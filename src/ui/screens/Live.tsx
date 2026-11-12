@@ -591,10 +591,13 @@ export default function Live() {
           kits={kits}
           jersey={jersey}
           onDone={s.courtDone}
+          onReached={s.courtReached}
           onTick={(c, sc) => s.ticker.set(c, sc)}
           onBeat={s.beat.set}
           names={nameOf}
           abbrevs={[home.abbrev, away.abbrev]}
+          game={() => ({ abbrevs: [home.abbrev, away.abbrev], ...s.ticker.get(), q: script?.q ?? view.q })}
+          replays={!s.keyPlays && !toPending}
           floor={floor}
           hot={hot}
           // between possessions the floor is never empty: the tip's line-up, the break's shot chart, or the players where they stood

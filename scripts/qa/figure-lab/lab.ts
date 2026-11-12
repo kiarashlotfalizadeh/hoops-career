@@ -3,12 +3,10 @@
 //   /scripts/qa/figure-lab/?move=jumper            eight moments of it, left to right
 //   /scripts/qa/figure-lab/?move=run&live=1        one figure, moving
 //   &yaw=40 (degrees round him)  &zoom=1.4  &from=0&to=1200 (ms)  &n=8  &h=78&w=215 (his build)
+//   &seed=1 (the first man's own things: crop, sleeves, shoes; the next is seed+1)  &light=1 (the home kit)  &num=23&name=Brunson&mark=NYK
 import {
   AmbientLight,
-  Color,
   DirectionalLight,
-  DoubleSide,
-  FrontSide,
   HemisphereLight,
   Mesh,
   MeshStandardMaterial,
@@ -19,7 +17,6 @@ import {
   Scene,
   SphereGeometry,
   WebGLRenderer,
-  type Material,
 } from 'three';
 import type { Act } from '../../../src/ui/live/choreo';
 import { Fig, figureGeo } from '../../../src/ui/live/court3d/figure';
@@ -110,12 +107,6 @@ floor.rotation.x = -Math.PI / 2;
 floor.receiveShadow = true;
 scene.add(floor);
 
-const mats = new Map<string, Material>();
-const mat = (color: string, rough = 0.7, both = false): Material => {
-  const k = `${color}/${rough}/${both}`;
-  if (!mats.has(k)) mats.set(k, new MeshStandardMaterial({ color: new Color(color), roughness: rough, vertexColors: true, side: both ? DoubleSide : FrontSide }));
-  return mats.get(k)!;
-};
 const geo = figureGeo((o) => o, (await loadModels()).figure);
 const kit = {
   color: '#1d428a',
@@ -127,7 +118,16 @@ const kit = {
 } as MatchKit;
 const gap = num('gap', 5);
 const figs = Array.from({ length: n }, (_, i) => {
-  const f = new Fig(geo, mat, bodyOf(num('h', 78), num('w', 215)), 0, kit, String(q.get('num') ?? 23));
+  const f = new Fig(
+    geo,
+    bodyOf(num('h', 78), num('w', 215)),
+    0,
+    kit,
+    String(q.get('num') ?? 23),
+    num('seed', 1) + i,
+    String(q.get('name') ?? 'Brunson'),
+    String(q.get('mark') ?? 'NYK'),
+  );
   scene.add(f.group);
   const ball = new Mesh(new SphereGeometry(BALL_R, 18, 14), new MeshStandardMaterial({ color: 0xc8642a, roughness: 0.6 }));
   ball.castShadow = true;

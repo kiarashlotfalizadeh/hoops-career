@@ -26,6 +26,12 @@ const END_ZONE = 0.3;
 const END_LANE = 1.9;
 /** How many points along a pass are looked at for who it meets. */
 const LOOKS = 24;
+/** A pass this long (ft) past a defender in the middle of its lane may be a bounce pass under his hands (about this share of them) instead of a lob over. */
+const BOUNCE_FAR: [number, number] = [8, 26];
+const BOUNCE_SHARE = 0.5;
+/** It hits the floor this far past him (of its way), never sooner or later than these. */
+const BOUNCE_PAST = 0.12;
+const BOUNCE_AT: [number, number] = [0.45, 0.75];
 
 /**
  * Pushes the spots in `at` (x, z each) apart, in place: no two closer than BODY_GAP. `go` is how far
@@ -168,9 +174,10 @@ export interface Round {
   at: number;
 }
 
-/** How a pass gets past the men in its way: an arc over (ft), and a swerve round one man near each end at most. */
+/** How a pass gets past the men in its way: an arc over (ft), or a bounce off the floor (where along it, 0: none), and a swerve round one man near each end at most. */
 export interface PassPath {
   lob: number;
+  bounce: number;
   round: Round[];
 }
 
@@ -182,9 +189,11 @@ export interface PassPath {
  * the passer, the man on the catcher). Nobody in the way, or a short pass: flat and straight.
  */
 export function passPath(from: P3, to: P3, gx: number, gz: number, men: Iterable<Man>): PassPath {
-  const path: PassPath = { lob: 0, round: [] };
+  const path: PassPath = { lob: 0, bounce: 0, round: [] };
   const far = Math.hypot(to.x - from.x, to.z - from.z);
   if (far <= 4) return path;
+  // (a bounce pass or a lob is the passer's own choice: the same pass from the same spot is always the same one)
+  const bounces = far >= BOUNCE_FAR[0] && far <= BOUNCE_FAR[1] && Math.abs(Math.sin(from.x * 12.9898 + from.z * 78.233) * 43758.5453) % 1 < BOUNCE_SHARE;
   const wide = [0, 0];
   const best: (Round | null)[] = [null, null];
   for (const m of men) {
@@ -203,6 +212,11 @@ export function passPath(from: P3, to: P3, gx: number, gz: number, men: Iterable
     const ends = !m.mate && (t < END_ZONE || t > 1 - END_ZONE);
     if (near > (ends ? END_LANE : LANE)) continue;
     if (!m.mate && t >= 0.15 && t <= 0.85) {
+      // (under his hands off the floor, just past him)
+      if (bounces && t >= 0.25 && t <= 0.65) {
+        path.bounce = Math.max(path.bounce, Math.max(BOUNCE_AT[0], Math.min(BOUNCE_AT[1], t + BOUNCE_PAST)));
+        continue;
+      }
       const need = (CLEAR_H * m.s - (from.y + (to.y - from.y) * t)) / (4 * t * (1 - t));
       if (need <= LOB_MAX) {
         path.lob = Math.max(path.lob, need);
@@ -218,7 +232,19 @@ export function passPath(from: P3, to: P3, gx: number, gz: number, men: Iterable
     best[half] = { x: (ox / near) * round, z: (oz / near) * round, at: Math.max(0.08, Math.min(0.92, t)) };
   }
   for (const r of best) if (r) path.round.push(r);
+  // (a bounce pass goes under any lob it would have needed)
+  if (path.bounce) path.lob = 0;
   return path;
+}
+
+/** A pass's height at `u` of its way (0..1) that bounces at `at`: down to the floor, off it, and up into his hands. */
+export function bounced(fromY: number, toY: number, floor: number, at: number, u: number): number {
+  if (u < at) {
+    const v = u / at;
+    return fromY + (floor - fromY) * Math.pow(v, 1.25);
+  }
+  const v = (u - at) / (1 - at);
+  return floor + (toY - floor) * (1 - Math.pow(1 - v, 1.7));
 }
 
 /**

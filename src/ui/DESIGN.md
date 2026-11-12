@@ -359,18 +359,44 @@ package (ink plates, white type); the console is paper and card stock like every
   model changes in its `.py`, never by hand in the `.glb`. Two dev-server pages look at them in
   the app's own light: `scripts/qa/figure-lab` (one move as a strip of moments) and
   `scripts/qa/scene-lab` (the whole arena held still from any camera; `lab.bench()` costs a frame).
-  The scene (`court3d/scene.ts`, `court3d/arena.ts`) lights it: one shadow-casting light, a warm fill bounced off the wood, a dark pool where each foot meets
-  the floor; the floor is lit (its paint keeps its colour, the lamp banks leave hot spots) and gets a
-  faint blurred mirror; a crowd of people who shift in their seats and stand, arms up, for a basket,
-  benches, boards, an upper deck. The camera cuts: sideline (pushes in near the rim), low baseline
-  for free throws, the whole building after 1.5 s with nothing to follow, and short cut-ins: a
-  close-up on the scorer after a dunk, a three or a big basket and on the man fouled, the stands
-  dimmed behind him (at most one every 12 s, none at 4x speed or with reduced motion). A slow device loses shadows and the mirror first.
+  The scene (`court3d/scene.ts`, `court3d/lens.ts`) lights it like a broadcast: one shadow-casting
+  key, a warm fill bounced off the wood, and the arena itself as the environment every material
+  reflects (lamp banks in a dark roof, the floor's colour below), so skin, shoes, the ball, the rim and
+  the glass catch the lamps. The floor is varnished maple: its paint keeps its colour, real strips,
+  seams and grain show up close and fade out far off, the lamp banks lie in it as soft streaks, and a
+  mirror shows bodies sharp at the feet and softer with height. Over the stands a faint lit haze and
+  the lamps' beams; then the finish (antialiased, a restrained glow on the brightest things, a warm
+  grade, darker corners). Each player wears one painted picture (`court3d/figure.ts`): his kit with
+  an outlined number, his name arched on the back, the abbreviation on the front and a team mark on
+  the shorts, and, his own every night, one of seven crops and maybe a headband, a sleeve, wristbands
+  or a leg sleeve (one draw a player). The building (`court3d/arena.ts`, `court3d/boards.ts`,
+  `court3d/fx.ts`) is alive: the scorer's table, the baseline and far-side boards, the ribbon and the
+  scoreboard's screens are LED boards showing the score, period and clock as the court has played
+  them (`GameInfo`, no spoilers), DEFENSE while the home side defends, and takeovers for a home three,
+  dunk, and-one, block, steal, buzzer-beater, a timeout, the end of a period and the final; a shot
+  clock and the game clock sit over each board. The crowd sways, stands for a basket, the visitors'
+  block stands for theirs, home fans wave towels late and the end behind the basket rallies at a
+  visitor's free throw; cameras flash on big moments; a home win brings an ovation and confetti. Banners
+  in the home colours (letters and stripes, no years), trusses and light rigs hang in the roof.
+- **The broadcast cuts** (`court3d/director.ts`, `aim` in `scene.ts`): an orbit round the tip, a crane
+  down into the main camera, the main camera high on the near sideline (it turns with the ball with a
+  little operator drift, pushes in near the rim, dips on a dunk), a low camera past the baseline for
+  free throws, the building at a timeout or after 1.5 s with nothing to follow, cut-ins on the scorer
+  of a big basket and on the man fouled (a lower third with his name, the building behind him soft),
+  and the winners at the final buzzer. Cuts dissolve briefly. **Instant replays**: a dunk, a three,
+  an and-one, a block or a shot at the buzzer is shown again at the next dead ball, slowed and from
+  another angle, between two wipes in the team's colours with a Replay bug. The court's clock holds
+  while it runs (CourtView keeps the possession's end until it is over), so nothing live is missed;
+  a tap skips it. None at 4x, in key plays, while paused or waiting on a call, in a highlight or with
+  reduced motion; at most one every 25 s. Reduced motion: one camera, the whole floor, held still.
+  A slow device gives up, a step at a time: the finish, a little sharpness, the shadows, the mirror and
+  the fine wood (with the players' cloth detail and the roof's extras), then half the sharpness.
 - **3D plays a possession at half the 2D pace** (`COURT3D_PACE`): discs can cross the floor in a
   second, bodies can't. Only the play's clock is slowed; the figures' legs run on their own time, so
   a planted foot stays planted. The speed chips mean the same in both; a 3D game takes twice as long.
 - **3D is drawn at most 60 times a second**, on the device's normal GPU setting, and not at all
-  while paused. A phone takes the drawing context from an app in the background: the 2D court shows
+  while paused in the middle of a move (at a held dead ball, a timeout or a huddle, the men keep
+  breathing at half the rate for a minute). A phone takes the drawing context from an app in the background: the 2D court shows
   until it is back, then the scene is rebuilt (a new canvas is tried if it isn't back in 3 s).
 - **The plan is `choreo.ts`'s; the figures only act it out.** Each keyframe says where every player
   is, what he is doing (`Frame.act`: dribble, screen, jumper, contest, rebound...) and where he
@@ -384,7 +410,14 @@ package (ink plates, white type); the console is paper and card stock like every
   the jump shot, free throw and layup. A take is measured into the puppet's own channels (hands from
   shoulders, hips, chest, head, elbows), so it fits any build and the feet stay the puppet's. No take
   covers a dunk, block, rebound, screen, post-up or celebration: those are keyed by hand in
-  `clips.ts`. `scripts/qa/figure-lab/` shows any move as a strip of moments on the dev server.
+  `clips.ts`, with three dunks (two hands, one, a hang on the rim), a free-throw routine and the
+  dead-ball rests (hands on hips, on knees after a long stretch). Over every clip, a layer of its own:
+  each man looks at something (the ball, his man, the rim, his target), breathes, keeps his hands
+  busy on defence, and gestures (a flex, a point, a high five on the way back, a hand up for the foul,
+  a protest, chest bumps at the buzzer). The ball misses off the front rim, the back iron or round the
+  ring, some makes rattle in, and passes go on a bounce under a defender in the lane.
+  `scripts/qa/figure-lab/` shows any move as a strip of moments on the dev server, and
+  `scripts/qa/motion-lab/` plays a simulated game through the real scene and measures it.
 - **The floor is the home team's**: maple, its colour in both keys and the centre circle, its mark at
   centre court, its name along the baselines. The Cup final's floor is neutral.
 - **One colour a team, all night** (`matchKits` in `teamColors.ts`, `s.kits` in the live game): the

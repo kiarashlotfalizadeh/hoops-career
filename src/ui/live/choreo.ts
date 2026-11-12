@@ -79,6 +79,8 @@ export interface Frame {
   face: number[];
   /** A blocked shot: who got a hand to it (an index into [offense..., defense...]). */
   swat?: number;
+  /** A whistle: who it was on (an index into [offense..., defense...]), for the 3D figures to react. */
+  foul?: number;
 }
 
 export interface Script {
@@ -906,7 +908,9 @@ export function buildScript(
       case 'foul': {
         // fouled on a make: and one
         const andOne = prev?.k === 'shot' && !!prev.made;
+        const on = st.pid === undefined ? -1 : all.indexOf(st.pid);
         snap(380, {
+          ...(on >= 0 && { foul: on }),
           flash: { text: andOne ? 'And one!' : 'Foul', kind: andOne ? 'make' : 'foul', x: ball.x, y: ball.y + 3 },
           ...cap(andOne ? `And one! Foul on ${N(st.pid)}` : `Foul on ${N(st.pid)}`),
         });

@@ -3,15 +3,24 @@
 // hands have fingers and the feet sneakers; he wears a V-neck vest tucked into shorts, whose legs
 // swing a beat behind his thighs. Builds differ (height, shoulders, how thick the limbs are); the
 // tone doesn't: one neutral colour for everyone, and no likeness.
+//
+// Everything he wears is one picture (his sheet, see `Sheet`): his vest with its number and name, the
+// shorts with their side panels and the team's mark, his head (a crop of hair, the planes of a face),
+// a strip down each arm and leg (a sleeve, a wristband, his socks), his shoes. Each point of the model
+// finds its place in the picture by what it is and where it is on him (see `sheetUv`), so the whole man
+// is one draw: one material, whatever he has on. A second, smaller picture says what each part is
+// made of (how rough, how much a cloth's sheen, how much of its knit shows up close).
 import {
   Bone,
   CanvasTexture,
-  DoubleSide,
   CircleGeometry,
+  Color,
+  DoubleSide,
   Group,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
+  MeshPhysicalMaterial,
   MeshStandardMaterial,
   Quaternion,
   RingGeometry,
@@ -19,8 +28,8 @@ import {
   SkinnedMesh,
   SRGBColorSpace,
   Vector3,
+  BufferAttribute,
   type BufferGeometry,
-  type Material,
 } from 'three';
 import type { MatchKit } from '../../teamColors';
 import { I } from './clips';
@@ -29,7 +38,7 @@ import { ANKLE, J, Puppet, THIGH, type Body } from './puppet';
 
 /** The figures' own colour: one neutral tone for everyone (they are figurines, not likenesses). */
 export const FIGURE = '#7b7d88';
-/** Their hair, cropped close: the same tone darker, or none (a shaved head is the skin's colour). Which one is a figure's own. */
+/** Their hair, cropped close: the same tone darker, or none (a shaved head is the skin's colour). The benches pick from these too. */
 export const HAIR = ['#55565f', '#62636c', '#4a4b53', FIGURE] as const;
 export const SHOE = '#1b1c1f';
 export const SOCK = '#ecebe6';
@@ -57,19 +66,80 @@ const B = {
 } as const;
 const BONES = 18;
 
+// ---------------------------------------------------------------- his sheet: where each thing is on it
+
+/** The sheet is a square this many pixels across; the stuff picture beside it a quarter of that. */
+const SHEET = 1024;
+const STUFF_K = 4;
+/** A place on the sheet: x, y, width, height in its pixels (y down, as a canvas has it). */
+type Rect = readonly [number, number, number, number];
+/** The vest, as the old picture had it (twice its size: a close-up reads the name), the shorts, his head. */
+const R_VEST: Rect = [0, 0, 1024, 512];
+const R_SHORTS: Rect = [0, 512, 512, 256];
+const R_HEAD: Rect = [512, 512, 512, 256];
+/** His shoes' upper (along the foot, round it) and their soles (along, up). */
+const R_SHOE: Rect = [0, 768, 512, 192];
+const R_SOLE: Rect = [0, 960, 512, 64];
+/** A strip down each limb, shoulder to fingertips and hip to sole: left arm, right arm, left leg, right leg. */
+const R_LIMB: readonly Rect[] = [
+  [512, 768, 512, 48],
+  [512, 816, 512, 48],
+  [512, 864, 512, 48],
+  [512, 912, 512, 48],
+];
+/** Plain patches: the vest's and shorts' trim, and the skin of his trunk. */
+const R_TRIM: Rect = [512, 960, 256, 64];
+const R_SKIN: Rect = [768, 960, 256, 64];
+/** A picture that goes round him (the shorts, his head, a shoe) runs on this far past its seam either side (in turns), so a triangle across the seam finds what it needs. */
+const WRAP = 0.06;
+/** The vest's picture is the model's own uv: round him from his left side, and up it in 2 ft from 3.6 ft; it reaches this high (in those units). */
+const VEST_TOP = 1.1;
+/** How far down an arm and a leg its strip reaches, ft (shoulder to fingertips, hip to sole, on the 6 ft 6 body). */
+const ARM_LEN = 2.75;
+const LEG_LEN = 3.5;
+/** His head's middle, from the head bone (figure.py's HEAD_C), and its half width, height and depth: his head's picture is drawn round it. */
+const HEAD_MID = new Vector3(0, 0.045, 0.05);
+const HEAD_SIZE = [0.3, 0.42, 0.37] as const;
+/** The most a crop of hair stands off his scalp, ft (a puff, a high top's crown). */
+const HAIR_MAX = 0.16;
+/** The middle of a shoe's cross-section, from the ankle (ft): round it is its picture's second way. */
+const SHOE_MID = -0.1;
+/** A shoe's length (heel to toe, from the ankle) and its sole's height, ft. */
+const SHOE_Z = [-0.36, 0.74] as const;
+const SOLE_H = 0.15;
+
+/** Which picture each point takes its colour from. */
+const Pic = { Vest: 0, Trim: 1, Shorts: 2, Head: 3, Skin: 4, ArmL: 5, ArmR: 6, LegL: 7, LegR: 8, Shoe: 9, Sole: 10 } as const;
+type Pic = (typeof Pic)[keyof typeof Pic];
+const RECT: Record<Pic, Rect> = {
+  [Pic.Vest]: R_VEST,
+  [Pic.Trim]: R_TRIM,
+  [Pic.Shorts]: R_SHORTS,
+  [Pic.Head]: R_HEAD,
+  [Pic.Skin]: R_SKIN,
+  [Pic.ArmL]: R_LIMB[0],
+  [Pic.ArmR]: R_LIMB[1],
+  [Pic.LegL]: R_LIMB[2],
+  [Pic.LegR]: R_LIMB[3],
+  [Pic.Shoe]: R_SHOE,
+  [Pic.Sole]: R_SOLE,
+};
+/** Which of a picture's two ways goes round (0 across, 1 up; -1 neither): a triangle across its seam is given points of its own. */
+const ROUND: Partial<Record<Pic, 0 | 1>> = { [Pic.Shorts]: 0, [Pic.Head]: 0, [Pic.Shoe]: 1 };
+
 export interface Geo {
-  /** The body, a group of it for each material in `wears`. */
+  /** The body: one shape, every point of it placed on the sheet. */
   body: BufferGeometry;
+  /** What the model says each part is (the sheet is painted to match: see `sheetUv`). */
   wears: string[];
   /** The skin counts its bones in the model's order: which of ours each is, and the way back to it from the body as built. */
   order: number[];
   inverse: Matrix4[];
+  /** How high the shorts reach (ft, as built): their picture runs from one to the other. */
+  shorts: [number, number];
   blob: BufferGeometry;
   ring: BufferGeometry;
 }
-
-/** A shared material for a plain colour: `both` draws the inside of cloth too (a sleeve hole shows it). */
-export type Mats = (color: string, rough?: number, both?: boolean) => Material;
 
 /** The shapes every figure shares (built once; `keep` takes each to throw away with the scene). */
 export function figureGeo(keep: <T extends { dispose(): void }>(o: T) => T, model: Map<string, Thing>): Geo {
@@ -82,41 +152,723 @@ export function figureGeo(keep: <T extends { dispose(): void }>(o: T) => T, mode
     if (k === undefined) throw new Error(`figure.glb: a bone the puppet doesn't have (${b.name})`);
     return k;
   });
+  const inverse = fig.bones.map((b) => b.inverse);
+  const shorts = sheetUv(geo, materials, order, inverse);
   const blob = keep(new CircleGeometry(1.25, 20));
   blob.rotateX(-Math.PI / 2);
   const ring = keep(new RingGeometry(1.55, 1.85, 28));
   ring.rotateX(-Math.PI / 2);
-  return { body: keep(geo), wears: materials, order, inverse: fig.bones.map((b) => b.inverse), blob, ring };
+  return { body: keep(geo), wears: materials, order, inverse, shorts, blob, ring };
 }
 
-/** The vest's cloth: the kit's colour, a panel down each side, his number front and back and his name over it on the back (its trim is sewn on: see the model). */
-function jerseyTexture(num: string, name: string, kit: MatchKit): CanvasTexture {
-  // (drawn at twice the size it's laid out in: a close-up reads the name)
-  const cv = document.createElement('canvas');
-  cv.width = 1024;
-  cv.height = 512;
-  const ctx = cv.getContext('2d')!;
-  ctx.scale(2, 2);
-  ctx.fillStyle = kit.token.fill;
-  ctx.fillRect(0, 0, 512, 256);
-  ctx.fillStyle = kit.token.ring;
-  // (the picture starts at his side: the back is a quarter of the way round, the front three)
-  for (const x of [0, 256, 512]) ctx.fillRect(x - 13, 0, 26, 256);
-  ctx.fillStyle = kit.token.num;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = `800 ${num.length > 1 ? 84 : 92}px "Archivo Variable", system-ui, sans-serif`;
-  for (const x of [128, 384]) ctx.fillText(num, x, 116, 104);
-  if (name) {
-    // (spaced out and no wider than his shoulder blades, as a name is sewn on)
-    ctx.font = '700 19px "Archivo Variable", system-ui, sans-serif';
-    if ('letterSpacing' in ctx) (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = '1.5px';
-    ctx.fillText(name.toUpperCase(), 128, 53, 112);
+/** How far round him a point is, in turns from his left side (the back a quarter of the way, the front three): the vest's own way. */
+const round = (x: number, z: number) => ((((Math.atan2(x, z) - Math.PI / 2) / (2 * Math.PI)) % 1) + 1) % 1;
+
+/** Of the pictures of his skin, the one a triangle across two of them takes (its other points are put on it too): his head over an arm over a leg over his trunk. */
+const OVER: Partial<Record<Pic, number>> = { [Pic.Head]: 4, [Pic.ArmL]: 3, [Pic.ArmR]: 3, [Pic.LegL]: 2, [Pic.LegR]: 2, [Pic.Skin]: 1 };
+
+/**
+ * Puts every point of the body on the sheet (its uv), by what it is (the model's material) and where it
+ * is on him as built (by the bones it hangs on): the vest keeps the model's picture; the shorts go round
+ * him; his head round its middle; an arm or a leg down its strip; a shoe along and round the foot.
+ * Each triangle takes one picture (one across two pictures of his skin, the one OVER says; one across a
+ * picture's seam, the picture a turn on), its points twinned where they have to be somewhere else for
+ * it; the parts become one. Says how high the shorts reach.
+ */
+function sheetUv(geo: BufferGeometry, wears: string[], order: number[], inverse: Matrix4[]): [number, number] {
+  const pos = geo.getAttribute('position');
+  const uv = geo.getAttribute('uv');
+  const on = geo.getAttribute('skinIndex');
+  const by = geo.getAttribute('skinWeight');
+  const index = geo.index!;
+  const n = pos.count;
+  // (what each point is, by the part its triangles are in)
+  const wear: string[] = new Array<string>(n).fill('skin');
+  for (const g of geo.groups) for (let i = g.start; i < g.start + g.count; i++) wear[index.getX(i)] = wears[g.materialIndex ?? 0];
+  const inv: Matrix4[] = [];
+  order.forEach((k, i) => (inv[k] = inverse[i]));
+  const weight = (v: number, bones: number[]) => {
+    let w = 0;
+    for (let c = 0; c < 4; c++) if (bones.includes(order[on.getComponent(v, c)])) w += by.getComponent(v, c);
+    return w;
+  };
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (let v = 0; v < n; v++)
+    if (wear[v] === 'cloth') {
+      lo = Math.min(lo, pos.getY(v));
+      hi = Math.max(hi, pos.getY(v));
+    }
+  lo -= 0.02;
+  hi += 0.02;
+  const P = new Vector3();
+  const L = new Vector3();
+  /** Which picture a point is in. */
+  const own = (v: number): Pic => {
+    P.fromBufferAttribute(pos, v);
+    const w = wear[v];
+    const foot = inv[P.x > 0 ? B.ftl : B.ftr];
+    if (w === 'jersey') return Pic.Vest;
+    if (w === 'trim') return Pic.Trim;
+    if (w === 'cloth') return Pic.Shorts;
+    if (w === 'shoe') return Pic.Shoe;
+    // (the white below the ankle is a sole; above it, a sock: the bottom of its leg's strip)
+    if (w === 'white') return L.copy(P).applyMatrix4(foot).y < -0.06 ? Pic.Sole : P.x > 0 ? Pic.LegL : Pic.LegR;
+    if (weight(v, [B.head]) >= 0.5) return Pic.Head;
+    if (weight(v, [B.ual, B.fal, B.hal]) >= 0.5) return Pic.ArmL;
+    if (weight(v, [B.uar, B.far, B.har]) >= 0.5) return Pic.ArmR;
+    if (weight(v, [B.thl, B.shl, B.ftl, B.hemL]) >= 0.5) return Pic.LegL;
+    if (weight(v, [B.thr, B.shr, B.ftr, B.hemR]) >= 0.5) return Pic.LegR;
+    return Pic.Skin;
+  };
+  /** Where a point is in a picture: across it and up it, each 0..1 (one that goes round, in turns). */
+  const place = (v: number, k: Pic): [number, number] => {
+    P.fromBufferAttribute(pos, v);
+    const left = P.x > 0;
+    switch (k) {
+      case Pic.Vest:
+        return [uv.getX(v), uv.getY(v) / VEST_TOP];
+      case Pic.Shorts:
+        return [round(P.x, P.z), (P.y - lo) / (hi - lo)];
+      case Pic.Shoe:
+      case Pic.Sole:
+        // (along the foot from the heel; round it from under the sole, the top of the foot half way and his outside three quarters; a sole, up it)
+        L.copy(P).applyMatrix4(inv[left ? B.ftl : B.ftr]);
+        return [(L.z - SHOE_Z[0]) / (SHOE_Z[1] - SHOE_Z[0]), k === Pic.Shoe ? 0.5 + Math.atan2(left ? L.x : -L.x, L.y - SHOE_MID) / (2 * Math.PI) : (L.y + ANKLE) / SOLE_H];
+      case Pic.Head:
+        // (his head, hair and all, round its middle from behind: his face is half way round)
+        L.copy(P).applyMatrix4(inv[B.head]).sub(HEAD_MID);
+        return [(Math.atan2(L.x, L.z) / (2 * Math.PI) + 0.5) % 1, 0.5 + Math.atan2(L.y, Math.hypot(L.x, L.z)) / Math.PI];
+      case Pic.ArmL:
+      case Pic.ArmR:
+        return [-L.copy(P).applyMatrix4(inv[k === Pic.ArmL ? B.ual : B.uar]).y / ARM_LEN, 0.5];
+      case Pic.LegL:
+      case Pic.LegR:
+        return [-L.copy(P).applyMatrix4(inv[k === Pic.LegL ? B.thl : B.thr]).y / LEG_LEN, 0.5];
+      default:
+        return [0.5, 0.5];
+    }
+  };
+  const mine = Array.from({ length: n }, (_v, v) => own(v));
+
+  // each triangle's picture, and where its corners are in it; a corner somewhere else than its point is a twin
+  const corners = Array.from(index.array as ArrayLike<number>);
+  const twins = new Map<string, number>();
+  const made: { v: number; k: Pic; at: [number, number] }[] = [];
+  const at: [number, number][] = mine.map((k, v) => place(v, k));
+  for (let f = 0; f < corners.length; f += 3) {
+    const vs = [corners[f], corners[f + 1], corners[f + 2]];
+    let k = mine[vs[0]];
+    for (const v of vs) if ((OVER[mine[v]] ?? 0) > (OVER[k] ?? 0)) k = mine[v];
+    const where = vs.map((v) => (mine[v] === k ? at[v] : place(v, k)));
+    const way = ROUND[k];
+    const across = way !== undefined && Math.max(...where.map((w) => w[way])) - Math.min(...where.map((w) => w[way])) > 0.5;
+    for (let i = 0; i < 3; i++) {
+      const v = vs[i];
+      const turn = across && where[i][way!] < 0.5 ? 1 : 0;
+      if (mine[v] === k && !turn) continue;
+      const key = `${v} ${k} ${turn}`;
+      let w = twins.get(key);
+      if (w === undefined) {
+        w = n + made.length;
+        twins.set(key, w);
+        const p: [number, number] = [...where[i]];
+        if (turn) p[way!] += 1;
+        made.push({ v, k, at: p });
+      }
+      corners[f + i] = w;
+    }
   }
-  const tex = new CanvasTexture(cv);
-  tex.colorSpace = SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
+  const total = n + made.length;
+  for (const [name, a] of Object.entries(geo.attributes)) {
+    const Kind = a.array.constructor as new (length: number) => typeof a.array;
+    const arr = new Kind(total * a.itemSize);
+    arr.set(a.array);
+    made.forEach(({ v }, i) => {
+      for (let c = 0; c < a.itemSize; c++) arr[(n + i) * a.itemSize + c] = a.array[v * a.itemSize + c];
+    });
+    geo.setAttribute(name, new BufferAttribute(arr, a.itemSize, a.normalized));
+  }
+  // onto the sheet: a picture that goes round has room for its run past the seam; any other stays off its edges
+  const out = new Float32Array(total * 2);
+  const put = (i: number, k: Pic, [a, b]: [number, number]) => {
+    const [x, y, w, h] = RECT[k];
+    const way = ROUND[k];
+    if (way === 0 || k === Pic.Vest) a = (a + WRAP) / (1 + 2 * WRAP);
+    if (way === 1) b = (b + WRAP) / (1 + 2 * WRAP);
+    if (k !== Pic.Vest) {
+      a = Math.min(0.995, Math.max(0.005, a));
+      b = Math.min(0.98, Math.max(0.02, b));
+    }
+    out[i * 2] = (x + a * w) / SHEET;
+    out[i * 2 + 1] = 1 - (y + (1 - b) * h) / SHEET;
+  };
+  for (let v = 0; v < n; v++) put(v, mine[v], at[v]);
+  made.forEach(({ k, at: p }, i) => put(n + i, k, p));
+  geo.setAttribute('uv', new BufferAttribute(out, 2));
+  geo.setIndex(total > 65535 ? corners : new BufferAttribute(Uint16Array.from(corners), 1));
+  geo.clearGroups();
+  return [lo, hi];
+}
+
+// ---------------------------------------------------------------- what he is made of
+
+/** Each kind of stuff: how rough it is, how much of a cloth's sheen it has, how much of its knit shows up close (the stuff picture holds these, a channel each). */
+const STUFF = {
+  skin: [0.56, 0, 0],
+  face: [0.5, 0, 0],
+  scalp: [0.48, 0, 0],
+  hand: [0.62, 0, 0],
+  hair: [0.86, 0.3, 0],
+  vest: [0.86, 0.85, 1],
+  // (a number is pressed on: smoother than the knit round it, and none of its sheen)
+  print: [0.55, 0.12, 0],
+  shorts: [0.78, 0.9, 0.7],
+  rib: [0.8, 0.6, 0.45],
+  sock: [0.92, 0.7, 0.55],
+  sleeve: [0.5, 0.45, 0.25],
+  terry: [0.95, 1, 0.8],
+  leather: [0.4, 0, 0],
+  mesh: [0.7, 0.2, 0.6],
+  lace: [0.8, 0.3, 0.3],
+  rubber: [0.62, 0, 0],
+} as const satisfies Record<string, readonly [number, number, number]>;
+type Stuff = keyof typeof STUFF;
+const stuffColor = (k: Stuff) => `rgb(${STUFF[k].map((v) => Math.round(v * 255)).join(',')})`;
+/** A colour, or (on the stuff picture) the stuff it is. */
+type Pick = (color: string, stuff: Stuff) => string;
+
+const mixC = new Color();
+const mixD = new Color();
+/** Two colours mixed (t of the second). */
+function mix(a: string, b: string, t: number): string {
+  return `#${mixC.set(a).lerp(mixD.set(b), t).getHexString()}`;
+}
+/** How light a colour is, 0..1 (near enough). */
+function light(c: string): number {
+  mixC.set(c).convertLinearToSRGB();
+  return 0.3 * mixC.r + 0.59 * mixC.g + 0.11 * mixC.b;
+}
+
+/** The two pictures being painted, and painting on both at once. */
+class Sheet {
+  readonly cv = document.createElement('canvas');
+  readonly stuff = document.createElement('canvas');
+  private readonly ctx: CanvasRenderingContext2D;
+  private readonly sctx: CanvasRenderingContext2D;
+  constructor() {
+    this.cv.width = this.cv.height = SHEET;
+    this.stuff.width = this.stuff.height = SHEET / STUFF_K;
+    this.ctx = this.cv.getContext('2d')!;
+    this.sctx = this.stuff.getContext('2d')!;
+  }
+
+  /** A plain patch. */
+  fill(r: Rect, color: string, stuff: Stuff) {
+    this.both(r, (ctx, pick) => {
+      ctx.fillStyle = pick(color, stuff);
+      ctx.fillRect(0, 0, r[2], r[3]);
+    });
+  }
+
+  /** Draws in a place on the sheet in its own pixels (0, 0 its corner), on both pictures. */
+  both(r: Rect, draw: (ctx: CanvasRenderingContext2D, pick: Pick) => void) {
+    for (const [ctx, k, pick] of [
+      [this.ctx, 1, (c: string) => c],
+      [this.sctx, 1 / STUFF_K, (_c: string, s: Stuff) => stuffColor(s)],
+    ] as const) {
+      ctx.save();
+      ctx.scale(k, k);
+      ctx.beginPath();
+      ctx.rect(r[0], r[1], r[2], r[3]);
+      ctx.clip();
+      ctx.translate(r[0], r[1]);
+      draw(ctx, pick);
+      ctx.restore();
+    }
+  }
+
+  /**
+   * A picture that goes round him, drawn `pw` wide for one turn and `ph` high, with `top` and `bottom`
+   * the share of the place it fills that its top and bottom rows are at; it's drawn again a turn either
+   * side, for the run past the seam.
+   */
+  around(r: Rect, pw: number, ph: number, draw: (ctx: CanvasRenderingContext2D, pick: Pick) => void, top = 1, bottom = 0) {
+    const sx = r[2] / (pw * (1 + 2 * WRAP));
+    const sy = (r[3] * (top - bottom)) / ph;
+    this.both(r, (ctx, pick) => {
+      for (const turn of [-1, 0, 1]) {
+        ctx.save();
+        ctx.translate((WRAP + turn) * pw * sx, (1 - top) * r[3]);
+        ctx.scale(sx, sy);
+        draw(ctx, pick);
+        ctx.restore();
+      }
+    });
+  }
+
+  /** A picture made a point at a time (see points), put in its place on both. */
+  put(r: Rect, pic: Points) {
+    for (const [ctx, k, cv] of [
+      [this.ctx, 1, pic.color],
+      [this.sctx, 1 / STUFF_K, pic.stuff],
+    ] as const) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(cv, r[0] * k, r[1] * k, r[2] * k, r[3] * k);
+      ctx.restore();
+    }
+  }
+}
+
+/** A picture made a point at a time: its colour, and its stuff (in whose third channel, a knit's elsewhere, how far it stands off him). */
+interface Points {
+  color: HTMLCanvasElement;
+  stuff: HTMLCanvasElement;
+}
+
+function points(w: number, h: number, at: (i: number, j: number) => [[number, number, number], Stuff, number]): Points {
+  const img = new ImageData(w, h);
+  const sw = Math.max(1, Math.round(w / STUFF_K));
+  const sh = Math.max(1, Math.round(h / STUFF_K));
+  const simg = new ImageData(sw, sh);
+  for (let j = 0; j < h; j++)
+    for (let i = 0; i < w; i++) {
+      const [rgb, st, lift] = at(i, j);
+      const o = (j * w + i) * 4;
+      img.data[o] = rgb[0] * 255;
+      img.data[o + 1] = rgb[1] * 255;
+      img.data[o + 2] = rgb[2] * 255;
+      img.data[o + 3] = 255;
+      if (i % STUFF_K === 0 && j % STUFF_K === 0 && i / STUFF_K < sw && j / STUFF_K < sh) {
+        const so = ((j / STUFF_K) * sw + i / STUFF_K) * 4;
+        const v = STUFF[st];
+        simg.data[so] = v[0] * 255;
+        simg.data[so + 1] = v[1] * 255;
+        simg.data[so + 2] = lift * 255;
+        simg.data[so + 3] = 255;
+      }
+    }
+  const [color, stuff] = [img, simg].map((data) => {
+    const cv = document.createElement('canvas');
+    cv.width = data.width;
+    cv.height = data.height;
+    cv.getContext('2d')!.putImageData(data, 0, 0);
+    return cv;
+  });
+  return { color, stuff };
+}
+
+/** Heads already painted, by crop, hair and band (a man's head is the same whoever he plays for): most of the time a new man takes. */
+const HEADS = new Map<string, Points>();
+const HEADS_KEPT = 24;
+
+/** Canvas text in the app's face (condensed like its scoreboard figures, or as wide as asked). */
+function font(ctx: CanvasRenderingContext2D, weight: number, px: number, stretch: 'condensed' | 'semi-condensed' | 'normal' = 'condensed') {
+  // (an engine that doesn't take the width keyword in the shorthand ignores that line and keeps the first)
+  ctx.font = `${weight} ${px}px "Archivo Variable", system-ui, sans-serif`;
+  ctx.font = `${weight} ${stretch} ${px}px "Archivo Variable", system-ui, sans-serif`;
+  if ('fontStretch' in ctx) (ctx as CanvasRenderingContext2D & { fontStretch: string }).fontStretch = stretch;
+  if ('letterSpacing' in ctx) (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = '0px';
+}
+
+/** Words set along an arch over (x, y), its middle highest (`bend`: how far its ends drop, in its height), no wider than `most`. */
+function arched(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, px: number, bend: number, most: number, spacing: number, paint: () => void) {
+  const widths = [...text].map((ch) => ctx.measureText(ch).width + spacing);
+  const total = widths.reduce((a, b) => a + b, 0) - spacing;
+  const k = Math.min(1, most / total);
+  let at = -total / 2;
+  for (const [i, ch] of [...text].entries()) {
+    const mid = (at + widths[i] / 2 - spacing / 2) * k;
+    const u = mid / (most / 2);
+    ctx.save();
+    ctx.translate(x + mid, y + bend * px * u * u);
+    ctx.rotate(Math.atan((2 * bend * px * u) / (most / 2)) * 0.9);
+    ctx.scale(k, 1);
+    paint();
+    ctx.fillText(ch, 0, 0);
+    ctx.restore();
+    at += widths[i];
+  }
+}
+
+/** A number as they sew one on: its colour, an edge of another round it. */
+function sewn(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, most: number, fill: string, edge: string | null, width: number) {
+  if (edge) {
+    ctx.lineJoin = 'miter';
+    ctx.miterLimit = 3;
+    ctx.lineWidth = width * 2;
+    ctx.strokeStyle = edge;
+    ctx.strokeText(text, x, y, most);
+  }
+  ctx.fillStyle = fill;
+  ctx.fillText(text, x, y, most);
+}
+
+/** A man's own things, the same every night (from his seed): his crop of hair, what he wears on his arms and legs, his shoes. */
+interface Gear {
+  /** 0 shaved, 1 cropped very close, 2 a fade, 3 a full crop, 4 rows, 5 a high top, 6 a puff. */
+  crop: number;
+  hair: string;
+  band: string | null;
+  /** A shooting sleeve: on which arm (0 left, 1 right) and its colour. */
+  sleeve: { arm: 0 | 1; color: string } | null;
+  wrist: { arms: (0 | 1)[]; color: string } | null;
+  /** On one leg or both: a knee sleeve, or one down the whole leg. */
+  leg: { legs: (0 | 1)[]; long: boolean; color: string } | null;
+  /** How far up his socks come (a share of the sock: 0 all of it). */
+  sockDrop: number;
+  shoe: { base: string; accent: string; sole: string; lace: string };
+}
+
+/** Numbers that look random and are a man's own: the same seed, the same run. */
+function rng(seed: number): () => number {
+  let a = (seed * 2654435761) >>> 0 || 1;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let x = Math.imul(a ^ (a >>> 15), 1 | a);
+    x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const BLACK = '#1d1e22';
+const WHITE = '#f1f0eb';
+
+function gearOf(seed: number, kit: MatchKit): Gear {
+  const r = rng(seed);
+  const one = <T>(xs: readonly T[]) => xs[Math.floor(r() * xs.length) % xs.length];
+  const roll = r();
+  const crop = [0.1, 0.24, 0.54, 0.74, 0.82, 0.91, 1].findIndex((p) => roll < p);
+  // (what a man may wear on his arms and legs is black, white or his team's colour, as the league has it)
+  const allowed = kit.light ? [WHITE, kit.color, BLACK] : [kit.color, BLACK, WHITE];
+  const sleeve = r() < 0.28 ? { arm: (r() < 0.75 ? 1 : 0) as 0 | 1, color: one(allowed) } : null;
+  const wristRoll = r();
+  const wrist = wristRoll < 0.2 ? { arms: (wristRoll < 0.08 ? [0, 1] : [r() < 0.5 ? 0 : 1]) as (0 | 1)[], color: one(allowed) } : null;
+  const legRoll = r();
+  // (a sleeve down the whole leg is on one leg; a knee sleeve may be on both)
+  const long = r() < 0.4;
+  const leg = legRoll < 0.17 ? { legs: (legRoll < 0.05 && !long ? [0, 1] : [r() < 0.5 ? 0 : 1]) as (0 | 1)[], long, color: one(allowed) } : null;
+  const band = r() < 0.12 ? one(allowed) : null;
+  // shoes: mostly black or white, some in the team's colour, the other two in a stripe and the sole
+  const base = kit.light ? one([WHITE, WHITE, BLACK, kit.color]) : one([BLACK, BLACK, WHITE, kit.color]);
+  const pale = light(base) > 0.6;
+  const accent = base === kit.color ? (pale ? BLACK : WHITE) : one([kit.color, kit.color, pale ? BLACK : WHITE]);
+  const shoe = { base, accent, sole: one(pale ? [WHITE, WHITE, '#2a2b30'] : [WHITE, '#2a2b30', '#2a2b30']), lace: pale ? one([WHITE, accent]) : one([base, WHITE]) };
+  return { crop, hair: one(HAIR.slice(0, 3)), band, sleeve, wrist, leg, sockDrop: one([0, 0, 0.12, 0.25]), shoe };
+}
+
+/** One man's sheet: his kit (`mark` his team's letters, if the game has them), his number and name, his own things. */
+function paint(kit: MatchKit, num: string, name: string, mark: string, gear: Gear, shorts: [number, number]): Sheet {
+  const sh = new Sheet();
+  const fill = kit.token.fill;
+  const ring = kit.token.ring;
+  const ink = kit.token.num;
+  // the number's edge: the team's second colour where it reads against both, else a deeper shade of the cloth
+  const edge = (() => {
+    const c = kit.light ? kit.trim : ring;
+    if (c.toLowerCase() !== ink.toLowerCase() && Math.abs(light(c) - light(fill)) > 0.12) return c;
+    return kit.light ? null : mix(fill, '#000000', 0.45);
+  })();
+  const panel = kit.light ? mix(fill, kit.color, 0.1) : mix(fill, '#000000', 0.18);
+
+  // plain patches
+  sh.fill(R_SKIN, FIGURE, 'skin');
+  sh.fill(R_TRIM, ring, 'rib');
+
+  // the vest (the old picture's frame: 512 round him, 256 up its 2 ft, its top at VEST_TOP)
+  sh.around(
+    R_VEST,
+    512,
+    256,
+    (ctx, pick) => {
+      ctx.fillStyle = pick(fill, 'vest');
+      ctx.fillRect(-4, -40, 520, 340);
+      // a panel down each side, piped in the trim
+      for (const x of [0, 256, 512]) {
+        ctx.fillStyle = pick(panel, 'vest');
+        ctx.fillRect(x - 15, -40, 30, 340);
+        ctx.fillStyle = pick(ring, 'rib');
+        for (const e of [-1, 1]) ctx.fillRect(x + e * 15 - 1.25, -40, 2.5, 340);
+      }
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      // his number, front and back, sewn on with its edge (in front it sits under the team's letters, below the V of the neck, which comes down to about 70)
+      const digits = num.length > 1;
+      font(ctx, 900, digits ? 88 : 96, digits ? 'condensed' : 'semi-condensed');
+      sewn(ctx, num, 384, 182, 92, pick(ink, 'print'), edge && pick(edge, 'print'), 3);
+      font(ctx, 900, digits ? 112 : 120, digits ? 'condensed' : 'semi-condensed');
+      sewn(ctx, num, 128, 178, 110, pick(ink, 'print'), edge && pick(edge, 'print'), 3.6);
+      // the team's letters arched over the front number; his name arched over the back one
+      if (mark) {
+        font(ctx, 900, 28, 'semi-condensed');
+        arched(ctx, mark.toUpperCase(), 384, 104, 28, 0.2, 92, 3, () => (ctx.fillStyle = pick(ink, 'print')));
+      }
+      if (name) {
+        font(ctx, 800, 21, 'condensed');
+        arched(ctx, name.toUpperCase(), 128, 62, 21, 0.3, 112, 2.2, () => (ctx.fillStyle = pick(ink, 'print')));
+      }
+    },
+    1 / VEST_TOP,
+    0,
+  );
+
+  // the shorts: a panel down each side with the trim's piping, the team's letters on his left leg
+  const tall = shorts[1] - shorts[0];
+  sh.around(R_SHORTS, 512, 256, (ctx, pick) => {
+    ctx.fillStyle = pick(fill, 'shorts');
+    ctx.fillRect(-4, -4, 520, 264);
+    for (const x of [0, 256, 512]) {
+      ctx.fillStyle = pick(panel, 'shorts');
+      ctx.fillRect(x - 26, 0, 52, 256);
+      ctx.fillStyle = pick(ring, 'rib');
+      for (const e of [-1, 1]) ctx.fillRect(x + e * 26 - 1.5, 0, 3, 256);
+    }
+    if (mark) {
+      // (a round mark a third of a foot across, low on his left leg's front: the picture goes round him
+      // 0.62 ft out from his middle there, and up the shorts' height, so a foot is this many pixels each way)
+      const across = 512 / (2 * Math.PI * 0.62);
+      const up = 256 / tall;
+      const [x, y] = [0.885 * 512, 256 - 0.45 * up];
+      ctx.beginPath();
+      ctx.ellipse(x, y, 0.17 * across, 0.17 * up, 0, 0, Math.PI * 2);
+      ctx.fillStyle = pick(ring, 'print');
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(x, y, 0.145 * across, 0.145 * up, 0, 0, Math.PI * 2);
+      ctx.fillStyle = pick(fill, 'print');
+      ctx.fill();
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(across / up, 1);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      font(ctx, 900, Math.round((mark.length > 2 ? 0.12 : 0.15) * up), 'condensed');
+      ctx.fillStyle = pick(ink, 'print');
+      ctx.fillText(mark.toUpperCase(), 0, 0.01 * up, 0.24 * up);
+      ctx.restore();
+    }
+  });
+
+  // his head: the crop of hair and the planes of a face, a point at a time round its middle
+  const W = 256;
+  const H = 128;
+  const hairRgb = new Color(gear.hair).convertLinearToSRGB();
+  const skinRgb = new Color(FIGURE).convertLinearToSRGB();
+  const bandRgb = gear.band ? new Color(gear.band).convertLinearToSRGB() : null;
+  const bump = (x: number, y: number, ax: number, ay: number, sx: number, sy: number) => Math.exp(-(((x - ax) / sx) ** 2 + ((y - ay) / sy) ** 2));
+  const key = `${gear.crop} ${gear.hair} ${gear.band}`;
+  const head =
+    HEADS.get(key) ??
+    points(W, H, (i, j) => {
+      const a = (((i + 0.5) / W) * (1 + 2 * WRAP) - WRAP - 0.5) * 2 * Math.PI;
+      const e = (0.5 - (j + 0.5) / H) * Math.PI;
+      // the point on his head that way, in head units (x out to his left, y up, z forward)
+      const dx = Math.cos(e) * Math.sin(a);
+      const dy = Math.sin(e);
+      const dz = Math.cos(e) * Math.cos(a);
+      const k = 1 / Math.hypot(dx / HEAD_SIZE[0], dy / HEAD_SIZE[1], dz / HEAD_SIZE[2]);
+      const [x, y, z] = [(dx * k) / HEAD_SIZE[0], (dy * k) / HEAD_SIZE[1], (dz * k) / HEAD_SIZE[2]];
+      // the face's planes: hollows of the eyes and under the brow, under the nose, the mouth's line, under the lip; the jaw's edge
+      let shade = 1;
+      if (z > 0.1) {
+        for (const ex of [-0.4, 0.4]) shade -= 0.09 * bump(x, y, ex, 0.07, 0.17, 0.075);
+        shade -= 0.05 * Math.exp(-(((y - 0.15) / 0.035) ** 2)) * bump(x, 0, 0, 0, 0.55, 1);
+        shade -= 0.07 * bump(x, y, 0, -0.33, 0.13, 0.04);
+        shade -= 0.07 * bump(x, y, 0, -0.47, 0.2, 0.018);
+        shade -= 0.05 * bump(x, y, 0, -0.61, 0.17, 0.04);
+        shade += 0.04 * bump(x, y, 0, 0.27, 0.3, 0.06) + 0.035 * (bump(x, y, -0.52, -0.12, 0.13, 0.1) + bump(x, y, 0.52, -0.12, 0.13, 0.1));
+      }
+      shade -= 0.06 * Math.exp(-(((y + 0.66 + 0.25 * Math.abs(x)) / 0.07) ** 2)) * (z > -0.3 ? 1 : 0);
+      // hair: over a line that runs from his forehead down past the top of each ear to the nape (figure.py's
+      // hairline); a fade's sides go to skin below the temples, rows run front to back; how high it stands
+      // off his scalp (ft) is his crop's shape, which the head is pushed out by (see stuffMaterial)
+      const line = Math.max(y - 0.32 - 0.5 * z, y - 0.3 - 0.85 * z);
+      const over = (soft: number) => Math.min(1, Math.max(0, (line + soft * 0.3) / soft));
+      const step = (a: number, b: number, v: number) => {
+        const q = Math.min(1, Math.max(0, (v - a) / (b - a)));
+        return q * q * (3 - 2 * q);
+      };
+      const sides = Math.min(1, Math.max(0.12, (y - 0.08 + 0.4 * (1 - Math.abs(x))) / 0.4));
+      const crop = gear.crop;
+      let cover = 0;
+      let lift = 0;
+      if (crop === 1) cover = 0.5 * over(0.08);
+      else if (crop === 2) cover = over(0.2) * sides;
+      else if (crop === 3) {
+        cover = over(0.05);
+        lift = 0.022 * step(-0.02, 0.1, line);
+      } else if (crop === 4) {
+        cover = over(0.05) * (0.7 + 0.3 * Math.cos(x * Math.PI * 7));
+        lift = 0.012 * cover;
+      } else if (crop === 5) {
+        // (a high top: the sides faded, the top stood up a few inches over his crown; only the top, or it juts out like a cap's brim)
+        cover = over(0.12) * Math.max(sides, step(0.4, 0.55, y));
+        lift = 0.105 * step(0.3, 0.9, y) * over(0.05);
+      } else if (crop === 6) {
+        cover = over(0.04);
+        lift = 0.1 * step(-0.04, 0.14, line);
+      }
+      let stuff: Stuff = cover > 0.35 ? 'hair' : crop === 0 && y > 0.25 ? 'scalp' : z > 0.2 ? 'face' : 'skin';
+      let rgb: [number, number, number] = [
+        (skinRgb.r + (hairRgb.r - skinRgb.r) * cover) * shade,
+        (skinRgb.g + (hairRgb.g - skinRgb.g) * cover) * shade,
+        (skinRgb.b + (hairRgb.b - skinRgb.b) * cover) * shade,
+      ];
+      if (bandRgb && Math.abs(y - 0.36 + 0.12 * z) < 0.075 && y > 0) {
+        rgb = [bandRgb.r, bandRgb.g, bandRgb.b];
+        stuff = 'terry';
+        lift = Math.max(lift, 0.012);
+      }
+      return [rgb, stuff, lift / HAIR_MAX];
+    });
+  if (!HEADS.has(key)) {
+    if (HEADS.size >= HEADS_KEPT) HEADS.delete(HEADS.keys().next().value!);
+    HEADS.set(key, head);
+  }
+  sh.put(R_HEAD, head);
+
+  // the limbs' strips: skin, and what he wears on them
+  for (const [limb, rect] of R_LIMB.entries()) {
+    const arm = limb < 2;
+    const side = (limb % 2) as 0 | 1;
+    const len = arm ? ARM_LEN : LEG_LEN;
+    const span = (from: number, to: number, color: string, stuff: Stuff) =>
+      sh.both(rect, (ctx, pick) => {
+        ctx.fillStyle = pick(color, stuff);
+        ctx.fillRect((from / len) * rect[2], 0, ((to - from) / len) * rect[2], rect[3]);
+      });
+    sh.fill(rect, FIGURE, 'skin');
+    if (arm) {
+      // (his hand, from the wrist on, is a little rougher)
+      span(2.12, len, FIGURE, 'hand');
+      if (gear.sleeve?.arm === side) span(0.28, 2.08, gear.sleeve.color, 'sleeve');
+      if (gear.wrist?.arms.includes(side)) span(1.86, 2.1, gear.wrist.color, 'terry');
+    } else {
+      // socks from the shoe up to mid-calf (lower for some), a band of the team's colour at the top of a white one
+      const sock = kit.light ? WHITE : kit.color;
+      const top = 2.4 + gear.sockDrop * 0.5;
+      if (gear.leg?.legs.includes(side)) span(gear.leg.long ? 0.9 : 1.3, gear.leg.long ? top + 0.05 : 2.05, gear.leg.color, 'sleeve');
+      span(top, len, sock, 'sock');
+      span(top + 0.07, top + 0.13, sock === WHITE ? kit.color : WHITE, 'sock');
+    }
+  }
+
+  // the shoes: along the foot (heel to toe), round it from under the sole (the top half way, his outside three quarters)
+  const { base, accent, sole, lace } = gear.shoe;
+  sh.both(R_SHOE, (ctx, pick) => {
+    // (a turn round the foot is up the picture here: drawn with y the share of a turn from under the
+    // sole, 192 to the turn, its top at 96 and his outside at 144, and again a turn either side)
+    const [, , w, h] = R_SHOE;
+    for (const turn of [-1, 0, 1]) {
+      ctx.save();
+      ctx.translate(0, h);
+      ctx.scale(w / 512, -h / (192 * (1 + 2 * WRAP)));
+      ctx.translate(0, (WRAP + turn) * 192);
+      ctx.fillStyle = pick(base, 'leather');
+      ctx.fillRect(-10, -10, 532, 212);
+      // the toe box, a mesh a shade off the leather; the heel's counter and a panel each side in the second colour
+      ctx.fillStyle = pick(mix(base, light(base) > 0.5 ? '#000000' : '#ffffff', 0.1), 'mesh');
+      ctx.fillRect(0.8 * 512, -10, 120, 212);
+      ctx.fillStyle = pick(accent, 'leather');
+      ctx.fillRect(-10, -10, 0.17 * 512 + 10, 212);
+      for (const out of [1, -1]) {
+        // (up the side of the foot is toward 96 from either side: it climbs toward the heel)
+        const mid = 96 + out * 50;
+        ctx.beginPath();
+        ctx.moveTo(0.16 * 512, mid - out * 34);
+        ctx.lineTo(0.62 * 512, mid - out * 8);
+        ctx.lineTo(0.67 * 512, mid + out * 4);
+        ctx.lineTo(0.16 * 512, mid + out * 14);
+        ctx.closePath();
+        ctx.fill();
+      }
+      // the laces up the top of the foot, over a tongue
+      ctx.fillStyle = pick(mix(base, '#000000', 0.18), 'mesh');
+      ctx.fillRect(0.4 * 512, 96 - 15, 0.42 * 512, 30);
+      ctx.fillStyle = pick(lace, 'lace');
+      for (let k = 0; k < 6; k++) ctx.fillRect((0.43 + k * 0.062) * 512, 96 - 13, 8, 26);
+      ctx.restore();
+    }
+  });
+  // the soles: the tread at the bottom, the foam over it, a line of the stripe's colour round the top
+  sh.both(R_SOLE, (ctx, pick) => {
+    const [, , w, h] = R_SOLE;
+    ctx.fillStyle = pick(sole, 'rubber');
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = pick(sole === WHITE ? '#3a3b40' : '#202125', 'rubber');
+    ctx.fillRect(0, h * 0.8, w, h * 0.2);
+    ctx.fillStyle = pick(accent, 'rubber');
+    ctx.fillRect(0, h * 0.12, w, h * 0.07);
+  });
+  return sh;
+}
+
+/**
+ * What the figures' material does beyond a plain one: its roughness, a cloth's sheen and, close up, the
+ * knit of it come from the stuff picture. (The knit's bumps are worked out where they're drawn, and fade
+ * out as they get too fine for the pixels to show.)
+ */
+const STUFF_PARS = /* glsl */ `
+uniform sampler2D uStuff;
+// (Mikkelsen's bump, as three's but with the screen's steps left their length: the height is in feet, as the knit's depth is)
+vec3 knitNormal( vec3 surf_pos, vec3 surf_norm, vec2 dHdxy, float faceDirection ) {
+  vec3 vSigmaX = dFdx( surf_pos );
+  vec3 vSigmaY = dFdy( surf_pos );
+  vec3 R1 = cross( vSigmaY, surf_norm );
+  vec3 R2 = cross( surf_norm, vSigmaX );
+  float fDet = dot( vSigmaX, R1 ) * faceDirection;
+  vec3 vGrad = sign( fDet ) * ( dHdxy.x * R1 + dHdxy.y * R2 );
+  return normalize( abs( fDet ) * surf_norm - vGrad );
+}`;
+/** The knit's stitches: this many to the sheet's width (a few millimetres apart on his vest), and how deep they are (ft: a tenth of a millimetre). */
+const KNIT = 640;
+const KNIT_DEEP = 0.0003;
+
+/** Where his head is on the sheet (in uv): there the stuff picture's third channel is how far his hair stands off him, not a knit. */
+const HEAD_UV = [R_HEAD[0] / SHEET, 1 - (R_HEAD[1] + R_HEAD[3]) / SHEET, (R_HEAD[0] + R_HEAD[2]) / SHEET, 1 - R_HEAD[1] / SHEET].map((v) => v.toFixed(4));
+const ON_HEAD = (uv: string) => `( ${uv}.x > ${HEAD_UV[0]} && ${uv}.y > ${HEAD_UV[1]} && ${uv}.y < ${HEAD_UV[3]} )`;
+
+/**
+ * His material, from his sheet and its stuff picture. `plain` (a device that can't keep up) is a
+ * standard material with the same picture, roughness and hair, but none of a cloth's sheen or knit.
+ */
+function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, plain = false): MeshStandardMaterial {
+  const m = plain
+    ? new MeshStandardMaterial({ map, vertexColors: true, side: DoubleSide, roughness: 1, metalness: 0 })
+    : new MeshPhysicalMaterial({ map, vertexColors: true, side: DoubleSide, roughness: 1, metalness: 0, sheen: 1, sheenRoughness: 0.55, sheenColor: 0xffffff });
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uStuff = { value: stuff };
+    // his hair stands off his head by as much as his crop says (pushed out as built, before his bones carry it)
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D uStuff;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\nif ${ON_HEAD('uv')} transformed += normal * textureLod( uStuff, uv, 0.0 ).b * ${HAIR_MAX.toFixed(3)};`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>\n${STUFF_PARS}`)
+      .replace('#include <roughnessmap_fragment>', 'vec4 stuff = texture2D( uStuff, vMapUv );\nfloat roughnessFactor = stuff.r;');
+    if (plain) return;
+    sh.fragmentShader = sh.fragmentShader
+      .replace(
+        '#include <normal_fragment_maps>',
+        /* glsl */ `#include <normal_fragment_maps>
+        if ( stuff.b > 0.02 && ! ${ON_HEAD('vMapUv')} ) {
+          vec2 kp = vMapUv * ${KNIT.toFixed(1)};
+          float fine = 1.0 - smoothstep( 0.22, 0.6, length( fwidth( kp ) ) );
+          if ( fine > 0.0 ) {
+            float h = sin( kp.x * 6.2832 ) * sin( kp.y * 6.2832 + 1.4 * sin( kp.x * 3.1416 ) );
+            normal = knitNormal( - vViewPosition, normal, vec2( dFdx( h ), dFdy( h ) ) * ${KNIT_DEEP} * stuff.b * fine, faceDirection );
+          }
+        }`,
+      )
+      .replace(
+        '#include <lights_physical_fragment>',
+        /* glsl */ `#include <lights_physical_fragment>
+        material.sheenColor = stuff.g * mix( vec3( 1.0 ), diffuseColor.rgb, 0.45 ) * 0.7;`,
+      );
+  };
+  m.customProgramCacheKey = () => (plain ? 'figure-plain' : 'figure');
+  return m;
 }
 
 const A = new Vector3();
@@ -143,6 +895,8 @@ export class Fig {
   readonly group = new Group();
   readonly pup: Puppet;
   readonly side: 0 | 1;
+  /** The team's letters on his kit (none in a highlight): another set dresses him again. */
+  readonly mark: string;
   private readonly bones: Bone[] = [];
   /** Each limb's hinge (the line its elbow or knee folds about), kept for when it's straight. */
   private readonly hinge = [new Vector3(1, 0, 0), new Vector3(1, 0, 0), new Vector3(1, 0, 0), new Vector3(1, 0, 0)];
@@ -151,16 +905,38 @@ export class Fig {
   readonly shadow: Mesh;
   readonly ring: Mesh;
   private readonly own: { dispose(): void }[] = [];
+  private gone = false;
+  private readonly mesh: SkinnedMesh;
+  /** His material, and its plain twin once a slow device has asked for it (see lite). */
+  private readonly mats: [MeshStandardMaterial, MeshStandardMaterial | null];
+  private readonly textures: [CanvasTexture, CanvasTexture];
 
-  constructor(geo: Geo, mats: Mats, body: Body, side: 0 | 1, kit: MatchKit, num: string, look = 0, name = '') {
+  /** `seed` makes him himself (his crop, what he wears on his arms and legs, his shoes); `mark` is his team's letters. */
+  constructor(geo: Geo, body: Body, side: 0 | 1, kit: MatchKit, num: string, seed = 0, name = '', mark = '') {
     this.pup = new Puppet(body);
     this.side = side;
+    this.mark = mark;
     const { s, bulk } = body;
-    const tex = jerseyTexture(num, name, kit);
-    // (every hollow's shade is on the skin and the cloth themselves: see the model)
-    const jersey = new MeshStandardMaterial({ map: tex, roughness: 0.82, metalness: 0, vertexColors: true, side: DoubleSide });
-    const skin = new MeshStandardMaterial({ color: FIGURE, roughness: 0.52, metalness: 0, vertexColors: true });
-    this.own.push(tex, jersey, skin);
+    const gear = gearOf(seed, kit);
+    const sheet = paint(kit, num, name, mark, gear, geo.shorts);
+    const map = new CanvasTexture(sheet.cv);
+    map.colorSpace = SRGBColorSpace;
+    map.anisotropy = 4;
+    const stuff = new CanvasTexture(sheet.stuff);
+    const mat = stuffMaterial(map, stuff);
+    this.own.push(map, stuff, mat);
+    this.mats = [mat, null];
+    this.textures = [map, stuff];
+    // (the app's face may still be on its way: once it's here, his letters are painted again in it)
+    const fonts = typeof document !== 'undefined' ? document.fonts : undefined;
+    if (fonts && !fonts.check('900 40px "Archivo Variable"'))
+      void fonts.load('900 40px "Archivo Variable"').then(() => {
+        if (this.gone || !fonts.check('900 40px "Archivo Variable"')) return;
+        const again = paint(kit, num, name, mark, gear, geo.shorts);
+        map.image = again.cv;
+        stuff.image = again.stuff;
+        map.needsUpdate = stuff.needsUpdate = true;
+      });
     for (let k = 0; k < BONES; k++) {
       const b = new Bone();
       this.bones.push(b);
@@ -177,19 +953,8 @@ export class Fig {
     scale(B.head, hs, hs, hs);
     for (const k of [B.ual, B.fal, B.uar, B.far, B.thl, B.shl, B.thr, B.shr, B.hemL, B.hemR]) scale(k, thick, s, thick);
     for (const k of [B.hal, B.har, B.ftl, B.ftr]) scale(k, s, s, s);
-    const wear: Record<string, Material> = {
-      skin,
-      hair: mats(HAIR[Math.abs(look) % HAIR.length], 0.78),
-      jersey,
-      trim: mats(kit.token.ring, 0.8, true),
-      cloth: mats(kit.token.fill, 0.82, true),
-      shoe: mats(kit.light ? kit.token.ring : SHOE, 0.45),
-      white: mats(SOCK, 0.7),
-    };
-    const mesh = new SkinnedMesh(
-      geo.body,
-      geo.wears.map((name) => wear[name] ?? skin),
-    );
+    const mesh = new SkinnedMesh(geo.body, mat);
+    this.mesh = mesh;
     const bones = new Skeleton(
       geo.order.map((k) => this.bones[k]),
       geo.inverse,
@@ -331,7 +1096,17 @@ export class Fig {
     this.ring.position.set(p.x, 0.045, p.z);
   }
 
+  /** A device that can't keep up: his plain material (no cloth's sheen, no knit up close), or back to the full one. */
+  lite(on: boolean) {
+    if (on && !this.mats[1]) {
+      this.mats[1] = stuffMaterial(this.textures[0], this.textures[1], true);
+      this.own.push(this.mats[1]);
+    }
+    this.mesh.material = (on && this.mats[1]) || this.mats[0];
+  }
+
   dispose() {
+    this.gone = true;
     for (const o of this.own) o.dispose();
   }
 }

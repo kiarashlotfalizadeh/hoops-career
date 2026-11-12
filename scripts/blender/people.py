@@ -1,7 +1,9 @@
 # The people who don't play: two players sitting on the bench (one leaning on his knees, one sat
-# back) and a coach on his feet with his arms folded. Each is the player's own body (figure.py), put
-# in a pose by its bones and baked as it stands: nothing in the app moves them. They stand on y = 0;
-# a sitter's hips are over the origin's chair (see SIT_BACK), facing +z.
+# back with a towel over his shoulder), and the coaches: the head coach on his feet with his arms
+# folded, his assistant sat on the first chair behind him. Each is the player's own body (figure.py),
+# put in a pose by its bones and baked as it stands: nothing in the app moves them. They stand on
+# y = 0; a sitter's hips are over the origin's chair (see SIT_BACK), facing +z, and the head coach
+# stands COACH_OUT in front of his assistant's chair.
 import os
 import sys
 
@@ -25,6 +27,7 @@ from figure import (  # noqa: E402
     THIGH,
     TORSO,
     UARM,
+    WHITE,
     arm_frame,
     copy,
     dress_coach,
@@ -34,12 +37,17 @@ from figure import (  # noqa: E402
     fused,
     materials,
     report,
+    solid,
 )
 
 CONV = Matrix(((1, 0, 0, 0), (0, 0, -1, 0), (0, 1, 0, 0), (0, 0, 0, 1)))
 # a bench chair's seat is this high, and a sitter's hips this far behind its middle (arena.py's chair)
 SEAT = 1.5
 SIT_BACK = 0.3
+# the head coach stands this far in front of the first chair (toward the floor; the app turns the two toward
+# the middle of the floor, which puts him beside his assistant on either bench), and is this much smaller than his players
+COACH_OUT = 3.0
+COACH_SIZE = 0.93
 
 
 def frame(at, x, y, z):
@@ -126,8 +134,33 @@ def white(obj):
     col.data.foreach_set('color', [1.0] * (len(obj.data.vertices) * 4))
 
 
-def posed(fig, rig_ob, pose, name, shift=(0, 0, 0), seat=False):
-    """The figure in a pose, as a mesh of its own: its shade baked for how it now stands or sits."""
+def towel(pose):
+    """A towel over his left shoulder, a flap down his chest and one down his back (laid along the posed chest)."""
+    x = SHOULDER * 0.55
+    # (up and forward of the chest joint: down his front, over the top of the shoulder, down his back)
+    path = [(-0.85, 0.43), (-0.45, 0.47), (-0.1, 0.42), (0.13, 0.22), (0.17, 0.0), (0.12, -0.22), (-0.15, -0.37), (-0.5, -0.4), (-0.9, -0.37)]
+    rings = []
+    for i, (y, z) in enumerate(path):
+        a, b = path[max(0, i - 1)], path[min(len(path) - 1, i + 1)]
+        ty, tz = b[0] - a[0], b[1] - a[1]
+        n = math.hypot(ty, tz) or 1
+        # (out from the body square to the path, a little thick)
+        oy, oz = tz / n, -ty / n
+        if z < 0:
+            oy, oz = -oy, -oz
+        ring = []
+        for w, d in ((-0.2, 0.0), (0.2, 0.0), (0.2, 0.03), (-0.2, 0.03)):
+            ring.append(tuple(pose['chest'] @ Vector((x + w - 0.04 * z, y + oy * d, z + oz * d))))
+        rings.append(ring)
+    o = solid(rings, 'towel')
+    smooth(o)
+    set_material(o, material(WHITE))
+    paint(o, lambda *_: 1.0)
+    return [o]
+
+
+def posed(fig, rig_ob, pose, name, shift=(0, 0, 0), seat=False, extra=None):
+    """The figure in a pose, as a mesh of its own (and `extra` things laid on him for it): its shade baked for how it now stands or sits."""
     # (which points are his head, while he still stands as built: a face's baked shade is only a hint)
     face = [v.co.z > HEAD_C[1] - HEAD_H * 1.05 for v in fig.data.vertices]
     for b in BONES:
@@ -139,6 +172,11 @@ def posed(fig, rig_ob, pose, name, shift=(0, 0, 0), seat=False):
     ob = link(bpy.data.objects.new(name, me))
     for g in list(ob.vertex_groups):
         ob.vertex_groups.remove(g)
+    if extra:
+        # (joined after him: their points come after his, and none of them is his face)
+        ob = join([ob, *extra(pose)], name)
+        ob.name = name
+        face += [False] * (len(ob.data.vertices) - len(face))
     others = []
     if seat:
         others = [box((0, FLOOR + SEAT - 0.1, SIT_BACK), (1.7, 0.2, 1.5), 'seat'), box((0, FLOOR + SEAT + 0.8, SIT_BACK - 0.8), (1.7, 1.6, 0.15), 'back')]
@@ -158,7 +196,8 @@ if __name__ == '__main__':
 
     # the coach: on his feet, arms folded, watching
     hi = fused()
-    coach_fig, coach_rig = finish(dress_coach(copy(hi, 'hi2'), 0.5), 'coachFig')
+    # (two of them in one thing, each lighter than a player: they are seen from across the floor)
+    coach_fig, coach_rig = finish(dress_coach(copy(hi, 'hi2'), 0.38), 'coachFig')
     white(coach_fig)
     paint(coach_fig, face_shade)
     sh = CHEST_Y - 0.14
@@ -170,7 +209,12 @@ if __name__ == '__main__':
         look=0.06,
         toes=0.16,
     )
-    coach = posed(coach_fig, coach_rig, standing, 'coach')
+    head = posed(coach_fig, coach_rig, standing, 'headCoach')
+    transform(head, Matrix.Translation((0, 0, COACH_OUT)) @ Matrix.Scale(COACH_SIZE, 4))
+    # his assistant: sat on the first chair, leaning in a little, his hands on his thighs, watching
+    watching = sitting(0.18, KN_Y - 0.04, 0.32, (0.95, 2.66, 0.45), (0.5, 2.22, 1.25), look=0.02)
+    aide = posed(coach_fig, coach_rig, watching, 'assistant', (0, 0, -SIT_BACK), seat=True)
+    coach = join([head, aide], 'coach')
     for o in (coach_fig, coach_rig):
         bpy.data.objects.remove(o)
 
@@ -182,7 +226,7 @@ if __name__ == '__main__':
     lean_fwd = sitting(0.5, KN_Y, 0.3, (0.68, 2.42, 1.1), (0.22, 1.95, 1.75), look=-0.3)
     bench_a = posed(fig, rig_ob, lean_fwd, 'benchA', (0, 0, -SIT_BACK), seat=True)
     sat_back = sitting(-0.14, KN_Y - 0.13, 0.36, (1.0, 2.62, 0.0), (0.66, 2.2, 1.0), look=0.1)
-    bench_b = posed(fig, rig_ob, sat_back, 'benchB', (0, 0, -SIT_BACK), seat=True)
+    bench_b = posed(fig, rig_ob, sat_back, 'benchB', (0, 0, -SIT_BACK), seat=True, extra=towel)
     for o in (fig, rig_ob):
         bpy.data.objects.remove(o)
 

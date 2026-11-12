@@ -3,6 +3,7 @@
 // a bone or a list the app relies on, a file older than its script, or a file the reader should have
 // turned away, fails here and not as a blank court on someone's phone.
 import { describe, expect, it } from 'vitest';
+import { figureGeo } from '../live/court3d/figure';
 import { merged, placed, readGlb, type Thing } from '../live/court3d/glb';
 
 /** The bones the puppet drives (court3d/figure.ts keeps the same names in its `B`; it is not exported). */
@@ -268,6 +269,23 @@ describe("the 3D court's models", () => {
       expect(fig.parts.find((p) => p.material === 'jersey')!.geo.getAttribute('uv')).toBeTruthy();
       expect(merged(fig).geo.getAttribute('uv').count).toBe(fig.parts.reduce((n, p) => n + p.geo.getAttribute('position').count, 0));
       expect(triangles(fig)).toBeLessThanOrEqual(15_000);
+      // as the app dresses him: one shape for one material, every point of him somewhere on his sheet, and no
+      // triangle stretched across it (one across two of its pictures, or a picture's seam, would show the others in between)
+      const geo = figureGeo((o) => o, figure);
+      expect(geo.body.groups.length).toBe(0);
+      const uv = geo.body.getAttribute('uv');
+      expect(Math.min(...Array.from(uv.array)), 'a point off the sheet').toBeGreaterThanOrEqual(0);
+      expect(most(uv.array), 'a point off the sheet').toBeLessThanOrEqual(1);
+      const corners = geo.body.index!.array;
+      let wide = 0;
+      for (let f = 0; f < corners.length; f += 3)
+        for (const get of [uv.getX.bind(uv), uv.getY.bind(uv)]) {
+          const v = [0, 1, 2].map((k) => get(corners[f + k]));
+          wide = Math.max(wide, Math.max(...v) - Math.min(...v));
+        }
+      // (the widest of one picture's own are at the crown of his head, where its picture meets at a point: under a fifth of the sheet)
+      expect(wide, 'a triangle stretched across the sheet').toBeLessThan(0.19);
+      expect(geo.shorts[1] - geo.shorts[0]).toBeGreaterThan(1);
     }
 
     // the benches and the coach: the player's body posed and baked (no skin), on the floor, his vest's uv kept
@@ -283,7 +301,8 @@ describe("the 3D court's models", () => {
           low = Math.min(low, p.geo.boundingBox!.min.y);
         }
         expect(Math.abs(low), `${name} is not on the floor (his lowest point is at y = ${low.toFixed(3)})`).toBeLessThan(0.08);
-        expect(triangles(who)).toBeLessThanOrEqual(8_000);
+        // (the coach's thing is two men: the head coach on his feet and his assistant on the first chair)
+        expect(triangles(who)).toBeLessThanOrEqual(name === 'coach' ? 13_000 : 8_000);
       }
       for (const name of ['benchA', 'benchB'])
         expect(

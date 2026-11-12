@@ -1,0 +1,26 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Motion lab</title>
+<style>
+  html,
+  body {
+    margin: 0;
+    background: #101012;
+    color: #ddd;
+    font: 12px system-ui;
+  }
+  #c {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 640px;
+    height: 400px;
+    visibility: hidden;
+  }
+  #strip {
+    display: block;
+  }
+</style>
+<canvas id="c"></canvas>
+<canvas id="strip"></canvas>
+<script type="module" src="./lab.ts"></script>

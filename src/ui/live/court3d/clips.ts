@@ -85,6 +85,9 @@ export type ClipId =
   | 'idle'
   | 'idle2'
   | 'idle3'
+  | 'shift'
+  | 'hips'
+  | 'knees'
   | 'walk'
   | 'run'
   | 'sprint'
@@ -102,7 +105,10 @@ export type ClipId =
   | 'floater'
   | 'layup'
   | 'dunk'
+  | 'dunk1'
+  | 'dunkHang'
   | 'freeThrow'
+  | 'ftRoutine'
   | 'rebound'
   | 'block'
   | 'contest'
@@ -111,7 +117,10 @@ export type ClipId =
   | 'boxout'
   | 'steal'
   | 'celebrate'
-  | 'rue';
+  | 'cheer'
+  | 'bump'
+  | 'rue'
+  | 'slump';
 
 /**
  * How a clip is timed: a 'loop' by the clock, a 'gait' by the stride (its keys at fractions of one,
@@ -146,10 +155,28 @@ function clip(id: ClipId, kind: Clip['kind'], dur: number, base: PoseKey, keys: 
   };
 }
 
+/** Standing, arms down, as numbers (what a gesture's trunk channels are measured from). */
+export const REST_POSE = Float32Array.from(CHANNELS, (c) => REST[c]);
+
 // --- poses the clips share ---
 const HOLD: PoseKey = { bx: 0.15, by: 4.25, bz: 0.9, gl: 1, gr: 1, lx: 0.1, ly: -1, lz: 0.9, rx: 0.1, ry: -1, rz: 0.9, hip: -0.12, lean: 0.08 };
 const GUARD_ARM: PoseKey = { lx: 0.85, ly: -0.95, lz: 0.75 };
 const DRIBBLE: PoseKey = { ...GUARD_ARM, bx: 0.95, bz: 0.8, rx: 0.4, ry: -2.0, rz: 0.75, hip: -0.28, lean: 0.17, wide: 0.15 };
+/** Hands on his hips, elbows out (the arms are solved down to his waist and fold outward). */
+const ON_HIPS: PoseKey = { lx: -0.2, ly: -1.36, lz: -0.06, rx: -0.2, ry: -1.36, rz: -0.06 };
+/** Bent over, his hands on his knees, arms straight. */
+const ON_KNEES: PoseKey = { hip: -0.8, lean: 0.75, wide: 0.22, lx: -0.3, ly: -2.3, lz: -0.19, rx: -0.3, ry: -2.3, rz: -0.19 };
+/** The dunk up to the slam (DUNK_AT): the gather, the two-foot leap and the reach. Every dunk shares it, so the ball meets the rim on time. */
+const DUNK_UP: [number, PoseKey][] = [
+  [-340, { ...DRIBBLE, by: 2.8, bz: 1.3, gl: 0 }],
+  [-170, { hip: -0.62, by: 4.2, lean: 0.22 }],
+  [-40, { hip: 0.2, air: 0.4, by: 5.6, leap: 0.25 }],
+  [70, { hip: 1.9, air: 1, by: 8.6, leap: 0.8, flu: 0.7, flf: 0.3, fru: 0.5, frf: -0.3, lean: -0.08 }],
+  [150, { hip: 2.3, air: 1, by: 8.5, leap: 1, flu: 0.8, flf: 0.4, fru: 0.6, frf: -0.4, lean: 0.05 }],
+  [200, { hip: 2.25, air: 1, by: 7.6, leap: 1, flu: 0.8, flf: 0.5, fru: 0.6, frf: -0.3, lean: 0.2 }],
+];
+/** A free throw's bounce: one, off the floor at his right foot, between his catching it and setting (0: it goes up). */
+const FT_BOUNCE: [number, number] = [-430, -190];
 
 /** A dribble's bounce: the ball leaves the hand, hits the floor halfway and comes back up; the hand rides it near the top. */
 const bounce =
@@ -316,18 +343,72 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3'>, Clip> = {
     0,
     { gr: 1, gl: 1, bx: 0, bz: 1 },
     [
-      [-340, { ...DRIBBLE, by: 2.8, bz: 1.3, gl: 0 }],
-      [-170, { hip: -0.62, by: 4.2, lean: 0.22 }],
-      [-40, { hip: 0.2, air: 0.4, by: 5.6, leap: 0.25 }],
-      [70, { hip: 1.9, air: 1, by: 8.6, leap: 0.8, flu: 0.7, flf: 0.3, fru: 0.5, frf: -0.3, lean: -0.08 }],
-      [150, { hip: 2.3, air: 1, by: 8.5, leap: 1, flu: 0.8, flf: 0.4, fru: 0.6, frf: -0.4, lean: 0.05 }],
-      [200, { hip: 2.25, air: 1, by: 7.6, leap: 1, flu: 0.8, flf: 0.5, fru: 0.6, frf: -0.3, lean: 0.2 }],
+      ...DUNK_UP,
       [230, { hip: 2.15, air: 1, gl: 0, gr: 0, lx: 0.15, ly: 1.75, lz: 0.9, rx: 0.15, ry: 1.75, rz: 0.9, leap: 1, flu: 0.7, flf: 0.6, fru: 0.5, frf: 0.2, lean: 0.15 }],
       [330, { hip: 1.5, air: 1, gl: 0, gr: 0, lx: 0.3, ly: 1.2, lz: 0.6, rx: 0.3, ry: 1.2, rz: 0.6, leap: 1 }],
       [500, { hip: -0.4, gl: 0, gr: 0, leap: 1, lx: 0.5, ly: -0.8, lz: 0.5, rx: 0.5, ry: -0.8, rz: 0.5 }],
       [620, { gl: 0, gr: 0, leap: 0.95 }],
     ],
     { grip: 'side' },
+  ),
+  // (one hand: the ball cocked high behind his head in his right, the left arm out for balance, thrown down through the ring)
+  dunk1: clip(
+    'dunk1',
+    'shot',
+    0,
+    { gr: 1, gl: 1, bx: 0.1, bz: 1 },
+    [
+      ...DUNK_UP.slice(0, 2),
+      [-40, { hip: 0.2, air: 0.4, by: 5.8, bx: 0.3, bz: 0.7, leap: 0.25, gl: 0.2 }],
+      [70, { hip: 1.9, air: 1, by: 9.1, bx: 0.45, bz: 0.15, leap: 0.8, gl: 0, lx: 0.85, ly: 0.2, lz: 0.6, flu: 0.9, flf: 0.6, fru: 0.2, frf: -0.4, lean: -0.12, tilt: 0.12 }],
+      [150, { hip: 2.3, air: 1, by: 9.2, bx: 0.4, bz: 0.45, leap: 1, gl: 0, lx: 0.9, ly: 0.4, lz: 0.5, flu: 0.95, flf: 0.7, fru: 0.25, frf: -0.4, lean: -0.05, tilt: 0.14 }],
+      [200, { hip: 2.25, air: 1, by: 8.0, bx: 0.2, bz: 1.1, leap: 1, gl: 0, lx: 0.9, ly: 0.3, lz: 0.5, flu: 0.85, flf: 0.6, fru: 0.3, frf: -0.3, lean: 0.22, tilt: 0.06 }],
+      [240, { hip: 2.1, air: 1, gl: 0, gr: 0, lx: 0.8, ly: 0.1, lz: 0.5, rx: 0.15, ry: 1.2, rz: 1.1, leap: 1, flu: 0.7, flf: 0.6, fru: 0.4, frf: 0.1, lean: 0.25 }],
+      [340, { hip: 1.4, air: 1, gl: 0, gr: 0, lx: 0.6, ly: -0.3, lz: 0.5, rx: 0.3, ry: 0.2, rz: 0.8, leap: 1 }],
+      [500, { hip: -0.45, gl: 0, gr: 0, leap: 1, lx: 0.5, ly: -0.9, lz: 0.5, rx: 0.5, ry: -0.8, rz: 0.5, lean: 0.2 }],
+      [640, { gl: 0, gr: 0, leap: 0.95 }],
+    ],
+    { grip: 'under' },
+  ),
+  // (two hands, and he hangs on the rim a beat, legs down, before he drops)
+  dunkHang: clip(
+    'dunkHang',
+    'shot',
+    0,
+    { gr: 1, gl: 1, bx: 0, bz: 1 },
+    [
+      ...DUNK_UP,
+      [230, { hip: 2.15, air: 1, gl: 0, gr: 0, lx: 0.2, ly: 1.85, lz: 0.75, rx: 0.2, ry: 1.85, rz: 0.75, leap: 1, flu: 0.5, flf: 0.4, fru: 0.4, frf: 0.2, lean: 0.12 }],
+      [330, { hip: 2.05, air: 1, gl: 0, gr: 0, lx: 0.25, ly: 1.95, lz: 0.6, rx: 0.25, ry: 1.95, rz: 0.6, leap: 1, flu: 0.1, flf: 0.15, fru: 0.05, frf: 0.1, lean: -0.04 }],
+      [520, { hip: 1.95, air: 1, gl: 0, gr: 0, lx: 0.25, ly: 1.95, lz: 0.55, rx: 0.25, ry: 1.95, rz: 0.55, leap: 1, flu: 0.2, flf: 0.3, fru: 0.15, frf: 0.25, lean: 0.02 }],
+      [640, { hip: 1.0, air: 1, gl: 0, gr: 0, lx: 0.4, ly: 1.0, lz: 0.5, rx: 0.4, ry: 1.0, rz: 0.5, leap: 1 }],
+      [780, { hip: -0.45, gl: 0, gr: 0, leap: 1, lx: 0.5, ly: -0.8, lz: 0.5, rx: 0.5, ry: -0.8, rz: 0.5, lean: 0.15 }],
+      [900, { gl: 0, gr: 0, leap: 0.95 }],
+    ],
+    { grip: 'side' },
+  ),
+  // (his routine at the line, as long as the plan leaves him: a bounce, the ball back into both hands, set. 0: the shot's move begins)
+  ftRoutine: clip(
+    'ftRoutine',
+    'shot',
+    0,
+    { ...HOLD, hip: -0.06, lean: 0.05 },
+    [
+      [-560, { ...HOLD }],
+      [FT_BOUNCE[0], { bx: 0.42, by: 3.0, bz: 0.95, gl: 0, gr: 1, hip: -0.22, lean: 0.2, lx: 0.45, ly: -1.25, lz: 0.55, rx: 0.3, ry: -1.3, rz: 0.75 }],
+      [FT_BOUNCE[1], { bx: 0.42, by: 3.0, bz: 0.95, gl: 0, gr: 1, hip: -0.24, lean: 0.22, lx: 0.45, ly: -1.25, lz: 0.55, rx: 0.3, ry: -1.3, rz: 0.75 }],
+      [-90, { ...HOLD, by: 4.0, hip: -0.12, lean: 0.1 }],
+      [0, { ...HOLD }],
+    ],
+    {
+      grip: 'top',
+      fn: (out, u) => {
+        if (u <= FT_BOUNCE[0] || u >= FT_BOUNCE[1]) return;
+        const h = Math.abs(Math.cos((Math.PI * (u - FT_BOUNCE[0])) / (FT_BOUNCE[1] - FT_BOUNCE[0])));
+        out[I.by] = 0.42 + (3.0 - 0.42) * Math.pow(h, 0.85);
+        out[I.gr] = Math.max(0, Math.min(1, (h - 0.45) / 0.3));
+      },
+    },
   ),
   freeThrow: clip(
     'freeThrow',
@@ -401,12 +482,156 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3'>, Clip> = {
     [0.5, { hip: 0.5, air: 0.9, lx: 0.6, ly: 2.05, lz: 0.3, rx: 0.6, ry: 2.05, rz: 0.3 }],
     [1, { hip: -0.25, lx: 0.7, ly: 1.2, lz: 0.4, rx: 0.7, ry: 1.2, rz: 0.4 }],
   ]),
+  // (fists pumping in turn, bouncing on his toes, head back)
+  cheer: clip('cheer', 'loop', 760, { lean: -0.04, wide: 0.12, nod: 0.3 }, [
+    [0, { hip: -0.14, lx: 0.55, ly: 1.05, lz: 0.35, rx: 0.5, ry: -0.35, rz: 0.55 }],
+    [0.25, { hip: 0.02 }],
+    [0.5, { hip: -0.14, lx: 0.5, ly: -0.35, lz: 0.55, rx: 0.55, ry: 1.05, rz: 0.35 }],
+    [0.75, { hip: 0.02 }],
+    [1, { hip: -0.14, lx: 0.55, ly: 1.05, lz: 0.35, rx: 0.5, ry: -0.35, rz: 0.55 }],
+  ]),
+  // (a chest bump with the man facing him: down, up together chest first, arms flung back, and down again)
+  bump: clip('bump', 'shot', 0, { wide: 0.15 }, [
+    [0, { hip: -0.12, lx: 0.6, ly: 0.9, lz: 0.4, rx: 0.6, ry: 0.9, rz: 0.4 }],
+    [200, { hip: -0.55, lean: 0.28, lx: 0.45, ly: -1.3, lz: -0.45, rx: 0.45, ry: -1.3, rz: -0.45 }],
+    [400, { hip: 1.05, air: 1, lean: 0.18, surge: 0.2, nod: 0.35, lx: 0.95, ly: 0.2, lz: -0.65, rx: 0.95, ry: 0.2, rz: -0.65, flu: 0.35, flf: -0.3, fru: 0.35, frf: -0.3 }],
+    [580, { hip: 0.55, air: 1, lean: 0.02, surge: 0.05, lx: 0.8, ly: 1.4, lz: 0.15, rx: 0.8, ry: 1.4, rz: 0.15, flu: 0.2, fru: 0.2 }],
+    [780, { hip: -0.32, lx: 0.6, ly: 1.5, lz: 0.3, rx: 0.6, ry: 1.5, rz: 0.3 }],
+    [980, { hip: -0.1, lx: 0.6, ly: 0.9, lz: 0.4, rx: 0.6, ry: 0.9, rz: 0.4 }],
+  ]),
   rue: clip('rue', 'loop', 2400, { lean: 0.02, lx: -0.25, ly: 1.05, lz: 0.2, rx: -0.25, ry: 1.05, rz: 0.2 }, [
     [0, { nod: -0.5 }],
     [0.5, { nod: -0.8, hip: -0.06 }],
     [1, { nod: -0.5 }],
   ]),
+  // (bent over, hands on his knees, head down: it's gone)
+  slump: clip('slump', 'loop', 3000, { ...ON_KNEES, lean: 0.82, nod: -0.55 }, [
+    [0, {}],
+    [0.5, { hip: -0.86, lean: 0.88, nod: -0.7 }],
+    [1, {}],
+  ]),
+
+  // --- standing at rest (a dead ball: the line, a timeout, the walk up) and his weight going from foot to foot ---
+  // (weight from one leg to the other, slowly, the hip of the leg he stands on up)
+  shift: clip('shift', 'loop', 5200, { lean: 0.03 }, [
+    [0, { sway: 0.11, proll: 0.05, tilt: -0.035, lx: 0.32, rx: 0.22, ly: -1.95, ry: -1.98 }],
+    [0.5, { sway: -0.11, proll: -0.05, tilt: 0.035, lx: 0.22, rx: 0.32, ly: -1.98, ry: -1.95 }],
+    [1, { sway: 0.11, proll: 0.05, tilt: -0.035, lx: 0.32, rx: 0.22, ly: -1.95, ry: -1.98 }],
+  ]),
+  hips: clip('hips', 'loop', 4600, { ...ON_HIPS, lean: 0.04, wide: 0.1 }, [
+    [0, { sway: 0.08, proll: 0.04, nod: -0.12 }],
+    [0.5, { sway: -0.06, proll: -0.03, nod: 0.06 }],
+    [1, { sway: 0.08, proll: 0.04, nod: -0.12 }],
+  ]),
+  // (bent over getting his breath back, head up to see the floor)
+  knees: clip('knees', 'loop', 2400, { ...ON_KNEES, nod: 0.3 }, [
+    [0, {}],
+    [0.5, { hip: -0.84, lean: 0.79 }],
+    [1, {}],
+  ]),
 };
+
+/**
+ * What his arms and head can do over whatever his legs are doing (a gesture): flex after a dunk, point to
+ * the sky, pump a fist, slap a teammate's hand, raise a hand for the foul or ask what that was for, clap,
+ * wag a finger after a block, hands to his head. Each is timed from its start (ms); only the arm and head
+ * channels are read, laid over his pose (see Puppet.cue).
+ */
+export type Gesture = 'flex' | 'roar' | 'point' | 'fist' | 'five' | 'handUp' | 'protest' | 'clap' | 'wag' | 'head';
+
+/** A gesture's keys, from REST: the channels it moves. */
+const gesture = (keys: [number, PoseKey][]): Clip => clip('celebrate', 'shot', 0, {}, keys);
+export const GESTURES: Record<Gesture, Clip> = {
+  // (both arms up and bent, fists by his ears, chest out)
+  flex: gesture([
+    [0, {}],
+    [220, { lx: 1.0, ly: 0.2, lz: 0.05, rx: 1.0, ry: 0.2, rz: 0.05, lean: -0.06, nod: 0.25, lsw: -0.5, rsw: -0.5 }],
+    [420, { lx: 0.85, ly: 0.32, lz: 0.0, rx: 0.85, ry: 0.32, rz: 0.0, lean: -0.1, nod: 0.3, lsw: -0.6, rsw: -0.6 }],
+    [1050, { lx: 0.9, ly: 0.28, lz: 0.02, rx: 0.9, ry: 0.28, rz: 0.02, lean: -0.08, nod: 0.25, lsw: -0.55, rsw: -0.55 }],
+    [1350, {}],
+  ]),
+  // (arms down and out, fists clenched, chest forward: a scream at the floor)
+  roar: gesture([
+    [0, {}],
+    [200, { lx: 0.75, ly: -1.25, lz: 0.45, rx: 0.75, ry: -1.25, rz: 0.45, lean: 0.24, nod: 0.2 }],
+    [900, { lx: 0.8, ly: -1.2, lz: 0.5, rx: 0.8, ry: -1.2, rz: 0.5, lean: 0.28, nod: 0.25 }],
+    [1200, {}],
+  ]),
+  // (his right arm up at the sky and held)
+  point: gesture([
+    [0, {}],
+    [240, { rx: 0.25, ry: 1.6, rz: 1.05, nod: 0.25, twist: -0.06 }],
+    [950, { rx: 0.25, ry: 1.65, rz: 1.0, nod: 0.3, twist: -0.06 }],
+    [1250, {}],
+  ]),
+  // (a fist pumped down, twice)
+  fist: gesture([
+    [0, {}],
+    [170, { rx: 0.45, ry: 0.75, rz: 0.35, lean: -0.05, nod: 0.2 }],
+    [320, { rx: 0.3, ry: -0.75, rz: 0.95, lean: 0.2, nod: 0.1 }],
+    [470, { rx: 0.45, ry: 0.6, rz: 0.4, lean: 0 }],
+    [620, { rx: 0.3, ry: -0.75, rz: 0.95, lean: 0.22, nod: 0.15 }],
+    [900, {}],
+  ]),
+  // (his right hand up to a teammate's: where it meets his is the scene's point, see Puppet.arms)
+  five: gesture([
+    [0, {}],
+    [280, { rx: 0.25, ry: 1.55, rz: 0.75 }],
+    [420, { rx: 0.2, ry: 1.3, rz: 0.95 }],
+    [750, {}],
+  ]),
+  // (the foul is his: one arm straight up, head down)
+  handUp: gesture([
+    [0, {}],
+    [240, { rx: 0.12, ry: 2.05, rz: 0.3, nod: -0.25 }],
+    [1150, { rx: 0.12, ry: 2.05, rz: 0.3, nod: -0.3 }],
+    [1450, {}],
+  ]),
+  // (both arms out, palms up, a shake of the head: what was that?)
+  protest: gesture([
+    [0, {}],
+    [260, { lx: 0.75, ly: -0.85, lz: 0.85, rx: 0.75, ry: -0.85, rz: 0.85, lean: -0.05, turn: 0.22 }],
+    [520, { lx: 0.85, ly: -0.7, lz: 0.85, rx: 0.85, ry: -0.7, rz: 0.85, lean: -0.08, turn: -0.22 }],
+    [780, { lx: 0.8, ly: -0.75, lz: 0.85, rx: 0.8, ry: -0.75, rz: 0.85, lean: -0.06, turn: 0.18 }],
+    [1050, { lx: 0.75, ly: -0.8, lz: 0.8, rx: 0.75, ry: -0.8, rz: 0.8, turn: -0.1 }],
+    [1350, {}],
+  ]),
+  // (four claps at his chest)
+  clap: gesture([
+    [0, {}],
+    [160, { lx: -0.25, ly: -0.6, lz: 0.95, rx: -0.25, ry: -0.6, rz: 0.95 }],
+    [260, { lx: -0.62, ly: -0.55, lz: 1.05, rx: -0.62, ry: -0.55, rz: 1.05 }],
+    [360, { lx: -0.25, ly: -0.6, lz: 0.95, rx: -0.25, ry: -0.6, rz: 0.95 }],
+    [460, { lx: -0.62, ly: -0.55, lz: 1.05, rx: -0.62, ry: -0.55, rz: 1.05 }],
+    [560, { lx: -0.25, ly: -0.6, lz: 0.95, rx: -0.25, ry: -0.6, rz: 0.95 }],
+    [660, { lx: -0.62, ly: -0.55, lz: 1.05, rx: -0.62, ry: -0.55, rz: 1.05 }],
+    [760, { lx: -0.25, ly: -0.6, lz: 0.95, rx: -0.25, ry: -0.6, rz: 0.95 }],
+    [860, { lx: -0.62, ly: -0.55, lz: 1.05, rx: -0.62, ry: -0.55, rz: 1.05 }],
+    [1100, {}],
+  ]),
+  // (a finger wagged at head height: not in here)
+  wag: gesture([
+    [0, {}],
+    [200, { rx: 0.05, ry: 0.85, rz: 1.3, turn: 0.15 }],
+    [360, { rx: 0.4, ry: 0.85, rz: 1.25, turn: -0.15 }],
+    [520, { rx: 0.05, ry: 0.85, rz: 1.3, turn: 0.15 }],
+    [680, { rx: 0.4, ry: 0.85, rz: 1.25, turn: -0.15 }],
+    [840, { rx: 0.15, ry: 0.8, rz: 1.25, turn: 0.05 }],
+    [1100, {}],
+  ]),
+  // (both hands to the top of his head)
+  head: gesture([
+    [0, {}],
+    [280, { lx: -0.25, ly: 1.05, lz: 0.2, rx: -0.25, ry: 1.05, rz: 0.2, nod: 0.2 }],
+    [1100, { lx: -0.25, ly: 1.08, lz: 0.15, rx: -0.25, ry: 1.08, rz: 0.15, nod: 0.3 }],
+    [1400, {}],
+  ]),
+};
+/** The arm channels a gesture takes over, and the trunk ones it adds to. */
+export const ARMS = [I.lx, I.ly, I.lz, I.rx, I.ry, I.rz, I.lsw, I.rsw];
+export const TRUNK = [I.lean, I.twist, I.tilt, I.nod, I.turn];
+/** A held follow-through after a jumper or a free throw: the shooting arm up, wrist dropped, the guide hand off the ball. */
+export const FOLLOW: PoseKey = { rx: 0.08, ry: 1.92, rz: 0.85, lx: 0.38, ly: 0.5, lz: 0.8 };
 
 /** A captured stance shorter than this (ms) is a snatch of a man shifting his weight: looped at its own speed it twitches, so it's played over this long. */
 const LOOP_MIN = 1100;
@@ -453,6 +678,10 @@ if (MOCAP_CHANNELS.length === N && MOCAP_CHANNELS.every((c, i) => c === CHANNELS
 
 /** Every clip: captured where a take covers the move, keyed by hand where none does (a dunk, a block, a celebration). */
 export const CLIPS: Record<ClipId, Clip> = { ...KEYED, idle2: KEYED.idle, idle3: KEYED.idle, ...CAPTURED };
+
+/** The dunks: a two-hander, a one-hander, and one that hangs on the rim. All meet the rim at DUNK_AT. */
+export const DUNKS: readonly ClipId[] = ['dunk', 'dunk1', 'dunkHang'];
+export const isDunk = (id: ClipId | undefined): boolean => id === 'dunk' || id === 'dunk1' || id === 'dunkHang';
 
 /** Whether a clip is captured motion. */
 export const captured = (id: ClipId): boolean => !!CLIPS[id].dense;

@@ -29,7 +29,7 @@ ARM_OUT = math.radians(38)
 
 # the clothes
 WAIST = HIP + 0.42
-HEM = KN_Y + 0.5
+HEM = KN_Y + 0.36
 # where the shorts' two legs part (lower than his own fork: they hang)
 FORK = HIP - 0.66
 TUCK = WAIST - 0.07
@@ -40,9 +40,10 @@ PIT_N = Vector((0.978, 0.209, 0)).normalized()
 VK, VM, VC = 1.0, 0.5, 5.27
 VLEN = math.sqrt(1 + VK * VK + VM * VM)
 TRIM = 0.055
-# the head (a little big for his height, as a figurine's is)
-HEAD_W, HEAD_H, HEAD_D = 0.338, 0.43, 0.4
-HEAD_C = (0, HEAD_Y + 0.045, 0.03)
+# the head (a tenth bigger than a real one for his height, as a figurine's is: narrower than it is
+# long, longer than it is deep), set forward on his neck as a head is
+HEAD_W, HEAD_H, HEAD_D = 0.3, 0.42, 0.37
+HEAD_C = (0, HEAD_Y + 0.045, 0.05)
 UNDER = 0.11
 # his hair, cropped: the scalp over a line that runs from his forehead down past the top of each ear to the nape
 HAIR_AT, HAIR_FRONT, HAIR_BACK = 0.3, 0.5, 0.85
@@ -127,12 +128,12 @@ def trunk():
         (4.79, 0.685, 0.455, 0.375, 0.01),
         (5.09, 0.74, 0.455, 0.385, 0.0),
         (5.27, 0.69, 0.4, 0.365, -0.01),
-        (5.40, 0.52, 0.29, 0.32, -0.02),
-        (5.50, 0.37, 0.235, 0.27, -0.02),
-        (5.60, 0.265, 0.215, 0.24, -0.012),
-        (5.82, 0.235, 0.21, 0.225, 0.0),
-        (6.05, 0.22, 0.2, 0.21, 0.0),
-        (6.10, 0.05, 0.05, 0.05, 0.0),
+        (5.40, 0.57, 0.29, 0.32, -0.02),
+        (5.50, 0.41, 0.235, 0.27, -0.02),
+        (5.60, 0.25, 0.205, 0.235, -0.008),
+        (5.82, 0.205, 0.19, 0.205, 0.012),
+        (6.05, 0.195, 0.18, 0.195, 0.03),
+        (6.10, 0.05, 0.05, 0.05, 0.03),
     ]
     return solid([ring((0, y, zc), rx, rzf, 32, rzb) for y, rx, rzf, rzb, zc in st], 'trunk')
 
@@ -147,18 +148,18 @@ def head():
         x, y, z = G(v.co)
         front = max(0.0, z)
         # the skull is longest behind and above the ears; the face under it is narrower, and flat
-        if y > 0 and z < 0:
-            z *= 1 + 0.07 * y
+        if y > -0.2 and z < 0:
+            z *= 1 + 0.1 * (y + 0.2)
         if y < -0.15:
             t = min(1.0, (-0.15 - y) / 0.8)
-            x *= 1 - 0.2 * t * t
+            x *= 1 - 0.26 * t * t
             z = z * (1 - 0.16 * t) + 0.13 * t * front
         if z > 0:
             z *= 0.92
         # the jaw's corners under the ears, and a chin
         for ex in (-0.62, 0.62):
             x += math.copysign(0.05, ex) * bump(x, y, (ex, -0.5), 0.3, 0.22) * (1 if z > -0.5 else 0)
-        z += bump(x, y, (0, -0.84), 0.3, 0.15) * front * 0.1
+        z += bump(x, y, (0, -0.84), 0.3, 0.15) * front * 0.15
         # a brow, the eyes' hollows under it, cheekbones, lips
         z += math.exp(-((y - 0.2) ** 2) / 0.014) * front * front * 0.085
         for ex in (-0.4, 0.4):
@@ -178,7 +179,7 @@ def head():
 def ears():
     out = []
     for s in (1, -1):
-        e = ellipsoid((s * (HEAD_W - 0.004), HEAD_C[1] - 0.02, 0.0), (0.03, 0.095, 0.058), 10, 8, 'ear', Matrix.Rotation(s * 0.4, 3, 'Y') @ Matrix.Rotation(-0.15, 3, 'X'))
+        e = ellipsoid((s * (HEAD_W - 0.006), HEAD_C[1] - 0.025, HEAD_C[2] - 0.045), (0.034, 0.108, 0.066), 10, 8, 'ear', Matrix.Rotation(s * 0.4, 3, 'Y') @ Matrix.Rotation(-0.15, 3, 'X'))
         set_material(e, material(SKIN))
         out.append(tag(e, ON_HEAD))
     return out
@@ -291,7 +292,7 @@ def shoe(s):
     # (the collar round his ankle: the sock comes up out of its flat top)
     # (a padded rim, and inside it a mouth a little wider than the sock: nothing of the leg cuts through the shoe)
     collar = solid(
-        [ring((ox, oy + y, zc), rx, rz, 16) for y, rx, rz, zc in ((-0.12, 0.12, 0.15, -0.03), (0.04, 0.165, 0.2, -0.03), (0.2, 0.178, 0.208, -0.025), (0.262, 0.182, 0.208, -0.02), (0.292, 0.174, 0.2, -0.02), (0.288, 0.158, 0.184, -0.02), (0.16, 0.152, 0.178, -0.02))],
+        [ring((ox, oy + y, zc), rx, rz, 16) for y, rx, rz, zc in ((-0.12, 0.12, 0.15, -0.03), (0.04, 0.165, 0.2, -0.03), (0.15, 0.176, 0.208, -0.025), (0.2, 0.18, 0.208, -0.02), (0.228, 0.172, 0.2, -0.02), (0.224, 0.156, 0.184, -0.02), (0.1, 0.15, 0.178, -0.02))],
         'shoeCollar',
     )
     for o in (upper, collar):
@@ -555,7 +556,7 @@ def hairline(p):
 
 
 def crop(body):
-    """His hair, cropped close: his scalp over the hairline, a hair's depth proud of the skin, a material of its own."""
+    """His hair, cropped close: his scalp over the hairline, a material of its own (the bench's colour; on the floor his crop is painted, see figure.ts)."""
     c = HEAD_C
     lines = [((0, c[1] + HAIR_AT * HEAD_H, c[2]), (0, 1 / HEAD_H, -k / HEAD_D)) for k in (HAIR_FRONT, HAIR_BACK)]
     bm = bmesh.new()
@@ -567,7 +568,6 @@ def crop(body):
     bm.free()
     body.data.update()
     slots(body, [SKIN, HAIR], lambda p: HAIR if hairline(p) > 0 and p[1] > HEAD_C[1] - HEAD_H else SKIN)
-    push(body, lambda p: 0.007 * sstep(0.0, 0.1, hairline(p)) if p[1] > HEAD_C[1] - HEAD_H else 0.0)
     return body
 
 

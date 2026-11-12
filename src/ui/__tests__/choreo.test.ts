@@ -1,15 +1,16 @@
 // The live court's keyframes: players (1.45 ft circles) shouldn't be drawn on top of each other, the
 // sets and defenses look like themselves, its score follows the scoreboard, timeouts name their caller
 // and the captions call the play.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { attackDir, buildScript, captionAt, faceWorld, standing, toWorld, type Frame } from '../live/choreo';
-import { captured, CHANNELS, CLIPS, I, mirror, N, sample } from '../live/court3d/clips';
+import { captured, CHANNELS, CLIPS, DUNK_AT, DUNKS, I, mirror, N, sample } from '../live/court3d/clips';
 import { figureGeo } from '../live/court3d/figure';
 import { readGlb } from '../live/court3d/glb';
 import arenaGlb from '../live/court3d/models/arena.glb?inline';
 import figureGlb from '../live/court3d/models/figure.glb?inline';
 import peopleGlb from '../live/court3d/models/people.glb?inline';
 import { BALL_R, baseClip, bodyOf, HIP, J, Puppet } from '../live/court3d/puppet';
+import { House } from '../live/court3d/boards';
 import type { PossLog, PossStep } from '../../core/sim/log';
 import { createLeague, defaultSettings } from '../../core/league/create';
 import { teamPlayers } from '../../core/league/helpers';
@@ -307,6 +308,15 @@ describe('live court choreography', () => {
         ['OKC', 'BOS'],
       );
       expect(s.frames.filter((f) => f.flash?.text.startsWith('Timeout')).map((f) => f.flash!.text)).toEqual(['Timeout BOS']);
+      // the building's boards read it off the court as it plays: the caller's timeout, and the shot clock running from 24
+      const house = new House();
+      const at = (i: number, clock: number) =>
+        house.read({ script: s, play: { i, clock } as never, standers: [], ball: null }, { abbrevs: ['OKC', 'BOS'], score: [0, 0], clock, q: 1 }, undefined, false, 16);
+      at(1, 700);
+      expect(house.shot).toBe(24);
+      at(s.frames.length, 690);
+      expect(house.moment).toMatchObject({ call: 'timeout', side: 1 });
+      expect(house.shot).toBe(14);
     }
 
     // the caller of a real timeout named: the engine's step says whose it was
@@ -451,6 +461,23 @@ describe('live court choreography', () => {
       expect(s.frames.some((f) => f.flash?.text === 'And one!')).toBe(true);
       expect(caps).toContain('And one! Foul on P12');
       expect(s.moment).toBeUndefined();
+      // as the building sees it, frame by frame: the basket, the and-one, the free throw; at the line the shot clock is off
+      const house = new House();
+      const calls: string[] = [];
+      for (let i = 1; i <= s.frames.length; i++) {
+        house.read(
+          { script: s, play: { i, clock: 40 - i } as never, standers: [], ball: null },
+          { abbrevs: ['OKC', 'BOS'], score: [98, 100], clock: 40 - i, q: 4 },
+          undefined,
+          true,
+          16,
+        );
+        const c = house.moment?.call;
+        if (c && c !== calls[calls.length - 1]) calls.push(c);
+      }
+      expect(calls).toEqual(['basket', 'andOne', 'free']);
+      expect(house.line).toBe(true);
+      expect(house.shot).toBeNull();
     }
 
     // a make as the clock runs out marked: at the buzzer, and the shot that wins it from behind in the 4th
@@ -662,6 +689,41 @@ describe('live court choreography', () => {
       const cr = new Puppet(bodyOf(78, 215));
       for (let t = 0; t < 900; t += 16) cr.update({ x: 0, z: t * 0.006, yaw: 0, act: 'drive', ms: t, dur: 900, ball: true }, 16);
       expect(cr.lefty).toBe(true);
+      // he looks at what the scene gives him (his head turns to it, and back when there's nothing), and not at a thing behind him
+      // (his idle, his breath and his beat held to one draw: what is measured is where he looks, not where his idle leans him)
+      const rnd = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+      const lk = new Puppet(bodyOf(78, 215));
+      rnd.mockRestore();
+      const stand = (t: number, look?: { x: number; y: number; z: number }, extra = {}) =>
+        lk.update({ x: 0, z: 0, yaw: 0, act: 'stand', ms: t, dur: 9000, ball: false, look, ...extra }, 16);
+      for (let t = 0; t < 600; t += 16) stand(t, { x: 12, y: 5, z: 6 });
+      expect(lk.pose[I.turn] + lk.pose[I.twist]).toBeGreaterThan(0.8);
+      for (let t = 600; t < 1200; t += 16) stand(t, { x: -1, y: 5, z: -12 });
+      expect(Math.abs(lk.pose[I.turn] + lk.pose[I.twist])).toBeLessThan(0.25);
+      // a gesture runs over whatever he's doing and ends: a hand up for the foul goes over his head
+      lk.cue('handUp');
+      let up = 0;
+      for (let t = 1200; t < 3000; t += 16) {
+        stand(t);
+        lk.arms(null);
+        up = Math.max(up, lk.j[J.hr * 3 + 1] - lk.j[J.head * 3 + 1]);
+      }
+      expect(up).toBeGreaterThan(0.8);
+      expect(lk.gesturing).toBeNull();
+      // a dead ball after a long run: bent over, hands on his knees; at the line he bounces it before it goes up
+      const tired = new Puppet(bodyOf(78, 215));
+      for (let t = 0; t < 3200; t += 16) tired.update({ x: t * 0.03, z: 0, yaw: Math.PI / 2, act: 'move', ms: t, dur: 3200, ball: false }, 16);
+      for (let t = 0; t < 400; t += 16) tired.update({ x: 96, z: 0, yaw: Math.PI / 2, act: 'stand', ms: t, dur: 9000, ball: false, rest: true }, 16);
+      expect(tired.clip).toBe('knees');
+      const ft = new Puppet(bodyOf(78, 215));
+      let floor = 9;
+      for (let t = 0; t < 450; t += 16) {
+        ft.update({ x: 0, z: 0, yaw: 0, act: 'hold', ms: t, dur: 450, ball: true, ft: 450 - t }, 16);
+        floor = Math.min(floor, ft.carry(out).y);
+      }
+      expect(floor).toBeLessThan(BALL_R + 0.3);
+      // every dunk is up at the rim at the slam
+      for (const id of DUNKS) expect(sample(CLIPS[id], DUNK_AT, new Float32Array(N))[I.hip]).toBeGreaterThan(2);
       // what he does picks the clip, not the other way round
       expect(baseClip('guard', false, 0, 0, 0)).toBe('stance');
       expect(baseClip('defend', false, 20, -18, 2)).toBe('backpedal');

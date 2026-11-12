@@ -740,11 +740,13 @@ export function useLiveGame() {
   }, [info, finish, flushFeed, fate, ticker, beat, takeView, enterBreak, eventAhead, atmoApi, staffAfter, staffBreak, staffHush, cut]);
   nextRef.current = nextPossession;
 
-  /** The court finished drawing: on to the next possession. */
-  const courtDone = () => {
+  /** The court has played the possession out (any replay of it is still to come): a shot at the buzzer, felt as it drops (on a phone). */
+  const courtReached = () => {
     const sc = scriptRef.current;
-    // a shot at the buzzer, felt as it drops (on a phone)
     if (sc?.moment) haptic(sc.off === userSideRef.current ? 'success' : 'warning');
+  };
+  /** The court finished drawing (and replaying): on to the next possession. */
+  const courtDone = () => {
     nextRef.current();
   };
 
@@ -978,6 +980,7 @@ export function useLiveGame() {
     banner: oc.banner,
     dropBanner: oc.dropBanner,
     courtDone,
+    courtReached,
     skip,
     togglePause,
     pickSpeed,

@@ -2,8 +2,11 @@
 // unit with its rim and net, a bench chair, the scorer's table, the ball, the scoreboard and the one
 // spectator the crowd is made of (and the few triangles he is in the floor's mirror). Here each becomes three.js objects with the app's own materials (a
 // part is told apart by the name Blender gave its material); the scene places them. Every part carries
-// a baked shade (its `color`): the lit materials multiply it in.
+// a baked shade (its `color`): the lit materials multiply it in. The faces that show a picture (the
+// clocks over the boards, the scoreboard's screens and ring) are given their map here, from where their
+// points are: the build keeps a uv only for the parts painted in Blender's own files.
 import {
+  BufferAttribute,
   DoubleSide,
   Group,
   InstancedMesh,
@@ -35,12 +38,18 @@ export interface Props {
   table(board: Material): Object3D;
   /** The ball (a Group whose origin is its centre), in these colours. */
   ball(fill: string, seam: string): Object3D;
-  /** The scoreboard (its origin is its centre; its cables go 12 ft up from there); `ribbon` is the caller's material for its ring. */
-  scoreboard(ribbon: Material): Object3D;
+  /**
+   * The scoreboard (its origin is its centre; its cables go 12 ft up from there); `ribbon` is the caller's material for its
+   * ring (u twice round it, v up its outside), `screens` for its four screens (u across each as you face it, v up it, the
+   * same picture on each; the screen underneath and the edges of the screens show the picture's bottom row).
+   */
+  scoreboard(ribbon: Material, screens: Material): Object3D;
   /** One spectator, a couple of hundred triangles (sat on y = 0 facing +z, his feet on the row below): the shape the crowd is drawn from. `aPart` says which of his points are trunk (0), head (1), arms (2, 3) and legs (4); a quarter more is an end with its own colour (hair, a hand, a shoe). `color` is his baked shade. `far` is the same man as a trunk and a head, for where he is only a blur. */
   crowd(): { fan: BufferGeometry; far: BufferGeometry };
   /** The hoop's pads that take the home colour: the caller sets this material's colour. */
   readonly team: MeshStandardMaterial;
+  /** The faces of the clocks over each board (u across as you face it, from the floor or from behind; v up): the caller lights them. */
+  readonly clock: MeshBasicMaterial;
 }
 
 /** How high the rim is over the floor. */
@@ -57,6 +66,114 @@ const NET_PULL = /* glsl */ `
     transformed.xz *= 1.0 + down * uSwish.y - foot * 0.16 * max(uSwish.x, 0.0);
     transformed.x += uSwish.z * foot;
   }`;
+/**
+ * A uv for each point of a shape from where it is: `at` gives it (u, v), or null for one on a face that shows
+ * nothing (it gets the picture's bottom left corner, which a picture here leaves dark).
+ */
+function mapped(geo: BufferGeometry, at: (p: Vector3, n: Vector3) => [number, number] | null) {
+  const pos = geo.getAttribute('position');
+  const nor = geo.getAttribute('normal');
+  const uv = new Float32Array(pos.count * 2);
+  const p = new Vector3();
+  const n = new Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    p.fromBufferAttribute(pos, i);
+    n.fromBufferAttribute(nor, i);
+    const got = at(p, n) ?? [0.001, 0.001];
+    uv[i * 2] = got[0];
+    uv[i * 2 + 1] = got[1];
+  }
+  geo.setAttribute('uv', new BufferAttribute(uv, 2));
+}
+
+/** The clocks' faces (in the hoop's frame: the floor is toward +x), read the right way round from in front and from behind. */
+function clockMap(geo: BufferGeometry) {
+  geo.computeBoundingBox();
+  const b = geo.boundingBox!;
+  mapped(geo, (p, n) => {
+    if (Math.abs(n.x) < 0.7) return null;
+    const across = (p.z - b.min.z) / (b.max.z - b.min.z);
+    return [n.x > 0 ? 1 - across : across, (p.y - b.min.y) / (b.max.y - b.min.y)];
+  });
+}
+
+/**
+ * The scoreboard's screens: each of the four leaning faces gets the whole picture, u across it as you face it (by
+ * its widest, the top: the narrower foot shows a little less of the sides), v from its foot to its top; the
+ * screen underneath, and the thin edges, the picture's bottom row (its foot).
+ */
+function screenMap(geo: BufferGeometry) {
+  const pos = geo.getAttribute('position');
+  const nor = geo.getAttribute('normal');
+  const p = new Vector3();
+  const n = new Vector3();
+  // first how wide and tall each face is: its way out, quartered
+  const span = new Map<number, { half: number; lo: number; hi: number }>();
+  const which = (q: Vector3, m: Vector3) => (q.y < UNDER_Y || Math.abs(m.y) > 0.8 ? null : ((Math.round(Math.atan2(m.z, m.x) / (Math.PI / 2)) % 4) + 4) % 4);
+  const across = (q: Vector3, m: Vector3) => {
+    const l = Math.hypot(m.x, m.z) || 1;
+    // (to your right as you face it: out of it, turned a quarter)
+    return (q.x * m.z - q.z * m.x) / l;
+  };
+  for (let i = 0; i < pos.count; i++) {
+    p.fromBufferAttribute(pos, i);
+    n.fromBufferAttribute(nor, i);
+    const k = which(p, n);
+    if (k === null) continue;
+    const s = span.get(k) ?? { half: 0, lo: Infinity, hi: -Infinity };
+    s.half = Math.max(s.half, Math.abs(across(p, n)));
+    s.lo = Math.min(s.lo, p.y);
+    s.hi = Math.max(s.hi, p.y);
+    span.set(k, s);
+  }
+  mapped(geo, (q, m) => {
+    const k = which(q, m);
+    const s = k === null ? undefined : span.get(k);
+    if (!s) return [0.5, 0.004];
+    return [0.5 + across(q, m) / (2 * s.half), 0.014 + (0.986 * (q.y - s.lo)) / (s.hi - s.lo)];
+  });
+}
+
+/**
+ * The ring under the scoreboard, as a run of ribbon: u twice round it (its points split where it comes back round,
+ * or the last strip would squeeze the whole picture in), v up its outside; its top, underside and inside show the
+ * picture's bottom row.
+ */
+function ringMap(geo: BufferGeometry): BufferGeometry {
+  const flat = geo.index ? geo.toNonIndexed() : geo;
+  flat.computeBoundingBox();
+  const b = flat.boundingBox!;
+  const pos = flat.getAttribute('position');
+  const nor = flat.getAttribute('normal');
+  const uv = new Float32Array(pos.count * 2);
+  const p = new Vector3();
+  const n = new Vector3();
+  for (let t = 0; t < pos.count; t += 3) {
+    const us: number[] = [];
+    for (let k = 0; k < 3; k++) {
+      p.fromBufferAttribute(pos, t + k);
+      // (clockwise seen from above: left to right as you look at it from outside)
+      us.push(((2 - Math.atan2(p.z, p.x) / Math.PI) % 2) * RING_TURNS * 0.5);
+    }
+    // (a strip across the seam: its points on the far side of it are carried on round)
+    if (Math.max(...us) - Math.min(...us) > RING_TURNS / 2) for (let k = 0; k < 3; k++) if (us[k] < RING_TURNS / 2) us[k] += RING_TURNS;
+    for (let k = 0; k < 3; k++) {
+      p.fromBufferAttribute(pos, t + k);
+      n.fromBufferAttribute(nor, t + k);
+      const out = n.x * p.x + n.z * p.z > 0.5 * Math.hypot(p.x, p.z) && Math.abs(n.y) < 0.5;
+      uv[(t + k) * 2] = us[k];
+      uv[(t + k) * 2 + 1] = out ? (p.y - b.min.y) / (b.max.y - b.min.y) : 0.004;
+    }
+  }
+  flat.setAttribute('uv', new BufferAttribute(uv, 2));
+  return flat;
+}
+
+/** The screens' points under this height (ft from the scoreboard's middle) are the screen underneath it. */
+const UNDER_Y = -4;
+/** How many times the ribbon's picture goes round the ring. */
+const RING_TURNS = 2;
+
 /** The parts of the basket unit that throw no shadow: the glass lets the light through, the clock's face lies on its box. */
 const NO_SHADOW = new Set(['glass', 'clock']);
 // (What else throws one: the rim and the ball. Not the net, whose cords are thinner than a point of the
@@ -90,6 +207,11 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
   const scoreboard = shapes('scoreboard');
   const fan = shapes('fan');
   const fanFar = shapes('fanFar');
+  clockMap(hoop.get('clock')!);
+  const boardScreens = scoreboard.get('screen');
+  if (boardScreens) screenMap(boardScreens);
+  const band = scoreboard.get('ribbon');
+  if (band) scoreboard.set('ribbon', keep(ringMap(band)));
 
   // what things are made of: padding, steel, the white on the glass, a screen that is off
   const team = keep(new MeshStandardMaterial({ color: 0x222222, roughness: 0.6, vertexColors: true }));
@@ -99,6 +221,8 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
   // (glass: mostly what is behind it, and the lights' glint on its face)
   const glass = keep(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.12, transparent: true, opacity: 0.3, side: DoubleSide, depthWrite: false }));
   const screen = keep(new MeshBasicMaterial({ color: 0x2b3038 }));
+  // (the clocks' faces: the caller puts the clocks on them)
+  const clock = keep(new MeshBasicMaterial({ color: 0x2b3038 }));
   const iron = keep(new MeshStandardMaterial({ color: '#e8551c', roughness: 0.5, vertexColors: true }));
   const cord = keep(new MeshStandardMaterial({ color: 0xf4f4f0, roughness: 0.9, vertexColors: true }));
   // (black furniture, but not so black that a monitor on the table or the scoreboard's corners are lost in the dark behind them)
@@ -106,10 +230,11 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
 
   return {
     team,
+    clock,
 
     basket() {
       const group = new Group();
-      for (const m of dress('hoop', hoop, { pad, steel, team, edge, glass, clock: screen })) {
+      for (const m of dress('hoop', hoop, { pad, steel, team, edge, glass, clock })) {
         m.castShadow = !NO_SHADOW.has(m.name);
         group.add(m);
       }
@@ -164,8 +289,8 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
       return group;
     },
 
-    scoreboard(ribbon) {
-      return new Group().add(...dress('scoreboard', scoreboard, { ribbon, dark, screen }));
+    scoreboard(ribbon, screens) {
+      return new Group().add(...dress('scoreboard', scoreboard, { ribbon, dark, screen: screens }));
     },
 
     crowd() {

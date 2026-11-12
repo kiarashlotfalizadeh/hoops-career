@@ -1,10 +1,18 @@
 /* The court as the page shows it (CourtView.tsx): the 2D canvas gives the box its shape, the 3D
-   picture lies over it, and the camera button sits in its corner. The 3D picture's labels (the
-   handler's name, a play's word) are the same ink pills the 2D court draws. */
+   picture lies over it, and the camera button sits in its corner. Over the 3D picture, the broadcast's
+   graphics in the scorebug's package (ink plates, white type, the team's colour as a block, sentence
+   case): the handler's tag, a play's word, the lower third on a cut-in or a replay, the replay's bug and
+   its wipe. Only opacity and transforms move. */
 .court-view {
   position: relative;
   display: block;
   line-height: 0;
+}
+/* On the live page the court's box can be taller than the floor's shape (a desktop: the column under
+   the call bar): the broadcast picture takes the whole box, its camera framing any shape, rather than
+   the floor's shape with a band of ink under it. (The 2D court keeps its shape at the top of the box.) */
+.lv-stage > .court-view {
+  position: static;
 }
 .c3d {
   position: absolute;
@@ -12,6 +20,7 @@
   overflow: hidden;
   pointer-events: none;
   line-height: 1.2;
+  color: var(--on-ink, #fff);
 }
 /* (the picture comes up over the 2D court, it doesn't pop in) */
 .court-view[data-look='3d'] .c3d {
@@ -24,6 +33,12 @@
   display: block;
   width: 100%;
   height: 100%;
+}
+/* the last camera's picture, over the new one for the moment a cut dissolves */
+.c3d-cut {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
 }
 /* (until its first frame is drawn the 2D court shows through) */
 .court-view[data-look='flat'] .c3d {
@@ -47,14 +62,42 @@
   opacity: 0;
   will-change: transform, opacity;
 }
+/* the handler: his number on his team's colour, his name */
 .c3d-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-top: 6px;
+  padding: 3px 10px 3px 3px;
 }
+.c3d-tag-n {
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--c3d-team, #3a3a3a);
+  font-family: var(--display, sans-serif);
+  font-stretch: var(--display-w, 72%);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.c3d-tag-n:empty {
+  display: none;
+}
+/* a play's word: a plate in the scoreboard's condensed cut */
 .c3d-flash {
-  margin-top: -14px;
+  margin-top: -16px;
   padding: 4px 12px 5px;
-  font-size: 15px;
-  font-weight: 800;
+  border-radius: 6px;
+  font-family: var(--display, sans-serif);
+  font-stretch: var(--display-w, 72%);
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -0.015em;
 }
 .c3d-flash[data-kind='make'] {
   color: var(--good-night, #7fe3a8);
@@ -65,6 +108,163 @@
 }
 .c3d-flash[data-kind='foul'] {
   color: var(--warn-night, #ffc65c);
+}
+/* the lower third: whom a cut-in or a replay is on, his number on his team's colour, his name, and what he did */
+.c3d-third {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: stretch;
+  max-width: calc(100% - 24px);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--ink, #121212);
+  opacity: 0;
+  translate: -14px 0;
+  transition:
+    opacity var(--dur-fast, 0.15s) var(--ease-in, ease-in),
+    translate var(--dur-fast, 0.15s) var(--ease-in, ease-in);
+}
+.c3d-third.on {
+  opacity: 1;
+  translate: 0 0;
+  transition:
+    opacity var(--dur, 0.22s) var(--ease-out, ease-out),
+    translate var(--dur, 0.22s) var(--ease-out, ease-out);
+}
+.c3d-third-n {
+  display: grid;
+  place-items: center;
+  min-width: 46px;
+  padding: 0 9px;
+  background: var(--c3d-team, #3a3a3a);
+  font-family: var(--display, sans-serif);
+  font-stretch: var(--display-w, 72%);
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.c3d-third-t {
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 7px 14px 8px 11px;
+}
+.c3d-third-name {
+  overflow: hidden;
+  font-family: var(--head, sans-serif);
+  font-stretch: var(--head-w, 118%);
+  font-size: 18px;
+  font-weight: 880;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.c3d-third-sub {
+  font-family: var(--mono, monospace);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.1;
+  color: color-mix(in srgb, var(--on-ink, #fff) 72%, transparent);
+  white-space: nowrap;
+}
+/* the replay's bug, in the corner while it plays */
+.c3d-bug {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 11px 0 9px;
+  border-radius: 999px;
+  background: var(--ink, #121212);
+  font-family: var(--font, sans-serif);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0;
+  scale: 0.9;
+  transition:
+    opacity var(--dur-fast, 0.15s) var(--ease-in, ease-in),
+    scale var(--dur-fast, 0.15s) var(--ease-in, ease-in);
+}
+.c3d-bug.on {
+  opacity: 1;
+  scale: 1;
+  transition:
+    opacity var(--dur, 0.22s) var(--ease-out, ease-out),
+    scale var(--dur, 0.22s) var(--ease-spring, ease-out);
+}
+/* the wipe into and out of a replay: an ink run with the team's colour and trim on its leading edge,
+   leaning, swept across the picture by the frame loop (the picture cuts under it while it covers it all) */
+.c3d-wipe {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+.c3d-wipe-run {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 162%;
+  background: linear-gradient(to right, var(--ink, #121212) 0 92.6%, var(--c3d-team, #3a3a3a) 92.6% 98.4%, var(--c3d-trim, #fff) 98.4%);
+  will-change: transform;
+}
+.c3d-wipe-word {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  transform: skewX(14deg);
+  font-family: var(--head, sans-serif);
+  font-stretch: var(--head-w, 118%);
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+}
+@media (max-width: 599px) {
+  .c3d-third {
+    left: 8px;
+    bottom: 8px;
+    max-width: calc(100% - 16px);
+  }
+  .c3d-third-n {
+    min-width: 38px;
+    padding: 0 7px;
+    font-size: 23px;
+  }
+  .c3d-third-t {
+    padding: 5px 11px 6px 9px;
+    gap: 2px;
+  }
+  .c3d-third-name {
+    font-size: 15px;
+  }
+  .c3d-third-sub {
+    font-size: 11px;
+  }
+  .c3d-bug {
+    top: 8px;
+    left: 8px;
+    height: 24px;
+    font-size: 12px;
+  }
+  .c3d-flash {
+    font-size: 17px;
+  }
+  .c3d-wipe-word {
+    font-size: 24px;
+  }
 }
 /* clutch time: the building's lights come down around the floor */
 .c3d-lights {

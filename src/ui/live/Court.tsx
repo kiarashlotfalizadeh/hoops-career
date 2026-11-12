@@ -80,6 +80,16 @@ export interface Stage {
 }
 export const emptyStage = (): Stage => ({ script: null, play: null, standers: [], ball: null });
 
+/** What the building's boards show (the 3D court's scoreboard, table and shot clocks): tonight's teams, and the score and clock as the court has played them, not as the sim has. */
+export interface GameInfo {
+  /** [home, away]. */
+  abbrevs: [string, string];
+  score: [number, number];
+  /** Seconds left in the period. */
+  clock: number;
+  q: number;
+}
+
 export const HALF_W = 25;
 /** The apron around the floor: a band along each sideline and a deeper one behind each baseline. */
 export const SIDE = 1.8;
