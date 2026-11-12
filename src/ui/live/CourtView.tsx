@@ -47,6 +47,8 @@ export interface CourtViewProps extends CourtProps {
   /** The 3D picture's camera (the broadcast's main one when not said), and the chip that goes round them. */
   cam?: CamKind;
   onCam?: (cam: CamKind) => void;
+  /** Each side's players, [home, away] (player ids), for the 3D benches. */
+  bench?: [number[], number[]];
   /** Each player's build, for his figure. */
   body: (pid: number) => Body;
   /** The game as the court has played it, asked for each frame (the 3D building's boards show it). */
@@ -57,7 +59,7 @@ export interface CourtViewProps extends CourtProps {
   onReached?: () => void;
 }
 
-export function CourtView({ look, onLook, cam, onCam, body, game, replays, onReached, ...court }: CourtViewProps) {
+export function CourtView({ look, onLook, cam, onCam, bench, body, game, replays, onReached, ...court }: CourtViewProps) {
   const kind = camKind(cam);
   const stage = useRef(emptyStage());
   // (this session only: the picture came up, the device couldn't draw it, or drew it too slowly)
@@ -159,6 +161,7 @@ export function CourtView({ look, onLook, cam, onCam, body, game, replays, onRea
             floor={court.floor}
             clutch={court.clutch}
             cam={kind}
+            bench={bench}
             speed={speed}
             own={court.speed}
             paused={court.paused}

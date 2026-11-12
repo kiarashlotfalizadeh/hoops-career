@@ -98,7 +98,8 @@ const deg = (r: number) => (r * 180) / Math.PI;
 
 /** Where a camera stands: `x` is where the play is along the floor (the dolly and the overhead go with it), `end` the end being attacked. */
 export function mount(kind: CamKind, tall: boolean, x: number, end: -1 | 0 | 1, out: Shot): Shot {
-  if (kind === 'tv') [out.px, out.py, out.pz] = [0, tall ? 46 : 35, tall ? 80 : 88];
+  // (the main camera stands on the broadcast's platform in the near stands, bowl.ts DECK_ROWS: over the heads in front of it)
+  if (kind === 'tv') [out.px, out.py, out.pz] = [0, tall ? 46 : 36, tall ? 80 : 81];
   else if (kind === 'side') [out.px, out.py, out.pz] = [clamp(x * 0.72, -30, 30), tall ? 16 : 13, 50];
   else if (kind === 'end') [out.px, out.py, out.pz] = [-(end || -1) * (MID + 30), tall ? 44 : 36, 0];
   else if (kind === 'low') [out.px, out.py, out.pz] = [(end || -1) * (MID + 7.5), 4.6, 15];

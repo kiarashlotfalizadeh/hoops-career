@@ -26,9 +26,16 @@ const NEAR = 20;
 const LAMPS: readonly (readonly [number, number, number, number, number, number])[] = [
   [34, 78, 40, 0xfff6ea, 1.25, 2048],
   [-34, 78, 40, 0xfff6ea, 0.8, 2048],
-  [-40, 72, -44, 0xf3f6ff, 0.8, 2048],
-  [40, 72, -44, 0xf3f6ff, 0.8, 2048],
+  [-40, 72, -44, 0xf3f6ff, 0.8, 1024],
+  [40, 72, -44, 0xf3f6ff, 0.8, 1024],
 ];
+/**
+ * The lamps before this one have their shadows drawn afresh every frame (the camera's side: the key's is
+ * the dark one). The far side's two are the faint soft ones of the fan: their maps are half the size, and
+ * are drawn in turn, one a frame, so a frame draws three of the four (every body in the building is drawn
+ * again for each).
+ */
+const EVERY_FRAME = 2;
 /** The edge light from behind the far stands, and the soft one from the camera's side. */
 const RIM = 1.3;
 const FRONT = 0.45;
@@ -48,6 +55,17 @@ const MOOD_MS = 900;
 /** How many of the lamps throw shadows at each step down (Court3D's STEPS, scene.lite). */
 const CASTERS = [4, 2, 0, 0];
 
+/**
+ * A material nothing's shadow falls on (the people in the stands, their seats, the steps): its shader goes
+ * without the lamps' shadows altogether. three gives every lit material a place in each lamp's shadow map
+ * for every point of it, used or not, and the stands are most of the building's triangles: a third of a
+ * frame went on carrying them. For a material's `onBeforeCompile`.
+ */
+export function unshadowed(sh: { vertexShader: string; fragmentShader: string }) {
+  sh.vertexShader = `#undef USE_SHADOWMAP\n${sh.vertexShader}`;
+  sh.fragmentShader = `#undef USE_SHADOWMAP\n${sh.fragmentShader}`;
+}
+
 export class Rig {
   readonly sky: HemisphereLight;
   readonly bounce: DirectionalLight;
@@ -56,6 +74,7 @@ export class Rig {
   private readonly fill: AmbientLight;
   /** How far down the house lights are (0: a game's; 1: the open, a timeout, the clutch). */
   drama = 0;
+  private frames = 0;
 
   constructor(private readonly scene: Scene) {
     this.sky = new HemisphereLight(0xe6eeff, 0x9a7d5e, SKY);
@@ -120,6 +139,19 @@ export class Rig {
   /** A device that can't keep up: two of the lamps' shadows at step 1 (the camera's side), none from 2. */
   lite(level: 0 | 1 | 2 | 3) {
     this.lamps.forEach((l, i) => (l.castShadow = i < CASTERS[level]));
+  }
+
+  /**
+   * A frame is about to be drawn (the scene says so once for each): whose turn it is among the far lamps'
+   * maps (see EVERY_FRAME; the first frames draw them all, so none is ever read before it is made).
+   */
+  turn() {
+    const n = this.frames++;
+    this.lamps.forEach((l, i) => {
+      if (i < EVERY_FRAME) return;
+      l.shadow.autoUpdate = false;
+      l.shadow.needsUpdate = n < 2 || (i - EVERY_FRAME) % 2 === n % 2;
+    });
   }
 
   /** The house lights go toward `to` (0: a game's, 1: down) over `ms`. */

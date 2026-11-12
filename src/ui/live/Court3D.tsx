@@ -41,6 +41,8 @@ export interface Court3DProps {
   clutch?: boolean;
   /** The camera that follows the play. */
   cam?: CamKind;
+  /** Each side's players, [home, away] (player ids): those not on the floor sit on its bench as themselves. */
+  bench?: [number[], number[]];
   /** The play's speed (the 2D court's clock runs on it), and the bodies' (see COURT3D_PACE). */
   speed: number;
   own: number;
@@ -63,8 +65,10 @@ export interface Court3DProps {
 const SLOW_MS = 31;
 /** Slower than this (under 45 a second) the picture gives something up, a step at a time (see STEPS). */
 const LITE_MS = 22;
-/** Frames are timed over stretches this long. */
+/** Frames are timed over stretches this long, or this many ms if that comes first (a device at five frames a second is not kept there twelve seconds a step). */
 const STRETCH = 60;
+const STRETCH_MS = 1500;
+const STRETCH_LEAST = 8;
 /**
  * What a device that can't keep up gives up, in order, the least missed first: the picture's finish (its
  * glow and grade, drawn straight to the screen), a little sharpness, the thrown shadows, the floor's mirror
@@ -79,6 +83,13 @@ const STEPS: readonly (readonly [number, Lite])[] = [
   [0.75, 3],
   [0.5, 3],
 ];
+/**
+ * Where a phone or a tablet starts (a screen worked by touch): without the shadows, at three quarters of
+ * its sharpness. The top step draws some four and a half million triangles and finishes the picture after:
+ * a phone made to start there spent its first seconds on frames it could not draw, a step at a time. One
+ * that keeps up is given the steps back (see FAST_RUN).
+ */
+const TOUCH_START = 3;
 /**
  * No more than 60 pictures a second, whatever the screen's rate (battery, heat): the gap between two, ms.
  * Kept as a schedule, not a least gap: a 75, 90 or 144 Hz screen then draws 60 of its frames a second
@@ -133,7 +144,7 @@ export default function Court3D(props: Court3DProps) {
     document.fonts?.ready.then(() => void (fontsIn = 1));
     const floorCv = document.createElement('canvas');
     // how sharp it's drawn: full, or less on a device that can't keep up
-    let level = 0;
+    let level = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? TOUCH_START : 0;
     let sized = '';
     let frames = 0;
     let spent = 0;
@@ -283,6 +294,7 @@ export default function Court3D(props: Court3DProps) {
           final: p.final,
           clutch: p.clutch,
           cam: p.cam,
+          bench: p.bench,
           board: fl?.kind === 'home' ? fl.paint : paints.ink,
           warn,
         },
@@ -306,7 +318,7 @@ export default function Court3D(props: Court3DProps) {
       if (dt > 0 && real > 0) {
         frames++;
         spent += real;
-        if (frames >= STRETCH) {
+        if (frames >= STRETCH || (spent >= STRETCH_MS && frames >= STRETCH_LEAST)) {
           const avg = spent / frames;
           frames = spent = 0;
           const last = STEPS.length - 1;

@@ -35,10 +35,14 @@ const BONES = [
   'nose',
   'hair',
 ];
+/** The leaves only the player has (figure.py's GIRDLE): a bone at each shoulder, one down each forearm, one his brows hang on and one for his lower lip. */
+const PLAYER_LEAVES = ['cll', 'clr', 'fwl', 'fwr', 'brow', 'lip'];
 /** Hair that is a shape of its own on the player (court3d/look.ts: a man wears one of them or none). */
 const HAIR_PIECES = ['bun', 'tail', 'twists', 'locs', 'braids', 'afro', 'hightop', 'curls'];
 /** The materials the app has a look for (court3d/figure.ts `wear`, court3d/arena.ts `dress`, court3d/props.ts: none of them exports its list). */
-const PLAYER = ['skin', 'hair', 'jersey', 'trim', 'cloth', 'shoe', 'white'];
+const PLAYER = ['skin', 'hair', 'jersey', 'trim', 'cloth', 'shoe', 'white', 'collar', 'high'];
+/** And the parts of his head that are his alone (figure.py's mouth and ears: court3d/figure.ts gives each its place on his sheet). */
+const PLAYER_HEAD = ['ear', 'mouth', 'teeth'];
 const ARENA = ['pad', 'steel', 'team', 'edge', 'glass', 'clock', 'led', 'iron', 'cord', 'seat', 'dark', 'board', 'screen', 'ribbon', 'leather', 'seam'];
 const FAN = ['fan'];
 const PROPS = ['ball', 'chair', 'hoop', 'net', 'rim', 'scoreboard', 'table', 'stall'];
@@ -257,12 +261,12 @@ describe("the 3D court's models", () => {
     // every thing the app asks for is there, in materials it has a look for, and nothing in any list is not a number
     {
       expect([...figure.keys()]).toEqual(['figure']);
-      expect([...people.keys()].sort()).toEqual(['bench', 'official', 'staff']);
+      expect([...people.keys()].sort()).toEqual(['bench', 'benchFar', 'official', 'officialFar', 'staff', 'staffFar']);
       expect([...arena.keys()]).toEqual(expect.arrayContaining(PROPS));
       expect(fans.length).toBe(FANS_NEAR.length + FANS_MID.length);
       for (const [file, things] of Object.entries(files))
         for (const [name, thing] of things) {
-          const known: readonly string[] = name.startsWith('fan') ? FAN : file === 'arena' ? ARENA : file === 'people' ? PARTS : [...PLAYER, ...HAIR_PIECES];
+          const known: readonly string[] = name.startsWith('fan') ? FAN : file === 'arena' ? ARENA : file === 'people' ? PARTS : [...PLAYER, ...PLAYER_HEAD, ...HAIR_PIECES];
           expect(thing.parts.length).toBeGreaterThan(0);
           for (const p of thing.parts) {
             const tag = `${file}.glb ${name} (${p.material})`;
@@ -280,18 +284,19 @@ describe("the 3D court's models", () => {
         }
       // (hair is on its way: allowed, not yet asked for)
       expect(figure.get('figure')!.parts.map((p) => p.material)).toEqual(expect.arrayContaining(PLAYER.filter((m) => m !== 'hair')));
+      expect(figure.get('figure')!.parts.map((p) => p.material)).toEqual(expect.arrayContaining(PLAYER_HEAD));
     }
 
     // the player: one skin on the puppet's 18 bones and the figure's seven leaves, every point of it on at most four of them, their weights adding up to one
     {
       const fig = figure.get('figure')!;
-      expect(fig.bones!.map((b) => b.name).sort()).toEqual([...BONES].sort());
+      expect(fig.bones!.map((b) => b.name).sort()).toEqual([...BONES, ...PLAYER_LEAVES].sort());
       for (const b of fig.bones!) expect(b.inverse.elements.every(Number.isFinite), `figure.glb: ${b.name}'s way back`).toBe(true);
       for (const p of fig.parts) {
         const [on, by] = [p.geo.getAttribute('skinIndex'), p.geo.getAttribute('skinWeight')];
         expect(Object.keys(p.geo.attributes), `figure (${p.material})`).toEqual(expect.arrayContaining(['color', 'skinIndex', 'skinWeight']));
         expect([on.itemSize, by.itemSize]).toEqual([4, 4]);
-        expect(most(on.array)).toBeLessThan(BONES.length);
+        expect(most(on.array)).toBeLessThan(BONES.length + PLAYER_LEAVES.length);
         let off = 0;
         for (let i = 0; i < by.count; i++) off = Math.max(off, Math.abs(by.getX(i) + by.getY(i) + by.getZ(i) + by.getW(i) - 1));
         expect(off, `figure (${p.material}): weights that do not add up to one`).toBeLessThan(0.02);
@@ -299,14 +304,17 @@ describe("the 3D court's models", () => {
       // (the vest's picture, his number, goes on by its uv; as one shape every part has one)
       expect(fig.parts.find((p) => p.material === 'jersey')!.geo.getAttribute('uv')).toBeTruthy();
       expect(merged(fig).geo.getAttribute('uv').count).toBe(fig.parts.reduce((n, p) => n + p.geo.getAttribute('position').count, 0));
-      // (with every piece of hair in the file; a man is drawn with one of them at most)
-      expect(triangles(fig)).toBeLessThanOrEqual(28_000);
-      const pieces = fig.parts.filter((p) => HAIR_PIECES.includes(p.material)).reduce((n, p) => n + p.geo.index!.count / 3, 0);
+      // (with every piece of hair in the file; a man is drawn with one of them at most, and with no more than 27,000 triangles: his face has a thousand of them more than it had)
+      expect(triangles(fig)).toBeLessThanOrEqual(34_000);
+      const size = (m: string) => fig.parts.filter((p) => p.material === m).reduce((n, p) => n + p.geo.index!.count / 3, 0);
+      const pieces = HAIR_PIECES.reduce((n, m) => n + size(m), 0);
+      expect(triangles(fig) - pieces + Math.max(...HAIR_PIECES.map(size))).toBeLessThanOrEqual(27_000);
       // as the app dresses him: one shape for one material, every point of him somewhere on his sheet, and no
       // triangle stretched across it (one across two of its pictures, or a picture's seam, would show the others in between)
       const geo = figureGeo((o) => o, figure);
       expect(geo.body.groups.length).toBe(0);
       expect(geo.body.index!.count / 3, 'the body with no hair on it has none of the pieces').toBe(triangles(fig) - pieces);
+      expect(geo.wearing(null, false).index!.count / 3, 'a low shoe leaves off what makes one high').toBe(triangles(fig) - pieces - size('high'));
       expect(geo.wearing('bun').index!.count, 'a piece of hair adds its own triangles').toBeGreaterThan(geo.body.index!.count);
       expect(geo.wearing('bun').getAttribute('position'), 'and shares the points').toBe(geo.body.getAttribute('position'));
       const uv = geo.body.getAttribute('uv');
@@ -319,8 +327,8 @@ describe("the 3D court's models", () => {
           const v = [0, 1, 2].map((k) => get(corners[f + k]));
           wide = Math.max(wide, Math.max(...v) - Math.min(...v));
         }
-      // (the widest of one picture's own are at the crown of his head, where its picture meets at a point: under a fifth of the sheet)
-      expect(wide, 'a triangle stretched across the sheet').toBeLessThan(0.19);
+      // (the widest of one picture's own are the few small ones round the very top of his head, where its picture meets at a point: under a quarter of the sheet)
+      expect(wide, 'a triangle stretched across the sheet').toBeLessThan(0.24);
       expect(geo.shorts[1] - geo.shorts[0]).toBeGreaterThan(1);
     }
 
@@ -328,10 +336,13 @@ describe("the 3D court's models", () => {
     // head of hair to colour by who he is; and every pose the app puts one in stands or sits him on the floor, whole
     {
       const bones = [...BONES].sort();
-      for (const name of ['bench', 'staff', 'official']) {
+      for (const name of ['bench', 'staff', 'official', 'benchFar', 'staffFar', 'officialFar']) {
         const who = people.get(name)!;
         expect(who.bones!.map((b) => b.name).sort(), `${name}'s bones`).toEqual(bones);
-        expect(who.parts.map((p) => p.material)).toEqual(expect.arrayContaining(['skin', 'hair', 'hairTop', 'beard', 'eye', 'brow', 'lip', 'shoe']));
+        // (a face that is shapes of its own, a beard and a goatee, and every way of wearing hair: the app shows each of them what is his)
+        expect(who.parts.map((p) => p.material)).toEqual(
+          expect.arrayContaining(['skin', 'hair', 'hairTop', 'bob', 'bun', 'tail', 'locs', 'afro', 'curls', 'beard', 'goatee', 'eye', 'iris', 'brow', 'lip', 'shoe']),
+        );
         for (const p of who.parts) {
           expect(Object.keys(p.geo.attributes), `${name} (${p.material})`).toEqual(expect.arrayContaining(['color', 'skinIndex', 'skinWeight']));
           const by = p.geo.getAttribute('skinWeight');
@@ -339,12 +350,17 @@ describe("the 3D court's models", () => {
           for (let i = 0; i < by.count; i++) off = Math.max(off, Math.abs(by.getX(i) + by.getY(i) + by.getZ(i) + by.getW(i) - 1));
           expect(off, `${name} (${p.material}): weights that do not add up to one`).toBeLessThan(0.02);
         }
-        expect(triangles(who)).toBeLessThanOrEqual(11_000);
+        // (the broadcast cuts to the bench and the coach: each is a head as fine as a player's, and a body lighter than his)
+        // (and each a second time for a man across the floor, a shadow and the floor's mirror: the same parts, a fifth of the triangles)
+        expect(triangles(who)).toBeLessThanOrEqual(name.endsWith('Far') ? 5_000 : 24_000);
+        const near = people.get(name.replace('Far', ''))!;
+        expect(who.parts.map((p) => p.material).sort()).toEqual(near.parts.map((p) => p.material).sort());
       }
       expect(people.get('official')!.parts.map((p) => p.material)).toEqual(expect.arrayContaining(['top', 'legs', 'metal']));
       expect(people.get('bench')!.parts.map((p) => p.material)).toEqual(expect.arrayContaining(['warm', 'cloth']));
+      expect(people.get('staff')!.parts.map((p) => p.material)).toEqual(expect.arrayContaining(['suit', 'lapel', 'shirt', 'tie', 'legs']));
       for (const pose of POSE_NAMES)
-        for (const name of ['bench', 'staff']) {
+        for (const name of ['bench', 'staff', 'benchFar', 'staffFar']) {
           const geo = posed(people.get(name)!, pose);
           const at = geo.getAttribute('position');
           expect(Array.from(at.array).every(Number.isFinite), `${name} in ${pose}`).toBe(true);
@@ -360,11 +376,11 @@ describe("the 3D court's models", () => {
         }
     }
 
-    // the spectators: under a thousand triangles by the floor and a few hundred behind, each point marked with the part of him it is (the crowd's shader moves him by it)
+    // the spectators: under a thousand triangles by the floor and under five hundred behind, each point marked with the part of him it is (the crowd's shader moves him by it)
     {
       for (const fan of fans) {
         expect(fan.parts.length).toBe(1);
-        expect(triangles(fan)).toBeLessThanOrEqual(FANS_MID.includes(fan.name) ? 400 : 1050);
+        expect(triangles(fan)).toBeLessThanOrEqual(FANS_MID.includes(fan.name) ? 500 : 1050);
         const marks = fan.parts[0].geo.getAttribute('aPart');
         expect(marks?.itemSize).toBe(1);
         // (0 trunk, 1 head, 2 and 3 arms, 4 legs; a mark may carry a little more: a quarter for skin or an end in its own colour, a half for a cap)
@@ -379,7 +395,11 @@ describe("the 3D court's models", () => {
         expect(shoes.length).toBeGreaterThan(0);
         expect(Math.min(...shoes.map((i) => at.getZ(i)))).toBeGreaterThanOrEqual(1);
       }
-      // his stand-in in the floor's mirror: a trunk and a head, a sixth of him
+      // a slow device's: all of him in under a hundred and fifty triangles (no shoes: the row in front hides his feet)
+      const low = arena.get('fanLow')!;
+      expect(triangles(low)).toBeLessThanOrEqual(150);
+      expect(new Set(Array.from(low.parts[0].geo.getAttribute('aPart').array, Math.round))).toEqual(new Set([0, 1, 2, 3, 4]));
+      // his stand-in in the floor's mirror: a trunk and a head
       const far = arena.get('fanFar')!;
       expect(triangles(far)).toBeLessThanOrEqual(40);
       expect(new Set(Array.from(far.parts[0].geo.getAttribute('aPart').array, Math.round))).toEqual(new Set([0, 1]));

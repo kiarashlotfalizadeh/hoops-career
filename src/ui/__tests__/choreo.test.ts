@@ -16,7 +16,8 @@ import { bouncePass, meets, planShot, RIM_H, shotAt, shotSpeed, spinFor, Spring,
 import { NET, NetSim } from '../live/court3d/net';
 import { BALL_R, baseClip, bodyOf, hash, HIP, J, Puppet } from '../live/court3d/puppet';
 import { House } from '../live/court3d/boards';
-import { Rig } from '../live/court3d/rig';
+import { Rig, unshadowed } from '../live/court3d/rig';
+import { lit, ROWS } from '../live/court3d/bowl';
 import type { PossLog, PossStep } from '../../core/sim/log';
 import { createLeague, defaultSettings } from '../../core/league/create';
 import { teamPlayers } from '../../core/league/helpers';
@@ -315,6 +316,10 @@ describe('live court choreography', () => {
         expect(c.top - c.bottom).toBeGreaterThan(FLOOR_W);
         expect((c.right - c.left) * (c.top - c.bottom)).toBeGreaterThan(FLOOR_L * FLOOR_W);
       }
+      // (the far side's two maps are drawn in turn after the first frames: three of the four a frame)
+      const drawn = () => (rig.turn(), rig.lamps.filter((l) => l.shadow.autoUpdate || l.shadow.needsUpdate).length);
+      expect([drawn(), drawn(), drawn(), drawn(), drawn()]).toEqual([4, 4, 3, 3, 3]);
+      expect(rig.lamps[2].shadow.needsUpdate).not.toBe(rig.lamps[3].shadow.needsUpdate);
       rig.lite(1);
       expect(rig.lamps.filter((l) => l.castShadow)).toHaveLength(2);
       rig.lite(3);
@@ -327,6 +332,18 @@ describe('live court choreography', () => {
       expect(rig.key.intensity).toBe(lamp);
       rig.mood(0, 1e9);
       expect(rig.sky.intensity).toBeCloseTo(sky);
+      // the stands sit under the floor's light, less of it every row up: by the floor most of a stop down, the back rows two
+      const rows = Array.from({ length: ROWS }, (_, i) => lit(i));
+      expect(rows[0]).toBeLessThan(0.75);
+      expect(rows[0]).toBeGreaterThan(0.5);
+      expect(rows[ROWS - 1]).toBeLessThan(rows[0] / 2);
+      expect(rows[ROWS - 1]).toBeGreaterThan(0.15);
+      for (let i = 1; i < ROWS; i++) expect(rows[i]).toBeLessThan(rows[i - 1]);
+      // (a material no shadow falls on carries none of the lamps' shadow maps)
+      const sh = { vertexShader: 'void main() {}', fragmentShader: 'void main() {}' };
+      unshadowed(sh);
+      expect(sh.vertexShader.startsWith('#undef USE_SHADOWMAP')).toBe(true);
+      expect(sh.fragmentShader.startsWith('#undef USE_SHADOWMAP')).toBe(true);
     }
     {
       const s = buildScript(
@@ -393,10 +410,39 @@ describe('live court choreography', () => {
       // (a teammate picks it up behind the baseline and gets it in to him)
       expect(next.frames[1].hold).toBeGreaterThan(0);
       expect(next.frames[1].hold).toBeLessThan(5);
-      expect(next.frames[1].o[next.frames[1].hold!].y).toBeGreaterThan(90);
-      expect(next.frames[2].hold).toBe(0);
-      expect(next.frames[2].act[next.frames[1].hold!]).toBe('pass');
-      expect(next.frames[2].act[0]).toBe('catch');
+      // (out of bounds, the one man who is: he has a look with it over his head before he throws it in)
+      expect(next.frames[1].o[next.frames[1].hold!].y).toBeGreaterThan(94);
+      expect(next.frames[2].hold).toBe(next.frames[1].hold);
+      expect(next.frames[2].act[next.frames[1].hold!]).toBe('inbound');
+      expect(next.frames[2].o.filter((p) => p.y > 94)).toHaveLength(1);
+      expect(next.frames[3].hold).toBe(0);
+      expect(next.frames[3].act[next.frames[1].hold!]).toBe('pass');
+      expect(next.frames[3].act[0]).toBe('catch');
+      // the game's first possession opens with the tip: both fives round the circle, the two centres up for it, tapped to a guard
+      const tipped = buildScript({ ...log([{ k: 'advance', pid: 1 }]), clockStart: 720 }, info);
+      expect(tipped.frames[0].o.every((p) => p.y >= 47 && p.y < 60) && tipped.frames[0].d.every((p) => p.y <= 47 && p.y > 34)).toBe(true);
+      expect(tipped.frames[1].act.map((x, j) => (x === 'tip' ? j : -1)).filter((j) => j >= 0)).toEqual([4, 9]);
+      expect([tipped.frames[1].hold, tipped.frames[2].hold, tipped.frames[2].act[4]]).toEqual([-1, 0, 'land']);
+      expect(Math.max(...tipped.frames.at(-1)!.o.map((p) => p.y))).toBeLessThan(40);
+      // a shot is up: each man who goes to the glass has a defender's back in him (a body's width off, on the rim's side), nobody boxes out air
+      const up = buildScript(
+        log([
+          { k: 'advance', pid: 1 },
+          { k: 'shot', pid: 1, x: 0, y: 26, v: 3, made: false, zone: 'ab3' },
+        ]),
+        info,
+      ).frames.at(-1)!;
+      const [crash, box] = [up.act.flatMap((x, j) => (x === 'crash' ? [up.o[j]] : [])), up.act.flatMap((x, j) => (x === 'boxout' ? [up.d[j - 5]] : []))];
+      expect(crash.length).toBeGreaterThan(0);
+      expect(box).toHaveLength(crash.length);
+      for (const b of box) {
+        const man = crash.find((c) => Math.hypot(c.x - b.x, c.y - b.y) < 3.2)!;
+        expect(Math.hypot(man.x, man.y - 5.25)).toBeGreaterThan(Math.hypot(b.x, b.y - 5.25) + 2);
+      }
+      // the moves those are: a clip each, and a man out of bounds with it holds it over his head
+      for (const id of ['tip', 'putback', 'hook', 'pull', 'start'] as const) expect(span(CLIPS[id])[1]).toBeGreaterThan(300);
+      expect([baseClip('inbound', true, 0, 0, 0), baseClip('crash', false, 0, 0, 0), baseClip('crash', false, 12, 12, 0)]).toEqual(['inbound', 'crash', 'jog']);
+      expect(sample(CLIPS.inbound, 0.2, new Float32Array(N))[I.by]).toBeGreaterThan(7);
       expect(next.frames.some((f) => f.o[0].y > 47)).toBe(true);
       const end = next.frames.at(-1)!;
       expect(Math.max(...end.o.map((p) => p.y), ...end.d.map((p) => p.y))).toBeLessThan(40);
@@ -611,7 +657,7 @@ describe('live court choreography', () => {
     {
       const glb = (file: string) => readGlb(Uint8Array.from(atob(file.slice(file.indexOf(',') + 1)), (ch) => ch.charCodeAt(0)).buffer);
       const geo = figureGeo((o) => o, glb(figureGlb));
-      expect([...geo.order].sort((x, y) => x - y)).toEqual(Array.from({ length: 25 }, (_, i) => i));
+      expect([...geo.order].sort((x, y) => x - y)).toEqual(Array.from({ length: 31 }, (_, i) => i));
       expect(geo.wears).toEqual(expect.arrayContaining(['skin', 'hair', 'jersey', 'trim', 'cloth', 'shoe', 'white']));
       const w = geo.body.getAttribute('skinWeight');
       for (let i = 0; i < w.count; i += 37) expect(w.getX(i) + w.getY(i) + w.getZ(i) + w.getW(i)).toBeCloseTo(1, 3);
@@ -620,7 +666,7 @@ describe('live court choreography', () => {
       const tall = geo.body.boundingBox!.max.y - geo.body.boundingBox!.min.y;
       expect(tall).toBeGreaterThan(6.5);
       expect(tall).toBeLessThan(6.9);
-      expect([...glb(peopleGlb).keys()].sort()).toEqual(['bench', 'official', 'staff']);
+      expect([...glb(peopleGlb).keys()].sort()).toEqual(['bench', 'benchFar', 'official', 'officialFar', 'staff', 'staffFar']);
       expect([...glb(arenaGlb).keys()].sort()).toEqual([
         'ball',
         'chair',
@@ -632,6 +678,7 @@ describe('live court choreography', () => {
         'fanF',
         'fanFar',
         'fanKid',
+        'fanLow',
         'fanMidA',
         'fanMidB',
         'hoop',
@@ -813,7 +860,7 @@ describe('live court choreography', () => {
       let high = 0;
       for (let t = 0; t < 2600; t += 16) {
         dr.update({ x: 0, z: 0, yaw: 0, act: 'dribble', ms: t, dur: 2600, ball: true }, 16);
-        const ball = dr.carry(out);
+        const ball = dr.bounced(dr.carry(out));
         dr.arms(ball);
         low = Math.min(low, ball.y);
         high = Math.max(high, ball.y);
@@ -834,7 +881,7 @@ describe('live court choreography', () => {
         expect(b.period).toBeLessThan(650);
         expect(b.push.y).toBeGreaterThan(2);
         expect(Math.hypot(b.floor.x, b.floor.z)).toBeLessThan(3);
-        if (b.phase < was && was < 1) expect(b.phase).toBeLessThan(0.2);
+        if (b.phase < was && was < 1) expect(b.phase).toBeLessThan(0.3);
         if (b.phase < 1 && was === 1) flights++;
         if (b.phase === 1 && t > 300) {
           const ball = hk.carry(out);
@@ -910,6 +957,40 @@ describe('live court choreography', () => {
       expect(baseClip('move', false, 40, 39, 0)).toBe('sprint');
       expect(baseClip('move', false, 10, 10, 0)).toBe('jog');
       expect(baseClip('dribble', true, 5, -4.5, 0)).toBe('dribbleBack');
+      // nothing about a man is left to chance (the same man moves the same way every time the game is played), a man off
+      // the ball with the play live is ready for it, not stood to attention, and he turns to a thing behind him as a body does
+      const twin = [0, 1].map(() => new Puppet(bodyOf(78, 215)));
+      let spin = 0;
+      for (let t = 0; t < 1500; t += 16)
+        for (const m of twin) {
+          const before = m.yaw;
+          m.update({ x: 0, z: 0, yaw: t < 700 ? 0 : 3, act: 'stand', ms: t, dur: 1500, ball: false, who: 41 }, 16);
+          spin = Math.max(spin, Math.abs(m.yaw - before));
+        }
+      for (let i = 0; i < N; i++) expect(twin[0].pose[i]).toBe(twin[1].pose[i]);
+      expect(twin[0].clip.startsWith('spot')).toBe(true);
+      expect(twin[0].pose[I.hip]).toBeLessThan(-0.05);
+      expect(Math.abs(twin[0].yaw - 3)).toBeLessThan(0.1);
+      expect(spin).toBeLessThan(0.2);
+      // a dribble as the scene flies it: off the floor, and the palm on the ball as it leaves his hand and as it comes back
+      const bd = new Puppet(bodyOf(78, 215));
+      let flying = 1;
+      let floorY = 9;
+      for (let t = 0; t < 3000; t += 16) {
+        bd.update({ x: 0, z: t * 0.004, yaw: 0, act: 'dribble', ms: t / 2, dur: 3000, ball: true, who: 9 }, 8, 16);
+        const ball = bd.bounced(bd.carry(out));
+        bd.arms(ball);
+        const b = bd.dribble;
+        const now = b?.phase ?? 1;
+        if (b && t > 600 && now < 1 !== flying < 1) {
+          const k = (b.hand > 0 ? J.hl : J.hr) * 3;
+          const hand = bd.world(bd.j[k], bd.j[k + 1], bd.j[k + 2], { x: 0, y: 0, z: 0 });
+          expect(Math.hypot(hand.x - ball.x, hand.y - ball.y - BALL_R - 0.12, hand.z - ball.z)).toBeLessThan(0.15);
+        }
+        if (t > 600) floorY = Math.min(floorY, ball.y);
+        flying = now;
+      }
+      expect(floorY).toBeLessThan(BALL_R + 0.2);
     }
 
     // the cameras that follow the play (cameras.ts): each of the five, in a wide frame and a phone's

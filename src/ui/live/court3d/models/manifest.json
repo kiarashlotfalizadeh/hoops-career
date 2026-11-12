@@ -1,20 +1,20 @@
 {
   "figure": {
-    "sources": "0eb5b69766b20e6d83254e4f2435cc68868c22bb2c0f4434ba4901a0217898a0",
-    "pack": 1,
+    "sources": "c0bf73a53252374dfa1f3a2686475f6cc3929f6fdc4862ba55b784d0ad6697cf",
+    "pack": 2,
     "blender": "Blender 5.2.1 LTS",
-    "bytes": 313244
+    "bytes": 778344
   },
   "people": {
-    "sources": "65131b5552b09e8424adcaecd7aa67ea503b23c714e9e216fbf48e53ce6e2e0b",
-    "pack": 1,
+    "sources": "acaa1fcb10eaa2eb9c20a356b9ddc677a3e21661cfa9ab2e05c9a10a6d1b7dec",
+    "pack": 2,
     "blender": "Blender 5.2.1 LTS",
-    "bytes": 531100
+    "bytes": 1239208
   },
   "arena": {
-    "sources": "3481d10afd4f8890264e4fa8e24e895542cbc9c2a01ad9aee3b8b7015949edef",
-    "pack": 1,
+    "sources": "42b91214426492609b05effeba4ab7e820d8b30f6d91173f09d255464c1af4e8",
+    "pack": 2,
     "blender": "Blender 5.2.1 LTS",
-    "bytes": 199848
+    "bytes": 413040
   }
 }

@@ -18,12 +18,17 @@ export interface Look {
   eyes: string;
   /** How heavy his eyebrows are, 0..1. */
   brow: number;
-  /** His face's shape: how wide and how long his head is, his jaw's width and length, his nose's width and how far it stands out (each about 1). */
-  face: { wide: number; long: number; jaw: number; chin: number; nose: number; bridge: number };
+  /**
+   * His face's shape: how wide and how long his head is, his jaw's width and length, his nose's width and
+   * how far it stands out (each about 1); then how heavy his brow's ridge is and how full his lips are
+   * (0..1), how far his eyes' outer corners are tipped up and how wide open he holds them (about 1), and
+   * which kind of head it is (an index into FACES).
+   */
+  face: { wide: number; long: number; jaw: number; chin: number; nose: number; bridge: number; ridge: number; lips: number; tilt: number; open: number; kind: number };
 }
 
 /** Eight tones of skin, lightest to darkest. */
-export const SKINS: readonly string[] = ['#e2b998', '#d6a986', '#c59876', '#b28462', '#986c4e', '#7e563e', '#644231', '#4a3026'];
+export const SKINS: readonly string[] = ['#e2b998', '#d6a986', '#c59876', '#b28462', '#986c4e', '#7e563e', '#66453a', '#503629'];
 
 /** How he may wear his hair (0 shaved). `piece` is hair that is a shape of its own on the model (figure.py), where a style has one. */
 export const STYLES = [
@@ -43,7 +48,21 @@ export const STYLES = [
 ] as const;
 
 /** His beard (0 none). */
-export const BEARDS = ['none', 'stubble', 'goatee', 'beard', 'full'] as const;
+export const BEARDS = ['none', 'stubble', 'goatee', 'beard', 'full', 'strap'] as const;
+
+/**
+ * The kinds of head there are, and what each is at heart (a man's own is that, a little off it every
+ * way): how wide and long it is, its jaw's width and its chin's length, how heavy its brow, the width
+ * of its nose and how full its lips. A five drawn from six kinds, each off its kind, is five men.
+ */
+export const FACES = [
+  { name: 'long', wide: 0.955, long: 1.055, jaw: 0.97, chin: 1.08, ridge: 0.4, nose: 0.95, lips: 0.45 },
+  { name: 'broad', wide: 1.065, long: 0.965, jaw: 1.04, chin: 0.96, ridge: 0.5, nose: 1.06, lips: 0.55 },
+  { name: 'square', wide: 1.02, long: 1.0, jaw: 1.11, chin: 1.03, ridge: 0.6, nose: 1.0, lips: 0.4 },
+  { name: 'narrow', wide: 0.935, long: 1.01, jaw: 0.9, chin: 1.0, ridge: 0.3, nose: 0.9, lips: 0.5 },
+  { name: 'heavy', wide: 1.01, long: 0.99, jaw: 1.04, chin: 1.0, ridge: 1.0, nose: 1.07, lips: 0.5 },
+  { name: 'soft', wide: 1.0, long: 0.975, jaw: 0.94, chin: 0.9, ridge: 0.1, nose: 0.97, lips: 0.75 },
+] as const;
 
 /** Hair's natural colours, darkest first. */
 const BLACK = '#17130f';
@@ -75,7 +94,7 @@ const TONE_SHARE = [0.08, 0.09, 0.1, 0.13, 0.16, 0.17, 0.15, 0.12];
  */
 const STRAIGHT = [0.07, 0.17, 0.22, 0.04, 0, 0, 0, 0.09, 0.09, 0, 0.02, 0.3, 0];
 const CURLED = [0.08, 0.15, 0.2, 0.12, 0.06, 0.07, 0.08, 0.01, 0.03, 0.05, 0.06, 0, 0.09];
-const BEARD_SHARE = [0.3, 0.22, 0.18, 0.2, 0.1];
+const BEARD_SHARE = [0.28, 0.2, 0.17, 0.17, 0.1, 0.08];
 const EYES = ['#3b2516', '#2e1c11', '#4a2f1a', '#5b4426', '#56664a', '#4f6a80'];
 
 /** Numbers that look random and are a man's own: the same id, the same run (each `salt` a run of its own). */
@@ -109,6 +128,8 @@ export function lookOf(pid: number): Look {
   );
   const hairs = HAIRS[tone];
   const span = (salt: number, lo: number, hi: number) => lo + (hi - lo) * r(salt);
+  const kinds = Math.floor(r(14) * FACES.length) % FACES.length;
+  const kind = FACES[kinds];
   return {
     skin: SKINS[tone],
     hair: hairs[Math.floor(r(3) * hairs.length) % hairs.length],
@@ -119,12 +140,18 @@ export function lookOf(pid: number): Look {
     eyes: EYES[tone < 2 && r(5) < 0.4 ? 4 + (r(6) < 0.5 ? 0 : 1) : Math.floor(r(6) * 4) % 4],
     brow: span(7, 0.35, 1),
     face: {
-      wide: span(8, 0.95, 1.06),
-      long: span(9, 0.96, 1.05),
-      jaw: span(10, 0.92, 1.07),
-      chin: span(11, 0.92, 1.1),
-      nose: span(12, 0.85, 1.1) + tone * 0.022,
-      bridge: span(13, 0.85, 1.15),
+      wide: kind.wide + span(8, -0.02, 0.02),
+      long: kind.long + span(9, -0.02, 0.02),
+      jaw: kind.jaw + span(10, -0.03, 0.03),
+      chin: kind.chin + span(11, -0.04, 0.05),
+      // (a broader nose and fuller lips go with a darker tone, loosely)
+      nose: kind.nose * span(12, 0.9, 1.08) + tone * 0.022,
+      bridge: span(13, 0.86, 1.14),
+      ridge: Math.min(1, Math.max(0, kind.ridge + span(15, -0.25, 0.25))),
+      lips: Math.min(1, Math.max(0, kind.lips + span(16, -0.25, 0.25) + (tone - 3.5) * 0.04)),
+      tilt: span(17, 0.3, 1.9),
+      open: span(18, 0.86, 1.08),
+      kind: kinds,
     },
   };
 }

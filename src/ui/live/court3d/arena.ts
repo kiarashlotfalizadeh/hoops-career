@@ -13,6 +13,7 @@
 import {
   BoxGeometry,
   BufferGeometry,
+  type Camera,
   CanvasTexture,
   Color,
   DepthTexture,
@@ -31,10 +32,13 @@ import {
   PlaneGeometry,
   Quaternion,
   RepeatWrapping,
+  type Scene,
   ShaderMaterial,
   SRGBColorSpace,
+  UnsignedByteType,
   Vector2,
   Vector3,
+  type WebGLRenderer,
 } from 'three';
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -61,8 +65,8 @@ export const LAMPS: readonly (readonly [number, number, number])[] = [
 const LED_WHITE = new Color('#ffffff');
 /** How much of the light the crowd keeps while it sits. */
 const SAT = 0.8;
-/** The most pools of dark the floor can take: two feet and a body for every figure on it. */
-const TOUCHES = 48;
+/** The most pools of dark the floor can take: two feet and a body for every figure on it, one under everyone sat round it. */
+const TOUCHES = 96;
 /** One seat in this many has a camera or a phone up when something happens. */
 const FLASH_SHARE = 0.22;
 /**
@@ -86,6 +90,8 @@ const LEAVERS = 0.45;
 const LEAVERS_LOST = 0.6;
 /** How far the house lights go down for the open, a timeout and a home win (the picture's exposure: the spots and the boards keep theirs), and how long each lasts (ms). */
 const HOUSE_DOWN = 0.6;
+/** How much of the stands' light the rig's darker mood takes (the clutch, the open: the lamps stay on the floor, the bowl sits back). */
+const MOOD_DIM = 0.4;
 const OPEN_SHOW_MS = 5200;
 const TIMEOUT_SHOW_MS = 9000;
 const WIN_SHOW_MS = 60000;
@@ -115,9 +121,9 @@ const POOL = {
 /** How soft the mirror gets with height: the blur (of the picture's height) for each ft over the floor, for each ft the floor is from the camera. */
 const SHEEN_SOFT = '0.06';
 /** How sharp the mirror is drawn: this much of the picture's own size, but this many dots across at least and at most (and on a device that has stepped down, at most as it was drawn before). */
-const SHEEN_SHARP = 0.55;
+const SHEEN_SHARP = 0.5;
 const SHEEN_LEAST = 480;
-const SHEEN_MOST = 1280;
+const SHEEN_MOST = 1024;
 const SHEEN_LITE = 640;
 
 /**
@@ -153,6 +159,10 @@ const SHEEN = {
     uniform float strength;
     varying vec4 vUv;
     varying vec3 vView;
+    vec3 lit(vec2 uv, float lod) {
+      vec3 c = textureLod(tDiffuse, uv, lod).rgb;
+      return c * c;
+    }
     void main() {
       vec2 uv = vUv.xy / vUv.w;
       // how high over the floor what the mirror shows here is (ft); how far apart its samples go for it,
@@ -171,16 +181,16 @@ const SHEEN = {
       float turn = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
       vec2 r = vec2(0.32, 1.0) * clamp((0.05 + high) * ${SHEEN_SOFT} / far, 0.0, 0.03) * (0.7 + 0.6 * turn);
       float lod = log2(max(r.y * uSize.y * 0.4, 1.0)) + 0.6 + min(high, 40.0) * 0.05;
-      vec3 c = textureLod(tDiffuse, uv, lod * 0.5).rgb * 0.24;
-      c += (textureLod(tDiffuse, uv + r * vec2(0.5, 0.25), lod).rgb + textureLod(tDiffuse, uv - r * vec2(0.5, 0.25), lod).rgb) * 0.16;
-      c += (textureLod(tDiffuse, uv + r * vec2(-0.6, 0.55), lod).rgb + textureLod(tDiffuse, uv - r * vec2(-0.6, 0.55), lod).rgb) * 0.12;
-      c += (textureLod(tDiffuse, uv + r * vec2(0.15, 0.95), lod).rgb + textureLod(tDiffuse, uv - r * vec2(0.15, 0.95), lod).rgb) * 0.1;
+      // (the mirror's picture is in the screen's terms: its taps are added up as light, near enough, and put back)
+      vec3 c = lit(uv, lod * 0.5) * 0.24;
+      c += (lit(uv + r * vec2(0.5, 0.25), lod) + lit(uv - r * vec2(0.5, 0.25), lod)) * 0.16;
+      c += (lit(uv + r * vec2(-0.6, 0.55), lod) + lit(uv - r * vec2(-0.6, 0.55), lod)) * 0.12;
+      c += (lit(uv + r * vec2(0.15, 0.95), lod) + lit(uv - r * vec2(0.15, 0.95), lod)) * 0.1;
+      c = sqrt(c);
       // (a clear coat mirrors as glass does: a twenty-fifth of what is over it from above, most of it looked along)
       float graze = pow(1.0 - clamp(normalize(vView).y, 0.0, 1.0), 5.0);
       // (and fainter the higher what it shows: a varnish is not a mirror, the roof is a blur in it)
       gl_FragColor = vec4(c, strength * (0.04 + 0.96 * graze) / (1.0 + high * 0.03));
-      #include <tonemapping_fragment>
-      #include <colorspace_fragment>
     }`,
 };
 
@@ -196,6 +206,7 @@ export class Arena {
   private readonly pools: InstancedMesh;
   private readonly dark = new InstancedBufferAttribute(new Float32Array(TOUCHES), 1);
   private readonly sheen: Reflector;
+  private readonly mirrorDraw: Reflector['onBeforeRender'];
   /** From the mirror's picture back to the building (see SHEEN). */
   private readonly unproject = new Matrix4();
   private dimTo = 1;
@@ -204,6 +215,8 @@ export class Arena {
   private readonly streamers: Streamers;
   /** The light show: the house lights down, the roof's spots sweeping (see fx.ts). */
   private readonly lights: Show;
+  /** How far down the rig's own mood is (rig.ts drama: the scene says): the stands sit darker under it. */
+  mood = 0;
   /** How far the house lights are down (0 to 1). */
   private show = 0;
   private showMs = Infinity;
@@ -336,8 +349,16 @@ export class Arena {
     this.group.add(scoreboard);
 
     // the varnish (its picture keeps its depth, for how soft each part of it is, and its sizes down, to be read soft)
-    this.sheen = new Reflector(keep(new PlaneGeometry(FLOOR_L, FLOOR_W)), { textureWidth: 640, textureHeight: 400, clipBias: 0.02, shader: SHEEN });
+    // (one sample a dot: every dot of it is read through a blur)
+    this.sheen = new Reflector(keep(new PlaneGeometry(FLOOR_L, FLOOR_W)), { textureWidth: 640, textureHeight: 400, clipBias: 0.02, shader: SHEEN, multisample: 0 });
     const shot = this.sheen.getRenderTarget();
+    // Its picture is drawn as the screen's is (lens.ts screenTarget: the tone curve on, the screen's terms, 8
+    // bits). Drawn as three draws into any other target, every material in the building changed its program
+    // for the mirror and back again each frame, which was most of a frame's work on the page's own thread.
+    shot.texture.type = UnsignedByteType;
+    shot.texture.colorSpace = SRGBColorSpace;
+    shot.texture.internalFormat = 'RGBA8';
+    (shot as typeof shot & { isXRRenderTarget: boolean }).isXRRenderTarget = true;
     shot.depthTexture = new DepthTexture(640, 400);
     shot.texture.generateMipmaps = true;
     shot.texture.minFilter = LinearMipmapLinearFilter;
@@ -356,16 +377,24 @@ export class Arena {
     // The mirror draws the whole scene a second time, and the crowd is most of the scene's triangles.
     // What the varnish shows of the stands is small and smeared, but it is there (most of all from the low
     // camera at a free throw): for that pass each of the crowd is his trunk and his head.
-    const mirror = this.sheen.onBeforeRender;
-    this.sheen.onBeforeRender = (...at) => {
-      this.crowd.mirror(true);
-      this.sideline.mirrored(true);
-      mirror.apply(this.sheen, at);
-      const cam = this.sheen.camera;
-      this.unproject.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse).invert();
-      this.crowd.mirror(false);
-      this.sideline.mirrored(false);
-    };
+    // It is drawn before the picture, not from inside it (see reflect): a draw inside a draw has lights of its
+    // own as three keeps them, and every lit material changed its program for it and back, each frame.
+    this.mirrorDraw = this.sheen.onBeforeRender;
+    this.sheen.onBeforeRender = () => {};
+  }
+
+  /** The floor's mirror for the picture about to be drawn from `camera` (the lens asks, before each picture). */
+  reflect(renderer: WebGLRenderer, scene: Scene, camera: Camera) {
+    // (the people round the floor, as this camera's picture wants them)
+    this.sideline.present(camera);
+    if (!this.sheen.visible) return;
+    this.crowd.mirror(true);
+    this.sideline.mirrored(true);
+    this.mirrorDraw.call(this.sheen, renderer, scene, camera, this.sheen.geometry, this.sheen.material as ShaderMaterial, null as never);
+    const cam = this.sheen.camera;
+    this.unproject.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse).invert();
+    this.crowd.mirror(false);
+    this.sideline.mirrored(false);
   }
 
   /** The building's colour (the home team's on its own floor): the pads on the baskets, the chairs, the seats, half the crowd and some of their towels, the walls' trim. */
@@ -414,15 +443,16 @@ export class Arena {
   }
 
   /**
-   * A device that can't keep up, a step at a time (Court3D's STEPS): the roof's steel, the glass and rails, the
-   * light spilt from the tunnels and the boards gone, the first rows' people in the plain model, the boards painted
-   * less often and no light show (1); four in ten of the people behind left out, half the cameras, a third of the
-   * confetti, no streamers (2).
+   * A device that can't keep up, by the scene's steps (Court3D's STEPS, scene.lite): the crowd in lighter
+   * models at each (crowd.ts shed); from the second the roof's steel, the glass and rails, the light spilt
+   * from the tunnels and the boards gone, the boards painted less often and no light show; at the third
+   * half the cameras, a third of the confetti, no streamers.
    */
-  shed(level: 0 | 1 | 2) {
+  shed(lite: 0 | 1 | 2 | 3) {
+    const level = lite > 2 ? 2 : lite > 1 ? 1 : 0;
     for (const o of this.steel) o.visible = level < 1;
     this.bowl.shed(level);
-    this.crowd.shed(level);
+    this.crowd.shed(lite);
     this.boards.lite(level > 0);
     this.lights.lite(level > 0);
     this.flashes.lite(level > 1);
@@ -451,9 +481,9 @@ export class Arena {
       this.cheering = this.awayUp = this.hush = this.wave = this.rally = this.show = 0;
       u.uCheer.value = u.uLag.value = u.uAway.value = u.uHush.value = u.uWave.value = u.uRally.value = u.uStand.value = u.uPhone.value = 0;
       u.uBall.value.y = 0;
-      u.uDim.value = this.dimTo;
+      this.crowd.dim(this.dimTo * (1 - MOOD_DIM * this.mood), this.dimTo * (1 - MOOD_DIM * this.mood));
       this.crowd.wave(false, 1);
-      this.bowl.dim(this.dimTo);
+      this.bowl.dim(this.dimTo, this.dimTo * (1 - MOOD_DIM * this.mood));
       this.bowl.cheer(0);
       this.boards.boost(1);
       this.flashes.update(real, 0, this.dimTo, true, 1);
@@ -533,8 +563,10 @@ export class Arena {
         .lerp(LED_WHITE, 0.35)
         .multiplyScalar((0.2 + (fresh(FLASH_MS) ? 0.25 * (1 - m!.ms / FLASH_MS) : 0)) * this.dimTo);
     // (sat down, the stands are a shade under the floor's light: the play is in front of them. On their feet they are in it)
-    u.uDim.value = this.dimTo * (SAT + (1 - SAT) * u.uCheer.value);
-    this.bowl.dim(this.dimTo / house);
+    // (the steps, the seats and the walls go down with them, for a close-up and under the darker house: one bowl)
+    const stands = this.dimTo * (1 - MOOD_DIM * this.mood);
+    this.crowd.dim(stands * (SAT + (1 - SAT) * u.uCheer.value), stands);
+    this.bowl.dim(this.dimTo / house, stands);
     this.bowl.cheer(u.uLag.value);
     // the cameras: a big moment's burst, a late free throw, the buzzer and the minutes after it, and now and then;
     // a few phones go up with them

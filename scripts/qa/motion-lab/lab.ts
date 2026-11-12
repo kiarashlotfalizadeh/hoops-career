@@ -3,11 +3,13 @@
 // 3D scene on a clock of its own (60 frames a second, nothing waits for the screen), measured, and filmed.
 //   lab.measure({ speed: 2 })     the whole game at a speed chip: planted feet that slide, hips that sink on a
 //                                 run, bodies inside each other, the ball inside a body
+//   lab.when('pull')              where in the game a man goes into that clip, or makes that gesture
 //   lab.find('dunk')              the possessions with a man doing that (act), and when
 //   lab.film({ k, pid, from, to, every, eye, fov })   a strip of moments of possession k, a camera on one man
 //                                 (eye: where the camera is from him, ft; 'tv': the broadcast's own)
+//                                 (k: 0 with `tip`: from both fives waiting round the circle for the opening tip)
 //   lab.pose({ drive, n, from, to })   one move side by side at moments of it, at centre court
-//   ?seed=n&home=n&away=n picks the game. ?toes=0: the feet as the body turns them itself (by default the lab turns
+//   ?seed=n&home=n&away=n picks the game. ?side=0: nobody round the floor. ?toes=0: the feet as the body turns them itself (by default the lab turns
 //   each foot bone by the puppet's own `feet[k].pitch`, the heel-and-toe roll the body doesn't read yet).
 import { Mesh, MeshStandardMaterial, PerspectiveCamera, SphereGeometry, Vector3, type Bone, type Camera, type Scene, type WebGLRenderer } from 'three';
 import { createLeague, defaultSettings } from '../../../src/core/league/create';
@@ -15,7 +17,7 @@ import { teamPlayers } from '../../../src/core/league/helpers';
 import { composites } from '../../../src/core/ratings';
 import { Rng } from '../../../src/core/random';
 import { GameSim } from '../../../src/core/sim/engine';
-import { buildScript, standing, type Act, type Script, type Standing } from '../../../src/ui/live/choreo';
+import { buildScript, COURT_LEN, standing, tipSpots, type Act, type Script, type Standing } from '../../../src/ui/live/choreo';
 import { emptyStage, paintFloor, pose as poseAt, readPaints, type CourtFloor, type Stage } from '../../../src/ui/live/Court';
 import { I } from '../../../src/ui/live/court3d/clips';
 import { Fig, type Geo } from '../../../src/ui/live/court3d/figure';
@@ -30,6 +32,8 @@ const num = (k: string, d: number) => (q.has(k) ? Number(q.get(k)) : d);
 const PACE = 0.5;
 const TAIL = 180;
 const FRAME = 1000 / 60;
+/** How long both fives wait round the centre circle before the opening tip (real ms). */
+const TIP_WAIT = 1600;
 
 // (the roll of a foot from heel to toe: the puppet says it, the body's foot bones are turned here until figure.ts reads it)
 if (q.get('toes') !== '0') {
@@ -106,6 +110,8 @@ const inner = scene as unknown as {
   ball: Vector3;
   geo: Geo;
 };
+// (?side=0: the floor without the people round it, for when their models are being rebuilt under the lab)
+if (q.get('side') === '0') (scene as unknown as { arena: { sideline: { update: () => void } } }).arena.sideline.update = () => {};
 const draw = inner.renderer.render.bind(inner.renderer);
 // (measuring draws nothing: a game takes seconds, not its length)
 let drawing = false;
@@ -116,6 +122,8 @@ class Clock {
   k = 0;
   t = 0;
   finalMs = -1;
+  /** How long the fives have stood round the circle for the tip (real ms); -1: the game starts on its first play. */
+  tipMs = -1;
   readonly stage: Stage = emptyStage();
   constructor(
     readonly speed: number,
@@ -128,6 +136,17 @@ class Clock {
       this.finalMs += real;
       scene.frame(st, { ...props, final: winner }, 0, real, this.calm, real);
       return this.finalMs < hold;
+    }
+    if (this.tipMs >= 0 && this.tipMs < TIP_WAIT && this.k === 0 && this.t === 0) {
+      // (as the live page has them before the first play: round the circle, the ball in the referee's hands)
+      this.tipMs += real;
+      const at = tipSpots(scripts[0].off === 0 ? [scripts[0].oPids, scripts[0].dPids] : [scripts[0].dPids, scripts[0].oPids]);
+      st.script = null;
+      st.play = null;
+      st.standers = [...at].map(([pid, p]) => ({ pid, side: (scripts[0].oPids.includes(pid) ? scripts[0].off : 1 - scripts[0].off) as 0 | 1, at: p }));
+      st.ball = { x: 0, y: COURT_LEN / 2 };
+      scene.frame(st, props, 0, real, this.calm, real * this.speed);
+      return true;
     }
     const sc = scripts[this.k];
     const dt = real * this.speed * PACE;
@@ -154,6 +173,7 @@ class Clock {
     return true;
   }
 }
+const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 const w = (p: { x: number; y: number }, dir: 1 | -1) => (dir === 1 ? { ...p } : { x: -p.x, y: 94 - p.y });
 
 const seg = (p: Vector3, a: Vector3, b: Vector3) => {
@@ -179,6 +199,7 @@ const HR = new Vector3();
 /** The whole game at a speed chip, measured. */
 function measure({ speed = 2, calm = false, slide = 0.05 } = {}) {
   const c = new Clock(speed, calm);
+  c.tipMs = 0;
   let pf = 0;
   let slid = 0;
   let slidFt = 0;
@@ -195,7 +216,14 @@ function measure({ speed = 2, calm = false, slide = 0.05 } = {}) {
   let dunkOff = 0;
   const cases: string[] = [];
   const slides = new Map<string, number>();
-  const last = new Map<number, { x: number; z: number; feet: [number, number, boolean][]; head: number; pose: Float32Array; air: number }>();
+  const whips = new Map<string, number>();
+  const deeps = new Map<string, number>();
+  const whipAt = new Map<string, number>();
+  const deepAt: string[] = [];
+  const last = new Map<
+    number,
+    { x: number; z: number; feet: [number, number, boolean][]; head: number; pose: Float32Array; air: number; yaw: number; twist: number; turn: number }
+  >();
   const acts = new Map<string, number>();
   const gestures = new Map<string, number>();
   const making = new Map<number, string | null>();
@@ -231,7 +259,15 @@ function measure({ speed = 2, calm = false, slide = 0.05 } = {}) {
         // (how fast his head turns on the floor: a whip is a frame of more than 0.25 rad)
         const hd = p.yaw + p.pose[I.twist] + p.pose[I.turn];
         const dh = Math.abs(Math.atan2(Math.sin(hd - was.head), Math.cos(hd - was.head)));
-        if (dh > 0.25) headWhip++;
+        if (dh > 0.25) {
+          headWhip++;
+          // (what turned it: his body, his chest or his neck, and in which clip)
+          const parts = [Math.abs(wrap(p.yaw - was.yaw)), Math.abs(p.pose[I.twist] - was.twist), Math.abs(p.pose[I.turn] - was.turn)];
+          const why = `${p.clip}:${['yaw', 'twist', 'turn'][parts.indexOf(Math.max(...parts))]}`;
+          whips.set(why, (whips.get(why) ?? 0) + 1);
+          const where = `k${c.k} i${play?.i} p${pid} ${p.clip} ${play ? play.b.act[sc ? [...sc.oPids, ...sc.dPids].indexOf(pid) : 0] : ''}`;
+          whipAt.set(where, (whipAt.get(where) ?? 0) + 1);
+        }
         heads += dh;
         // (a man standing who doesn't move at all from one frame to the next: a statue)
         if (p.clip.startsWith('idle') || p.clip === 'ready' || p.clip === 'hold' || p.clip === 'stance') {
@@ -252,7 +288,17 @@ function measure({ speed = 2, calm = false, slide = 0.05 } = {}) {
         runs++;
         hips.push(p.j[J.hips * 3 + 1] / (HIP * s));
       }
-      last.set(pid, { x: p.x, z: p.z, feet, head: p.yaw + p.pose[I.twist] + p.pose[I.turn], pose: Float32Array.from(p.pose), air });
+      last.set(pid, {
+        x: p.x,
+        z: p.z,
+        feet,
+        head: p.yaw + p.pose[I.twist] + p.pose[I.turn],
+        pose: Float32Array.from(p.pose),
+        air,
+        yaw: p.yaw,
+        twist: p.pose[I.twist],
+        turn: p.pose[I.turn],
+      });
       const key = p.clip;
       acts.set(key, (acts.get(key) ?? 0) + 1);
       const g = p.gesturing;
@@ -282,7 +328,12 @@ function measure({ speed = 2, calm = false, slide = 0.05 } = {}) {
         const d = Math.hypot(pa.x - pb.x, pa.z - pb.z);
         const r = (pa.body.s + pb.body.s) / 2;
         if (d < 1.3 * r) pairs++;
-        if (d < 0.9 * r) deep++;
+        if (d < 0.9 * r) {
+          deep++;
+          const why = [pa.clip, pb.clip].sort().join('+');
+          deeps.set(why, (deeps.get(why) ?? 0) + 1);
+          if (deepAt.length < 12 && !deepAt.some((x) => x.startsWith(`k${c.k} `))) deepAt.push(`k${c.k} t${Math.round(c.t)} ${figs[a][0]}/${figs[b][0]} ${why}`);
+        }
       }
   }
   hips.sort((x, y) => x - y);
@@ -300,15 +351,35 @@ function measure({ speed = 2, calm = false, slide = 0.05 } = {}) {
     runs,
     pairsNear: pairs,
     pairsDeep: deep,
+    deeps: Object.fromEntries([...deeps].sort((x, y) => y[1] - x[1]).slice(0, 8)),
+    deepAt,
     ballInBody: inBody,
     dunkOffDeg: Math.round((dunkOff * 180) / Math.PI),
     cases,
     headWhips: headWhip,
+    whips: Object.fromEntries([...whips].sort((x, y) => y[1] - x[1]).slice(0, 16)),
+    whipAt: Object.fromEntries([...whipAt].sort((x, y) => y[1] - x[1]).slice(0, 14)),
     headTravel: Math.round((heads / Math.max(1, pf)) * 1000) / 1000,
     statuePct: pct(still, standing),
     gestures: Object.fromEntries(gestures),
     clips: Object.fromEntries([...acts].sort((x, y) => y[1] - x[1])),
   };
+}
+
+/** Where in the game (at a speed chip) a man goes into `clip`, or makes that gesture: the first `most` times, each possession once. */
+function when(clip: string, { speed = 2, most = 8 } = {}) {
+  const c = new Clock(speed);
+  c.tipMs = 0;
+  const out: string[] = [];
+  const was = new Map<number, string>();
+  while (c.step() && out.length < most) {
+    for (const [pid, f] of inner.figs) {
+      const now = f.pup.clip === clip || f.pup.gesturing === clip ? clip : '';
+      if (now && was.get(pid) !== now && !out.some((x) => x.startsWith(`k${c.k} `))) out.push(`k${c.k} t${Math.round(c.t)} p${pid}`);
+      was.set(pid, now);
+    }
+  }
+  return out;
 }
 
 /** The possessions with a man doing `act` (or with a frame whose flash or fx says it), and where. */
@@ -366,10 +437,14 @@ async function film({
   cols = 8,
   most = 32,
   final = false,
+  tip = false,
+  lead = 2,
   world = null as number[] | null,
 } = {}) {
   const c = new Clock(speed);
-  const start = Math.max(0, k - 2);
+  // (`lead`: how many possessions before it are played first; all of them, from the tip, and it is the game as `measure` and `when` play it)
+  if ((tip && k === 0) || lead >= k) c.tipMs = 0;
+  const start = Math.max(0, k - lead);
   c.k = start;
   // (the possessions before it, so everyone gets there as he would)
   while (c.k < k && c.finalMs < 0) c.step();
@@ -381,7 +456,8 @@ async function film({
   const target = new Vector3();
   for (;;) {
     const sc = scripts[c.k];
-    const inside = final ? c.finalMs >= 0 && c.finalMs >= from && c.finalMs <= to : c.k === k && c.t >= from && c.t <= to;
+    const waiting = c.tipMs >= 0 && c.tipMs < TIP_WAIT;
+    const inside = final ? c.finalMs >= 0 && c.finalMs >= from && c.finalMs <= to : c.k === k && c.t >= from && c.t <= to && (!waiting || c.tipMs > TIP_WAIT - 300);
     drawing = inside && n % every === 0 && eye === 'tv' && !world;
     const going = c.step(FRAME, final ? to + 100 : 3000);
     if (inside && n % every === 0) {
@@ -526,6 +602,7 @@ function trace({ k = 0, from = 0, to = Infinity, every = 2, speed = 2 } = {}) {
   pose,
   scripts,
   measure,
+  when,
   find,
   acts,
   film,

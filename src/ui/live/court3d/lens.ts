@@ -222,6 +222,20 @@ const SEAM_DARK = 0.5;
 /** How much darker the darkest strip is than the lightest (maple: not much), and the grain in one. */
 const TONE = 0.13;
 const GRAIN = 0.11;
+/**
+ * What is left when the strips are too fine to see: runs of this many strips (a bundle of boards laid
+ * together), of this many, and of this many (a lot of them), each a shade of its own by this much; and
+ * the worn patches' shade.
+ */
+const BUNDLE = 3;
+const BAND = 11;
+const LOT = 30;
+const BUNDLE_TONE = 0.085;
+const BAND_TONE = 0.06;
+const LOT_TONE = 0.07;
+const PATCH = 0.07;
+/** The bare wood's colour under these lamps, of the canvas's: deeper and a little less red (a rich maple, not peach). */
+const WOOD_GRADE = [0.8, 0.81, 0.77];
 /** How far a strip's face is off flat at most (radians): the lamps in the varnish break up along them. */
 const TILT = 0.011;
 /** A lamp bank, as bright as it is (the floor shows a twentieth or so of it, more the flatter it is looked across). */
@@ -249,9 +263,9 @@ const LANE_W = 16;
  * the rig's in full (they throw its shadows) and this much of the soft light from all round, so a shadow
  * on it is a shadow.
  */
-const FLOOR_DIRECT = 1.0;
+const FLOOR_DIRECT = 0.85;
 /** How much deeper a shadow on the floor is than the light it keeps off (1: as it is). */
-const FLOOR_SHADE = 1.4;
+const FLOOR_SHADE = 1.75;
 /** How much of the floor's light is taken to be the lamps' that throw shadows (the rest is never in shadow). */
 const FLOOR_HOLD = 0.9;
 const FLOOR_SOFT = 0.1;
@@ -355,8 +369,31 @@ const FLOOR_WOOD = /* glsl */ `
   float wNear = (1.0 - smoothstep(STRIP_ * 0.45, STRIP_ * 1.3, wFwA)) * uDetail;
   float wPick = fHash(vec2(wStrip * 1.37 + 0.5, wPiece * 2.11 + 1.3));
   float wTone = 1.0 + TONE_ * (0.36 - wPick * wPick);
-  // (from far off: the floor was laid in panels and has worn, a shade here and there)
-  float wPatch = 1.0 + 0.035 * (fCloud(vec2(vFloor.x * 0.11, vFloor.z * 0.23)) - 0.5) * uDetail;
+  // (from far off the strips are under a dot, but a floor is never one flat colour: boards from one bundle
+  // lie together, so it is streaked along its strips in runs of a few boards, then of a hand's width of
+  // them; each size comes in as the one under it gets too fine to see, so the wood is wood at every size)
+  float wBundleF = wStripF / BUNDLE_;
+  float wBundle = floor(wBundleF);
+  float wBundleRun = (vFloor.x + 60.0) / (STRIP_LONG_ * 1.6) + fHash(vec2(wBundle, 9.3)) * 7.0;
+  float wBundleTone = mix(fHash(vec2(wBundle, floor(wBundleRun))), fHash(vec2(wBundle, floor(wBundleRun) + 1.0)), smoothstep(0.8, 1.0, fract(wBundleRun))) - 0.5;
+  float wBandF = wStripF / BAND_;
+  float wBand = floor(wBandF);
+  float wBandRun = (vFloor.x + 60.0) / (STRIP_LONG_ * 3.1) + fHash(vec2(wBand, 4.1)) * 5.0;
+  float wBandEdge = smoothstep(0.0, 0.25, fract(wBandF)) * (1.0 - smoothstep(0.75, 1.0, fract(wBandF)));
+  float wBandTone = (mix(fHash(vec2(wBand, floor(wBandRun) + 0.5)), fHash(vec2(wBand, floor(wBandRun) + 1.5)), smoothstep(0.7, 1.0, fract(wBandRun))) - 0.5) * wBandEdge;
+  float wSeenBundle = (1.0 - wNear / max(uDetail, 1e-3)) * (1.0 - smoothstep(STRIP_ * BUNDLE_ * 0.5, STRIP_ * BUNDLE_ * 1.6, wFwA));
+  float wSeenBand = 1.0 - smoothstep(STRIP_ * BAND_ * 0.5, STRIP_ * BAND_ * 1.6, wFwA);
+  // (and from across the building, on a phone: the lots the boards came in, a few ft wide and a long way along)
+  float wLotF = wStripF / LOT_;
+  float wLot = floor(wLotF);
+  float wLotRun = (vFloor.x + 60.0) / (STRIP_LONG_ * 4.3) + fHash(vec2(wLot, 2.9)) * 3.0;
+  float wLotAcross = smoothstep(0.0, 0.5, fract(wLotF));
+  float wLotAlong = smoothstep(0.55, 1.0, fract(wLotRun));
+  float wLotTone = mix(mix(fHash(vec2(wLot - 1.0, floor(wLotRun) + 0.25)), fHash(vec2(wLot - 1.0, floor(wLotRun) + 1.25)), wLotAlong), mix(fHash(vec2(wLot, floor(wLotRun) + 0.25)), fHash(vec2(wLot, floor(wLotRun) + 1.25)), wLotAlong), wLotAcross) - 0.5;
+  float wFar = 1.0 + (BUNDLE_TONE_ * wBundleTone * (0.35 + 0.65 * wSeenBundle) + BAND_TONE_ * wBandTone * wSeenBand + LOT_TONE_ * wLotTone);
+  // (and it was laid in panels and has worn, a shade here and there, drawn out along the strips)
+  // (these stay on a device that has given the strips up: they cost next to nothing, and a floor of one flat colour is not wood)
+  float wPatch = wFar * (1.0 + PATCH_ * (fCloud(vec2(vFloor.x * 0.07, vFloor.z * 0.31)) - 0.5));
   // the grain: fine lines along the strip, wavering, finer still where they are near
   float wWav = fNoise(vec2(wRun * 0.35, wStrip * 5.0)) * 3.0;
   float wG1 = fStreak(wRun * 0.7 + wPiece * 13.0, (wAcross + wWav * STRIP_) * 60.0);
@@ -371,6 +408,9 @@ const FLOOR_WOOD = /* glsl */ `
   float wBare = 1.0 - smoothstep(0.05, 0.16, length(wOff));
   float wStain = wBare + (1.0 - wBare) * step(wOff.r, 0.0) * step(wOff.b, 0.0) * step(0.02, diffuseColor.r - diffuseColor.b);
   diffuseColor.rgb *= mix(1.0 - (1.0 - wWood) * 0.45, wWood, wStain);
+  // (the bare wood as a camera exposed for the men on it has it: a deep honey, not the canvas's pale one;
+  // the lines and the paint keep their own brightness, and stand off it)
+  diffuseColor.rgb *= mix(vec3(1.0), WOOD_GRADE_, wBare);
   // the wear: where the lanes are, the coat scuffed dull in streaks by feet (and a little everywhere)
   float wLane = (1.0 - smoothstep(LANE_L_ - 3.0, LANE_L_ + 2.0, HALF_COURT - abs(vFloor.x))) * step(abs(vFloor.x), HALF_COURT) * (1.0 - smoothstep(LANE_W_ * 0.5 - 1.0, LANE_W_ * 0.5 + 3.0, abs(vFloor.z)));
   float wScuff = fCloud(vFloor.xz * vec2(0.5, 0.8));
@@ -497,6 +537,14 @@ export function varnish(mat: MeshStandardMaterial): FloorKnobs {
     TONE_: glsl(TONE),
     GRAIN_: glsl(GRAIN),
     TILT_: glsl(TILT),
+    BUNDLE_: glsl(BUNDLE),
+    BAND_: glsl(BAND),
+    LOT_: glsl(LOT),
+    LOT_TONE_: glsl(LOT_TONE),
+    BUNDLE_TONE_: glsl(BUNDLE_TONE),
+    BAND_TONE_: glsl(BAND_TONE),
+    PATCH_: glsl(PATCH),
+    WOOD_GRADE_: `vec3(${WOOD_GRADE.join(', ')})`,
     SHARP_: glsl(SPREAD_SHARP),
     SOFT_: glsl(SPREAD_SOFT),
     HAZE_S: glsl(SPREAD_HAZE),
@@ -547,6 +595,12 @@ export const HAZE_DENSITY = 0.0009;
 /** The lamps' beams down through the haze to the floor: how much of the lamp they show where they leave it, and how wide they get by the floor (ft). */
 const BEAM = 0.05;
 const BEAM_FLOOR = 26;
+/**
+ * How far down toward the floor a beam is drawn at all (of the way): past it there is a three-hundredth of
+ * its light left, and fifteen cones drawn to the floor were thirty sheets of nothing over the floor, which
+ * is most of the picture. (The haze they lay over the stands is all above this.)
+ */
+const BEAM_END = 0.8;
 /** The glow round a lamp bank, at its middle (over the glow's threshold: it blooms). */
 const LAMP_GLOW = 2.2;
 
@@ -596,6 +650,7 @@ const BEAMS = {
       float mid = abs(dot(normalize(vNormal), vView / d));
       // (seen against the dark of the roof, gone by the time it is over the stands and the floor)
       float a = mid * mid * pow(clamp(1.0 - vAlong, 0.0, 1.0), 3.5) * smoothstep(0.0, 0.06, vAlong) * smoothstep(20.0, 60.0, d);
+      a *= 1.0 - smoothstep(${(BEAM_END - 0.1).toFixed(2)}, ${BEAM_END.toFixed(2)}, vAlong);
       gl_FragColor = vec4(uLamp * a, 1.0);
       #include <colorspace_fragment>
     }`,
@@ -666,16 +721,16 @@ export function air(keep: <T extends { dispose(): void }>(o: T) => T): { group: 
     const r0 = b.hu * 0.7;
     const base = pos.length / 3;
     for (let k = 0; k <= 1; k++) {
-      const r = k ? BEAM_FLOOR : r0;
+      const r = r0 + (BEAM_FLOOR - r0) * k * BEAM_END;
       for (let i = 0; i <= SEGS; i++) {
         const a = (i / SEGS) * Math.PI * 2;
         nv.copy(side).multiplyScalar(Math.cos(a)).addScaledVector(up, Math.sin(a));
         p.copy(b.at)
-          .addScaledVector(axis, k * reach)
+          .addScaledVector(axis, k * BEAM_END * reach)
           .addScaledVector(nv, r);
         pos.push(p.x, p.y, p.z);
         nrm.push(nv.x, nv.y, nv.z);
-        along.push(k);
+        along.push(k * BEAM_END);
       }
     }
     for (let i = 0; i < SEGS; i++) {
@@ -769,6 +824,10 @@ const DRAMA_CONTRAST = 0.08;
 const SATURATION = 1.12;
 const CONTRAST = 0.16;
 const BLACKS = 0.008;
+/** How much crispness is put back (the most a neighbour is taken off a dot, of 1: a fifth is as far as it can go). */
+const SHARP = 0.08;
+/** A picture of more dots than this is drawn with two samples a dot, not four (a 1440p screen's is; a 1080p one's is not). */
+const FINE_DOTS = 2.6e6;
 /** A broadcast camera's balance: a hair warm (in the screen's terms). */
 const BALANCE = new Vector3(1.007, 1.0, 0.993);
 /** The camera's exposure: a little over the building's light (a broadcast keeps the floor bright). */
@@ -909,10 +968,23 @@ const FINISH = /* glsl */ `
   uniform float uAspect;
   uniform sampler2D tSofter;
   uniform vec2 uDot;
+  uniform float uSharp;
   ${UNSHARP}
   varying vec2 vUv;
   void main() {
     vec3 s = texture2D(tScene, vUv).rgb;
+    if (uSharp > 0.0) {
+      // (a lens's crispness put back after the samples are averaged: more where the picture is quiet (the wood's
+      // grain, a kit's knit, a face), all but none across an edge that is already hard, so no line gets a halo
+      // and no stair gets steeper)
+      vec3 a = texture2D(tScene, vUv + vec2(0.0, uDot.y)).rgb, b = texture2D(tScene, vUv - vec2(0.0, uDot.y)).rgb;
+      vec3 c = texture2D(tScene, vUv + vec2(uDot.x, 0.0)).rgb, d = texture2D(tScene, vUv - vec2(uDot.x, 0.0)).rgb;
+      vec3 lo = min(s, min(min(a, b), min(c, d)));
+      vec3 hi = max(s, max(max(a, b), max(c, d)));
+      vec3 room = sqrt(clamp(min(lo, 1.0 - hi) / max(hi, 1e-3), 0.0, 1.0));
+      vec3 w = -room * uSharp;
+      s = clamp((s + (a + b + c + d) * w) / (1.0 + 4.0 * w), 0.0, 1.0);
+    }
     if (uFocusAmt > 0.0) {
       // (the nearest thing at this dot or beside it: a man's edge stays his, sharp, not a row of soft dots)
       float d = texture2D(tDepth, vUv).r;
@@ -980,6 +1052,8 @@ export class Lens {
   occlude = true;
   /** How far down the house lights are (rig.ts mood): the corners darker, the contrast up a touch. */
   drama = 0;
+  /** What has to be drawn before a picture from this camera can be (the floor's mirror: arena.ts reflect). */
+  before: ((camera: Camera) => void) | null = null;
   readonly ao: Occlusion;
   private focusAt = 0;
   private focusAmt = 0;
@@ -995,11 +1069,12 @@ export class Lens {
   private readonly softer: ShaderMaterial;
   private w = 1;
   private h = 1;
+  private readonly most: number;
 
   constructor(private readonly renderer: WebGLRenderer) {
     this.can = renderer.extensions.has('EXT_color_buffer_float') || renderer.extensions.has('EXT_color_buffer_half_float');
-    const samples = Math.min(4, renderer.capabilities.maxSamples || 0);
-    this.scene = screenTarget(samples);
+    this.most = Math.min(4, renderer.capabilities.maxSamples || 0);
+    this.scene = screenTarget(this.most);
     this.ao = new Occlusion(renderer);
     for (let i = 0; i < GLOW_STEPS; i++) this.glow.push(target(1, 1));
     const geo = new BufferGeometry();
@@ -1023,6 +1098,7 @@ export class Lens {
       tSoft: { value: null },
       tSofter: { value: null },
       uDot: { value: new Vector2() },
+      uSharp: { value: SHARP },
       tAo: { value: null },
       uAo: { value: 0 },
       uGlow: { value: GLOW / GLOW_STEPS },
@@ -1063,6 +1139,13 @@ export class Lens {
   size(w: number, h: number) {
     this.w = Math.max(1, Math.round(w));
     this.h = Math.max(1, Math.round(h));
+    // (a big picture's dots are small on the screen that shows it, and every edge of five million triangles is
+    // sampled this many times: two samples a dot there, four where the dots are big enough to see)
+    const samples = Math.min(this.most, this.w * this.h > FINE_DOTS ? 2 : 4);
+    if (samples !== this.scene.samples) {
+      this.scene.samples = samples;
+      this.scene.dispose();
+    }
     this.scene.setSize(this.w, this.h);
     this.ao.size(this.w, this.h);
     this.glow.forEach((t, i) => t.setSize(Math.max(1, this.w >> (i + 1)), Math.max(1, this.h >> (i + 1))));
@@ -1086,6 +1169,7 @@ export class Lens {
     const exposure = this.exposure * (1 + this.bumped);
     this.bumped = Math.max(0, this.bumped - (ms / BUMP_MS) * Math.max(this.bumped, 0.2));
     r.toneMappingExposure = exposure;
+    this.before?.(camera);
     if (!this.post) {
       r.setRenderTarget(null);
       r.render(scene, camera);
@@ -1147,7 +1231,6 @@ export class Lens {
       f.tDepth.value = this.scene.depthTexture;
       f.uNear.value = pc.near;
       f.uFar.value = pc.far;
-      (f.uDot.value as Vector2).set(1 / this.w, 1 / this.h);
       const su = this.softer.uniforms;
       su.tSrc.value = this.scene.texture;
       su.tDepth.value = this.scene.depthTexture;
@@ -1167,6 +1250,7 @@ export class Lens {
       f.tSoft.value = this.soft[1].texture;
       f.tSofter.value = this.soft[2].texture;
     }
+    (f.uDot.value as Vector2).set(1 / this.w, 1 / this.h);
     f.uVignette.value = VIGNETTE + DRAMA_VIGNETTE * this.drama;
     f.uContrast.value = CONTRAST + DRAMA_CONTRAST * this.drama;
     f.tScene.value = this.scene.texture;

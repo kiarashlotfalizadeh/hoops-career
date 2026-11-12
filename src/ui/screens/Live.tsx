@@ -57,6 +57,7 @@ import { quickPills, subOptions } from '../live/session';
 import { HOT_STREAK } from '../live/Lineup';
 import { changesLine, screenChanges } from '../tactics/changes';
 import { nightWatch } from '../games/data';
+import { teamPlayers } from '../../core/league/helpers';
 import { breakStory, crowdLevel, currentRun, isClutch, RUN_MIN } from '../live/atmosphere';
 import { Crowd, clutchSlowAlways, setClutchSlowAlways } from '../live/Atmos';
 import { COACH_MARKS, CoachMark, coachMarksSeen, markCoachMarksSeen } from '../live/CoachMarks';
@@ -76,6 +77,19 @@ export default function Live() {
   const [courtTap, setCourtTap] = useState(0);
 
   const persist = !!game?.keep;
+  // (each side's healthy players, best first: the 3D benches seat whoever of them is not on the floor)
+  const benches = useMemo(
+    () =>
+      [home?.tid, away?.tid].map((tid) =>
+        tid === undefined
+          ? []
+          : teamPlayers(league, tid)
+              .filter((p) => !p.injury)
+              .sort((a, b) => b.ovr - a.ovr)
+              .map((p) => p.pid),
+      ) as [number[], number[]],
+    [league, home?.tid, away?.tid],
+  );
   const tactics = useMemo(
     () => (game ? game.sim.baseTactics(game.userSide) : null),
     // the tactics change through this screen (tick) and at resume (game)
@@ -586,6 +600,7 @@ export default function Live() {
           onLook={(v) => edit((l) => void (l.settings.courtLook = v))}
           cam={league.settings.courtCam}
           onCam={(v) => edit((l) => void (l.settings.courtCam = v))}
+          bench={benches}
           body={body}
           script={script}
           speed={s.speed}

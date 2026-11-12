@@ -26,6 +26,7 @@ import {
 } from 'three';
 import { COURT_LEN } from '../choreo';
 import { END, HALF_W, SIDE } from '../Court';
+import { unshadowed } from './rig';
 
 type Keep = <T extends { dispose(): void }>(o: T) => T;
 type V3 = [number, number, number];
@@ -74,7 +75,7 @@ const GATE_IN = 9.4;
 /** Press row: the far side's first row is a desk this far either side of its middle. */
 const PRESS = 27;
 /** The broadcast's platform in the near stands (under where its main camera looks from): the rows it takes, and half its width. */
-const DECK_ROWS = [9, 10];
+const DECK_ROWS = [14, 16];
 const DECK_HALF = 8.5;
 /** An aisle every this many seats; the first this many from a side's middle. */
 const AISLE_EVERY = 19;
@@ -128,8 +129,26 @@ const P = (s: Side, u: number, y: number, d: number): V3 => {
   const n = Math.sin(s.turn);
   return [s.cx + u * c - d * n, y, s.cz - u * n - d * c];
 };
-/** How much of the floor's light reaches a row (the lights are on the floor: a soft falloff up the stands). */
-const lit = (row: number) => 1 - 0.4 * (row / (ROWS - 1)) ** 0.9;
+/**
+ * How much of the floor's light reaches a row. The lamps are aimed at the floor and a camera is exposed for
+ * it: the rows by the floor sit in their spill, most of a stop under the floor, and it falls away up the
+ * bowl to two stops under by the walkway (the upper deck's picture and the lit fronts over it go on down
+ * from there: DECK_GLOW and the rest). The steps, the seats and the people in them all take this one number,
+ * so they darken together.
+ */
+const LIT_FRONT = 0.66;
+const LIT_BACK = 0.27;
+export const lit = (row: number) => LIT_BACK + (LIT_FRONT - LIT_BACK) * (1 - Math.min(1, row / (ROWS - 1))) ** 1.25;
+/** Those stood at the rail behind the top row, the upper deck's picture at its front row, and the lit fronts behind and over the walkway: under the lower bowl's, not over it. */
+const RAIL_LIT = 0.3;
+const DECK_GLOW = 0.36;
+const SUITE_GLOW = 0.5;
+const SHOP_GLOW = 0.42;
+const DOOR_GLOW = 0.55;
+const SIGN_GLOW = 0.8;
+/** The building's colour on its walls' padded tops and its seats' picture: this far toward grey, and this much of it (paint under a dimmed house is not a lit sign). */
+const TRIM_GREY = 0.3;
+const TRIM_TONE = 0.5;
 /** The near side's people are between the cameras and the floor: seen from behind and against it, they are this much darker past the first rows. */
 const NEAR_LIT = 0.6;
 
@@ -451,6 +470,10 @@ export class Bowl {
   private readonly deck: CanvasTexture;
   private readonly up = { value: 0 };
   private readonly trim: MeshLambertMaterial;
+  private readonly concrete: MeshLambertMaterial;
+  /** The walls' tops' colour with all its light, and how much of it the stands have now (see dim). */
+  private readonly trimTone = new Color(1, 1, 1);
+  private stands = 1;
   private readonly apron: MeshLambertMaterial;
   private readonly glowFloor: MeshBasicMaterial;
   /** The lit pictures and how bright each is at full light. */
@@ -618,13 +641,13 @@ export class Bowl {
         for (let u = -e + 3; u < e - 3; u += 2.3) {
           if (rnd() > 0.42) continue;
           const [x, , z] = P(s, u + (rnd() - 0.5) * 0.8, 0, TOP + 1.9 + rnd() * 0.8);
-          this.seats.push({ x, y: TOP_Y, z, turn: s.turn, row: ROWS, side: s.k, kind: 'stand', lit: 0.62, stall: false });
+          this.seats.push({ x, y: TOP_Y, z, turn: s.turn, row: ROWS, side: s.k, kind: 'stand', lit: RAIL_LIT, stall: false });
         }
         // (the near side's terrace: people about on it, behind the rail)
         if (s.set)
           for (let i = 0; i < 90; i++) {
             const [x, , z] = P(s, (rnd() - 0.5) * 2 * (e - 4), 0, TOP + 5 + rnd() * (s.set - 4));
-            this.seats.push({ x, y: TOP_Y, z, turn: s.turn + (rnd() - 0.5) * 1.2, row: ROWS, side: s.k, kind: 'stand', lit: 0.55, stall: false });
+            this.seats.push({ x, y: TOP_Y, z, turn: s.turn + (rnd() - 0.5) * 1.2, row: ROWS, side: s.k, kind: 'stand', lit: RAIL_LIT * 0.9, stall: false });
           }
 
         // the concourse's wall under the suites, the suites' soffit and their windows, the band the ribbon is on
@@ -688,7 +711,7 @@ export class Bowl {
       this.chairs.push({ x, y: 0, z: COURT_Z, turn: Math.PI });
     }
     for (const e of [-1, 1]) for (let i = 0; i < 6; i++) this.chairs.push({ x: e * (42.5 + i * 2.35), y: 0, z: -(HALF_W + SIDE + 3.6), turn: 0 });
-    for (const c of this.chairs) this.seats.push({ x: c.x, y: 0.12, z: c.z, turn: c.turn, row: 0, side: c.turn ? 3 : 0, kind: 'court', lit: 1.05, stall: false });
+    for (const c of this.chairs) this.seats.push({ x: c.x, y: 0.12, z: c.z, turn: c.turn, row: 0, side: c.turn ? 3 : 0, kind: 'court', lit: 0.85, stall: false });
 
     // --- what stands about on the ground and in the stands: the broadcast's cameras, press row, cables, the corners ---
     /** A box by its middle and its sizes (its top and four sides). */
@@ -736,7 +759,7 @@ export class Bowl {
         '#0a0a0c',
       );
     }
-    // the broadcast's platform in the near stands: a deck over two rows, a rail round it, three cameras
+    // the broadcast's platform in the near stands: a deck over three rows, a rail round it: where the main camera stands
     {
       const s = SIDES[3];
       const [d0, d1] = [DECK_ROWS[0] * DEEP, (DECK_ROWS[1] + 1) * DEEP];
@@ -750,7 +773,7 @@ export class Bowl {
       }
       rail.bar(P(s, -DECK_HALF, y + 3.2, d0), P(s, DECK_HALF, y + 3.2, d0), 0.14, 0.14, '#8d9199');
       for (let u = -DECK_HALF; u <= DECK_HALF; u += DECK_HALF / 2) rail.bar(P(s, u, y, d0), P(s, u, y + 3.2, d0), 0.12, 0.12, '#8d9199');
-      for (const u of [-5, 0, 5]) camera(...(P(s, u, y, d0 + 2.4) as [number, number, number]));
+      // (the main camera itself stands here, cameras.ts `mount`: nothing on the deck is in its way)
     }
     // press row: a long desk along the far side's first row, a cloth in the building's colour down its front, screens and lamps on it
     {
@@ -801,11 +824,14 @@ export class Bowl {
       this.lit.push({ mat, glow });
       return add(soup, mat);
     };
-    add(concrete, keep(new MeshLambertMaterial({ vertexColors: true, side: DoubleSide })));
+    this.concrete = keep(new MeshLambertMaterial({ vertexColors: true, side: DoubleSide }));
+    this.concrete.onBeforeCompile = unshadowed;
+    add(concrete, this.concrete);
     this.trim = keep(new MeshLambertMaterial({ vertexColors: true, side: DoubleSide }));
+    this.trim.onBeforeCompile = unshadowed;
     add(trim, this.trim);
     this.deck = texture(keep, 1024, 256, (cv) => paintDeck(cv, '#2a2c33'));
-    const rows = picture(deck, this.deck, 0.6).material as MeshBasicMaterial;
+    const rows = picture(deck, this.deck, DECK_GLOW).material as MeshBasicMaterial;
     rows.alphaTest = 0.5;
     // (each seat's person is drawn sat, the picture's lower half, or on his feet, its upper: the more of them the
     // more the building cheers, each at his own moment)
@@ -822,10 +848,10 @@ export class Bowl {
       );
     };
     rows.customProgramCacheKey = () => 'upperRows';
-    picture(suites, texture(keep, 1024, 96, paintSuites), 1);
-    picture(shops, texture(keep, 1024, 96, paintShops), 0.9);
-    picture(doors, texture(keep, 128, 96, paintDoor, false), 0.8);
-    picture(signs, texture(keep, 64, 24, paintExit, false), 1.1);
+    picture(suites, texture(keep, 1024, 96, paintSuites), SUITE_GLOW);
+    picture(shops, texture(keep, 1024, 96, paintShops), SHOP_GLOW);
+    picture(doors, texture(keep, 128, 96, paintDoor, false), DOOR_GLOW);
+    picture(signs, texture(keep, 64, 24, paintExit, false), SIGN_GLOW);
     // (glass: mostly what is behind it, and the building's lights on its face)
     const pane = keep(
       new MeshStandardMaterial({ color: 0xcfe0ea, roughness: 0.08, metalness: 0, envMapIntensity: 0.35, transparent: true, opacity: 0.14, side: DoubleSide, depthWrite: false }),
@@ -856,10 +882,14 @@ export class Bowl {
   paint(board: string) {
     if (board === this.board) return;
     this.board = board;
-    this.trim.color.set(board).multiplyScalar(0.8);
+    const c = this.trimTone.set(board);
+    const grey = Math.max(0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b, 0.02);
+    c.lerp(new Color(grey, grey, grey), TRIM_GREY).multiplyScalar(TRIM_TONE);
+    this.trim.color.copy(c).multiplyScalar(this.stands);
     this.apron.color.set('#1d1e22').lerp(new Color(board), 0.12);
     this.glowFloor.color.set(board).lerp(new Color('#ffffff'), 0.35);
-    paintDeck(this.deck.image as HTMLCanvasElement, `#${new Color(board).multiplyScalar(0.6).getHexString()}`);
+    const seat = c.clone().multiplyScalar(0.6 / TRIM_TONE);
+    paintDeck(this.deck.image as HTMLCanvasElement, `#${seat.getHexString()}`);
     this.deck.needsUpdate = true;
   }
 
@@ -868,9 +898,12 @@ export class Bowl {
     this.up.value = up;
   }
 
-  /** How much of their light the lit faces keep (1: all of it). */
-  dim(to: number) {
+  /** How much of their light the lit faces keep (1: all of it), and the steps and the walls with the people on them (`stands`). */
+  dim(to: number, stands = to) {
     for (const { mat, glow } of this.lit) mat.color.setScalar(glow * to);
+    this.stands = stands;
+    this.concrete.color.setScalar(stands);
+    this.trim.color.copy(this.trimTone).multiplyScalar(stands);
   }
 
   /** A device that can't keep up: no glass, rails, nor light spilt on the steps and the ground. */

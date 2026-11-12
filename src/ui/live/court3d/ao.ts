@@ -24,7 +24,7 @@ import {
 const REACH = 1.3;
 const REACH_MOST = 0.09;
 /** How dark it gets, and what is not counted: nearer its own surface than this (ft, and more with distance: the depth is coarser there). */
-const DARK = 1.6;
+const DARK = 1.8;
 const SKIN = 0.035;
 const SKIN_FAR = 0.0012;
 /** Past this far from the camera (ft) there is none: the far stands are a few dots a head. */
@@ -81,6 +81,8 @@ const FIND = /* glsl */ `
       sum += max(dot(v, n) - skin, 0.0) / (d2 + 0.02) * (1.0 - smoothstep(uReach * uReach * 0.6, uReach * uReach * 1.6, d2));
     }
     float ao = clamp(1.0 - ${DARK.toFixed(2)} * sum * uReach / float(TAPS), 0.0, 1.0);
+    // (never to black, and less the nearer the camera: in a close-up an ear's bowl or the shade under a chin is a few dots across, and went to ink)
+    ao = max(ao, mix(0.66, 0.3, smoothstep(12.0, 45.0, z)));
     ao = mix(ao, 1.0, smoothstep(${FAR_FROM.toFixed(1)}, ${FAR_TO.toFixed(1)}, z));
     gl_FragColor = vec4(ao, 0.0, 0.0, 1.0);
   }`;

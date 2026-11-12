@@ -3,13 +3,13 @@
 // here (plain numbers, the scene's x and z), and nothing about the game is decided.
 
 /** Two bodies' middles are never drawn closer than this (ft): men whose paths cross go round each other. */
-export const BODY_GAP = 2.3;
+export const BODY_GAP = 2.7;
 /** Each is sent at least this far (ft) to his own side of the crossing. */
 const BIAS = 0.7;
 /** A step round another man is taken at this speed at most, ft a second: never in one frame. */
 const SLIDE = 12;
 /** Eased, a step aside can lag two men closing fast. They are never drawn nearer than this (ft), whatever the easing says: the bodies don't meet. */
-const BODY_MIN = 2.0;
+const BODY_MIN = 2.3;
 /** And that last step is taken at this speed at most, ft a second. */
 const SHOVE = 21;
 /** A plan spot this far (ft) from the last frame's is a new start whoever says so: his step aside starts again there. */

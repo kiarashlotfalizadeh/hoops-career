@@ -112,8 +112,6 @@ type Lab = {
   boards: { shout(call: string, side: 0 | 1 | null): void; house: { pretend: unknown } };
 };
 const inner = scene as unknown as { renderer: WebGLRenderer; scene: Scene; arena: Lab; rig: { mood(to: number, ms: number): void; drama: number } };
-// (what a slow device gives up of the building, with the shadows and the mirror)
-if (q.has('lite')) inner.arena.shed(2);
 if (q.has('def') || q.has('ft')) inner.arena.boards.house.pretend = { off: 1, line: q.has('ft'), end: -1, shot: q.has('ft') ? null : 11.2 };
 const [eye0, at0, fov0] = SHOTS[q.get('shot') ?? 'main'] ?? SHOTS.main;
 const eye = vec('eye', eye0);

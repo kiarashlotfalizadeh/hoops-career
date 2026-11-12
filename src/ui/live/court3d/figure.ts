@@ -3,7 +3,13 @@
 // hands have fingers and the feet sneakers; he wears a V-neck vest tucked into shorts, whose legs
 // swing a beat behind his thighs. Builds differ (height, shoulders, how thick the limbs are), and so
 // do the men: each has a skin, a head of hair, a beard and a face of his own (look.ts), made up from
-// his id, never a likeness.
+// his id, never a likeness. Beyond the puppet's bones he has leaves this file turns itself: his fingers,
+// his jaw and nose, his hair's swing, a bone at each shoulder (half way from chest to arm: see `girdle`)
+// and one down each forearm (the hand's turn spread along it), his brows and his lower lip. His head is
+// one of six kinds, each man off his kind (look.ts), and his face works: his jaw comes open on his teeth
+// in the air and when he shouts, his brows come down, his eyes blink. Close up the material draws his
+// eyes itself (see EYES), and his head is lit by a lamp on the camera as well as the building's, so his
+// dark skin is a face with planes and not a shape (the material's uTone, uBlink, uIris, uEye).
 //
 // Everything he wears is one picture (his sheet, see `Sheet`): his vest with its number and name, the
 // shorts with their side panels and the team's mark, his head (his face, his hair and beard),
@@ -26,6 +32,7 @@ import {
   Quaternion,
   RingGeometry,
   Skeleton,
+  Vector2,
   SkinnedMesh,
   SRGBColorSpace,
   Vector3,
@@ -35,7 +42,7 @@ import {
 import type { MatchKit } from '../../teamColors';
 import { CLIPS, I } from './clips';
 import { merged, type Thing } from './glb';
-import { lookOf, STYLES, type Look } from './look';
+import { lookOf, SKINS, STYLES, type Look } from './look';
 import { ANKLE, J, Puppet, THIGH, type Body } from './puppet';
 
 /** The grey the figures were before each had a skin of his own (look.ts): what the benches still wear until they take theirs from there. */
@@ -74,14 +81,29 @@ const B = {
   nose: 23,
   // (and what hair that hangs swings from)
   hair: 24,
+  // (and one at each shoulder, half way between his chest and his upper arm: see `girdle`)
+  cll: 25,
+  clr: 26,
+  // (and one down each forearm, that takes part of the hand's turn about it)
+  fwl: 27,
+  fwr: 28,
+  // (and one his brows hang on: lowered when he strains or shouts)
+  brow: 29,
+  // (and one for his lower lip and teeth: it opens with his jaw, and keeps his head's size, so his lips meet whatever his jaw's shape)
+  lip: 30,
 } as const;
-const BONES = 25;
+const BONES = 31;
+/** How far out from his sides his arms are as built (figure.py's ARM_OUT). */
+const ARM_OUT = (38 * Math.PI) / 180;
 /** Where the fingers' two joints are down the hand from the wrist, ft (figure.py's KNUCKLE and MIDDLE). */
 const KNUCKLE = 0.4;
 const MIDDLE = 0.545;
-/** Where his jaw and his nose are scaled about, from the head bone (figure.py's JAW_AT and NOSE_AT). */
-const JAW_AT = new Vector3(0, 0.045 - 0.42 * 0.42, 0.05 + 0.25 * 0.37);
+/** Where his jaw, his nose and his brows are scaled about, from the head bone (figure.py's JAW_AT, NOSE_AT and BROW_AT). */
+const JAW_AT = new Vector3(0, 0.045 - 0.5 * 0.42, 0.05 + 0.25 * 0.37);
 const NOSE_AT = new Vector3(0, 0.045 - 0.2 * 0.42, 0.05 + 0.8 * 0.37);
+const BROW_AT = new Vector3(0, 0.045 + 0.24 * 0.42, 0.05 + 0.8 * 0.37);
+/** Where his jaw hinges, just in front of his ear (from the head bone, ft): it comes open about this, not about where it is scaled. */
+const JAW_HINGE = new Vector3(0, 0.045 - 0.03 * 0.42, 0.05 - 0.2 * 0.37);
 /** Where hair that hangs swings from (figure.py's HAIR_AT). */
 const HAIR_AT = new Vector3(0, 0.045 + 0.1 * 0.42, 0.05 - 0.6 * 0.37);
 
@@ -96,8 +118,9 @@ type Rect = readonly [number, number, number, number];
 const R_VEST: Rect = [0, 0, 1024, 512];
 const R_SHORTS: Rect = [0, 512, 512, 256];
 const R_HEAD: Rect = [512, 512, 512, 400];
-/** His shoes' upper (along the foot, round it) and their soles (along, up). */
-const R_SHOE: Rect = [0, 768, 512, 192];
+/** His shoes' upper (along the foot, round it), their collar and tongue (round his ankle, up it) and their soles (along, up). */
+const R_SHOE: Rect = [0, 768, 384, 192];
+const R_COLLAR: Rect = [384, 768, 128, 192];
 const R_SOLE: Rect = [0, 960, 512, 64];
 /** A strip down each limb, shoulder to fingertips and hip to sole: left arm, right arm, left leg, right leg. */
 const R_LIMB: readonly Rect[] = [
@@ -108,7 +131,16 @@ const R_LIMB: readonly Rect[] = [
 ];
 /** Plain patches: the vest's and shorts' trim, the skin of his trunk, and hair that is a shape of its own (a bun, his locks). */
 const R_TRIM: Rect = [512, 992, 160, 32];
-const R_SKIN: Rect = [672, 992, 160, 32];
+const R_SKIN: Rect = [672, 992, 96, 32];
+/**
+ * His ears: a plain strip of his skin along the foot of his head's picture, where the picture is of what is down
+ * inside his neck and no point of him looks. (Round his head's middle his ears lie over his hair and his beard,
+ * whose picture is not theirs; and on his head's part of the sheet they are lit as his face is.)
+ */
+const R_EAR: Rect = [R_HEAD[0] + 64, R_HEAD[1] + R_HEAD[3] - 14, 384, 12];
+/** What is behind his lips when his jaw comes open (figure.py's mouth): the dark of it, his teeth. */
+const R_MOUTH: Rect = [768, 992, 32, 32];
+const R_TEETH: Rect = [800, 992, 32, 32];
 const R_HAIR: Rect = [832, 992, 192, 32];
 /** A picture that goes round him (the shorts, his head, a shoe) runs on this far past its seam either side (in turns), so a triangle across the seam finds what it needs. */
 const WRAP = 0.06;
@@ -144,14 +176,16 @@ function solve(f: (x: number) => number, y: number, lo: number, hi: number): num
   }
   return (lo + hi) / 2;
 }
-/** The middle of a shoe's cross-section, from the ankle (ft): round it is its picture's second way. */
-const SHOE_MID = -0.1;
+/** The line a shoe's upper is unrolled about, from the ankle (ft: the foot of the upper, so its top is half way up its picture and its sides a quarter either way). */
+const SHOE_MID = -0.2;
+/** How high a shoe's collar and tongue reach, from the ankle (ft): their picture's second way. */
+const COLLAR_Y = [-0.14, 0.42] as const;
 /** A shoe's length (heel to toe, from the ankle) and its sole's height, ft. */
 const SHOE_Z = [-0.36, 0.74] as const;
 const SOLE_H = 0.15;
 
 /** Which picture each point takes its colour from. */
-const Pic = { Vest: 0, Trim: 1, Shorts: 2, Head: 3, Skin: 4, ArmL: 5, ArmR: 6, LegL: 7, LegR: 8, Shoe: 9, Sole: 10, Hair: 11 } as const;
+const Pic = { Vest: 0, Trim: 1, Shorts: 2, Head: 3, Skin: 4, ArmL: 5, ArmR: 6, LegL: 7, LegR: 8, Shoe: 9, Sole: 10, Hair: 11, Collar: 12, Mouth: 13, Teeth: 14, Ear: 15 } as const;
 type Pic = (typeof Pic)[keyof typeof Pic];
 const RECT: Record<Pic, Rect> = {
   [Pic.Vest]: R_VEST,
@@ -166,19 +200,25 @@ const RECT: Record<Pic, Rect> = {
   [Pic.Shoe]: R_SHOE,
   [Pic.Sole]: R_SOLE,
   [Pic.Hair]: R_HAIR,
+  [Pic.Collar]: R_COLLAR,
+  [Pic.Mouth]: R_MOUTH,
+  [Pic.Teeth]: R_TEETH,
+  [Pic.Ear]: R_EAR,
 };
 /** Hair that is a shape of its own on the model (a man wears one of them or none: see STYLES). */
 const PIECES = ['bun', 'tail', 'twists', 'locs', 'braids', 'afro', 'hightop', 'curls'];
+/** What makes a shoe a high one (the collar on up round his ankle, a longer tongue): a piece too, left off a man who wears his low. */
+const HIGH = 'high';
 /** Those of them that are curls, not strands: their half of the hair's picture is tufts. */
 const TUFTED = ['afro', 'hightop', 'curls', 'twists'];
 /** Which of a picture's two ways goes round (0 across, 1 up; -1 neither): a triangle across its seam is given points of its own. */
-const ROUND: Partial<Record<Pic, 0 | 1>> = { [Pic.Shorts]: 0, [Pic.Head]: 0, [Pic.Shoe]: 1 };
+const ROUND: Partial<Record<Pic, 0 | 1>> = { [Pic.Shorts]: 0, [Pic.Head]: 0, [Pic.Shoe]: 1, [Pic.Collar]: 0 };
 
 export interface Geo {
   /** The body: one shape, every point of it placed on the sheet (with no hair but what is painted on him). */
   body: BufferGeometry;
-  /** The body with one of the model's pieces of hair on it (a bun, a tail, twists, locks, braids), or `body` for none. */
-  wearing(piece: string | null): BufferGeometry;
+  /** The body with one of the model's pieces of hair on it (a bun, a tail, twists, locks, braids), or `body` for none; in high shoes, or (`high` false) low ones. */
+  wearing(piece: string | null, high?: boolean): BufferGeometry;
   /** What the model says each part is (the sheet is painted to match: see `sheetUv`). */
   wears: string[];
   /** The skin counts its bones in the model's order: which of ours each is, and the way back to it from the body as built. */
@@ -209,22 +249,26 @@ export function figureGeo(keep: <T extends { dispose(): void }>(o: T) => T, mode
   ring.rotateX(-Math.PI / 2);
   // each piece of hair is the same points with other triangles left out: one set of points for every man
   const all = Array.from(geo.index!.array as ArrayLike<number>);
-  const made = new Map<string | null, BufferGeometry>();
-  const wearing = (name: string | null) => {
+  const made = new Map<string, BufferGeometry>();
+  const wearing = (name: string | null, high = true) => {
     const key = name !== null && PIECES.includes(name) ? name : null;
-    let g = made.get(key);
+    let g = made.get(`${key} ${high}`);
     if (!g) {
       g = keep(new BufferGeometry());
       for (const [k, a] of Object.entries(geo.attributes)) g.setAttribute(k, a);
-      const tris = all.filter((_v, i) => piece[Math.floor(i / 3)] === '' || piece[Math.floor(i / 3)] === key);
+      const on = (p: string) => p === '' || p === key || (high && p === HIGH);
+      const tris = all.filter((_v, i) => on(piece[Math.floor(i / 3)]));
       g.setIndex(geo.getAttribute('position').count > 65535 ? tris : new BufferAttribute(Uint16Array.from(tris), 1));
-      made.set(key, g);
+      made.set(`${key} ${high}`, g);
     }
     return g;
   };
   geo.dispose();
   return { body: wearing(null), wearing, wears: materials, order, inverse, shorts, blob, ring };
 }
+
+/** A number folded into 0..1 and back (0, 1, 0, 1 at each whole step): a picture laid by it repeats with no seam. */
+const fold = (v: number) => Math.abs((((v % 2) + 2) % 2) - 1);
 
 /** How far round him a point is, in turns from his left side (the back a quarter of the way, the front three): the vest's own way. */
 const round = (x: number, z: number) => ((((Math.atan2(x, z) - Math.PI / 2) / (2 * Math.PI)) % 1) + 1) % 1;
@@ -277,13 +321,17 @@ function sheetUv(geo: BufferGeometry, wears: string[], order: number[], inverse:
     if (w === 'trim') return Pic.Trim;
     if (w === 'cloth') return Pic.Shorts;
     if (w === 'shoe') return Pic.Shoe;
+    if (w === 'collar' || w === 'high') return Pic.Collar;
+    if (w === 'ear') return Pic.Ear;
+    if (w === 'mouth') return Pic.Mouth;
+    if (w === 'teeth') return Pic.Teeth;
     if (PIECES.includes(w)) return Pic.Hair;
     // (the white below the ankle is a sole; above it, a sock: the bottom of its leg's strip)
     if (w === 'white') return L.copy(P).applyMatrix4(foot).y < -0.06 ? Pic.Sole : P.x > 0 ? Pic.LegL : Pic.LegR;
     // (his head is all his head bone's, with his jaw and nose; his neck, which shares it with his chest, is his trunk's skin)
-    if (weight(v, [B.head, B.jaw, B.nose]) >= 0.995) return Pic.Head;
-    if (weight(v, [B.ual, B.fal, B.hal]) >= 0.5) return Pic.ArmL;
-    if (weight(v, [B.uar, B.far, B.har]) >= 0.5) return Pic.ArmR;
+    if (weight(v, [B.head, B.jaw, B.nose, B.brow, B.lip]) >= 0.995) return Pic.Head;
+    if (weight(v, [B.ual, B.fal, B.hal]) + 0.5 * weight(v, [B.cll]) >= 0.5) return Pic.ArmL;
+    if (weight(v, [B.uar, B.far, B.har]) + 0.5 * weight(v, [B.clr]) >= 0.5) return Pic.ArmR;
     if (weight(v, [B.thl, B.shl, B.ftl, B.hemL]) >= 0.5) return Pic.LegL;
     if (weight(v, [B.thr, B.shr, B.ftr, B.hemR]) >= 0.5) return Pic.LegR;
     return Pic.Skin;
@@ -302,14 +350,18 @@ function sheetUv(geo: BufferGeometry, wears: string[], order: number[], inverse:
         // (along the foot from the heel; round it from under the sole, the top of the foot half way and his outside three quarters; a sole, up it)
         L.copy(P).applyMatrix4(inv[left ? B.ftl : B.ftr]);
         return [(L.z - SHOE_Z[0]) / (SHOE_Z[1] - SHOE_Z[0]), k === Pic.Shoe ? 0.5 + Math.atan2(left ? L.x : -L.x, L.y - SHOE_MID) / (2 * Math.PI) : (L.y + ANKLE) / SOLE_H];
+      case Pic.Collar:
+        // (round his ankle from behind it: the tongue is half way round, his outside three quarters; and up it)
+        L.copy(P).applyMatrix4(inv[left ? B.ftl : B.ftr]);
+        return [0.5 + Math.atan2(left ? L.x : -L.x, L.z + 0.03) / (2 * Math.PI), (L.y - COLLAR_Y[0]) / (COLLAR_Y[1] - COLLAR_Y[0])];
       case Pic.Head:
         // (his head, hair and all, round its middle from behind: his face is half way round)
         L.copy(P).applyMatrix4(inv[B.head]).sub(HEAD_MID);
         return [headU(Math.atan2(L.x, L.z)) % 1, headV(Math.atan2(L.y, Math.hypot(L.x, L.z)))];
       case Pic.Hair:
-        // (a lock's own run of the hair's picture: along it by where it is on him)
-        // (combed hair in the left half of the hair's picture, a head of curls in the right)
-        return [(TUFTED.includes(wear[v]) ? 0.75 : 0.25) + 0.2 * Math.sin(P.x * 6 + P.z * 8), 0.5 + 0.45 * Math.sin(P.y * 7)];
+        // (the hair's picture laid over him again and again, each time the other way round so it has no edge: combed
+        // hair, in the left half of it, runs down a lock; a head of curls, in the right, is tufts every way)
+        return TUFTED.includes(wear[v]) ? [0.52 + 0.46 * fold(P.x * 2.3 + P.y * 0.9), fold(P.z * 6.4 + P.y * 3.7)] : [0.02 + 0.46 * fold(P.y * 1.7), fold(P.x * 7.3 + P.z * 5.9)];
       case Pic.ArmL:
       case Pic.ArmR:
         return [-L.copy(P).applyMatrix4(inv[k === Pic.ArmL ? B.ual : B.uar]).y / ARM_LEN, 0.5];
@@ -325,7 +377,7 @@ function sheetUv(geo: BufferGeometry, wears: string[], order: number[], inverse:
   // each triangle's picture, and where its corners are in it; a corner somewhere else than its point is a twin
   const corners = Array.from(index.array as ArrayLike<number>);
   const piece: string[] = [];
-  for (let f = 0; f < corners.length; f += 3) piece.push(PIECES.includes(wear[corners[f]]) ? wear[corners[f]] : '');
+  for (let f = 0; f < corners.length; f += 3) piece.push(PIECES.includes(wear[corners[f]]) || wear[corners[f]] === HIGH ? wear[corners[f]] : '');
   const twins = new Map<string, number>();
   const made: { v: number; k: Pic; at: [number, number] }[] = [];
   const at: [number, number][] = mine.map((k, v) => place(v, k));
@@ -398,6 +450,7 @@ const STUFF = {
   lip: [0.36, 1, 0],
   eye: [0.08, 1, 0],
   hair: [0.7, 0.3, 0],
+  curl: [0.95, 0.12, 0],
   beard: [0.8, 0.2, 0],
   vest: [0.86, 0.85, 1],
   // (a number is pressed on: smoother than the knit round it, and none of its sheen)
@@ -408,6 +461,9 @@ const STUFF = {
   sleeve: [0.5, 0.45, 0.25],
   terry: [0.95, 0.85, 0.8],
   leather: [0.4, 0, 0],
+  // (behind his lips: wet teeth, and the dark)
+  tooth: [0.25, 0, 0],
+  gullet: [0.9, 0, 0],
   mesh: [0.7, 0.2, 0.6],
   lace: [0.8, 0.3, 0.3],
   rubber: [0.62, 0, 0],
@@ -569,6 +625,14 @@ function hairlineAt(round: number): number {
   return HAIRLINE[HAIRLINE.length - 1][1];
 }
 
+/** His eyes on the plane of his face (figure.py's EYE_X, EYE_Y, EYE_W): how far out each is, how high, its half width. */
+const EYE = [0.38, 0.066, 0.138] as const;
+/** How far up its outer corner is tipped and how high its upper lid stands open, for the middling man (look.ts's tilt and open scale them). */
+const EYE_TILT = 0.012;
+const EYE_OPEN = 0.047;
+/** His iris: its half width and half height on that plane (a circle on him), and how far over the eye's middle it sits. */
+const IRIS = [0.06, 0.043, 0.008] as const;
+
 /**
  * His head's picture, a point at a time: his skin with a face on it (eyes, brows, lips, the shade of
  * its hollows, all placed as figure.py's head_r shapes them), his beard, his hair as he wears it (and
@@ -587,8 +651,17 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
   const hair = rgbOf(look.hair);
   const iris = rgbOf(look.eyes);
   const bandRgb = band ? rgbOf(band) : null;
-  // (lips are the skin's colour, redder; darker skin's are browner than they are red)
-  const lip: Rgb = [skin[0] * 0.84 + 0.03, skin[1] * 0.64, skin[2] * 0.66 + 0.01];
+  // (lips are the skin's colour, redder; darker skin's are browner than they are red, the upper one darker than
+  // the lower, which is pinker)
+  const dark = look.tone / (SKINS.length - 1);
+  const lipUp: Rgb = [skin[0] * (0.84 - 0.1 * dark) + 0.02, skin[1] * (0.66 + 0.02 * dark), skin[2] * (0.67 + 0.04 * dark) + 0.01];
+  const lipLow: Rgb = [skin[0] * (0.88 + 0.12 * dark) + 0.02 + 0.04 * dark, skin[1] * (0.74 + 0.04 * dark), skin[2] * (0.75 + 0.06 * dark) + 0.01 + 0.02 * dark];
+  // (his own face: how full his lips are, how his eyes are set: see look.ts)
+  const full = 0.82 + 0.4 * look.face.lips;
+  const tiltK = EYE_TILT * look.face.tilt;
+  const openK = EYE_OPEN * look.face.open;
+  // (how much of a shaven beard's shade shows: most on a lighter skin under darker hair)
+  const shadow = 0.22 * (1 - 0.6 * dark);
   const style = STYLES[look.style].name;
   // where each column and row of the picture looks from the head's middle
   const cols = Array.from({ length: w }, (_v, i) => {
@@ -642,99 +715,165 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
         const py = (ny / fz) * 0.8;
         const apx = Math.abs(px);
         stuff = 'face';
-        // blood under the skin of his cheeks, nose and ears; his brow catches the light and sweats
-        if (py < 0.3 && py > -0.75) to([skin[0] * 1.04, skin[1] * 0.88, skin[2] * 0.85], 0.55 * bump(apx, py, 0.56, -0.24, 0.24, 0.2) + 0.5 * bump(px, py, 0, -0.22, 0.13, 0.12));
+        // skin is never one colour: lighter where the bone is near it and the light falls (his forehead, the bridge of his
+        // nose, his chin), redder where the blood is (his cheeks, the end of his nose), uneven everywhere
+        const mottle = noise(nx * 21 + nz * 13, ny * 21 - nz * 9) - 0.5;
+        c[0] *= 1 + 0.035 * mottle;
+        c[1] *= 1 + 0.05 * mottle;
+        c[2] *= 1 + 0.055 * mottle;
+        if (py > 0.25) to([skin[0] * 1.1, skin[1] * 1.08, skin[2] * 1.05], 0.34 * bump(px, py, 0, 0.52, 0.42, 0.17));
+        if (py < 0.3 && py > -0.3 && apx < 0.2) to([skin[0] * 1.1, skin[1] * 1.08, skin[2] * 1.05], 0.3 * bump(px, py, 0, -0.03, 0.032, 0.16));
+        if (py < -0.7) to([skin[0] * 1.06, skin[1] * 1.04, skin[2] * 1.02], 0.25 * bump(px, py, 0, -0.86, 0.14, 0.08));
+        if (py < 0.3 && py > -0.75) to([skin[0] * 1.05, skin[1] * 0.87, skin[2] * 0.84], 0.4 * bump(apx, py, 0.56, -0.24, 0.24, 0.2) + 0.4 * bump(px, py, 0, -0.25, 0.12, 0.09));
         if (py > 0.3 && py < 0.66) stuff = 'sweat';
-        // the hollows: round the eyes, under the brow, beside and under the nose, under the lower lip, under the jaw
-        if (py > -0.2 && py < 0.4 && apx < 0.9) shade(0.2 * bump(apx, py, 0.38, 0.09, 0.2, 0.1) + 0.1 * bump(apx, py, 0.2, 0.05, 0.07, 0.12));
-        if (py > -0.47 && py < -0.24 && apx < 0.45) shade(0.22 * bump(px, py, 0, -0.345, 0.15, 0.03) + 0.5 * bump(apx, py, 0.085, -0.318, 0.04, 0.022));
-        if (py > -0.8 && py < -0.15 && apx < 0.5) shade(0.16 * bump(px, py, 0, -0.68, 0.17, 0.035) + 0.1 * bump(apx, py, 0.3, -0.43, 0.035, 0.12));
-        // his mouth: the upper lip with its bow, the fuller lower one, the line between them
-        const mw = 0.275;
-        const my = -0.52;
-        if (apx < mw + 0.03) {
+        // the hollows: round the eyes (darkest beside the nose and under the eye), under the brow, beside the nose and
+        // under it, its nostrils, the fold from its wing past the mouth, under the lower lip, under the cheekbone
+        if (py > -0.2 && py < 0.4 && apx < 0.9)
+          shade(0.3 * bump(apx, py, 0.37, 0.09, 0.2, 0.095) + 0.16 * bump(apx, py, 0.2, 0.07, 0.07, 0.11) + 0.12 * bump(apx, py, 0.4, -0.04, 0.14, 0.035));
+        if (py > -0.47 && py < -0.2 && apx < 0.45)
+          shade(0.2 * bump(px, py, 0, -0.36, 0.14, 0.028) + 0.82 * bump(apx, py, 0.078, -0.334, 0.036, 0.015) + 0.16 * bump(apx, py, 0.215, -0.285, 0.03, 0.06));
+        if (py > -0.8 && py < -0.15 && apx < 0.8)
+          shade(0.17 * bump(px, py, 0, -0.68, 0.17, 0.035) + 0.12 * bump(apx, py, 0.33, -0.43, 0.035, 0.12) + 0.07 * bump(apx, py, 0.66, -0.47, 0.15, 0.15));
+        // (a clean-shaven man's jaw is a shade darker where his beard would be)
+        if (look.beard === 0 && py < -0.3)
+          to(
+            [hair[0] * 0.6 + skin[0] * 0.4, hair[1] * 0.6 + skin[1] * 0.4, hair[2] * 0.6 + skin[2] * 0.4],
+            shadow * (0.5 * sstep(-0.36, -0.42, py) * sstep(0.42, 0.3, apx) * (1 - bump(px, py, 0, -0.52, 0.3, 0.07)) + 0.5 * sstep(-0.62, -0.72, py)),
+          );
+        // his mouth: the upper lip with its bow, the fuller lower one, the line between them, the paler edge round them
+        const mw = 0.262;
+        const my = -0.522;
+        if (apx < mw + 0.04 && py < -0.4 && py > -0.68) {
           const t = Math.min(1, apx / mw);
           const arch = Math.pow(1 - t * t, 0.6);
-          const up = my + 0.058 * arch * (1 - 0.2 * Math.exp(-((t / 0.14) ** 2)));
-          const low = my - 0.082 * Math.pow(1 - t * t, 0.8);
-          const inLip = sstep(low - 0.008, low + 0.008, py) * sstep(up + 0.008, up - 0.008, py) * sstep(mw + 0.02, mw - 0.02, apx);
+          const up = my + 0.052 * full * arch * (1 - 0.24 * Math.exp(-((t / 0.14) ** 2)));
+          const low = my - 0.084 * full * Math.pow(1 - t * t, 0.8);
+          const inLip = sstep(low - 0.01, low + 0.008, py) * sstep(up + 0.01, up - 0.008, py) * sstep(mw + 0.02, mw - 0.02, apx);
+          // (the skin just over the upper lip's edge is a little paler: the edge reads without a line drawn round it)
+          if (look.beard < 2) to([skin[0] * 1.08, skin[1] * 1.06, skin[2] * 1.04], 0.3 * sstep(0.03, 0.006, Math.abs(py - up - 0.016)) * sstep(mw, mw - 0.1, apx));
           if (inLip > 0) {
-            to(py < my ? [lip[0] * 1.07, lip[1] * 1.05, lip[2] * 1.05] : lip, inLip * 0.85);
-            // (the lower lip's shine)
-            to([1, 0.95, 0.92], 0.1 * inLip * bump(px, py, 0, my - 0.04, 0.12, 0.016));
+            const lower = py < my;
+            to(lower ? lipLow : lipUp, inLip * 0.82);
+            // (the creases down a lip; the lower lip's shine; its under side in its own shade)
+            const crease = noise(px * 70, py * 9);
+            shade(0.1 * inLip * (crease - 0.5));
+            if (lower) {
+              to([1, 0.94, 0.9], 0.16 * inLip * bump(px, py, 0.01, my - 0.04 * full, 0.1, 0.014));
+              shade(0.16 * inLip * sstep(my - 0.05 * full, low, py));
+            } else shade(0.1 * inLip * sstep(up - 0.03, my, py));
             if (inLip > 0.5) stuff = 'lip';
           }
-          to([skin[0] * 0.2, skin[1] * 0.12, skin[2] * 0.12], 0.85 * sstep(0.011, 0.004, Math.abs(py - my + 0.012 * t * t)) * sstep(mw + 0.02, mw - 0.03, apx));
+          // (the line between them, deepest at the corners)
+          to([skin[0] * 0.16, skin[1] * 0.09, skin[2] * 0.09], 0.9 * sstep(0.0085, 0.003, Math.abs(py - my + 0.03 * t * t * t)) * sstep(mw + 0.02, mw - 0.03, apx));
+          shade(0.14 * bump(apx, py, mw + 0.005, my - 0.03, 0.03, 0.025));
         }
-        // his eyes: the white between its lids, the iris and pupil, a light in it; lashes, the fold over the lid
-        const ex = apx - 0.38;
-        const ey = py - 0.066;
-        const ew = 0.138;
-        if (Math.abs(ex) < ew + 0.05 && Math.abs(ey) < 0.12) {
+        // his eyes: the white between its lids, the iris with its dark rim and pupil, a light in it; lashes, the fold
+        // over the lid (close up the material draws the eye itself, sharper than a picture can: see EYES)
+        const ex = apx - EYE[0];
+        const ey = py - EYE[1];
+        const ew = EYE[2];
+        if (Math.abs(ex) < ew + 0.06 && Math.abs(ey) < 0.13) {
           const t = clamp01(Math.abs(ex) / ew);
           // (the outer corner sits a little higher than the inner one)
-          const tilt = 0.012 * (ex / ew);
-          const up = tilt + 0.056 * Math.pow(1 - t * t, 0.55);
+          const tilt = tiltK * (ex / ew);
+          const up = tilt + openK * Math.pow(1 - t * t, 0.55);
           const low = tilt - 0.037 * Math.pow(1 - t * t, 0.8);
           const open = sstep(low - 0.005, low + 0.005, ey) * sstep(up + 0.005, up - 0.005, ey) * (Math.abs(ex) < ew ? 1 : 0);
-          to([skin[0] * 0.5, skin[1] * 0.42, skin[2] * 0.4], 0.35 * sstep(0.03, 0.0, Math.abs(ey - up - 0.03)) * sstep(ew + 0.04, ew - 0.03, Math.abs(ex)));
+          // (the upper lid: its skin a little darker and redder than his cheek's, the fold over it, the edge of the lower one)
+          const onLid = sstep(up + 0.05, up + 0.02, ey) * sstep(up - 0.005, up + 0.005, ey) * sstep(ew + 0.05, ew - 0.02, Math.abs(ex));
+          to([skin[0] * 0.86, skin[1] * 0.74, skin[2] * 0.72], 0.5 * onLid);
+          to([skin[0] * 0.45, skin[1] * 0.36, skin[2] * 0.34], 0.5 * sstep(0.014, 0.0, Math.abs(ey - up - 0.034)) * sstep(ew + 0.05, ew - 0.03, Math.abs(ex)));
+          to([skin[0] * 1.06, skin[1] * 0.92, skin[2] * 0.9], 0.3 * sstep(0.012, 0.002, Math.abs(ey - low + 0.012)) * sstep(ew, ew - 0.04, Math.abs(ex)));
           if (open > 0) {
-            const white: Rgb = [0.7, 0.66, 0.62];
+            const white: Rgb = [0.68, 0.65, 0.62];
             // (the lid's shadow on the top of the eye; its corners redder)
-            const lidShade = 0.55 + 0.45 * sstep(up, up - 0.04, ey);
-            to([white[0] * lidShade, white[1] * lidShade * (1 - 0.12 * t), white[2] * lidShade * (1 - 0.14 * t)], open);
-            const r = Math.hypot(ex / 0.06, (ey - 0.01) / 0.043);
-            if (r < 1.12) {
-              const ir = sstep(1.12, 0.94, r) * open;
-              to([iris[0] * (1.25 - 0.6 * r) * lidShade, iris[1] * (1.25 - 0.6 * r) * lidShade, iris[2] * (1.25 - 0.6 * r) * lidShade], ir);
-              to([0.02, 0.015, 0.015], sstep(0.5, 0.38, r) * open + 0.5 * sstep(0.85, 1.0, r) * ir);
+            const lidShade = 0.5 + 0.5 * sstep(up, up - 0.045, ey);
+            to([white[0] * lidShade, white[1] * lidShade * (1 - 0.16 * t * t), white[2] * lidShade * (1 - 0.2 * t * t)], open);
+            const r = Math.hypot(ex / IRIS[0], (ey - IRIS[2]) / IRIS[1]);
+            if (r < 1.1) {
+              const ir = sstep(1.08, 0.94, r) * open;
+              const glow = 0.75 + 0.75 * sstep(0.4, 0.85, r) - 0.9 * sstep(0.8, 1.0, r);
+              to([iris[0] * glow * lidShade, iris[1] * glow * lidShade, iris[2] * glow * lidShade], ir);
+              to([0.02, 0.015, 0.015], sstep(0.46, 0.36, r) * open);
               // (the light in his eye, up and toward his nose's other side: the same side in both)
-              to([1, 1, 1], 0.55 * open * sstep(0.2, 0.08, Math.hypot((px - Math.sign(px) * 0.38 - 0.02) / 0.06, (ey - 0.024) / 0.043)));
+              to([1, 1, 1], 0.7 * open * sstep(0.22, 0.08, Math.hypot((px - Math.sign(px) * EYE[0] - 0.02) / IRIS[0], (ey - IRIS[2] - 0.016) / IRIS[1])));
             }
             if (open > 0.5) stuff = 'eye';
           }
-          // lashes along the upper lid, a thinner line under the lower one
-          to([0.07, 0.05, 0.04], 0.9 * sstep(0.013, 0.004, Math.abs(ey - up - 0.004)) * sstep(ew + 0.02, ew - 0.01, Math.abs(ex)));
-          to([skin[0] * 0.45, skin[1] * 0.36, skin[2] * 0.34], 0.5 * sstep(0.008, 0.002, Math.abs(ey - low + 0.003)) * sstep(ew, ew - 0.03, Math.abs(ex)));
+          // lashes along the upper lid (heavier toward its outer end), a thinner line under the lower one
+          to([0.06, 0.045, 0.04], 0.9 * sstep(0.014, 0.004, Math.abs(ey - up - 0.004)) * sstep(ew + 0.025, ew - 0.01, Math.abs(ex)) * (0.75 + 0.25 * sstep(-ew, ew, ex)));
+          to([skin[0] * 0.4, skin[1] * 0.32, skin[2] * 0.3], 0.5 * sstep(0.008, 0.002, Math.abs(ey - low + 0.003)) * sstep(ew, ew - 0.03, Math.abs(ex)));
         }
-        // his eyebrows: from beside the nose up to their peak and down to a tail, heavier or lighter
+        // his eyebrows, on the ridge of his brow: from beside the nose up to their peak and down to a tail, heavier or
+        // lighter; each a run of hairs, upright by the nose and laid over toward the tail
         const q = (apx - 0.15) / 0.52;
-        if (q > -0.05 && q < 1.05 && py > 0.12 && py < 0.36) {
-          const yb = 0.2 + 0.07 * Math.sin(Math.min(1, q * 1.15) * Math.PI * 0.62) - 0.035 * sstep(0.7, 1, q);
-          const thick = (0.02 + 0.022 * look.brow) * (1 - 0.55 * q * q) + 0.004;
-          const on = sstep(thick, thick * 0.45, Math.abs(py - yb)) * sstep(-0.03, 0.08, q) * sstep(1.03, 0.9, q);
-          to([hair[0] * 0.9, hair[1] * 0.9, hair[2] * 0.9], on * (0.55 + 0.4 * look.brow) * (0.75 + 0.25 * fine()));
+        if (q > -0.08 && q < 1.06 && py > 0.1 && py < 0.38) {
+          const yb = 0.2 + 0.07 * Math.sin(Math.min(1, Math.max(0, q) * 1.15) * Math.PI * 0.62) - 0.035 * sstep(0.7, 1, q);
+          const thick = (0.022 + 0.024 * look.brow) * (1 - 0.6 * q * q) + 0.004;
+          const lean = 1.25 - 1.1 * sstep(0, 0.6, q);
+          const along = apx * Math.cos(lean) + py * Math.sin(lean);
+          const hairs = noise((apx * Math.sin(lean) - py * Math.cos(lean)) * 95, along * 16);
+          // (its edges are hairs, not a line: thinner, and broken)
+          const on = sstep(thick * (1.05 + 0.5 * (hairs - 0.5)), thick * 0.3, Math.abs(py - yb)) * sstep(-0.07, 0.07, q + 0.08 * (hairs - 0.5)) * sstep(1.05, 0.88, q);
+          to([hair[0] * 0.85, hair[1] * 0.85, hair[2] * 0.85], on * (0.5 + 0.42 * look.brow) * (0.55 + 0.6 * hairs));
         }
       }
 
-      // his beard: stubble, a goatee round his mouth, or all of his jaw (shorter up his cheeks)
-      if (look.beard > 0 && nz > -0.25 && ny < 0.15) {
+      // his beard: stubble, a goatee round his mouth, all of his jaw (shorter up his cheeks), a full one, or a strap
+      // along the line of his jaw; its edge thins out into single hairs, and it is hairs all through
+      if (look.beard > 0 && nz > -0.25 && ny < 0.32) {
         const fz = Math.max(nz, 0.3);
         const px = (nx / fz) * 0.8;
         const py = (ny / fz) * 0.8;
         const apx = Math.abs(px);
         const front = nz > 0.3 ? 1 : 0;
         // (round the mouth: over the lip, down beside it, the chin; never on the lips)
-        const lips = front * sstep(0.3, 0.26, apx) * sstep(-0.617, -0.602, py) * sstep(-0.447, -0.462, py);
-        const tache = front * sstep(-0.34, -0.375, py) * sstep(-0.53, -0.47, py) * sstep(0.36, 0.3, apx) * (1 - 0.7 * bump(px, py, 0, -0.39, 0.035, 0.03));
-        const bars = front * sstep(0.2, 0.26, apx) * sstep(0.4, 0.34, apx) * sstep(-0.47, -0.53, py) * sstep(-0.95, -0.8, py);
-        const chin = sstep(-0.635, -0.695, py) * sstep(0.42, 0.34, apx) * front * sstep(-1.25, -1.0, py);
-        const round = Math.max(tache, bars, chin) * (1 - lips);
+        const lips = front * sstep(0.31, 0.25, apx) * sstep(-0.63, -0.6, py) * sstep(-0.44, -0.47, py);
+        const tache = front * sstep(-0.345, -0.39, py) * sstep(-0.54, -0.47, py) * sstep(0.38, 0.29, apx) * (1 - 0.75 * bump(px, py, 0, -0.4, 0.03, 0.035));
+        const bars = front * sstep(0.2, 0.27, apx) * sstep(0.42, 0.33, apx) * sstep(-0.46, -0.54, py) * sstep(-1.0, -0.8, py);
+        const chin = sstep(-0.63, -0.71, py) * sstep(0.44, 0.32, apx) * front * sstep(-1.3, -1.05, py);
+        // (the tuft under the lower lip)
+        const patch = front * bump(px, py, 0, -0.655, 0.05, 0.035);
+        const round = Math.max(tache, bars, chin, patch) * (1 - lips);
         // (his jaw and cheeks: under a line from his ear down to the corner of his mouth, as far as under his chin)
-        const cheek = sstep(0.05, -0.09, ny + 0.52 - 0.62 * (ax - 0.3) - 0.5 * (ax - 0.3) * (ax - 0.3)) * sstep(-0.99, -0.9, ny) * sstep(-0.25, -0.1, nz) * (1 - lips);
+        // (the line is a man's own, never ruled: it wanders a little)
+        const line = ny + 0.52 - 0.62 * (ax - 0.3) - 0.5 * (ax - 0.3) * (ax - 0.3) + 0.06 * (noise(ax * 3.5 + 3, nz * 3.5) - 0.5);
+        const under = sstep(-1.0, -0.9, ny) * sstep(-0.2, -0.08, nz) * (1 - lips);
+        // (and up in front of his ear it narrows to the sideburn his hair comes down to meet)
+        const burn = sstep(0.0, 0.09, nz) * sstep(0.34, 0.2, nz) * sstep(0.3, 0.16, ny) * sstep(-0.3, -0.1, ny) * sstep(0.6, 0.8, ax);
+        const cheek = Math.max(
+          (look.beard === 1 ? sstep(0.16, -0.3, line + 0.25 * ax * ax) : sstep(0.05, -0.08, line + 0.2 * (ax - 0.5) * (ax - 0.5))) *
+            under *
+            sstep(0.0, -0.12, ny - 0.25 * (nz + 0.1)),
+          burn * (look.beard === 2 || look.beard === 5 ? 0 : 1),
+        );
+        // (a strap: a finger's width along the edge of his jaw, from ear to ear by way of his chin)
+        const edge = Math.max(0.25 * ax - ny - 0.66 * nz - 0.71, -ny + 0.12 * nz - 1.137);
+        const strap = Math.max(sstep(-0.27, -0.17, edge) * sstep(0.01, -0.04, edge) * sstep(-0.12, -0.3, ny), 0.9 * patch) * under;
+        // (hairs: fine ones every way for stubble, longer ones lying down his jaw for a beard)
+        const speck = noise(nx * 64 + nz * 41, ny * 64 - nz * 29);
+        const strand = noise(nx * 52 + nz * 26, ny * 17 + nz * 7);
+        const frayed = (m: number, by: number) => sstep(0.5 - by, 0.5 + by, m + (strand - 0.5) * 2 * by + (speck - 0.5) * by);
         let on = 0;
         let deep = 0;
-        if (look.beard === 1) on = Math.max(round, cheek) * (0.3 + 0.12 * fine());
+        if (look.beard === 1) on = Math.max(round, cheek) * (0.17 + 0.2 * speck);
         else if (look.beard === 2) {
-          on = round * (0.82 + 0.18 * fine());
-          deep = 0.008 * round;
+          const m = frayed(round, 0.22);
+          on = m * (0.74 + 0.26 * strand);
+          deep = 0.009 * m;
+        } else if (look.beard === 5) {
+          const m = frayed(strap, 0.2);
+          on = Math.max(m * (0.72 + 0.28 * strand), Math.max(round, cheek) * (0.1 + 0.1 * speck));
+          deep = 0.007 * m;
         } else {
-          on = Math.max(round, cheek) * (0.84 + 0.16 * fine());
-          deep = (look.beard === 4 ? 0.035 + 0.05 * sstep(-0.55, -0.9, ny) : 0.012) * Math.max(round, cheek);
+          const m = frayed(Math.max(round, cheek), look.beard === 4 ? 0.2 : 0.3);
+          on = m * (0.72 + 0.28 * strand) * (look.beard === 3 ? 0.9 : 1);
+          deep = (look.beard === 4 ? 0.03 + 0.045 * sstep(-0.5, -0.9, ny) : 0.011) * m * sstep(0.2, 0.6, Math.max(round, cheek));
         }
         if (on > 0) {
-          const g = 0.8 + 0.3 * fine();
-          to([hair[0] * g, hair[1] * g, hair[2] * g], on);
+          // (lighter where a hair catches the light, darker between two; a touch of his skin's warmth in it)
+          const g = 0.55 + 0.7 * strand + 0.25 * (speck - 0.5);
+          to([hair[0] * g + 0.03 * skin[0], hair[1] * g + 0.02 * skin[1], hair[2] * g + 0.015 * skin[2]], on);
           if (on > 0.5) stuff = 'beard';
           lift = Math.max(lift, deep);
         }
@@ -744,7 +883,8 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
       const round = Math.atan2(ax, nz);
       const line = ny - hairlineAt(round);
       if (line > -0.12) {
-        const over = (soft: number) => clamp01(line / soft + 0.3);
+        // (no line drawn round his head: the hair thins out to the skin over a little way, unevenly, as a hairline does)
+        const over = (soft: number) => sstep(-0.9 * soft, 1.6 * soft, line + (fine() - 0.5) * soft * 1.5);
         // (how far up from the hairline of his sides and back: a fade is skin there and hair by the crown; never at his forehead)
         const fade = Math.max(sstep(0.0, 0.3, line), sstep(1.0, 0.45, round));
         const curled = style === 'curls' || style === 'afro' || style === 'twists' || style === 'locs' || style === 'hightop';
@@ -817,9 +957,9 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
           else if (ny > 0.3) stuff = 'scalp';
         }
       } else if (nz < 0.1 && ny > -0.5 && ax > 0.8) {
-        // (his ears: redder than his cheeks, their bowl in shade)
-        to([skin[0] * 1.02, skin[1] * 0.86, skin[2] * 0.84], 0.4);
-        shade(0.3 * bump(nz, ny, -0.22, -0.05, 0.1, 0.12));
+        // (his ears: a little redder than his cheeks, their bowl in shade)
+        to([skin[0] * 1.04, skin[1] * 0.9, skin[2] * 0.87], 0.35);
+        shade(0.22 * bump(nz, ny, -0.2, -0.06, 0.035, 0.07));
       }
       if (bandRgb && ny > 0.1 && Math.abs(ny - 0.34 - 0.13 * nz) < 0.062) {
         c[0] = bandRgb[0];
@@ -855,6 +995,9 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
   };
   return { rows: h, row, done };
 }
+
+/** His ears' colour: his skin's, a little redder. */
+const earOf = (look: Look) => mix(look.skin, '#a8402e', 0.1);
 
 /** Which head a sheet wants: its key among the heads kept, and what to paint it from. */
 interface Wanted {
@@ -961,7 +1104,12 @@ interface Gear {
   leg: { legs: (0 | 1)[]; long: boolean; color: string } | null;
   /** How far up his socks come (a share of the sock: 0 all of it). */
   sockDrop: number;
-  shoe: { base: string; accent: string; sole: string; lace: string };
+  /** Tights under his shorts down to the knee (their colour), a padded sleeve over a knee, a band round an upper arm. */
+  tights: string | null;
+  pads: { legs: (0 | 1)[]; color: string } | null;
+  armband: { arm: 0 | 1; color: string } | null;
+  /** His shoes: the upper's colour and its second one, the foam's and the tread's, the laces'; cut high round the ankle or low. */
+  shoe: { base: string; accent: string; sole: string; tread: string; lace: string; high: boolean };
 }
 
 /** Numbers that look random and are a man's own: the same seed, the same run. */
@@ -996,8 +1144,222 @@ function gearOf(seed: number, kit: MatchKit): Gear {
   const base = kit.light ? one([WHITE, WHITE, BLACK, kit.color]) : one([BLACK, BLACK, WHITE, kit.color]);
   const pale = light(base) > 0.6;
   const accent = base === kit.color ? (pale ? BLACK : WHITE) : one([kit.color, kit.color, pale ? BLACK : WHITE]);
-  const shoe = { base, accent, sole: one(pale ? [WHITE, WHITE, '#2a2b30'] : [WHITE, '#2a2b30', '#2a2b30']), lace: pale ? one([WHITE, accent]) : one([base, WHITE]) };
-  return { band, sleeve, wrist, leg, sockDrop: one([0, 0, 0.12, 0.25]), shoe };
+  const sole = one(pale ? [WHITE, WHITE, '#2a2b30'] : [WHITE, '#2a2b30', '#2a2b30']);
+  // (the tread under it: gum, the foam's own colour a shade down, or the second colour)
+  const tread = one(['#b08a5a', mix(sole, '#000000', sole === WHITE ? 0.72 : 0.35), accent]);
+  const lace = pale ? one([WHITE, accent]) : one([base, WHITE]);
+  const sockDrop = one([0, 0, 0.12, 0.25]);
+  // (a dice of its own, last: what came before it stays as it was)
+  const shoe = { base, accent, sole, tread, lace, high: r() < 0.62 };
+  const tights = r() < 0.2 ? one([BLACK, BLACK, WHITE, kit.color]) : null;
+  const padRoll = r();
+  // (pads go on bare knees: a man in a leg sleeve has his knee covered already)
+  const pads = !leg && padRoll < 0.16 ? { legs: (padRoll < 0.1 ? [0, 1] : [r() < 0.5 ? 0 : 1]) as (0 | 1)[], color: one([BLACK, BLACK, WHITE]) } : null;
+  const armband = !sleeve && r() < 0.1 ? { arm: (r() < 0.5 ? 0 : 1) as 0 | 1, color: one(allowed) } : null;
+  return { band, sleeve, wrist, leg, sockDrop, shoe, tights, pads, armband };
+}
+
+/** How far along the shoe's picture a place on the foot is (0 the heel's end, 1 the toe's), from how far forward of the ankle it is (ft). */
+const shoeU = (z: number) => (z - SHOE_Z[0]) / (SHOE_Z[1] - SHOE_Z[0]);
+/** Where the laces cross the throat, ft forward of the ankle (figure.py's LACES). */
+const LACES = [0, 1, 2, 3, 4, 5].map((k) => 0.2 + 0.056 * k);
+
+/**
+ * His shoes. The upper is drawn unrolled: x along the foot (heel to toe), and across it `t` from the
+ * ridge of the foot (0) down either side to the sole (1), the same on his inside and his outside:
+ * the heel's counter and a panel on each side in the second colour, the eyestays with their
+ * eyelets either side of the tongue, the laces, a toe box of mesh behind a rubber bumper, and the
+ * stitching round each piece. Then the collar and tongue (round his ankle, up it), and the sole
+ * (the tread, the foam over it with a line of the second colour).
+ */
+function paintShoes(sh: Sheet, shoe: Gear['shoe']) {
+  const { base, accent, sole, tread, lace } = shoe;
+  const pale = light(base) > 0.5;
+  const off = (c: string, t: number) => mix(c, light(c) > 0.5 ? '#000000' : '#ffffff', t);
+  const stitch = off(base, 0.3);
+  const tongue = off(base, pale ? 0.12 : 0.06);
+  sh.both(R_SHOE, (ctx, pick) => {
+    const [, , w, h] = R_SHOE;
+    // (drawn 512 along and, a turn round the foot, 192 up: the ridge at 96, the sole's edge 48 either side of it)
+    ctx.scale(w / 512, h / 192);
+    const X = (z: number) => shoeU(z) * 512;
+    const Y = (side: number, t: number) => 96 + side * 48 * t;
+    ctx.fillStyle = pick(base, 'leather');
+    ctx.fillRect(-4, -4, 520, 200);
+    /** A shape on both sides of the foot: its corners as (ft forward of the ankle, t). */
+    const both = (pts: [number, number][], color: string, stuff: Stuff) => {
+      ctx.fillStyle = pick(color, stuff);
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        pts.forEach(([z, t], i) => (i ? ctx.lineTo(X(z), Y(side, t)) : ctx.moveTo(X(z), Y(side, t))));
+        ctx.closePath();
+        ctx.fill();
+      }
+    };
+    /** A line of stitches on both sides. */
+    const sewn = (pts: [number, number][]) => {
+      ctx.strokeStyle = pick(stitch, 'lace');
+      ctx.lineWidth = 1.1;
+      ctx.setLineDash([3, 2.2]);
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        pts.forEach(([z, t], i) => (i ? ctx.lineTo(X(z), Y(side, t)) : ctx.moveTo(X(z), Y(side, t))));
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    };
+    // the toe box: mesh, a row of holes punched in it; the rubber bumper round its end
+    both(
+      [
+        [0.46, 0],
+        [0.76, 0],
+        [0.76, 1.6],
+        [0.4, 1.6],
+        [0.42, 0.8],
+      ],
+      off(base, pale ? 0.07 : 0.045),
+      'mesh',
+    );
+    ctx.fillStyle = pick(off(base, 0.3), 'mesh');
+    for (let i = 0; i < 5; i++) for (const side of [-1, 1]) for (let k = 0; k < 4; k++) ctx.fillRect(X(0.5 + i * 0.035) - 1, Y(side, 0.12 + k * 0.2) - 1, 2, 2);
+    both(
+      [
+        [0.655, 0],
+        [0.76, 0],
+        [0.76, 1.6],
+        [0.6, 1.6],
+        [0.62, 0.75],
+      ],
+      sole,
+      'rubber',
+    );
+    // the heel's counter, and a panel on each side under the eyestay
+    both(
+      [
+        [-0.4, 0],
+        [-0.2, 0],
+        [-0.13, 0.5],
+        [-0.16, 1.6],
+        [-0.4, 1.6],
+      ],
+      accent,
+      'leather',
+    );
+    both(
+      [
+        [-0.1, 1.6],
+        [0.27, 1.6],
+        [0.25, 0.72],
+        [0.13, 0.5],
+        [0.0, 0.62],
+      ],
+      accent,
+      'leather',
+    );
+    // the eyestays either side of the throat, the tongue between them
+    both(
+      [
+        [0.1, 0],
+        [0.52, 0],
+        [0.55, 0.36],
+        [0.5, 0.52],
+        [0.14, 0.62],
+        [0.08, 0.4],
+      ],
+      off(base, pale ? 0.05 : 0.08),
+      'leather',
+    );
+    both(
+      [
+        [0.12, 0],
+        [0.5, 0],
+        [0.5, 0.2],
+        [0.12, 0.3],
+      ],
+      tongue,
+      'mesh',
+    );
+    // the laces: across the throat where the model has them, crossed between
+    ctx.strokeStyle = pick(lace, 'lace');
+    ctx.lineWidth = 2;
+    for (let k = 0; k + 1 < LACES.length; k++)
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(X(LACES[k]), Y(side, 0.3));
+        ctx.lineTo(X(LACES[k + 1]), Y(-side, 0.3));
+        ctx.stroke();
+      }
+    ctx.fillStyle = pick(lace, 'lace');
+    for (const z of LACES) ctx.fillRect(X(z) - 6.5, Y(-1, 0.4), 13, Y(1, 0.4) - Y(-1, 0.4));
+    ctx.fillStyle = pick(off(base, 0.55), 'rubber');
+    for (const z of LACES)
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.arc(X(z), Y(side, 0.47), 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    sewn([
+      [-0.19, 0],
+      [-0.115, 0.5],
+      [-0.145, 1.6],
+    ]);
+    sewn([
+      [-0.09, 1.6],
+      [0.0, 0.66],
+      [0.13, 0.54],
+      [0.24, 0.74],
+      [0.262, 1.6],
+    ]);
+    sewn([
+      [0.07, 0.42],
+      [0.13, 0.66],
+      [0.5, 0.56],
+      [0.565, 0.38],
+    ]);
+    sewn([
+      [0.4, 1.6],
+      [0.41, 0.8],
+      [0.45, 0],
+    ]);
+    // (where the upper goes into the sole: a line of shade)
+    ctx.fillStyle = pick(mix(base, '#000000', 0.45), 'rubber');
+    for (const side of [-1, 1]) ctx.fillRect(-4, Y(side, 0.93) - (side > 0 ? 0 : 3), 520, 3);
+  });
+  // the collar and tongue: leather, the padded rim a shade off it and a line of the second colour under that; the
+  // tongue in front with its patch; a loop behind
+  sh.around(R_COLLAR, 128, 192, (ctx, pick) => {
+    const Y = (y: number) => 192 * (1 - (y - COLLAR_Y[0]) / (COLLAR_Y[1] - COLLAR_Y[0]));
+    ctx.fillStyle = pick(base, 'leather');
+    ctx.fillRect(-2, -2, 132, 196);
+    // (the padding round the top of a high one, a shade off the leather; a line of the second colour under it)
+    ctx.fillStyle = pick(off(base, 0.05), 'mesh');
+    ctx.fillRect(-2, Y(0.3), 132, Y(0.16) - Y(0.3));
+    ctx.fillStyle = pick(accent, 'leather');
+    ctx.fillRect(-2, Y(0.16), 132, 2);
+    // (the tongue, half way round)
+    ctx.fillStyle = pick(tongue, 'mesh');
+    ctx.fillRect(64 - 15, -2, 30, Y(0.02) + 2);
+    ctx.fillStyle = pick(accent, 'print');
+    ctx.fillRect(64 - 8, Y(0.3), 16, Y(0.22) - Y(0.3));
+    ctx.fillStyle = pick(lace, 'lace');
+    ctx.fillRect(64 - 10, Y(0.12), 20, 3);
+    ctx.fillRect(64 - 10, Y(0.06), 20, 3);
+    // (the loop, at the seam behind)
+    ctx.fillStyle = pick(accent, 'lace');
+    for (const x of [0, 128]) ctx.fillRect(x - 5, Y(0.3), 10, Y(0.1) - Y(0.3));
+  });
+  // the soles: the tread at the bottom, the foam over it, a line of the second colour along it
+  sh.both(R_SOLE, (ctx, pick) => {
+    const [, , w, h] = R_SOLE;
+    ctx.fillStyle = pick(sole, 'rubber');
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = pick(tread, 'rubber');
+    ctx.fillRect(0, h * (1 - 0.027 / SOLE_H), w, h);
+    ctx.fillStyle = pick(accent, 'rubber');
+    ctx.fillRect(0, h * (1 - 0.062 / SOLE_H), w * shoeU(0.3), h * 0.05);
+    // (the heel's foam has a window of the second colour in it)
+    ctx.fillRect(w * shoeU(-0.3), h * (1 - 0.085 / SOLE_H), w * (shoeU(-0.08) - shoeU(-0.3)), h * (0.03 / SOLE_H));
+  });
 }
 
 /** One man's sheet: his kit (`mark` his team's letters, if the game has them), his number and name, his own things, his look. */
@@ -1013,9 +1375,14 @@ function paint(kit: MatchKit, num: string, name: string, mark: string, gear: Gea
     return kit.light ? null : mix(fill, '#000000', 0.45);
   })();
   const panel = kit.light ? mix(fill, kit.color, 0.1) : mix(fill, '#000000', 0.18);
+  // (a seam and its stitches: the cloth's own colour, a shade off it)
+  const seam = mix(fill, light(fill) > 0.5 ? '#000000' : '#ffffff', 0.2);
 
   // plain patches
   sh.fill(R_SKIN, look.skin, 'skin');
+  // (what is behind his lips is in his head's shade already: its colours are lighter than they will look)
+  sh.fill(R_MOUTH, '#3a1210', 'gullet');
+  sh.fill(R_TEETH, '#f4efe4', 'tooth');
   sh.fill(R_TRIM, ring, 'rib');
   // (his locks: the hair's colour, a little lighter and darker along them)
   sh.both(R_HAIR, (ctx, pick) => {
@@ -1023,14 +1390,19 @@ function paint(kit: MatchKit, num: string, name: string, mark: string, gear: Gea
     ctx.fillStyle = pick(look.hair, 'hair');
     ctx.fillRect(0, 0, w, h);
     for (let k = 0; k < 24; k++) {
-      ctx.fillStyle = pick(mix(look.hair, k % 2 ? '#000000' : '#8a7460', 0.22), 'hair');
-      ctx.fillRect(0, ((k * 7) % 31) + 0.5, w / 2, 1.6);
+      ctx.fillStyle = pick(mix(look.hair, k % 2 ? '#000000' : '#8a7460', 0.2), 'hair');
+      ctx.fillRect(0, ((k * 7) % 31) + 0.5, w / 2, 1.4);
     }
-    // (the right half in tufts: curls are not combed)
-    for (let k = 0; k < 150; k++) {
-      ctx.fillStyle = pick(mix(look.hair, k % 3 ? '#000000' : '#9a8068', 0.26), 'hair');
+    // (a lock is wound: a darker turn every little way down it)
+    ctx.fillStyle = pick(mix(look.hair, '#000000', 0.3), 'hair');
+    for (let x = 3; x < w / 2; x += 7) ctx.fillRect(x, 0, 1.6, h);
+    // (the right half in tufts: curls are not combed, and take no shine)
+    ctx.fillStyle = pick(look.hair, 'curl');
+    ctx.fillRect(w / 2, 0, w / 2, h);
+    for (let k = 0; k < 260; k++) {
+      ctx.fillStyle = pick(mix(look.hair, k % 4 ? '#000000' : '#8a7460', k % 4 ? 0.3 : 0.14), 'curl');
       ctx.beginPath();
-      ctx.arc(w / 2 + 3 + ((k * 37) % (w / 2 - 6)), (k * 13) % h, 1.2 + (k % 3) * 0.8, 0, Math.PI * 2);
+      ctx.arc(w / 2 + 2 + ((k * 37) % (w / 2 - 4)), (k * 13) % h, 0.9 + (k % 3) * 0.5, 0, Math.PI * 2);
       ctx.fill();
     }
   });
@@ -1049,6 +1421,19 @@ function paint(kit: MatchKit, num: string, name: string, mark: string, gear: Gea
         ctx.fillRect(x - 15, -40, 30, 340);
         ctx.fillStyle = pick(ring, 'rib');
         for (const e of [-1, 1]) ctx.fillRect(x + e * 15 - 1.25, -40, 2.5, 340);
+        // (sewn in: a row of stitches either side of the panel, and the seam down its middle)
+        ctx.strokeStyle = pick(seam, 'vest');
+        ctx.lineWidth = 0.7;
+        ctx.setLineDash([2.4, 1.6]);
+        for (const e of [-19, 19]) {
+          ctx.beginPath();
+          ctx.moveTo(x + e, -40);
+          ctx.lineTo(x + e, 300);
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        ctx.fillStyle = pick(seam, 'vest');
+        ctx.fillRect(x - 0.4, -40, 0.8, 340);
       }
       ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';
@@ -1082,6 +1467,42 @@ function paint(kit: MatchKit, num: string, name: string, mark: string, gear: Gea
       ctx.fillRect(x - 26, 0, 52, 256);
       ctx.fillStyle = pick(ring, 'rib');
       for (const e of [-1, 1]) ctx.fillRect(x + e * 26 - 1.5, 0, 3, 256);
+      ctx.strokeStyle = pick(seam, 'shorts');
+      ctx.lineWidth = 0.8;
+      ctx.setLineDash([2.6, 1.8]);
+      for (const e of [-31, 31]) {
+        ctx.beginPath();
+        ctx.moveTo(x + e, 0);
+        ctx.lineTo(x + e, 256);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    }
+    {
+      // the hem's two rows of stitches; the seam up the inside of each leg and round the seat; the cord at his waist, tied in front
+      const up = 256 / tall;
+      ctx.strokeStyle = pick(seam, 'shorts');
+      ctx.lineWidth = 0.8;
+      ctx.setLineDash([2.6, 1.8]);
+      for (const y of [0.115, 0.14]) {
+        ctx.beginPath();
+        ctx.moveTo(-4, 256 - y * up);
+        ctx.lineTo(516, 256 - y * up);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.fillStyle = pick(seam, 'shorts');
+      for (const x of [128, 384]) ctx.fillRect(x - 0.5, 0, 1, 256);
+      ctx.strokeStyle = pick(kit.light ? ring : '#f1f0eb', 'lace');
+      ctx.lineWidth = 1.6;
+      ctx.lineCap = 'round';
+      for (const e of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(384 + e * 3, 0.13 * up);
+        ctx.quadraticCurveTo(384 + e * 9, 0.2 * up, 384 + e * 7, 0.3 * up);
+        ctx.stroke();
+      }
+      ctx.lineCap = 'butt';
     }
     if (mark) {
       // (a round mark a third of a foot across, low on his left leg's front: the picture goes round him
@@ -1121,6 +1542,7 @@ function paint(kit: MatchKit, num: string, name: string, mark: string, gear: Gea
     head = quick.done();
   }
   sh.put(R_HEAD, head);
+  sh.fill(R_EAR, earOf(look), 'skin');
   sh.head = { key, look, band };
 
   // the limbs' strips: skin, and what he wears on them
@@ -1152,63 +1574,24 @@ function paint(kit: MatchKit, num: string, name: string, mark: string, gear: Gea
       span(2.12, len, mix(look.skin, '#e8c0a8', 0.12), 'hand');
       if (gear.sleeve?.arm === side) span(0.28, 2.08, gear.sleeve.color, 'sleeve');
       if (gear.wrist?.arms.includes(side)) span(1.86, 2.1, gear.wrist.color, 'terry');
+      if (gear.armband?.arm === side) span(0.62, 0.72, gear.armband.color, 'terry');
     } else {
       // socks from the shoe up to mid-calf (lower for some), a band of the team's colour at the top of a white one
       const sock = kit.light ? WHITE : kit.color;
       const top = 2.4 + gear.sockDrop * 0.5;
+      if (gear.tights) span(0.8, 1.78, gear.tights, 'sleeve');
       if (gear.leg?.legs.includes(side)) span(gear.leg.long ? 0.9 : 1.3, gear.leg.long ? top + 0.05 : 2.05, gear.leg.color, 'sleeve');
+      if (gear.pads?.legs.includes(side)) {
+        // (a padded sleeve over the knee: its cuffs a shade off it, the pad itself quilted)
+        span(1.36, 1.92, gear.pads.color, 'sleeve');
+        span(1.48, 1.8, mix(gear.pads.color, light(gear.pads.color) > 0.5 ? '#000000' : '#ffffff', 0.12), 'terry');
+      }
       span(top, len, sock, 'sock');
       span(top + 0.07, top + 0.13, sock === WHITE ? kit.color : WHITE, 'sock');
     }
   }
 
-  // the shoes: along the foot (heel to toe), round it from under the sole (the top half way, his outside three quarters)
-  const { base, accent, sole, lace } = gear.shoe;
-  sh.both(R_SHOE, (ctx, pick) => {
-    // (a turn round the foot is up the picture here: drawn with y the share of a turn from under the
-    // sole, 192 to the turn, its top at 96 and his outside at 144, and again a turn either side)
-    const [, , w, h] = R_SHOE;
-    for (const turn of [-1, 0, 1]) {
-      ctx.save();
-      ctx.translate(0, h);
-      ctx.scale(w / 512, -h / (192 * (1 + 2 * WRAP)));
-      ctx.translate(0, (WRAP + turn) * 192);
-      ctx.fillStyle = pick(base, 'leather');
-      ctx.fillRect(-10, -10, 532, 212);
-      // the toe box, a mesh a shade off the leather; the heel's counter and a panel each side in the second colour
-      ctx.fillStyle = pick(mix(base, light(base) > 0.5 ? '#000000' : '#ffffff', 0.1), 'mesh');
-      ctx.fillRect(0.8 * 512, -10, 120, 212);
-      ctx.fillStyle = pick(accent, 'leather');
-      ctx.fillRect(-10, -10, 0.17 * 512 + 10, 212);
-      for (const out of [1, -1]) {
-        // (up the side of the foot is toward 96 from either side: it climbs toward the heel)
-        const mid = 96 + out * 50;
-        ctx.beginPath();
-        ctx.moveTo(0.16 * 512, mid - out * 34);
-        ctx.lineTo(0.62 * 512, mid - out * 8);
-        ctx.lineTo(0.67 * 512, mid + out * 4);
-        ctx.lineTo(0.16 * 512, mid + out * 14);
-        ctx.closePath();
-        ctx.fill();
-      }
-      // the laces up the top of the foot, over a tongue
-      ctx.fillStyle = pick(mix(base, '#000000', 0.18), 'mesh');
-      ctx.fillRect(0.4 * 512, 96 - 15, 0.42 * 512, 30);
-      ctx.fillStyle = pick(lace, 'lace');
-      for (let k = 0; k < 6; k++) ctx.fillRect((0.43 + k * 0.062) * 512, 96 - 13, 8, 26);
-      ctx.restore();
-    }
-  });
-  // the soles: the tread at the bottom, the foam over it, a line of the stripe's colour round the top
-  sh.both(R_SOLE, (ctx, pick) => {
-    const [, , w, h] = R_SOLE;
-    ctx.fillStyle = pick(sole, 'rubber');
-    ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = pick(sole === WHITE ? '#3a3b40' : '#202125', 'rubber');
-    ctx.fillRect(0, h * 0.8, w, h * 0.2);
-    ctx.fillStyle = pick(accent, 'rubber');
-    ctx.fillRect(0, h * 0.12, w, h * 0.07);
-  });
+  paintShoes(sh, gear.shoe);
   return sh;
 }
 
@@ -1232,10 +1615,102 @@ vec3 knitNormal( vec3 surf_pos, vec3 surf_norm, vec2 dHdxy, float faceDirection 
 /** The knit's stitches: this many to the sheet's width (a few millimetres apart on his vest), and how deep they are (ft: a tenth of a millimetre). */
 const KNIT = 640;
 const KNIT_DEEP = 0.0003;
-/** How much light of its own his head has (a share of its colour). */
+/** How much light of its own his head has (a share of its colour), for the lightest skin; the darkest has this many times that again (see uTone). */
 const FACE_FILL = '0.32';
-/** How deep the folds his vest and shorts hang in are, ft. */
-const FOLD_DEEP = 0.013;
+const FACE_FILL_DARK = '3.2';
+
+/** Where a place on the plane of his face (figure.py's face_at) is on the sheet, in uv. */
+function faceUv(px: number, py: number): [number, number] {
+  const d = [(px / 0.8) * HEAD_SIZE[0], (py / 0.8) * HEAD_SIZE[1], HEAD_SIZE[2]];
+  const u = (headU(Math.atan2(d[0], d[2])) + WRAP) / (1 + 2 * WRAP);
+  const v = headV(Math.atan2(d[1], Math.hypot(d[0], d[2])));
+  return [(R_HEAD[0] + u * R_HEAD[2]) / SHEET, 1 - (R_HEAD[1] + (1 - v) * R_HEAD[3]) / SHEET];
+}
+/**
+ * His eyes, drawn where his head's picture is lit: close up a picture has too few points for an eye (a dozen across
+ * its iris), so there the material draws it itself, as headPainter does but as sharp as the screen: the white in the
+ * shade of its lid, the iris with its fibres and dark rim, the pupil, the light in it, the lashes; and his blink, the
+ * upper lid down over the ball to the lower one. Far off the picture's own eye is left to show (but for a blink).
+ * (A point of the sheet is taken back to the plane of his face the way it was put there: headU and headV undone.)
+ */
+const EYES = (() => {
+  const f = (v: number) => v.toFixed(5);
+  // (the eyes' own corner of the sheet, a little over: nothing is worked out anywhere else)
+  const box = [-1, 1].flatMap((sx) => [-1, 1].map((sy) => faceUv(sx * (EYE[0] + EYE[2] + 0.06), EYE[1] + sy * 0.13)));
+  const [u0, u1] = [Math.min(...box.map((c) => c[0])), Math.max(...box.map((c) => c[0]))];
+  const [v0, v1] = [Math.min(...box.map((c) => c[1])), Math.max(...box.map((c) => c[1]))];
+  const lin = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const rgb = (c: readonly number[]) => `vec3( ${c.map((v) => f(lin(v))).join(', ')} )`;
+  return /* glsl */ `if ( vMapUv.x > ${f(u0)} && vMapUv.x < ${f(u1)} && vMapUv.y > ${f(v0)} && vMapUv.y < ${f(v1)} ) {
+      // (round him and up him from where the point is on the sheet)
+      float hu = ( vMapUv.x - ${f(R_HEAD[0] / SHEET)} ) / ${f(R_HEAD[2] / SHEET)} * ${f(1 + 2 * WRAP)} - ${f(WRAP)};
+      float hv = ( vMapUv.y - ${f(1 - (R_HEAD[1] + R_HEAD[3]) / SHEET)} ) / ${f(R_HEAD[3] / SHEET)};
+      float ha = ( hu - 0.5 ) * 6.28318;
+      float ht = hv;
+      for ( int i = 0; i < 4; i ++ ) {
+        ha -= ( ha + ${f(HEAD_KA)} * sin( ha ) - ( hu - 0.5 ) * 6.28318 ) / ( 1.0 + ${f(HEAD_KA)} * cos( ha ) );
+        ht -= ( ht + ${f(HEAD_KE / (2 * Math.PI))} * ( sin( 6.28318 * ( ht - ${f(HEAD_CE)} ) ) + ${f(Math.sin(2 * Math.PI * HEAD_CE))} ) - hv ) / ( 1.0 + ${f(HEAD_KE)} * cos( 6.28318 * ( ht - ${f(HEAD_CE)} ) ) );
+      }
+      float hel = ( ht - 0.5 ) * 3.14159;
+      // (and from there the plane of his face: out from his nose, and up)
+      vec2 fp = vec2( tan( ha ) * ${f((HEAD_SIZE[2] / HEAD_SIZE[0]) * 0.8)}, tan( hel ) / cos( ha ) * ${f((HEAD_SIZE[2] / HEAD_SIZE[1]) * 0.8)} );
+      float side = sign( fp.x );
+      float ex = abs( fp.x ) - ${f(EYE[0])};
+      float ey = fp.y - ${f(EYE[1])};
+      float w = ${f(EYE[2])};
+      float aa = clamp( fwidth( fp.y ), 0.0008, 0.05 );
+      float ax = clamp( fwidth( fp.x ), 0.0008, 0.05 );
+      // (how close: all of it once an eye is a dozen pixels high, none of it under five)
+      float near = 1.0 - smoothstep( 0.007, 0.018, aa );
+      float show = max( near, step( 0.001, uBlink ) );
+      if ( show > 0.0 ) {
+        float t = min( 1.0, abs( ex ) / w );
+        float k = 1.0 - t * t;
+        float tilt = uEye.x * ex / w;
+        float up = tilt + uEye.y * pow( k, 0.55 );
+        float low = tilt - 0.037 * pow( k, 0.8 );
+        float lid = mix( up, low - 0.004, uBlink );
+        float inX = 1.0 - smoothstep( w - ax, w + ax, abs( ex ) );
+        // (shut, his lid covers the picture's own lashes too, along the top of the eye)
+        float top = up + 0.016 * smoothstep( 0.0, 0.4, uBlink );
+        float gap = inX * smoothstep( low - aa, low + aa, ey ) * ( 1.0 - smoothstep( top - aa, top + aa, ey ) );
+        float under = 1.0 - smoothstep( lid - aa, lid + aa, ey );
+        // the ball: its white, in the lid's shade at the top and redder at the corners
+        float lidShade = 0.42 + 0.58 * smoothstep( lid, lid - 0.05, ey );
+        vec3 eye = ${rgb([0.7, 0.67, 0.64])} * lidShade * vec3( 1.0, 1.0 - 0.2 * t * t, 1.0 - 0.26 * t * t );
+        vec2 ip = vec2( ex / ${f(IRIS[0])}, ( ey - ${f(IRIS[2])} ) / ${f(IRIS[1])} );
+        float r = length( ip );
+        float ar = aa / ${f(IRIS[1])};
+        float ang = atan( ip.y, ip.x );
+        float fibre = 0.86 + 0.14 * sin( ang * 26.0 + 3.0 * sin( ang * 7.0 ) );
+        vec3 ic = uIris * ( 0.8 + 1.1 * smoothstep( 0.38, 0.8, r ) - 1.5 * smoothstep( 0.78, 1.0, r ) ) * fibre * lidShade;
+        eye = mix( eye, max( ic, vec3( 0.0 ) ), 1.0 - smoothstep( 1.0 - ar, 1.0 + ar, r ) );
+        eye = mix( eye, vec3( 0.002 ), 1.0 - smoothstep( 0.42 - ar, 0.42 + ar, r ) );
+        // (the light in it: up and to one side, the same side in both)
+        float cl = length( vec2( ( ex - side * 0.02 ) / ${f(IRIS[0])}, ( ey - ${f(IRIS[2] + 0.017)} ) / ${f(IRIS[1])} ) );
+        eye = mix( eye, vec3( 1.0 ), 0.9 * ( 1.0 - smoothstep( 0.13 - ar, 0.13 + ar, cl ) ) );
+        // (and a fainter one across from it, the floor's)
+        float cl2 = length( vec2( ( ex + side * 0.022 ) / ${f(IRIS[0])}, ( ey - ${f(IRIS[2] - 0.014)} ) / ${f(IRIS[1])} ) );
+        eye = mix( eye, vec3( 0.6, 0.5, 0.4 ), 0.3 * ( 1.0 - smoothstep( 0.1, 0.3, cl2 ) ) );
+        // his lid over it as far as it is down, in his own skin; lashes along its edge
+        vec3 over = uSkin * mix( 0.62, 0.82, smoothstep( lid, top, ey ) );
+        vec3 drawn = mix( over, eye, under );
+        diffuseColor.rgb = mix( diffuseColor.rgb, drawn, gap * show );
+        float lash = inX * ( 1.0 - smoothstep( 0.006, 0.006 + 2.0 * aa, abs( ey - lid - 0.003 ) ) ) * ( 0.7 + 0.3 * smoothstep( - w, w, ex ) );
+        diffuseColor.rgb = mix( diffuseColor.rgb, ${rgb([0.07, 0.05, 0.045])}, 0.92 * lash * show );
+        shut = max( shut, gap * ( 1.0 - under ) );
+      }
+    }`;
+})();
+
+/** What a man's material is told of him as he plays: how dark his skin is (0 the lightest tone, 1 the darkest), its colour, how far shut his eyes are; his eyes' colour, and how they are set (their tilt, how far open). */
+interface Told {
+  uTone: { value: number };
+  uSkin: { value: Color };
+  uBlink: { value: number };
+  uIris: { value: Color };
+  uEye: { value: Vector2 };
+}
 
 /** Where his head is on the sheet (in uv): there the stuff picture's third channel is how far his hair stands off him, not a knit. */
 const HEAD_UV = [R_HEAD[0] / SHEET, 1 - (R_HEAD[1] + R_HEAD[3]) / SHEET, (R_HEAD[0] + R_HEAD[2]) / SHEET, 1 - R_HEAD[1] / SHEET].map((v) => v.toFixed(4));
@@ -1245,33 +1720,48 @@ const ON_HEAD = (uv: string) => `( ${uv}.x > ${HEAD_UV[0]} && ${uv}.y > ${HEAD_U
  * His material, from his sheet and its stuff picture. `plain` (a device that can't keep up) is a
  * standard material with the same picture, roughness and hair, but none of a cloth's sheen or knit.
  */
-function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, plain = false): MeshStandardMaterial {
+function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, plain = false): MeshStandardMaterial {
   const m = plain
     ? new MeshStandardMaterial({ map, vertexColors: true, side: DoubleSide, roughness: 1, metalness: 0 })
     : new MeshPhysicalMaterial({ map, vertexColors: true, side: DoubleSide, roughness: 1, metalness: 0, sheen: 1, sheenRoughness: 0.55, sheenColor: 0xffffff });
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uStuff = { value: stuff };
+    Object.assign(sh.uniforms, told);
     // his hair stands off his head by as much as his crop says (pushed out as built, before his bones carry it)
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nuniform sampler2D uStuff;')
       .replace('#include <begin_vertex>', `#include <begin_vertex>\nif ${ON_HEAD('uv')} transformed += normal * textureLod( uStuff, uv, 0.0 ).b * ${HAIR_MAX.toFixed(3)};`);
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', `#include <common>\n${STUFF_PARS}`)
+      .replace('#include <common>', `#include <common>\n${STUFF_PARS}\nuniform float uTone;\nuniform vec3 uSkin;\nuniform float uBlink;\nuniform vec3 uIris;\nuniform vec2 uEye;`)
       // (skin's hollows are warm, not grey: the shade baked into him takes less of its red than of its blue)
       .replace(
         '#include <color_fragment>',
         /* glsl */ `vec4 stuff = texture2D( uStuff, vMapUv );
         float skinK = smoothstep( 0.92, 0.98, stuff.g );
-        diffuseColor.rgb *= mix( vColor.rgb, pow( vColor.rgb, vec3( 0.84, 1.03, 1.16 ) ), skinK );`,
+        float shut = 0.0;
+        ${EYES}
+        // (dark skin's hollows go to black under a light from above long before light skin's do: its shade is let off some)
+        vec3 baked = mix( vColor.rgb, vec3( 1.0 ), 0.35 * uTone * skinK );
+        diffuseColor.rgb *= mix( vColor.rgb, pow( baked, vec3( 0.84, 1.03, 1.16 ) ), skinK );`,
       )
-      .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = stuff.r;')
+      // (dark skin is read by the light that glances off it more than by the little it gives back: it has more of a shine)
+      .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = mix( stuff.r, 0.55, shut ) * ( 1.0 - 0.2 * uTone * skinK );')
       // (and what light comes to it off the building is warmer on it than on cloth: a little of it has been through him)
       // (his head has a little light of its own, most where it faces the camera: under the arena's top light a face is read by it)
       .replace(
         '#include <lights_fragment_end>',
         `#include <lights_fragment_end>
         reflectedLight.indirectDiffuse *= mix( vec3( 1.0 ), vec3( 1.07, 0.98, 0.93 ), skinK );
-        if ${ON_HEAD('vMapUv')} reflectedLight.indirectDiffuse += diffuseColor.rgb * ${FACE_FILL} * ( 0.35 + 0.65 * saturate( dot( normal, normalize( vViewPosition ) ) ) );`,
+        float toward = saturate( dot( normal, normalize( vViewPosition ) ) );
+        // (that light is a lamp on the camera, a little over the lens: a plane that faces it is lit and one that turns
+        // down from it is not, so his brow, his nose and his jaw are shapes in it and not one flat glow)
+        float lamp = saturate( dot( normal, normalize( normalize( vViewPosition ) + ( viewMatrix * vec4( 0.0, 0.55, 0.0, 0.0 ) ).xyz ) ) );
+        // (the darker his skin, the more of that light it needs to be a face and not a shape; and the rest of his skin has some too)
+        if ${ON_HEAD('vMapUv')} reflectedLight.indirectDiffuse += diffuseColor.rgb * ${FACE_FILL} * ( 1.0 + ${FACE_FILL_DARK} * uTone ) * ( 0.14 + 0.86 * lamp * lamp );
+        else reflectedLight.indirectDiffuse += diffuseColor.rgb * 0.7 * uTone * skinK * ( 0.3 + 0.7 * toward );
+        // (and a rim of light along the edges that face up: the top light catching the round of a brow, a cheek, a shoulder)
+        float rim = pow( 1.0 - toward, 3.0 ) * saturate( 0.35 + 0.65 * dot( normal, normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz ) ) );
+        reflectedLight.indirectSpecular += vec3( 1.0, 0.93, 0.86 ) * rim * skinK * ( 0.04 + 0.1 * uTone );`,
       );
     if (plain) return;
     sh.fragmentShader = sh.fragmentShader
@@ -1279,13 +1769,7 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, plain = false):
         '#include <normal_fragment_maps>',
         /* glsl */ `#include <normal_fragment_maps>
         if ( stuff.b > 0.02 && ! ${ON_HEAD('vMapUv')} ) {
-          // (his vest and shorts hang in folds: broad ones, there at any distance)
-          float folds = smoothstep( 0.62, 0.7, stuff.b ) * ( 1.0 - skinK );
-          if ( folds > 0.0 ) {
-            float fh = 0.6 * sin( vMapUv.x * 96.0 + 3.0 * sin( vMapUv.y * 23.0 ) ) + 0.4 * sin( vMapUv.x * 41.0 - vMapUv.y * 33.0 + 2.0 * sin( vMapUv.y * 47.0 ) );
-            // (across a seam of the picture the folds jump: no fold is that steep)
-            normal = knitNormal( - vViewPosition, normal, clamp( vec2( dFdx( fh ), dFdy( fh ) ), -0.4, 0.4 ) * ${FOLD_DEEP} * folds, faceDirection );
-          }
+          // (the folds his vest and shorts hang in are the model's own: none are drawn here to fight them)
           vec2 kp = vMapUv * ${KNIT.toFixed(1)};
           // (gone well before a stitch is a pixel across: at the broadcast's distance it would be a grid of dots)
           float fine = 1.0 - smoothstep( 0.07, 0.24, length( fwidth( kp ) ) );
@@ -1299,12 +1783,29 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, plain = false):
         '#include <lights_physical_fragment>',
         /* glsl */ `#include <lights_physical_fragment>
         // (skin has a soft edge of its own against the light, warmer than cloth's)
-        material.sheenColor = mix( stuff.g * mix( vec3( 1.0 ), diffuseColor.rgb, 0.45 ) * 0.7, vec3( 0.95, 0.6, 0.45 ) * 0.14, skinK );`,
+        material.sheenColor = mix( stuff.g * mix( vec3( 1.0 ), diffuseColor.rgb, 0.45 ) * 0.7, vec3( 0.95, 0.6, 0.45 ) * ( 0.14 + 0.16 * uTone ), skinK );`,
       );
   };
   m.customProgramCacheKey = () => (plain ? 'figure-plain' : 'figure');
   return m;
 }
+
+/** How far his jaw swings open at the most, radians. */
+const JAW_SWING = 0.28;
+/** What a gesture does to his face: how far his jaw opens (0..1), how far his brows come down, and whether he is talking (his jaw works). */
+const FACE_OF: Record<string, readonly [number, number, number] | undefined> = {
+  roar: [1, 1, 0],
+  flex: [0.6, 0.9, 0],
+  fist: [0.45, 0.6, 0],
+  protest: [0.6, 0.8, 1],
+  call: [0.5, 0.3, 1],
+  ask: [0.45, 0.2, 1],
+  point: [0.3, 0.2, 1],
+  wag: [0.2, 0.5, 0],
+  head: [0, 0.6, 0],
+  five: [0.2, 0, 0],
+  clap: [0.25, 0.1, 1],
+};
 
 const A = new Vector3();
 const C = new Vector3();
@@ -1316,16 +1817,11 @@ const Yv = new Vector3();
 const Z = new Vector3();
 const MAT = new Matrix4();
 const Q = new Quaternion();
+const QA = new Quaternion();
+const QB = new Quaternion();
 const UP = new Vector3(0, 1, 0);
 const XA = new Vector3(1, 0, 0);
 const ZA = new Vector3(0, 0, 1);
-
-/** A point of the cloth that follows where it hangs from, a beat late. */
-interface Lag {
-  at: Vector3;
-  v: Vector3;
-  set: boolean;
-}
 
 export class Fig {
   readonly group = new Group();
@@ -1336,8 +1832,6 @@ export class Fig {
   private readonly bones: Bone[] = [];
   /** Each limb's hinge (the line its elbow or knee folds about), kept for when it's straight. */
   private readonly hinge = [new Vector3(1, 0, 0), new Vector3(1, 0, 0), new Vector3(1, 0, 0), new Vector3(1, 0, 0)];
-  private readonly lag: Lag[] = [0, 1].map(() => ({ at: new Vector3(), v: new Vector3(), set: false }));
-  private last = 0;
   readonly shadow: Mesh;
   readonly ring: Mesh;
   private readonly own: { dispose(): void }[] = [];
@@ -1346,6 +1840,13 @@ export class Fig {
   /** His material, and its plain twin once a slow device has asked for it (see lite). */
   private readonly mats: [MeshStandardMaterial, MeshStandardMaterial | null];
   private readonly textures: [CanvasTexture, CanvasTexture];
+  private readonly told: Told;
+  /** His blink: how many seconds between two, and where in that he started. */
+  private readonly blinks: [number, number];
+  /** His face as it is now: how far his jaw is open and his brows are down (0..1), and when that was last moved on. */
+  private jawOpen = 0;
+  private frown = 0;
+  private faceAt = 0;
 
   /** Where the ball is while he has a hand on it (the scene's point; null: his hands lie on it as his move's grip has them). */
   ball: { x: number; y: number; z: number } | null = null;
@@ -1365,7 +1866,16 @@ export class Fig {
     map.colorSpace = SRGBColorSpace;
     map.anisotropy = 4;
     const stuff = new CanvasTexture(sheet.stuff);
-    const mat = stuffMaterial(map, stuff);
+    this.told = {
+      uTone: { value: look.tone / (SKINS.length - 1) },
+      uSkin: { value: new Color(look.skin) },
+      uBlink: { value: 0 },
+      uIris: { value: new Color(look.eyes) },
+      uEye: { value: new Vector2(EYE_TILT * look.face.tilt, EYE_OPEN * look.face.open) },
+    };
+    // (he blinks in his own time: every few seconds, never with the man beside him)
+    this.blinks = [3.1 + (((seed * 7) % 11) / 11) * 2.6, ((seed * 13) % 17) / 17];
+    const mat = stuffMaterial(map, stuff, this.told);
     this.own.push(map, stuff, mat);
     this.mats = [mat, null];
     this.textures = [map, stuff];
@@ -1376,6 +1886,7 @@ export class Fig {
         refine(on.head, (head) => {
           if (this.gone) return;
           current.put(R_HEAD, head);
+          current.fill(R_EAR, earOf(look), 'skin');
           map.needsUpdate = stuff.needsUpdate = true;
         });
     };
@@ -1401,8 +1912,12 @@ export class Fig {
     const thick = s * (0.78 + 0.22 * bulk);
     const deep = Math.sqrt(bulk) * s;
     const scale = (k: number, x: number, y: number, z: number) => this.bones[k].scale.set(x, y, z);
+    // (and no two men of one build are cut the same: one is broader across the chest, one has heavier arms or thighs,
+    // one thin calves and forearms. A few parts in a hundred each: his joints stay where the puppet has them.)
+    const own = rng(seed + 977);
+    const [wide, arm, leg, low] = [0.97 + 0.07 * own(), 0.95 + 0.11 * own(), 0.95 + 0.1 * own(), 0.94 + 0.1 * own()];
     scale(B.pelvis, bulk * s, s, deep);
-    scale(B.chest, bulk * s, s, deep);
+    scale(B.chest, bulk * s * wide, s, deep);
     scale(B.hem, bulk * s, s, deep);
     // (and each has a face of his own: a wider or a longer head, his jaw, his nose)
     const hs = Math.sqrt(s) * 1.06;
@@ -1411,10 +1926,14 @@ export class Fig {
     scale(B.jaw, hs * face.wide * face.jaw, hs * face.long * face.chin, hs);
     scale(B.nose, hs * face.wide * face.nose, hs * face.long, hs * face.bridge);
     scale(B.hair, hs * face.wide, hs * face.long, hs);
-    for (const k of [B.kn1l, B.kn2l, B.kn1r, B.kn2r]) scale(k, s, s, s);
-    for (const k of [B.ual, B.fal, B.uar, B.far, B.thl, B.shl, B.thr, B.shr, B.hemL, B.hemR]) scale(k, thick, s, thick);
+    scale(B.brow, hs * face.wide, hs * face.long, hs);
+    scale(B.lip, hs * face.wide, hs * face.long, hs);
+    for (const k of [B.ual, B.uar]) scale(k, thick * arm, s, thick * arm);
+    for (const k of [B.fal, B.far]) scale(k, thick * arm * low, s, thick * arm * low);
+    for (const k of [B.thl, B.thr, B.hemL, B.hemR]) scale(k, thick * leg, s, thick * leg);
+    for (const k of [B.shl, B.shr]) scale(k, thick * leg * low, s, thick * leg * low);
     for (const k of [B.hal, B.har, B.ftl, B.ftr]) scale(k, s, s, s);
-    const mesh = new SkinnedMesh(geo.wearing(STYLES[look.style].piece), mat);
+    const mesh = new SkinnedMesh(geo.wearing(STYLES[look.style].piece, gear.shoe.high), mat);
     this.mesh = mesh;
     const bones = new Skeleton(
       geo.order.map((k) => this.bones[k]),
@@ -1443,6 +1962,28 @@ export class Fig {
     const b = this.bones[k];
     b.position.copy(at);
     b.quaternion.setFromRotationMatrix(MAT.makeBasis(x, y, z));
+  }
+
+  /**
+   * A shoulder's own bone: at the joint, turned half way from where the arm is as built (on his chest) to
+   * where it points now, with none of the arm's own twist. The cap of his shoulder and his armpit hang on
+   * it, so an arm overhead, forward or at his side bends there in two gentle turns. (Both swings are taken
+   * from an arm straight out to the side: the one way an arm never points is straight in through his chest.)
+   */
+  private girdle(k: number, arm: number, side: 1 | -1, joint: Vector3, elbow: Vector3) {
+    const chest = this.bones[B.chest].quaternion;
+    const now = W3.copy(elbow).sub(joint).normalize().applyQuaternion(Q.copy(chest).invert());
+    const out = E.set(side, 0, 0);
+    QA.setFromUnitVectors(out, D.set(side * Math.sin(ARM_OUT), -Math.cos(ARM_OUT), 0));
+    QB.setFromUnitVectors(out, now).slerp(QA, 0.5).multiply(QA.invert());
+    const b = this.bones[k];
+    b.position.copy(joint);
+    b.quaternion
+      .copy(chest)
+      .multiply(QB)
+      .multiply(Q.setFromAxisAngle(ZA, side * ARM_OUT));
+    // (as thick as his arm is where it meets it)
+    b.scale.copy(this.bones[arm].scale);
   }
 
   /** The skin onto the puppet's joints. */
@@ -1478,19 +2019,50 @@ export class Fig {
       [B.jaw, JAW_AT],
       [B.nose, NOSE_AT],
       [B.hair, HAIR_AT],
+      [B.brow, BROW_AT],
+      [B.lip, JAW_AT],
     ] as const) {
       const b = this.bones[k];
       b.position.copy(A.copy(from).multiply(head.scale).applyQuaternion(head.quaternion)).add(head.position);
       b.quaternion.copy(head.quaternion);
     }
-    // (in the air, at the top of his effort, his mouth comes open a little)
-    this.bones[B.jaw].quaternion.multiply(Q.setFromAxisAngle(XA, 0.11 * Math.min(1, Math.max(0, P[I.air]))));
-    // hair that hangs swings a beat behind him, as far as the puppet says his cloth lags (in his own frame, ft)
-    const lag = (p as { trailSlow?: { x: number; z: number }; trail?: { x: number; z: number } }).trailSlow ?? (p as { trail?: { x: number; z: number } }).trail;
-    if (lag)
-      this.bones[B.hair].quaternion
-        .multiply(Q.setFromAxisAngle(XA, Math.max(-0.5, Math.min(0.5, lag.z * 0.6))))
-        .multiply(Q.setFromAxisAngle(ZA, Math.max(-0.4, Math.min(0.4, -lag.x * 0.6))));
+    // (a blink: his lids down and up again in a seventh of a second)
+    const since = (performance.now() / 1000 / this.blinks[0] + this.blinks[1]) % 1;
+    this.told.uBlink.value = Math.max(0, 1 - Math.abs(since * this.blinks[0] - 0.07) / 0.07);
+    // his face works with the rest of him: in the air, at the top of his effort, his mouth comes open and his brows
+    // come down; a roar or a flex bares his teeth; a man protesting, calling or asking is talking. (Eased, on the
+    // wall's clock: a face is quick, and a replay at half speed loses nothing by it.)
+    const now = performance.now();
+    const dt = Math.min(0.1, Math.max(0, (now - this.faceAt) / 1000));
+    this.faceAt = now;
+    const air = Math.min(1, Math.max(0, P[I.air]));
+    const [open, frown, talks] = FACE_OF[p.gesturing ?? ''] ?? [0, 0, 0];
+    const talk = talks ? 0.5 + 0.5 * Math.sin(now * 0.021 + this.blinks[1] * 40) * Math.sin(now * 0.0083) : 1;
+    const ease = 1 - Math.exp(-dt * 14);
+    this.jawOpen += (Math.max(0.3 * air, open * talk) - this.jawOpen) * ease;
+    this.frown += (Math.max(0.6 * air, frown) - this.frown) * ease;
+    // (his jaw swings about its hinge by his ear, not about where it is scaled from)
+    const jaw = this.bones[B.jaw];
+    Q.setFromAxisAngle(XA, JAW_SWING * this.jawOpen);
+    jaw.position.copy(A.copy(JAW_AT).sub(JAW_HINGE).applyQuaternion(Q).add(JAW_HINGE).multiply(head.scale).applyQuaternion(head.quaternion)).add(head.position);
+    jaw.quaternion.multiply(Q);
+    this.bones[B.lip].position.copy(jaw.position);
+    this.bones[B.lip].quaternion.copy(jaw.quaternion);
+    // (his brows: down, a little forward and drawn together; a heavier brow sits further forward all the time)
+    const brow = this.bones[B.brow];
+    const hs = head.scale.z;
+    brow.position.add(
+      A.set(0, -0.016 * this.frown, 0.006 * this.frown + 0.012 * (this.look.face.ridge - 0.45))
+        .multiplyScalar(hs)
+        .applyQuaternion(head.quaternion),
+    );
+    brow.scale.x = head.scale.x * (1 - 0.07 * this.frown);
+    // hair that hangs swings a beat behind him, as far as the puppet says the heavier of his loose things lags (in
+    // his own frame, ft: behind him on a run, so its ends go back; to the side he came from on a slide)
+    const lag = p.trailSlow;
+    this.bones[B.hair].quaternion
+      .multiply(Q.setFromAxisAngle(XA, Math.max(-0.4, Math.min(0.6, -lag.z * 0.32))))
+      .multiply(Q.setFromAxisAngle(ZA, Math.max(-0.45, Math.min(0.45, lag.x * 0.32))));
 
     // arms and legs: each bone along its limb, turned so the joint folds the way it's folded
     const limb = (n: number, a: number, mid: number, end: number, b0: number, bend: 1 | -1) => {
@@ -1516,6 +2088,8 @@ export class Fig {
     };
     limb(0, J.sl, J.el, J.hl, B.ual, -1);
     limb(1, J.sr, J.er, J.hr, B.uar, -1);
+    this.girdle(B.cll, B.ual, 1, at(J.sl, A), at(J.el, C));
+    this.girdle(B.clr, B.uar, -1, at(J.sr, A), at(J.er, C));
     limb(2, J.jl, J.kl, J.fl, B.thl, 1);
     limb(3, J.jr, J.kr, J.fr, B.thr, 1);
     // hands go with their forearms; feet point the way he faces, toes down once they leave the floor
@@ -1551,15 +2125,30 @@ export class Fig {
         // (the puppet's hand is its wrist, a palm's depth off the ball: the palm itself goes on to the leather)
         this.bones[h].position.addScaledVector(W3, 0.06 * s * grip);
       }
-      // his fingers: a hand that hangs curls them a little; one on the ball closes them round it
+      // his forearm turns with his hand: the part of the hand's turn that is about the forearm's own line, most of it
+      // (the rest is the wrist's)
+      const fw = this.bones[left ? B.fwl : B.fwr];
+      const fore = this.bones[f];
+      QA.copy(fore.quaternion).invert().multiply(this.bones[h].quaternion);
+      const twist = Math.hypot(QA.y, QA.w);
+      if (twist > 1e-6) QA.set(0, QA.y / twist, 0, QA.w / twist);
+      else QA.identity();
+      fw.position.copy(fore.position);
+      fw.quaternion.copy(fore.quaternion).multiply(QB.identity().slerp(QA, 0.7));
+      fw.scale.copy(fore.scale);
+      // his fingers: a hand with nothing in it is loose, its fingers together and curled as they fall; one on the ball
+      // opens, its fingers spread over the leather and laid along it
       let from = this.bones[h];
+      const spread = s * (0.92 + 0.24 * grip);
       for (const [bone, down, curl] of [
-        [left ? B.kn1l : B.kn1r, KNUCKLE, 0.12 + 0.16 * grip],
-        [left ? B.kn2l : B.kn2r, MIDDLE - KNUCKLE, 0.24 + 0.14 * grip],
+        [left ? B.kn1l : B.kn1r, KNUCKLE, 0.46 - 0.2 * grip],
+        [left ? B.kn2l : B.kn2r, MIDDLE - KNUCKLE, 0.66 - 0.3 * grip],
       ] as const) {
         const b = this.bones[bone];
         b.position.copy(C.set(0, -down * s, 0).applyQuaternion(from.quaternion)).add(from.position);
         b.quaternion.copy(from.quaternion).multiply(Q.setFromAxisAngle(ZA, way * curl));
+        // (across the hand is the bone's own z: wider there, the fingers stand apart)
+        b.scale.set(s, s, spread);
         from = b;
       }
     }
@@ -1576,40 +2165,20 @@ export class Fig {
       this.bones[f].quaternion.setFromAxisAngle(XA, Math.max(-0.4, Math.min(1.1, roll)));
     }
 
-    // cloth: each leg of the shorts down its thigh, a beat late
-    const now = performance.now();
-    const dt = Math.min(0.05, Math.max(0, (now - this.last) / 1000));
-    this.last = now;
-    this.group.updateMatrixWorld(true);
-    const cloth = (n: number, bone: number, anchor: Vector3, q: Quaternion, give: number) => {
-      const l = this.lag[n];
-      const want = C.copy(anchor);
-      this.group.localToWorld(want);
-      if (!l.set || dt === 0 || l.at.distanceTo(want) > 3) {
-        l.at.copy(want);
-        l.v.set(0, 0, 0);
-        l.set = true;
-      } else {
-        // a spring to where it hangs, damped; it never stretches far
-        l.v.addScaledVector(D.copy(want).sub(l.at), 260 * dt).multiplyScalar(Math.exp(-14 * dt));
-        l.at.addScaledVector(l.v, dt);
-        D.copy(l.at).sub(want);
-        const far = D.length();
-        if (far > give * s) l.at.copy(want).addScaledVector(D, (give * s) / far);
-      }
-      const b = this.bones[bone];
-      b.position.copy(this.group.worldToLocal(D.copy(l.at)));
-      b.quaternion.copy(q);
-    };
+    // cloth: each leg of the shorts hangs from its thigh, and trails as far as the puppet says his loose things do
+    // (the puppet's own clock: a replay at half speed swings them at half speed). It never stretches far.
+    const far = Math.hypot(p.trail.x, p.trail.y, p.trail.z);
+    const give = Math.min(1, (0.22 * s) / Math.max(1e-6, far * 0.3)) * 0.3;
     // (the vest is tucked in: its bone stays with his hips)
     this.bones[B.hem].position.copy(this.bones[B.pelvis].position);
     this.bones[B.hem].quaternion.copy(hipQ);
-    for (const [n, bone, th, a, k] of [
-      [0, B.hemL, B.thl, J.jl, J.kl],
-      [1, B.hemR, B.thr, J.jr, J.kr],
+    for (const [bone, th, a, k] of [
+      [B.hemL, B.thl, J.jl, J.kl],
+      [B.hemR, B.thr, J.jr, J.kr],
     ] as const) {
       at(a, A).lerp(at(k, E), (THIGH - 0.7) / THIGH);
-      cloth(n, bone, A, this.bones[th].quaternion, 0.2);
+      this.bones[bone].position.set(A.x + p.trail.x * give, A.y + p.trail.y * give * 0.5, A.z + p.trail.z * give);
+      this.bones[bone].quaternion.copy(this.bones[th].quaternion);
     }
 
     this.shadow.position.set(p.x, 0.03, p.z);
@@ -1619,7 +2188,7 @@ export class Fig {
   /** A device that can't keep up: his plain material (no cloth's sheen, no knit up close), or back to the full one. */
   lite(on: boolean) {
     if (on && !this.mats[1]) {
-      this.mats[1] = stuffMaterial(this.textures[0], this.textures[1], true);
+      this.mats[1] = stuffMaterial(this.textures[0], this.textures[1], this.told, true);
       this.own.push(this.mats[1]);
     }
     this.mesh.material = (on && this.mats[1]) || this.mats[0];

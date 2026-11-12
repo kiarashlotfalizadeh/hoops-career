@@ -2,16 +2,23 @@
 #
 # How it's made: the body's masses (trunk, limbs, palms) are laid out as simple solids and fused
 # into one skin (voxel remesh, then smoothed), so a shoulder runs into an arm without a seam. His
-# head is a skin of its own, shaped by a formula (head_r: a skull, a jaw, a brow, a nose, lips), so
-# a face keeps its form however few triangles it gets, and the app can paint eyes and a mouth where
-# the formula put their hollows; it sits down over the top of his neck.
+# head is a skin of its own, shaped by a formula (skull: a cranium over a face cut in flat faces, the
+# jaw's line an edge; head_r: on that a brow's ridge, the eyes' sockets and their balls and lids,
+# cheekbones, a nose with a bridge, wings and nostrils, lips, a chin), so a face keeps its form however
+# few triangles it gets, and the app can paint eyes and a mouth where the formula put them; it sits
+# down over the top of his neck. His lips part along the line of his mouth (the dark of it and his
+# teeth are behind them), his ears are shells with a rolled rim, and his neck has its two cords and
+# an Adam's apple.
 # The clothes are that same skin, pushed out and cut along planes (a V-neck vest tucked into shorts
 # with two legs, socks), so they sit on him and move with him; the skin under them is cut away.
-# Fingers, ears and sneakers are built by hand and joined on, and so is hair that stands off a
+# His arms and legs are bone and muscle (a deltoid, biceps and triceps, the forearm's bellies, a kneecap,
+# hamstrings, a calf), and a girdle ties each arm to his trunk (trapezius, chest, back, collarbone).
+# Fingers, ears and basketball shoes (shoe_fine: sole, upper, collar, tongue, laces; high or low) are built by hand and joined on, and so is hair that stands off a
 # head (a bun, a tail, twists, locks, braids: the app draws a man with one of them or none). Each
 # point follows the bones near it (weights are a function of where the point is), and the shade of
-# every hollow is baked in. Beyond the puppet's bones he has six leaves the app turns itself: his
-# fingers' two joints on each hand, and his jaw and nose, whose sizes make one face unlike another.
+# every hollow is baked in. Beyond the puppet's bones he has leaves the app turns itself: his
+# fingers' two joints on each hand, his jaw and nose, whose sizes make one face unlike another (and
+# his jaw comes open), and on the floor his brows and his lower lip.
 #
 # He stands with his arms out from his sides (they can't be fused hanging against the trunk); the
 # rig's bones carry that pose, so the game needs to know nothing about it.
@@ -42,8 +49,9 @@ FORK = HIP - 0.66
 TUCK = WAIST - 0.07
 SOCK_LO, SOCK_HI = AN_Y + 0.02, AN_Y + 0.78
 # the vest's armholes (a plane each side) and its V neck (two planes, lower in front)
-PIT = 0.7, 4.75
-PIT_N = Vector((0.995, 0.1, 0)).normalized()
+# (the armhole leans in toward his neck, as a vest's does: its strap narrow on top of the shoulder, its foot under the armpit)
+PIT = 0.72, 4.74
+PIT_N = Vector((0.954, 0.3, 0)).normalized()
 VK, VM, VC = 1.0, 0.5, 5.27
 VLEN = math.sqrt(1 + VK * VK + VM * VM)
 TRIM = 0.055
@@ -52,6 +60,8 @@ TRIM = 0.055
 HEAD_W, HEAD_H, HEAD_D = 0.3, 0.42, 0.37
 HEAD_C = (0, HEAD_Y + 0.045, 0.05)
 UNDER = 0.17
+# how many triangles his head is given (most of them his face's)
+HEAD_TRIS = 6040
 # his hair, cropped: the scalp over a line that runs from his forehead down past the top of each ear to the nape
 HAIR_AT, HAIR_FRONT, HAIR_BACK = 0.3, 0.5, 0.85
 
@@ -60,16 +70,31 @@ BONES = ['pelvis', 'chest', 'head', 'ual', 'fal', 'hal', 'uar', 'far', 'har', 't
 # does: each hand's fingers at the knuckles and at their middle joints, and two that shape a face, his jaw and his nose)
 # (and one that hair which hangs swings from)
 LEAVES = {'kn1l': 'hal', 'kn2l': 'kn1l', 'kn1r': 'har', 'kn2r': 'kn1r', 'jaw': 'head', 'nose': 'head', 'hair': 'head'}
+# (and, on the player only, one his brows hang on, that figure.ts lowers when he strains or shouts; one for his lower lip and
+# teeth, which open with his jaw but are never made wider or longer with it, so his lips meet whatever his jaw's shape; one at each shoulder that figure.ts turns half way from his chest to his upper arm: the
+# cap of the shoulder and the armpit go with it, so an arm raised overhead or hung at his side keeps its shoulder;
+# and one down each forearm that takes part of the hand's turn about it, so a wrist turns over the length of the
+# forearm, as the two bones in it do, and not in a twist of skin at the wrist.
+# The people round the floor, people.py, are seen from far off and keep the bones above.)
+GIRDLE = {'cll': 'chest', 'clr': 'chest', 'fwl': 'fal', 'fwr': 'far', 'brow': 'head', 'lip': 'head'}
+girdled = False
+
+
+def leaves():
+    return {**LEAVES, **GIRDLE} if girdled else LEAVES
 SKIN, HAIR, JERSEY, TRIM_M, CLOTH, SHOE, WHITE = 'skin', 'hair', 'jersey', 'trim', 'cloth', 'shoe', 'white'
 # hair that is a shape of its own (a man wears one of them or none: figure.ts leaves the others out)
 BUN, TAIL, TWISTS, LOCS, BRAIDS, AFRO, HIGHTOP, CURLS = 'bun', 'tail', 'twists', 'locs', 'braids', 'afro', 'hightop', 'curls'
 # what a hand-built part hangs on (anything else: by where each point is)
-BY_PLACE, SHORTS, HAND_L, HAND_R, ON_HEAD, FOOT_L, FOOT_R, FACE, SWINGS = range(9)
-RIGID = {ON_HEAD: 'head', FOOT_L: 'ftl', FOOT_R: 'ftr'}
+BY_PLACE, SHORTS, HAND_L, HAND_R, ON_HEAD, FOOT_L, FOOT_R, FACE, SWINGS, ON_JAW = range(10)
+RIGID = {ON_HEAD: 'head', FOOT_L: 'ftl', FOOT_R: 'ftr', ON_JAW: 'lip'}
+# what is behind his lips (see mouth)
+MOUTH, TEETH, EAR = 'mouth', 'teeth', 'ear'
 # the fingers' knuckles and middle joints, down the arm from the wrist
 KNUCKLE, MIDDLE = 0.4, 0.545
-# where his jaw and his nose are scaled about, from the head's middle (in its half sizes)
-JAW_AT, NOSE_AT = (0, -0.42, 0.25), (0, -0.2, 0.8)
+# where his jaw and his nose are scaled about, from the head's middle (in its half sizes: his jaw's from the height
+# of the line of his mouth, so a longer chin never parts his lips), and where his brows hang from
+JAW_AT, NOSE_AT, BROW_AT = (0, -0.5, 0.25), (0, -0.2, 0.8), (0, 0.24, 0.8)
 # where hair that hangs swings from (the same way), and his hairline as figure.ts paints it: how high it is
 # (the height of a unit direction from the head's middle) by how far round from the front (radians)
 SWING_AT = (0, 0.1, -0.6)
@@ -169,61 +194,156 @@ def ray(n, c, r):
     return (bb + math.sqrt(max(0.0, bb * bb - aa * cc))) / aa
 
 
+def flat(n, normal, at):
+    """How far along n a flat face is: the plane through `at` that looks out along `normal` (far off, where n looks away from it)."""
+    ln = math.sqrt(sum(v * v for v in normal))
+    c = sum(n[i] * normal[i] for i in range(3)) / ln
+    return sum(at[i] * normal[i] for i in range(3)) / ln / c if c > 0.02 else 99.0
+
+
+def smin(a, b, k):
+    """The lesser of two, the corner between them rounded over k: two faces of a head meet in an edge, not a crease."""
+    h = max(k - abs(a - b), 0.0) / k
+    return min(a, b) - h * h * k * 0.25
+
+
+def smax(a, b, k):
+    return -smin(-a, -b, k)
+
+
 def face_at(n):
     """Where on the plane of his face a direction from the head's middle looks (in the head's half sizes: figure.ts paints by the same)."""
     nz = max(n[2], 0.3)
     return n[0] / nz * 0.8, n[1] / nz * 0.8
 
 
+# his face, on its plane (figure.ts paints by the same numbers, and so does people.py): each eye's middle and
+# half width, his mouth's height and half width, the tip of his nose and where it meets his lip
+EYE_X, EYE_Y, EYE_W = 0.38, 0.066, 0.138
+MOUTH_Y, MOUTH_W = -0.522, 0.275
+NOSE_TIP, NOSE_FOOT = -0.262, -0.34
+
+
+def lids(px, py):
+    """An eye, from its middle: how far across and up a point is, and where the upper and the lower lid are there (figure.ts's)."""
+    ex, ey = abs(px) - EYE_X, py - EYE_Y
+    k = max(0.0, 1 - min(1.0, abs(ex) / EYE_W) ** 2)
+    tilt = 0.012 * ex / EYE_W
+    return ex, ey, tilt + 0.056 * k ** 0.55, tilt - 0.037 * k ** 0.8
+
+
+def brow_at(apx):
+    """How high his eyebrow is, that far out from the middle of his face (figure.ts's): up from beside the nose to its peak, down to a tail."""
+    q = (apx - 0.15) / 0.52
+    return 0.2 + 0.07 * math.sin(clamp(q * 1.15) * math.pi * 0.62) - 0.035 * sstep(0.7, 1, q)
+
+
+def skull(n):
+    """
+    The head's bone, before anything of a face is on it: a cranium (longer than it is wide, widest
+    over the ears) and under it the block of a face, cut by flat faces as a face is: its front (a
+    little back at the chin), a plane each side from the cheekbone round to the ear, the jaw's sides
+    down to the chin, and the jaw's under side, from the chin up to its corner under the ear. The
+    faces meet in rounded edges: the line of a jaw, the turn of a cheek.
+    """
+    cranium = ray(n, (0, 0.2, -0.1), (0.915, 0.75, 0.955))
+    x = abs(n[0])
+    m = (x, n[1], n[2])
+    low = ray(n, (0, -0.32, 0.0), (0.86, 0.95, 0.9))
+    # (its front; the cheeks' turn back to the cheekbones; the jaw's side; behind, his neck takes over)
+    low = smin(low, flat(m, (0, -0.1, 1), (0, -0.45, 0.842)), 0.07)
+    low = smin(low, flat(m, (0.74, -0.2, 0.64), (0.4, -0.1, 0.83)), 0.2)
+    low = smin(low, flat(m, (1, -0.2, 0.16), (0.745, -0.58, -0.1)), 0.09)
+    low = smin(low, flat(m, (0, 0.35, -1), (0, -0.4, -0.52)), 0.1)
+    # (under it: the jaw's edge rises from the chin to its corner; the chin's own under side is nearly level)
+    low = smin(low, flat(m, (0.25, -1, -0.66), (0, -1.0, 0.5)), 0.1)
+    low = smin(low, flat(m, (0, -1, 0.12), (0, -0.985, 0.7)), 0.08)
+    return smax(cranium, low, 0.09)
+
+
 def head_r(n):
     """
-    How far out the head's skin is along n (a unit direction from its middle, in its half sizes): a
-    skull with a narrower face and jaw under it, then a brow, the eyes' hollows, cheekbones, a nose,
-    lips and a chin. Everything on the face is placed by face_at, as figure.ts paints it.
+    How far out the head's skin is along n (a unit direction from its middle, in its half sizes):
+    the skull, then what a face has on it. A brow ridge over each eye and the hollow of the socket
+    under it, the ball of the eye in that with a lid over and under; cheekbones, and the hollow of
+    the cheek under them; a nose with a bridge, a tip, wings and nostrils, cut in under it; lips, each
+    with its own fullness, the groove over the upper one and the corners of the mouth; a chin. Everything
+    on the face is placed by face_at, as figure.ts paints it.
     """
-    skull = ray(n, (0, 0.2, -0.08), (0.97, 0.79, 0.93))
-    jaw = ray(n, (0, -0.3, 0.1), (0.79, 0.65, 0.76))
-    t = 0.5 * (skull + jaw + math.sqrt((skull - jaw) ** 2 + 0.006))
+    t = skull(n)
     x, y, z = n
-    # the jaw's corners under the ears; the temples a little hollow
-    for sx in (-1, 1):
-        t += 0.035 * math.exp(-(((x - sx * 0.74) / 0.2) ** 2 + ((y + 0.55) / 0.16) ** 2 + ((z - 0.12) / 0.3) ** 2))
-        t -= 0.02 * math.exp(-(((x - sx * 0.85) / 0.2) ** 2 + ((y - 0.25) / 0.2) ** 2 + ((z - 0.45) / 0.25) ** 2))
+    ax = abs(x)
+    b3 = lambda cx, cy, cz, sx, sy, sz: math.exp(-(((ax - cx) / sx) ** 2 + ((y - cy) / sy) ** 2 + ((z - cz) / sz) ** 2))  # noqa: E731
+    # the temples, a little hollow behind the brow's end; the cheekbone's arch back toward the ear; the jaw's
+    # muscle over its corner; the bump behind the ear; the back of the skull over the nape
+    t -= 0.03 * b3(0.82, 0.3, 0.42, 0.2, 0.22, 0.24)
+    t += 0.045 * b3(0.7, -0.1, 0.55, 0.2, 0.12, 0.26)
+    t += 0.018 * b3(0.86, -0.08, 0.2, 0.16, 0.12, 0.3)
+    t += 0.022 * b3(0.74, -0.42, 0.1, 0.16, 0.2, 0.22)
+    t += 0.02 * b3(0.7, -0.12, -0.5, 0.16, 0.14, 0.16)
+    t += 0.02 * b3(0, 0.05, -0.95, 0.5, 0.25, 0.3)
     front = sstep(0.1, 0.5, z)
     if front <= 0:
         return t
     px, py = face_at(n)
-    g = lambda ax, ay, sx, sy: math.exp(-(((px - ax) / sx) ** 2 + ((py - ay) / sy) ** 2))  # noqa: E731
-    d = 0.056 * math.exp(-(((py - 0.25) / 0.07) ** 2)) * math.exp(-((px / 0.75) ** 2)) * (1 - 0.45 * math.exp(-((px / 0.12) ** 2)))
-    for sx in (-1, 1):
-        d -= 0.108 * g(sx * 0.38, 0.07, 0.17, 0.085)
-        # (the eye's own round under its lids, the upper lid's fold over it)
-        d += 0.05 * g(sx * 0.38, 0.062, 0.115, 0.042)
-        d += 0.012 * g(sx * 0.38, 0.125, 0.14, 0.018)
-        d += 0.052 * g(sx * 0.62, -0.14, 0.2, 0.14)
-        d += 0.068 * g(sx * 0.15, -0.265, 0.07, 0.05)
-        # (the fold from each side of the nose down past the mouth)
-        d -= 0.014 * g(sx * 0.33, -0.44, 0.04, 0.13)
-    # the nose: low between the eyes, highest at its tip, cut in under it
-    u = clamp((0.2 - py) / 0.44)
-    d += (0.02 + 0.125 * u ** 1.3) * sstep(-0.335, -0.275, py) * sstep(0.32, 0.16, py) * math.exp(-((px / (0.07 + 0.05 * u)) ** 2))
-    # (his forehead stands up over his brow)
-    d += 0.03 * g(0, 0.52, 0.6, 0.2)
-    # the mouth: both lips on a rise of their own, the line between them, the groove under the lower one, a chin
-    wide = math.exp(-((px / 0.27) ** 4))
-    d += 0.04 * g(0, -0.5, 0.36, 0.17)
-    d += wide * (0.034 * math.exp(-(((py + 0.472) / 0.04) ** 2)) + 0.044 * math.exp(-(((py + 0.572) / 0.045) ** 2)) - 0.04 * math.exp(-(((py + 0.52) / 0.013) ** 2)))
-    d -= 0.014 * g(0, -0.41, 0.032, 0.05)
-    d -= 0.02 * g(0, -0.675, 0.2, 0.04)
-    d += 0.062 * g(0, -0.85, 0.2, 0.1)
+    apx = abs(px)
+    g = lambda cx, cy, sx, sy: math.exp(-(((apx - cx) / sx) ** 2 + ((py - cy) / sy) ** 2))  # noqa: E731
+    d = 0.0
+    # his forehead: two rises over the brows, flat between; the brow's ridge along the line of the eyebrow,
+    # heaviest over the inner half of the eye, joined over the nose by a lower one
+    d += 0.02 * g(0.34, 0.56, 0.26, 0.2)
+    yb = brow_at(apx) + 0.012
+    d += (0.056 * sstep(1.0, 0.55, apx) * (0.75 + 0.25 * sstep(0.06, 0.2, apx))) * math.exp(-(((py - yb) / (0.06 if py < yb else 0.1)) ** 2))
+    # the eye's socket: deep under the brow, deepest beside the nose; shallow toward the cheekbone
+    d -= 0.1 * g(EYE_X - 0.02, EYE_Y + 0.02, 0.2, 0.095)
+    d -= 0.025 * g(0.19, 0.1, 0.08, 0.09)
+    # (the ball of the eye in it, under its lids; the upper lid's fold over it, the lower lid's edge and the bag under it)
+    ex, ey, up, lo = lids(apx, py)
+    d += 0.066 * g(EYE_X, EYE_Y, 0.125, 0.058)
+    d += 0.016 * math.exp(-(((ey - up - 0.03) / 0.022) ** 2)) * sstep(EYE_W + 0.07, EYE_W - 0.02, abs(ex))
+    d += 0.01 * math.exp(-(((ey - lo + 0.022) / 0.02) ** 2)) * sstep(EYE_W + 0.04, EYE_W - 0.03, abs(ex))
+    # his cheekbones, out under the outer corner of each eye; the front of the cheek; the hollow under the bone
+    d += 0.022 * g(0.4, -0.27, 0.13, 0.1)
+    d -= 0.03 * g(0.66, -0.47, 0.15, 0.15)
+    # (the fold from each wing of the nose down past the corner of the mouth)
+    d -= 0.016 * g(0.33, -0.43, 0.04, 0.13)
+    # the nose: its root low between the eyes, its bridge rising to the tip, cut in under it to the lip; narrow
+    # at the bridge, round at the tip; the side walls run out into the cheeks
+    d -= 0.014 * g(0, 0.12, 0.1, 0.06)
+    u = clamp((0.15 - py) / (0.15 - NOSE_TIP))
+    high = (0.018 + 0.125 * u ** 1.4) * sstep(NOSE_FOOT, NOSE_TIP - 0.004, py) * sstep(0.3, 0.14, py)
+    wide = 0.062 + 0.035 * u * u + 0.02 * (1 - u) ** 2
+    d += high * math.exp(-((apx / wide) ** 2.4))
+    d += 0.16 * high * math.exp(-((apx / (wide * 2.4)) ** 2))
+    d += 0.03 * g(0, NOSE_TIP - 0.008, 0.075, 0.05)
+    # (its wings, each round its nostril; the crease behind the wing; the nostrils, under)
+    d += 0.07 * g(0.128, -0.297, 0.05, 0.044)
+    d -= 0.022 * g(0.215, -0.285, 0.03, 0.06)
+    d -= 0.045 * g(0.078, NOSE_FOOT + 0.004, 0.038, 0.016)
+    # the mouth: a rise for both lips, each lip's own fullness (the upper one's bow, the fuller lower one), the
+    # line between them, the groove from the nose down to the bow and its two ridges, the corners tucked in
+    across = max(0.0, 1 - (px / (MOUTH_W + 0.01)) ** 2) ** 0.7
+    d += 0.045 * g(0, -0.5, 0.36, 0.17)
+    d += across * (0.04 * math.exp(-(((py + 0.474) / 0.04) ** 2)) * (1 - 0.18 * math.exp(-((px / 0.04) ** 2))) + 0.052 * math.exp(-(((py + 0.575) / 0.046) ** 2)))
+    d -= across * 0.04 * math.exp(-(((py - MOUTH_Y) / 0.014) ** 2))
+    d -= 0.016 * g(0, -0.41, 0.03, 0.055)
+    d += 0.008 * g(0.055, -0.415, 0.022, 0.05)
+    d -= 0.012 * g(0.285, MOUTH_Y - 0.02, 0.045, 0.045)
+    # the groove under the lower lip, and the chin: a ball in front, squarer below
+    d -= 0.03 * g(0, -0.675, 0.2, 0.04)
+    d += 0.05 * g(0, -0.88, 0.2, 0.12)
+    d += 0.012 * g(0.16, -0.96, 0.1, 0.08)
     return t + d * front
 
 
-def head(q=1.0):
-    """His head: a skin over head_r, finer over his face than over his skull."""
+def head(q=1.0, slit=False):
+    """
+    His head: a skin over head_r, finer over his face than over his skull. `slit` parts his lips along
+    the line of his mouth (the man on the floor: his jaw can come open, see mouth).
+    """
     c = HEAD_C
     size = (HEAD_W, HEAD_H, HEAD_D)
-    cols, rows = 132, 96
+    cols, rows = 176, 128
     verts, faces = [], []
 
     def at(a, e):
@@ -234,7 +354,9 @@ def head(q=1.0):
         return tuple(c[i] + n[i] * r * size[i] for i in range(3))
 
     for i in range(1, rows):
-        e = -math.pi / 2 + math.pi * i / rows
+        # (more of the rows between his brow and his chin)
+        t = -math.pi / 2 + math.pi * i / rows
+        e = t - 0.2 * (math.sin(2 * (t + 0.2)) + math.sin(0.4))
         for j in range(cols):
             # (more of the columns over his face)
             a = 2 * math.pi * j / cols
@@ -252,16 +374,40 @@ def head(q=1.0):
     o = mesh_obj('head', verts, faces)
     fix_normals(o)
     # (thinned as the body is: his face keeps more of its triangles than its size gives it)
-    face = (0, c[1] - 0.08, c[2] + 0.3)
-    swell(o, face, 0.3, 2.6)
+    face = (0, c[1] - 0.07, c[2] + 0.3)
+    swell(o, face, 0.3, 3.0)
     # (the benches, seen from far off, get by with a good deal less)
-    o = thin(o, (5400 if q >= 1 else 1400) * q)
-    swell(o, face, 0.3, 2.6, back=True)
-    # (what is down inside his neck is never seen)
+    o = thin(o, (HEAD_TRIS if q >= 1 else 1400) * q)
+    swell(o, face, 0.3, 3.0, back=True)
+    # (an edge thinned to a few triangles is a saw's: evened out a little)
+    relax(o, 1, 0.35)
     bm = bmesh.new()
     bm.from_mesh(o.data)
-    inside = [f for f in bm.faces if (lambda p: p[1] < c[1] - 0.3 and math.hypot(p[0], p[2] - 0.03) < 0.15)(G(f.calc_center_median()))]
+    if slit:
+        # his lips part along the line of his mouth: an edge cut there, and split from one corner to the other
+        co, no = B(*c), B(0, 1 / size[1], -(MOUTH_Y / 0.8) / size[2])
+        bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], dist=1e-6, plane_co=co, plane_no=no)
+
+        def on_line(v):
+            p = G(v.co)
+            d = [(p[i] - c[i]) / size[i] for i in range(3)]
+            return d[2] > 0.3 and abs(d[1] / d[2] * 0.8 - MOUTH_Y) < 2e-4 and abs(d[0] / d[2] * 0.8) < MOUTH_W - 0.07
+
+        def plane_y(p):
+            d = [(p[i] - c[i]) / size[i] for i in range(3)]
+            return d[1] / max(d[2], 0.3) * 0.8
+
+        line = [e for e in bm.edges if on_line(e.verts[0]) and on_line(e.verts[1])]
+        bmesh.ops.split_edges(bm, edges=line)
+        # (each lip's edge a hair off the line, its own way: face_weights tells the upper lip's from the lower's by that)
+        for v in [v for v in bm.verts if on_line(v)]:
+            ways = {plane_y(G(f.calc_center_median())) > MOUTH_Y for f in v.link_faces}
+            if len(ways) == 1:
+                v.co = v.co + B(0, (0.0007 if ways.pop() else -0.0007), 0)
+    # (what is down inside his neck is never seen)
+    inside = [f for f in bm.faces if (lambda p: p[1] < c[1] - 0.24 and math.hypot(p[0], p[2] - 0.03) < 0.15)(G(f.calc_center_median()))]
     bmesh.ops.delete(bm, geom=inside, context='FACES')
+    bmesh.ops.triangulate(bm, faces=bm.faces[:])
     bm.to_mesh(o.data)
     bm.free()
     o.data.update()
@@ -269,49 +415,152 @@ def head(q=1.0):
     return tag(o, FACE)
 
 
-def ears():
+def mouth():
+    """
+    What is behind his lips when his jaw comes open: the dark of his mouth, his upper teeth (his
+    head's) and his lower ones (his jaw's), each a short band round the front of it. Shut, his lips
+    are in front of all of it.
+    """
+
+    def band(name, mat, kind, deep, ys, half, cols=8):
+        verts, faces = [], []
+        for py in ys:
+            for j in range(cols + 1):
+                px = half * (2 * j / cols - 1)
+                # (set back from his lips, further toward the corners, as the arch of his teeth is)
+                verts.append(tuple(on_head((px / 0.8, py / 0.8, 1.0), -deep - 0.05 * (px / half) ** 2 * (0.4 + half))))
+        for i in range(len(ys) - 1):
+            for j in range(cols):
+                a = i * (cols + 1) + j
+                faces.append((a, a + 1, a + cols + 2, a + cols + 1))
+        o = mesh_obj(name, verts, faces)
+        fix_normals(o)
+        set_material(o, material(mat))
+        return tag(o, kind)
+
+    return [
+        band('gullet', MOUTH, ON_HEAD, 0.05, (-0.4, -0.52, -0.64, -0.78), 0.3, 6),
+        band('upper teeth', TEETH, ON_HEAD, 0.02, (-0.485, -0.565), 0.2),
+        band('lower teeth', TEETH, ON_JAW, 0.03, (-0.545, -0.62), 0.18),
+    ]
+
+
+def ears(mat=SKIN):
+    """
+    His ears: each a shell with a rolled rim (the helix), a ridge inside that, the bowl by the ear's
+    hole and a lobe, lying close to his skull: its front edge on it, its back edge a finger off.
+    `mat`: the man on the floor's are a material of their own (figure.ts gives them his skin's plain
+    colour: his head's picture, laid round its middle, has his hair and his beard where they are).
+    """
+    out = []
+    seg = 16
+    # (how far in from its edge, how far it stands off the ear's own plane: rim, crest of the roll, its inner
+    # edge, the ridge inside, the bowl)
+    prof = [(1.0, 0.0), (1.0, 0.02), (0.88, 0.03), (0.74, 0.016), (0.56, 0.024), (0.36, 0.006), (0.12, 0.0)]
+    for s in (1, -1):
+        # where it grows from: on the side of his head behind the jaw's hinge, its middle level with his eyes' under side
+        root = on_head((s * 0.95, -0.07, -0.19))
+        up = Vector((0, 1, 0.12)).normalized()
+        outv = Vector((s, 0, 0))
+        back = Vector((0, -0.12, -1)).normalized()
+        # (leaning back off the head: turned out about its front edge)
+        turn = Matrix.Rotation(-s * 0.17, 3, up)
+        rings = []
+        for inset, off in prof:
+            pts = []
+            for k in range(seg):
+                a = 2 * math.pi * k / seg
+                cs, sn = math.cos(a), math.sin(a)
+                # (an ear's outline: wider at the top than at the lobe; the roll only round its top and back)
+                w = 0.052 * (0.82 + 0.18 * sn) * (1 - 0.12 * max(0.0, -cs) * max(0.0, sn))
+                h = 0.108
+                roll = sstep(-0.75, -0.3, sn + 0.5 * cs) if inset > 0.7 else 1.0
+                lobe = sstep(-0.5, -0.9, sn)
+                u, v = cs * w * (1 - (1 - inset) * 1.0), sn * h * (1 - (1 - inset) * (0.9 - 0.35 * lobe)) - (1 - inset) * 0.012
+                o = off * (roll if inset > 0.7 else 1 - 0.6 * lobe) + 0.006 * lobe * (1 - inset)
+                p = back * (u + 0.052 * 0.8) + up * v + outv * (o * 0.85 - 0.006)
+                pts.append(tuple(root + turn @ p))
+            rings.append(pts if s > 0 else pts[::-1])
+        e = solid(rings, 'ear')
+        set_material(e, material(mat))
+        out.append(tag(e, ON_HEAD))
+    return out
+
+
+def neck():
+    """What shows in a neck: the two cords from behind each ear down to the notch between his collarbones, and his Adam's apple."""
     out = []
     for s in (1, -1):
-        # (a shell that leans back off the head, and its lobe)
-        e = ellipsoid((s * (HEAD_W * 0.93 + 0.002), HEAD_C[1] - 0.03, HEAD_C[2] - 0.05), (0.02, 0.1, 0.06), 10, 8, 'ear', Matrix.Rotation(s * 0.28, 3, 'Y') @ Matrix.Rotation(-0.18, 3, 'X'))
-        lobe = ellipsoid((s * (HEAD_W * 0.93 + 0.004), HEAD_C[1] - 0.115, HEAD_C[2] - 0.03), (0.02, 0.036, 0.03), 6, 5, 'lobe')
-        for part in (e, lobe):
-            set_material(part, material(SKIN))
-            out.append(tag(part, ON_HEAD))
+        pts = [Vector((s * 0.17, 6.02, -0.07)), Vector((s * 0.18, 5.9, 0.005)), Vector((s * 0.158, 5.76, 0.085)), Vector((s * 0.105, 5.6, 0.155)), Vector((s * 0.05, 5.47, 0.19))]
+        rings = []
+        for i, p in enumerate(pts):
+            d = (pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)]).normalized()
+            e1 = d.cross(Vector((0, 0, 1))).normalized()
+            e2 = d.cross(e1)
+            rad = (0.045, 0.05, 0.048, 0.042, 0.032)[i]
+            rings.append([tuple(p + (e1 * math.cos(a) * rad * 1.25 + e2 * math.sin(a) * rad)) for a in (2 * math.pi * k / 10 for k in range(10))])
+        out.append(solid(rings, 'cord'))
+    out.append(ellipsoid((0, 5.8, 0.222), (0.052, 0.062, 0.05), 10, 8, 'apple'))
     return out
 
 
 def arm(s):
     f = arm_frame(s)
-    # (how far down the arm, its radius across, its depth, how far forward its middle sits)
+    # the arm's own run, bone and the flesh nearest it (how far down the arm, its radius across, its depth, how far forward its middle sits);
+    # an elbow is wider across than it is deep, a wrist flat
     st = [
         (-0.14, 0.05, 0.05, 0.0),
-        (-0.07, 0.15, 0.18, 0.0),
-        (0.06, 0.2, 0.235, 0.005),
-        (0.26, 0.238, 0.252, 0.01),
-        (0.5, 0.205, 0.225, 0.012),
-        (0.72, 0.205, 0.232, 0.022),
-        (1.0, 0.168, 0.18, 0.0),
-        (1.14, 0.166, 0.162, 0.0),
-        (1.38, 0.192, 0.182, 0.008),
-        (1.74, 0.152, 0.14, 0.004),
-        (2.06, 0.112, 0.098, 0.0),
-        (2.19, 0.1, 0.082, 0.0),
+        (-0.07, 0.14, 0.17, 0.0),
+        (0.06, 0.185, 0.22, 0.0),
+        (0.26, 0.195, 0.222, 0.0),
+        (0.5, 0.178, 0.2, 0.0),
+        (0.75, 0.168, 0.19, 0.008),
+        (0.95, 0.158, 0.168, 0.0),
+        (1.1, 0.164, 0.152, 0.0),
+        (1.28, 0.176, 0.166, 0.008),
+        (1.5, 0.166, 0.158, 0.006),
+        (1.75, 0.138, 0.124, 0.004),
+        (1.95, 0.114, 0.096, 0.0),
+        (2.08, 0.106, 0.084, 0.0),
+        (2.19, 0.1, 0.08, 0.0),
         (2.3, 0.05, 0.05, 0.0),
     ]
     parts = [solid([ring((0, -u, zc), rx, rz, 20, frame=f) for u, rx, rz, zc in st], 'arm')]
-    # the shoulder's cap, and the palm (its back to the outside, thumb edge forward)
-    cap = ellipsoid((-s * 0.055, -0.14, 0.0), (0.205, 0.25, 0.24), 20, 14, 'cap')
+    # its muscles, each a mass of its own on that run (the fusing runs them together, a shallow groove between two):
+    # the deltoid, a cap over the joint that comes to a point half way down the upper arm's outside; the biceps in
+    # front and the triceps behind; the point of the elbow; the forearm's two bellies, thickest just under the elbow
+    # (where: out from the arm's middle, down it, forward; then its half sizes)
+    for (out, u, z), r in (
+        ((0.035, 0.2, 0.0), (0.205, 0.37, 0.245)),
+        ((0.075, 0.42, -0.01), (0.14, 0.26, 0.17)),
+        ((-0.01, 0.63, 0.078), (0.148, 0.31, 0.142)),
+        ((0.015, 0.55, -0.085), (0.158, 0.35, 0.142)),
+        ((0.0, 1.12, -0.095), (0.07, 0.11, 0.07)),
+        ((0.045, 1.36, 0.035), (0.142, 0.31, 0.132)),
+        ((-0.045, 1.42, -0.01), (0.132, 0.33, 0.128)),
+    ):
+        parts.append(transform(ellipsoid((s * out, -u, z), r, 16, 12, 'muscle'), f))
+    # the palm (its back to the outside, thumb edge forward), the heel of the thumb
     palm = ellipsoid((0.0, -(ARM + 0.215), 0.012), (0.066, 0.25, 0.17), 20, 14, 'palm')
     heel = ellipsoid((-s * 0.03, -(ARM + 0.14), 0.09), (0.06, 0.13, 0.085), 12, 8, 'heel')
     # (the shoulder runs into the chest and the back: no ball on a stick)
-    bridge = ellipsoid((-s * 0.22, -0.1, 0.0), (0.3, 0.17, 0.285), 16, 10, 'bridge')
-    # (and into the chest in front: a shallow groove there, not a cut)
-    fill = ellipsoid((-s * 0.17, -0.18, 0.06), (0.22, 0.17, 0.17), 14, 10, 'fill')
-    for p in (cap, bridge, fill, palm, heel):
+    # (over the top of the joint only: under it his armpit is a hollow, or an arm raised overhead would carry a lump up with it)
+    bridge = ellipsoid((-s * 0.2, -0.04, 0.0), (0.26, 0.14, 0.25), 16, 10, 'bridge')
+    for p in (bridge, palm, heel):
         transform(p, f)
         parts.append(p)
     return parts
+
+
+def girdle(s):
+    """What ties an arm to his trunk: the trapezius from his neck down to the point of the shoulder, the chest's muscle to the front of the armpit, the back's to the back of it, a collarbone."""
+    out = [
+        ellipsoid((s * 0.43, 5.47, -0.09), (0.44, 0.115, 0.24), 16, 10, 'trap', Matrix.Rotation(-s * 0.4, 3, 'Z')),
+        ellipsoid((s * 0.35, 4.94, 0.285), (0.34, 0.25, 0.185), 16, 10, 'pec', Matrix.Rotation(s * 0.25, 3, 'Z')),
+        ellipsoid((s * 0.42, 4.7, -0.2), (0.28, 0.42, 0.17), 16, 10, 'lat', Matrix.Rotation(-s * 0.2, 3, 'Z')),
+        ellipsoid((s * 0.4, 5.415, 0.17), (0.36, 0.04, 0.045), 12, 8, 'collarbone', Matrix.Rotation(-s * 0.08, 3, 'Z') @ Matrix.Rotation(s * 0.3, 3, 'Y')),
+    ]
+    return out
 
 
 def digit(f, base, way, lens, curl, r, s, name='finger'):
@@ -339,11 +588,11 @@ def fingers(s):
     f = arm_frame(s)
     out = []
     # (where along the knuckles, how long, how thick, how much it splays)
-    for z, ln, r, splay in ((0.122, 0.31, 0.034, 0.1), (0.041, 0.345, 0.035, 0.025), (-0.04, 0.32, 0.033, -0.05), (-0.116, 0.255, 0.03, -0.13)):
+    for z, ln, r, splay in ((0.122, 0.3, 0.039, 0.1), (0.041, 0.335, 0.04, 0.025), (-0.04, 0.31, 0.038, -0.05), (-0.116, 0.25, 0.034, -0.13)):
         knuckle = -(ARM + KNUCKLE) + abs(z - 0.02) * 0.22
         # (built nearly straight: figure.ts curls them at the knuckles and the middle joints)
         out.append(digit(f, (-s * 0.008, knuckle + 0.03, z), (-s * 0.04, -1, splay), (0.03 + ln * 0.44, ln * 0.31, ln * 0.25), (0.05, 0.08, 0.2), r, s))
-    out.append(digit(f, (-s * 0.03, -(ARM + 0.1), 0.125), (-s * 0.12, -0.84, 0.52), (0.13, 0.11, 0.08), (0.06, 0.14, 0.14), 0.042, s, 'thumb'))
+    out.append(digit(f, (-s * 0.03, -(ARM + 0.1), 0.125), (-s * 0.16, -0.88, 0.42), (0.13, 0.11, 0.08), (0.06, 0.14, 0.14), 0.046, s, 'thumb'))
     return out
 
 
@@ -355,19 +604,155 @@ def leg(s):
         (HIP, 0.335, 0.36, 0.035),
         (HIP - 0.45, 0.31, 0.335, 0.035),
         (HIP - 0.9, 0.275, 0.29, 0.025),
-        (HIP - 1.3, 0.235, 0.245, 0.012),
-        (KN_Y + 0.08, 0.205, 0.215, 0.012),
-        (KN_Y - 0.1, 0.2, 0.205, 0.0),
-        (KN_Y - 0.4, 0.235, 0.255, -0.045),
-        (KN_Y - 0.72, 0.215, 0.235, -0.055),
-        (KN_Y - 1.05, 0.165, 0.175, -0.03),
-        (KN_Y - 1.35, 0.13, 0.14, -0.012),
-        (AN_Y + 0.02, 0.125, 0.14, 0.0),
+        (HIP - 1.3, 0.232, 0.24, 0.012),
+        (KN_Y + 0.08, 0.2, 0.205, 0.008),
+        (KN_Y - 0.1, 0.19, 0.19, 0.0),
+        (KN_Y - 0.4, 0.195, 0.2, -0.015),
+        (KN_Y - 0.72, 0.18, 0.19, -0.02),
+        (KN_Y - 1.05, 0.142, 0.15, -0.012),
+        (KN_Y - 1.35, 0.112, 0.122, -0.004),
+        (AN_Y + 0.02, 0.108, 0.125, 0.0),
         (AN_Y - 0.1, 0.05, 0.05, 0.0),
     ]
-    limb = solid([ring((x, y, zc), rx, rz, 22) for y, rx, rz, zc in reversed(st)], 'leg')
-    knee = ellipsoid((x, KN_Y + 0.03, 0.15), (0.12, 0.15, 0.09), 12, 8, 'knee')
-    return [limb, knee]
+    parts = [solid([ring((x, y, zc), rx, rz, 22) for y, rx, rz, zc in reversed(st)], 'leg')]
+    # (where, from the knee: out from the leg's middle, up, forward; then its half sizes)
+    for (out, up, z), r in (
+        # the kneecap, and the tendon under it down to the shin
+        ((0.0, 0.03, 0.15), (0.115, 0.14, 0.085)),
+        ((0.0, -0.2, 0.125), (0.07, 0.16, 0.06)),
+        # over the knee: the thigh's muscle comes down lower inside than outside
+        ((-0.1, 0.3, 0.09), (0.12, 0.22, 0.12)),
+        ((0.1, 0.46, 0.06), (0.125, 0.3, 0.125)),
+        # behind it: the two cords of the hamstrings, a hollow between them
+        ((-0.125, 0.12, -0.13), (0.055, 0.26, 0.07)),
+        ((0.125, 0.12, -0.13), (0.055, 0.26, 0.07)),
+        # the calf: two heads, the inner one lower and fuller; the shin's own muscle outside its bone
+        ((-0.065, -0.52, -0.105), (0.132, 0.34, 0.15)),
+        ((0.075, -0.45, -0.1), (0.12, 0.3, 0.135)),
+        ((0.075, -0.5, 0.06), (0.1, 0.36, 0.1)),
+    ):
+        parts.append(ellipsoid((x + s * out, KN_Y + up, z), r, 14, 10, 'muscle'))
+    return parts
+
+
+def lerp_at(table, z):
+    """A table of (z, values...) rows read at z, eased between rows."""
+    if z <= table[0][0]:
+        return table[0][1:]
+    for (z0, *v0), (z1, *v1) in zip(table, table[1:]):
+        if z <= z1:
+            t = sstep(z0, z1, z)
+            return tuple(a + (b - a) * t for a, b in zip(v0, v1))
+    return table[-1][1:]
+
+
+# a basketball shoe, from the ankle joint (ft): along the foot, its sole's half width and how far its middle sits toward the foot's outside
+SOLE_W = [(-0.345, 0.03, 0.0), (-0.325, 0.095, 0.0), (-0.27, 0.142, 0.0), (-0.15, 0.164, 0.004), (0.0, 0.16, 0.008), (0.14, 0.158, 0.014), (0.3, 0.178, 0.02), (0.43, 0.196, 0.016), (0.54, 0.19, 0.004), (0.63, 0.164, -0.012), (0.69, 0.122, -0.026), (0.725, 0.055, -0.034)]
+# (along the foot: how high the foam is there, how far the tread is off the floor: a heel's bevel, the toe's spring)
+SOLE_H = [(-0.345, 0.085, 0.03), (-0.3, 0.118, 0.008), (-0.1, 0.112, 0.0), (0.15, 0.094, 0.0), (0.4, 0.078, 0.0), (0.55, 0.072, 0.01), (0.66, 0.07, 0.03), (0.725, 0.07, 0.05)]
+# (along the foot: the upper's half width, the top of it from the ankle joint, how square its top is: a toe box is flatter on top than an instep)
+UPPER = [
+    (-0.33, 0.03, -0.04, 2.0),
+    (-0.312, 0.094, 0.03, 2.0),
+    (-0.25, 0.138, 0.07, 2.0),
+    (-0.12, 0.158, 0.082, 2.0),
+    (0.04, 0.16, 0.078, 2.0),
+    (0.14, 0.16, 0.058, 2.0),
+    (0.24, 0.166, 0.03, 2.2),
+    (0.34, 0.176, 0.0, 2.5),
+    (0.44, 0.184, -0.03, 2.8),
+    (0.53, 0.18, -0.052, 3.0),
+    (0.6, 0.166, -0.066, 3.0),
+    (0.655, 0.138, -0.082, 2.8),
+    (0.695, 0.094, -0.108, 2.4),
+    (0.716, 0.04, -0.15, 2.0),
+]
+LACES = [0.2 + 0.056 * k for k in range(6)]
+COLLAR, HIGH = 'collar', 'high'
+
+
+def shoe_fine(s):
+    """
+    A basketball shoe round the ankle joint, built to be looked at: a sole in two layers (the tread a
+    little wider than the foam over it, the heel bevelled, the toe sprung), an upper with a toe box, a
+    padded collar and a tongue, six laces; and, a piece of its own, what makes it a high shoe (the
+    collar on up round his ankle, a longer tongue, a loop at the heel).
+    """
+    ox, oy = s * HIP_W, AN_Y
+    floor = -ANKLE
+    out = []
+
+    # the sole: each section is the tread's edge, a step in, then the foam up to where the upper sits on it
+    rings = []
+    for z in [-0.345, -0.335, -0.31, -0.27, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3, 0.38, 0.46, 0.54, 0.6, 0.65, 0.69, 0.715, 0.725]:
+        (w, cx), (h, lift) = lerp_at(SOLE_W, z), lerp_at(SOLE_H, z)
+        y0 = floor + lift
+        wo, wm, wt = w + 0.016, w + 0.006, w - 0.002
+        sec = [(-wo, 0.003), (-wo, 0.024), (-wm, 0.03), (-wt, h), (-wt * 0.5, h), (wt * 0.5, h), (wt, h), (wm, 0.03), (wo, 0.024), (wo, 0.003), (wo * 0.55, 0.0), (-wo * 0.55, 0.0)]
+        rings.append([(ox + s * cx + x, oy + y0 + y, z) for x, y in sec])
+    sole = solid(rings, 'sole')
+    set_material(sole, material(WHITE))
+    smooth(sole, 40)
+
+    # the upper: over the foot from the heel's counter to the toe box, its sides nearly upright where they leave the sole
+    rings = []
+    n = 18
+    for z, hw, top, sq in UPPER:
+        (w, cx), (h, lift) = lerp_at(SOLE_W, z), lerp_at(SOLE_H, z)
+        base = floor + lift + h - 0.012
+        r = []
+        for k in range(n):
+            a = 2 * math.pi * k / n
+            c, sn = math.cos(a), math.sin(a)
+            e = 2.0 / sq
+            x = hw * math.copysign(abs(c) ** e, c)
+            y = base + (top - base) * abs(sn) ** e if sn > 0 else base + 0.01 * sn
+            r.append((ox + s * cx + x, oy + y, z))
+        rings.append(r)
+    upper = solid(rings, 'shoe')
+    smooth(upper, 70)
+
+    # the collar: a padded rim round his ankle, higher behind his heel cord and in front than at the ankle bones; the
+    # sock comes up out of a mouth a little wider than it
+    def rim(y, rx, rz, zc, tilt=1.0):
+        pts = ring((ox, oy + y, zc), rx, rz, 18)
+        return [(x, yy + tilt * (0.05 * ((zz - zc) / rz) ** 2 - 0.012), zz) for x, yy, zz in pts]
+
+    collar = solid([rim(-0.1, 0.118, 0.15, -0.04, 0), rim(0.03, 0.156, 0.196, -0.036, 0.3), rim(0.08, 0.16, 0.199, -0.034, 0.5), rim(0.104, 0.153, 0.19, -0.033, 0.5), rim(0.1, 0.138, 0.172, -0.032, 0.5), rim(0.0, 0.132, 0.166, -0.03, 0.2)], 'shoeCollar')
+    # (a low shoe's tongue; a high one's goes on up over it)
+    tongue = ellipsoid((ox, oy + 0.085, 0.165), (0.084, 0.11, 0.028), 10, 6, 'shoeTongue', Matrix.Rotation(-0.5, 3, 'X'))
+    for o in (collar, tongue):
+        smooth(o)
+        set_material(o, material(COLLAR))
+        out.append(tag(o, BY_PLACE))
+    # a high shoe (a piece of its own: figure.ts leaves it off a man who wears his low): the collar on up round his
+    # ankle, its tongue, a loop at the back to pull it on by
+    cuff = solid([rim(0.05, 0.158, 0.197, -0.035, 0.4), rim(0.13, 0.166, 0.203, -0.032, 0.7), rim(0.2, 0.168, 0.204, -0.028), rim(0.232, 0.16, 0.196, -0.028), rim(0.226, 0.142, 0.176, -0.028), rim(0.09, 0.139, 0.173, -0.03, 0.5)], 'shoeCuff')
+    flap = ellipsoid((ox, oy + 0.17, 0.15), (0.088, 0.19, 0.03), 10, 6, 'shoeFlap', Matrix.Rotation(-0.4, 3, 'X'))
+    loop = box((0, 0, 0), (0.05, 0.11, 0.022), 'shoeLoop')
+    transform(loop, Matrix.Translation((ox, oy + 0.2, -0.243)) @ Matrix.Rotation(0.12, 4, 'X'))
+    for o in (cuff, flap, loop):
+        smooth(o, 80)
+        set_material(o, material(HIGH))
+        out.append(tag(o, BY_PLACE))
+    # the laces: six of them across the throat, each lying on the upper there
+    parts = []
+    for z in LACES:
+        hw, top, sq = lerp_at(UPPER, z)
+        _, cx = lerp_at(SOLE_W, z)
+        slope = (lerp_at(UPPER, z + 0.03)[1] - lerp_at(UPPER, z - 0.03)[1]) / 0.06
+        rings = []
+        for t in (-1, -0.5, 0, 0.5, 1):
+            x = t * hw * 0.6
+            y = top - 0.045 * abs(t) ** 2.2 + 0.004
+            rings.append([(ox + s * cx + x, oy + y + dy + dz * slope, z + dz) for dy, dz in ((0.0, -0.013), (0.014, -0.009), (0.014, 0.009), (0.0, 0.013))])
+        parts.append(solid(rings, 'lace'))
+    laces = join(parts, 'shoeLaces')
+    smooth(laces, 40)
+    for o in (upper, laces):
+        set_material(o, material(SHOE))
+    foot = FOOT_L if s > 0 else FOOT_R
+    return [tag(upper, foot), tag(laces, foot), tag(sole, foot), *out]
 
 
 def shoe(s):
@@ -514,13 +899,26 @@ def weights(p, kind):
         rho = math.hypot(loc.x, loc.z)
         # (the top of his shoulder gives way to the arm slowly, the armpit quickly: an arm that hangs leaves no shelf over it)
         out = max(0.0, s * loc.x / rho) if rho > 1e-6 else 0.0
-        m = 1.0 if u > 0.8 and rho < 0.6 else (1 - sstep(0.31, 0.5, rho)) * sstep(-0.24 - 0.14 * out, 0.3 + 0.4 * out, u)
+        m = 1.0 if u > 0.8 and rho < 0.6 else (1 - sstep(0.31, 0.5, rho)) * (sstep(-0.24 - 0.1 * out, 0.36 - 0.08 * out, u) if girdled else sstep(-0.24 - 0.14 * out, 0.3 + 0.4 * out, u))
+        # (nothing inside the vest's armhole goes with the arm, skin or cloth: the armhole keeps its shape and what
+        # comes through it its place in it, whatever the arm does; the arm takes over just outside it)
+        m *= sstep(0.0, 0.11, pit(p, s))
         if m <= 0:
             continue
         e = sstep(UARM - 0.24, UARM + 0.24, u)
         h = sstep(ARM - 0.1, ARM + 0.1, u)
-        w[ua], w[fa], w[ha] = m * (1 - e), m * e * (1 - h), m * e * h
-        arms += m
+        if girdled:
+            # (his chest gives way to the shoulder's own bone, and that to the arm: two gentle turns, not one sharp one)
+            mine = sstep(0.45, 1.0, m)
+            both = sstep(0.0, 0.55, m)
+            w['cll' if s > 0 else 'clr'] = both - mine
+            tw = sstep(UARM + 0.3, ARM - 0.08, u)
+            w[ua], w[fa], w[ha] = mine * (1 - e), mine * e * (1 - h) * (1 - tw), mine * e * h
+            w['fwl' if s > 0 else 'fwr'] = mine * e * (1 - h) * tw
+            arms += both
+        else:
+            w[ua], w[fa], w[ha] = m * (1 - e), m * e * (1 - h), m * e * h
+            arms += m
     rest = max(0.0, 1 - arms)
     legs = sstep(HIP + 0.14, HIP - 0.4, y)
     if legs > 0 and rest > 0:
@@ -562,15 +960,32 @@ def swing_weights(p):
 
 
 def face_weights(p):
-    """His head's points: all his head's, but for what his jaw and his nose take with them (they shape a face: see figure.ts)."""
+    """
+    His head's points: all his head's, but for what his jaw, his nose and (on the floor) his brows take with them.
+    His jaw and nose shape a face, and his jaw comes open: under the line of his mouth his lip is all his jaw's,
+    over it none of it, and out past the corners of his mouth his cheeks go from one to the other over their width.
+    """
     size = (HEAD_W, HEAD_H, HEAD_D)
     d = [(p[i] - HEAD_C[i]) / size[i] for i in range(3)]
     ln = math.sqrt(sum(v * v for v in d)) or 1.0
     n = tuple(v / ln for v in d)
     px, py = face_at(n)
+    apx = abs(px)
     nose = sstep(0.1, 0.4, n[2]) * math.exp(-((px / 0.2) ** 2 + ((py + 0.25) / 0.17) ** 2)) * 0.9
-    jaw = sstep(-0.15, -0.6, n[1] / max(0.35, math.hypot(n[0], n[2]))) * sstep(-0.5, 0.0, n[2]) * (1 - nose)
-    w = {'head': 1 - nose - jaw, 'jaw': jaw, 'nose': nose}
+    # (round the sides, by how far under the line from his ear to the corner of his mouth; in front, by the line of his mouth)
+    side = sstep(-0.15, -0.6, n[1] / max(0.35, math.hypot(n[0], n[2]))) * sstep(-0.5, 0.0, n[2])
+    soft = 0.001 + 0.02 * sstep(MOUTH_W - 0.09, MOUTH_W - 0.05, apx) + 0.5 * sstep(MOUTH_W - 0.06, MOUTH_W + 0.4, apx)
+    lip = sstep(MOUTH_Y + soft, MOUTH_Y - soft, py)
+    k = sstep(0.25, 0.5, n[2]) * sstep(MOUTH_W + 0.55, MOUTH_W + 0.1, apx)
+    jaw = (side * (1 - k) + lip * k) * (1 - nose)
+    brow = lower = 0.0
+    if girdled:
+        # (his lower lip, and the skin just under it, is its own bone's: see GIRDLE)
+        lower = jaw * sstep(-0.74, -0.62, py) * sstep(MOUTH_W + 0.14, MOUTH_W - 0.02, apx) * sstep(0.3, 0.5, n[2])
+        jaw -= lower
+    if girdled and n[2] > 0.1:
+        brow = 0.85 * sstep(0.1, 0.4, n[2]) * math.exp(-(((py - brow_at(apx) - 0.02) / 0.1) ** 2)) * sstep(1.0, 0.7, apx) * (1 - nose) * (1 - jaw)
+    w = {'head': 1 - nose - jaw - brow - lower, 'jaw': jaw, 'nose': nose, 'brow': brow, 'lip': lower}
     return {k: v for k, v in w.items() if v > 0.004}
 
 
@@ -610,15 +1025,17 @@ def rig(mesh):
         rest['hem' + sfx] = Matrix.Translation((s * HIP_W, KN_Y + 0.7, 0))
         rest['kn1' + sfx.lower()] = f @ Matrix.Translation((0, -(ARM + KNUCKLE), 0))
         rest['kn2' + sfx.lower()] = f @ Matrix.Translation((0, -(ARM + MIDDLE), 0))
-    for name, at in (('jaw', JAW_AT), ('nose', NOSE_AT), ('hair', SWING_AT)):
+        rest['cl' + sfx.lower()] = f
+        rest['fw' + sfx.lower()] = rest[fa]
+    for name, at in (('jaw', JAW_AT), ('nose', NOSE_AT), ('hair', SWING_AT), ('brow', BROW_AT), ('lip', JAW_AT)):
         rest[name] = Matrix.Translation((HEAD_C[0] + at[0] * HEAD_W, HEAD_C[1] + at[1] * HEAD_H, HEAD_C[2] + at[2] * HEAD_D))
     conv = Matrix(((1, 0, 0, 0), (0, 0, -1, 0), (0, 1, 0, 0), (0, 0, 0, 1)))
-    for name in [*BONES, *LEAVES]:
+    for name in [*BONES, *leaves()]:
         eb = arm_data.edit_bones.new(name)
         eb.head = (0, 0, 0)
         eb.tail = (0, 0.3, 0)
         eb.matrix = conv @ rest[name]
-    for name, parent in LEAVES.items():
+    for name, parent in leaves().items():
         arm_data.edit_bones[name].parent = arm_data.edit_bones[parent]
     bpy.ops.object.mode_set(mode='OBJECT')
     mesh.parent = ob
@@ -629,9 +1046,9 @@ def rig(mesh):
 
 def fused():
     """One skin over all his masses."""
-    masses = [trunk()]
+    masses = [trunk(), *neck()]
     for s in (1, -1):
-        masses += arm(s) + leg(s)
+        masses += arm(s) + girdle(s) + leg(s)
     hi = join(masses, 'hi')
     hi = apply_modifier(hi, 'REMESH', mode='VOXEL', voxel_size=0.019, adaptivity=0.0, use_smooth_shade=True)
     relax(hi, 5)
@@ -714,7 +1131,7 @@ def dress_player(hi, q=1.0):
     mid = thin(copy(hi, 'mid'), 44000)
 
     # the skin that shows: head, neck and shoulders outside the vest, the arms; the legs from under the shorts to inside the socks
-    body = thin_body(hi, (7200 if q >= 1 else 3000) * q)
+    body = thin_body(hi, (8600 if q >= 1 else 3000) * q)
     # (how far under the vest's edges his skin goes on: less on the benches' coarser bodies, which would poke through it)
     under = UNDER if q >= 1 else 0.07
     cut(
@@ -723,7 +1140,7 @@ def dress_player(hi, q=1.0):
         lambda p: pit(p, 1) > -under or pit(p, -1) > -under or (vee(p) > -under and p[1] > 4.9) or (SOCK_HI - 0.06 < p[1] < HEM + 0.3 and abs(p[0]) < 1.2),
     )
     set_material(body, material(SKIN))
-    top = crop(head(q))
+    top = crop(head(q, slit=q >= 1))
 
     # the vest: his trunk, a little looser, cut at the armholes and the V of the neck, tucked in; a band of trim round each opening
     vest = copy(mid, 'vest')
@@ -740,8 +1157,8 @@ def dress_player(hi, q=1.0):
         k = 1 + 0.03 * waist * (1.1 + math.sin(a * 7 + 0.6) + 0.5 * math.sin(a * 13 + 2.0)) + 0.018 * side * (1 + math.sin(p[1] * 9 + a * 3))
         v.co = B(p[0] * k, p[1], p[2] * k)
     vest.data.update()
-    thin(vest, (4400 if q >= 1 else 3000) * q)
-    relax(vest, 1)
+    thin(vest, (5400 if q >= 1 else 3000) * q)
+    relax(vest, 3 if q >= 1 else 1)
     in_vest = lambda p: p[1] > TUCK and p[1] < 5.75 and pit(p, 1) <= 0 and pit(p, -1) <= 0 and vee(p) <= 0  # noqa: E731
     cut(vest, [level(TUCK), plane_pit(1), plane_pit(-1), plane_vee(1), plane_vee(-1), plane_pit(1, -TRIM), plane_pit(-1, -TRIM), plane_vee(1, -TRIM), plane_vee(-1, -TRIM)], in_vest)
     slots(vest, [JERSEY, TRIM_M], lambda p: TRIM_M if pit(p, 1) > -TRIM or pit(p, -1) > -TRIM or vee(p) > -TRIM else JERSEY)
@@ -767,9 +1184,9 @@ def dress_player(hi, q=1.0):
 
     for o in (body, vest, socks):
         tag(o, BY_PLACE)
-    built = [body, top, vest, shorts, socks, *ears()]
+    built = [body, top, vest, shorts, socks, *ears(EAR if q >= 1 else SKIN), *(mouth() if q >= 1 else [])]
     for s in (1, -1):
-        built += fingers(s) + shoe(s)
+        built += fingers(s) + (shoe_fine(s) if q >= 1 else shoe(s))
     return built
 
 
@@ -875,12 +1292,16 @@ def finish(built, name='figure'):
     bake_occlusion(fig, floor=FLOOR, rays=64, reach=1.1, low=0.58)
     # (a face is small: its baked shade is a hint, or its few points read as bruises)
     soften(fig, lambda x, y, z: y > HEAD_C[1] - HEAD_H * 1.05, 0.55)
+    # (an ear's back is hard against his head: left as dark as that makes it, it is a hole beside his face)
+    soften(fig, lambda x, y, z: abs(x) > HEAD_W * 0.86 and abs(y - HEAD_C[1]) < 0.16 and z < HEAD_C[2] + 0.06, 0.15)
     paint(fig, face_shade)
+    # (and a shoulder moves: the shade of the grooves round it as he's built would stay behind as a painted crease)
+    soften(fig, lambda x, y, z: (abs(x) - SHOULDER) ** 2 + (y - SH_Y) ** 2 + z * z < 0.62 ** 2 and y < CHEST_Y + 0.2, 0.4)
 
     # bones and weights
     tags = [0] * len(me.vertices)
     me.attributes['tag'].data.foreach_get('value', tags)
-    groups = {b: fig.vertex_groups.new(name=b) for b in [*BONES, *LEAVES]}
+    groups = {b: fig.vertex_groups.new(name=b) for b in [*BONES, *leaves()]}
     for v in me.vertices:
         kind = tags[v.index]
         at = tuple(G(v.co))
@@ -900,9 +1321,14 @@ def materials():
     material(CLOTH, (0.1, 0.2, 0.5), 0.8)
     material(SHOE, (0.05, 0.05, 0.055), 0.45)
     material(WHITE, (0.86, 0.85, 0.82), 0.7)
+    material(COLLAR, (0.07, 0.07, 0.08), 0.5)
+    material(HIGH, (0.07, 0.07, 0.08), 0.5)
     material(SUIT, (0.03, 0.032, 0.04), 0.7)
     material(SHIRT, (0.85, 0.85, 0.85), 0.7)
     material(TIE, (1.0, 0.72, 0.1), 0.6)
+    material(EAR, (0.3, 0.31, 0.35), 0.52)
+    material(MOUTH, (0.05, 0.015, 0.015), 0.8, shade=False)
+    material(TEETH, (0.8, 0.78, 0.72), 0.4, shade=False)
 
 
 def on_head(n, out=0.0):
@@ -936,16 +1362,17 @@ def hair_line(round_):
     return HAIRLINE[-1][1]
 
 
-def volume(name, lift, low=None, top=None, cols=44, rows=12):
+def volume(name, lift, low=None, top=None, cols=44, rows=12, lumps=0.0):
     """
     A head of hair as a shape of its own: a skin `lift(n)` feet off his scalp, from his hairline (or
     from `low`, a height, where that is higher) up over his crown, rolled in to the scalp at its edge;
-    nothing of it higher than `top`.
+    nothing of it higher than `top`. `lumps` (ft) makes it uneven, as a head of curls is: no smooth helmet.
     """
     verts, faces = [], []
 
     def at(n, edge):
-        p = on_head(n, -0.012 + (lift(n) + 0.012) * edge)
+        bump = lumps * (math.sin(n[0] * 17 + n[1] * 9 + 1.0) * math.sin(n[2] * 16 - n[1] * 11) + 0.6 * math.sin(n[0] * 31 - n[2] * 27 + n[1] * 23)) if lumps else 0.0
+        p = on_head(n, -0.012 + (lift(n) + bump + 0.012) * edge)
         if top is not None:
             p.y = min(p.y, top)
         return tuple(p)
@@ -989,20 +1416,30 @@ def hair_pieces():
         w = (0.035, 0.07, 0.075, 0.065, 0.045, 0.012)[i]
         rings.append([(p.x + math.cos(a) * w * 1.25, p.y, p.z + math.sin(a) * w) for a in (2 * math.pi * k / 8 for k in range(8))])
     out.append((solid(rings, 'tail'), TAIL))
-    # short twists all over his scalp, each standing a little off it
+    # short twists all over his scalp: each a stub with a round end, standing off it and leaning its own way, the
+    # scalp showing in the partings between them
     parts = []
-    for i in range(170):
+    for i in range(124):
         # (spread evenly over the scalp: a spiral from the crown down to the hairline)
-        t = (i + 0.5) / 170
+        t = (i + 0.5) / 124
         e = math.pi / 2 - t ** 0.62 * 1.75
         a = i * 2.39996
         n = (math.cos(e) * math.sin(a), math.sin(e), math.cos(e) * math.cos(a))
-        if hairline(tuple(on_head(n))) < 0.02:
+        if hairline(tuple(on_head(n))) < 0.06:
             continue
         base = on_head(n, -0.012)
-        lean = Vector((rnd.uniform(-0.3, 0.3), -0.3, rnd.uniform(-0.3, 0.3)))
-        tip = on_head(n, rnd.uniform(0.045, 0.07)) + lean * 0.05
-        parts.append(strand([base, tip], 0.036, 4, 'twist'))
+        lean = Vector((rnd.uniform(-0.4, 0.4), -0.35, rnd.uniform(-0.4, 0.4)))
+        tall = rnd.uniform(0.07, 0.105)
+        mid = on_head(n, tall * 0.6) + lean * 0.018
+        tip = on_head(n, tall) + lean * 0.05
+        r = rnd.uniform(0.03, 0.037)
+        e1 = Vector(n).cross(Vector((0.3, 0.2, 1))).normalized()
+        e2 = Vector(n).cross(e1).normalized()
+        rings = [[tuple(at + (e1 * math.cos(q + turn) + e2 * math.sin(q + turn)) * rad) for q in (2 * math.pi * k / 5 for k in range(5))] for at, rad, turn in ((base, r, 0.0), (mid, r * 0.96, 0.5), (tip, r * 0.62, 1.0))]
+        # (its foot is under his scalp: left open, a triangle or three saved on each)
+        stub = mesh_obj('twist', [p for ring_ in rings for p in ring_], [(i * 5 + k, i * 5 + (k + 1) % 5, (i + 1) * 5 + (k + 1) % 5, (i + 1) * 5 + k) for i in range(2) for k in range(5)] + [tuple(range(10, 15))])
+        fix_normals(stub)
+        parts.append(stub)
     out.append((join(parts, 'twists'), TWISTS))
     # locks from his crown down to his neck, over his ears
     parts = []
@@ -1034,8 +1471,8 @@ def hair_pieces():
         parts.append(strand([base + Vector((0, 0.03, 0.01)), base + Vector((0, -0.02, -0.012)), base + Vector((0, -drop * 0.6, -0.008)), base + Vector((0, -drop, 0.0))], 0.018, 4, 'braid'))
     out.append((join(parts, 'braids'), BRAIDS))
     # heads of hair that stand off the scalp: an afro, round; a high top, its sides left to the scalp; short curls, uneven
-    out.append((volume('afro', lambda n: 0.1 + 0.1 * sstep(0.05, 0.8, n[1]) - 0.03 * sstep(0.3, 0.9, n[2])), AFRO))
-    out.append((volume('hightop', lambda n: 0.19, low=0.47, top=HEAD_C[1] + HEAD_H * 0.8 + 0.2, rows=8), HIGHTOP))
+    out.append((volume('afro', lambda n: 0.1 + 0.1 * sstep(0.05, 0.8, n[1]) - 0.03 * sstep(0.3, 0.9, n[2]), cols=52, rows=15, lumps=0.022), AFRO))
+    out.append((volume('hightop', lambda n: 0.2, low=0.47, top=HEAD_C[1] + HEAD_H * 0.8 + 0.2, cols=48, rows=10, lumps=0.008), HIGHTOP))
     out.append((volume('curls', lambda n: 0.034 + 0.01 * math.sin(n[0] * 23 + n[1] * 9) * math.sin(n[2] * 21 - n[1] * 13), cols=52, rows=14), CURLS))
     for o, name in out:
         set_material(o, material(name, (0.05, 0.04, 0.035), 0.8))
@@ -1044,8 +1481,10 @@ def hair_pieces():
 
 
 def build(who='player'):
+    global girdled
     reset()
     materials()
+    girdled = who == 'player'
     hi = fused()
     # (only the men on the floor have hair that is a shape of its own: the benches are seen from far off)
     return finish(dress_player(hi) + hair_pieces() if who == 'player' else dress_coach(hi), 'figure' if who == 'player' else who)

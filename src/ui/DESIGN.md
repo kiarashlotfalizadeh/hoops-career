@@ -361,8 +361,11 @@ package (ink plates, white type); the console is paper and card stock like every
   over his number on his back. `people.glb` is that same body posed and baked: two bench sitters
   and a coach in a suit with folded arms. `arena.glb` is the basket unit, rim, net, ball, bench
   chair, scorer's table, scoreboard, a seat of the stands and the spectators the crowd is made of
-  (six grown-ups and a child of about 1,000 triangles for the rows by the floor, two of under 400 for the rows behind, and a
-  28-triangle stand-in that only the floor's mirror draws) (`court3d/props.ts`). The app gives
+  (six grown-ups and a child of about 1,000 triangles for the rows by the floor, two of under 500 for the rows behind, one
+  of under 150 for a slow device, and a 28-triangle stand-in for the floor's mirror and the slowest step) (`court3d/props.ts`).
+  Everyone round the floor comes twice in `people.glb`: the body for a close camera, and one of a fifth
+  of the triangles (`benchFar`, `staffFar`, `officialFar`) that a sitter is drawn in unless he is a fifth
+  of the picture's height, and that throws a walker's shadow and stands in the mirror for him. The app gives
   each part its material by the name Blender gave it, and paints kits and the home colour on. A
   model changes in its `.py`, never by hand in the `.glb`. Two dev-server pages look at them in
   the app's own light: `scripts/qa/figure-lab` (one move as a strip of moments) and
@@ -418,8 +421,11 @@ package (ink plates, white type); the console is paper and card stock like every
   a tap skips it. None at 4x, in key plays, while paused or waiting on a call, in a highlight or with
   reduced motion; at most one every 25 s (37 s above 1x). Reduced motion: no pans, cut-ins or
   replays; each half of the floor is a still picture from the chosen camera, with a cut between.
-  A slow device gives up, a step at a time: the finish, a little sharpness, the shadows, the mirror and
-  the fine wood (with the players' cloth detail and the roof's extras), then half the sharpness.
+  A slow device gives up, a step at a time: the finish (and the first rows' detailed people), a little
+  sharpness, the shadows (with the players' cloth detail, the roof's extras, and the crowd behind in its
+  lightest model), the mirror and the fine wood (the whole house then a quarter of a million triangles),
+  then half the sharpness. A phone or a tablet starts without the shadows and is given steps back if it
+  keeps up.
 - **3D plays a possession at half the 2D pace** (`COURT3D_PACE`): discs can cross the floor in a
   second, bodies can't. Only the play's clock is slowed; the figures' legs run on their own time, so
   a planted foot stays planted. The speed chips mean the same in both; a 3D game takes twice as long.

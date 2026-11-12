@@ -430,8 +430,10 @@ def ball():
 # --- the spectators: the people the crowd is made of. Six grown-ups and a child for the rows by the floor
 # --- (under a thousand triangles each: a man in a collared top, a big man in a cap, a woman with her
 # --- hair down, one with it tied back and bare arms, a man with a lot of hair in a hood, a bald man in a
-# --- jacket), two plainer ones for the rows behind (fanMid*), the twenty-odd triangles anyone is where he
-# --- is only a blur (fanFar), and the seat they sit in (stall) ---
+# --- jacket), two plainer ones for the rows behind (fanMid*: round limbs and shoulders, a hand, a head of
+# --- hair, under five hundred triangles), one of some hundred and forty for a device that can't draw those
+# --- (fanLow), the twenty-odd triangles anyone is where he is only a blur (fanFar), and the seat they sit
+# --- in (stall). None has a face painted on it: the crowd's shader draws one where it is near enough ---
 
 #: How far under his hips his feet are: the seat is this far over the step it stands on.
 FAN_FOOT = -1.3
@@ -524,8 +526,9 @@ FANS = {
     'fanE': dict(n=12, hn=10, m=8, sleeve='long', hair='big', hood=True, belly=0.04, limb=1.04),
     'fanF': dict(n=12, hn=10, m=8, sleeve='long', hair='none', jacket=True, collar=True, belly=0.08, limb=1.08),
     'fanKid': dict(n=12, hn=10, m=8, sleeve='short', hair='short', kid=True, belly=0.02, limb=0.92),
-    'fanMidA': dict(n=8, hn=8, m=4, sleeve='short', hair='short', belly=0.05, limb=1.08),
-    'fanMidB': dict(n=8, hn=8, m=4, sleeve='long', hair='long', woman=True, belly=-0.02, limb=0.86),
+    'fanMidA': dict(n=8, hn=8, m=6, sleeve='short', hair='short', belly=0.05, limb=1.08),
+    'fanMidB': dict(n=8, hn=8, m=6, sleeve='long', hair='long', woman=True, belly=-0.02, limb=0.86),
+    'fanLow': dict(n=5, hn=5, m=3, sleeve='short', hair='short', low=True, belly=0.03, limb=1.0),
 }
 
 
@@ -541,6 +544,7 @@ def fan(name):
     w = FANS[name]
     n, hn, m = w['n'], w['hn'], w['m']
     near = n > 8
+    low = w.get('low', False)
     woman, kid = w.get('woman', False), w.get('kid', False)
     SKIN, HAIR, CAP = 1, 1.25, 1.5
     parts = []
@@ -563,7 +567,9 @@ def fan(name):
         oval(1.74, 0.21, 0.14, 0.18, n, -0.04),
         oval(1.8, 0.145, 0.125, 0.15, n, -0.04),
     ]
-    if not near:
+    if low:
+        trunk = [trunk[0], trunk[3], trunk[5], trunk[8]]
+    elif not near:
         trunk = [trunk[0], trunk[2], trunk[3], trunk[5], trunk[6], trunk[8]]
     # (his neck is bare above his collar)
     bare = [0.25 if y > 1.77 else 0 for ring in trunk for (x, y, z) in ring]
@@ -590,7 +596,9 @@ def fan(name):
         oval(hy(2.53), 0.26 * hs, 0.27 * hs, 0.3 * hs, hn, -0.03),
         oval(hy(2.63), 0.17 * hs, 0.17 * hs, 0.2 * hs, hn, -0.04),
     ]
-    if not near:
+    if low:
+        head = [head[0], head[2], head[5], head[7]]
+    elif not near:
         head = [head[0], head[1], head[3], head[4], head[5], head[7]]
     hair, cap = w['hair'], w.get('cap', False)
     top = CAP if cap else (SKIN if hair == 'none' else HAIR)
@@ -619,7 +627,7 @@ def fan(name):
         parts.append(fan_piece([[(0.25, hy(2.44), 0.22), (-0.25, hy(2.44), 0.22), (-0.25, hy(2.48), 0.22), (0.25, hy(2.48), 0.22)], [(0.18, hy(2.39), 0.66), (-0.18, hy(2.39), 0.66), (-0.18, hy(2.415), 0.66), (0.18, hy(2.415), 0.66)]], CAP, 'brim', end=True))
     elif hair == 'big':
         parts.append(marked(ellipsoid((0, hy(2.5), -0.07), (0.39 * hs, 0.32 * hs, 0.39 * hs), *seg, 'hair'), HAIR))
-    elif hair != 'none':
+    elif hair != 'none' and not low:
         parts.append(marked(ellipsoid((0, hy(2.47), -0.055), (0.3 * hs, 0.245 * hs, 0.335 * hs), *seg, 'hair'), HAIR))
     if hair == 'long':
         # her hair down: round the back of her head from temple to temple, on down to her shoulders
@@ -652,12 +660,15 @@ def fan(name):
         # bends), the forearm, the wrist, his hand
         arm = 2 if s > 0 else 3
         line = [(1.69, 0.09, 0.1), (1.6, 0.17, 0.18), (1.38, 0.16, 0.165), (1.0, 0.14, 0.145), (0.68, 0.122, 0.125), (0.52, 0.118, 0.12), (0.1, 0.105, 0.105), (-0.22, 0.075, 0.07), (-0.33, 0.095, 0.05), (-0.5, 0.08, 0.04)]
-        if not near:
-            line = [line[1], line[3], line[4], line[5], line[7], line[9]]
+        if low:
+            # (a ring just over the elbow: the shader bends what is under FAN_ELBOW)
+            line = [line[1], (0.62, 0.122, 0.125), line[7], line[9]]
+        elif not near:
+            line = [line[0], line[1], line[3], line[4], line[5], line[7], line[8], line[9]]
         rings = []
         for i, (y, across, deep) in enumerate(line):
-            # (four sides are measured to their corners: a little more, to be as thick across)
-            g = (limb if y > -0.25 else 1.0) * (1.0 if near else 1.3)
+            # (few sides are measured to their corners: a little more, to be as thick across)
+            g = (limb if y > -0.25 else 1.0) * (1.0 if near else 1.5 if low else 1.24)
             rings.append([(s * (sx - 0.02) + across * g * cos(2 * pi * (k + 0.5) / m), y, deep * g * sin(2 * pi * (k + 0.5) / m)) for k in range(m)])
         # where his sleeve ends: at the wrist, between the shoulder and the elbow, or there is none. In the
         # first rows the ring there is doubled (cloth above it, skin below)
@@ -686,8 +697,9 @@ def fan(name):
         heel = [(s * 0.215, f0, 1.03), (s * 0.455, f0, 1.03), (s * 0.455, f1, 1.03), (s * 0.215, f1, 1.03)]
         arch = [(s * 0.215, f0, 1.38), (s * 0.465, f0, 1.38), (s * 0.455, f1 - 0.02, 1.38), (s * 0.225, f1 - 0.02, 1.38)]
         toe = [(s * 0.25, f0, 1.72), (s * 0.47, f0, 1.72), (s * 0.46, f0 + 0.09, 1.72), (s * 0.26, f0 + 0.09, 1.72)]
-        # (nobody sees his sole)
-        parts.append(fan_piece([heel, arch, toe] if near else [heel, toe], 4.25, 'shoe', start=True, end=True, skip=(0,)))
+        # (nobody sees his sole; the lightest of them has no shoes: the row in front hides his feet)
+        if not low:
+            parts.append(fan_piece([heel, arch, toe] if near else [heel, toe], 4.25, 'shoe', start=True, end=True, skip=(0,)))
 
     out = join(parts, name)
     set_material(out, material('fan', (0.3, 0.3, 0.33), 0.8))
@@ -710,17 +722,8 @@ def fan(name):
         v.co = hung[v.index]
     me.update()
 
-    def face(x, y, z):
-        """His eyes under the brow, and the line of his mouth: a shade each, which is all of them the first rows' distance shows."""
-        if part_at(x, y, z) and z > 0.2 * hs:
-            if abs(y - hy(2.3)) < 0.04 and 0.06 < abs(x) < 0.22:
-                return 0.36
-            if abs(y - hy(2.03)) < 0.04 and abs(x) < 0.12:
-                return 0.66
-        return 1.0
-
-    part_at = lambda x, y, z: y > 1.85
-    paint(out, face)
+    # (no face is painted on him: a few points across a head would carry it as a band; crowd.ts draws it)
+    paint(out, lambda x, y, z: 1.0)
     return out
 
 

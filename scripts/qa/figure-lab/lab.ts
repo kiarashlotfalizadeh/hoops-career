@@ -5,7 +5,10 @@
 //   &yaw=40 (degrees round him)  &zoom=1.4  &from=0&to=1200 (ms)  &n=8  &h=78&w=215 (his build)
 //   &seed=1 (the first man's own things: his look, sleeves, shoes; the next is seed+1)  &light=1 (the home kit)  &num=23&name=Brunson&mark=NYK
 //   &style=4 &beard=3 &tone=6 (everyone's hair, beard or skin: see look.ts)  &styles=1 (each man the next style)  &tones=1 (each the next skin)
-//   faces: ?move=idle&n=6&gap=1.5&camY=6.4&lookY=6.25&zoom=3.6&yaw=12&from=100&to=100
+//   &eye=3,5.5,6&at=0,5,0&fov=28 (a camera of one's own, ft: for a close look at a shoulder, a shoe)
+//   &arms=up|shoot|fwd|hip|out|across|back|down (both arms put there, whatever the move has them do; arms=all, or a list of them: each man the next)
+//   faces: ?move=idle&n=6&gap=1.5&camY=6.4&lookY=6.25&zoom=3.6&yaw=12&from=100&to=100  (&beard=0..5: none, stubble, goatee, beard, full, strap)
+//   &face=1 (his jaw open and his brows down, as in a roar)
 import {
   AmbientLight,
   DirectionalLight,
@@ -24,7 +27,7 @@ import type { Act } from '../../../src/ui/live/choreo';
 import { Fig, figureGeo, settleHeads } from '../../../src/ui/live/court3d/figure';
 import { BEARDS, lookOf, SKINS, STYLES } from '../../../src/ui/live/court3d/look';
 import { loadModels } from '../../../src/ui/live/court3d/models';
-import { BALL_R, bodyOf, type Drive } from '../../../src/ui/live/court3d/puppet';
+import { BALL_R, bodyOf, FARM, J, UARM, type Drive } from '../../../src/ui/live/court3d/puppet';
 import type { MatchKit } from '../../../src/ui/teamColors';
 
 const q = new URLSearchParams(location.search);
@@ -156,6 +159,76 @@ const cam = new PerspectiveCamera(28, innerWidth / innerHeight, 1, 400);
 const dist = (n * gap * 0.62 + 16) / zoom;
 cam.position.set(Math.sin(yaw) * dist, num('camY', 5.5), Math.cos(yaw) * dist);
 cam.lookAt(0, num('lookY', 3.8), 0);
+// (a camera of one's own: where it is and what it looks at, ft, and how wide it sees)
+if (q.has('eye')) {
+  const [eye, at] = [q.get('eye')!, q.get('at') ?? '0,4,0'].map((v) => v.split(',').map(Number));
+  cam.position.set(eye[0], eye[1], eye[2]);
+  cam.fov = num('fov', 28);
+  cam.updateProjectionMatrix();
+  cam.lookAt(at[0], at[1], at[2]);
+}
+
+/** Arms put where a shoulder is hardest on a skin (each: the way the upper arm points, then the forearm, for his left; x out to his side, y up, z forward). */
+const REACH: Record<string, [number[], number[]]> = {
+  down: [
+    [0.08, -1, 0.02],
+    [0.05, -1, 0.12],
+  ],
+  up: [
+    [0.25, 1, 0.1],
+    [-0.05, 1, 0.05],
+  ],
+  shoot: [
+    [0.2, 0.55, 0.8],
+    [-0.1, 1, 0.1],
+  ],
+  fwd: [
+    [0.1, -0.1, 1],
+    [-0.1, 0.1, 1],
+  ],
+  hip: [
+    [0.75, -0.6, -0.25],
+    [-0.8, -0.45, 0.4],
+  ],
+  out: [
+    [1, 0.05, 0],
+    [1, 0.3, 0.1],
+  ],
+  across: [
+    [-0.35, -0.3, 0.9],
+    [-0.9, 0.2, 0.4],
+  ],
+  back: [
+    [0.2, -0.75, -0.65],
+    [0.1, -0.9, -0.3],
+  ],
+};
+const ARMS = q.get('arms');
+function reach(f: Fig, pose: string) {
+  const [up, low] = REACH[pose] ?? REACH.down;
+  const { j, body, left, up: spine, front } = f.pup;
+  for (const [side, sh, el, ha] of [
+    [1, J.sl, J.el, J.hl],
+    [-1, J.sr, J.er, J.hr],
+  ] as const) {
+    let at = [j[sh * 3], j[sh * 3 + 1], j[sh * 3 + 2]];
+    for (const [d, len, to] of [
+      [up, UARM, el],
+      [low, FARM, ha],
+    ] as const) {
+      const n = Math.hypot(d[0], d[1], d[2]);
+      const [x, y, z] = [(side * d[0]) / n, d[1] / n, d[2] / n];
+      at = [
+        at[0] + (left.x * x + spine.x * y + front.x * z) * len * body.s,
+        at[1] + (left.y * x + spine.y * y + front.y * z) * len * body.s,
+        at[2] + (left.z * x + spine.z * y + front.z * z) * len * body.s,
+      ];
+      j[to * 3] = at[0];
+      j[to * 3 + 1] = at[1];
+      j[to * 3 + 2] = at[2];
+    }
+  }
+}
 
 /** One figure a step on, then put where its lane is (it runs on the spot). */
 function step(k: (typeof figs)[number], dt: number) {
@@ -164,6 +237,7 @@ function step(k: (typeof figs)[number], dt: number) {
   k.f.pup.update(d, dt, dt);
   const b = d.ball ? k.f.pup.carry({ x: 0, y: 0, z: 0 }) : null;
   k.f.pup.arms(b);
+  if (ARMS) reach(k.f, (ARMS === 'all' ? Object.keys(REACH) : ARMS.split(','))[figs.indexOf(k) % (ARMS === 'all' ? Object.keys(REACH).length : ARMS.split(',').length)]);
   k.f.place();
   const offX = k.x - k.f.pup.x;
   const offZ = -k.f.pup.z;
@@ -189,6 +263,17 @@ if (live) {
     const end = from + ((to - from) * i) / Math.max(1, n - 1);
     while (k.t < end) step(k, Math.min(16, end - k.t));
   });
+  renderer.render(scene, cam);
+}
+if (q.has('face') && !live) {
+  // (his face at the top of a shout: held there, then he is put again and drawn)
+  for (const k of figs) {
+    Object.assign(k.f as unknown as Record<string, number>, { jawOpen: 1, frown: 1, faceAt: performance.now() + 1e7 });
+    const [x, z] = [k.f.group.position.x, k.f.group.position.z];
+    k.f.place();
+    k.f.group.position.x = x;
+    k.f.group.position.z = z;
+  }
   renderer.render(scene, cam);
 }
 // (a window that changes shape, or had none yet when this ran, is drawn again)

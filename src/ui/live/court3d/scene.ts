@@ -60,7 +60,7 @@ import { buildProps } from './props';
 import { Rig } from './rig';
 import { BALL_R, hash, J, type Body, type V3 } from './puppet';
 import { Sideline } from './sideline';
-import { clearOf, passPath, Spacing, swerve, type PassPath } from './spacing';
+import { BODY_GAP, clearOf, passPath, Spacing, swerve, type PassPath } from './spacing';
 
 export interface SceneProps {
   kits: [MatchKit, MatchKit];
@@ -204,6 +204,15 @@ const SPLIT_MS = 800;
 /** After a big basket, for this long (the bodies' ms), a teammate who comes within FIVE_NEAR (ft) of the scorer slaps his hand. */
 const FIVE_MS = 3600;
 const FIVE_NEAR = 4.6;
+/** A fallen man's teammate comes to pull him up from this near (ft), at this pace (ft a second), stops this far from him, gives him his hand this long into the fall (the play's ms) and is done with it by then; never longer than this (the bodies' ms). */
+const HELP_FROM = 14;
+const HELP_PACE = 9;
+const HELP_OFF = 2.9;
+const HELP_AT = 780;
+const HELP_UNTIL = 1450;
+const HELP_MOST = 5200;
+/** How high the opening tip goes when no referee throws it (ft). */
+const TIP_H = 11.5;
 /** At the buzzer, winners this near each other (ft) pair off for a chest bump, walking this long (ms) to meet. */
 const PAIR_NEAR = 9;
 const PAIR_MS = 650;
@@ -329,6 +338,8 @@ export class CourtScene {
   private madeKey = '';
   private shooter: Fig | null = null;
   private fives: { by: Fig; ms: number; n: number; done: Set<Fig> } | null = null;
+  /** A man knocked down and the teammate on his way to pull him up: where that man is on his way, how long it has been, whether he has given him his hand. */
+  private helping: { down: Fig; by: Fig; x: number; z: number; ms: number; lent: boolean } | null = null;
   // the clock their eyes move on (ms), and the buzzer's chest bumps: each winner's partner, where they meet and when
   private lookMs = 0;
   private pairs: Map<number, { mate: number; x: number; z: number; at: number }> | null = null;
@@ -429,6 +440,8 @@ export class CourtScene {
     const props = buildProps(models.arena, keep);
     this.arena = new Arena(keep, props, new Sideline(keep, props, models, this.geo));
     this.scene.add(this.arena.group);
+    // (the floor's mirror is drawn before each picture, from that picture's camera)
+    this.lens.before = (cam) => this.arena.reflect(this.renderer, this.scene, cam);
 
     // the baskets: the unit behind each baseline, its board, the rim and its net
     for (const end of [-1, 1]) {
@@ -473,7 +486,7 @@ export class CourtScene {
     this.floorKnobs.uDetail.value = level > 2 ? 0 : 1;
     this.dome.visible = level < 3;
     // (the building's extras: the roof's steel and the boards' rate from step 2, half the cameras and confetti at 3)
-    this.arena.shed(level > 2 ? 2 : level > 1 ? 1 : 0);
+    this.arena.shed(level);
     this.arena.sideline.shed(level);
     // (the players' plain material, no cloth sheen nor knit, once the shadows have gone too)
     this.figLite = level > 1;
@@ -683,6 +696,9 @@ export class CourtScene {
         const lane = line && said === 'stand' && (b.act.includes('ft') || b.act.includes('release')) && Math.hypot(spots[j * 2] - rim.x, spots[j * 2 + 1] - rim.z) < LANE_FT;
         const act = lane ? 'defend' : dead && (said === 'defend' || said === 'guard') ? 'stand' : said;
         const end = this.paired(pid, side, spots[j * 2], spots[j * 2 + 1], Math.PI - faceWorld(b.face[j], sc.dir), p);
+        // (a man the sideline has on a way of its own: on from the table, over toward his bench at a timeout)
+        this.arena.sideline.lead(pid, end, this.director.onAir);
+        this.helps(f, end, own);
         const nb = sc.frames[bi + 1];
         f.pup.update(
           {
@@ -755,7 +771,7 @@ export class CourtScene {
         free = true;
       } else if (carried >= 0) {
         holder = figs[carried];
-        set(ball, holder.pup.carry(TMP));
+        set(ball, holder.pup.bounced(holder.pup.carry(TMP)));
         this.give(holder, null, ease);
       } else if (b.fx) {
         const one = was?.pup.one;
@@ -904,6 +920,8 @@ export class CourtScene {
           this.path.bounce ? bouncePass(this.from.y, to.y, BALL_R, this.path.bounce, lu, secs) : this.from.y + (to.y - this.from.y) * lu + 4 * arc * lu * (1 - lu),
           this.from.z + (to.z - this.from.z) * lu + side.z,
         );
+        // (the opening tip with no referee to throw it up: it rises between the two who jump for it)
+        if (!next && b.act.includes('tip')) ball.y = this.from.y + (TIP_H - this.from.y) * Math.sin((lu * Math.PI) / 2);
         passing = true;
         // (kept out of the bodies it goes by, eased: the two men's hands go with it)
         this.give(was, next, ease);
@@ -957,6 +975,8 @@ export class CourtScene {
         const act = over(st.pid, st.side, st.pid === this.heldBy ? 'hold' : 'stand');
         const has = act === 'hold';
         const end = this.paired(st.pid, st.side, at[j * 2], at[j * 2 + 1], f.pup.placed ? f.pup.yaw : Math.atan2(-at[j * 2], -at[j * 2 + 1]), p);
+        this.arena.sideline.lead(st.pid, end, this.director.onAir);
+        this.helps(f, end, own);
         // (they watch the ball, and the ball is dead: they stand at rest)
         const look = has || p.final !== undefined ? undefined : { x: ball.x, y: ball.y, z: ball.z };
         f.pup.update(
@@ -970,7 +990,7 @@ export class CourtScene {
       }
       if (holder) {
         hands.add(holder);
-        set(ball, holder.pup.carry(TMP));
+        set(ball, holder.pup.bounced(holder.pup.carry(TMP)));
         this.give(holder, null, ease);
       } else {
         if (had && had.side === p.final) this.toss();
@@ -1030,8 +1050,8 @@ export class CourtScene {
       this.pairs = null;
     }
     // the people round the floor: the referees work this moment of the play, the coaches and the benches watch it
-    // (a referee who has the ball, at the tip or picked up dead, puts it in his hands)
-    this.arena.sideline.update({
+    // (while the ball is a referee's, held or on its way to or from his hands, it is where he has it and no player's hands are on it)
+    const refs = this.arena.sideline.update({
       stage,
       ball,
       figs: this.figs,
@@ -1041,6 +1061,7 @@ export class CourtScene {
       clutch: !!p.clutch,
       game: p.game,
       bench: p.bench,
+      body: p.body,
       own,
       ease,
       real,
@@ -1048,6 +1069,7 @@ export class CourtScene {
       cut: !!reel?.cut,
       replay: this.director.onAir,
     });
+    if (refs) hands.clear();
 
     for (const [pid, f] of [...this.figs]) {
       if (!seen.has(pid)) {
@@ -1136,6 +1158,8 @@ export class CourtScene {
       const flip = unit.rotation.y ? -1 : 1;
       // a man hanging on it: each hand on the ring holds it down, and the cords are pushed off his wrists
       HANDS.length = 0;
+      // (a man still hanging on the ring keeps it down: puppet.ts onRim)
+      if (!hanger) for (const f of this.figs.values()) if (f.pup.onRim) hanger = f;
       if (hanger && i === rimEnd && !calm)
         for (const k of [J.hl, J.hr]) {
           const j = hanger.pup.j;
@@ -1341,6 +1365,8 @@ export class CourtScene {
     // (the house lights come down for the open, the tip and a timeout, and some of the way for the clutch: rig.ts)
     this.rig.mood(this.shot === 'open' || this.shot === 'tip' || this.shot === 'house' ? 1 : p.clutch ? 0.6 : 0, calm ? 1e6 : real);
     this.lens.drama = this.rig.drama;
+    this.arena.mood = this.rig.drama;
+    this.rig.turn();
     // (the house lights down for the open, a timeout, a home win: the building says how far)
     this.lens.exposure = (this.lit ??= this.lens.exposure) * this.arena.house;
     this.lens.render(this.scene, this.camera, real);
@@ -1433,6 +1459,11 @@ export class CourtScene {
     this.reactKey = key;
     const r = (n: number) => hash(this.scriptN, n);
     // a basket, once, when it's down (the slam, or the ball through the net)
+    // (a free throw down: the men of his own who step in from the lane slap his hand, see choreo.ts)
+    if (b.fx === 'make' && line && this.madeKey !== key && lu >= 0.9 && a.hold !== undefined && figs[a.hold]) {
+      this.madeKey = key;
+      this.fives = { by: figs[a.hold], ms: 0, n: 0, done: new Set() };
+    }
     if (b.fx === 'make' && !line && this.madeKey !== key && (this.slammed || lu >= 0.86)) {
       this.madeKey = key;
       const by = a.hold !== undefined && a.hold >= 0 ? (figs[a.hold] ?? null) : null;
@@ -1454,7 +1485,7 @@ export class CourtScene {
       let asked = false;
       for (let j = 0; j < nO; j++) {
         if (b.act[j] === 'screen' && a.act[j] !== 'screen') figs[nO + j]?.pup.cue('call', null, 600);
-        else if (!asked && b.act[j] === 'stand' && figs[j] && figs[j] !== holder && holder && holder.side === figs[j].side && r(20 + j) < 0.35) {
+        else if (!asked && b.act[j] === 'stand' && !b.act.includes('inbound') && figs[j] && figs[j] !== holder && holder && holder.side === figs[j].side && r(20 + j) < 0.35) {
           const open = figs.every((f) => f.side === figs[j].side || Math.hypot(f.pup.x - figs[j].pup.x, f.pup.z - figs[j].pup.z) > OPEN_FT);
           if (open) {
             figs[j].pup.cue('ask', null, 500);
@@ -1463,7 +1494,15 @@ export class CourtScene {
         }
       }
       // (fouled hard with the ball: now and then he goes down, and gets up)
-      if (fl?.kind === 'foul' && a.hold !== undefined && a.hold >= 0 && figs[a.hold] && figs[a.hold] !== figs[b.foul ?? -1] && r(8) < 0.3) figs[a.hold].pup.stumble();
+      if (fl?.kind === 'foul' && a.hold !== undefined && a.hold >= 0 && figs[a.hold] && figs[a.hold] !== figs[b.foul ?? -1] && r(8) < 0.3) {
+        const down = figs[a.hold];
+        down.pup.stumble();
+        // (the nearest of his own comes over to pull him up)
+        const by = figs
+          .filter((f) => f.side === down.side && f !== down)
+          .sort((x, y) => Math.hypot(x.pup.x - down.pup.x, x.pup.z - down.pup.z) - Math.hypot(y.pup.x - down.pup.x, y.pup.z - down.pup.z))[0];
+        if (by && Math.hypot(by.pup.x - down.pup.x, by.pup.z - down.pup.z) < HELP_FROM) this.helping = { down, by, x: by.pup.x, z: by.pup.z, ms: 0, lent: false };
+      }
       if (fl?.text === 'Steal' && a.hold !== undefined && a.hold >= 0 && figs[a.hold] && r(6) < 0.5) figs[a.hold].pup.cue('protest', null, 1200);
     }
     const fv = this.fives;
@@ -1483,6 +1522,57 @@ export class CourtScene {
       fv.n++;
       break;
     }
+  }
+
+  /**
+   * A man knocked down is pulled up by the nearest of his own: that man is taken off the play's spot, walks over,
+   * gives him a hand as he sits up, and walks back to where the play has him. `end`: where the scene was about
+   * to put him, overwritten while he is on that way.
+   */
+  private helps(f: Fig, end: { x: number; z: number; yaw: number }, own: number) {
+    const h = this.helping;
+    if (!h || h.by !== f) return;
+    h.ms += own;
+    const down = h.down.pup;
+    const t = down.floored;
+    // (he hasn't gone down yet, and may not: nobody sets out for a man on his feet)
+    if (t === 0) {
+      if (h.ms > HELP_MOST) this.helping = null;
+      h.x = f.pup.x;
+      h.z = f.pup.z;
+      return;
+    }
+    const back = t < 0 || t > HELP_UNTIL || h.ms > HELP_MOST || (this.heldBy !== null && this.figs.get(this.heldBy) === f);
+    // (he stops an arm's length short of him, on the side he came from, or as near that side as nobody else is standing)
+    const from = Math.atan2(h.x - down.x, h.z - down.z);
+    let [gx, gz] = [end.x, end.z];
+    if (!back)
+      for (const turn of [0, 0.7, -0.7, 1.4, -1.4, 2.1, -2.1]) {
+        gx = down.x + Math.sin(from + turn) * HELP_OFF;
+        gz = down.z + Math.cos(from + turn) * HELP_OFF;
+        let open = true;
+        for (const o of this.figs.values()) if (o !== f && o !== h.down && Math.hypot(o.pup.x - gx, o.pup.z - gz) < BODY_GAP) open = false;
+        if (open) break;
+      }
+    const left = Math.hypot(gx - h.x, gz - h.z);
+    const step = Math.min(left, (HELP_PACE * own) / 1000);
+    if (left > 1e-3) {
+      h.x += ((gx - h.x) / left) * step;
+      h.z += ((gz - h.z) / left) * step;
+    }
+    if (back && left - step < 0.4) {
+      this.helping = null;
+      return;
+    }
+    if (!back) {
+      end.yaw = Math.atan2(down.x - h.x, down.z - h.z);
+      if (!h.lent && left - step < 0.6 && t >= HELP_AT) {
+        f.pup.lend();
+        h.lent = true;
+      }
+    }
+    end.x = h.x;
+    end.z = h.z;
   }
 
   /**

@@ -1,7 +1,9 @@
 // The people in the stands. Each is one of a few spectators Blender made (scripts/blender/arena.py: five
-// for the rows by the floor, two plainer ones for the rows behind, a trunk and a head for the floor's
-// mirror), his own size, build, skin, hair and clothes, drawn in a handful of instanced draws a side
-// (a side nobody is looking at is not drawn at all). Nothing is moved from here frame by frame: the
+// for the rows by the floor, two plainer ones for the rows behind, one of some 140 triangles and a trunk
+// and a head for a slow device and the floor's mirror), his own size, build, skin, hair and clothes,
+// drawn in a handful of instanced draws a side (a side nobody is looking at is not drawn at all). What
+// he wears is more than a colour where the camera is near enough to tell: the fragment shader draws a
+// face on him and, by his own number, a jacket open over a shirt, a replica top, hoops, a check. Nothing is moved from here frame by frame: the
 // shader sits each one in his seat, shifts him about, turns his head to the ball's end, leans a few on
 // their knees, holds a phone up in a few hands, stands them up (a cheer goes out from the play across
 // the building; a nervous end has them up with their hands at their faces), waves the towels, and
@@ -24,6 +26,7 @@ import {
   Vector3,
 } from 'three';
 import type { Seat } from './bowl';
+import { unshadowed } from './rig';
 
 type Keep = <T extends { dispose(): void }>(o: T) => T;
 
@@ -32,6 +35,7 @@ export interface Fans {
   near: BufferGeometry[];
   kid: BufferGeometry;
   mid: BufferGeometry[];
+  low: BufferGeometry;
   far: BufferGeometry;
   stall: BufferGeometry;
 }
@@ -54,8 +58,8 @@ const WEAR = [
   '#4b4e55',
   '#62656b',
   '#85878a',
-  '#a9a8a3',
-  '#cdcac2',
+  '#9c9b96',
+  '#b4b1aa',
   '#27364d',
   '#31476a',
   '#3f5878',
@@ -68,17 +72,27 @@ const WEAR = [
   '#8a5a3c',
 ];
 /** How many of the seats' people wear the home colour, and of those how many its white. */
-const HOME_SHARE = 0.4;
+const HOME_SHARE = 0.3;
 const HOME_WHITE = 0.16;
 const HOME_TRIM = 0.16;
+/** The white a fan wears: off-white, well under a kit's on the floor (a stand full of pure white dots pulls the eye off the play). */
+const HOME_WHITE_WEAR = '#aeaba4';
 /** A team's colour as cloth: this far toward grey (a shirt is never a paint chip), more so its second colour. */
-const WORN = 0.24;
+const WORN = 0.42;
 /** The visitors' block: from x to x on the far side, rows this to that (most of its seats theirs). */
 const VISITORS = [24, 46, 3, 11];
 const WHITE = new Color('#ffffff');
 const GREY = new Color();
-/** The seats' colour is the building's, this much of it (and less the higher up: the lights are on the floor). */
-const STALL_TONE = 0.45;
+/**
+ * The seats' colour is the building's, this far toward grey and this much of it (moulded plastic under a
+ * dimmed house, not a lit sign; and less the higher up, by the seat's own `lit`: the lamps are on the floor),
+ * and no lighter than this (as light: a silver or a yellow building's seats are a dull one).
+ */
+const STALL_GREY = 0.38;
+const STALL_TONE = 0.5;
+const STALL_MOST = 0.22;
+/** A colour the lamps hardly reach has little colour left: how much of a cloth's is kept in the darkest rows (all of it by the floor). */
+const DIM_COLOUR = 0.55;
 
 /**
  * What the crowd's shader adds to a plain lit one. `aWho` is a fan's own numbers: his beat (0 to 1), who
@@ -219,6 +233,8 @@ const CROWD_HEAD = /* glsl */ `
   attribute float aPart;
   uniform float uDim;
   varying vec2 vBounce;
+  varying vec4 vFace;
+  varying vec2 vOwn;
   ${FAN_MOVE}`;
 const CROWD_COLOR = /* glsl */ `
   float tone = aWho.z;
@@ -244,18 +260,72 @@ const CROWD_COLOR = /* glsl */ `
     // (his neck, above his collar)
     wear = color * skin;
   }
-  vColor = wear * (uDim * aWho.w);`;
+  // (how much of the bowl's light reaches his seat: bowl.ts lit, the same number his seat and his step take; and
+  // the less of it, the less colour his clothes show)
+  // (where on his face a point of it is, as the model has it: the fragment draws his eyes and his mouth there)
+  // (and where on his trunk a point of his top is: 2)
+  vFace = aPart > 0.5 && aPart < 1.5 && over < 0.1 ? vec4(position, 1.0) : aPart < 0.5 && over < 0.1 ? vec4(position, 2.0) : vec4(0.0);
+  float reach = aWho.w;
+  // (which top he has on, from his own number; and how lit he is, for what shows under it)
+  vOwn = vec2(fract(own * 7.31), uDim * reach * color.r);
+  wear = mix(vec3(dot(wear, vec3(0.2126, 0.7152, 0.0722))), wear, mix(${DIM_COLOUR}, 1.0, smoothstep(0.25, 0.7, reach)));
+  vColor = wear * (uDim * reach);`;
 /** Where he is; and how square on to the floor this point of him is (the floor is the brightest thing in the building: it lights the faces and the fronts of those looking at it). */
 const CROWD_MOVE = /* glsl */ `
   float gone = smoothstep(0.45, 1.0, fanGone(aWho));
   transformed = fanAt(transformed, aPart, aWho, instanceMatrix) * (1.0 - gone);
   // (going: he turns for the aisle and is lost among those still sat)
   transformed.z -= gone * 1.2;
-  vBounce.x = max(0.0, dot(normalize(mat3(instanceMatrix) * objectNormal), normalize(vec3(0.0, 3.0, 0.0) - instanceMatrix[3].xyz)));
+  // (a floor is a broad light: it comes round a cheek and a shoulder, not off at their edge)
+  vBounce.x = max(0.0, (dot(normalize(mat3(instanceMatrix) * objectNormal), normalize(vec3(0.0, 3.0, 0.0) - instanceMatrix[3].xyz)) + 0.4) / 1.4);
   // (and the boards': on those sat by them, the first rows, on the side of them that faces the floor)
   vBounce.y = smoothstep(9.0, 2.2, instanceMatrix[3].y) * (0.3 + 0.7 * vBounce.x);`;
+/**
+ * A face: the dark of his eyes under a brow and the line of his mouth, drawn where the model's head has
+ * them (arena.py fan: eyes at 2.3 ft over his hips, mouth at 2.03), and gone before they are too small to
+ * hold: then the shade of his eye sockets is what is left, and a far row's faces are a tone, as they are
+ * from across a building. And his top (a point of his trunk: vFace.w 2), by his own number: a jacket or a
+ * hood open in a V over a shirt with a zip under it, a replica top (dark panels down its sides, a band
+ * across the chest), hoops, a check; everyone's has a band at the neck. Gone, as the face is, where a
+ * stripe would be finer than a dot.
+ */
+const CROWD_FACE = /* glsl */ `
+  if (vFace.w > 0.95 && vFace.w < 1.05 && vFace.z > 0.15) {
+    vec2 f = vec2(abs(vFace.x), vFace.y);
+    float fine = fwidth(vFace.y);
+    float seen = 1.0 - smoothstep(0.012, 0.035, fine);
+    float eye = 1.0 - smoothstep(0.65, 1.15, length((f - vec2(0.115, 2.315)) / vec2(0.058, 0.026)));
+    float brow = 1.0 - smoothstep(0.6, 1.2, length((f - vec2(0.12, 2.385)) / vec2(0.085, 0.013)));
+    float mouth = 1.0 - smoothstep(0.6, 1.2, length((vFace.xy - vec2(0.0, 2.035)) / vec2(0.09, 0.015)));
+    float socket = 1.0 - smoothstep(0.4, 1.3, length((f - vec2(0.115, 2.33)) / vec2(0.11, 0.07)));
+    float far = (1.0 - seen) * (1.0 - smoothstep(0.03, 0.1, fine));
+    diffuseColor.rgb *= 1.0 - max(eye * 0.82, max(brow * 0.5, mouth * 0.5)) * seen - 0.3 * socket * far;
+  } else if (vFace.w > 1.9) {
+    vec3 q = vFace.xyz;
+    float seen = 1.0 - smoothstep(0.02, 0.07, fwidth(q.y));
+    float front = smoothstep(0.02, 0.1, q.z);
+    float k = vOwn.x;
+    float dark = 0.16 * smoothstep(1.6, 1.66, q.y);
+    float under = 0.0;
+    if (k < 0.24) {
+      under = 0.8 * front * smoothstep(0.0, 0.025, (q.y - 1.3) * 0.3 - abs(q.x));
+      dark = max(dark, 0.5 * front * (1.0 - smoothstep(0.01, 0.028, abs(q.x))) * step(q.y, 1.32));
+    } else if (k < 0.42) {
+      dark = max(dark, 0.34 * smoothstep(0.34, 0.39, abs(q.x)));
+      under = 0.3 * front * (1.0 - smoothstep(0.04, 0.055, abs(q.y - 1.2))) * (1.0 - smoothstep(0.3, 0.34, abs(q.x)));
+    } else if (k < 0.54) {
+      dark = max(dark, 0.3 * smoothstep(-0.3, 0.3, sin(q.y * 23.0)));
+    } else if (k < 0.64) {
+      dark = max(dark, 0.26 * step(0.0, sin(q.x * 27.0) * sin(q.y * 27.0)));
+      dark = max(dark, 0.4 * front * (1.0 - smoothstep(0.008, 0.022, abs(q.x))));
+    }
+    // (what shows in the V, or the band's colour: a white shirt, a grey one, a black one)
+    float tee = fract(k * 37.0);
+    vec3 shirt = (tee < 0.5 ? vec3(0.4, 0.39, 0.37) : tee < 0.8 ? vec3(0.2, 0.2, 0.21) : vec3(0.03)) * vOwn.y;
+    diffuseColor.rgb = mix(diffuseColor.rgb * (1.0 - dark * seen), shirt, under * seen);
+  }`;
 /** How much of his own colour he shows whatever the lamps do (a crowd is never the black a lamp's falloff alone would leave it), and how much more the floor's light adds. */
-const FILL = '0.07';
+const FILL = '0.12';
 const BOUNCE = 'vec3(0.62, 0.52, 0.42)';
 
 /**
@@ -316,26 +386,39 @@ export class Crowd {
   private readonly visitors: { who: number; shade: number }[] = [];
   private readonly towels: InstancedMesh;
   private readonly towelMat: MeshBasicMaterial;
+  private readonly seatMat: MeshLambertMaterial;
   /** The seats, a draw a side for the rows by the floor and one for the rest; how lit each seat is. */
   private readonly stalls: { mesh: InstancedMesh; lit: number[] }[] = [];
-  /** The detailed people's draws, and the same people in the plain model (a slow device's). */
+  /**
+   * The rows by the floor's draws (the detailed people), and the rows behind's; and the same people in the
+   * lighter models a slow device draws them in (see shed): the rows by the floor in the plain one and in
+   * the lightest, the rows behind in the lightest and as a trunk and a head.
+   */
   private readonly fine: InstancedMesh[] = [];
   private readonly plain: InstancedMesh[] = [];
+  private readonly least: InstancedMesh[] = [];
   private readonly rest: InstancedMesh[] = [];
+  private readonly restLow: InstancedMesh[] = [];
+  private readonly restFar: InstancedMesh[] = [];
+  /** The rows by the floor's seats, and the same seats as two faces each (a slow device's). */
+  private readonly seats: { fine: InstancedMesh; flat: InstancedMesh }[] = [];
   private board = '';
+  private level = 0;
 
   constructor(keep: Keep, models: Fans, seats: Seat[]) {
     let n = 11;
     const rnd = () => ((n = (n * 16807) % 2147483647) & 0xffff) / 0xffff;
     const mat = keep(new MeshLambertMaterial({ color: 0xffffff, vertexColors: true }));
     mat.onBeforeCompile = (sh) => {
+      unshadowed(sh);
       Object.assign(sh.uniforms, this.u);
       sh.vertexShader = sh.vertexShader
         .replace('#include <common>', `#include <common>${CROWD_HEAD}`)
         .replace('#include <color_vertex>', `#include <color_vertex>${CROWD_COLOR}`)
         .replace('#include <begin_vertex>', `#include <begin_vertex>${CROWD_MOVE}`);
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying vec2 vBounce;\nuniform vec3 uLed;')
+        .replace('#include <common>', '#include <common>\nvarying vec2 vBounce;\nvarying vec4 vFace;\nvarying vec2 vOwn;\nuniform vec3 uLed;')
+        .replace('#include <color_fragment>', `#include <color_fragment>${CROWD_FACE}`)
         .replace(
           '#include <emissivemap_fragment>',
           `#include <emissivemap_fragment>\n  totalEmissiveRadiance += diffuseColor.rgb * (${FILL} + ${BOUNCE} * vBounce.x + uLed * vBounce.y);`,
@@ -428,17 +511,26 @@ export class Crowd {
           // (drawn before the seats and the steps they hide, the rows by the floor first: less is drawn twice)
           mesh.renderOrder = fine ? -3 : -2;
           this.main.add(mesh);
-          if (!fine) return void this.rest.push(mesh);
+          // (the same people in a lighter model, for a device that can't keep up: see shed)
+          const lighter = (geo: BufferGeometry, into: InstancedMesh[]) => {
+            const m = keep(new InstancedMesh(share(geo, { aWho }), mat, list.length));
+            m.instanceMatrix = mesh.instanceMatrix;
+            m.instanceColor = mesh.instanceColor;
+            m.boundingSphere = mesh.boundingSphere;
+            m.visible = false;
+            m.renderOrder = mesh.renderOrder;
+            into.push(m);
+            this.main.add(m);
+          };
+          if (!fine) {
+            this.rest.push(mesh);
+            lighter(models.low, this.restLow);
+            lighter(models.far, this.restFar);
+            return;
+          }
           this.fine.push(mesh);
-          // (the same people in the plain model, for a device that can't keep up: see shed)
-          const plain = keep(new InstancedMesh(share(models.mid[model === 2 || model === 3 ? 1 : 0], { aWho }), mat, list.length));
-          plain.instanceMatrix = mesh.instanceMatrix;
-          plain.instanceColor = mesh.instanceColor;
-          plain.boundingSphere = mesh.boundingSphere;
-          plain.visible = false;
-          plain.renderOrder = -3;
-          this.plain.push(plain);
-          this.main.add(plain);
+          lighter(models.mid[model === 2 || model === 3 ? 1 : 0], this.plain);
+          lighter(models.low, this.least);
         });
 
     // the towels in the hands of those who brought one (see TOWEL_MOVE), each in his seat and on his beat
@@ -467,7 +559,7 @@ export class Crowd {
     this.main.add(this.towels);
 
     // the seats: the model in the rows by the floor, a back and a pan behind (two faces: nobody is near enough for more)
-    const seatMat = keep(new MeshLambertMaterial({ color: 0xffffff, vertexColors: true, side: DoubleSide }));
+    const seatMat = (this.seatMat = keep(new MeshLambertMaterial({ color: 0xffffff, vertexColors: true, side: DoubleSide })));
     const far = keep(new BufferGeometry());
     const quad = (a: number[], b: number[], d: number[], e: number[]) => [...a, ...b, ...d, ...a, ...d, ...e];
     const top = SEAT_UP - 0.1;
@@ -484,6 +576,7 @@ export class Crowd {
       ),
     );
     far.computeVertexNormals();
+    seatMat.onBeforeCompile = unshadowed;
     for (let side = 0; side < 4; side++)
       for (const fine of [true, false]) {
         const list = seats.filter((s) => s.stall && s.side === side && s.row < NEAR_ROWS === fine);
@@ -494,6 +587,15 @@ export class Crowd {
         mesh.renderOrder = -1;
         this.stalls.push({ mesh, lit: list.map((s) => s.lit) });
         this.main.add(mesh);
+        if (!fine) continue;
+        // (the same seats as the rows behind have them)
+        const flat = keep(new InstancedMesh(far, seatMat, list.length));
+        flat.instanceMatrix = mesh.instanceMatrix;
+        flat.boundingSphere = mesh.boundingSphere;
+        flat.renderOrder = -1;
+        flat.visible = false;
+        this.seats.push({ fine: mesh, flat });
+        this.main.add(flat);
       }
     this.group.add(this.main, this.blur);
   }
@@ -529,22 +631,38 @@ export class Crowd {
         .lerp(GREY.setScalar(Math.max(light, 0.03)), WORN * (light > 0.12 ? 1.5 : 1))
         .multiplyScalar(shade * (light > 0.12 ? 0.74 : 1));
     };
-    for (const f of this.fans) this.wear(f.who, f.shade < 0 ? c.set('#cfccc4') : f.shade > 1 ? lift(trim, f.shade - 1) : lift(board, f.shade));
+    for (const f of this.fans) this.wear(f.who, f.shade < 0 ? c.set(HOME_WHITE_WEAR) : f.shade > 1 ? lift(trim, f.shade - 1) : lift(board, f.shade));
     this.flush();
+    const seat = new Color(board);
+    const grey = Math.max(0.2126 * seat.r + 0.7152 * seat.g + 0.0722 * seat.b, 0.03);
+    // (a pale colour's seats would be the brightest thing in the stands: no seat is lighter than this)
+    seat.lerp(GREY.setScalar(grey), STALL_GREY).multiplyScalar(Math.min(1, STALL_MOST / grey));
     c.set(board);
     for (let i = 1; i < this.towels.count; i += 2) this.towels.setColorAt(i, c);
     if (this.towels.instanceColor) this.towels.instanceColor.needsUpdate = true;
     for (const { mesh, lit } of this.stalls) {
-      lit.forEach((l, i) => mesh.setColorAt(i, c.set(board).multiplyScalar(STALL_TONE * l)));
+      lit.forEach((l, i) => mesh.setColorAt(i, c.copy(seat).multiplyScalar(STALL_TONE * l)));
       mesh.instanceColor!.needsUpdate = true;
     }
+    for (const s of this.seats) s.flat.instanceColor = s.fine.instanceColor;
   }
 
   /** The visitors' fans in the visitors' colour (a few in its second). */
   dress(fill: string, trim: string) {
     const c = new Color();
-    for (const f of this.visitors) this.wear(f.who, f.shade < 0 ? c.set(trim).multiplyScalar(0.8) : c.set(fill).multiplyScalar(f.shade));
+    // (cloth, as the home side's: a shade toward grey)
+    const cloth = (hex: string, k: number) => {
+      c.set(hex);
+      return c.lerp(GREY.setScalar(Math.max(0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b, 0.03)), WORN * 0.7).multiplyScalar(k);
+    };
+    for (const f of this.visitors) this.wear(f.who, f.shade < 0 ? cloth(trim, 0.8) : cloth(fill, f.shade));
     this.flush();
+  }
+
+  /** How much of their light the people keep (1: all of it; on their feet for a basket they are in more of it: `people`), and the seats under them. */
+  dim(people: number, seats: number) {
+    this.u.uDim.value = people;
+    this.seatMat.color.setScalar(Math.min(1, seats));
   }
 
   /** The towels are out (and how lit they are). */
@@ -553,16 +671,28 @@ export class Crowd {
     this.towelMat.color.setScalar(dim);
   }
 
-  /** The floor's mirror is being drawn: for it everyone is his trunk and his head, and there are no seats. */
+  /** The floor's mirror is being drawn: for it everyone is his trunk and his head, and there are no seats (on a device two steps down, nobody: the varnish shows the floor's own people and the boards). */
   mirror(on: boolean) {
     this.main.visible = !on;
-    this.blur.visible = on;
+    this.blur.visible = on && this.level < 2;
   }
 
-  /** A device that can't keep up: the rows by the floor in the plain model (1), and four in ten of the rest left out (2). */
-  shed(level: 0 | 1 | 2) {
+  /**
+   * A device that can't keep up, by the scene's steps: the rows by the floor in the plain model (1); the
+   * rows behind in the lightest one and every seat two faces (2); the rows by the floor in the lightest
+   * and the rows behind a trunk and a head each (3: a quarter of a million triangles for the whole house).
+   */
+  shed(level: 0 | 1 | 2 | 3) {
+    this.level = level;
     for (const o of this.fine) o.visible = level < 1;
-    for (const o of this.plain) o.visible = level > 0;
-    for (const o of this.rest) o.count = level > 1 ? Math.ceil(o.instanceMatrix.count * 0.6) : o.instanceMatrix.count;
+    for (const o of this.plain) o.visible = level === 1 || level === 2;
+    for (const o of this.least) o.visible = level > 2;
+    for (const o of this.rest) o.visible = level < 2;
+    for (const o of this.restLow) o.visible = level === 2;
+    for (const o of this.restFar) o.visible = level > 2;
+    for (const s of this.seats) {
+      s.fine.visible = level < 2;
+      s.flat.visible = level > 1;
+    }
   }
 }

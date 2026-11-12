@@ -30,7 +30,13 @@ export const SOURCES: Record<string, string[]> = {
 };
 const MODELS = Object.keys(SOURCES);
 /** Which way of packing wrote a file. Raise it when pack() changes what it writes: the test then asks for a rebuild. */
-export const PACK = 1;
+export const PACK = 2;
+/**
+ * A point is kept to this fine a grid (ft: a 4096th, some 0.07 mm). Nothing is drawn that fine, and a
+ * float that ends in zeros is what the web's compression can do something with: the files are a seventh
+ * smaller on the wire (a fifth under brotli) for it, and no reader knows the difference.
+ */
+export const GRID = 1 / 4096;
 /** The materials the app paints a picture on (a kit's number, the table's LED front): only their parts keep a uv. */
 const PAINTED = new Set(['jersey', 'board']);
 
@@ -75,9 +81,10 @@ const TRIANGLES = 34963;
 const up4 = (n: number) => (n + 3) & ~3;
 
 /**
- * A .glb as Blender wrote it, rewritten with the dead weight out. The shape is the same (points to the
- * bit, the rest to within what a byte holds: see same); the file is what src/ui/live/court3d/glb.ts
+ * A .glb as Blender wrote it, rewritten with the dead weight out. The shape is the same (points to
+ * within GRID, the rest to within what a byte holds: see same); the file is what src/ui/live/court3d/glb.ts
  * reads, and still a .glb any viewer opens.
+ *  - a point is rounded to GRID (still three floats);
  *  - a normal is three bytes (floats before), a colour three bytes (four 16-bit numbers before: the
  *    fourth said nothing), a point's bone weights four bytes that add up to 255;
  *  - a uv stays only on a part the app paints a picture on (PAINTED), as it was: a vest's runs past 1
@@ -157,7 +164,9 @@ export function pack(file: Uint8Array, notes: string[] = []): Uint8Array {
         }
         const { array, raw, size: comps } = numbers(json, bin, i);
         if (array.length !== n * comps) throw bad(`has ${array.length / comps} of ${key} for ${n} points`);
-        if (key === 'NORMAL' && !(raw instanceof Int8Array)) {
+        if (key === 'POSITION' && raw instanceof Float32Array) {
+          cols.push({ key, data: Float32Array.from(raw, (v) => Math.round(v / GRID) * GRID), type: 'VEC3', normalized: false });
+        } else if (key === 'NORMAL' && !(raw instanceof Int8Array)) {
           const q = new Int8Array(n * 3);
           for (let k = 0; k < q.length; k += 3) {
             const len = Math.hypot(array[k], array[k + 1], array[k + 2]) || 1;
@@ -263,7 +272,7 @@ export function pack(file: Uint8Array, notes: string[] = []): Uint8Array {
 const LEAN = 1.5;
 const STEP = 1 / 255 + 1e-6;
 
-/** Throws unless `after` reads (through the app's own reader) as the model `before` is: the same things, bones and triangles, every corner's point to the bit, its normal, colour and weights to within what a byte holds. */
+/** Throws unless `after` reads (through the app's own reader) as the model `before` is: the same things, bones and triangles, every corner's point to within the grid, its normal, colour and weights to within what a byte holds. */
 export function same(before: Uint8Array, after: Uint8Array): void {
   const [a, b] = [readGlb(before), readGlb(after)];
   function bad(what: string): never {
@@ -309,7 +318,7 @@ export function same(before: Uint8Array, after: Uint8Array): void {
             const [wa, wb] = [weights(pa.geo, va), weights(pb.geo, vb)];
             for (const bone of new Set([...wa.keys(), ...wb.keys()])) if (Math.abs((wa.get(bone) ?? 0) - (wb.get(bone) ?? 0)) > STEP) bad(at);
           } else {
-            const slack = attr === 'color' ? STEP : 0;
+            const slack = attr === 'color' ? STEP : attr === 'position' ? GRID / 2 + 1e-6 : 0;
             for (let j = 0; j < size; j++) if (!(Math.abs(la.getComponent(va, j) - lb.getComponent(vb, j)) <= slack)) bad(at);
           }
         }

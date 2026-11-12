@@ -84,12 +84,40 @@ const SPECS: Spec[] = [
   // pulling up out of a run (0: he's nearly stopped), and a defender closing out and breaking down into his stance
   { id: 'stop', src: '127_05', kind: 'shot', from: 0.7, to: 1.75, anchor: 0.7, rate: 500, ground: true },
   { id: 'closeout', src: '102_25', kind: 'shot', from: 1.45, to: 2.4, anchor: 1.45, rate: 500, ground: true },
+  // (a first step: from standing into a run, the lean and the drive of the arms that get him going; 0: he pushes off)
+  { id: 'start', src: '102_30', kind: 'shot', from: 0.2, to: 1.3, anchor: 0.2, rate: 500, ground: true },
   // guarding (the slide is captured going right; the clip goes left, and the puppet flips it back)
-  { id: 'shuffle', src: '102_27', kind: 'gait', from: 0.5, to: 1.3, slide: true, mirror: true },
-  { id: 'stance', src: '102_24', kind: 'loop', from: 1.85, to: 2.25 },
-  { id: 'ready', src: '102_24', kind: 'loop', from: 2.25, to: 2.65 },
+  // (the men in these takes bent at the waist with their hands hanging: a defender sits, his back near straight,
+  // his hands up and out where the ball and the pass are. The feet and the weight are the takes'; the carriage is set)
+  {
+    id: 'shuffle',
+    src: '102_27',
+    kind: 'gait',
+    from: 0.5,
+    to: 1.3,
+    slide: true,
+    mirror: true,
+    level: { turn: 0, lean: 0.27, hip: -0.56, nod: 0.08, lx: 1.2, ly: -0.72, lz: 0.72, rx: 1.2, ry: -0.72, rz: 0.72 },
+  },
+  // (on the ball: one hand up at it, the other out in the lane)
+  {
+    id: 'stance',
+    src: '102_24',
+    kind: 'loop',
+    from: 1.85,
+    to: 2.25,
+    level: { turn: 0, lean: 0.29, hip: -0.6, nod: 0.1, lx: 1.15, ly: -0.8, lz: 0.8, rx: 0.5, ry: -0.05, rz: 1.1 },
+  },
+  {
+    id: 'ready',
+    src: '102_24',
+    kind: 'loop',
+    from: 2.25,
+    to: 2.65,
+    level: { turn: 0, lean: 0.2, hip: -0.42, nod: 0.06, lx: 0.95, ly: -1.02, lz: 0.62, rx: 0.95, ry: -1.02, rz: 0.62 },
+  },
   // with the ball
-  { id: 'dribble', src: '86_14', kind: 'loop', from: 22.0, to: 25.6, ball: 'dribble', grip: 'top', tempo: 1.2, add: { hip: -0.18, lean: 0.06 } },
+  { id: 'dribble', src: '86_14', kind: 'loop', from: 22.0, to: 25.6, ball: 'dribble', grip: 'top', tempo: 1.2, add: { hip: -0.36, lean: 0.13, wide: 0.28 } },
   { id: 'dribbleRun', src: '06_04', kind: 'loop', from: 0.4, to: 3.0, ball: 'dribble', grip: 'top', add: { hip: -0.1, lean: 0.05 } },
   // (walking it up, and backing away with it)
   { id: 'dribbleWalk', src: '06_02', kind: 'loop', from: 2.2, to: 4.9, ball: 'dribble', grip: 'top', add: { hip: -0.08, lean: 0.03 } },
@@ -260,6 +288,9 @@ function poseAt(m: Measured, ft: number, spec: Spec): { pose: Float32Array; hand
   const ul = len(up);
   P[I.tilt] = Math.asin(clamp(up[0] / ul, -1, 1));
   P[I.lean] = Math.asin(clamp(up[2] / ul, -1, 1)) - m.lean0;
+  // (a body set lower or leaned than the take's is set before its hands are measured: they, and the ball in them, go with its shoulders)
+  P[I.hip] += spec.add?.hip ?? 0;
+  P[I.lean] += spec.add?.lean ?? 0;
   const hipY = HIP + P[I.hip];
   spine(P, BODY, hipY, JT, U, Fr, L);
   const sl = dir(sub(at('LeftArm'), at('RightArm')));
@@ -319,7 +350,7 @@ function poseAt(m: Measured, ft: number, spec: Spec): { pose: Float32Array; hand
   P[I.bx] = 0.1;
   P[I.by] = 4.2;
   P[I.bz] = 0.85;
-  for (const [c, v] of Object.entries(spec.add ?? {})) P[I[c as keyof typeof I]] += v;
+  for (const [c, v] of Object.entries(spec.add ?? {})) if (c !== 'hip' && c !== 'lean') P[I[c as keyof typeof I]] += v;
   return { pose: P, hands };
 }
 

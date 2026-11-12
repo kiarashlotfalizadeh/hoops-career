@@ -54,12 +54,12 @@ export interface Props {
   scoreboard(ribbon: Material, screens: Material): Object3D;
   /**
    * The spectators (each sat on y = 0 facing +z, his feet on his own step, 1.3 under him): the shapes the crowd is drawn
-   * from. `near` are the people of the rows by the floor (under a thousand triangles each) and `kid` a child among them, `mid` those of the rows behind,
+   * from. `near` are the people of the rows by the floor (under a thousand triangles each) and `kid` a child among them, `mid` those of the rows behind, `low` one of some 140 triangles (a slow device's),
    * `far` anyone as a trunk and a head, for where he is only a blur. His arms hang; `aPart` says which of a shape's points are trunk (0),
    * head (1), arms (2, 3) and legs (4); a quarter more is skin or an end with its own colour (a neck, hair, a bare arm, a shoe), a
    * half more a cap. `color` is the baked shade. `stall` is the seat (on its step at y = 0).
    */
-  crowd(): { near: BufferGeometry[]; kid: BufferGeometry; mid: BufferGeometry[]; far: BufferGeometry; stall: BufferGeometry };
+  crowd(): { near: BufferGeometry[]; kid: BufferGeometry; mid: BufferGeometry[]; low: BufferGeometry; far: BufferGeometry; stall: BufferGeometry };
   /** The hoop's pads that take the home colour: the caller sets this material's colour. */
   readonly team: MeshStandardMaterial;
   /** The faces of the clocks over each board (u across as you face it, from the floor or from behind; v up): the caller lights them. */
@@ -233,6 +233,7 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
   const near = fans(['fanA', 'fanB', 'fanC', 'fanD', 'fanE', 'fanF']);
   const [kid] = fans(['fanKid']);
   const mid = fans(['fanMidA', 'fanMidB']);
+  const [fanLow] = fans(['fanLow']);
   const [fanFar] = fans(['fanFar']);
   const stall = shapes('stall').get('seat');
   clockMap(hoop.get('clock')!);
@@ -369,7 +370,7 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
 
     crowd() {
       if (!stall) throw new Error('arena.glb: the stall has no shape');
-      return { near, kid, mid, far: fanFar, stall };
+      return { near, kid, mid, low: fanLow, far: fanFar, stall };
     },
   };
 }
