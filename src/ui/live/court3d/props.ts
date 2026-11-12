@@ -1,13 +1,15 @@
 // The building's props as Blender made them (models/arena.glb, from scripts/blender/arena.py): the basket
-// unit with its rim and net, a bench chair, the scorer's table, the ball, the scoreboard and the one
-// spectator the crowd is made of (and the few triangles he is in the floor's mirror). Here each becomes three.js objects with the app's own materials (a
+// unit with its rim and net, a bench chair, the scorer's table, the ball, the scoreboard, the spectators
+// the crowd is made of and a seat in the stands. Here each becomes three.js objects with the app's own materials (a
 // part is told apart by the name Blender gave its material); the scene places them. Every part carries
 // a baked shade (its `color`): the lit materials multiply it in. The faces that show a picture (the
 // clocks over the boards, the scoreboard's screens and ring) are given their map here, from where their
 // points are: the build keeps a uv only for the parts painted in Blender's own files.
 import {
   BufferAttribute,
-  DoubleSide,
+  BufferGeometry,
+  Color,
+  DynamicDrawUsage,
   Group,
   InstancedMesh,
   Matrix4,
@@ -15,13 +17,15 @@ import {
   MeshBasicMaterial,
   MeshLambertMaterial,
   MeshStandardMaterial,
+  PlaneGeometry,
   Quaternion,
   Vector3,
-  type BufferGeometry,
   type Material,
   type Object3D,
 } from 'three';
+import { blob, leather, lights, pane, pebbles } from './ballskin';
 import { placed, type Thing } from './glb';
+import { cordIndex, cords as cordPoints, CORD_SIDES, NET, NetSim } from './net';
 
 type Keep = <T extends { dispose(): void }>(o: T) => T;
 
@@ -30,28 +34,43 @@ export interface Props {
    * One basket unit built for the low end (rim over the origin, facing +x); the caller places and turns it. rim and net are
    * children placed at y = 10 that the caller animates. `swish` is how the net's cords are pulled this frame: x down its
    * length (1: stretched by a ball going through, under 0: flicked back up), y wider at its foot, z swung toward the floor.
+   * `live` is the same net as cord that moves (net.ts): its knots are in the unit's frame less the rim's height, `draw` puts
+   * its cords where the knots are; the caller shows it or `net`, never both.
    */
-  basket(): { group: Group; rim: Object3D; net: Object3D; swish: Vector3 };
+  basket(): { group: Group; rim: Object3D; net: Object3D; swish: Vector3; live: { sim: NetSim; mesh: Object3D; draw(): void } };
   /** Chairs at these places (y is the floor there), each turned `turn` radians about y; one InstancedMesh per material. `seat` is the padding's material (the caller owns and recolours it; with `vertexColors` on, it takes the baked shade). */
   chairs(at: { x: number; y: number; z: number; turn: number }[], seat: Material): Object3D;
   /** The scorer's table (34 ft along x, on the floor, its front toward +z); `board` is the caller's material for its LED front, whose uv runs 0..1 left to right and bottom to top. */
   table(board: Material): Object3D;
   /** The ball (a Group whose origin is its centre), in these colours. */
   ball(fill: string, seam: string): Object3D;
+  /** The dark under the ball where it meets the floor (a flat round, a foot across, on y = 0): the caller places, sizes and fades it. */
+  ballShadow(): Mesh;
   /**
    * The scoreboard (its origin is its centre; its cables go 12 ft up from there); `ribbon` is the caller's material for its
    * ring (u twice round it, v up its outside), `screens` for its four screens (u across each as you face it, v up it, the
    * same picture on each; the screen underneath and the edges of the screens show the picture's bottom row).
    */
   scoreboard(ribbon: Material, screens: Material): Object3D;
-  /** One spectator, a couple of hundred triangles (sat on y = 0 facing +z, his feet on the row below): the shape the crowd is drawn from. `aPart` says which of his points are trunk (0), head (1), arms (2, 3) and legs (4); a quarter more is an end with its own colour (hair, a hand, a shoe). `color` is his baked shade. `far` is the same man as a trunk and a head, for where he is only a blur. */
-  crowd(): { fan: BufferGeometry; far: BufferGeometry };
+  /**
+   * The spectators (each sat on y = 0 facing +z, his feet on his own step, 1.3 under him): the shapes the crowd is drawn
+   * from. `near` are the people of the rows by the floor (under a thousand triangles each) and `kid` a child among them, `mid` those of the rows behind,
+   * `far` anyone as a trunk and a head, for where he is only a blur. His arms hang; `aPart` says which of a shape's points are trunk (0),
+   * head (1), arms (2, 3) and legs (4); a quarter more is skin or an end with its own colour (a neck, hair, a bare arm, a shoe), a
+   * half more a cap. `color` is the baked shade. `stall` is the seat (on its step at y = 0).
+   */
+  crowd(): { near: BufferGeometry[]; kid: BufferGeometry; mid: BufferGeometry[]; far: BufferGeometry; stall: BufferGeometry };
   /** The hoop's pads that take the home colour: the caller sets this material's colour. */
   readonly team: MeshStandardMaterial;
   /** The faces of the clocks over each board (u across as you face it, from the floor or from behind; v up): the caller lights them. */
   readonly clock: MeshBasicMaterial;
+  /** The strip of lights round each board (ballskin.ts `lit` turns them on). */
+  readonly led: MeshBasicMaterial;
 }
 
+/** What a game ball's leather and its seams are taken toward (see ball). */
+const TAN = new Color(0xa4491b);
+const PITCH = new Color(0x0b0a09);
 /** How high the rim is over the floor. */
 const RIM_H = 10;
 /** How long the net hangs below the ring (ft): how far down it a cord's point is says how much of a pull it takes. */
@@ -175,7 +194,7 @@ const UNDER_Y = -4;
 const RING_TURNS = 2;
 
 /** The parts of the basket unit that throw no shadow: the glass lets the light through, the clock's face lies on its box. */
-const NO_SHADOW = new Set(['glass', 'clock']);
+const NO_SHADOW = new Set(['glass', 'clock', 'led']);
 // (What else throws one: the rim and the ball. Not the net, whose cords are thinner than a point of the
 // shadow's map and would only shimmer. Not the table or the chairs: the light comes from the near side,
 // so theirs would fall behind them, off the floor, on ground that takes no shadow. Not the scoreboard: a
@@ -205,8 +224,17 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
   const table = shapes('table');
   const ball = shapes('ball');
   const scoreboard = shapes('scoreboard');
-  const fan = shapes('fan');
-  const fanFar = shapes('fanFar');
+  const fans = (names: string[]) =>
+    names.map((name) => {
+      const geo = shapes(name).get('fan');
+      if (!geo) throw new Error(`arena.glb: ${name} has no shape`);
+      return geo;
+    });
+  const near = fans(['fanA', 'fanB', 'fanC', 'fanD', 'fanE', 'fanF']);
+  const [kid] = fans(['fanKid']);
+  const mid = fans(['fanMidA', 'fanMidB']);
+  const [fanFar] = fans(['fanFar']);
+  const stall = shapes('stall').get('seat');
   clockMap(hoop.get('clock')!);
   const boardScreens = scoreboard.get('screen');
   if (boardScreens) screenMap(boardScreens);
@@ -218,24 +246,40 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
   const pad = keep(new MeshStandardMaterial({ color: 0x1c1c1f, roughness: 0.6, vertexColors: true }));
   const steel = keep(new MeshStandardMaterial({ color: 0x2b2d31, roughness: 0.45, vertexColors: true }));
   const edge = keep(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, vertexColors: true }));
-  // (glass: mostly what is behind it, and the lights' glint on its face)
-  const glass = keep(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.12, transparent: true, opacity: 0.3, side: DoubleSide, depthWrite: false }));
+  // (glass: what is behind it, and the lamps on its face)
+  const glass = keep(pane());
+  const led = keep(lights());
   const screen = keep(new MeshBasicMaterial({ color: 0x2b3038 }));
   // (the clocks' faces: the caller puts the clocks on them)
   const clock = keep(new MeshBasicMaterial({ color: 0x2b3038 }));
-  const iron = keep(new MeshStandardMaterial({ color: '#e8551c', roughness: 0.5, vertexColors: true }));
+  // (the rim's orange enamel: it takes the lamps)
+  const iron = keep(new MeshStandardMaterial({ color: '#e4501a', roughness: 0.36, vertexColors: true }));
   const cord = keep(new MeshStandardMaterial({ color: 0xf4f4f0, roughness: 0.9, vertexColors: true }));
   // (black furniture, but not so black that a monitor on the table or the scoreboard's corners are lost in the dark behind them)
   const dark = keep(new MeshLambertMaterial({ color: 0x26272c, vertexColors: true }));
 
+  // the live net's cords: which corners make its triangles, and each point's shade (darker toward the mouth, as Blender's net is)
+  const links = NET.n * NET.k * 2;
+  const cordTris = new BufferAttribute(cordIndex(links), 1);
+  const cordShade = new Float32Array(links * CORD_SIDES * 2 * 3);
+  for (let l = 0; l < links; l++) {
+    const k = Math.floor(l / (NET.n * 2));
+    for (let e = 0; e < 2; e++) cordShade.fill(1 - 0.2 * ((k + e) / NET.k) ** 1.5, (l * 2 + e) * CORD_SIDES * 3, (l * 2 + e + 1) * CORD_SIDES * 3);
+  }
+  const skin = keep(pebbles());
+  const under = keep(blob());
+
   return {
     team,
     clock,
+    led,
 
     basket() {
       const group = new Group();
-      for (const m of dress('hoop', hoop, { pad, steel, team, edge, glass, clock })) {
+      for (const m of dress('hoop', hoop, { pad, steel, team, edge, glass, clock, led })) {
         m.castShadow = !NO_SHADOW.has(m.name);
+        // (the pane is drawn after what is seen through it)
+        if (m.name === 'glass') m.renderOrder = 2;
         group.add(m);
       }
       // (the rim tips and the net swings about the rim's centre: each is its own thing, there)
@@ -252,7 +296,28 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
       ring.position.y = mesh.position.y = RIM_H;
       ring.castShadow = true;
       group.add(ring, mesh);
-      return { group, rim: ring, net: mesh, swish };
+      // the net as cord (net.ts): its points are written each frame it moves
+      const sim = new NetSim();
+      const shape = keep(new BufferGeometry());
+      const at = new BufferAttribute(new Float32Array(links * CORD_SIDES * 2 * 3), 3).setUsage(DynamicDrawUsage);
+      const facing = new BufferAttribute(new Float32Array(links * CORD_SIDES * 2 * 3), 3).setUsage(DynamicDrawUsage);
+      shape.setAttribute('position', at);
+      shape.setAttribute('normal', facing);
+      shape.setAttribute('color', new BufferAttribute(cordShade, 3));
+      shape.setIndex(cordTris);
+      const live = new Mesh(shape, cord);
+      live.name = 'cord';
+      live.position.y = RIM_H;
+      // (it is always by the rim, wherever its cords fly: no need to find its bounds each frame)
+      live.frustumCulled = false;
+      live.visible = false;
+      const draw = () => {
+        cordPoints(sim, at.array as Float32Array, facing.array as Float32Array);
+        at.needsUpdate = facing.needsUpdate = true;
+      };
+      draw();
+      group.add(live);
+      return { group, rim: ring, net: mesh, swish, live: { sim, mesh: live, draw } };
     },
 
     chairs(at, seat) {
@@ -279,14 +344,23 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
     },
 
     ball(fill, seam) {
-      const leather = keep(new MeshStandardMaterial({ color: fill, roughness: 0.62, vertexColors: true }));
-      const cut = keep(new MeshStandardMaterial({ color: seam, roughness: 0.8, vertexColors: true }));
+      // (the court's own colours, taken toward a game ball's under these lamps: tanned leather, seams all but black)
+      const hide = keep(leather(`#${new Color(fill).lerp(TAN, 0.55).getHexString()}`, skin));
+      const cut = keep(new MeshStandardMaterial({ color: new Color(seam).lerp(PITCH, 0.8), roughness: 0.85, vertexColors: true }));
       const group = new Group();
-      for (const m of dress('ball', ball, { leather, seam: cut })) {
+      for (const m of dress('ball', ball, { leather: hide, seam: cut })) {
         m.castShadow = true;
         group.add(m);
       }
       return group;
+    },
+
+    ballShadow() {
+      const round = keep(new PlaneGeometry(1, 1));
+      round.rotateX(-Math.PI / 2);
+      const mesh = new Mesh(round, keep(new MeshBasicMaterial({ color: 0x000000, map: under, transparent: true, opacity: 0.3, depthWrite: false })));
+      mesh.renderOrder = 3;
+      return mesh;
     },
 
     scoreboard(ribbon, screens) {
@@ -294,9 +368,8 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
     },
 
     crowd() {
-      const [near, far] = [fan.get('fan'), fanFar.get('fan')];
-      if (!near || !far) throw new Error('arena.glb: the fan has no shape');
-      return { fan: near, far };
+      if (!stall) throw new Error('arena.glb: the stall has no shape');
+      return { near, kid, mid, far: fanFar, stall };
     },
   };
 }

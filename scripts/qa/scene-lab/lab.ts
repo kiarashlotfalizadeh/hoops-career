@@ -9,9 +9,11 @@
 //   &game=1 (a game on the boards: Q4, 2:31 left, 88-85)  &call=three|dunk|andOne|block|steal|buzzer|timeout (a big moment, the home side's;
 //   &by=1 the visitors')  &def=1 (the home side on defence)  &ft=1 (a visitor at the line, the end behind it waving)  &clutch=1  &final=0|1 (who won)
 //   &final=0|1 (the game over, that side the winners: with no eye or shot, the broadcast's own camera finds them)
+//   &mood=1 (the house lights down, as for the open, a timeout and the clutch: with a shot or an eye)
 //   &tip=1 (the ten lined up for the tip, the ball in the centre circle: with no eye or shot, the broadcast's opening camera)
 import { PerspectiveCamera, type Scene, type WebGLRenderer } from 'three';
 import { emptyStage, paintFloor, readPaints, type CourtFloor, type Stage } from '../../../src/ui/live/Court';
+import { settleHeads } from '../../../src/ui/live/court3d/figure';
 import { bodyOf } from '../../../src/ui/live/court3d/puppet';
 import { CourtScene, loadModels } from '../../../src/ui/live/court3d/scene';
 import { matchKits } from '../../../src/ui/teamColors';
@@ -44,7 +46,7 @@ const scene = new CourtScene(canvas, paints.ball, paints.ballSeam, await loadMod
 scene.lite(q.has('lite') ? (Math.min(3, Number(q.get('lite')) || 3) as 1 | 2 | 3) : 0);
 const floorCv = document.createElement('canvas');
 const floor: CourtFloor = { kind: 'home', abbrev: 'WAS', name: 'Wizards', colors: ['#002b5c', '#e31837', '#c4ced4'], paint: kits[0].color, trim: kits[0].trim, mark: 'circle' };
-paintFloor(floorCv, { wide: true, k: 14, w: 0, h: 0, top: 0, ox: 0, oy: 0 }, 1, floor, paints);
+paintFloor(floorCv, { wide: true, k: 14, w: 0, h: 0, top: 0, ox: 0, oy: 0 }, 1, floor, paints, true);
 scene.setFloor(floorCv);
 
 // ten men where a half-court set leaves them, and the ball with one of them
@@ -109,7 +111,7 @@ type Lab = {
   shed(level: number): void;
   boards: { shout(call: string, side: 0 | 1 | null): void; house: { pretend: unknown } };
 };
-const inner = scene as unknown as { renderer: WebGLRenderer; scene: Scene; arena: Lab };
+const inner = scene as unknown as { renderer: WebGLRenderer; scene: Scene; arena: Lab; rig: { mood(to: number, ms: number): void; drama: number } };
 // (what a slow device gives up of the building, with the shadows and the mirror)
 if (q.has('lite')) inner.arena.shed(2);
 if (q.has('def') || q.has('ft')) inner.arena.boards.house.pretend = { off: 1, line: q.has('ft'), end: -1, shot: q.has('ft') ? null : 11.2 };
@@ -125,6 +127,8 @@ function draw() {
   scene.size(w, h, Math.min(2, devicePixelRatio));
   // (a few frames so the figures settle where they stand and the crowd is where `t` and `cheer` put it)
   for (let i = 0; i < 30; i++) {
+    // (a still wants the men's finished heads, which a game paints between frames)
+    if (i === 27) settleHeads();
     if (q.has('cheer')) inner.arena.cheer(1);
     if (q.has('call') && i === 18) inner.arena.boards.shout(q.get('call')!, q.has('by') ? 1 : 0);
     scene.frame(stage, props, 16, (num('t', 2) * 1000) / 30, false, 16);
@@ -134,6 +138,10 @@ function draw() {
   cam.lookAt(at[0], at[1], at[2]);
   cam.updateProjectionMatrix();
   cam.updateMatrixWorld();
+  if (q.has('mood')) {
+    inner.rig.mood(num('mood', 1), 1e9);
+    scene.lens.drama = inner.rig.drama;
+  }
   if (q.has('shot') || q.has('eye')) scene.still(cam);
   // (kept for a screenshot: the renderer clears its picture once the page has shown it)
   const still = document.getElementById('still') as HTMLCanvasElement;

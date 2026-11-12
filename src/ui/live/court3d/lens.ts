@@ -5,17 +5,19 @@
 //   them, drawn once for each floor into an environment map: the lit floor below, the dark bowl of the
 //   stands, the roof black but for the banks of lamps in it. It gives them their soft light from every
 //   side (their form) and the glints of the lamps on them (their highlights).
-// - The varnished floor (`varnish`): the 2D court's painted canvas, and over it in the floor's own
-//   shader, where the camera is near enough to see them, the maple strips of a real floor (2¼ in wide,
-//   each a shade of its own, their seams and their joints, the grain), and the lamps in the varnish: each
-//   bank a row of lamps, drawn out toward the camera as a glossy floor draws a light, over the soft glow
-//   of the whole bank. Its shadows are sharp at a foot and soft by a head.
+// - The varnished floor (`varnish`): the 2D court's painted canvas (its wood one bare colour), and over
+//   it in the floor's own shader the maple strips of a real floor (2¼ in wide, each a shade of its own,
+//   their seams and staggered joints, the grain; what is too fine to see from where the camera is fades
+//   to its average), a coat that is clearer over paint and scuffed dull in the lanes, and the lamps in
+//   the varnish: each bank a soft bar broken up along the strips, drawn out toward the camera as a
+//   glossy floor draws a light. Its shadows (the rig's four lamps: rig.ts) are sharp at a foot and soft
+//   by a head, and deeper than the light they keep off.
 // - The air (`air`): the dark over the stands lit faintly round the lamps' height, their beams down
 //   through it, a glow round each bank; and (scene.ts) a little haze, so the far stands sit back.
 // - The picture (`Lens`): on the top step the scene is drawn into a target of its own, as it would be to
-//   the screen; the brightest of it (the lamps in the varnish, the glints, a lit board) glows a little, the
-//   corners are a shade darker, and it is graded as a broadcast is (a hair warm, the blacks deep, the
-//   colours as painted). A device that can't keep up draws straight to the screen (see Court3D's STEPS).
+//   the screen; where things meet is darkened (ao.ts), the brightest of it (the lamps in the varnish,
+//   the glints, a lit board) glows a little, the corners are a shade darker, it is graded as a broadcast
+//   is (a hair warm, the blacks deep, the colours as painted), and behind a close-up's man it goes soft. A device that can't keep up draws straight to the screen (see Court3D's STEPS).
 import {
   AdditiveBlending,
   BackSide,
@@ -47,7 +49,9 @@ import {
   type Texture,
   type WebGLRenderer,
 } from 'three';
-import { HALF_W, SIDE } from '../Court';
+import { COURT_LEN } from '../choreo';
+import { FLOOR_L, FLOOR_W, HALF_W, SIDE } from '../Court';
+import { Occlusion } from './ao';
 import { LAMPS } from './arena';
 
 // ---------------------------------------------------------------------------------------------------
@@ -116,9 +120,9 @@ const ENV_LAMP = 56;
 /** What the lamps' light is: a daylight white (a broadcast is balanced for it: the warmth is the wood's). */
 const LAMP_TINT = new Color(1, 0.98, 0.95);
 /** The floor as the things on it see it: its own colour, about as bright as it is lit. */
-const ENV_FLOOR = 1.05;
+const ENV_FLOOR = 0.45;
 /** The stands round the floor (the crowd in the lamps' spill), the roof over them, and the LED ribbon along the top of the bowl. */
-const ENV_STANDS = new Color(0.05, 0.043, 0.036);
+const ENV_STANDS = new Color(0.09, 0.08, 0.075);
 const ENV_ROOF = new Color(0.008, 0.008, 0.01);
 const ENV_RIBBON = 0.22;
 /** The scoreboard over the middle: its screens' glow on the tops of heads. */
@@ -208,41 +212,58 @@ export function arenaLight(renderer: WebGLRenderer, floor: Color): WebGLRenderTa
 // ---------------------------------------------------------------------------------------------------
 // The varnished floor
 
-/** The boards as the 2D court paints them (Court.tsx paintFloor): each is this wide (ft), and is six of a real floor's strips. */
-const PAINTED_BOARD = 1.15;
-const STRIPS = 6;
+/** A strip of the floor is this wide (ft: 2¼ in), and this long at least and at most. */
+const STRIP = 2.25 / 12;
+const STRIP_SHORT = 2.4;
+const STRIP_LONG = 7;
 /** A seam between two strips, or a joint at a strip's end: this wide (ft), and this much darker. */
-const SEAM_W = 0.0055;
-const SEAM_DARK = 0.42;
+const SEAM_W = 0.006;
+const SEAM_DARK = 0.5;
+/** How much darker the darkest strip is than the lightest (maple: not much), and the grain in one. */
+const TONE = 0.13;
+const GRAIN = 0.11;
 /** How far a strip's face is off flat at most (radians): the lamps in the varnish break up along them. */
-const TILT = 0.0025;
-/** A bank is a row of this many lamps, each this much of its share of the row: the varnish's clear coat shows each one. */
-const HEADS = 6;
-const HEAD_FILL = 0.32;
-/** A lamp, as bright as it is (the floor shows a twentieth or so of it, more the flatter it is looked across). */
-const BANK_GLOW = new Color(1, 0.96, 0.9).multiplyScalar(54);
+const TILT = 0.011;
+/** A lamp bank, as bright as it is (the floor shows a twentieth or so of it, more the flatter it is looked across). */
+const BANK_GLOW = new Color(1, 0.97, 0.92).multiplyScalar(30);
 /**
  * How far a reflection spreads up and down, for each ft it goes from the floor to the lamp: the clear
  * coat's (sharp), the wood's under it (soft) and the varnish's haze. Across, it spreads less the flatter
  * the floor is looked across (a rough floor draws a light out toward the camera).
  */
-const SPREAD_SHARP = 0.04;
-const SPREAD_SOFT = 0.16;
-const SPREAD_HAZE = 0.32;
-/** How much of the lamps the haze is; and how much brighter the clear coat's lamps are than the wood's blur of them (they are the lamps themselves, nearly: they glow). */
-const HAZE = 0.35;
-const CLEAR = 1.5;
-/** The floor takes this much of the light (it is set for the figures): its paint stays the colour it was painted. */
-const PAINT_LIGHT = 0.8;
+const SPREAD_SHARP = 0.035;
+const SPREAD_SOFT = 0.14;
+const SPREAD_HAZE = 0.34;
+/** How much of the lamps the haze is; and how much brighter the clear coat's lamps are than the wood's blur of them. */
+const HAZE = 0.18;
+const CLEAR = 1.3;
+/** How clear the coat is: over bare wood, over paint (a logo has more coats on it), and where the key is worn by feet. */
+const GLOSS_WOOD = 0.5;
+const GLOSS_PAINT = 0.72;
+const GLOSS_WORN = 0.22;
+/** The lane is this long from the baseline and this wide (ft): where the wear is. */
+const LANE_L = 19;
+const LANE_W = 16;
+/**
+ * The floor's light. The lamps are in the rig (rig.ts) and in the building's light both: the floor takes
+ * the rig's in full (they throw its shadows) and this much of the soft light from all round, so a shadow
+ * on it is a shadow.
+ */
+const FLOOR_DIRECT = 1.0;
+/** How much deeper a shadow on the floor is than the light it keeps off (1: as it is). */
+const FLOOR_SHADE = 1.4;
+/** How much of the floor's light is taken to be the lamps' that throw shadows (the rest is never in shadow). */
+const FLOOR_HOLD = 0.9;
+const FLOOR_SOFT = 0.1;
 /**
  * The shadows on the floor: sharp where a foot meets it, softer the higher what throws them is (a lamp
  * ring is a broad light). How far round a point the map is looked at for what is over it (texels); how
  * soft for each ft that is over the floor, at least and at most (texels).
  */
 const SHADOW_SEARCH = 7;
-const SHADOW_SOFT = 0.9;
-const SHADOW_SHARP = 0.6;
-const SHADOW_MOST = 6;
+const SHADOW_SOFT = 0.4;
+const SHADOW_SHARP = 0.7;
+const SHADOW_MOST = 4;
 /** The depth of the shadow map along the light, ft (scene.ts SHADOW_DEPTH). */
 const SHADOW_FT = 120;
 
@@ -252,22 +273,25 @@ const CONTACT = /* glsl */ `
         vec2 ts = vec2(1.0) / shadowMapSize;
         float over = 0.0;
         float found = 0.0;
-        for (int i = 0; i < 8; i++) {
+        for (int i = 0; i < 9; i++) {
           float a = float(i) * 0.785 + 0.4;
-          vec2 o = vec2(cos(a), sin(a)) * ts * SHADOW_SEARCH_ * (0.45 + 0.55 * float(i & 1));
+          vec2 o = i == 8 ? vec2(0.0) : vec2(cos(a), sin(a)) * ts * SHADOW_SEARCH_ * (0.45 + 0.55 * float(i & 1));
           float d = unpackRGBAToDepth(texture2D(shadowMap, shadowCoord.xy + o));
           if (d < shadowCoord.z) {
             over += shadowCoord.z - d;
             found += 1.0;
           }
         }
-        shadowRadius = found > 0.0 ? clamp(over / found * SHADOW_FT_ * SHADOW_SOFT_, SHADOW_SHARP_, SHADOW_MOST_) : SHADOW_SHARP_;
+        // (nothing over it anywhere near: most of the floor, and four lamps to ask, so it is not filtered at all)
+        if (found == 0.0) return 1.0;
+        shadowRadius = clamp(over / found * SHADOW_FT_ * SHADOW_SOFT_, SHADOW_SHARP_, SHADOW_MOST_);
       }
       float dx0 = - texelSize.x * shadowRadius;`;
 
 const FLOOR_HEAD = /* glsl */ `
   varying vec3 vFloor;
   uniform float uDetail;
+  uniform vec3 uWood;
   uniform vec3 uBankAt[BANKS];
   uniform vec4 uBankU[BANKS];
   uniform vec4 uBankV[BANKS];
@@ -283,6 +307,23 @@ const FLOOR_HEAD = /* glsl */ `
     vec2 f = fract(p);
     f = f * f * (3.0 - 2.0 * f);
     return mix(mix(fHash(i), fHash(i + vec2(1.0, 0.0)), f.x), mix(fHash(i + vec2(0.0, 1.0)), fHash(i + vec2(1.0, 1.0)), f.x), f.y);
+  }
+  // the grain: lines along the strip, each with a run of light and dark of its own (no two side by side
+  // in step: a lattice of noise looked along shows as diamonds)
+  float fLine(float run, float line) {
+    float o = run + fHash(vec2(line, 1.7)) * 41.0;
+    float i = floor(o);
+    float f = fract(o);
+    return mix(fHash(vec2(i, line)), fHash(vec2(i + 1.0, line)), f * f * (3.0 - 2.0 * f));
+  }
+  float fStreak(float run, float across) {
+    float i = floor(across);
+    float f = fract(across);
+    return mix(fLine(run, i), fLine(run, i + 1.0), f * f * (3.0 - 2.0 * f));
+  }
+  // (three sizes of it, each turned: no lattice shows in the varnish looked along)
+  float fCloud(vec2 p) {
+    return fNoise(p) * 0.5 + fNoise(mat2(0.8, 0.6, -0.6, 0.8) * p * 2.03 + 17.0) * 0.3 + fNoise(mat2(0.6, -0.8, 0.8, 0.6) * p * 4.1 + 5.0) * 0.2;
   }
   // how much of a pixel fw wide at x is covered by lines w wide every p (the lines' exact share: no shimmer)
   float fLines(float x, float p, float w, float fw) {
@@ -300,49 +341,76 @@ const FLOOR_HEAD = /* glsl */ `
 
 const FLOOR_WOOD = /* glsl */ `
   #include <map_fragment>
-  // the strips: across the floor from its far edge, each painted board six strips; along it, each strip
-  // in lengths of its own with its joints staggered
+  // the strips: across the floor from its far edge, 2¼ in each; along it, each strip in lengths of
+  // its own with its joints staggered
   float wAcross = HALF_EDGE - vFloor.z;
-  float wAlong = vFloor.x;
-  float wSw = BOARD / STRIPS_N;
-  float wStripF = wAcross / wSw;
+  float wStripF = wAcross / STRIP_;
   float wStrip = floor(wStripF);
-  float wLen = 2.6 + 5.4 * fHash(vec2(wStrip, 3.1));
-  float wRun = wAlong + wLen * fHash(vec2(wStrip, 7.7));
+  float wLen = STRIP_SHORT_ + (STRIP_LONG_ - STRIP_SHORT_) * fHash(vec2(wStrip, 3.1));
+  float wRun = vFloor.x + 60.0 + wLen * fHash(vec2(wStrip, 7.7));
   float wPiece = floor(wRun / wLen);
   float wFwA = fwidth(wAcross);
   float wFwL = fwidth(wRun);
-  // (what is too fine to see from here is its average: a strip under a few dots wide is the board's tone)
-  float wNear = (1.0 - smoothstep(wSw * 0.1, wSw * 0.3, wFwA)) * uDetail;
+  // (what is too fine to see from here is its average: strips under a dot wide are one tone)
+  float wNear = (1.0 - smoothstep(STRIP_ * 0.45, STRIP_ * 1.3, wFwA)) * uDetail;
   float wPick = fHash(vec2(wStrip * 1.37 + 0.5, wPiece * 2.11 + 1.3));
-  vec3 wTone = mix(vec3(1.03, 1.025, 1.02), vec3(0.92, 0.895, 0.86), wPick * wPick);
+  float wTone = 1.0 + TONE_ * (0.36 - wPick * wPick);
+  // (from far off: the floor was laid in panels and has worn, a shade here and there)
+  float wPatch = 1.0 + 0.035 * (fCloud(vec2(vFloor.x * 0.11, vFloor.z * 0.23)) - 0.5) * uDetail;
   // the grain: fine lines along the strip, wavering, finer still where they are near
   float wWav = fNoise(vec2(wRun * 0.35, wStrip * 5.0)) * 3.0;
-  float wG1 = fNoise(vec2(wRun * 0.9 + wPiece * 13.0, (wAcross + wWav * wSw) * 70.0));
-  float wG2 = fNoise(vec2(wRun * 2.3, wAcross * 190.0 + wStrip));
-  float wGrainNear = 1.0 - smoothstep(0.002, 0.005, wFwA);
-  float wGrain = 1.0 + 0.09 * (wG1 - 0.5) * wGrainNear + 0.05 * (wG2 - 0.5) * (1.0 - smoothstep(0.0008, 0.002, wFwA));
-  float wSeams = fLines(wAcross, wSw, SEAM_W_, wFwA) + fLines(wRun, wLen, SEAM_W_, wFwL) * step(0.05, fract(wStripF)) * step(fract(wStripF), 0.95);
-  vec3 wWood = mix(vec3(1.0), wTone * wGrain, wNear) * (1.0 - SEAM_DARK_ * min(wSeams, 1.0) * uDetail);
-  // (paint and lines take the grain and the seams less than bare wood: they lie over it)
-  float wBare = smoothstep(0.08, 0.2, diffuseColor.r - diffuseColor.b);
-  diffuseColor.rgb *= mix(vec3(1.0) - (vec3(1.0) - wWood) * 0.6, wWood, wBare);
+  float wG1 = fStreak(wRun * 0.7 + wPiece * 13.0, (wAcross + wWav * STRIP_) * 60.0);
+  float wG2 = fStreak(wRun * 1.9, wAcross * 170.0 + wStrip * 3.0);
+  float wGrain = 1.0 + GRAIN_ * ((wG1 - 0.5) * (1.0 - smoothstep(0.002, 0.006, wFwA)) + 0.6 * (wG2 - 0.5) * (1.0 - smoothstep(0.0008, 0.002, wFwA)));
+  float wSeams = fLines(wAcross, STRIP_, SEAM_W_, wFwA) + fLines(wRun, wLen, SEAM_W_, wFwL) * step(0.06, fract(wStripF)) * step(fract(wStripF), 0.94) * wNear;
+  // (a seam is a groove a dot can't hold from far off: it fades before it could shimmer)
+  wSeams *= 1.0 - smoothstep(STRIP_ * 0.5, STRIP_ * 2.0, wFwA);
+  float wWood = mix(1.0, wTone * wGrain, wNear) * wPatch * (1.0 - SEAM_DARK_ * min(wSeams, 1.0) * uDetail);
+  // (paint and lines lie over the wood: they take its strips and seams less; the apron's stain takes them all)
+  vec3 wOff = diffuseColor.rgb - uWood;
+  float wBare = 1.0 - smoothstep(0.05, 0.16, length(wOff));
+  float wStain = wBare + (1.0 - wBare) * step(wOff.r, 0.0) * step(wOff.b, 0.0) * step(0.02, diffuseColor.r - diffuseColor.b);
+  diffuseColor.rgb *= mix(1.0 - (1.0 - wWood) * 0.45, wWood, wStain);
+  // the wear: where the lanes are, the coat scuffed dull in streaks by feet (and a little everywhere)
+  float wLane = (1.0 - smoothstep(LANE_L_ - 3.0, LANE_L_ + 2.0, HALF_COURT - abs(vFloor.x))) * step(abs(vFloor.x), HALF_COURT) * (1.0 - smoothstep(LANE_W_ * 0.5 - 1.0, LANE_W_ * 0.5 + 3.0, abs(vFloor.z)));
+  float wScuff = fCloud(vFloor.xz * vec2(0.5, 0.8));
+  float wWorn = smoothstep(0.42, 0.7, wScuff) * (0.25 + 0.75 * wLane) * uDetail;
   // each strip's face a little off flat, and its varnish a little more or less clear
-  vec2 fTilt = (vec2(fHash(vec2(wStrip, 11.0)), fHash(vec2(wStrip, wPiece + 5.0))) - 0.5) * vec2(0.6, 2.0) * TILT_ * wNear;
-  float fGloss = 0.6 + 0.25 * (fHash(vec2(wPiece, wStrip * 0.73)) - 0.5) * wNear;`;
+  vec2 fTilt = (vec2(fHash(vec2(wStrip, 11.0)), fHash(vec2(wStrip, wPiece + 5.0))) - 0.5) * vec2(0.5, 2.0) * TILT_ * wNear * mix(0.5, 1.0, wBare);
+  float fGloss = mix(mix(GLOSS_PAINT_, GLOSS_WOOD_, wBare) + 0.34 * (fHash(vec2(wPiece, wStrip * 0.73)) - 0.5) * wNear * wBare, GLOSS_WORN_, wWorn * 0.8);
+  diffuseColor.rgb *= 1.0 - 0.04 * wWorn;`;
 
 const FLOOR_VARNISH = /* glsl */ `
   #include <lights_fragment_end>
   {
-    reflectedLight.directDiffuse *= PAINT_;
-    reflectedLight.indirectDiffuse *= PAINT_;
+    // (a lamp's shadow on the floor is deeper than its share of the light: a broadcast's floor shows them)
+    // (and it is the lamps that throw them that count: the edge light and the soft one, which throw none,
+    // would wash them out, so the floor takes the shadow as if most of its light were the lamps')
+    float fCast = 0.0;
+    float fRest = 0.0;
+    #if NUM_DIR_LIGHTS > 0
+    for (int i = 0; i < NUM_DIR_LIGHTS; i++) {
+      float lit = dot(directionalLights[i].color, vec3(0.33)) * max(dot(geometryNormal, directionalLights[i].direction), 0.0);
+      if (i < NUM_DIR_LIGHT_SHADOWS) fCast += lit;
+      else fRest += lit;
+    }
+    #endif
+    vec3 fAll = reflectedLight.directDiffuse;
+    float fGot = dot(fAll, vec3(0.33)) / max(dot(BRDF_Lambert(material.diffuseColor), vec3(0.33)), 1e-4);
+    float fShade = fCast > 0.0 ? clamp((fGot - fRest) / fCast, 0.0, 1.0) : 1.0;
+    // (what it would be with nothing in the way, then the shadow laid on it)
+    fAll *= (fCast + fRest) / max(fGot, 1e-4);
+    reflectedLight.directDiffuse = fAll * (1.0 - HOLD_ + HOLD_ * pow(fShade, SHADE_)) * DIRECT_;
+    reflectedLight.indirectDiffuse *= SOFT_AMT;
     // (the varnish's reflections are its lamps, below, and the mirror over it: not the environment's blur)
     reflectedLight.indirectSpecular *= 0.0;
+    reflectedLight.directSpecular *= 0.0;
     vec3 eyeW = normalize(vFloor - cameraPosition);
     vec3 r = reflect(eyeW, normalize(vec3(fTilt.x, 1.0, fTilt.y)));
     float cosI = clamp(-eyeW.y, 0.0, 1.0);
-    float fres = 0.04 + 0.96 * pow(1.0 - cosI, 5.0);
-    float across = max(cosI, 0.2);
+    // (a varnish is not glass: looked along, it mirrors half of what glass would)
+    float fres = 0.04 + 0.46 * pow(1.0 - cosI, 5.0);
+    float across = max(cosI, 0.25);
     float glint = 0.0;
     for (int i = 0; i < BANKS; i++) {
       float dn = dot(r, uBankN[i]);
@@ -354,25 +422,53 @@ const FLOOR_VARNISH = /* glsl */ `
       float v = dot(d, uBankV[i].xyz);
       float hu = uBankU[i].w;
       float hv = uBankV[i].w;
-      // (the clear coat: each lamp of the row, drawn out toward the camera)
-      float cell = 2.0 * hu / HEADS_N;
-      float s = t * SHARP_;
-      float lamp = 0.5 * cell * HEAD_FILL_;
-      float head = fSpread((fract(u / cell + 0.5 * HEADS_N) - 0.5) * cell, 0.3 * lamp, 0.7 * lamp + min(s * across, 0.3 * cell)) * (1.0 + 0.886 * 0.7 / 0.3);
-      float sharp = head * fSpread(u, hu, 0.5 * cell) * fSpread(v, 0.3 * hv, 0.7 * hv + s) * (1.0 + 0.886 * 0.5 * cell / hu) * (1.0 + 0.886 * (0.7 * hv + s) / (0.3 * hv)) * hv / (hv + 0.886 * s);
-      float soft = HEAD_FILL_ * fSpread(u, hu, t * SOFT_ * across) * fSpread(v, hv, t * SOFT_);
-      float haze = HEAD_FILL_ * fSpread(u, hu, t * HAZE_S * across) * fSpread(v, hv, t * HAZE_S);
+      // (the clear coat: the bank itself, its edges a little soft; under it the wood's blur of it, drawn
+      // out toward the camera; and the haze round both)
+      float sharp = fSpread(u, hu, 0.4 + t * SHARP_ * across) * fSpread(v, hv, 0.3 + t * SHARP_);
+      float soft = fSpread(u, hu, t * SOFT_ * across) * fSpread(v, hv, t * SOFT_);
+      float haze = fSpread(u, hu, t * HAZE_S * across) * fSpread(v, hv, t * HAZE_S);
       glint += mix(soft, sharp * CLEAR_, fGloss) + HAZE_ * haze;
     }
-    reflectedLight.directSpecular += uBankGlow * glint * fres;
+    // (looked along, the mirror over the floor has the lamps themselves: the coat's own are left to it)
+    reflectedLight.directSpecular += uBankGlow * glint * fres * smoothstep(0.04, 0.22, cosI);
   }`;
 
 /** What the floor's shader is told each frame (only the wood's detail is changed: shed on a slow device). */
 export interface FloorKnobs {
   uDetail: { value: number };
+  /** The bare wood's colour as the floor's canvas has it (linear): what isn't that is paint. */
+  uWood: { value: Color };
 }
 
 const glsl = (n: number) => (Number.isInteger(n) ? `${n}.0` : String(n));
+
+/**
+ * The bare wood's colour on the floor's canvas (the whole floor, sideways, as Court.tsx paints it): the
+ * commonest of a few dots between the arcs and the middle, where there is seldom paint.
+ */
+export function woodOf(cv: HTMLCanvasElement): Color {
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  const seen = new Map<number, number>();
+  let best = 0xdcae76;
+  if (ctx) {
+    for (const [x, z] of [
+      [16, 14],
+      [-16, 14],
+      [16, -14],
+      [-16, -14],
+      [12, 0],
+      [-12, 0],
+      [20, 19],
+    ]) {
+      const d = ctx.getImageData(Math.round((0.5 + x / FLOOR_L) * cv.width), Math.round((0.5 + z / FLOOR_W) * cv.height), 1, 1).data;
+      const c = (d[0] << 16) | (d[1] << 8) | d[2];
+      const n = (seen.get(c) ?? 0) + 1;
+      seen.set(c, n);
+      if (n > (seen.get(best) ?? 0)) best = c;
+    }
+  }
+  return new Color(best);
+}
 
 /**
  * The floor's material becomes the varnished floor (see the top of this file): the canvas it is given
@@ -380,7 +476,7 @@ const glsl = (n: number) => (Number.isInteger(n) ? `${n}.0` : String(n));
  */
 export function varnish(mat: MeshStandardMaterial): FloorKnobs {
   const list = banks();
-  const knobs: FloorKnobs = { uDetail: { value: 1 } };
+  const knobs: FloorKnobs = { uDetail: { value: 1 }, uWood: { value: new Color(0xdcae76) } };
   const uniforms = {
     ...knobs,
     uBankAt: { value: list.map((b) => b.at) },
@@ -392,19 +488,29 @@ export function varnish(mat: MeshStandardMaterial): FloorKnobs {
   const defs = {
     BANKS: String(list.length),
     HALF_EDGE: glsl(HALF_W + SIDE),
-    BOARD: glsl(PAINTED_BOARD),
-    STRIPS_N: glsl(STRIPS),
+    HALF_COURT: glsl(COURT_LEN / 2),
+    STRIP_: glsl(STRIP),
+    STRIP_SHORT_: glsl(STRIP_SHORT),
+    STRIP_LONG_: glsl(STRIP_LONG),
     SEAM_W_: glsl(SEAM_W),
     SEAM_DARK_: glsl(SEAM_DARK),
+    TONE_: glsl(TONE),
+    GRAIN_: glsl(GRAIN),
     TILT_: glsl(TILT),
     SHARP_: glsl(SPREAD_SHARP),
     SOFT_: glsl(SPREAD_SOFT),
     HAZE_S: glsl(SPREAD_HAZE),
     HAZE_: glsl(HAZE),
     CLEAR_: glsl(CLEAR),
-    HEADS_N: glsl(HEADS),
-    HEAD_FILL_: glsl(HEAD_FILL),
-    PAINT_: glsl(PAINT_LIGHT),
+    GLOSS_WOOD_: glsl(GLOSS_WOOD),
+    GLOSS_PAINT_: glsl(GLOSS_PAINT),
+    GLOSS_WORN_: glsl(GLOSS_WORN),
+    LANE_L_: glsl(LANE_L),
+    LANE_W_: glsl(LANE_W),
+    DIRECT_: glsl(FLOOR_DIRECT),
+    SHADE_: glsl(FLOOR_SHADE),
+    HOLD_: glsl(FLOOR_HOLD),
+    SOFT_AMT: glsl(FLOOR_SOFT),
     SHADOW_SEARCH_: glsl(SHADOW_SEARCH),
     SHADOW_SOFT_: glsl(SHADOW_SOFT),
     SHADOW_SHARP_: glsl(SHADOW_SHARP),
@@ -652,16 +758,21 @@ const GLOW_KNEE = 0.6;
 const GLOW = 0.32;
 /** How many times the glow is halved in size: the widest is the picture's height over 2 to this. */
 const GLOW_STEPS = 4;
+/** How much of the dark where things meet is laid over the picture (ao.ts). */
+const AO = 0.85;
 /** How much darker the corners are. */
-const VIGNETTE = 0.2;
+const VIGNETTE = 0.22;
+/** And how much more of each the darker house has (the open, a timeout, the clutch). */
+const DRAMA_VIGNETTE = 0.2;
+const DRAMA_CONTRAST = 0.08;
 /** The grade: a little more colour, a soft S in the contrast, the blacks held down a touch. */
-const SATURATION = 1.06;
-const CONTRAST = 0.1;
+const SATURATION = 1.12;
+const CONTRAST = 0.16;
 const BLACKS = 0.008;
 /** A broadcast camera's balance: a hair warm (in the screen's terms). */
 const BALANCE = new Vector3(1.007, 1.0, 0.993);
 /** The camera's exposure: a little over the building's light (a broadcast keeps the floor bright). */
-const EXPOSURE = 1.06;
+const EXPOSURE = 1.14;
 /** An exposure bump dies away over this long (ms). */
 const BUMP_MS = 260;
 
@@ -742,6 +853,40 @@ const UP = /* glsl */ `
     gl_FragColor = vec4(c / 16.0, 1.0);
   }`;
 
+/** How far out of focus a thing `z` ft from the camera is (0: sharp; 1: as soft as it gets): what is behind the man more than what is in front of him. */
+const UNSHARP = /* glsl */ `
+  uniform float uFocus;
+  uniform float uFocusAmt;
+  uniform float uNear;
+  uniform float uFar;
+  float unsharp(float z) {
+    float off = (z - uFocus) / max(uFocus, 1.0);
+    return clamp(off > 0.0 ? off * 2.0 : -off * 1.2, 0.0, 1.0) * uFocusAmt;
+  }`;
+
+/**
+ * A close-up's soft picture, down a size from the picture itself: four samples, each counted by how far
+ * out of focus it is, so the man in focus doesn't run into the blur behind him as a halo.
+ */
+const SOFT = /* glsl */ `
+  #include <packing>
+  uniform sampler2D tSrc;
+  uniform sampler2D tDepth;
+  uniform vec2 uTexel;
+  ${UNSHARP}
+  varying vec2 vUv;
+  void main() {
+    vec3 sum = vec3(0.0);
+    float all = 0.0;
+    for (int i = 0; i < 4; i++) {
+      vec2 uv = vUv + vec2(i < 2 ? -1.0 : 1.0, i == 0 || i == 2 ? -1.0 : 1.0) * uTexel;
+      float w = 0.04 + unsharp(-perspectiveDepthToViewZ(texture2D(tDepth, uv).r, uNear, uFar));
+      sum += texture2D(tSrc, uv).rgb * w;
+      all += w;
+    }
+    gl_FragColor = vec4(sum / all, 1.0);
+  }`;
+
 /**
  * The finished picture: the glow, the grade, the corners, to the screen. It is all done in the screen's
  * terms (the exposure and the tone curve are the materials', and the picture is kept as drawn): the glow
@@ -753,6 +898,8 @@ const FINISH = /* glsl */ `
   uniform sampler2D tGlow;
   uniform sampler2D tDepth;
   uniform sampler2D tSoft;
+  uniform sampler2D tAo;
+  uniform float uAo;
   uniform float uGlow;
   uniform vec3 uBalance;
   uniform float uSat;
@@ -760,18 +907,22 @@ const FINISH = /* glsl */ `
   uniform float uBlacks;
   uniform float uVignette;
   uniform float uAspect;
-  uniform float uFocus;
-  uniform float uFocusAmt;
-  uniform float uNear;
-  uniform float uFar;
+  uniform sampler2D tSofter;
+  uniform vec2 uDot;
+  ${UNSHARP}
   varying vec2 vUv;
   void main() {
     vec3 s = texture2D(tScene, vUv).rgb;
     if (uFocusAmt > 0.0) {
-      float z = -perspectiveDepthToViewZ(texture2D(tDepth, vUv).r, uNear, uFar);
-      float off = clamp(abs(z - uFocus) / max(uFocus, 1.0) * 2.0, 0.0, 1.0) * uFocusAmt;
-      s = mix(s, texture2D(tSoft, vUv).rgb, smoothstep(0.0, 1.0, off));
+      // (the nearest thing at this dot or beside it: a man's edge stays his, sharp, not a row of soft dots)
+      float d = texture2D(tDepth, vUv).r;
+      d = min(d, min(min(texture2D(tDepth, vUv + vec2(uDot.x, 0.0)).r, texture2D(tDepth, vUv - vec2(uDot.x, 0.0)).r), min(texture2D(tDepth, vUv + vec2(0.0, uDot.y)).r, texture2D(tDepth, vUv - vec2(0.0, uDot.y)).r)));
+      float off = unsharp(-perspectiveDepthToViewZ(d, uNear, uFar));
+      s = mix(s, texture2D(tSoft, vUv).rgb, smoothstep(0.0, 0.5, off));
+      s = mix(s, texture2D(tSofter, vUv).rgb, smoothstep(0.45, 1.0, off));
     }
+    // (the dark where things meet: see ao.ts)
+    if (uAo > 0.0) s *= mix(1.0, texture2D(tAo, vUv).r, uAo);
     vec3 glow = texture2D(tGlow, vUv).rgb * uGlow;
     // (a dot that is not a number would spread: it is nothing)
     if (any(isnan(glow)) || any(isinf(glow))) glow = vec3(0.0);
@@ -825,6 +976,11 @@ export class Lens {
   /** Brighter or darker than the building's own light (1: as lit; see EXPOSURE). */
   exposure = EXPOSURE;
   private bumped = 0;
+  /** The dark where things meet (ao.ts): on, and how much of it. A device a step down goes without. */
+  occlude = true;
+  /** How far down the house lights are (rig.ts mood): the corners darker, the contrast up a touch. */
+  drama = 0;
+  readonly ao: Occlusion;
   private focusAt = 0;
   private focusAmt = 0;
   private readonly can: boolean;
@@ -836,6 +992,7 @@ export class Lens {
   private readonly down: ShaderMaterial;
   private readonly up: ShaderMaterial;
   private readonly finish: ShaderMaterial;
+  private readonly softer: ShaderMaterial;
   private w = 1;
   private h = 1;
 
@@ -843,6 +1000,7 @@ export class Lens {
     this.can = renderer.extensions.has('EXT_color_buffer_float') || renderer.extensions.has('EXT_color_buffer_half_float');
     const samples = Math.min(4, renderer.capabilities.maxSamples || 0);
     this.scene = screenTarget(samples);
+    this.ao = new Occlusion(renderer);
     for (let i = 0; i < GLOW_STEPS; i++) this.glow.push(target(1, 1));
     const geo = new BufferGeometry();
     geo.setAttribute('position', new Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
@@ -863,6 +1021,10 @@ export class Lens {
       tGlow: { value: null },
       tDepth: { value: null },
       tSoft: { value: null },
+      tSofter: { value: null },
+      uDot: { value: new Vector2() },
+      tAo: { value: null },
+      uAo: { value: 0 },
       uGlow: { value: GLOW / GLOW_STEPS },
       uBalance: { value: BALANCE },
       uSat: { value: SATURATION },
@@ -874,6 +1036,16 @@ export class Lens {
       uFocusAmt: { value: 0 },
       uNear: { value: 1 },
       uFar: { value: 100 },
+    });
+    const fu = this.finish.uniforms;
+    this.softer = pass(SOFT, {
+      tSrc: { value: null },
+      tDepth: { value: null },
+      uTexel: { value: new Vector2() },
+      uFocus: fu.uFocus,
+      uFocusAmt: fu.uFocusAmt,
+      uNear: fu.uNear,
+      uFar: fu.uFar,
     });
     this.tri = new Mesh(geo, this.finish);
     this.tri.frustumCulled = false;
@@ -892,6 +1064,7 @@ export class Lens {
     this.w = Math.max(1, Math.round(w));
     this.h = Math.max(1, Math.round(h));
     this.scene.setSize(this.w, this.h);
+    this.ao.size(this.w, this.h);
     this.glow.forEach((t, i) => t.setSize(Math.max(1, this.w >> (i + 1)), Math.max(1, this.h >> (i + 1))));
     this.soft.forEach((t, i) => t.setSize(Math.max(1, this.w >> (i + 1)), Math.max(1, this.h >> (i + 1))));
   }
@@ -918,14 +1091,20 @@ export class Lens {
       r.render(scene, camera);
       return;
     }
-    const dof = this.focusAmt > 0 && (camera as PerspectiveCamera).isPerspectiveCamera;
-    if (dof && !this.scene.depthTexture) {
+    const persp = (camera as PerspectiveCamera).isPerspectiveCamera;
+    const dof = this.focusAmt > 0 && persp;
+    const occlude = this.occlude && persp;
+    if ((dof || occlude) && !this.scene.depthTexture) {
       // (asked for the first time: the picture's depth is kept from now on)
       this.scene.depthTexture = new DepthTexture(this.w, this.h);
       this.scene.dispose();
     }
     r.setRenderTarget(this.scene);
     r.render(scene, camera);
+
+    const f = this.finish.uniforms;
+    f.uAo.value = occlude ? AO : 0;
+    if (occlude) f.tAo.value = this.ao.render(this.scene.depthTexture!, camera as PerspectiveCamera);
 
     // the glow: down in halves from the brightest of it, then back up, each size adding the one under it
     const auto = r.autoClear;
@@ -955,38 +1134,41 @@ export class Lens {
     }
     r.autoClear = auto;
 
-    // a close-up's soft background: the picture at a quarter of its size
-    const f = this.finish.uniforms;
+    // a close-up's soft background: the picture at a half of its size (the man in focus kept out of it),
+    // then a quarter and an eighth, which the finish reads
+    f.uFocus.value = this.focusAt;
+    f.uFocusAmt.value = dof ? this.focusAmt : 0;
     if (dof) {
       if (!this.soft.length) {
-        this.soft = [target(1, 1), target(1, 1)];
+        this.soft = [target(1, 1), target(1, 1), target(1, 1)];
         this.size(this.w, this.h);
-      }
-      this.tri.material = this.down;
-      d.uFirst.value = 0;
-      let from: Texture = this.scene.texture;
-      let first = true;
-      let fw = this.w;
-      let fh = this.h;
-      for (const t of this.soft) {
-        d.uDecode.value = first ? 1 : 0;
-        first = false;
-        d.tSrc.value = from;
-        (d.uTexel.value as Vector2).set(1 / fw, 1 / fh);
-        r.setRenderTarget(t);
-        r.render(this.tri, this.cam);
-        from = t.texture;
-        fw = t.width;
-        fh = t.height;
       }
       const pc = camera as PerspectiveCamera;
       f.tDepth.value = this.scene.depthTexture;
-      f.tSoft.value = this.soft[1].texture;
       f.uNear.value = pc.near;
       f.uFar.value = pc.far;
+      (f.uDot.value as Vector2).set(1 / this.w, 1 / this.h);
+      const su = this.softer.uniforms;
+      su.tSrc.value = this.scene.texture;
+      su.tDepth.value = this.scene.depthTexture;
+      (su.uTexel.value as Vector2).set(0.5 / this.w, 0.5 / this.h);
+      this.tri.material = this.softer;
+      r.setRenderTarget(this.soft[0]);
+      r.render(this.tri, this.cam);
+      this.tri.material = this.down;
+      d.uFirst.value = d.uDecode.value = 0;
+      for (let i = 1; i < this.soft.length; i++) {
+        const from = this.soft[i - 1];
+        d.tSrc.value = from.texture;
+        (d.uTexel.value as Vector2).set(1 / from.width, 1 / from.height);
+        r.setRenderTarget(this.soft[i]);
+        r.render(this.tri, this.cam);
+      }
+      f.tSoft.value = this.soft[1].texture;
+      f.tSofter.value = this.soft[2].texture;
     }
-    f.uFocus.value = this.focusAt;
-    f.uFocusAmt.value = dof ? this.focusAmt : 0;
+    f.uVignette.value = VIGNETTE + DRAMA_VIGNETTE * this.drama;
+    f.uContrast.value = CONTRAST + DRAMA_CONTRAST * this.drama;
     f.tScene.value = this.scene.texture;
     f.tGlow.value = this.glow[0].texture;
     f.uAspect.value = this.w / this.h;
@@ -998,10 +1180,12 @@ export class Lens {
   dispose() {
     this.scene.depthTexture?.dispose();
     this.scene.dispose();
+    this.ao.dispose();
     for (const t of [...this.glow, ...this.soft]) t.dispose();
     this.tri.geometry.dispose();
     this.down.dispose();
     this.up.dispose();
     this.finish.dispose();
+    this.softer.dispose();
   }
 }

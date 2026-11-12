@@ -1434,6 +1434,8 @@ export interface Settings {
   liveView?: 'court' | 'bench';
   /** The court's picture: the 3D broadcast camera (the default, where the device draws WebGL) or the 2D floor from above ('flat'). */
   courtLook?: '3d' | 'flat';
+  /** The 3D court's camera: the broadcast's main one (the default), the sideline's, the end zone's, the baseline's or the overhead. */
+  courtCam?: 'tv' | 'side' | 'end' | 'low' | 'top';
   /** Live games open with the starting lineups on the court before the tip (default on). */
   liveIntro?: boolean;
   /** Live games show the night's other scores as they go (default on). */

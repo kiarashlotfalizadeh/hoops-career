@@ -584,6 +584,8 @@ export default function Live() {
         <CourtView
           look={league.settings.courtLook ?? '3d'}
           onLook={(v) => edit((l) => void (l.settings.courtLook = v))}
+          cam={league.settings.courtCam}
+          onCam={(v) => edit((l) => void (l.settings.courtCam = v))}
           body={body}
           script={script}
           speed={s.speed}

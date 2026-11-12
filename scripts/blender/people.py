@@ -1,9 +1,16 @@
-# The people who don't play: two players sitting on the bench (one leaning on his knees, one sat
-# back with a towel over his shoulder), and the coaches: the head coach on his feet with his arms
-# folded, his assistant sat on the first chair behind him. Each is the player's own body (figure.py),
-# put in a pose by its bones and baked as it stands: nothing in the app moves them. They stand on
-# y = 0; a sitter's hips are over the origin's chair (see SIT_BACK), facing +z, and the head coach
-# stands COACH_OUT in front of his assistant's chair.
+# The people round the floor: everyone who isn't one of the ten. Three bodies, each the player's own
+# (figure.py) in other clothes, each one skin on the puppet's bones as he is:
+#   bench     a player off the floor: a long-sleeved warm-up top over his shorts
+#   staff     a suit (figure.py's coach) with its trousers a material of their own: coaches and their
+#             assistants, the scorer's table, security, and (in other colours) the photographers
+#   official  a referee: a short-sleeved shirt, long trousers, a whistle at his chest
+# Each has a face that reads from across the floor (eyes, brows, lips), a fuller head of hair over his
+# crop, and his jaw a material of its own: the app colours each by who he is (sideline.ts: his skin, his
+# hair, whether he has a beard) and shows or hides the fuller hair.
+#
+# Nothing here is posed. The app sits them down, stands them up and puts them at the table by their
+# bones (sideline.ts bakes each pose once, when the court loads), and the ones who move (the
+# referees, the head coaches) are driven by the players' puppet.
 import os
 import sys
 
@@ -12,239 +19,311 @@ from lib import *  # noqa: E402,F403
 from figure import (  # noqa: E402
     AN_Y,
     ARM,
-    BONES,
+    BY_PLACE,
     CHEST_Y,
-    FARM,
+    CLOTH,
     FLOOR,
-    HEAD,
+    FORK,
+    G,
     HEAD_C,
+    HEAD_D,
     HEAD_H,
-    HIP,
-    HIP_W,
+    HEAD_W,
+    HEM,
     KN_Y,
-    SHIN,
-    SHOULDER,
-    THIGH,
-    TORSO,
-    UARM,
+    ON_HEAD,
+    SHOE,
+    SHORTS,
+    SKIN,
+    SOCK_HI,
+    SOCK_LO,
+    TRIM_M,
+    TUCK,
+    WAIST,
     WHITE,
     arm_frame,
     copy,
+    crop,
+    cut,
+    down_arm,
     dress_coach,
-    dress_player,
-    face_shade,
+    ears,
+    fingers,
     finish,
     fused,
+    hairline,
+    level,
     materials,
+    push,
+    relax,
     report,
-    solid,
+    shoe,
+    shorts_form,
+    slots,
+    sstep,
+    tag,
+    thin,
+    thin_body,
 )
 
-CONV = Matrix(((1, 0, 0, 0), (0, 0, -1, 0), (0, 1, 0, 0), (0, 0, 0, 1)))
-# a bench chair's seat is this high, and a sitter's hips this far behind its middle (arena.py's chair)
-SEAT = 1.5
-SIT_BACK = 0.3
-# the head coach stands this far in front of the first chair (toward the floor; the app turns the two toward
-# the middle of the floor, which puts him beside his assistant on either bench), and is this much smaller than his players
-COACH_OUT = 3.0
-COACH_SIZE = 0.93
+# what the app colours by who he is (sideline.ts PARTS: the names are its own)
+EYE, BROW, LIP, BEARD, HAIR_TOP = 'eye', 'brow', 'lip', 'beard', 'hairTop'
+WARM, TOP, LEGS, METAL = 'warm', 'top', 'legs', 'metal'
+# a sleeve ends this far down the arm: a warm-up's at the wrist, a referee's above the elbow
+CUFF = ARM - 0.06
+SLEEVE = 0.7
 
 
-def frame(at, x, y, z):
-    m = Matrix.Identity(4)
-    for i, axis in enumerate((x, y, z)):
-        for r in range(3):
-            m[r][i] = axis[r]
-    for r in range(3):
-        m[r][3] = at[r]
-    return m
+def front(tree, x, y):
+    """How far forward (z) the body's skin is at this height and this far across: the first of it met from in front."""
+    hit = tree.ray_cast(B(x, y, 3.0), B(0, 0, -1))[0]
+    return -hit.y if hit is not None else 0.0
 
 
-def turned(at, rot):
-    return Matrix.Translation(at) @ rot.to_4x4()
+def tree_of(obj):
+    from mathutils.bvhtree import BVHTree
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    t = BVHTree.FromBMesh(bm)
+    bm.free()
+    return t
 
 
-def limb(a, mid, end, bend):
-    """The two bones of an arm or a leg through these joints, as figure.ts turns them (an elbow folds forward, a knee back)."""
-    up, low = (mid - a).normalized(), (end - mid).normalized()
-    h = up.cross(low) * bend
-    h = h.normalized() if h.length > 0.06 else Vector((1, 0, 0))
+def bit(center, radii, mat, name, rot=None, seg=8, rings=5):
+    o = ellipsoid(center, radii, seg, rings, name, rot)
+    set_material(o, material(mat))
+    return tag(o, ON_HEAD)
+
+
+def face(hi):
+    """A face that reads from across the floor: the whites of his eyes and a dark iris in each, brows over them, lips."""
+    t = tree_of(hi)
+    c, w, h = HEAD_C, HEAD_W, HEAD_H
     out = []
-    for origin, d in ((a, up), (mid, low)):
-        y = -d
-        x = (h - y * h.dot(y)).normalized()
-        out.append(frame(origin, x, y, x.cross(y)))
-    return out
-
-
-def reach(a, toward, length):
-    return a + (toward - a).normalized() * length
-
-
-def body_pose(hips, lean, elbows, hands, knees=None, ankles=None, look=0.0, toes=0.2):
-    """
-    Every bone's place for a pose: the hips' middle, how far the trunk leans forward (radians), where
-    each elbow and hand tries to be (left, right), and for a sitter where his knees and ankles are.
-    """
-    rot = Matrix.Rotation(lean, 3, 'X')
-    hips = Vector(hips)
-    chest = hips + rot @ Vector((0, TORSO, 0))
-    out = {
-        'pelvis': turned(hips, Matrix.Rotation(lean * 0.35, 3, 'X')),
-        'chest': turned(chest, rot),
-        'head': turned(chest + rot @ Vector((0, HEAD, 0)), Matrix.Rotation(lean * 0.3 + look, 3, 'X')),
-    }
-    out['hem'] = out['pelvis'] @ Matrix.Translation((0, -0.03, 0))
-    for i, (s, sfx, ua, fa, ha, th, sh, ft) in enumerate(((1, 'L', 'ual', 'fal', 'hal', 'thl', 'shl', 'ftl'), (-1, 'R', 'uar', 'far', 'har', 'thr', 'shr', 'ftr'))):
-        sho = chest + rot @ Vector((s * SHOULDER, -0.14, 0))
-        el = reach(sho, Vector(elbows[i]), UARM)
-        ha_at = reach(el, Vector(hands[i]), FARM)
-        out[ua], out[fa] = limb(sho, el, ha_at, -1)
-        out[ha] = turned(ha_at, out[fa].to_3x3())
-        hip = hips + Vector((s * HIP_W, 0, 0))
-        kn = Vector(knees[i]) if knees else hip + Vector((0, -THIGH, 0))
-        an = Vector(ankles[i]) if ankles else kn + Vector((0, -SHIN, 0))
-        kn = reach(hip, kn, THIGH)
-        an = reach(kn, an, SHIN)
-        out[th], out[sh] = limb(hip, kn, an, 1)
-        out[ft] = turned(an, Matrix.Rotation(s * toes, 3, 'Y'))
-        out['hem' + sfx] = out[th] @ Matrix.Translation((0, -(THIGH - 0.7), 0))
-    return out
-
-
-def sitting(lean, knee_y, splay, elbows, hands, look=0.0):
-    """A pose on a chair: the knees at this height and this far apart, the feet where the shins then reach the floor."""
-    hip_y = FLOOR + SEAT + 0.4
-    knees, ankles = [], []
     for s in (1, -1):
-        hip = Vector((s * HIP_W, hip_y, 0))
-        dx, dy = s * splay, knee_y - hip_y
-        kn = hip + Vector((dx, dy, math.sqrt(THIGH * THIGH - dx * dx - dy * dy)))
-        ax, ay = s * 0.06, AN_Y - knee_y
-        an = kn + Vector((ax, ay, math.sqrt(max(0.0, SHIN * SHIN - ax * ax - ay * ay))))
-        knees.append(kn)
-        ankles.append(an)
-    mirror = lambda pts: [Vector(pts), Vector((-pts[0], pts[1], pts[2]))]  # noqa: E731
-    return body_pose((0, hip_y, 0), lean, mirror(elbows), mirror(hands), knees, ankles, look, 0.25)
+        ex, ey = s * 0.4 * w, c[1] + 0.06 * h
+        ez = front(t, ex, ey)
+        out.append(bit((ex, ey, ez - 0.006), (0.058, 0.026, 0.017), WHITE, 'eyeWhite'))
+        out.append(bit((ex * 0.96, ey, ez + 0.003), (0.026, 0.026, 0.012), EYE, 'iris', seg=6, rings=4))
+        by = c[1] + 0.17 * h
+        out.append(bit((ex * 1.04, by, front(t, ex, by) - 0.006), (0.086, 0.019, 0.02), BROW, 'brow', Matrix.Rotation(-s * 0.08, 3, 'Z')))
+    ly = c[1] - 0.47 * h
+    out.append(bit((0, ly, front(t, 0, ly) - 0.006), (0.072, 0.017, 0.018), LIP, 'lips'))
+    return out
 
 
-def white(obj):
-    """Clears the mesh's baked shade."""
-    col = obj.data.color_attributes.get('Col')
-    col.data.foreach_set('color', [1.0] * (len(obj.data.vertices) * 4))
+# a beard's edges, in head sizes from the head's middle (up, forward): its top runs from in front of the ear down to
+# under the lips, its foot is under the chin, and it stops this far back toward the ears
+BEARD_EAR, BEARD_LIP, BEARD_FOOT, BEARD_BACK = (-0.1, -0.3), (-0.55, 0.85), -1.0, -0.3
 
 
-def towel(pose):
-    """A towel over his left shoulder, a flap down his chest and one down his back (laid along the posed chest)."""
-    x = SHOULDER * 0.55
-    # (up and forward of the chest joint: down his front, over the top of the shoulder, down his back)
-    path = [(-0.85, 0.43), (-0.45, 0.47), (-0.1, 0.42), (0.13, 0.22), (0.17, 0.0), (0.12, -0.22), (-0.15, -0.37), (-0.5, -0.4), (-0.9, -0.37)]
-    rings = []
-    for i, (y, z) in enumerate(path):
-        a, b = path[max(0, i - 1)], path[min(len(path) - 1, i + 1)]
-        ty, tz = b[0] - a[0], b[1] - a[1]
-        n = math.hypot(ty, tz) or 1
-        # (out from the body square to the path, a little thick)
-        oy, oz = tz / n, -ty / n
-        if z < 0:
-            oy, oz = -oy, -oz
-        ring = []
-        for w, d in ((-0.2, 0.0), (0.2, 0.0), (0.2, 0.03), (-0.2, 0.03)):
-            ring.append(tuple(pose['chest'] @ Vector((x + w - 0.04 * z, y + oy * d, z + oz * d))))
-        rings.append(ring)
-    o = solid(rings, 'towel')
-    smooth(o)
-    set_material(o, material(WHITE))
-    paint(o, lambda *_: 1.0)
-    return [o]
+def beard_line():
+    """The beard's top edge as a plane (a point of it and its way up, game frame)."""
+    (y0, z0), (y1, z1) = BEARD_EAR, BEARD_LIP
+    # (square to the edge, in head sizes; a head is not as deep as it is tall)
+    ny, nz = (z1 - z0) / HEAD_H, -(y1 - y0) / HEAD_D
+    return (0, HEAD_C[1] + y0 * HEAD_H, HEAD_C[2] + z0 * HEAD_D), (0, ny, nz)
 
 
-def posed(fig, rig_ob, pose, name, shift=(0, 0, 0), seat=False, extra=None):
-    """The figure in a pose, as a mesh of its own (and `extra` things laid on him for it): its shade baked for how it now stands or sits."""
-    # (which points are his head, while he still stands as built: a face's baked shade is only a hint)
-    face = [v.co.z > HEAD_C[1] - HEAD_H * 1.05 for v in fig.data.vertices]
-    for b in BONES:
-        # (each bone stands alone, so its pose is its place now against its place as built)
-        rig_ob.pose.bones[b].matrix_basis = rig_ob.data.bones[b].matrix_local.inverted() @ (CONV @ pose[b])
-    bpy.context.view_layer.update()
-    dg = bpy.context.evaluated_depsgraph_get()
-    me = bpy.data.meshes.new_from_object(fig.evaluated_get(dg), depsgraph=dg)
-    ob = link(bpy.data.objects.new(name, me))
-    for g in list(ob.vertex_groups):
-        ob.vertex_groups.remove(g)
-    if extra:
-        # (joined after him: their points come after his, and none of them is his face)
-        ob = join([ob, *extra(pose)], name)
-        ob.name = name
-        face += [False] * (len(ob.data.vertices) - len(face))
-    others = []
-    if seat:
-        others = [box((0, FLOOR + SEAT - 0.1, SIT_BACK), (1.7, 0.2, 1.5), 'seat'), box((0, FLOOR + SEAT + 0.8, SIT_BACK - 0.8), (1.7, 1.6, 0.15), 'back')]
-    bake_occlusion(ob, others=others, floor=FLOOR, rays=72, reach=1.2, low=0.6, blur=3)
-    soften(ob, face, 0.55)
-    for o in others:
-        bpy.data.objects.remove(o)
-    smooth(ob)
-    transform(ob, Matrix.Translation((shift[0], shift[1] - FLOOR, shift[2])))
-    return ob
+def jaw(p):
+    """A point of his face where a beard grows: his cheeks below a line from his ear to under his lips, his chin and under it."""
+    co, no = beard_line()
+    y, z = (p[1] - HEAD_C[1]) / HEAD_H, (p[2] - HEAD_C[2]) / HEAD_D
+    return (p[1] - co[1]) * no[1] + (p[2] - co[2]) * no[2] < 0 and y > BEARD_FOOT and z > BEARD_BACK and abs(p[0]) < HEAD_W * 1.2
+
+
+def bearded(built):
+    """The skin of his jaw as a material of its own: the app colours it as his skin, or as his beard. His head is cut along the beard's edges first, so they are lines."""
+    c = HEAD_C
+    planes = [beard_line(), ((0, c[1] + BEARD_FOOT * HEAD_H, 0), (0, 1, 0)), ((0, 0, c[2] + BEARD_BACK * HEAD_D), (0, 0, 1))]
+    for o in built:
+        names = [m.name for m in o.data.materials]
+        if SKIN not in names:
+            continue
+        bm = bmesh.new()
+        bm.from_mesh(o.data)
+        for co, no in planes:
+            # (only his head: a plane goes on for ever)
+            faces = [f for f in bm.faces if G(f.calc_center_median())[1] > c[1] - HEAD_H * 1.3 and abs(G(f.calc_center_median())[0]) < 0.6]
+            geom = list({v for f in faces for v in f.verts}) + list({e for f in faces for e in f.edges}) + faces
+            bmesh.ops.bisect_plane(bm, geom=geom, dist=1e-5, plane_co=B(*co), plane_no=B(*no))
+        bmesh.ops.triangulate(bm, faces=bm.faces[:])
+        bm.to_mesh(o.data)
+        bm.free()
+        o.data.update()
+        o.data.materials.append(material(BEARD))
+        skin, beard = names.index(SKIN), len(names)
+        for f in o.data.polygons:
+            if f.material_index == skin and jaw(G(f.center)):
+                f.material_index = beard
+    return built
+
+
+def head_bits(hi, mid):
+    """His face, and a fuller head of hair over his crop (shown on those who have it)."""
+    scalp = lambda p: hairline(p) > 0.02 and p[1] > HEAD_C[1] - HEAD_H * 0.7  # noqa: E731
+    hair = copy(mid, 'hairTop')
+    cut(hair, [], scalp)
+    push(hair, lambda p: 0.006 + 0.085 * sstep(0.02, 0.42, hairline(p)))
+    relax(hair, 2)
+    thin(hair, 240)
+    set_material(hair, material(HAIR_TOP))
+    return [*face(hi), tag(hair, ON_HEAD)]
+
+
+def lighter(built, keep=0.4):
+    """The same people with lighter shoes: a sneaker built for a close-up is most of a far-off man's triangles."""
+    for o in built:
+        if o.name.startswith(('shoe', 'sole')):
+            thin(o, max(40, tri_count(o) * keep))
+    return built
+
+
+def cuffs(at):
+    """A plane across each arm this far down it."""
+    return [((arm_frame(s) @ Vector((0, -at, 0))).to_tuple(), (arm_frame(s).to_3x3() @ Vector((0, -1, 0))).to_tuple()) for s in (1, -1)]
+
+
+def trousers(q, mat):
+    """Long trousers (the suit's: the shorts' seat, a straight leg each down to the shoe)."""
+    t = shorts_form(
+        [(AN_Y - 0.1, 0.4, 0.2, 0.235, 0.24), (AN_Y + 0.12, 0.4, 0.205, 0.24, 0.245), (KN_Y - 0.5, 0.4, 0.235, 0.265, 0.3), (KN_Y, 0.405, 0.265, 0.31, 0.31), (FORK - 0.12, 0.415, 0.34, 0.395, 0.415)],
+        folds=0.007,
+    )
+    thin(t, 3600 * q)
+    cut(t, [level(AN_Y + 0.1), level(WAIST)], lambda p: AN_Y + 0.1 < p[1] < WAIST and abs(p[0]) < 1.2)
+    set_material(t, material(mat))
+    return tag(t, BY_PLACE)
+
+
+def dress_bench(hi, q=1.0):
+    """Off the floor: a long-sleeved warm-up top (a band at its neck and cuffs) tucked into his shorts, socks, sneakers."""
+    mid = thin(copy(hi, 'mid'), 44000)
+    bits = head_bits(hi, mid)
+    body = thin_body(hi, 5000 * q)
+    cut(
+        body,
+        [level(5.3), *cuffs(CUFF), level(HEM + 0.3), level(SOCK_HI - 0.06)],
+        lambda p: (p[1] > 5.3 and abs(p[0]) < 0.6) or down_arm(p) > CUFF - 0.08 or (SOCK_HI - 0.06 < p[1] < HEM + 0.3 and abs(p[0]) < 1.2),
+    )
+    crop(body)
+
+    top = copy(mid, 'top')
+    push(top, lambda p: 0.03 + 0.03 * sstep(WAIST + 0.1, WAIST + 0.5, p[1]) * sstep(5.0, 4.4, p[1]) * (1 if down_arm(p) < 0.3 else 0))
+    relax(top, 12)
+    thin(top, 4600 * q)
+    relax(top, 1)
+    cut(
+        top,
+        [level(TUCK), *cuffs(CUFF), *cuffs(CUFF - 0.13), level(5.56), level(5.45)],
+        lambda p: TUCK < p[1] < 5.56 and (down_arm(p) < CUFF or abs(p[0]) < 0.9),
+    )
+    slots(top, [WARM, TRIM_M], lambda p: TRIM_M if (p[1] > 5.45 and abs(p[0]) < 0.5) or down_arm(p) > CUFF - 0.13 else WARM)
+
+    shorts = shorts_form()
+    thin(shorts, 2600 * q)
+    cut(shorts, [level(HEM), level(WAIST), level(HEM + 0.085)], lambda p: HEM < p[1] < WAIST and abs(p[0]) < 1.2)
+    slots(shorts, [CLOTH, TRIM_M], lambda p: TRIM_M if p[1] < HEM + 0.085 else CLOTH)
+    tag(shorts, SHORTS)
+
+    socks = mid
+    push(socks, lambda p: 0.009 + 0.013 * sstep(SOCK_HI - 0.16, SOCK_HI - 0.1, p[1]))
+    thin(socks, 1400 * q)
+    cut(socks, [level(SOCK_LO), level(SOCK_HI)], lambda p: SOCK_LO < p[1] < SOCK_HI)
+    set_material(socks, material(WHITE))
+
+    for o in (body, top, socks):
+        tag(o, BY_PLACE)
+    built = [body, top, shorts, socks, *ears(), *bits]
+    for s in (1, -1):
+        built += fingers(s) + shoe(s)
+    return lighter(bearded(built))
+
+
+def dress_official(hi, q=1.0):
+    """A referee: a short-sleeved shirt (a darker band at its collar and sleeves), long trousers, dark shoes, a whistle at his chest."""
+    mid = thin(copy(hi, 'mid'), 44000)
+    bits = head_bits(hi, mid)
+    chest = front(tree_of(mid), 0, 4.95)
+    body = thin_body(hi, 5600 * q)
+    cut(body, [level(5.3), *cuffs(SLEEVE - 0.1)], lambda p: (p[1] > 5.3 and abs(p[0]) < 0.6) or down_arm(p) > SLEEVE - 0.1)
+    crop(body)
+
+    shirt = copy(mid, 'shirt')
+    push(shirt, lambda p: 0.024 + 0.022 * sstep(WAIST + 0.1, WAIST + 0.5, p[1]) * sstep(5.0, 4.4, p[1]) * (1 if down_arm(p) < 0.3 else 0))
+    relax(shirt, 10)
+    thin(shirt, 3800 * q)
+    relax(shirt, 1)
+    cut(
+        shirt,
+        [level(TUCK), *cuffs(SLEEVE), *cuffs(SLEEVE - 0.09), level(5.54), level(5.44)],
+        lambda p: TUCK < p[1] < 5.54 and (down_arm(p) < SLEEVE or (abs(p[0]) < 0.9 and down_arm(p) == 0)),
+    )
+    slots(shirt, [TOP, TRIM_M], lambda p: TRIM_M if (p[1] > 5.44 and abs(p[0]) < 0.5) or down_arm(p) > SLEEVE - 0.09 else TOP)
+
+    # (his whistle, on a cord round his neck)
+    whistle = box((0, 4.93, chest + 0.045), (0.11, 0.07, 0.06), 'whistle')
+    set_material(whistle, material(METAL))
+    cord = []
+    for s in (1, -1):
+        c = box((s * 0.11, 5.19, chest + 0.02), (0.022, 0.56, 0.02), 'cord')
+        transform(c, Matrix.Translation((0, 4.93, 0)) @ Matrix.Rotation(-s * 0.4, 4, 'Z') @ Matrix.Translation((0, -4.93, 0)))
+        transform(c, Matrix.Translation((s * 0.02, 0, 0)))
+        set_material(c, material(METAL))
+        cord.append(c)
+
+    bpy.data.objects.remove(mid)
+    for o in (body, shirt, whistle, *cord):
+        tag(o, BY_PLACE)
+    built = [body, shirt, trousers(q, LEGS), whistle, *cord, *ears(), *bits]
+    for s in (1, -1):
+        built += fingers(s)
+        for part in shoe(s):
+            set_material(part, material(SHOE))
+            built.append(part)
+    return lighter(bearded(built), 0.5)
+
+
+def dress_staff(hi, q=1.0):
+    """The coach's suit (figure.py), its trousers a material of their own so a jacket and trousers can differ."""
+    mid = thin(copy(hi, 'mid'), 44000)
+    bits = head_bits(hi, mid)
+    bpy.data.objects.remove(mid)
+    built = dress_coach(hi, q)
+    for o in built:
+        # (figure.py builds the trousers from the shorts' form, and they keep its name)
+        if o.name.startswith(('shorts', 'trousers')):
+            set_material(o, material(LEGS))
+    return lighter(bearded([*built, *bits]))
 
 
 if __name__ == '__main__':
     a = args()
     reset()
     materials()
+    for name, color in ((EYE, (0.02, 0.015, 0.012)), (BROW, (0.05, 0.04, 0.035)), (LIP, (0.3, 0.14, 0.12)), (BEARD, (0.3, 0.31, 0.35)), (HAIR_TOP, (0.08, 0.082, 0.095))):
+        material(name, color, 0.7)
+    for name, color in ((WARM, (0.08, 0.1, 0.2)), (TOP, (0.3, 0.3, 0.32)), (LEGS, (0.02, 0.02, 0.025)), (METAL, (0.5, 0.5, 0.52))):
+        material(name, color, 0.75)
 
-    # the coach: on his feet, arms folded, watching
     hi = fused()
-    # (two of them in one thing, each lighter than a player: they are seen from across the floor)
-    coach_fig, coach_rig = finish(dress_coach(copy(hi, 'hi2'), 0.38), 'coachFig')
-    white(coach_fig)
-    paint(coach_fig, face_shade)
-    sh = CHEST_Y - 0.14
-    standing = body_pose(
-        (0, HIP, 0),
-        -0.04,
-        [(SHOULDER + 0.1, sh - 1.0, 0.36), (-SHOULDER - 0.1, sh - 1.0, 0.36)],
-        [(-0.3, 4.34, 0.62), (0.3, 4.2, 0.66)],
-        look=0.06,
-        toes=0.16,
-    )
-    head = posed(coach_fig, coach_rig, standing, 'headCoach')
-    transform(head, Matrix.Translation((0, 0, COACH_OUT)) @ Matrix.Scale(COACH_SIZE, 4))
-    # his assistant: sat on the first chair, leaning in a little, his hands on his thighs, watching
-    watching = sitting(0.18, KN_Y - 0.04, 0.32, (0.95, 2.66, 0.45), (0.5, 2.22, 1.25), look=0.02)
-    aide = posed(coach_fig, coach_rig, watching, 'assistant', (0, 0, -SIT_BACK), seat=True)
-    coach = join([head, aide], 'coach')
-    for o in (coach_fig, coach_rig):
-        bpy.data.objects.remove(o)
-
-    # the bench: one leaning forward with his forearms on his thighs, one sat back with his hands on them
-    # (a lighter copy of the player: they are seen from across the floor)
-    fig, rig_ob = finish(dress_player(hi, 0.42), 'sitter')
-    white(fig)
-    paint(fig, face_shade)
-    lean_fwd = sitting(0.5, KN_Y, 0.3, (0.68, 2.42, 1.1), (0.22, 1.95, 1.75), look=-0.3)
-    bench_a = posed(fig, rig_ob, lean_fwd, 'benchA', (0, 0, -SIT_BACK), seat=True)
-    sat_back = sitting(-0.14, KN_Y - 0.13, 0.36, (1.0, 2.62, 0.0), (0.66, 2.2, 1.0), look=0.1)
-    bench_b = posed(fig, rig_ob, sat_back, 'benchB', (0, 0, -SIT_BACK), seat=True, extra=towel)
-    for o in (fig, rig_ob):
-        bpy.data.objects.remove(o)
-
-    people = [bench_a, bench_b, coach]
-    for o in people:
-        report(o)
+    people = []
+    # (each is seen from across the floor more than up close: lighter than a player)
+    for name, dress, q in (('bench', dress_bench, 0.44), ('staff', dress_staff, 0.42), ('official', dress_official, 0.6)):
+        fig, rig_ob = finish(dress(copy(hi, 'hi2'), q), name)
+        rig_ob.name = name + 'Rig'
+        report(fig)
+        people += [fig, rig_ob]
+    bpy.data.objects.remove(hi)
     export_glb(os.path.join(a['out'], 'people.glb'), people)
     save_blend(os.path.join(a['blend'], 'people.blend'))
     if 'preview' in a:
-        for i, o in enumerate(people):
-            o.location = B((i - 1) * 4.0, 0, 0)
-        chairs = [box(((i - 1) * 4.0, SEAT - 0.1, 0), (1.6, 0.2, 1.5), 'chair') for i in range(2)]
-        for c in chairs:
-            set_material(c, material('ground2', (0.2, 0.2, 0.22), 0.6, shade=False))
+        for i, o in enumerate(people[1::2]):
+            o.location = B((i - 1) * 3.4, -FLOOR, 0)
         preview(
             os.path.join(a['preview'], 'people.png'),
-            [((0, 4.5, 30), (2, 3.2, 0), 16), ((22, 6, 20), (2, 3.2, 0), 16), ((14, 3, 12), (8, 2.2, 0), 5)],
-            size=(720, 460),
+            [((0, 4.5, 30), (0, 3.4, 0), 12), ((20, 6, 20), (0, 3.4, 0), 12), ((1.5, 6.3, 10), (0, 5.9 - FLOOR, 0), 2.2), ((-9, 6.2, 5), (-3.4, 5.9 - FLOOR, 0), 2.2)],
+            size=(720, 520),
             ground=0,
-            sheet_cols=1,
+            sheet_cols=2,
         )

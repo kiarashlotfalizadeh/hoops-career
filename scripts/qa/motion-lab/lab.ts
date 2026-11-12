@@ -6,8 +6,10 @@
 //   lab.find('dunk')              the possessions with a man doing that (act), and when
 //   lab.film({ k, pid, from, to, every, eye, fov })   a strip of moments of possession k, a camera on one man
 //                                 (eye: where the camera is from him, ft; 'tv': the broadcast's own)
-//   ?seed=n&home=n&away=n picks the game.
-import { Mesh, MeshStandardMaterial, PerspectiveCamera, SphereGeometry, Vector3, type Camera, type Scene, type WebGLRenderer } from 'three';
+//   lab.pose({ drive, n, from, to })   one move side by side at moments of it, at centre court
+//   ?seed=n&home=n&away=n picks the game. ?toes=0: the feet as the body turns them itself (by default the lab turns
+//   each foot bone by the puppet's own `feet[k].pitch`, the heel-and-toe roll the body doesn't read yet).
+import { Mesh, MeshStandardMaterial, PerspectiveCamera, SphereGeometry, Vector3, type Bone, type Camera, type Scene, type WebGLRenderer } from 'three';
 import { createLeague, defaultSettings } from '../../../src/core/league/create';
 import { teamPlayers } from '../../../src/core/league/helpers';
 import { composites } from '../../../src/core/ratings';
@@ -28,6 +30,22 @@ const num = (k: string, d: number) => (q.has(k) ? Number(q.get(k)) : d);
 const PACE = 0.5;
 const TAIL = 180;
 const FRAME = 1000 / 60;
+
+// (the roll of a foot from heel to toe: the puppet says it, the body's foot bones are turned here until figure.ts reads it)
+if (q.get('toes') !== '0') {
+  const place = Fig.prototype.place;
+  const X = new Vector3(1, 0, 0);
+  Fig.prototype.place = function (this: Fig) {
+    place.call(this);
+    const bones = (this as unknown as { bones: Bone[] }).bones;
+    this.pup.feet.forEach((f, k) => {
+      const b = bones[k ? 14 : 11];
+      const lift = Math.max(0, b.position.y / this.pup.body.s - 0.28);
+      // (as the body has it, toes down by how high the foot is, where the puppet says nothing: a jump)
+      b.quaternion.setFromAxisAngle(X, Math.max(-0.4, Math.min(1.1, this.pup.pose[I.air] > 0.5 ? Math.min(0.95, lift * 0.75) : f.pitch)));
+    });
+  };
+}
 
 // the game
 const league = createLeague({ name: 'lab', userTid: 0, coachName: 'lab', settings: defaultSettings(), seed: null, rngSeed: num('league', 17) });
@@ -67,7 +85,7 @@ const scene = new CourtScene(canvas, paints.ball, paints.ballSeam, await loadMod
 const floorCv = document.createElement('canvas');
 const t0 = league.teams[H];
 const floor: CourtFloor = { kind: 'home', abbrev: t0.abbrev, name: t0.name, colors: t0.colors, paint: kits[0].color, trim: kits[0].trim, mark: 'circle' };
-paintFloor(floorCv, { wide: true, k: 12, w: 0, h: 0, top: 0, ox: 0, oy: 0 }, 1, floor, paints);
+paintFloor(floorCv, { wide: true, k: 12, w: 0, h: 0, top: 0, ox: 0, oy: 0 }, 1, floor, paints, true);
 scene.setFloor(floorCv);
 const props = {
   kits,
@@ -176,7 +194,8 @@ function measure({ speed = 2, calm = false, slide = 0.05 } = {}) {
   let heads = 0;
   let dunkOff = 0;
   const cases: string[] = [];
-  const last = new Map<number, { x: number; z: number; feet: [number, number, boolean][]; head: number; pose: Float32Array }>();
+  const slides = new Map<string, number>();
+  const last = new Map<number, { x: number; z: number; feet: [number, number, boolean][]; head: number; pose: Float32Array; air: number }>();
   const acts = new Map<string, number>();
   const gestures = new Map<string, number>();
   const making = new Map<number, string | null>();
@@ -205,6 +224,9 @@ function measure({ speed = 2, calm = false, slide = 0.05 } = {}) {
         if (worst > slide) {
           slid++;
           slidFt += worst;
+          // (which clip he was in, and whether he had just come down from a jump)
+          const why = `${p.clip}${was.air > 0.2 || air > 0.2 ? '+air' : ''}`;
+          slides.set(why, (slides.get(why) ?? 0) + 1);
         }
         // (how fast his head turns on the floor: a whip is a frame of more than 0.25 rad)
         const hd = p.yaw + p.pose[I.twist] + p.pose[I.turn];
@@ -226,11 +248,11 @@ function measure({ speed = 2, calm = false, slide = 0.05 } = {}) {
         dunkOff = Math.max(dunkOff, off);
       }
       const sp = Math.hypot(p.vf, p.vs);
-      if (sp > 9 && !p.one && (p.clip === 'run' || p.clip === 'sprint')) {
+      if (sp > 9 && !p.one && (p.clip === 'jog' || p.clip === 'run' || p.clip === 'sprint')) {
         runs++;
         hips.push(p.j[J.hips * 3 + 1] / (HIP * s));
       }
-      last.set(pid, { x: p.x, z: p.z, feet, head: p.yaw + p.pose[I.twist] + p.pose[I.turn], pose: Float32Array.from(p.pose) });
+      last.set(pid, { x: p.x, z: p.z, feet, head: p.yaw + p.pose[I.twist] + p.pose[I.turn], pose: Float32Array.from(p.pose), air });
       const key = p.clip;
       acts.set(key, (acts.get(key) ?? 0) + 1);
       const g = p.gesturing;
@@ -271,6 +293,7 @@ function measure({ speed = 2, calm = false, slide = 0.05 } = {}) {
     frames,
     slidePct: pct(slid, pf),
     slideMeanFt: Math.round((slidFt / Math.max(1, slid)) * 1000) / 1000,
+    slides: Object.fromEntries([...slides].sort((x, y) => y[1] - x[1]).slice(0, 14)),
     hipsLowest: hips[0],
     hipsP1: hips[Math.floor(hips.length * 0.01)],
     hipsMean: hips.reduce((x, y) => x + y, 0) / Math.max(1, hips.length),
@@ -419,6 +442,7 @@ function pose({
   h = 520,
   cue = null as Gesture | null,
   cueAt = 0,
+  fall = false,
   h0 = 78,
   w0 = 215,
 } = {}) {
@@ -440,8 +464,9 @@ function pose({
     for (;;) {
       const step = Math.min(16, end - t);
       t += step;
-      if (cue && !cued && t >= cueAt) {
-        f.pup.cue(cue);
+      if ((cue || fall) && !cued && t >= cueAt) {
+        if (cue) f.pup.cue(cue);
+        else f.pup.stumble();
         cued = true;
       }
       const d = make(t, i);

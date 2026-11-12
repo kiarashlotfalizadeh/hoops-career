@@ -78,6 +78,8 @@ export function HighlightsCard({ league, res }: { league: League; res: GameResul
             <CourtView
               look={league.settings.courtLook ?? '3d'}
               onLook={(v) => edit((l) => void (l.settings.courtLook = v))}
+              cam={league.settings.courtCam}
+              onCam={(v) => edit((l) => void (l.settings.courtCam = v))}
               body={(pid) => bodyOf(league.players[pid]?.heightIn ?? 78, league.players[pid]?.weightLb ?? 215, league.players[pid]?.ratings.str)}
               script={sc}
               speed={league.settings.liveSpeed || 1}

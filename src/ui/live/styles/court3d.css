@@ -62,21 +62,54 @@
   opacity: 0;
   will-change: transform, opacity;
 }
-/* the handler: his number on his team's colour, his name */
+/* a tag over a head (the man with the ball, a man tapped): his number on his team's colour, his name,
+   on an ink plate with a notch under it that points at him */
 .c3d-tag {
+  position: absolute;
+  top: 0;
+  left: 0;
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-  padding: 3px 10px 3px 3px;
+  align-items: stretch;
+  height: 20px;
+  margin-top: -5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ink, #121212) 90%, transparent);
+  color: var(--on-ink, #fff);
+  white-space: nowrap;
+  opacity: 0;
+  will-change: transform, opacity;
+  transition: opacity var(--dur-fast, 0.15s) linear;
+}
+.c3d-tag::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 8px;
+  height: 4px;
+  translate: -50% 0;
+  background: color-mix(in srgb, var(--ink, #121212) 90%, transparent);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+.c3d-tag-name {
+  align-self: center;
+  padding: 0 8px 1px 6px;
+  font:
+    700 12px/1 'Archivo Variable',
+    system-ui,
+    sans-serif;
+  font-stretch: semi-condensed;
+}
+/* (the shot clock is running out on him: the plate's foot says so) */
+.c3d-tag[data-late='1'] {
+  box-shadow: inset 0 -2px 0 var(--warn-night, #ffc65c);
 }
 .c3d-tag-n {
   display: grid;
   place-items: center;
-  min-width: 20px;
-  height: 18px;
+  min-width: 22px;
   padding: 0 5px;
-  border-radius: 999px;
+  border-radius: 4px 0 0 4px;
   background: var(--c3d-team, #3a3a3a);
   font-family: var(--display, sans-serif);
   font-stretch: var(--display-w, 72%);
@@ -272,7 +305,21 @@
   inset: 0;
   background: radial-gradient(ellipse at center, rgba(8, 6, 4, 0) 45%, rgba(8, 6, 4, 0.55) 100%);
 }
-/* the camera: the broadcast picture, or the floor from straight above */
+/* the camera: the broadcast picture, or the floor from straight above; and the chip that goes round the 3D picture's cameras */
+.court-cam.court-cam-kind {
+  right: 48px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  padding: 0 12px 0 10px;
+  font:
+    700 12px/1 'Archivo Variable',
+    system-ui,
+    sans-serif;
+  font-stretch: semi-condensed;
+  white-space: nowrap;
+}
 .court-cam {
   position: absolute;
   top: 8px;
@@ -306,8 +353,8 @@
 .court-slow {
   position: absolute;
   left: 8px;
-  right: 48px;
-  top: 8px;
+  right: 8px;
+  top: 48px;
   z-index: 1;
   display: flex;
   flex-wrap: wrap;

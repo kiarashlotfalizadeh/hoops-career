@@ -1,16 +1,22 @@
 // The live court's keyframes: players (1.45 ft circles) shouldn't be drawn on top of each other, the
 // sets and defenses look like themselves, its score follows the scoreboard, timeouts name their caller
 // and the captions call the play.
+import { Scene } from 'three';
 import { describe, expect, it, vi } from 'vitest';
+import { FLOOR_L, FLOOR_W } from '../live/Court';
 import { attackDir, buildScript, captionAt, faceWorld, standing, toWorld, type Frame } from '../live/choreo';
-import { captured, CHANNELS, CLIPS, DUNK_AT, DUNKS, I, mirror, N, sample } from '../live/court3d/clips';
+import { blocked, CAM_KINDS, camKind, clearSeat, Operator, seen, shot, type View } from '../live/court3d/cameras';
+import { captured, CHANNELS, CLIPS, DUNK_AT, DUNKS, I, mirror, N, PASSES, sample, span } from '../live/court3d/clips';
 import { figureGeo } from '../live/court3d/figure';
 import { readGlb } from '../live/court3d/glb';
 import arenaGlb from '../live/court3d/models/arena.glb?inline';
 import figureGlb from '../live/court3d/models/figure.glb?inline';
 import peopleGlb from '../live/court3d/models/people.glb?inline';
-import { BALL_R, baseClip, bodyOf, HIP, J, Puppet } from '../live/court3d/puppet';
+import { bouncePass, meets, planShot, RIM_H, shotAt, shotSpeed, spinFor, Spring, stretch, type How } from '../live/court3d/ballistics';
+import { NET, NetSim } from '../live/court3d/net';
+import { BALL_R, baseClip, bodyOf, hash, HIP, J, Puppet } from '../live/court3d/puppet';
 import { House } from '../live/court3d/boards';
+import { Rig } from '../live/court3d/rig';
 import type { PossLog, PossStep } from '../../core/sim/log';
 import { createLeague, defaultSettings } from '../../core/league/create';
 import { teamPlayers } from '../../core/league/helpers';
@@ -297,6 +303,31 @@ describe('live court choreography', () => {
     }
 
     // a timeout flashes once, naming the team that called it
+    // the building's lamps: four throw shadows, each map holding the whole floor; a slow device keeps two, then
+    // none; the house lights come down for the open and a timeout, and the lamps stay as they were
+    {
+      const world = new Scene();
+      const rig = new Rig(world);
+      expect(rig.lamps.filter((l) => l.castShadow)).toHaveLength(4);
+      for (const l of rig.lamps) {
+        const c = l.shadow.camera;
+        expect(c.right - c.left).toBeGreaterThan(FLOOR_W);
+        expect(c.top - c.bottom).toBeGreaterThan(FLOOR_W);
+        expect((c.right - c.left) * (c.top - c.bottom)).toBeGreaterThan(FLOOR_L * FLOOR_W);
+      }
+      rig.lite(1);
+      expect(rig.lamps.filter((l) => l.castShadow)).toHaveLength(2);
+      rig.lite(3);
+      expect(rig.lamps.some((l) => l.castShadow)).toBe(false);
+      const [sky, env, lamp] = [rig.sky.intensity, world.environmentIntensity, rig.key.intensity];
+      rig.mood(1, 1e9);
+      expect(rig.drama).toBeCloseTo(1);
+      expect(rig.sky.intensity).toBeLessThan(sky * 0.6);
+      expect(world.environmentIntensity).toBeLessThan(env);
+      expect(rig.key.intensity).toBe(lamp);
+      rig.mood(0, 1e9);
+      expect(rig.sky.intensity).toBeCloseTo(sky);
+    }
     {
       const s = buildScript(
         log([
@@ -580,7 +611,7 @@ describe('live court choreography', () => {
     {
       const glb = (file: string) => readGlb(Uint8Array.from(atob(file.slice(file.indexOf(',') + 1)), (ch) => ch.charCodeAt(0)).buffer);
       const geo = figureGeo((o) => o, glb(figureGlb));
-      expect([...geo.order].sort((x, y) => x - y)).toEqual(Array.from({ length: 18 }, (_, i) => i));
+      expect([...geo.order].sort((x, y) => x - y)).toEqual(Array.from({ length: 25 }, (_, i) => i));
       expect(geo.wears).toEqual(expect.arrayContaining(['skin', 'hair', 'jersey', 'trim', 'cloth', 'shoe', 'white']));
       const w = geo.body.getAttribute('skinWeight');
       for (let i = 0; i < w.count; i += 37) expect(w.getX(i) + w.getY(i) + w.getZ(i) + w.getW(i)).toBeCloseTo(1, 3);
@@ -589,8 +620,27 @@ describe('live court choreography', () => {
       const tall = geo.body.boundingBox!.max.y - geo.body.boundingBox!.min.y;
       expect(tall).toBeGreaterThan(6.5);
       expect(tall).toBeLessThan(6.9);
-      expect([...glb(peopleGlb).keys()].sort()).toEqual(['benchA', 'benchB', 'coach']);
-      expect([...glb(arenaGlb).keys()].sort()).toEqual(['ball', 'chair', 'fan', 'fanFar', 'hoop', 'net', 'rim', 'scoreboard', 'table']);
+      expect([...glb(peopleGlb).keys()].sort()).toEqual(['bench', 'official', 'staff']);
+      expect([...glb(arenaGlb).keys()].sort()).toEqual([
+        'ball',
+        'chair',
+        'fanA',
+        'fanB',
+        'fanC',
+        'fanD',
+        'fanE',
+        'fanF',
+        'fanFar',
+        'fanKid',
+        'fanMidA',
+        'fanMidB',
+        'hoop',
+        'net',
+        'rim',
+        'scoreboard',
+        'stall',
+        'table',
+      ]);
     }
 
     // the figures: a planted foot stays where it landed, the ball stays in his hands, a big man is bigger
@@ -620,11 +670,13 @@ describe('live court choreography', () => {
         expect(p.j[J.fl * 3 + 1]).toBeGreaterThan(0);
         expect(p.j[J.head * 3 + 1]).toBeGreaterThan(p.j[J.hips * 3 + 1] + 2);
       }
+      // (a man's stride for that speed, about three steps a second: not a patter of little ones)
       expect(steps).toBeGreaterThan(6);
+      expect(steps).toBeLessThan(10);
       expect(slid).toBeLessThan(0.02);
       expect(p.clip).toBe('run');
-      // a fast break as the plan runs it (50 ft/s): the 3D court plays it at half pace on the body's own
-      // time, so his legs keep up; on the play's time they can't, and a planted foot is dragged
+      // a fast break as the plan runs it (50 ft/s), at the 3D court's half pace and on the play's own time: however
+      // fast, a planted foot is never dragged (what it can't cover he covers in the air between strides)
       const drag = (pace: number) => {
         const q = new Puppet(bodyOf(78, 215));
         const at: ({ x: number; z: number } | null)[] = [null, null];
@@ -640,7 +692,75 @@ describe('live court choreography', () => {
         return worst;
       };
       expect(drag(0.5)).toBeLessThan(0.02);
-      expect(drag(1)).toBeGreaterThan(0.5);
+      expect(drag(1)).toBeLessThan(0.02);
+      // a runner's foot rolls (heel up as he leaves it, toes up before it lands), two men at one speed don't run in
+      // step, and what hangs off him trails him when he stops dead and settles
+      const men = [3, 11].map((who) => ({ who, m: new Puppet(bodyOf(who === 3 ? 75 : 83, who === 3 ? 190 : 250)), up: [] as boolean[] }));
+      let toesDown = 0;
+      let toesUp = 0;
+      for (let t = 0; t < 4000; t += 16)
+        for (const r of men) {
+          r.m.update({ x: Math.min(t, 3000) * 0.018, z: 3, yaw: Math.PI / 2, act: t < 3000 ? 'move' : 'stand', ms: t, dur: 4000, ball: false, who: r.who }, 16);
+          if (t > 600 && t < 3000) {
+            r.up.push(r.m.feet[0].swing);
+            toesDown = Math.max(toesDown, r.m.feet[0].pitch);
+            toesUp = Math.min(toesUp, r.m.feet[0].pitch);
+          }
+          if (r.who === 3 && t === 3008) expect(Math.abs(r.m.trail.z)).toBeGreaterThan(0.03);
+        }
+      expect(toesDown).toBeGreaterThan(0.5);
+      expect(toesUp).toBeLessThan(-0.05);
+      expect(men[0].up.filter((u, i) => u !== men[1].up[i]).length / men[0].up.length).toBeGreaterThan(0.15);
+      expect(Math.hypot(men[0].m.trail.x, men[0].m.trail.y, men[0].m.trail.z)).toBeLessThan(0.06);
+      // a jump off two feet is a take's: a crouch, up to its top as a thrown thing goes (most of the height in the
+      // first half of the way up), and a landing that gives
+      const hipAt = (t: number) => sample(CLIPS.rebound, t, new Float32Array(N))[I.hip];
+      const [r0, r1] = span(CLIPS.rebound);
+      const hips = Array.from({ length: 80 }, (_, i) => hipAt(r0 + ((r1 - r0) * i) / 79));
+      const top = hips.indexOf(Math.max(...hips));
+      expect(hipAt(0)).toBeGreaterThan(1.3);
+      expect(Math.min(...hips.slice(0, top))).toBeLessThan(-0.3);
+      expect(Math.min(...hips.slice(top))).toBeLessThan(-0.25);
+      const off = hips
+        .slice(0, top)
+        .reverse()
+        .findIndex((h) => h <= 0);
+      expect(hips[top - Math.round(off / 2)]).toBeGreaterThan(hipAt(0) * 0.6);
+      // about to pass, he draws it in: the wind-up is one of his passes, the ball still in his hands
+      const ps = new Puppet(bodyOf(78, 215));
+      for (let t = 0; t < 400; t += 16) ps.update({ x: 0, z: 0, yaw: 0, act: 'hold', ms: t, dur: 400, ball: true, pass: 400 - t, who: 5 }, 16);
+      expect(PASSES).toContain(ps.one?.id);
+      expect(ps.one!.tau).toBeLessThan(0);
+      expect(Math.max(ps.pose[I.gl], ps.pose[I.gr])).toBeGreaterThan(0.9);
+      // a man on the side his dribble is on: it goes to his other hand, and stays clear of that man's middle
+      const pr = new Puppet(bodyOf(78, 215));
+      const on = { x: -1.2, z: 0.7 };
+      let near = 9;
+      for (let t = 0; t < 2000; t += 16) {
+        pr.update({ x: 0, z: 0, yaw: 0, act: 'dribble', ms: t, dur: 2000, ball: true, press: on, who: 5 }, 16);
+        const ball = pr.carry({ x: 0, y: 0, z: 0 });
+        if (t > 400) near = Math.min(near, Math.hypot(ball.x - on.x, ball.z - on.z));
+      }
+      expect(pr.lefty).toBe(true);
+      expect(near).toBeGreaterThan(1);
+      // pulling up out of a run is a take's stop; knocked over, he goes down and gets up
+      const st = new Puppet(bodyOf(78, 215));
+      const seen = new Set<string>();
+      let lowest = 9;
+      for (let t = 0; t < 4200; t += 16) {
+        if (t === 2496) st.stumble();
+        st.update({ x: Math.min(t, 1200) * 0.018, z: 0, yaw: Math.PI / 2, act: t < 1200 ? 'move' : 'stand', ms: t, dur: 4200, ball: false, who: 5 }, 16);
+        seen.add(st.clip);
+        if (t > 2496) lowest = Math.min(lowest, st.j[J.hips * 3 + 1]);
+      }
+      expect(seen.has('stop')).toBe(true);
+      expect(seen.has('stumble')).toBe(true);
+      // (all the way down: his seat on the floor)
+      expect(lowest).toBeLessThan(1.2);
+      expect(st.clip).not.toBe('stumble');
+      // a dunk's way up is a thrown thing's: most of its height in the first half of the rise
+      const dk = (t: number) => sample(CLIPS.dunk, t, new Float32Array(N))[I.hip];
+      expect(dk(55)).toBeGreaterThan(dk(150) * 0.7);
       // a jump shot, from the gather to the landing: until the release the shooting hand is on the ball
       const sh = new Puppet(bodyOf(78, 215));
       const out = { x: 0, y: 0, z: 0 };
@@ -656,7 +776,23 @@ describe('live court choreography', () => {
       expect(sh.clip).not.toBe('jumper');
       expect(peak).toBeGreaterThan(HIP + 0.8);
       // the moves a take covers are captured motion (measured on these same channels); the rest are keyed
-      for (const id of ['walk', 'run', 'sprint', 'shuffle', 'stance', 'dribble', 'dribbleRun', 'crossover', 'pass', 'jumper', 'freeThrow', 'layup'] as const)
+      for (const id of [
+        'walk',
+        'jog',
+        'run',
+        'sprint',
+        'shuffle',
+        'stance',
+        'dribble',
+        'dribbleRun',
+        'dribbleWalk',
+        'crossover',
+        'pass',
+        'jumper',
+        'freeThrow',
+        'layup',
+        'rebound',
+      ] as const)
         expect(captured(id)).toBe(true);
       expect(captured('dunk')).toBe(false);
       for (const c of Object.values(CLIPS)) for (const pose of c.poses) expect(pose.length).toBe(N);
@@ -685,6 +821,49 @@ describe('live court choreography', () => {
       }
       expect(low).toBeLessThan(BALL_R + 0.25);
       expect(high).toBeGreaterThan(2);
+      // the same dribble as the ball's flight reads it: a bounce of a real length, let go from his hand, that runs
+      // 0 to 1 and never backward, his hand on the ball when it's back; nothing to read once the ball is gone
+      const hk = new Puppet(bodyOf(78, 215));
+      let was = 1;
+      let flights = 0;
+      for (let t = 0; t < 3000; t += 16) {
+        hk.update({ x: 0, z: 0, yaw: 0, act: 'dribble', ms: t, dur: 3000, ball: true, who: 9 }, 16);
+        const b = hk.dribble;
+        if (hk.clip !== 'dribble' || !b) continue;
+        expect(b.period).toBeGreaterThan(250);
+        expect(b.period).toBeLessThan(650);
+        expect(b.push.y).toBeGreaterThan(2);
+        expect(Math.hypot(b.floor.x, b.floor.z)).toBeLessThan(3);
+        if (b.phase < was && was < 1) expect(b.phase).toBeLessThan(0.2);
+        if (b.phase < 1 && was === 1) flights++;
+        if (b.phase === 1 && t > 300) {
+          const ball = hk.carry(out);
+          hk.arms(ball);
+          const k = (b.hand > 0 ? J.hl : J.hr) * 3;
+          expect(Math.hypot(hk.j[k] - ball.x, hk.j[k + 1] - ball.y, hk.j[k + 2] - ball.z)).toBeLessThan(BALL_R + 0.45);
+        }
+        was = b.phase;
+      }
+      expect(flights).toBeGreaterThan(1);
+      hk.update({ x: 0, z: 0, yaw: 0, act: 'stand', ms: 0, dur: 500, ball: false, who: 9 }, 16);
+      expect(hk.dribble).toBeNull();
+      // a hanging dunk keeps his hands on the ring for a beat after the slam
+      const hg = new Puppet(bodyOf(78, 215));
+      // (a man whose first dunk is that one)
+      let hanger = 0;
+      while (DUNKS[Math.floor(hash(hanger, 1) * DUNKS.length)] !== 'dunkHang') hanger++;
+      let hung = 0;
+      for (let t = 0; t < 1400; t += 16) {
+        const up = t < 400;
+        hg.update({ x: 4, z: 0, yaw: -Math.PI / 2, act: up ? 'dunk' : 'release', ms: up ? t : t - 400, dur: up ? 400 : 1000, ball: up, aim: { x: 0, z: 0 }, who: hanger }, 16);
+        hg.arms(null);
+        if (hg.onRim) {
+          hung += 16;
+          expect(hg.j[J.hr * 3 + 1]).toBeGreaterThan(9);
+        }
+      }
+      expect(hung).toBeGreaterThan(250);
+      expect(hg.onRim).toBe(false);
       // a crossover leaves it in his other hand, and the dribble that follows is that hand's
       const cr = new Puppet(bodyOf(78, 215));
       for (let t = 0; t < 900; t += 16) cr.update({ x: 0, z: t * 0.006, yaw: 0, act: 'drive', ms: t, dur: 900, ball: true }, 16);
@@ -713,7 +892,7 @@ describe('live court choreography', () => {
       // a dead ball after a long run: bent over, hands on his knees; at the line he bounces it before it goes up
       const tired = new Puppet(bodyOf(78, 215));
       for (let t = 0; t < 3200; t += 16) tired.update({ x: t * 0.03, z: 0, yaw: Math.PI / 2, act: 'move', ms: t, dur: 3200, ball: false }, 16);
-      for (let t = 0; t < 400; t += 16) tired.update({ x: 96, z: 0, yaw: Math.PI / 2, act: 'stand', ms: t, dur: 9000, ball: false, rest: true }, 16);
+      for (let t = 0; t < 1400; t += 16) tired.update({ x: 96, z: 0, yaw: Math.PI / 2, act: 'stand', ms: t, dur: 9000, ball: false, rest: true }, 16);
       expect(tired.clip).toBe('knees');
       const ft = new Puppet(bodyOf(78, 215));
       let floor = 9;
@@ -729,6 +908,192 @@ describe('live court choreography', () => {
       expect(baseClip('defend', false, 20, -18, 2)).toBe('backpedal');
       expect(baseClip('dribble', true, 25, 24, 0)).toBe('dribbleRun');
       expect(baseClip('move', false, 40, 39, 0)).toBe('sprint');
+      expect(baseClip('move', false, 10, 10, 0)).toBe('jog');
+      expect(baseClip('dribble', true, 5, -4.5, 0)).toBe('dribbleBack');
+    }
+
+    // the cameras that follow the play (cameras.ts): each of the five, in a wide frame and a phone's
+    {
+      // a half-court set at the right basket: five out, five on them
+      const set = [20, 0, 30, 20, 30, -20, 44, 22, 40, -6, 24, 0, 33, 16, 33, -16, 42, 17, 41, -3];
+      const view = (aspect: number, bx: number, men = set): View => ({ ball: { x: bx, y: 4, z: 2 }, men, n: 10, end: 1, aspect, near: 0, tight: 0 });
+      expect(camKind('nope')).toBe('tv');
+      expect(camKind('low')).toBe('low');
+      for (const kind of CAM_KINDS)
+        for (const aspect of [1.69, 1.3]) {
+          const op = new Operator();
+          const s = shot();
+          const v = view(aspect, 20);
+          expect(op.aim(kind, v, 16, false, s)).toBe(true);
+          for (let i = 0; i < 300; i++) expect(op.aim(kind, v, 16, false, s)).toBe(false);
+          // settled, it holds the ball and its man; all but the two on the men round the ball the rim too, and all ten, head to foot
+          const inside = (x: number, y: number, z: number) => {
+            const p = seen(s, aspect, x, y, z);
+            expect(p.d).toBeGreaterThan(4);
+            expect(Math.abs(p.x), `${kind} ${aspect}: ${x}, ${y}, ${z}`).toBeLessThan(1);
+            expect(Math.abs(p.y)).toBeLessThan(1);
+          };
+          inside(20, 4, 2);
+          inside(20, 7, 0);
+          if (kind !== 'low' && kind !== 'side') inside(47 - 5.25, 10, 0);
+          if (kind === 'tv' || kind === 'end' || kind === 'top')
+            for (let i = 0; i < 10; i++) {
+              inside(set[i * 2], 0, set[i * 2 + 1]);
+              inside(set[i * 2], 7, set[i * 2 + 1]);
+            }
+          // (the gantry never sees under the near side's seats, where nothing is built)
+          if (kind === 'tv') expect(seen(s, aspect, s.lx, 0, 46).y).toBeLessThan(-1);
+          // a break the other way at 30 ft a second: the ball stays in the picture, the picture never jumps and never cuts
+          let worst = 0;
+          const was = { ...s };
+          // (the cameras at an end follow it as far as the middle of the floor: a play going away from its own basket is not theirs)
+          for (let i = 0; i < (kind === 'low' || kind === 'end' ? 70 : 150); i++) {
+            const bx = 20 - i * 0.5;
+            const run = view(
+              aspect,
+              bx,
+              set.map((m, j) => (j % 2 ? m : m - i * 0.45)),
+            );
+            run.end = kind === 'low' || kind === 'end' ? 1 : -1;
+            expect(op.aim(kind, run, 16, false, s)).toBe(false);
+            const p = seen(s, aspect, bx, 4, 2);
+            expect(Math.max(Math.abs(p.x), Math.abs(p.y)), `${kind} ${aspect} frame ${i}: ${p.x.toFixed(2)}, ${p.y.toFixed(2)}`).toBeLessThan(1);
+            worst = Math.max(worst, Math.hypot(s.lx - was.lx, s.ly - was.ly, s.lz - was.lz));
+            Object.assign(was, s);
+          }
+          expect(worst).toBeLessThan(2);
+          // reduced motion: a still picture of the half the ball is in, and a cut when it is well into the other
+          const calm = shot();
+          op.aim(kind, view(aspect, 20), 16, true, calm);
+          const still = { ...calm };
+          expect(op.aim(kind, view(aspect, 9), 16, true, calm)).toBe(false);
+          expect(calm).toEqual(still);
+          expect(op.aim(kind, view(aspect, -9), 16, true, calm)).toBe(true);
+          expect(calm).not.toEqual(still);
+        }
+      // a close-up's camera: in front of his face when nobody is there, round a man who is, never behind the basket's post
+      const seat = { x: 0, z: 0 };
+      expect(clearSeat(0, 0, 0, [], 0, 22, seat)).toBeLessThan(3);
+      expect(seat.z).toBeGreaterThan(15);
+      const inTheWay = [0, 8, 3, 9, -3, 9];
+      expect(clearSeat(0, 0, 0, inTheWay, 3, 22, seat)).toBeLessThan(3);
+      expect(blocked(0, 0, seat.x, seat.z, inTheWay, 3)).toBe(false);
+      expect(blocked(0, 0, 0, 22, inTheWay, 3)).toBe(true);
+      clearSeat(40, 0, Math.PI / 2, [], 0, 22, seat);
+      expect(Math.abs(seat.z)).toBeGreaterThan(4);
+    }
+    // the ball's flight: every shot starts in the hand, a make ends under the net and a miss never goes down through the
+    // ring, whichever way it ends; a jumper spins back; the rim rings and comes to rest
+    {
+      const rim = { x: -41.75, z: 0 };
+      const seen = new Set<How>();
+      const at = { x: 0, y: 0, z: 0 };
+      for (let i = 0; i < 400; i++) {
+        const made = i % 2 === 0;
+        const kind = (['jumper', 'layup', 'floater', 'ft'] as const)[(i >> 1) % 4];
+        const a = ((i * 37) % 170) * (Math.PI / 180) - Math.PI / 2 + 0.09;
+        const far = kind === 'layup' ? 3 : kind === 'ft' ? 13.75 : 6 + ((i * 7) % 20);
+        const from = { x: rim.x + Math.cos(a) * far, y: 8 + (i % 3) * 0.5, z: Math.sin(a) * far };
+        const r = [(i * 0.618) % 1, (i * 0.377) % 1, (i * 0.251) % 1] as [number, number, number];
+        const shot = planShot({ from, rim, kind, made, secs: 0.8 + far * 0.03, next: made ? null : { x: rim.x + 4, y: 0, z: 3 }, r });
+        seen.add(shot.how);
+        shotAt(shot, 0, at);
+        expect(Math.hypot(at.x - from.x, at.y - from.y, at.z - from.z), `${shot.how} leaves the hand`).toBeLessThan(1e-6);
+        expect(shot.hits.some((h) => h.what === 'net')).toBe(made);
+        shotAt(shot, 1, at);
+        if (made) {
+          expect(Math.hypot(at.x - rim.x, at.z - rim.z), `${shot.how} ends under the ring`).toBeLessThan(0.2);
+          expect(at.y).toBeLessThan(RIM_H - 1.3);
+          expect(shotSpeed(shot, 1, at).y).toBeLessThan(0);
+        } else {
+          let through = false;
+          let top = 0;
+          for (let u = 0; u <= 1.001; u += 0.02) {
+            shotAt(shot, u, at);
+            top = Math.max(top, at.y);
+            if (at.y < RIM_H - 0.2 && at.y > RIM_H - 1.3 && Math.hypot(at.x - rim.x, at.z - rim.z) < 0.4) through = true;
+          }
+          expect(through, `${shot.how} misses`).toBe(false);
+          expect(top).toBeLessThan(22);
+        }
+      }
+      expect([...seen].sort()).toEqual(['air', 'back', 'backIn', 'bank', 'edge', 'front', 'glass', 'kiss', 'roll', 'round', 'side', 'swish']);
+      // (a ball going +x: a shot's top comes back toward the shooter, a rolling one's goes on ahead)
+      expect(spinFor('shot', 10, 0, at)!.z).toBeGreaterThan(0);
+      expect(spinFor('roll', 10, 0, at)!.z).toBeLessThan(0);
+      expect(spinFor('held', 10, 0, at)).toEqual({ x: 0, y: 0, z: 0 });
+      expect(spinFor('loose', 10, 0, at)).toBeNull();
+      const hinge = new Spring(5.5, 0.16);
+      hinge.kick(-3.3);
+      let low = 0;
+      for (let t = 0; t < 180; t++) {
+        hinge.step(1 / 60);
+        low = Math.min(low, hinge.x);
+      }
+      expect(low).toBeLessThan(-0.05);
+      expect(low).toBeGreaterThan(-0.3);
+      expect(hinge.x).toBe(0);
+      // (held down by a man hanging on it, it stays down)
+      for (let t = 0; t < 120; t++) hinge.step(1 / 60, -0.1);
+      expect(hinge.x).toBeCloseTo(-0.1, 2);
+      // a loose ball: dropped on the front of the iron it comes off it upward and outward, thrown at the glass it comes
+      // back, dropped down the middle it goes through (slowed by the cords) and never through the bar
+      const hoops = [{ x: rim.x, z: 0, out: 1 as const }];
+      const fall = (x: number, y: number, vx: number, vy: number) => {
+        const p = { x, y, z: 0 };
+        const v = { x: vx, y: vy, z: 0 };
+        let met = 0;
+        for (let t = 0; t < 60 && p.y > 7; t++) {
+          v.y -= 32 / 120;
+          p.x += v.x / 120;
+          p.y += v.y / 120;
+          const now = meets(p, v, 1 / 120, hoops);
+          met ||= now;
+          expect(Math.hypot(Math.abs(p.x - rim.x) - 0.776, p.y - RIM_H)).toBeGreaterThan(0.41);
+        }
+        return { p, v, met };
+      };
+      const iron = fall(rim.x + 0.95, 10.8, 0, -8);
+      expect(iron.met).toBeGreaterThan(0);
+      expect(iron.p.x).toBeGreaterThan(rim.x + 0.95);
+      const glass = fall(rim.x - 0.5, 11.5, -12, 0);
+      expect(glass.met).toBeLessThan(0);
+      expect(glass.v.x).toBeGreaterThan(0);
+      const clean = fall(rim.x, 10.8, 0, -14);
+      expect(clean.met).toBe(0);
+      expect(clean.p.y).toBeLessThanOrEqual(7);
+      expect(clean.v.y).toBeGreaterThan(-19);
+      // a bounce pass meets the floor where it is asked to and ends in the hands; only a fast ball is drawn long
+      expect(bouncePass(4, 3.5, BALL_R, 0.6, 0.6, 0.5)).toBeCloseTo(BALL_R, 5);
+      expect(bouncePass(4, 3.5, BALL_R, 0.6, 1, 0.5)).toBeCloseTo(3.5, 5);
+      expect(bouncePass(4, 3.5, BALL_R, 0.6, 0, 0.5)).toBeCloseTo(4, 5);
+      expect(stretch(20)).toBe(0);
+      expect(stretch(200)).toBeLessThan(0.2);
+    }
+
+    // the net: it hangs still, a ball through it moves it and stretches no cord past what cord gives, and it comes to rest
+    {
+      const net = new NetSim();
+      expect(net.step(1 / 60, null, 0)).toBe(false);
+      const rest = Float32Array.from(net.at);
+      let moved = 0;
+      for (let f = 0; f < 40; f++) {
+        net.step(1 / 60, { x: 0, y: 0.7 - f * 0.07, z: 0 }, 0);
+        for (let i = 0; i < rest.length; i++) moved = Math.max(moved, Math.abs(net.at[i] - rest[i]));
+        expect(Array.from(net.at).every(Number.isFinite)).toBe(true);
+        for (let l = 0; l < net.links.length; l += 2) {
+          const [a, b] = [net.links[l] * 3, net.links[l + 1] * 3];
+          expect(Math.hypot(net.at[a] - net.at[b], net.at[a + 1] - net.at[b + 1], net.at[a + 2] - net.at[b + 2])).toBeLessThan(0.75);
+        }
+      }
+      expect(moved).toBeGreaterThan(0.08);
+      // (its hooks stay on the ring)
+      for (let i = 0; i < NET.n * 3; i++) expect(net.at[i]).toBe(rest[i]);
+      for (let f = 0; f < 600 && net.awake; f++) net.step(1 / 60, null, 0);
+      expect(net.awake).toBe(false);
+      let off = 0;
+      for (let i = 0; i < rest.length; i++) off = Math.max(off, Math.abs(net.at[i] - rest[i]));
+      expect(off).toBeLessThan(0.2);
     }
   });
 });

@@ -3,7 +3,9 @@
 //   /scripts/qa/figure-lab/?move=jumper            eight moments of it, left to right
 //   /scripts/qa/figure-lab/?move=run&live=1        one figure, moving
 //   &yaw=40 (degrees round him)  &zoom=1.4  &from=0&to=1200 (ms)  &n=8  &h=78&w=215 (his build)
-//   &seed=1 (the first man's own things: crop, sleeves, shoes; the next is seed+1)  &light=1 (the home kit)  &num=23&name=Brunson&mark=NYK
+//   &seed=1 (the first man's own things: his look, sleeves, shoes; the next is seed+1)  &light=1 (the home kit)  &num=23&name=Brunson&mark=NYK
+//   &style=4 &beard=3 &tone=6 (everyone's hair, beard or skin: see look.ts)  &styles=1 (each man the next style)  &tones=1 (each the next skin)
+//   faces: ?move=idle&n=6&gap=1.5&camY=6.4&lookY=6.25&zoom=3.6&yaw=12&from=100&to=100
 import {
   AmbientLight,
   DirectionalLight,
@@ -19,7 +21,8 @@ import {
   WebGLRenderer,
 } from 'three';
 import type { Act } from '../../../src/ui/live/choreo';
-import { Fig, figureGeo } from '../../../src/ui/live/court3d/figure';
+import { Fig, figureGeo, settleHeads } from '../../../src/ui/live/court3d/figure';
+import { BEARDS, lookOf, SKINS, STYLES } from '../../../src/ui/live/court3d/look';
 import { loadModels } from '../../../src/ui/live/court3d/models';
 import { BALL_R, bodyOf, type Drive } from '../../../src/ui/live/court3d/puppet';
 import type { MatchKit } from '../../../src/ui/teamColors';
@@ -97,6 +100,9 @@ const key = new DirectionalLight(0xfff6ea, 2.1);
 key.position.set(8, 30, 14);
 key.castShadow = true;
 key.shadow.mapSize.set(2048, 2048);
+// (the figures take shadows too: kept off their own skin)
+key.shadow.bias = -0.0006;
+key.shadow.normalBias = 0.06;
 Object.assign(key.shadow.camera, { left: -30, right: 30, top: 20, bottom: -20, near: 5, far: 80 });
 scene.add(key);
 const rim = new DirectionalLight(0xcfdcff, 0.9);
@@ -118,6 +124,13 @@ const kit = {
 } as MatchKit;
 const gap = num('gap', 5);
 const figs = Array.from({ length: n }, (_, i) => {
+  const look = lookOf(num('seed', 1) + i);
+  if (q.has('styles')) look.style = i % STYLES.length;
+  if (q.has('style')) look.style = num('style', 0) % STYLES.length;
+  if (q.has('beard')) look.beard = num('beard', 0) % BEARDS.length;
+  if (q.has('tones')) look.tone = i % SKINS.length;
+  if (q.has('tone')) look.tone = num('tone', 0) % SKINS.length;
+  look.skin = SKINS[look.tone];
   const f = new Fig(
     geo,
     bodyOf(num('h', 78), num('w', 215)),
@@ -127,6 +140,7 @@ const figs = Array.from({ length: n }, (_, i) => {
     num('seed', 1) + i,
     String(q.get('name') ?? 'Brunson'),
     String(q.get('mark') ?? 'NYK'),
+    look,
   );
   scene.add(f.group);
   const ball = new Mesh(new SphereGeometry(BALL_R, 18, 14), new MeshStandardMaterial({ color: 0xc8642a, roughness: 0.6 }));
@@ -135,6 +149,7 @@ const figs = Array.from({ length: n }, (_, i) => {
   return { f, ball, x: (i - (n - 1) / 2) * gap, t: 0 };
 });
 
+settleHeads();
 const yaw = (num('yaw', 30) * Math.PI) / 180;
 const zoom = num('zoom', 1);
 const cam = new PerspectiveCamera(28, innerWidth / innerHeight, 1, 400);

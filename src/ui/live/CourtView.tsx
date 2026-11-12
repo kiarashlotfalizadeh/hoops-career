@@ -1,14 +1,16 @@
 // The court as the page shows it: the 3D broadcast picture, or the 2D floor seen from straight
-// above. One tap on the camera button switches; the 2D court is always there underneath (it keeps
+// above. One tap on the camera button switches, and the chip beside it goes round the 3D picture's
+// cameras (cameras.ts); the 2D court is always there underneath (it keeps
 // the play's time, draws the break's shot chart, and is what a device without WebGL gets).
 // An instant replay holds the play's clock: the court's word that a possession is over waits here
 // until the replay of its big play has been shown (a tap on the court skips it), so the game never
-// moves on behind it.
+// moves on behind it. A tap on a man in the 3D picture tags him for a while, and is only that.
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { Grid2x2, Video } from 'lucide-react';
+import { Grid2x2, SwitchCamera, Video } from 'lucide-react';
 import { Court, emptyStage, type CourtProps, type GameInfo } from './Court';
 import type { Script } from './choreo';
 import type { Cast } from './Court3D';
+import { CAM_KINDS, CAM_NAME, camKind, type CamKind } from './court3d/cameras';
 import type { Body } from './court3d/puppet';
 import './styles/court3d.css';
 
@@ -42,6 +44,9 @@ export function canDraw3D(): boolean {
 export interface CourtViewProps extends CourtProps {
   look: CourtLook;
   onLook: (look: CourtLook) => void;
+  /** The 3D picture's camera (the broadcast's main one when not said), and the chip that goes round them. */
+  cam?: CamKind;
+  onCam?: (cam: CamKind) => void;
   /** Each player's build, for his figure. */
   body: (pid: number) => Body;
   /** The game as the court has played it, asked for each frame (the 3D building's boards show it). */
@@ -52,7 +57,8 @@ export interface CourtViewProps extends CourtProps {
   onReached?: () => void;
 }
 
-export function CourtView({ look, onLook, body, game, replays, onReached, ...court }: CourtViewProps) {
+export function CourtView({ look, onLook, cam, onCam, body, game, replays, onReached, ...court }: CourtViewProps) {
+  const kind = camKind(cam);
   const stage = useRef(emptyStage());
   // (this session only: the picture came up, the device couldn't draw it, or drew it too slowly)
   const [ready, setReady] = useState(false);
@@ -130,10 +136,11 @@ export function CourtView({ look, onLook, body, game, replays, onReached, ...cou
       className="court-view"
       data-look={shown ? '3d' : 'flat'}
       onClick={(e) => {
-        // (a tap during a replay skips it, and is only that)
-        if (!held.current) return;
-        e.stopPropagation();
-        cast.current?.skip();
+        // (a tap during a replay skips it, and is only that; so is a tap on a man, which tags him)
+        if (held.current) {
+          e.stopPropagation();
+          cast.current?.skip();
+        } else if (shown && cast.current?.tap(e.clientX, e.clientY)) e.stopPropagation();
       }}
     >
       <Court {...court} speed={speed} stage={stage} mute={shown} onDone={onDone} />
@@ -151,6 +158,7 @@ export function CourtView({ look, onLook, body, game, replays, onReached, ...cou
             final={court.final}
             floor={court.floor}
             clutch={court.clutch}
+            cam={kind}
             speed={speed}
             own={court.speed}
             paused={court.paused}
@@ -170,6 +178,20 @@ export function CourtView({ look, onLook, body, game, replays, onReached, ...cou
             onSlow={() => setSlow(true)}
           />
         </Suspense>
+      )}
+      {shown && onCam && (
+        <button
+          className="court-cam court-cam-kind"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCam(CAM_KINDS[(CAM_KINDS.indexOf(kind) + 1) % CAM_KINDS.length]);
+          }}
+          aria-label={`Camera: ${CAM_NAME[kind]}. Switch to the next camera`}
+          title="Next camera"
+        >
+          <SwitchCamera size={15} aria-hidden="true" />
+          <span>{CAM_NAME[kind]}</span>
+        </button>
       )}
       {can && !hide && (
         <button

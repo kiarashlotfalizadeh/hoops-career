@@ -3,12 +3,13 @@
 // is at, and says so when it can't: no WebGL (onFail), or frames too slow to watch (onSlow). A phone
 // takes the drawing context away from an app in the background: the 2D court shows meanwhile (onLost)
 // and the scene is built again when the context is back. Over the picture, the broadcast's graphics:
-// the handler's tag, the play's word, the lower third on a cut-in or a replay, the replay's bug and wipe
+// the tags over the handler and a tapped man, the play's word, the lower third on a cut-in or a replay, the replay's bug and wipe
 // (written each frame from what the scene says, no re-render).
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import { Rewind } from 'lucide-react';
 import { FLOOR_L, paintFloor, readPaints, type CourtFloor, type GameInfo, type Stage } from './Court';
 import type { MatchKit } from '../teamColors';
+import type { CamKind } from './court3d/cameras';
 import type { Body } from './court3d/puppet';
 import { loadModels, type Models } from './court3d/models';
 import type { CourtScene, Labels, Lite } from './court3d/scene';
@@ -19,6 +20,8 @@ export interface Cast {
   replay(done: () => void): boolean;
   /** A tap on the court: the replay goes, through its wipe. */
   skip(): void;
+  /** A tap on the page at (x, y): true if it was on a man in the picture (he is tagged for a while). */
+  tap(x: number, y: number): boolean;
   /** The replay goes at once (the game stopped or sped up, the picture went), and `done` with it. */
   end(): void;
 }
@@ -36,6 +39,8 @@ export interface Court3DProps {
   final?: 0 | 1;
   floor?: CourtFloor;
   clutch?: boolean;
+  /** The camera that follows the play. */
+  cam?: CamKind;
   /** The play's speed (the 2D court's clock runs on it), and the bodies' (see COURT3D_PACE). */
   speed: number;
   own: number;
@@ -100,6 +105,7 @@ export default function Court3D(props: Court3DProps) {
   const glRef = useRef<HTMLCanvasElement>(null);
   const cutRef = useRef<HTMLCanvasElement>(null);
   const tagRef = useRef<HTMLSpanElement>(null);
+  const tag2Ref = useRef<HTMLSpanElement>(null);
   const flashRef = useRef<HTMLSpanElement>(null);
   const thirdRef = useRef<HTMLDivElement>(null);
   const bugRef = useRef<HTMLSpanElement>(null);
@@ -164,6 +170,10 @@ export default function Court3D(props: Court3DProps) {
         return true;
       },
       skip: () => scene?.skipReplay(),
+      tap: (x, y) => {
+        const box = canvas.getBoundingClientRect();
+        return !!scene && gone < 0 && !live.current.hide && scene.tap(x - box.left, y - box.top);
+      },
       end: () => {
         scene?.endReplay();
         letGo();
@@ -240,7 +250,7 @@ export default function Court3D(props: Court3DProps) {
         floorKey = key;
         // (the whole floor, sideways, as the 2D court paints it: its mark faces the camera)
         const k = Math.min(16, Math.max(10, (Math.max(w, 700) * 2) / FLOOR_L));
-        paintFloor(floorCv, { wide: true, k, w: 0, h: 0, top: 0, ox: 0, oy: 0 }, 1, fl, paints);
+        paintFloor(floorCv, { wide: true, k, w: 0, h: 0, top: 0, ox: 0, oy: 0 }, 1, fl, paints, true);
         scene.setFloor(floorCv);
         dirty = true;
       }
@@ -272,6 +282,7 @@ export default function Court3D(props: Court3DProps) {
           hot: p.hot,
           final: p.final,
           clutch: p.clutch,
+          cam: p.cam,
           board: fl?.kind === 'home' ? fl.paint : paints.ink,
           warn,
         },
@@ -280,7 +291,7 @@ export default function Court3D(props: Court3DProps) {
         !!calmQ?.matches,
         p.paused ? (idle ? real : 0) : real * p.own,
       );
-      paint(labels, tagRef.current, flashRef.current, thirdRef.current, bugRef.current, wipeRef.current, w, h);
+      paint(labels, [tagRef.current, tag2Ref.current], flashRef.current, thirdRef.current, bugRef.current, wipeRef.current, w, h);
       if (cutAt) {
         const a = 1 - (performance.now() - cutAt) / DISSOLVE_MS;
         if (a <= 0) cutAt = 0;
@@ -346,10 +357,12 @@ export default function Court3D(props: Court3DProps) {
     <div className="c3d" hidden={props.hide} aria-hidden="true">
       <canvas ref={glRef} className="c3d-gl" />
       <canvas ref={cutRef} className="c3d-gl c3d-cut" />
-      <span ref={tagRef} className="c3d-pill c3d-tag">
-        <b className="c3d-tag-n" />
-        <span className="c3d-tag-name" />
-      </span>
+      {[tagRef, tag2Ref].map((ref, i) => (
+        <span key={i} ref={ref} className="c3d-tag">
+          <b className="c3d-tag-n" />
+          <span className="c3d-tag-name" />
+        </span>
+      ))}
       <span ref={flashRef} className="c3d-pill c3d-flash" />
       {props.clutch && <div className="c3d-lights" />}
       <div ref={thirdRef} className="c3d-third">
@@ -377,18 +390,41 @@ const WIPE_LEAN = 14;
 /** The wipe's run, as wide as the picture this many times (the ink, then its team's colour on the leading edge). */
 const WIPE_RUN = 1.62;
 
+/** Two tags nearer than this across and up the page (px) would lie on each other. */
+const TAG_WIDE = 130;
+const TAG_HIGH = 26;
+
 /** The graphics over the picture this frame (each written only when it changes). */
-function paint(l: Labels, tag: HTMLElement | null, flash: HTMLElement | null, third: HTMLElement | null, bug: HTMLElement | null, wipe: HTMLElement | null, w: number, h: number) {
-  if (tag) {
-    const t = l.tag;
+function paint(
+  l: Labels,
+  tags: (HTMLElement | null)[],
+  flash: HTMLElement | null,
+  third: HTMLElement | null,
+  bug: HTMLElement | null,
+  wipe: HTMLElement | null,
+  w: number,
+  h: number,
+) {
+  // (two tags on men side by side: the second stands over the first, not on it)
+  const [first, second] = l.tags;
+  const lift = first && second && Math.abs(first.x - second.x) < TAG_WIDE && Math.abs(first.y - second.y) < TAG_HIGH ? TAG_HIGH : 0;
+  tags.forEach((tag, i) => {
+    if (!tag) return;
+    const t = l.tags[i] ?? null;
     if (t && t.text && tag.dataset.key !== `${t.num}/${t.text}`) {
       tag.dataset.key = `${t.num}/${t.text}`;
       tag.children[0].textContent = t.num;
       tag.children[1].textContent = t.text;
       tag.style.setProperty('--c3d-team', t.color);
     }
-    place(tag, t, 1);
-  }
+    if (t && (tag.dataset.late === '1') !== t.late) tag.dataset.late = t.late ? '1' : '0';
+    // (it stands on its point: over his head, clear of him)
+    if (!t || !t.text) tag.style.opacity = '0';
+    else {
+      tag.style.opacity = '1';
+      tag.style.transform = `translate(${Math.round(t.x)}px, ${Math.round(t.y - (i ? lift : 0))}px) translate(-50%, -100%)`;
+    }
+  });
   // (a play's word lands: it comes up to its size as it comes in)
   if (flash) {
     if (l.flash && flash.textContent !== l.flash.text) flash.textContent = l.flash.text;

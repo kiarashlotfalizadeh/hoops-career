@@ -3,13 +3,12 @@
 // plan's positions, facings and acts go to each figure's puppet, the ball goes from hand to hand,
 // and that is all. Loaded on demand (three.js stays out of the app's first download).
 import {
-  AmbientLight,
   CanvasTexture,
-  CircleGeometry,
   Color,
-  DirectionalLight,
+  Group,
+  type DirectionalLight,
   FogExp2,
-  HemisphereLight,
+  type HemisphereLight,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
@@ -30,14 +29,38 @@ import { BASKET, COURT_LEN, faceWorld, toWorld, type Act, type Flash, type Pt, t
 import { FLOOR_L, FLOOR_W, type GameInfo, type Stage } from '../Court';
 import type { MatchKit } from '../../teamColors';
 import { Arena } from './arena';
+import {
+  bouncePass,
+  GRAVITY,
+  meets,
+  passArc,
+  planShot,
+  shotAt,
+  shotSpeed,
+  spinFor,
+  Spring,
+  stretch,
+  swat,
+  veer,
+  type Hoop,
+  type Shot,
+  type ShotKind,
+  type Spin,
+} from './ballistics';
+import { lit as ledLit } from './ballskin';
 import { DUNK_AT, isDunk } from './clips';
-import { BIG_WORD, Director, WIPE_MS, type BigKind } from './director';
+import { blocked, clearSeat, Operator, shot as newShot, TALL, type CamKind, type View } from './cameras';
+import { BIG_WORD, Director, INTRO_MS, WIPE_MS, type BigKind } from './director';
 import { Fig, figureGeo, type Geo } from './figure';
-import { air, arenaLight, HAZE_COLOR, HAZE_DENSITY, Lens, varnish, type FloorKnobs } from './lens';
+import { air, arenaLight, HAZE_COLOR, HAZE_DENSITY, Lens, varnish, woodOf, type FloorKnobs } from './lens';
+import { Marks, SHOT_LATE } from './marks';
 import type { Models } from './models';
+import type { NetSim } from './net';
 import { buildProps } from './props';
+import { Rig } from './rig';
 import { BALL_R, hash, J, type Body, type V3 } from './puppet';
-import { bounced, clearOf, passPath, Spacing, swerve, type PassPath } from './spacing';
+import { Sideline } from './sideline';
+import { clearOf, passPath, Spacing, swerve, type PassPath } from './spacing';
 
 export interface SceneProps {
   kits: [MatchKit, MatchKit];
@@ -54,12 +77,16 @@ export interface SceneProps {
   final?: 0 | 1;
   /** Clutch time: the main camera comes in a little, and the building is on its feet for less. */
   clutch?: boolean;
+  /** The camera that follows the play (cameras.ts; the broadcast's main one when not said). */
+  cam?: CamKind;
+  /** Who is on each bench, [home, away] (player ids): they sit there as themselves. Without it the benches are made up. */
+  bench?: [number[], number[]];
 }
 
 /** What the page writes over the picture this frame (in CSS pixels). */
 export interface Labels {
-  /** The ball handler's tag: his name and number, in his team's colour. */
-  tag: { x: number; y: number; text: string; num: string; color: string } | null;
+  /** The tags over heads: the man with the ball, then a man the user tapped; each his name and number, in his team's colour (`late`: the shot clock is running out on him). */
+  tags: { x: number; y: number; text: string; num: string; color: string; late: boolean }[];
   flash: { x: number; y: number; text: string; kind: Flash['kind']; alpha: number } | null;
   /** The lower third: the man a cut-in or a replay is on, and what he did (`key` changes when it does). */
   third: { key: string; name: string; num: string; color: string; team: string; word: string } | null;
@@ -73,8 +100,36 @@ const MID = COURT_LEN / 2;
 const RIM_H = 10;
 /** How far in front of its hinge at the board the rim's middle is (ft): it tips about the hinge. */
 const RIM_HINGE = 1.2;
-/** Gravity in the game's sped-up time, ft a second squared. */
-const G = 85;
+/** What a loose ball falls by, ft a second squared, in the bodies' time (a touch more than a thrown one's: it is out of the way sooner). */
+const G = GRAVITY * 1.15;
+/** How much of its speed a ball keeps off the floor, and the bounce too small to count (ft a second). */
+const BOUNCE_KEEP = 0.62;
+const BOUNCE_LEAST = 2.5;
+/** A loose ball is moved in steps no longer than this (s): it meets the iron, it doesn't skip through it. */
+const FREE_STEP = 1 / 120;
+/** The two baskets, for a loose ball (ballistics.ts meets). */
+const HOOPS: readonly Hoop[] = [
+  { x: -(COURT_LEN / 2 - BASKET.y), z: 0, out: 1 },
+  { x: COURT_LEN / 2 - BASKET.y, z: 0, out: -1 },
+];
+/** A man hanging on the rim: a hand this near the ring (ft) has hold of it, and each holds it this far down (radians). */
+const HANG_NEAR = 0.45;
+const HANG_TIP = 0.055;
+/** The play's time to the bodies', when a frame doesn't say (CourtView's COURT3D_PACE). */
+const PACE = 0.5;
+/** The rim on its hinge: how fast it rings (a second) and how soon it stops; how fast a firm shot off the iron sets it going (radians a second), and a dunk. */
+const RIM_HZ = 4.2;
+const RIM_DAMP = 0.36;
+const RIM_KNOCK = 0.5;
+const RIM_SLAM = 3.4;
+/** The unit on its base: slower, and it takes this much of a dunk. */
+const UNIT_HZ = 3.1;
+const UNIT_DAMP = 0.14;
+const UNIT_SLAM = 0.07;
+/** The ball's spin gets to what it is doing in about this long (s). */
+const SPIN_S = 0.07;
+/** A dribbler's clips (the ball rolls forward off the floor). */
+const DRIBBLES = new Set(['dribble', 'dribbleRun', 'crossover']);
 /** Acts that go at the rim. */
 const AIMED = new Set<Act>(['layup', 'dunk', 'floater', 'jumper', 'release']);
 /** The joints that stand on the floor. */
@@ -86,6 +141,14 @@ const WIDE_AFTER = 1500;
 /** A cut-in (a close-up of a scorer or the man a whistle was for) has this long at most (ms), and there is this long between two. */
 const CUT_MS = 1700;
 const CUT_GAP = 12000;
+/** A bench's or the crowd's cut-away has this long (ms), a timeout's bench this long. */
+const AWAY_MS = 1500;
+const HUDDLE_MS = 2400;
+/** A close-up with a body in front of its man for this long (ms) is left. */
+const BLOCK_MS = 220;
+/** The final buzzer's picture goes from the winners to the crowd after this long (ms), and to the whole building after this. */
+const FINAL_CROWD = 5200;
+const FINAL_WIDE = 8600;
 /** And goes this far round him while it holds (radians). */
 const CUT_ARC = 0.1;
 /** The play runs no faster than this against the clock for a cut-in (at 4x there is no time for one). */
@@ -97,11 +160,9 @@ const OPEN_MS = 2600;
 /** Where a man is put to be sure he is cut to his spot, not walked there (see recut). */
 const NOWHERE = 1e4;
 /** The tip's line-up is seen from this far off the centre circle (ft), going round it from this side (radians) at this pace (a second). */
-const TIP_OFF = 30;
+const TIP_OFF = 38;
 const TIP_FROM = -0.45;
 const TIP_TURN = 0.07;
-/** The free-throw camera comes in on the shooter over this long (ms). */
-const FT_PUSH = 2600;
 /** The final buzzer's camera comes in on the winners over this long (ms), from this far off them (ft). */
 const FINAL_MS = 5000;
 const FINAL_OFF = 31;
@@ -109,11 +170,9 @@ const FINAL_OFF = 31;
 const HAND = 0.1;
 const OPERATOR = 0.45;
 /** How much of their light the stands keep behind a close-up: the picture is the player, not the crowd behind him. */
-const CUT_DIM = 0.18;
+const CUT_DIM = 0.42;
 /** And the benches while a play is on: the men on the floor by the far sideline stand out from their own bench. */
 const BENCH_DIM = 0.4;
-/** And from the low camera at a free throw, which looks along them. */
-const FT_BENCH = 0.24;
 /** At the buzzer each man takes it in in his own time: the last of them this long (ms) after the first. */
 const BUZZER_MS = 900;
 /** A body's trunk is this thick (ft from its middle, on the 6 ft 6 puppet): a ball in the air stays outside it. */
@@ -151,38 +210,25 @@ const PAIR_MS = 650;
 /** Each stands this far (ft) from the middle of the two: near enough that their chests meet at the top. */
 const PAIR_GAP = 1.15;
 /** A winner with the ball at the buzzer throws it up: this fast (ft a second). */
-const TOSS = 40;
+const TOSS = 27;
 /** A loose ball rolls to a stop over about this long (s), and a bounce keeps this much of its roll. */
 const ROLL_S = 0.9;
 const ROLL_KEEP = 0.7;
-/** The ways a shot misses: off the front of the rim, off the back, off the side, in and out round the ring. */
-const MISSES = ['front', 'front', 'front', 'back', 'back', 'side', 'round'] as const;
-/** The ring's middle to its iron (ft, near enough for the ball's middle on it); in and out, the ball gets to the ring this far into its flight and goes this far round it (radians). */
-const RING = 0.75;
-const ROUND_AT = 0.8;
-const ROUND_TURN = 4.2;
-/** A rebound's arc off the rim (ft above the line from the rim to his hands, and more the farther it goes). */
+/** A rebound's arc off the rim (ft above the line from the rim to his hands, and more the farther it goes), and the most a ball already on its way up adds. */
 const REBOUND_ARC = 2.2;
+const REBOUND_MOST = 4.5;
 
-/** The lights the crowd shares with the floor and the figures (see the constructor): the soft light from above, all round, and back up off the wood. */
-const SKY = 1.0;
-const FILL = 0.14;
-const BOUNCE = 0.36;
 /** How much of the floor's colour the light off it loses (see warm). */
 const BOUNCE_GREY = 0.45;
-/** The key's shadow map holds the floor and this much round it (ft), and is this deep along the light (ft: lens.ts SHADOW_FT is the same). */
-const SHADOW_MARGIN = 2;
-const SHADOW_DEPTH = 120;
 /** How far a device that can't keep up has stepped down (see lite). */
 export type Lite = 0 | 1 | 2 | 3;
 
 /** A ball through the net pulls it for this long (ms): down, flicked back up past where it hangs, and still. */
 const NET_MS = 700;
-/** The main camera gets to where it is turning in about this long (s): it starts and stops, it doesn't lurch. */
-const FOLLOW_S = 0.34;
-/** And looks this far ahead of a ball on its way along the floor: ft for each ft a second, and at most. */
-const LEAD = 0.14;
-const LEAD_MAX = 5;
+/** A tag stands this far over a head (ft); a tapped man keeps his this long (ms); a tap this near him on the page (px, at least) is on him. */
+const TAG_OVER = 1.15;
+const PICK_MS = 7000;
+const PICK_PX = 30;
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const smooth = (u: number) => u * u * (3 - 2 * u);
@@ -191,9 +237,18 @@ const sx = (p: Pt) => p.y - MID;
 const sz = (p: Pt) => -p.x;
 
 const A = new Vector3();
+const Q = new Quaternion();
+const AXIS_X = new Vector3(1, 0, 0);
+const HANDS: V3[] = [];
+const NO_HANDS: V3[] = [];
 const TMP: V3 = { x: 0, y: 0, z: 0 };
 const TMP2: V3 = { x: 0, y: 0, z: 0 };
 const SIDE = { x: 0, z: 0 };
+const SEAT = { x: 0, z: 0 };
+/** A close-up's camera stands this far off its man (ft). */
+const CLOSE_OFF = 22;
+const WAY = { x: 0, z: 0 };
+const TURN: V3 = { x: 0, y: 0, z: 0 };
 
 export class CourtScene {
   private readonly renderer: WebGLRenderer;
@@ -201,7 +256,9 @@ export class CourtScene {
   private readonly camera = new PerspectiveCamera(30, 1.3, 4, 700);
   private readonly geo: Geo;
   private readonly arena: Arena;
-  private readonly key: DirectionalLight;
+  private readonly rig: Rig;
+  /** The camera's exposure with the house lights up (kept the first time they are asked about). */
+  private lit?: number;
   private readonly sky: HemisphereLight;
   private readonly bounce: DirectionalLight;
   private bounced: CanvasTexture | null = null;
@@ -220,23 +277,41 @@ export class CourtScene {
   private readonly floorMat: MeshStandardMaterial;
   private floorTex: CanvasTexture | null = null;
   private readonly ballMesh: Object3D;
+  private readonly ballFrame = new Group();
+  // which way the ball has turned (its seams), kept apart from the frame it is stretched in
+  private readonly ballTurn = new Quaternion();
   private readonly ballShadow: Mesh;
   private readonly nets: Object3D[] = [];
   private readonly rims: Object3D[] = [];
   private readonly units: Object3D[] = [];
   private readonly swish: Vector3[] = [];
-  // how hard the net and the rim were last hit (a dunk more than a shot), and the way the ball last rolled
+  // the nets as cord (net.ts), the rims on their hinges and the units on their bases, and the boards' lights
+  private readonly cords: { sim: NetSim; mesh: Object3D; draw(): void }[] = [];
+  private readonly hinges = [new Spring(RIM_HZ, RIM_DAMP), new Spring(RIM_HZ, RIM_DAMP)];
+  private readonly sways = [new Spring(UNIT_HZ, UNIT_DAMP), new Spring(UNIT_HZ, UNIT_DAMP)];
+  private readonly led: MeshBasicMaterial;
+  private rimWas = 0;
+  // how hard the net and the rim were last hit (a dunk more than a shot); how the ball turns (its axis times radians a second) and how fast it goes
   private netHit = 1;
   private rimHit = 1;
-  private readonly spin = new Vector3(1, 0, 0);
-  // the main camera's turn: how fast it is turning, how fast the ball goes along the floor, how far it has come in for the clutch
-  private focusV = 0;
-  private ballVx = 0;
+  // the camera that follows the play (cameras.ts): its operator, what he is shown, his picture; how far it has come in for the clutch
+  private readonly op = new Operator();
+  private readonly view: View = { ball: { x: 0, y: 0, z: 0 }, men: new Float32Array(20), n: 0, end: 0, aspect: 1.5, near: 0, tight: 0 };
+  private readonly pic = newShot();
+  private camCut = false;
+  private readonly spin = new Vector3();
+  private readonly ballV = new Vector3();
+  private long = 0;
+  // the shot in the air (ballistics.ts), how many of the things it meets it has met, and how fast the ball was going when this move picked it up
+  private flight: Shot | null = null;
+  private met = 0;
+  private readonly fromV = new Vector3();
+  // a blocked shot is off the hand and on its own (until someone has it)
+  private swatted = false;
   private tight = 0;
   // the ball: where it is, where this move picked it up, how fast it's falling
   private readonly ball = new Vector3(0, BALL_R, 0);
   private readonly from = new Vector3();
-  private readonly swatAt = new Vector3();
   private vy = 0;
   private moveKey = '';
   private lastScript: unknown = null;
@@ -259,20 +334,25 @@ export class CourtScene {
   private pairs: Map<number, { mate: number; x: number; z: number; at: number }> | null = null;
   // free throws: the frames of this script a man shoots them in
   private ftAt: number[] = [];
-  // the main camera, looking nearer for a ball on the near side and higher for one in the air
-  private dip = 0;
-  private lift = 0;
   private netKick = 0;
   private rimKick = 0;
-  private focus: number | null = null;
   // the camera on now, how long it has been (ms), how long there has been nothing to follow, how far it has pushed in
-  private shot: 'main' | 'ft' | 'wide' | 'close' | 'house' | 'tip' | 'open' | 'final' = 'main';
+  private shot: 'main' | 'wide' | 'close' | 'house' | 'tip' | 'open' | 'final' | 'bench' | 'crowd' | 'intro' = 'main';
+  // how long the cut-away on now has (ms), whose bench or crowd it is, whether a timeout's building comes after it,
+  // how long a body has been in front of a close-up's man (ms)
+  private cutLen = CUT_MS;
+  private cutSide: 0 | 1 = 0;
+  private cueSide: 0 | 1 = 0;
+  private after = false;
+  private blockMs = 0;
+  // the tip's building shot has been shown
+  private introSeen = false;
+  private finalBeat = 0;
   private shotMs = 0;
   private idleMs = 0;
   private push = 0;
-  private ftEnd = 0;
   // a cut-in: the one asked for (and how long ago, ms), who it's on, the move it was asked in, where its camera is and looks
-  private cue: 'close' | 'house' | null = null;
+  private cue: 'close' | 'house' | 'bench' | 'crowd' | null = null;
   // and what the lower third says he did
   private cueWord = '';
   private cueMs = 0;
@@ -293,6 +373,10 @@ export class CourtScene {
   private finalMs = 0;
   // the replays, and the hand on the cameras (director.ts); the rim taking a dunk, as last seen
   private readonly director = new Director();
+  // who is who on the floor (marks.ts), and the man the user tapped: who, and how long ago (ms)
+  private readonly marks: Marks;
+  private picked: number | null = null;
+  private pickMs = 0;
   private slamSeen = false;
   // the final buzzer's camera: which way round the winners it stands (radians from the near side)
   private finalA = 0;
@@ -320,49 +404,9 @@ export class CourtScene {
     // and what comes back up off the wood onto the undersides of things (its colour is the floor's: see frame).
     // Most of the soft light is the building's own (the environment: see warm), which gives a body its form;
     // these are what the crowd, which takes no environment, is lit by as well.
-    this.sky = new HemisphereLight(0xffffff, 0x9a7d5e, SKY);
-    this.scene.add(this.sky);
-    this.scene.add(new AmbientLight(0xffffff, FILL));
-    this.bounce = new DirectionalLight(0xc89a66, BOUNCE);
-    this.bounce.position.set(0, -40, 14);
-    this.scene.add(this.bounce);
-    const key = new DirectionalLight(0xfffaf3, 2.1);
-    key.position.set(30, 84, 26);
-    key.castShadow = true;
-    key.shadow.mapSize.set(2048, 2048);
-    // (its map is the floor as the light sees it, turned square on to it and no bigger: a body over the floor
-    // throws its shadow where it is in the map, so the floor is all the map need hold)
-    const sc = key.shadow.camera;
-    sc.up.set(0, 0, -1);
-    const toKey = key.position.clone().normalize();
-    const across = new Vector3().crossVectors(sc.up, toKey).normalize();
-    const up = new Vector3().crossVectors(toKey, across);
-    let [wide, high] = [0, 0];
-    for (const [x, z] of [
-      [FLOOR_L / 2, FLOOR_W / 2],
-      [FLOOR_L / 2, -FLOOR_W / 2],
-    ]) {
-      wide = Math.max(wide, Math.abs(across.x * x + across.z * z));
-      high = Math.max(high, Math.abs(up.x * x + up.z * z));
-    }
-    sc.left = -wide - SHADOW_MARGIN;
-    sc.right = wide + SHADOW_MARGIN;
-    sc.top = high + SHADOW_MARGIN;
-    sc.bottom = -high - SHADOW_MARGIN;
-    sc.near = 20;
-    sc.far = 20 + SHADOW_DEPTH;
-    key.shadow.bias = -0.0006;
-    key.shadow.normalBias = 0.04;
-    // (a soft edge, and not black: a building has more lights than this one. The floor's own shadow is
-    // sharp at a foot and this soft by a head: see varnish)
-    key.shadow.radius = 5;
-    key.shadow.intensity = 0.8;
-    this.key = key;
-    this.scene.add(key);
-    // (an edge, not an outline: any stronger and a green kit gets a lime line round it)
-    const rim = new DirectionalLight(0xe4e8f4, 0.42);
-    rim.position.set(-24, 40, -70);
-    this.scene.add(rim);
+    this.rig = new Rig(this.scene);
+    this.sky = this.rig.sky;
+    this.bounce = this.rig.bounce;
 
     // the floor as the 2D court paints it, lit: varnished maple that takes the shadows and the lamps (see lens.ts)
     const ground = new Mesh(keep(new PlaneGeometry(520, 420)), keep(new MeshBasicMaterial({ color: 0x0e0e0f })));
@@ -383,12 +427,13 @@ export class CourtScene {
     this.scene.add(floor);
     // what Blender built (scripts/blender): the baskets, the ball, the furniture, the people on the benches
     const props = buildProps(models.arena, keep);
-    this.arena = new Arena(keep, props, models.people);
+    this.arena = new Arena(keep, props, new Sideline(keep, props, models, this.geo));
     this.scene.add(this.arena.group);
 
     // the baskets: the unit behind each baseline, its board, the rim and its net
     for (const end of [-1, 1]) {
-      const { group, rim, net, swish } = props.basket();
+      const { group, rim, net, swish, live } = props.basket();
+      this.cords.push(live);
       // (built for the basket at the low end, facing up the floor; the other is turned round)
       group.position.set(end * (MID - BASKET.y), 0, 0);
       if (end > 0) group.rotation.y = Math.PI;
@@ -399,35 +444,45 @@ export class CourtScene {
       this.scene.add(group);
     }
 
+    // (the ball turns inside a frame that is drawn a little long the way it goes when it goes fast)
     this.ballMesh = props.ball(ballFill, ballSeam);
-    this.scene.add(this.ballMesh);
-    const under = keep(new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.16, depthWrite: false }));
-    const ballBlob = keep(new CircleGeometry(0.42, 14));
-    ballBlob.rotateX(-Math.PI / 2);
-    this.ballShadow = new Mesh(ballBlob, under);
-    this.ballShadow.renderOrder = 3;
+    this.ballFrame.add(this.ballMesh);
+    this.scene.add(this.ballFrame);
+    this.ballShadow = props.ballShadow();
+    this.ballShadow.visible = false;
     this.scene.add(this.ballShadow);
+    this.marks = new Marks(keep);
+    this.scene.add(this.marks.group);
+    this.led = props.led;
   }
 
   /**
-   * A device that can't keep up: the picture straight to the screen, unfinished and without the lamps'
-   * beams (1), no shadows thrown either (2), and no mirror in the floor, nor its fine wood, nor the lit
+   * A device that can't keep up: the picture straight to the screen, unfinished (no glow, no dark where
+   * things meet), without the lamps' beams and with two of the four lamps' shadows (1), no shadows thrown
+   * at all, a blob under each man instead (2), and no mirror in the floor, nor its fine wood, nor the lit
    * air over the stands (3).
    */
   lite(level: Lite) {
     this.level = level;
     this.arena.mirror(this.px.x, this.px.y, level < 1);
     this.lens.post = level < 1;
+    this.lens.occlude = level < 1;
     this.beams.visible = level < 1;
-    this.key.castShadow = level < 2;
+    this.rig.lite(level);
     this.arena.lite(level > 2);
     this.floorKnobs.uDetail.value = level > 2 ? 0 : 1;
     this.dome.visible = level < 3;
     // (the building's extras: the roof's steel and the boards' rate from step 2, half the cameras and confetti at 3)
     this.arena.shed(level > 2 ? 2 : level > 1 ? 1 : 0);
+    this.arena.sideline.shed(level);
     // (the players' plain material, no cloth sheen nor knit, once the shadows have gone too)
     this.figLite = level > 1;
-    for (const f of this.figs.values()) f.lite(this.figLite);
+    for (const f of this.figs.values()) {
+      f.lite(this.figLite);
+      f.shadow.visible = this.figLite;
+    }
+    // (a blob under a man and the ball is what a device with no thrown shadows has instead of them)
+    this.ballShadow.visible = this.figLite;
   }
 
   /**
@@ -475,6 +530,7 @@ export class CourtScene {
     tex.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
     this.floorTex = tex;
     this.floorMat.map = tex;
+    this.floorKnobs.uWood.value.copy(woodOf(cv));
     this.floorMat.color.set(0xffffff);
     this.floorMat.needsUpdate = true;
   }
@@ -506,6 +562,9 @@ export class CourtScene {
       // (his crop of hair, his sleeves and shoes are his own every night: no likeness, only so ten men are not one man)
       f = new Fig(this.geo, p.body(pid), side, p.kits[side], p.jersey(pid), pid, p.names?.(pid), mark);
       f.lite(this.figLite);
+      f.shadow.visible = this.figLite;
+      // (a body takes the lamps' shadows too: an arm's on a trunk, one man's on the next)
+      f.group.traverse((o) => (o.receiveShadow = true));
       this.figs.set(pid, f);
       this.scene.add(f.group, f.shadow, f.ring);
     }
@@ -532,7 +591,7 @@ export class CourtScene {
     // live one (director.ts); on the frame it cuts in, and the one it cuts back, everyone starts afresh
     if (calm) this.director.end();
     // (a cut-in on the scorer has the picture until the wipe comes over it at its end)
-    const reel = this.director.feed(stage, dt, own, real, this.shot === 'close' && this.shotMs < CUT_MS - WIPE_MS / 2);
+    const reel = this.director.feed(stage, dt, own, real, (this.shot === 'close' || this.shot === 'bench' || this.shot === 'crowd') && this.shotMs < this.cutLen - WIPE_MS / 2);
     if (reel) {
       stage = reel.stage;
       dt = reel.dt;
@@ -552,7 +611,7 @@ export class CourtScene {
     const play = stage.play;
     const ball = this.ball;
     const seen = new Set<number>();
-    const labels: Labels = { tag: null, flash: null, third: null, replay: false, wipe: null };
+    const labels: Labels = { tags: [], flash: null, third: null, replay: false, wipe: null };
     // (what is eased, a turn, a step aside, arms going up, is eased on the clock: no bigger a frame at 2x or 4x)
     const ease = Math.min(own, real);
     const aside = Math.min(own, real * ASIDE_PACE);
@@ -571,10 +630,12 @@ export class CourtScene {
     let line = false;
     let near = 0;
     let backspin = false;
+    let passing = false;
+    let hanger: Fig | null = null;
     /** The building gets up for a basket: all of it for the home side's big ones, a stir for the visitors'. */
     const roar = (home: boolean, big: boolean) => this.arena.cheer(home ? (big || p.clutch ? 1 : line ? 0.25 : 0.42) : big ? 0.22 : 0.12);
     // (where the page's words go: found now, put on the picture once the camera is aimed)
-    let tagAt: { x: number; z: number; text: string; num: string; color: string } | null = null;
+    let tagAt: { f: Fig; pid: number } | null = null;
     let flashAt: { x: number; z: number; fl: Flash; alpha: number } | null = null;
 
     const started = sc !== this.lastScript;
@@ -640,6 +701,10 @@ export class CourtScene {
             tired: late,
             // (holding it at the line: how long until it goes up)
             ft: said === 'hold' && nb?.act[j] === 'ft' ? Math.max(0, play.dur - play.ms) : undefined,
+            // (the man on him, if one is near: he keeps the ball away from him)
+            press: j === carried ? nearestOf(spots, j, j < nO ? nO : 0, j < nO ? pids.length : nO, (k) => this.figs.get(pids[k])?.pup) : undefined,
+            // (about to pass it: how long until it leaves his hands)
+            pass: j === carried && nb?.act[j] === 'pass' ? Math.max(0, play.dur - play.ms) : undefined,
             over: p.final !== undefined,
             bump: end.bump,
             who: pid,
@@ -659,6 +724,12 @@ export class CourtScene {
         this.slammed = false;
         this.landed = false;
         this.path = null;
+        this.flight = null;
+        this.met = 0;
+        // (how fast it was going, for whoever picks it out of the air; a held ball's is its carrier's, not its own)
+        if (this.heldBy === null && !fresh) this.fromV.copy(this.ballV);
+        else this.fromV.set(0, 0, 0);
+        if (fresh || (b.hold !== undefined && b.hold >= 0)) this.swatted = false;
         if (fresh) {
           const start = toWorld(sc.frames[0].ball, sc.dir);
           if (cut || Math.hypot(ball.x - sx(start), ball.z - sz(start)) > 12) {
@@ -671,6 +742,8 @@ export class CourtScene {
         this.vy = 0;
       }
       const lu = play.dur > 0 ? clamp(play.ms / play.dur, 0, 1) : 1;
+      // (the play's time to the bodies')
+      const pace = own > 0 && dt > 0 ? dt / own : PACE;
       const was = a.hold !== undefined && a.hold >= 0 ? figs[a.hold] : null;
       const next = b.hold !== undefined && b.hold >= 0 ? figs[b.hold] : null;
       if (was) hands.add(was);
@@ -694,7 +767,8 @@ export class CourtScene {
           if (one.tau >= DUNK_AT) {
             this.slammed = true;
             ball.set(rim.x, RIM_H - 0.2, rim.z);
-            this.vy = -20;
+            this.vy = -17;
+            this.drift.x = this.drift.z = 0;
             // (the rim takes his weight and springs back; the net is pulled harder than a shot pulls it)
             this.rimKick = 1;
             this.rimHit = 1.7;
@@ -706,97 +780,90 @@ export class CourtScene {
               if (!calm) this.lens.bump(DUNK_BUMP);
             }
           }
-        } else if (this.slammed) free = true;
+        } else if (this.slammed) {
+          free = true;
+          // (he may hang on the rim on his way down)
+          if (was && one && isDunk(one.id)) hanger = was;
+        } else if (this.swatted) free = true;
         else if (b.swat !== undefined && figs[b.swat]) {
-          // blocked: it gets as far as his hand, and comes back off it
+          // blocked: it gets as far as his hand, and goes off it the way the play takes it next (or back where it came from)
           const blk = figs[b.swat];
           hands.add(blk);
           const j = blk.pup.j;
           const hand = blk.pup.world(j[J.hr * 3], j[J.hr * 3 + 1] + 0.4, j[J.hr * 3 + 2], TMP);
-          if (lu < 0.32) {
-            const w = lu / 0.32;
-            ball.set(this.from.x + (hand.x - this.from.x) * w, this.from.y + (hand.y - this.from.y) * w, this.from.z + (hand.z - this.from.z) * w);
-            this.swatAt.copy(ball);
-          } else {
-            const w = (lu - 0.32) / 0.68;
-            const dx = this.from.x - rim.x;
-            const dz = this.from.z - rim.z;
-            const d = Math.hypot(dx, dz) || 1;
-            ball.set(this.swatAt.x + (dx / d) * 9 * w, Math.max(BALL_R, this.swatAt.y * (1 - w * w)), this.swatAt.z + (dz / d) * 9 * w);
-          }
+          const w = Math.min(1, lu / 0.32);
+          ball.set(this.from.x + (hand.x - this.from.x) * w, this.from.y + (hand.y - this.from.y) * w + 1.2 * w * (1 - w), this.from.z + (hand.z - this.from.z) * w);
           this.give(null, null, ease, false);
+          backspin = true;
+          if (lu >= 0.32) {
+            this.swatted = true;
+            // (how long until someone has it: the rest of this move and the ones with nobody on the ball after it)
+            let left = (1 - lu) * play.dur;
+            let k = bi + 1;
+            for (; k < sc.frames.length && !((sc.frames[k].hold ?? -1) >= 0); k++) left += sc.frames[k].dur;
+            const to = sc.frames[k] ? toWorld(sc.frames[k].ball, sc.dir) : null;
+            const v = swat(hand, this.from, to && { x: sx(to), y: 0, z: sz(to) }, left / 1000 / pace, hash(this.scriptN, bi + 3), TMP2);
+            this.vy = v.y;
+            this.drift.x = v.x;
+            this.drift.z = v.z;
+            this.spin.set(v.z, 0, -v.x).multiplyScalar(0.6);
+            free = true;
+          }
         } else {
-          // a shot: up from his hand, over the top and down at the rim (through it, or off the iron)
-          const peak = (b.ballZ ?? 6) * 0.62;
+          // a shot: thrown from his hand to the rim, and what it does there (ballistics.ts): through it, off the iron, off the glass
           const made = b.fx === 'make';
-          // (a miss is one of a few, the shot's own: off the front of the rim, off the back, off the side, or in and round and out)
-          const how = made ? 'in' : MISSES[Math.floor(hash(this.scriptN, bi) * MISSES.length)];
-          const T = made ? 0.86 : how === 'round' ? ROUND_AT : 1;
-          const w = Math.min(1, lu / T);
-          const dx = this.from.x - rim.x;
-          const dz = this.from.z - rim.z;
-          const d = Math.hypot(dx, dz) || 1;
-          // (toward the shooter from the rim, and square to that)
-          const ux = dx / d;
-          const uz = dz / d;
-          const turn = hash(this.scriptN, bi + 50) < 0.5 ? 1 : -1;
-          const hit = how === 'back' ? -0.7 : how === 'side' ? 0 : how === 'in' ? 0 : RING;
-          let ex = rim.x + ux * hit + (how === 'side' ? uz * RING * turn : 0);
-          let ez = rim.z + uz * hit - (how === 'side' ? ux * RING * turn : 0);
-          const top = RIM_H + 0.3;
+          if (!this.flight) {
+            const kind: ShotKind = this.ftAt.includes(bi - 1) ? 'ft' : ((['layup', 'floater', 'jumper'] as const).find((k) => a.act.includes(k)) ?? 'jumper');
+            // (where the play takes it after: a rebounder's hands, or the floor where it is next wanted)
+            const nf = made ? undefined : sc.frames[bi + 1];
+            const to = nf && toWorld(nf.ball, sc.dir);
+            this.flight = planShot({
+              from: this.from,
+              rim,
+              kind,
+              made,
+              secs: play.dur / 1000 / pace,
+              next: to ? { x: sx(to), y: 0, z: sz(to) } : null,
+              r: [hash(this.scriptN, bi), hash(this.scriptN, bi + 50), hash(this.scriptN, bi + 7)],
+            });
+          }
+          const shot = this.flight;
           // (once it has landed it is its own: it drops out of the net to the floor, or comes off the iron)
           if (this.landed) free = true;
           else {
-            ball.set(this.from.x + (ex - this.from.x) * w, this.from.y + (top - this.from.y) * w + 4 * peak * w * (1 - w), this.from.z + (ez - this.from.z) * w);
+            set(ball, shotAt(shot, lu, TMP));
             // (what a body had moved it in his hands is let go of on the way up)
             this.give(null, null, ease, false);
-            backspin = true;
-            if (made && lu > T) {
-              ball.y = top - ((lu - T) / (1 - T)) * 2.7;
-              if (!this.netKick && !calm) {
+            backspin = this.met === 0;
+            for (; this.met < shot.hits.length && lu >= shot.hits[this.met].u; this.met++) {
+              const hit = shot.hits[this.met];
+              // (off the iron or the glass it loses its spin, and picks up some of the way it glanced off)
+              shotSpeed(shot, hit.u + 0.02, TMP2);
+              if (hit.what !== 'net') this.spin.set(TMP2.z, TMP2.y * 0.4, -TMP2.x).multiplyScalar(0.7);
+              if (calm) continue;
+              if (hit.what === 'net') {
                 this.netKick = 1;
-                this.netHit = 1;
-                // (one in four rattles in: the rim takes a little of it on the way through)
-                if (hash(this.scriptN, bi + 7) < 0.25 && !this.rimKick) {
-                  this.rimKick = 0.5;
-                  this.rimHit = 0.6;
-                }
+                this.netHit = hit.power;
                 roar(sc.off === 0, b.flash?.text === '+3' || !!sc.moment);
-                if (sc.moment && !calm) this.lens.bump(BUZZER_BUMP);
-              }
-            }
-            if (how === 'round' && lu > T) {
-              // (in and out: round the inside of the ring from its front, and off it)
-              const a = ((lu - T) / (1 - T)) * ROUND_TURN * turn;
-              const c = Math.cos(a);
-              const sn = Math.sin(a);
-              ex = rim.x + (ux * c - uz * sn) * RING;
-              ez = rim.z + (uz * c + ux * sn) * RING;
-              ball.set(ex, top - 0.15 * Math.sin((Math.PI * (lu - T)) / (1 - T)), ez);
-              if (!this.rimKick && !calm) {
-                this.rimKick = 0.6;
-                this.rimHit = 0.6;
-              }
+                if (sc.moment) this.lens.bump(BUZZER_BUMP);
+              } else if (hit.what === 'rim') {
+                this.rimKick = 1;
+                this.rimHit = hit.power;
+              } else this.sways[rimEnd].kick(-UNIT_SLAM * hit.power);
             }
             if (lu >= 1) {
               this.landed = true;
-              if (!made && !this.rimKick && !calm) {
-                this.rimKick = 1;
-                this.rimHit = how === 'back' ? 1.3 : 1;
-              }
-              // (it leaves the net as fast as it went through it, in the bodies' time, and rolls out from under the basket;
-              // off the iron it pops up and away: short off the front, long off the back, wide off the side, out of the ring the way it was going round)
-              const pace = own > 0 && dt > 0 ? dt / own : 1;
-              this.vy = made ? -clamp((2.7 / Math.max(0.03, ((1 - T) * play.dur) / 1000)) * pace, 8, 30) : how === 'back' ? 12 : how === 'round' ? 5 : 8;
-              const out = made ? 2 : how === 'back' ? 6 : 5;
-              const [ox, oz] = made ? [-Math.sign(rim.x), 0] : how === 'back' ? [-ux, -uz] : how === 'front' ? [ux, uz] : [ex - rim.x, ez - rim.z];
-              const ol = Math.hypot(ox, oz) || 1;
-              this.drift.x = (ox / ol) * out;
-              this.drift.z = (oz / ol) * out;
+              // (it goes on as it was going: down out of the net, or up and away off the iron)
+              const v = shotSpeed(shot, 1, TMP2);
+              this.vy = v.y;
+              this.drift.x = v.x;
+              this.drift.z = v.z;
+              free = true;
             }
           }
         }
-      } else {
+      } else if (this.swatted && !next) free = true;
+      else {
         // a pass (to where his hands will be), or the ball loose on the floor
         const end = toWorld(b.ball, sc.dir);
         const to = next ? next.pup.carry(TMP) : { x: sx(end), y: BALL_R, z: sz(end) };
@@ -818,14 +885,26 @@ export class CourtScene {
           );
         }
         // (a rebound comes up off the rim and down into his hands)
-        const off = !!next && b.act[figs.indexOf(next)] === 'rebound' && this.from.y > RIM_H - 1;
-        const arc = Math.max(this.path.lob, Math.min(1.8, far * 0.05) + (next ? 0 : Math.min(1.5, far * 0.1)), off ? REBOUND_ARC + far * 0.05 : 0);
+        // (one that never met the iron only falls to him)
+        const off = !!next && b.act[figs.indexOf(next)] === 'rebound' && this.from.y > RIM_H - 1 && this.fromV.y > -2;
+        // (a ball picked out of the air, off the iron or off a block, starts the way it was going: up, if it was on its way up)
+        const flying = !was && this.fromV.lengthSq() > 4;
+        const secs = play.dur / 1000 / pace;
+        const rise = flying ? clamp((this.fromV.y * secs - (to.y - this.from.y)) / 4, 0, REBOUND_MOST) : 0;
+        // (a pass is thrown up by as much as it falls on its way: a long one is a lob, a short one all but flat; a ball already in the air is not thrown again)
+        const arc = Math.max(this.path.lob, flying ? 0 : Math.min(next ? 1.8 : 3, passArc(secs)), off ? Math.max(rise, Math.min(REBOUND_ARC, 0.6 + far * 0.2)) : rise);
         const side = swerve(this.path, lu, SIDE);
+        if (flying) {
+          const way = veer(to.x - this.from.x, to.z - this.from.z, this.fromV.x, this.fromV.z, secs, lu, WAY);
+          side.x += way.x;
+          side.z += way.z;
+        }
         ball.set(
           this.from.x + (to.x - this.from.x) * lu + side.x,
-          this.path.bounce ? bounced(this.from.y, to.y, BALL_R, this.path.bounce, lu) : this.from.y + (to.y - this.from.y) * lu + 4 * arc * lu * (1 - lu),
+          this.path.bounce ? bouncePass(this.from.y, to.y, BALL_R, this.path.bounce, lu, secs) : this.from.y + (to.y - this.from.y) * lu + 4 * arc * lu * (1 - lu),
           this.from.z + (to.z - this.from.z) * lu + side.z,
         );
+        passing = true;
         // (kept out of the bodies it goes by, eased: the two men's hands go with it)
         this.give(was, next, ease);
         if (lu >= 1) {
@@ -839,9 +918,7 @@ export class CourtScene {
       // what the page writes over the picture: the handler's name, the play's label
       const hold = play.u >= 0.5 ? b.hold : a.hold;
       if (p.names && hold !== undefined && hold >= 0 && figs[hold]) {
-        const f = figs[hold];
-        const pid = hold < nO ? sc.oPids[hold] : sc.dPids[hold - nO];
-        tagAt = { x: f.pup.x, z: f.pup.z, text: p.names(pid), num: p.jersey(pid), color: p.kits[f.side].color };
+        tagAt = { f: figs[hold], pid: hold < nO ? sc.oPids[hold] : sc.dPids[hold - nO] };
       }
       const fl = (play.u > 0.35 ? b.flash : undefined) ?? (play.u <= 0.35 ? a.flash : undefined);
       if (fl) {
@@ -850,7 +927,6 @@ export class CourtScene {
       }
       // (the camera pushes in as the ball gets to the basket)
       near = clamp(1 - (Math.hypot(ball.x - rim.x, ball.z - rim.z) - 6) / 16, 0, 1);
-      if (line) this.ftEnd = rimEnd ? 1 : -1;
     } else {
       // between possessions: everyone where the last play left him (or lined up for the tip)
       this.moveKey = '';
@@ -908,21 +984,40 @@ export class CourtScene {
     if (free) this.bend.x = this.bend.z = 0;
     else this.drift.x = this.drift.z = 0;
     if (free && sec > 0) {
-      this.vy -= G * sec;
-      ball.y += this.vy * sec;
-      ball.x += this.drift.x * sec;
-      ball.z += this.drift.z * sec;
-      // (off whoever it comes down on, once it is where it fell to)
-      this.clear(null, null, BALL_PUSH * sec);
-      if (ball.y < BALL_R) {
-        ball.y = BALL_R;
-        const hard = Math.abs(this.vy) > 5;
-        this.vy = hard ? -this.vy * 0.5 : 0;
-        if (hard) {
-          this.drift.x *= ROLL_KEEP;
-          this.drift.z *= ROLL_KEEP;
+      // (in short steps: it meets the iron, the glass and the net's cords on its way, and comes off them: ballistics.ts)
+      const steps = Math.min(12, Math.ceil(sec / FREE_STEP));
+      const h = sec / steps;
+      for (let st = 0; st < steps; st++) {
+        this.vy -= G * h;
+        TMP.x = ball.x + this.drift.x * h;
+        TMP.y = ball.y + this.vy * h;
+        TMP.z = ball.z + this.drift.z * h;
+        TMP2.x = this.drift.x;
+        TMP2.y = this.vy;
+        TMP2.z = this.drift.z;
+        const met = meets(TMP, TMP2, h, HOOPS);
+        set(ball, TMP);
+        this.drift.x = TMP2.x;
+        this.vy = TMP2.y;
+        this.drift.z = TMP2.z;
+        if (met && !calm) {
+          const end = ball.x < 0 ? 0 : 1;
+          if (met > 0) this.hinges[end].kick(-RIM_KNOCK * met);
+          else this.sways[end].kick(UNIT_SLAM * met);
+          this.spin.set(this.drift.z, this.vy * 0.3, -this.drift.x).multiplyScalar(0.8);
+        }
+        if (ball.y < BALL_R) {
+          ball.y = BALL_R;
+          const hard = Math.abs(this.vy) > BOUNCE_LEAST;
+          this.vy = hard ? -this.vy * BOUNCE_KEEP : 0;
+          if (hard) {
+            this.drift.x *= ROLL_KEEP;
+            this.drift.z *= ROLL_KEEP;
+          }
         }
       }
+      // (off whoever it comes down on, once it is where it fell to)
+      this.clear(null, null, BALL_PUSH * sec);
       // (on the floor it slows to a stop)
       if (ball.y <= BALL_R + 0.01 && this.vy === 0) {
         const k = Math.exp(-sec / ROLL_S);
@@ -934,48 +1029,143 @@ export class CourtScene {
       this.tossed = false;
       this.pairs = null;
     }
+    // the people round the floor: the referees work this moment of the play, the coaches and the benches watch it
+    // (a referee who has the ball, at the tip or picked up dead, puts it in his hands)
+    this.arena.sideline.update({
+      stage,
+      ball,
+      figs: this.figs,
+      held: !!holder,
+      line,
+      final: p.final,
+      clutch: !!p.clutch,
+      game: p.game,
+      bench: p.bench,
+      own,
+      ease,
+      real,
+      calm,
+      cut: !!reel?.cut,
+      replay: this.director.onAir,
+    });
 
     for (const [pid, f] of [...this.figs]) {
       if (!seen.has(pid)) {
         this.drop(pid, f);
         continue;
       }
+      f.ball = hands.has(f) ? ball : null;
       f.pup.arms(hands.has(f) ? ball : null);
       f.place();
       const hot = !!p.hot?.has(pid);
-      f.ring.visible = hot || f === holder;
-      if (f.ring.visible) (f.ring.material as MeshBasicMaterial).color.set(hot ? p.warn : '#ffffff');
+      // (the man with the ball has the broadcast's own ring: see marks.ts)
+      f.ring.visible = hot && f !== holder;
+      if (f.ring.visible) (f.ring.material as MeshBasicMaterial).color.set(p.warn);
     }
 
-    // the ball rolls the way it goes (a shot spins back); its shadow stays on the floor, wider and fainter the higher it is
-    const bm = this.ballMesh.position;
+    // the ball turns as what it is doing turns it (ballistics.ts spinFor): its seams show it. Its shadow stays on the
+    // floor, tight and dark as it touches, wider and fainter the higher it is
+    const bm = this.ballFrame.position;
     const moved = bm.distanceTo(ball);
-    const flat = Math.hypot(ball.x - bm.x, ball.z - bm.z);
-    // (a dribble goes up and down: it keeps the spin it had)
-    if (flat > 0.3 * moved && flat > 1e-3) this.spin.set((ball.z - bm.z) / flat, 0, -(ball.x - bm.x) / flat);
-    if (!calm && moved < 20 && moved > 1e-4) this.ballMesh.rotateOnWorldAxis(this.spin, (backspin ? -1 : 1) * Math.min(0.8, moved * 1.1));
+    if (sec > 0 && moved < 20) this.ballV.set((ball.x - bm.x) / sec, (ball.y - bm.y) / sec, (ball.z - bm.z) / sec);
+    else if (moved >= 20) this.ballV.set(0, 0, 0);
+    const doing: Spin = backspin
+      ? line
+        ? 'ft'
+        : 'shot'
+      : passing
+        ? 'pass'
+        : holder
+          ? DRIBBLES.has(holder.pup.clip)
+            ? 'dribble'
+            : 'held'
+          : free && ball.y <= BALL_R + 0.02
+            ? 'roll'
+            : 'loose';
+    // (a dribbler's ball rolls the way he goes, not the way his hand takes it from side to side)
+    const turn =
+      doing === 'dribble' && holder
+        ? spinFor(doing, holder.pup.vf * Math.sin(holder.pup.yaw), holder.pup.vf * Math.cos(holder.pup.yaw), TURN)
+        : spinFor(doing, this.ballV.x, this.ballV.z, TURN);
+    if (turn && sec > 0) this.spin.lerp(A.set(turn.x, turn.y, turn.z), 1 - Math.exp(-sec / SPIN_S));
+    const rate = this.spin.length();
+    if (!calm && sec > 0 && rate > 1e-3) this.ballTurn.premultiply(Q.setFromAxisAngle(A.copy(this.spin).divideScalar(rate), Math.min(1.2, rate * sec))).normalize();
+    // (a pass thrown hard is drawn a little long along its way; the seams turn inside that)
+    const speed = this.ballV.length();
+    const long = passing && !calm ? stretch(speed) : 0;
+    this.long += (long - this.long) * (sec > 0 ? 1 - Math.exp(-sec / SPIN_S) : 0);
+    if (this.long > 1e-3 && speed > 1) {
+      this.ballFrame.quaternion.setFromUnitVectors(AXIS_X, A.copy(this.ballV).divideScalar(speed));
+      this.ballFrame.scale.set(1 + this.long, 1 - this.long * 0.4, 1 - this.long * 0.4);
+      this.ballMesh.quaternion.copy(this.ballFrame.quaternion).invert().multiply(this.ballTurn);
+    } else {
+      this.ballFrame.quaternion.identity();
+      this.ballFrame.scale.setScalar(1);
+      this.ballMesh.quaternion.copy(this.ballTurn);
+    }
     bm.copy(ball);
+    const up = Math.max(0, ball.y - BALL_R);
     this.ballShadow.position.set(ball.x, 0.035, ball.z);
-    this.ballShadow.scale.setScalar(1 + Math.min(1.2, ball.y * 0.06));
-    (this.ballShadow.material as MeshBasicMaterial).opacity = 0.34 / (1 + ball.y * 0.3);
+    this.ballShadow.scale.setScalar(0.74 + Math.min(2.2, up * 0.22));
+    (this.ballShadow.material as MeshBasicMaterial).opacity = 0.62 / (1 + up * 1.1) + 0.1 / (1 + up * 0.12);
     // the net takes a made shot, the rim a miss or a dunk
     this.netKick = Math.max(0, this.netKick - own / NET_MS);
     this.rimKick = Math.max(0, this.rimKick - own / 380);
-    // (the ball pulls the net down its length, it flicks back up past where it hangs, wider at the foot, and swings out; its
-    // loops stay on the ring. The rim tips on its hinge at the board, the net hangs from it, and the whole unit rocks a little with it)
+    // (a knock sets the rim ringing on its hinge at the board; a dunk tips it right down, and the whole unit rocks on its base)
+    if (this.rimKick > this.rimWas) {
+      const slam = this.rimHit > 1.5;
+      this.hinges[rimEnd].kick(-(slam ? RIM_SLAM : RIM_KNOCK) * this.rimHit);
+      if (slam) this.sways[rimEnd].kick(-UNIT_SLAM * this.rimHit);
+    }
+    this.rimWas = this.rimKick;
+    // (the cords are worked out while the device keeps up; past that the net Blender made is pulled as a ball would pull
+    // it: down its length, flicked back up past where it hangs, wider at the foot, and swung out)
+    const corded = this.level < 2 && !calm;
     const age = (1 - this.netKick) * NET_MS;
     const pull = this.netKick > 0 ? this.netHit * Math.exp(-age / 230) : 0;
     this.nets.forEach((n, i) => {
       const k = i === rimEnd ? pull : 0;
       const wave = Math.cos(age / 50);
       this.swish[i].set(k * wave, k * 0.2 * Math.max(0, -wave), k * 0.22 * Math.sin(age / 64));
-      const tip = i === rimEnd ? Math.sin(this.rimKick * 18) * this.rimKick * 0.07 * this.rimHit : 0;
-      this.units[i].rotation.z = tip * 0.1;
+      if (calm) {
+        this.hinges[i].still();
+        this.sways[i].still();
+      }
+      const unit = this.units[i];
+      // (the far basket's own frame is turned round)
+      const flip = unit.rotation.y ? -1 : 1;
+      // a man hanging on it: each hand on the ring holds it down, and the cords are pushed off his wrists
+      HANDS.length = 0;
+      if (hanger && i === rimEnd && !calm)
+        for (const k of [J.hl, J.hr]) {
+          const j = hanger.pup.j;
+          const at = hanger.pup.world(j[k * 3], j[k * 3 + 1], j[k * 3 + 2], TMP);
+          const lx = (at.x - unit.position.x) * flip;
+          const lz = at.z * flip;
+          if (Math.hypot(Math.hypot(lx, lz) - 0.776, at.y - RIM_H) < HANG_NEAR) HANDS.push({ x: lx, y: at.y - RIM_H - 0.25, z: lz });
+        }
+      this.hinges[i].step(sec, -HANG_TIP * HANDS.length);
+      this.sways[i].step(sec);
+      const tip = this.hinges[i].x;
+      unit.rotation.z = this.sways[i].x;
+      // (the rim tips about its hinge; the net hangs from it)
       for (const o of [n, this.rims[i]]) {
         o.rotation.z = tip;
         o.position.set(RIM_HINGE * (Math.cos(tip) - 1), RIM_H + RIM_HINGE * Math.sin(tip), 0);
       }
+      const cord = this.cords[i];
+      n.visible = !corded;
+      cord.mesh.visible = corded;
+      if (!corded) return void cord.sim.reset();
+      // (the ball in the net's own frame)
+      TMP.x = (ball.x - unit.position.x) * flip;
+      TMP.y = ball.y - RIM_H;
+      TMP.z = ball.z * flip;
+      if (cord.sim.step(sec, TMP, tip, HANDS.length ? HANDS : NO_HANDS)) cord.draw();
     });
+    // the lights round the boards: red when the period's clock is out, and when the shot clock is
+    const shotClock = this.arena.boards.house.shot;
+    ledLit(this.led, (play ? play.clock <= 0 : p.game?.clock === 0) || (shotClock !== null && shotClock <= 0));
 
     // where each body meets the floor: under each foot (less as it lifts), and wide under him
     let pools = 0;
@@ -989,6 +1179,7 @@ export class CourtScene {
       const hips = f.pup.world(j[J.hips * 3], 0, j[J.hips * 3 + 2], TMP);
       this.arena.touch(pools++, hips.x, hips.z, 2.7, 0.2);
     }
+    pools = this.arena.sideline.touch(this.arena, pools);
     this.arena.touched(pools);
     if (this.floorTex && this.floorTex !== this.bounced) this.warm((this.bounced = this.floorTex));
 
@@ -1008,18 +1199,36 @@ export class CourtScene {
       const news = fl !== this.flashed && !stale ? fl : null;
       const made = play.b.fx === 'make' && this.netKick > this.kicked && !stale;
       if (made) this.scorer = pids[play.a.hold ?? -1] ?? null;
-      let cue: 'close' | 'house' | null = null;
+      let cue: 'close' | 'house' | 'bench' | 'crowd' | null = null;
       let on: number | null = null;
       let word = '';
+      let whose: 0 | 1 = 0;
       if (made && !line && (this.slammed || fl?.text === '+3' || sc.moment)) {
         cue = 'close';
         on = this.scorer;
         word = sc.moment ? BIG_WORD[sc.moment] : this.slammed ? BIG_WORD.dunk : BIG_WORD.three;
+        // (not always his face: now and then his bench on its feet, or, for the home side, the crowd)
+        const side = on === null ? undefined : this.figs.get(on)?.side;
+        const r = hash(this.scriptN, 21);
+        if (side !== undefined && !sc.moment) {
+          whose = side;
+          if (r < 0.2 && d.benchClear(side, this.view.men, this.view.n)) cue = 'bench';
+          else if (r < 0.36 && side === 0) cue = 'crowd';
+        }
+      } else if (made && line && hash(this.scriptN, 22) < 0.6) {
+        // (a free throw down: the man at the line, now and then)
+        cue = 'close';
+        on = this.scorer;
+        word = 'At the line';
       } else if (news && (news.kind === 'foul' || news.text === 'And one!')) {
         cue = 'close';
         on = this.heldBy ?? (news.kind === 'make' ? this.scorer : null);
         word = news.kind === 'make' ? BIG_WORD.and1 : 'Fouled';
-      } else if (news?.text.startsWith('Timeout')) cue = 'house';
+      } else if (news?.text.startsWith('Timeout')) {
+        cue = 'house';
+        // (whose it is: its bench first, then the building)
+        whose = p.game?.abbrevs[1] && news.text.endsWith(p.game.abbrevs[1]) ? 1 : 0;
+      }
       // (noted whatever the camera does now: it is shown when the ball is dead)
       const big: BigKind | null =
         made && !line ? (sc.moment ?? (this.slammed ? 'dunk' : fl?.text === '+3' ? 'three' : null)) : news?.text === 'And one!' ? 'and1' : news?.kind === 'block' ? 'block' : null;
@@ -1036,6 +1245,7 @@ export class CourtScene {
       if (cue === 'house' ? pace : !!cue && timely && on !== null && this.figs.has(on)) {
         this.cue = cue;
         this.cueMs = 0;
+        this.cueSide = whose;
         if (cue === 'close') {
           this.star = on;
           this.cueWord = word;
@@ -1056,8 +1266,8 @@ export class CourtScene {
     this.was.pos.copy(cam.position);
     this.was.dir.copy(cam.quaternion);
     this.was.fov = cam.fov;
-    this.aim(stage, real, calm, line, near, quiet, !!p.clutch, p.final);
-    if (this.cutHook && !calm && !reel && !d.onAir && this.shot !== shotWas && this.shot !== 'open' && real > 0) {
+    this.aim(stage, real, calm, line, near, quiet, !!p.clutch, p.cam ?? 'tv', p.final);
+    if (this.cutHook && !calm && !reel && !d.onAir && (this.shot !== shotWas || this.camCut) && this.shot !== 'open' && real > 0) {
       const now = { pos: cam.position.clone(), dir: cam.quaternion.clone(), fov: cam.fov };
       cam.position.copy(this.was.pos);
       cam.quaternion.copy(this.was.dir);
@@ -1074,10 +1284,31 @@ export class CourtScene {
     cam.updateMatrixWorld();
     // the words over the picture: the handler's tag and the play's word, none over a replay (its bug and
     // its lower third say what it is); the lower third on the man a cut-in or a replay is on; the wipe
-    if (tagAt && !d.onAir) {
-      const t: { x: number; z: number; text: string; num: string; color: string } = tagAt;
-      const at = this.screen(A.set(t.x, 0, t.z));
-      labels.tag = { x: at.x, y: at.y, text: t.text, num: t.num, color: t.color };
+    // who is who: a ring under the man with the ball and a tag over his head (the ring says when the shot clock
+    // is running out on him), and the same, plainer, for a man the user tapped; none of it in a replay or a close-up
+    const plain = !d.onAir && (this.shot === 'main' || this.shot === 'open') && p.final === undefined;
+    const left = this.arena.boards.house.shot;
+    const late = sc && play && left !== null ? clamp((SHOT_LATE + 0.4 - left) / 1.2, 0, 1) : 0;
+    this.pickMs += real;
+    const picked = this.picked !== null && this.pickMs < PICK_MS ? this.figs.get(this.picked) : undefined;
+    if (!picked) this.picked = null;
+    const tagOver = (f: Fig, pid: number, isLate: boolean) => {
+      const j = f.pup.j;
+      const h = f.pup.world(j[J.head * 3], j[J.head * 3 + 1], j[J.head * 3 + 2], TMP);
+      const at = this.screen(A.set(h.x, h.y + TAG_OVER, h.z));
+      labels.tags.push({ x: at.x, y: at.y, text: p.names!(pid), num: p.jersey(pid), color: p.kits[f.side].color, late: isLate });
+    };
+    this.marks.tick(real);
+    const lit = plain && holder ? (holder as Fig) : null;
+    this.marks.put(0, !!lit, lit?.pup.x ?? 0, lit?.pup.z ?? 0, real, lit ? p.kits[lit.side].color : null, late, p.warn, calm);
+    const also = plain && picked && picked !== lit ? picked : null;
+    this.marks.put(1, !!also, also?.pup.x ?? 0, also?.pup.z ?? 0, real, null, 0, p.warn, calm);
+    if (plain && p.names) {
+      if (tagAt) {
+        const t: { f: Fig; pid: number } = tagAt;
+        tagOver(t.f, t.pid, late > 0.5);
+      }
+      if (also && this.picked !== null) tagOver(also, this.picked, false);
     }
     if (flashAt && !d.onAir) {
       const f: { x: number; z: number; fl: Flash; alpha: number } = flashAt;
@@ -1107,6 +1338,11 @@ export class CourtScene {
       const c = sharp.pup.world(j[J.chest * 3], j[J.chest * 3 + 1], j[J.chest * 3 + 2], TMP);
       this.lens.focus(this.camera.position.distanceTo(A.set(c.x, c.y, c.z)), d.onAir ? REPLAY_SOFT : CLOSE_SOFT);
     } else this.lens.focus(0, 0);
+    // (the house lights come down for the open, the tip and a timeout, and some of the way for the clutch: rig.ts)
+    this.rig.mood(this.shot === 'open' || this.shot === 'tip' || this.shot === 'house' ? 1 : p.clutch ? 0.6 : 0, calm ? 1e6 : real);
+    this.lens.drama = this.rig.drama;
+    // (the house lights down for the open, a timeout, a home win: the building says how far)
+    this.lens.exposure = (this.lit ??= this.lens.exposure) * this.arena.house;
     this.lens.render(this.scene, this.camera, real);
     return labels;
   }
@@ -1213,6 +1449,21 @@ export class CourtScene {
       if (fl?.text === 'And one!' && this.shooter) this.shooter.pup.cue(r(3) < 0.5 ? 'roar' : 'flex');
       if ((fl?.kind === 'foul' || fl?.text === 'And one!') && b.foul !== undefined && figs[b.foul]) figs[b.foul].pup.cue(r(4) < 0.55 ? 'handUp' : 'protest', null, 1500);
       if (a.swat !== undefined && figs[a.swat] && r(5) < 0.6) figs[a.swat].pup.cue('wag');
+      // a screen coming: the man guarding the screener calls it. An open man with nobody near asks for the ball (one a move)
+      const nO = sc.oPids.length;
+      let asked = false;
+      for (let j = 0; j < nO; j++) {
+        if (b.act[j] === 'screen' && a.act[j] !== 'screen') figs[nO + j]?.pup.cue('call', null, 600);
+        else if (!asked && b.act[j] === 'stand' && figs[j] && figs[j] !== holder && holder && holder.side === figs[j].side && r(20 + j) < 0.35) {
+          const open = figs.every((f) => f.side === figs[j].side || Math.hypot(f.pup.x - figs[j].pup.x, f.pup.z - figs[j].pup.z) > OPEN_FT);
+          if (open) {
+            figs[j].pup.cue('ask', null, 500);
+            asked = true;
+          }
+        }
+      }
+      // (fouled hard with the ball: now and then he goes down, and gets up)
+      if (fl?.kind === 'foul' && a.hold !== undefined && a.hold >= 0 && figs[a.hold] && figs[a.hold] !== figs[b.foul ?? -1] && r(8) < 0.3) figs[a.hold].pup.stumble();
       if (fl?.text === 'Steal' && a.hold !== undefined && a.hold >= 0 && figs[a.hold] && r(6) < 0.5) figs[a.hold].pup.cue('protest', null, 1200);
     }
     const fv = this.fives;
@@ -1357,17 +1608,32 @@ export class CourtScene {
    * the winners at the final buzzer; the instant replays (director.ts). It cuts between them, never more
    * often than HOLD_MS. Reduced motion: one camera, the whole floor, held still.
    */
-  private aim(stage: Stage, real: number, calm: boolean, line: boolean, near: number, quiet: boolean, clutch: boolean, final?: 0 | 1) {
+  private aim(stage: Stage, real: number, calm: boolean, line: boolean, near: number, quiet: boolean, clutch: boolean, kind: CamKind, final?: 0 | 1) {
     const cam = this.camera;
     const aspect = this.w / this.h;
     const fov = (across: number) => (2 * Math.atan(Math.tan((across * Math.PI) / 360) / aspect) * 180) / Math.PI;
     const live = !!(stage.script && stage.play);
+    // what the camera that follows the play is shown: the ball, the men, the end being attacked
+    const v = this.view;
+    let n = 0;
+    for (const f of this.figs.values()) {
+      if (n >= v.men.length) break;
+      (v.men as Float32Array)[n++] = f.pup.x;
+      (v.men as Float32Array)[n++] = f.pup.z;
+    }
+    v.n = n / 2;
+    v.ball = this.ball;
+    v.end = live ? (stage.script!.dir === 1 ? -1 : 1) : 0;
+    v.aspect = aspect;
+    this.camCut = false;
     if (calm) {
-      cam.fov = fov(aspect < 1.6 ? 62 : 58);
-      cam.position.set(0, 46, 96);
-      cam.lookAt(0, 0, 4);
+      // (no pans: each half of the floor is a still picture, and the picture cuts between them)
+      const s = this.pic;
+      this.op.aim(kind, v, real, true, s);
+      cam.fov = s.fov;
+      cam.position.set(s.px, s.py, s.pz);
+      cam.lookAt(s.lx, s.ly, s.lz);
       cam.updateProjectionMatrix();
-      this.focus = null;
       this.shot = 'main';
       this.cue = null;
       this.arena.dim(1, this.bench(live ? BENCH_DIM : 1, real));
@@ -1380,7 +1646,8 @@ export class CourtScene {
       const f = this.figs.get(r.star);
       const j = f?.pup.j;
       const chest = f && j ? f.pup.world(j[J.chest * 3], j[J.chest * 3 + 1], j[J.chest * 3 + 2], TMP) : null;
-      d.aimReel(cam, chest, this.ball, aspect, real);
+      const head = f && j ? f.pup.world(j[J.head * 3], j[J.head * 3 + 1], j[J.head * 3 + 2], TMP2) : null;
+      d.aimReel(cam, chest, head, this.ball, aspect, real);
       const dim = r.cam === 'tight' ? CUT_DIM : 1;
       this.arena.dim(dim, this.bench(dim, real));
       return;
@@ -1396,21 +1663,29 @@ export class CourtScene {
     const tip = !live && stage.standers.length === 10 && !!stage.ball && Math.abs(stage.ball.y - MID) < 0.01 && Math.abs(stage.ball.x) < 0.01;
     // a cut-in, or the building at a timeout, is over when it has had its time, when the play goes on, or when
     // he has left the floor (but a cut-in a replay comes after has the picture until the wipe has covered it)
-    const held = this.shot === 'close' || this.shot === 'house';
-    const next = this.shot === 'close' && (d.phase === 'wait' || d.phase === 'in');
-    const over = held && ((this.shot === 'close' && !who) || (!next && (this.shotMs > (this.shot === 'close' ? CUT_MS : HOUSE_MS) || !quiet)));
+    const held = this.shot === 'close' || this.shot === 'house' || this.shot === 'bench' || this.shot === 'crowd';
+    const next = held && this.shot !== 'house' && (d.phase === 'wait' || d.phase === 'in');
+    // (a body in front of a close-up's man: the picture leaves him)
+    this.blockMs = this.shot === 'close' && who && blocked(who.pup.x, who.pup.z, this.seat.x, this.seat.z, this.others(who), v.n - 1) ? this.blockMs + real : 0;
+    const over = held && ((this.shot === 'close' && (!who || this.blockMs > BLOCK_MS)) || (!next && (this.shotMs > this.cutLen || !quiet)));
+    // a close-up is taken from where its man is clear, his face to it if it can be; from nowhere, the home crowd instead, or nothing
+    if (this.cue === 'close' && who && clearSeat(who.pup.x, who.pup.z, who.pup.yaw, this.others(who), v.n - 1, CLOSE_OFF, SEAT) >= 3) this.cue = who.side === 0 ? 'crowd' : null;
+    if (live) this.introSeen = false;
+    else if (this.shot === 'intro' && this.shotMs > INTRO_MS) this.introSeen = true;
     const want: typeof this.shot =
       final !== undefined
         ? 'final'
         : held && !over
           ? this.shot
-          : line
-            ? 'ft'
-            : (this.cue ??
-              // (the line-up stays on the picture until the first possession is on the floor: nothing in between)
-              (tip || (this.shot === 'tip' && !live)
-                ? 'tip'
-                : live && (this.shot === 'tip' || (this.shot === 'open' && this.shotMs < OPEN_MS))
+          : this.shot === 'bench' && this.after && quiet
+            ? 'house'
+            : ((this.cue === 'house' ? 'bench' : this.cue) ??
+              // (the building, then the line-up, which stays on the picture until the first possession is on the floor: nothing in between)
+              (tip || ((this.shot === 'tip' || this.shot === 'intro') && !live)
+                ? this.introSeen
+                  ? 'tip'
+                  : 'intro'
+                : live && (this.shot === 'tip' || this.shot === 'intro' || (this.shot === 'open' && this.shotMs < OPEN_MS))
                   ? 'open'
                   : this.idleMs > WIDE_AFTER
                     ? 'wide'
@@ -1419,47 +1694,39 @@ export class CourtScene {
                       : 'wide'));
     // (the play starting again takes the picture back from the building at once, the buzzer and a timeout take it
     // from anything, and the tip's line-up goes straight into the first possession; every other camera has its HOLD_MS)
-    const now = want === 'final' || want === 'house' || want === 'open' || (want === 'main' && this.shot === 'wide');
+    const timeout = want === 'bench' && this.cue === 'house';
+    const now = want === 'final' || want === 'house' || want === 'open' || want === 'intro' || timeout || (want === 'main' && this.shot === 'wide');
     if (want !== this.shot && (this.shotMs > HOLD_MS || now)) {
       this.shot = want;
       this.shotMs = 0;
-      this.focus = null;
-      if (want === 'close' || want === 'house') {
+      this.blockMs = 0;
+      this.op.reset();
+      if (want === 'close' || want === 'house' || want === 'bench' || want === 'crowd') {
+        this.after = timeout;
+        this.cutLen = want === 'close' ? CUT_MS : want === 'house' ? HOUSE_MS : timeout ? HUDDLE_MS : AWAY_MS;
+        this.cutSide = this.cueSide;
         this.cue = null;
-        if (want === 'close') this.cutGap = 0;
+        if (want !== 'house' && !timeout) this.cutGap = 0;
       }
       if (want === 'close' && who) {
-        // low, from where nobody stands between: past the baseline for a man at the basket, else round the near side of him
-        const x = who.pup.x;
-        const z = who.pup.z;
-        const e = x < 0 ? -1 : 1;
-        let best = Infinity;
-        for (const turn of Math.abs(x) > MID - 13 ? [e * 1.25, e * 0.6, 0, -e * 0.6, e * 0.95, e * 0.3, -e * 0.3] : [-e * 0.3, e * 0.3, -e * 0.9, e * 0.9, 0, -e * 0.6, e * 0.6]) {
-          const cx = clamp(x + Math.sin(turn) * 24, -(MID + 8.5), MID + 8.5);
-          const cz = clamp(z + Math.cos(turn) * 24, -8, 32);
-          const far = Math.hypot(cx - x, cz - z);
-          let cost = far < 11 ? 5 : 0;
-          for (const f of this.figs.values()) {
-            const t = ((f.pup.x - x) * (cx - x) + (f.pup.z - z) * (cz - z)) / (far * far);
-            // (a body takes more of the picture the nearer the lens it stands: a wider berth there, and it counts for more)
-            if (f !== who && t > 0.04 && t < 1 && Math.hypot(f.pup.x - x - (cx - x) * t, f.pup.z - z - (cz - z) * t) < 2.4 + 4 * t) cost += 1 + 2 * t;
-          }
-          if (cost < best) {
-            best = cost;
-            this.seat.set(cx, 5.2, cz);
-          }
-        }
-        this.look.set(x, 4.6, z);
+        // (low, from where he is clear: found just above)
+        this.seat.set(SEAT.x, 5.4, SEAT.z);
+        this.look.set(who.pup.x, 5.4 * who.pup.body.s, who.pup.z);
       }
     }
     const closeUp = this.shot === 'close' && !!who;
-    this.arena.dim(closeUp ? CUT_DIM : 1, closeUp ? CUT_DIM : this.bench(this.shot === 'ft' ? FT_BENCH : live ? BENCH_DIM : 1, real));
+    const away = this.shot === 'bench' || this.shot === 'crowd';
+    this.arena.dim(closeUp ? CUT_DIM : 1, closeUp ? CUT_DIM : away ? this.bench(1, real * 4) : this.bench(live ? BENCH_DIM : 1, real));
+    if (this.shot === 'bench') return d.aimBench(cam, this.cutSide, this.shotMs, aspect);
+    if (this.shot === 'crowd') return d.aimCrowd(cam, this.cutSide, this.shotMs, aspect);
+    if (this.shot === 'intro') return d.aimIntro(cam, this.shotMs, aspect);
+
     if (this.shot === 'close' && who) {
-      // low and tight on him, following his chest as he goes; the frame is his height and a half, whatever its shape
+      // low and tight on him, following him as he goes; the frame is on his face: his waist to over his head, whatever its shape
       const j = who.pup.j;
-      const c = who.pup.world(j[J.chest * 3], j[J.chest * 3 + 1], j[J.chest * 3 + 2], TMP);
-      this.look.lerp(A.set(c.x, Math.max(3.6, c.y), c.z), 1 - Math.exp(-real / 200));
-      const half = (5.9 - 0.9 * Math.min(1, this.shotMs / CUT_MS)) / Math.min(1, aspect);
+      const c = who.pup.world(j[J.head * 3], j[J.head * 3 + 1], j[J.head * 3 + 2], TMP);
+      this.look.lerp(A.set(c.x, Math.max(4, c.y - 0.9), c.z), 1 - Math.exp(-real / 160));
+      const half = (3.2 - 0.5 * Math.min(1, this.shotMs / CUT_MS)) / Math.min(1, aspect);
       cam.fov = clamp((2 * Math.atan(half / this.seat.distanceTo(this.look)) * 180) / Math.PI, 10, 58);
       // (it drifts round him a little as it holds, on the operator's shoulder: a camera on a man, not one on a post)
       const turn = CUT_ARC * Math.min(1, this.shotMs / CUT_MS) * (this.seat.x < this.look.x ? 1 : -1);
@@ -1474,7 +1741,7 @@ export class CourtScene {
       cam.updateProjectionMatrix();
       return;
     }
-    const tall = aspect < 1.6;
+    const tall = aspect < TALL;
     if (this.shot === 'final') {
       // the buzzer: low on the winners as they take it in, going round them a little and coming in
       let cx = 0;
@@ -1491,6 +1758,19 @@ export class CourtScene {
         cx /= n;
         cz /= n;
         for (const f of this.figs.values()) if (f.side === final) spread = Math.max(spread, Math.hypot(f.pup.x - cx, f.pup.z - cz));
+      }
+      // (the winners first; then the crowd, if it is theirs; then the whole building)
+      const beat = this.shotMs > FINAL_WIDE ? 2 : this.shotMs > FINAL_CROWD && final === 0 ? 1 : 0;
+      if (beat !== this.finalBeat) this.camCut = true;
+      this.finalBeat = beat;
+      if (beat === 1) return d.aimCrowd(cam, cx < 0 ? 0 : 1, this.shotMs - FINAL_CROWD, aspect);
+      if (beat === 2) {
+        const u = Math.min(1, (this.shotMs - FINAL_WIDE) / 16000);
+        cam.fov = fov(tall ? 50 : 58);
+        cam.position.set(56 - u * 12, 30 - u * 3, 72);
+        cam.lookAt(0, 9, -14);
+        cam.updateProjectionMatrix();
+        return;
       }
       if (this.shotMs === 0) {
         // (from the near side, round to where none of the others stands between)
@@ -1533,23 +1813,12 @@ export class CourtScene {
       cam.updateProjectionMatrix();
       return;
     }
-    if (this.shot === 'ft') {
-      // low, past the baseline and off to the near side: the shooter at his line from the front, the lane
-      // either side of him, the building behind; it comes in a little on him through his routine, on a shoulder
-      const e = this.ftEnd;
-      const u = smooth(Math.min(1, this.shotMs / FT_PUSH));
-      cam.fov = Math.max(20, fov(tall ? 29 : 35)) * (1 - 0.08 * u);
-      cam.position.set(e * (MID + 10) + d.hand(0, HAND * 0.6), 8.5 + d.hand(1, HAND * 0.5), 22);
-      cam.lookAt(e * (MID - 15.5), 6.3, -1.5);
-      cam.updateProjectionMatrix();
-      return;
-    }
     if (this.shot === 'wide') {
       // the building, from high in a corner, drifting in
       const drift = Math.min(1, this.shotMs / 14000);
       cam.fov = fov(tall ? 46 : 54);
-      cam.position.set(-74 + drift * 10, 46 - drift * 4, 92 - drift * 8);
-      cam.lookAt(-4, 2, -6);
+      cam.position.set(-60 + drift * 10, 30 - drift * 2, 74);
+      cam.lookAt(-2, 8, -14);
       cam.updateProjectionMatrix();
       return;
     }
@@ -1562,51 +1831,28 @@ export class CourtScene {
       cam.updateProjectionMatrix();
       return;
     }
-    this.push += (near - this.push) * (1 - Math.exp(-real / 420));
+    // (it comes in as the ball gets to the basket, and for a man at the line)
+    this.push += ((line ? 1 : near) - this.push) * (1 - Math.exp(-real / 420));
     // (clutch time: it comes in and down a little, slowly, and stays there while the play is on)
     this.tight += ((clutch && live ? 1 : 0) - this.tight) * (1 - Math.exp(-real / 1800));
-    // (a ball by the far sideline: the near half of the floor is empty wood, so it looks farther and a little tighter)
-    this.far += (clamp((-this.ball.z - 7) / 14, 0, 1) - this.far) * (1 - Math.exp(-real / 600));
-    let fv = fov((tall ? 35 : 46) - this.push * (tall ? 3 : 5) - this.tight * (tall ? 1.5 : 2.5) - this.far * (tall ? 1.5 : 2.5));
-    // (a ball by the near sideline: the picture may go farther along the floor to keep its man in it)
-    const reach = (tall ? 30 : 24) + clamp(this.ball.z, 0, 25) * 0.36;
-    const sc = stage.script;
-    const sec = real / 1000;
-    // how fast the ball is going along the floor, eased (a pass is over before the camera has heard of it; a break is not)
-    const vx = sec > 0 ? clamp((this.ball.x - this.ballWas) / sec, -60, 60) : 0;
-    this.ballWas = this.ball.x;
-    this.ballVx += (vx - this.ballVx) * (1 - Math.exp(-real / 450));
-    let to = this.ball.x;
-    // (most of the picture ahead of the ball, toward the basket it's going at, and a little more ahead of one on its way)
-    if (sc && stage.play) to += (sc.dir === 1 ? -1 : 1) * (tall ? 7 : 4) + clamp(this.ballVx * LEAD, -LEAD_MAX, LEAD_MAX);
-    to = clamp(to, -reach, reach);
-    const jump = this.focus === null || Math.abs(to - this.focus) > 60;
-    if (jump) {
-      this.focus = to;
-      this.focusV = this.ballVx = 0;
-    } else if (sec > 0) {
-      // (a spring with no bounce in it: the turn has a speed of its own, so it eases off and eases in)
-      const w = 2 / FOLLOW_S;
-      const x = w * sec;
-      const e = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
-      const off = this.focus! - to;
-      const t = (this.focusV + w * off) * sec;
-      this.focusV = (this.focusV - w * t) * e;
-      this.focus = to + (off + t) * e;
-    }
-    // it looks nearer for a ball on the near side (a man in the near corner keeps his feet in the picture),
-    // and a little higher for one in the air (a long shot stays in it at the top)
-    const dip = clamp((this.ball.z - 8) * 0.8, 0, 12);
-    const lift = clamp((this.ball.y - 9) * 0.7, 0, 5);
-    this.dip = jump ? dip : this.dip + (dip - this.dip) * (1 - Math.exp(-real / 380));
-    this.lift = jump ? 0 : this.lift + (lift - this.lift) * (1 - Math.exp(-real / 220));
-    // (the operator: the frame is never quite still on the play, and the rim taking a dunk is felt in it)
-    let px = this.focus! * 0.78 + d.drift(0, OPERATOR * 0.6);
-    let py = 33 - this.tight * 2 - d.bump(0.4);
-    let pz = 60 - this.tight * 1.5;
-    let lx = this.focus! + d.drift(1, OPERATOR);
-    let ly = this.lift + d.drift(2, OPERATOR * 0.45);
-    let lz = (tall ? -6 : -4) + this.dip - this.far * 3;
+    v.near = this.push;
+    v.tight = this.tight;
+    const s = this.pic;
+    // (a cut of his own, a new camera or the floor's changing ends, dissolves as any cut does; not his first picture after another shot's)
+    const first = this.shotMs === 0 || !this.aimed;
+    this.camCut = this.op.aim(kind, v, real, false, s) && !first;
+    this.aimed = true;
+    // (a hand on it: the gantry's and the end zone's are on heads and only their frame wanders; the others are carried,
+    // and the rim taking a dunk is felt in all of them)
+    const carried = kind === 'side' || kind === 'low' ? 1 : 0;
+    let fv = s.fov;
+    let px = s.px + carried * d.hand(0, HAND);
+    let py = s.py + carried * d.hand(1, HAND * 0.7) - d.bump(kind === 'low' ? 0.2 : 0.4);
+    let pz = s.pz + carried * d.hand(2, HAND);
+    const wander = (OPERATOR * Math.hypot(s.lx - s.px, s.ly - s.py, s.lz - s.pz)) / 90;
+    let lx = s.lx + d.drift(1, wander);
+    let ly = s.ly + d.drift(2, wander * 0.45);
+    let lz = s.lz + d.drift(0, wander * 0.3);
     if (this.shot === 'open') {
       // the game's first possession: up from low by the centre circle into the main camera
       const w = smooth(Math.min(1, this.shotMs / OPEN_MS));
@@ -1623,8 +1869,19 @@ export class CourtScene {
     cam.lookAt(lx, ly, lz);
     cam.updateProjectionMatrix();
   }
-  private ballWas = 0;
-  private far = 0;
+  private aimed = false;
+  /** Everyone on the floor but `who` (x, z each), for a close-up's line of sight. */
+  private others(who: Fig): Float32Array {
+    const out = this.rest;
+    let n = 0;
+    for (const f of this.figs.values()) {
+      if (f === who || n >= out.length) continue;
+      out[n++] = f.pup.x;
+      out[n++] = f.pup.z;
+    }
+    return out;
+  }
+  private readonly rest = new Float32Array(20);
 
   /** Into a replay or out of it: the next frame starts afresh (everyone on his spot, the ball where its move has it, a cut). */
   private recut() {
@@ -1633,7 +1890,11 @@ export class CourtScene {
     // (the net and the rim are still; the end of a possession seen again doesn't sink the shot again)
     this.netKick = 1e-6;
     this.rimKick = 0;
-    this.focus = null;
+    this.op.reset();
+    this.flight = null;
+    this.swatted = false;
+    for (const c of this.cords) c.sim.reset();
+    for (const h of [...this.hinges, ...this.sways]) h.still();
     this.shot = 'main';
     this.shotMs = HOLD_MS;
     this.cue = null;
@@ -1656,6 +1917,29 @@ export class CourtScene {
     return this.director.released;
   }
 
+  /**
+   * A tap on the picture at (x, y) (CSS pixels): on a man, he is tagged for a while (again: no longer), and
+   * true. Not during a replay or a close-up (a tap there is the page's).
+   */
+  tap(x: number, y: number): boolean {
+    if (this.director.phase !== 'off' || (this.shot !== 'main' && this.shot !== 'open')) return false;
+    let best: number | null = null;
+    let near = Infinity;
+    for (const [pid, f] of this.figs) {
+      const j = f.pup.j;
+      const c = f.pup.world(j[J.chest * 3], j[J.chest * 3 + 1], j[J.chest * 3 + 2], TMP);
+      const at = this.screen(A.set(c.x, c.y, c.z));
+      const feet = this.screen(A.set(c.x, 0, c.z));
+      // (within his height on the page, or a finger's width of him when he is small on it)
+      const d = Math.hypot(at.x - x, (at.y - y) * 0.6);
+      if (d < Math.max(PICK_PX, (feet.y - at.y) * 0.55) && d < near) [near, best] = [d, pid];
+    }
+    if (best === null) return false;
+    this.picked = this.picked === best && this.pickMs < PICK_MS ? null : best;
+    this.pickMs = 0;
+    return true;
+  }
+
   /** A point of the scene on the page (CSS pixels). */
   private screen(v: Vector3): { x: number; y: number } {
     v.project(this.camera);
@@ -1669,6 +1953,7 @@ export class CourtScene {
 
   dispose() {
     for (const [pid, f] of [...this.figs]) this.drop(pid, f);
+    this.arena.sideline.dispose();
     for (const o of this.trash) o.dispose();
     this.floorTex?.dispose();
     this.envMap?.dispose();
@@ -1682,3 +1967,25 @@ function set(v: Vector3, p: V3) {
 }
 
 export { loadModels } from './models';
+
+/** An open man has nobody of theirs within this far of him (ft). */
+const OPEN_FT = 9;
+/** Of the men at spots `from`..`to` (pairs of x, z; where his body is, once he has one), the nearest to spot `j`, if he is within reach of him. */
+function nearestOf(
+  spots: ArrayLike<number>,
+  j: number,
+  from: number,
+  to: number,
+  body: (k: number) => { x: number; z: number; placed: boolean } | undefined,
+): { x: number; z: number } | undefined {
+  let best = 6;
+  let at: { x: number; z: number } | undefined;
+  for (let k = from; k < to; k++) {
+    const b = body(k);
+    const x = b?.placed ? b.x : spots[k * 2];
+    const z = b?.placed ? b.z : spots[k * 2 + 1];
+    const d = Math.hypot(x - spots[j * 2], z - spots[j * 2 + 1]);
+    if (d < best) [best, at] = [d, { x, z }];
+  }
+  return at;
+}

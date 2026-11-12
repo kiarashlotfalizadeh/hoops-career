@@ -542,9 +542,10 @@ const grain = (n: number) => {
 /**
  * The floor, painted once at the canvas's size: maple boards along its length, the darker apron,
  * the home team's paint in both keys and the center circle, the lines, the baskets, its mark at
- * center court. Flat, as a broadcast graphic draws it (no lighting, no gloss).
+ * center court. Flat, as a broadcast graphic draws it (no lighting, no gloss). `bare`: the wood one
+ * even colour, no boards (the 3D court's floor draws its own strips over it: see court3d/lens.ts).
  */
-export function paintFloor(cv: HTMLCanvasElement, view: View, dpr: number, floor: CourtFloor | undefined, paints: Paints) {
+export function paintFloor(cv: HTMLCanvasElement, view: View, dpr: number, floor: CourtFloor | undefined, paints: Paints, bare = false) {
   const { k, wide } = view;
   cv.width = Math.max(1, Math.round((wide ? FLOOR_L : FLOOR_W) * k * dpr));
   cv.height = Math.max(1, Math.round((wide ? FLOOR_W : FLOOR_L) * k * dpr));
@@ -563,7 +564,7 @@ export function paintFloor(cv: HTMLCanvasElement, view: View, dpr: number, floor
   ctx.fillStyle = paints.wood;
   ctx.fillRect(-HALF_W - SIDE, -END, FLOOR_W, FLOOR_L);
   const board = 1.15;
-  for (let i = 0, x = -HALF_W - SIDE; x < HALF_W + SIDE; i++, x += board) {
+  for (let i = 0, x = -HALF_W - SIDE; !bare && x < HALF_W + SIDE; i++, x += board) {
     const r = grain(i);
     ctx.globalAlpha = r > 0.5 ? (r - 0.5) * 0.5 : (0.5 - r) * 0.9;
     ctx.fillStyle = r > 0.5 ? '#fff6e4' : paints.wood2;

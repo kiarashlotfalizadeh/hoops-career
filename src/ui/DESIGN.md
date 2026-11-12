@@ -337,7 +337,14 @@ package (ink plates, white type); the console is paper and card stock like every
   the near sideline (`live/Court3D.tsx`, `live/court3d/`): athletes in the night's kits,
   each as tall and as broad as his listed height and weight, all one neutral tone (no likeness). The camera button in the court's
   corner switches to the 2D floor from straight above (the tactics view), and back; the choice is
-  saved (`settings.courtLook`). The 2D court always runs underneath: it keeps the play's clock,
+  saved (`settings.courtLook`). The chip beside it goes round the 3D picture's five cameras
+  (`court3d/cameras.ts`, saved as `settings.courtCam`): Broadcast (the default: a gantry camera at
+  mid-court that pans, tilts and zooms, all ten and the basket in a half-court set, ahead of the ball
+  and wider on a break), Sideline (lower, closer, on a dolly), End zone (high behind the offense),
+  Baseline (on the floor by the basket being attacked) and Overhead. Each is framed for the box's
+  shape (a phone's stand higher and frame tighter). A tap on a player tags him for a few seconds; the
+  man with the ball always wears his tag over his head and a ring in his team's colour under him,
+  which turns to the warning colour and beats when the shot clock is under five. The 2D court always runs underneath: it keeps the play's clock,
   draws the break's shot chart, and is the whole court where WebGL 2 is missing or the 3D scene
   fails to load. If frames run slow the picture is first drawn less sharp, then the court offers 2D.
   three.js loads with the first 3D frame, never with the app.
@@ -353,42 +360,64 @@ package (ink plates, white type); the console is paper and card stock like every
   neutral tone; hair is that tone a little darker, one of a few crops per player, and his name is
   over his number on his back. `people.glb` is that same body posed and baked: two bench sitters
   and a coach in a suit with folded arms. `arena.glb` is the basket unit, rim, net, ball, bench
-  chair, scorer's table, scoreboard and the spectator the crowd is made of (182 triangles, and a
+  chair, scorer's table, scoreboard, a seat of the stands and the spectators the crowd is made of
+  (six grown-ups and a child of about 1,000 triangles for the rows by the floor, two of under 400 for the rows behind, and a
   28-triangle stand-in that only the floor's mirror draws) (`court3d/props.ts`). The app gives
   each part its material by the name Blender gave it, and paints kits and the home colour on. A
   model changes in its `.py`, never by hand in the `.glb`. Two dev-server pages look at them in
   the app's own light: `scripts/qa/figure-lab` (one move as a strip of moments) and
   `scripts/qa/scene-lab` (the whole arena held still from any camera; `lab.bench()` costs a frame).
-  The scene (`court3d/scene.ts`, `court3d/lens.ts`) lights it like a broadcast: one shadow-casting
-  key, a warm fill bounced off the wood, and the arena itself as the environment every material
-  reflects (lamp banks in a dark roof, the floor's colour below), so skin, shoes, the ball, the rim and
-  the glass catch the lamps. The floor is varnished maple: its paint keeps its colour, real strips,
-  seams and grain show up close and fade out far off, the lamp banks lie in it as soft streaks, and a
-  mirror shows bodies sharp at the feet and softer with height. Over the stands a faint lit haze and
-  the lamps' beams; then the finish (antialiased, a restrained glow on the brightest things, a warm
-  grade, darker corners). Each player wears one painted picture (`court3d/figure.ts`): his kit with
+  The scene (`court3d/scene.ts`, `court3d/lens.ts`) lights it like a broadcast (`court3d/rig.ts`): four
+  lamps round the roof, each with a shadow map fixed to the floor, so a man throws four faint shadows
+  that are dark where they overlap; a cool edge light from behind, a soft one from the camera's side,
+  a fill bounced off the wood, and the arena itself as the environment every material reflects (lamp
+  banks in a dark roof, the floor's colour below), so skin, shoes, the ball, the rim and the glass
+  catch the lamps. The house lights come down for the open, a timeout and the clutch (`rig.mood`).
+  The floor is varnished maple, all drawn in its shader over a bare painted canvas: 2¼ in strips with
+  staggered joints, tone and grain, paint glossier than wood, the lanes scuffed dull, the lamp banks
+  lying in it as soft broken bars, and a mirror that is sharp at the feet, softer and fainter with
+  height. Over the stands a faint lit haze and the lamps' beams; then the finish (antialiased, the
+  dark where things meet found from the picture's depth (`court3d/ao.ts`), a restrained glow on the
+  brightest things, a warm grade, darker corners, a soft background behind a close-up). Each player wears one painted picture (`court3d/figure.ts`): his kit with
   an outlined number, his name arched on the back, the abbreviation on the front and a team mark on
   the shorts, and, his own every night, one of seven crops and maybe a headband, a sleeve, wristbands
   or a leg sleeve (one draw a player). The building (`court3d/arena.ts`, `court3d/boards.ts`,
   `court3d/fx.ts`) is alive: the scorer's table, the baseline and far-side boards, the ribbon and the
   scoreboard's screens are LED boards showing the score, period and clock as the court has played
   them (`GameInfo`, no spoilers), DEFENSE while the home side defends, and takeovers for a home three,
-  dunk, and-one, block, steal, buzzer-beater, a timeout, the end of a period and the final; a shot
-  clock and the game clock sit over each board. The crowd sways, stands for a basket, the visitors'
-  block stands for theirs, home fans wave towels late and the end behind the basket rallies at a
-  visitor's free throw; cameras flash on big moments; a home win brings an ovation and confetti. Banners
-  in the home colours (letters and stripes, no years), trusses and light rigs hang in the roof.
-- **The broadcast cuts** (`court3d/director.ts`, `aim` in `scene.ts`): an orbit round the tip, a crane
-  down into the main camera, the main camera high on the near sideline (it turns with the ball with a
-  little operator drift, pushes in near the rim, dips on a dunk), a low camera past the baseline for
-  free throws, the building at a timeout or after 1.5 s with nothing to follow, cut-ins on the scorer
-  of a big basket and on the man fouled (a lower third with his name, the building behind him soft),
-  and the winners at the final buzzer. Cuts dissolve briefly. **Instant replays**: a dunk, a three,
-  an and-one, a block or a shot at the buzzer is shown again at the next dead ball, slowed and from
-  another angle, between two wipes in the team's colours with a Replay bug. The court's clock holds
+  dunk, and-one, block, steal, buzzer-beater, a timeout, the end of a period and the final; after a
+  big home basket the scorer's card (his number, name and points so far) and REPLAY; MAKE SOME NOISE
+  with a meter late in a close one; a side's leading scorer at a dead ball; and between plays panels
+  for invented partners (no real brands); a shot
+  clock and the game clock sit over each board. The bowl (`court3d/bowl.ts`) is a building on all
+  four sides: stepped rows with aisles, tunnels with the concourse's light in their mouths, a walkway
+  with people standing at the rail, lit suites, an upper deck (rows of a painted picture, each seat
+  sat or on its feet) and walls up to a roof of trusses, catwalks, speakers and light banks; the near
+  side's upper levels sit back behind the cameras. The crowd (`court3d/crowd.ts`) is people: men,
+  women and children in the home colours, a visitors' block, seats in the building's colour where
+  nobody sits. They shift, follow the ball, stand for a basket (the cheer goes out from the play),
+  stand nervously late in a close game, wave towels, rally at a visitor's free throw, hold phones up,
+  and leave late in a blowout; cameras flash on big moments; a home win brings an ovation, confetti
+  and streamers. The house lights go down, with spots sweeping the floor, before the tip, at a
+  timeout and after a home win. Banners in the home colours (letters and stripes, no years) hang in
+  the roof.
+- **The broadcast cuts** (`court3d/director.ts`, `aim` in `scene.ts`): the building from high before
+  the tip, an orbit round the line-up, a crane down into the chosen camera (a little operator drift,
+  in a little near the rim and at the line, a dip on a dunk), a bench and its coach and then the
+  building at a timeout, the building after 1.5 s with nothing to follow, cut-ins on the scorer of a
+  big basket, the man fouled or a man who made his free throw (waist up, from where nobody and no
+  basket post stands between, his face to the camera when it can be; left at once if someone walks
+  in front; a lower third with his name, the building behind him soft), now and then his bench or
+  the home crowd instead, and at the final buzzer the winners, their crowd, then the whole building.
+  Cuts dissolve briefly. **Instant replays**: a dunk, a three, an and-one, a block or a shot at the
+  buzzer is shown again at the next dead ball, slowed round its moment, from one of six cameras in
+  turn (low past the baseline, over the backboard, the floor under the basket, low on the near side,
+  the gantry's long lens, tight on the man), between two wipes in the team's colours with a Replay
+  bug; a shot at the buzzer, and at 1x a dunk, a second time, slower and tight. The court's clock holds
   while it runs (CourtView keeps the possession's end until it is over), so nothing live is missed;
   a tap skips it. None at 4x, in key plays, while paused or waiting on a call, in a highlight or with
-  reduced motion; at most one every 25 s. Reduced motion: one camera, the whole floor, held still.
+  reduced motion; at most one every 25 s (37 s above 1x). Reduced motion: no pans, cut-ins or
+  replays; each half of the floor is a still picture from the chosen camera, with a cut between.
   A slow device gives up, a step at a time: the finish, a little sharpness, the shadows, the mirror and
   the fine wood (with the players' cloth detail and the roof's extras), then half the sharpness.
 - **3D plays a possession at half the 2D pace** (`COURT3D_PACE`): discs can cross the floor in a

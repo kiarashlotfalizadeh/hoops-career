@@ -77,6 +77,9 @@ export class House {
   private to = SHOT;
   private held: number | null = null;
   private walk = Infinity;
+  /** Who made the last basket, for which side, and what he has now; and every scorer's points so far (as the court has played them). */
+  star: { pid: number; side: 0 | 1; pts: number } | null = null;
+  private readonly points = new Map<number, { side: 0 | 1; pts: number }>();
   /** What to take as the play while none is running (the scene lab's stills). */
   pretend: { off: 0 | 1; line: boolean; end: -1 | 1; shot: number | null } | null = null;
 
@@ -96,6 +99,11 @@ export class House {
       return;
     }
     if (sc !== this.script) {
+      // (a new game: nobody has scored)
+      if (game && game.q === 1 && game.score[0] + game.score[1] === 0) {
+        this.points.clear();
+        this.star = null;
+      }
       this.script = sc;
       this.seen = 0;
       this.score = game ? [game.score[0], game.score[1]] : null;
@@ -117,6 +125,13 @@ export class House {
     this.shot = this.line || play.clock < shot ? null : shot;
   }
 
+  /** A side's top scorer so far (null: nobody has scored for it). */
+  leader(side: 0 | 1): { pid: number; side: 0 | 1; pts: number } | null {
+    let best: { pid: number; side: 0 | 1; pts: number } | null = null;
+    for (const [pid, v] of this.points) if (v.side === side && (!best || v.pts > best.pts)) best = { pid, ...v };
+    return best;
+  }
+
   private saw(sc: Script, k: number, clock: number) {
     const f = sc.frames[k];
     const text = f.flash?.text ?? '';
@@ -125,6 +140,13 @@ export class House {
     if (f.fx === 'make' && f.score) {
       const pts = this.score ? f.score[sc.off] - this.score[sc.off] : Number(/^\+(\d)/.exec(text)?.[1] ?? 2);
       const dunk = !!sc.frames[k - 1]?.act.includes('dunk');
+      // (whose it was: the man who had the ball before it went in)
+      const pid = [...sc.oPids, ...sc.dPids][sc.frames[k - 1]?.hold ?? -1];
+      if (pid !== undefined && pts > 0) {
+        const had = this.points.get(pid)?.pts ?? 0;
+        this.points.set(pid, { side: sc.off, pts: had + pts });
+        this.star = { pid, side: sc.off, pts: had + pts };
+      }
       call(text === 'Game winner' ? 'winner' : text === 'Buzzer beater' ? 'buzzer' : text.endsWith('FT') ? 'free' : dunk ? 'dunk' : pts === 3 ? 'three' : 'basket', sc.off);
     } else if (text === 'And one!') call('andOne', sc.off);
     else if (f.flash?.kind === 'block') call('block', def);
@@ -245,6 +267,10 @@ type Show =
   | { kind: 'timeout'; side: 0 | 1 | null }
   | { kind: 'break'; text: string }
   | { kind: 'final' }
+  | { kind: 'stat'; side: 0 | 1; name: string; num: string; pts: number; head: string }
+  | { kind: 'noise' }
+  | { kind: 'replay' }
+  | { kind: 'ad'; i: number }
   | { kind: 'clock' };
 
 /** One team on the boards: its letters, its colour, a second colour for stripes, the colour darkened for a field. */
@@ -260,13 +286,15 @@ interface Look {
   game: GameInfo | null;
   shot: number | null;
   final: 0 | 1 | undefined;
+  /** How loud the building is (0 to 1), and a count that goes up a few times a second (a noise meter's bars move on it). */
+  noise: number;
+  tick: number;
 }
 
 /** A big moment holds the boards this long (ms); a timeout a little longer. */
 const TAKEOVER_MS = 3600;
 const TIMEOUT_MS = 5200;
-/** The table's turn between the score and the home side's colours (s each), and the home side's defence and the score. */
-const TABLE_LOOP = [9, 6];
+/** A board's turn between the home side's defence and what else it shows (s each). */
 const DEFENSE_LOOP = [5, 6];
 /** The ribbon crawls along at this many ft a second; its picture is this long (ft) before it comes round again. */
 const CRAWL_FT_S = 2.6;
@@ -282,6 +310,26 @@ const AMBER = '#ffb53a';
 const RED = '#ff2d1f';
 /** An unlit segment of a clock's figures: there, if you look. */
 const GHOST = 'rgba(255, 60, 40, 0.07)';
+
+/** After a big moment's word: the scorer's card on the screens and the table, REPLAY behind the baskets, for this long (ms). */
+const CARD_MS = 4200;
+/** The boards' turns while nothing takes them over (s each): the table's score, colours and a partner; the ends' colours and a partner; the ribbon's; a dead ball's on the screens (score, a scorer, a partner). */
+const TABLE_TURNS = [9, 5, 6];
+const END_TURNS = [9, 7];
+const RIBBON_TURNS = [16, 9];
+const SCREEN_TURNS = [4, 5, 4];
+/**
+ * The building's partners, as its boards carry them between plays: invented names, each a field, a
+ * lettering colour, a second colour and one of four plain marks. None is a real company.
+ */
+const ADS = [
+  { name: 'HALVERN', tag: 'PRIVATE BANK', bg: '#0d3b3a', fg: '#e9e2cf', hi: '#d9a441', mark: 0 },
+  { name: 'TORRIN', tag: 'ELECTRIC MOTORS', bg: '#15171c', fg: '#f2f2f2', hi: '#e0452f', mark: 1 },
+  { name: 'QUILLFIRE', tag: 'SPARKLING COLA', bg: '#7a1420', fg: '#fff3e2', hi: '#ffd24a', mark: 2 },
+  { name: 'MERIDEW', tag: 'AIRWAYS', bg: '#123a6b', fg: '#f4f8ff', hi: '#7fd0ff', mark: 3 },
+  { name: 'BRACKWATER', tag: 'INSURANCE', bg: '#2a2f24', fg: '#eef0e4', hi: '#a8c64a', mark: 0 },
+  { name: 'LUMACORE', tag: 'HOME ENERGY', bg: '#3a2a0c', fg: '#fff6dc', hi: '#ffb53a', mark: 1 },
+] as const;
 
 const WORDS: Partial<Record<Call, string>> = { three: 'THREE', dunk: 'DUNK', andOne: 'AND ONE', block: 'BLOCK', steal: 'STEAL', buzzer: 'BUZZER BEATER', winner: 'GAME WINNER' };
 
@@ -470,6 +518,59 @@ function seven(ctx: CanvasRenderingContext2D, text: string, cx: number, cy: numb
   return width;
 }
 
+/** A partner's mark, r across, in one colour: a ring and its dot, two peaks, a diamond in a diamond, three leaning bars. */
+function mark(ctx: CanvasRenderingContext2D, kind: number, cx: number, cy: number, r: number, color: string) {
+  ctx.save();
+  ctx.fillStyle = ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(1.5, r * 0.26);
+  ctx.beginPath();
+  if (kind === 0) {
+    ctx.arc(cx, cy, r * 0.8, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (kind === 1) {
+    for (const o of [-0.45, 0.35]) {
+      ctx.moveTo(cx + (o - 0.55) * r, cy + r * 0.8);
+      ctx.lineTo(cx + o * r, cy - r * (o < 0 ? 0.5 : 0.9));
+      ctx.lineTo(cx + (o + 0.55) * r, cy + r * 0.8);
+    }
+    ctx.fill();
+  } else if (kind === 2) {
+    for (const k of [1, 0.45]) {
+      ctx.moveTo(cx, cy - r * k);
+      ctx.lineTo(cx + r * 0.7 * k, cy);
+      ctx.lineTo(cx, cy + r * k);
+      ctx.lineTo(cx - r * 0.7 * k, cy);
+      ctx.closePath();
+    }
+    ctx.fill('evenodd');
+  } else {
+    for (let i = -1; i <= 1; i++) {
+      ctx.moveTo(cx + i * r * 0.62 - r * 0.38, cy + r * 0.85);
+      ctx.lineTo(cx + i * r * 0.62 - r * 0.02, cy + r * 0.85);
+      ctx.lineTo(cx + i * r * 0.62 + r * 0.38, cy - r * 0.85);
+      ctx.lineTo(cx + i * r * 0.62 + r * 0.02, cy - r * 0.85);
+      ctx.closePath();
+    }
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** A noise meter: bars from x0 to x1 rising left to right (or falling: `dir` -1), lit as far as `level` (0 to 1) says, green to amber to red; the top lit ones flicker on `tick`. */
+function meter(ctx: CanvasRenderingContext2D, x0: number, x1: number, y0: number, y1: number, level: number, tick: number, dir: 1 | -1 = 1, n = 12) {
+  const bw = (x1 - x0) / n;
+  const lit = Math.round(level * n + (((tick * 7) % 3) - 1) * 0.8);
+  for (let i = 0; i < n; i++) {
+    const k = dir > 0 ? i : n - 1 - i;
+    const h = (y1 - y0) * (0.3 + (0.7 * (k + 1)) / n);
+    ctx.fillStyle = k < lit ? (k < n * 0.5 ? '#3fd06a' : k < n * 0.8 ? AMBER : RED) : 'rgba(255,255,255,0.08)';
+    ctx.fillRect(x0 + i * bw + bw * 0.14, y1 - h, bw * 0.72, h);
+  }
+}
+
 /** A team's block: its colour, its letters, and its score if there is one. */
 function block(ctx: CanvasRenderingContext2D, side: Side, score: number | null, x: number, y: number, w: number, h: number, lead = true) {
   ctx.fillStyle = side.fill;
@@ -604,6 +705,70 @@ function strip(ctx: CanvasRenderingContext2D, w: number, h: number, show: Show, 
       }
       break;
     }
+    case 'stat': {
+      // a scorer's card: his number in his side's colour, his name, what he has tonight
+      const who = show.side === 0 ? home : away;
+      const n = ribbon ? 2 : kind === 'table' ? 1 : 2;
+      const cell = w / n;
+      ctx.fillStyle = who.deep;
+      ctx.fillRect(0, 0, w, h);
+      for (let i = 0; i < n; i++) {
+        const x = cell * i;
+        ctx.fillStyle = who.fill;
+        ctx.fillRect(x + cell * 0.08, pad, cell * 0.16, h - pad * 2);
+        ctx.fillStyle = who.trim;
+        ctx.fillRect(x + cell * 0.24, pad, Math.max(2, cell * 0.006), h - pad * 2);
+        write(ctx, `#${show.num}`, x + cell * 0.16, h / 2, h * 0.7, cell * 0.14, WHITE, 'center', 0.1);
+        write(ctx, show.name.toUpperCase(), x + cell * 0.27, h / 2, h * 0.62, cell * 0.3, WHITE, 'left');
+        write(ctx, String(show.pts), x + cell * 0.74, h / 2, h * 0.86, cell * 0.12, WHITE, 'right', 0.1);
+        write(ctx, 'PTS', x + cell * 0.755, h * 0.58, h * 0.42, cell * 0.1, who.trim === who.fill ? WHITE : who.trim, 'left');
+        chevrons(ctx, x + cell * 0.88, x + cell - pad, pad * 1.6, h - pad * 1.6, 1, who.fill, 0.9);
+        chevrons(ctx, x + pad, x + cell * 0.07, pad * 1.6, h - pad * 1.6, 1, who.fill, 0.9);
+      }
+      break;
+    }
+    case 'noise': {
+      ctx.fillStyle = home.deep;
+      ctx.fillRect(0, 0, w, h);
+      const n = ribbon ? 2 : kind === 'table' ? 1 : 2;
+      const cell = w / n;
+      for (let i = 0; i < n; i++) {
+        const cx = cell * (i + 0.5);
+        write(ctx, 'MAKE SOME NOISE', cx, h / 2, h * 0.74, cell * 0.44, WHITE, 'center', 0.12);
+        meter(ctx, cx - cell * 0.48, cx - cell * 0.26, pad, h - pad, look.noise, look.tick + i, -1);
+        meter(ctx, cx + cell * 0.26, cx + cell * 0.48, pad, h - pad, look.noise, look.tick + i + 1, 1);
+      }
+      break;
+    }
+    case 'replay': {
+      stripes(ctx, 0, w, 0, h, home.deep, h * 0.5, h * 1.4);
+      const n = ribbon ? 2 : kind === 'table' ? 2 : 3;
+      const cell = w / n;
+      for (let i = 0; i < n; i++) {
+        const cx = cell * (i + 0.5);
+        write(ctx, 'REPLAY', cx, h / 2, h * 0.76, cell * 0.36, WHITE, 'center', 0.14);
+        chevrons(ctx, cx - cell * 0.42, cx - cell * 0.24, pad * 1.4, h - pad * 1.4, -1, home.trim === home.fill ? WHITE : home.trim);
+        chevrons(ctx, cx + cell * 0.24, cx + cell * 0.42, pad * 1.4, h - pad * 1.4, -1, home.trim === home.fill ? WHITE : home.trim);
+      }
+      break;
+    }
+    case 'ad': {
+      // a partner's panel: its field, its mark, its name spaced wide, what it is in small letters; over and over along the board
+      const ad = ADS[show.i % ADS.length];
+      ctx.fillStyle = ad.bg;
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = ad.hi;
+      ctx.fillRect(0, h - Math.max(2, h * 0.07), w, Math.max(2, h * 0.07));
+      const n = ribbon ? 3 : kind === 'table' ? 2 : 3;
+      const cell = w / n;
+      for (let i = 0; i < n; i++) {
+        const x = cell * i;
+        mark(ctx, ad.mark, x + cell * 0.13, h * 0.46, h * 0.32, ad.hi);
+        write(ctx, ad.name.split('').join(' '), x + cell * 0.22, h * 0.4, h * 0.54, cell * 0.6, ad.fg, 'left');
+        write(ctx, ad.tag, x + cell * 0.225, h * 0.76, h * 0.22, cell * 0.5, ad.hi, 'left');
+      }
+      break;
+    }
     case 'timeout': {
       const who = show.side === null ? null : show.side === 0 ? home : away;
       const n = ribbon ? 2 : 1;
@@ -704,6 +869,47 @@ function screen(ctx: CanvasRenderingContext2D, w: number, h: number, show: Show,
     case 'word':
       big(show.text, home.fill, home.deep, home.trim);
       break;
+    case 'stat': {
+      // a scorer's card: his number on his side's colour, his name, what he has tonight; the score under it
+      const who = show.side === 0 ? home : away;
+      const g = ctx.createLinearGradient(0, 0, w, 0);
+      g.addColorStop(0, who.fill);
+      g.addColorStop(0.36, who.fill);
+      g.addColorStop(0.361, who.deep);
+      g.addColorStop(1, BLACK);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, H * 0.76);
+      stripes(ctx, w * 0.3, w * 0.36, 0, H * 0.76, who.trim, H * 0.05, H * 0.05);
+      write(ctx, `#${show.num}`, w * 0.15, H * 0.38, H * 0.5, w * 0.26, WHITE, 'center', 0.1);
+      write(ctx, show.head, w * 0.4, H * 0.1, H * 0.1, w * 0.5, who.trim === who.fill ? WHITE : who.trim, 'left');
+      write(ctx, show.name.toUpperCase(), w * 0.4, H * 0.26, H * 0.2, w * 0.56, WHITE, 'left');
+      write(ctx, String(show.pts), w * 0.4, H * 0.54, H * 0.36, w * 0.24, WHITE, 'left', 0.1);
+      face(ctx, H * 0.36);
+      const pw = Math.min(w * 0.24, ctx.measureText(String(show.pts)).width);
+      write(ctx, 'PTS', w * 0.42 + pw, H * 0.6, H * 0.18, w * 0.2, AMBER, 'left');
+      under();
+      break;
+    }
+    case 'noise': {
+      ctx.fillStyle = home.deep;
+      ctx.fillRect(0, 0, w, H * 0.76);
+      write(ctx, 'MAKE SOME NOISE', w / 2, H * 0.16, H * 0.24, w * 0.9, WHITE, 'center', 0.12);
+      meter(ctx, w * 0.08, w * 0.92, H * 0.3, H * 0.72, look.noise, look.tick, 1, 20);
+      under();
+      break;
+    }
+    case 'ad': {
+      const ad = ADS[show.i % ADS.length];
+      ctx.fillStyle = ad.bg;
+      ctx.fillRect(0, 0, w, H * 0.76);
+      ctx.fillStyle = ad.hi;
+      ctx.fillRect(0, H * 0.73, w, H * 0.03);
+      mark(ctx, ad.mark, w * 0.5, H * 0.2, H * 0.14, ad.hi);
+      write(ctx, ad.name.split('').join(' '), w / 2, H * 0.46, H * 0.2, w * 0.84, ad.fg);
+      write(ctx, ad.tag, w / 2, H * 0.63, H * 0.08, w * 0.6, ad.hi);
+      under();
+      break;
+    }
     case 'timeout': {
       const who = show.side === null ? null : show.side === 0 ? home : away;
       if (who) big(`${who.abbr} TIMEOUT`.trim(), who.fill, who.deep, who.trim);
@@ -801,6 +1007,10 @@ export class Boards {
   private fontsIn = false;
   private dimTo = 1;
   private bench = 1;
+  private up = 1;
+  private loud = 0;
+  private names: ((pid: number) => string) | null = null;
+  private numbers: ((pid: number) => string) | null = null;
   /** Painted at half the rate on a device that can't keep up. */
   private slow = false;
   // the banners in the roof: their picture (four of them side by side), what it was painted for
@@ -910,6 +1120,22 @@ export class Boards {
     this.slow = on;
   }
 
+  /** Who a player is to the boards: his name and his number (the page's own; none in a highlight). */
+  cast(names?: (pid: number) => string, numbers?: (pid: number) => string) {
+    this.names = names ?? null;
+    this.numbers = numbers ?? null;
+  }
+
+  /** How loud the building is (0 to 1): a noise meter shows it. */
+  hear(level: number) {
+    this.loud = level;
+  }
+
+  /** The house lights are down (the picture's exposure with them): the boards are this much brighter, to stay as they were. */
+  boost(by: number) {
+    this.up = by;
+  }
+
   /** A big moment, as if the court had just played it (the scene lab's stills). */
   shout(call: Call, side: 0 | 1 | null = 0) {
     this.house.moment = { call, side, ms: 0 };
@@ -929,7 +1155,15 @@ export class Boards {
     // (on a neutral floor nobody's building is cheering: the boards show the game and no more)
     const neutral = this.board.toLowerCase() !== kits[0].color.toLowerCase();
     // (a highlight has no game: the boards show the home side's colours and no letters)
-    const look: Look = { home: side(kits[0], game?.abbrevs[0] ?? ''), away: side(kits[1], game?.abbrevs[1] ?? ''), game, shot: h.shot, final: h.final };
+    const look: Look = {
+      home: side(kits[0], game?.abbrevs[0] ?? ''),
+      away: side(kits[1], game?.abbrevs[1] ?? ''),
+      game,
+      shot: h.shot,
+      final: h.final,
+      noise: this.loud,
+      tick: Math.floor(this.ms / 170),
+    };
 
     // a big moment over everything; or the end of a quarter; or each board's own turn
     const m = h.moment;
@@ -948,19 +1182,50 @@ export class Boards {
     const score: Show = { kind: 'score' };
     const home: Show = neutral ? score : { kind: 'home' };
     const defense: Show = { kind: 'defense' };
+    // a scorer's card: his name and number as the page knows them, what he has as the court has played it
+    const card = (who: { pid: number; side: 0 | 1; pts: number } | null, head: string): Show | null => {
+      const name = who && this.names?.(who.pid);
+      return who && name ? { kind: 'stat', side: who.side, name, num: this.numbers?.(who.pid) ?? '', pts: who.pts, head } : null;
+    };
+    // (after a big home basket's word: the man who made it, and REPLAY behind the baskets)
+    const after = !!m && m.side === 0 && !neutral && BIG.has(m.call) && m.ms >= TAKEOVER_MS && m.ms < TAKEOVER_MS + CARD_MS && h.star?.side === 0;
+    const scorer = after ? card(h.star, 'TONIGHT') : null;
+    // (late in a close one with the ball: the building is asked for noise)
+    const noisy = !neutral && (h.clutch || late) && h.off === 0 && !h.line && h.final === undefined;
+    const noise: Show = { kind: 'noise' };
+    // (a dead ball: the screens go round the score, a side's top scorer and a partner)
+    const dead = !!game && h.off === null && h.final === undefined;
+    const secs = this.ms / 1000;
+    const cycle = (turns: number[], shows: (Show | null)[], off = 0): Show => {
+      const all = turns.reduce((a, b) => a + b, 0);
+      let t = (secs + off) % all;
+      for (let i = 0; i < turns.length; i++) {
+        if (t < turns[i]) return shows[i] ?? shows[0]!;
+        t -= turns[i];
+      }
+      return shows[0]!;
+    };
+    /** The partner whose turn it is on a board that changes every `every` s (each board `off` along from the others). */
+    const ad = (every: number, off: number): Show => ({ kind: 'ad', i: Math.floor(secs / every) + off });
     const want = (l: Lamps): Show => {
       if (l.kind === 'clock') return { kind: 'clock' };
       if (take) return take;
       switch (l.kind) {
         case 'table':
-          return urgent ? defense : defending ? turn(DEFENSE_LOOP, defense, score) : game ? turn(TABLE_LOOP, score, home) : home;
+          if (scorer) return scorer;
+          return urgent ? defense : noisy ? noise : defending ? turn(DEFENSE_LOOP, defense, score) : game ? cycle(TABLE_TURNS, [score, home, neutral ? score : ad(20, 0)]) : home;
         case 'end':
-          return urgent ? defense : defending ? turn(DEFENSE_LOOP, defense, home) : home;
+          if (after) return { kind: 'replay' };
+          return urgent ? defense : noisy ? noise : defending ? turn(DEFENSE_LOOP, defense, home) : cycle(END_TURNS, [home, ad(16, 2)], 3);
         case 'ribbon':
+          return urgent ? defense : noisy ? noise : cycle(RIBBON_TURNS, [home, ad(25, 4)]);
         case 'far':
           return urgent ? defense : home;
         default:
-          return urgent ? defense : score;
+          if (scorer) return scorer;
+          if (urgent) return defense;
+          if (noisy) return turn([4, 5], noise, score);
+          return dead ? cycle(SCREEN_TURNS, [score, card(h.leader(Math.floor(secs / 13) % 2 ? 1 : 0), 'LEADING SCORER'), ad(13, 1)]) : score;
       }
     };
 
@@ -990,13 +1255,13 @@ export class Boards {
       }
       // what moves without a new picture: a band of light over a team's colours, the defence's pulse, the ribbon's crawl
       const k = l.show.kind;
-      l.sweep.value = calm ? 0 : k === 'home' || k === 'word' ? 0.7 : k === 'score' ? 0.2 : 0;
-      l.pulse.value = calm ? 0 : k === 'defense' ? 1 : k === 'word' ? 0.45 : 0;
+      l.sweep.value = calm ? 0 : k === 'home' || k === 'word' || k === 'ad' || k === 'stat' ? 0.7 : k === 'score' ? 0.2 : 0;
+      l.pulse.value = calm ? 0 : k === 'defense' || k === 'noise' ? 1 : k === 'word' || k === 'replay' ? 0.45 : 0;
     }
     if (!calm) this.far.crawl.value = this.ribbons.crawl.value = (this.ribbons.crawl.value + ((real / 1000) * CRAWL_FT_S) / RIBBON_FT) % 1;
     for (const { mat, glow } of this.lit) {
       const far = glow === FAR_GLOW;
-      mat.color.setScalar(glow * (far ? 0.45 + 0.55 * this.bench : BOARD_DIM + (1 - BOARD_DIM) * clamp01((this.dimTo - 0.18) / 0.82)));
+      mat.color.setScalar(this.up * glow * (far ? 0.45 + 0.55 * this.bench : BOARD_DIM + (1 - BOARD_DIM) * clamp01((this.dimTo - 0.18) / 0.82)));
     }
   }
 
@@ -1130,9 +1395,14 @@ function keyOf(show: Show, look: Look, kind: Kind): string {
     case 'home':
       // (the ribbon's run of it carries the score; the screens show the score for it)
       return kind === 'ribbon' || kind === 'screen' ? `${names}|${scored}|${timed}|${kind === 'screen' && look.shot !== null ? shotText(look.shot) : ''}` : names;
+    case 'noise':
+      return `${names}|${Math.round(look.noise * 20)}|${look.tick}|${kind === 'screen' ? `${scored}|${timed}` : ''}`;
     case 'defense':
     case 'word':
     case 'timeout':
+    case 'stat':
+    case 'replay':
+    case 'ad':
       return kind === 'screen' ? `${names}|${scored}|${timed}` : names;
     default:
       return `${names}|${scored}`;

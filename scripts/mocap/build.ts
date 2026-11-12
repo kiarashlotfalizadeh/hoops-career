@@ -34,7 +34,7 @@ interface Spec {
   from: number;
   to: number;
   /** A shot's moment (the release): 'peak' finds where the hands are highest. */
-  anchor?: number | 'peak';
+  anchor?: number | 'peak' | 'apex';
   /** Play ms for each captured second (the game's plays run a little faster than life). */
   rate?: number;
   grip?: 'side' | 'top' | 'under';
@@ -42,6 +42,14 @@ interface Spec {
   ball?: 'dribble' | Touch[];
   /** The other hand does it in the take (or it goes the other way): flip it. */
   mirror?: boolean;
+  /** A gait's arms and chest swing this many times as far about where they ride (a sprint driven harder than any take was run). */
+  swing?: number;
+  /** A move on the floor cut from a run: no foot of it counts as in the air. */
+  ground?: boolean;
+  /** A gait's carriage: these channels' means over the stride are moved to these. */
+  level?: Partial<Record<(typeof CHANNELS)[number], number>>;
+  /** A short take: how near its ends a stride may start and end (seconds). */
+  win?: number;
   /** A sideways gait: its stride runs from feet together to feet together. */
   slide?: boolean;
   /** Added to every frame (a captured body that isn't an athlete: jump higher, sit lower). */
@@ -59,15 +67,33 @@ const SPECS: Spec[] = [
   { id: 'idle3', src: '124_06', kind: 'loop', from: 4.45, to: 5.0 },
   // getting around
   { id: 'walk', src: '06_01', kind: 'gait', from: 0.5, to: 4 },
-  { id: 'run', src: '127_04', kind: 'gait', from: 1.6, to: 3.8, add: { lean: -0.18, hip: 0.22 } },
-  { id: 'sprint', src: '127_06', kind: 'gait', from: 0, to: 1.5, add: { lean: -0.12, hip: 0.26 } },
+  // (a steady jog, a run at pace, and the hardest-driven take there is. Each runner carried himself his own way: a
+  // hunch, his head turned to something. The stride is his; the carriage is set to a ballplayer's)
+  { id: 'jog', src: '127_13', kind: 'gait', from: 0, to: 1.6, level: { lean: 0.15, hip: -0.1, turn: 0, nod: 0.03, ly: -1.3, ry: -1.3, lz: 0.4, rz: 0.4 } },
+  { id: 'run', src: '102_05', kind: 'gait', from: 0, to: 0.9, win: 0.07, level: { lean: 0.21, hip: -0.1, turn: 0, nod: 0.06, ly: -1.15, ry: -1.15, lz: 0.45, rz: 0.45 } },
+  { id: 'sprint', src: '127_06', kind: 'gait', from: 0, to: 1.5, swing: 1.45, level: { lean: 0.38, hip: -0.16, turn: 0, nod: 0.16, ly: -0.85, ry: -0.85, lz: 0.5, rz: 0.5 } },
+  // (backing up: a man walking backward with a ball, his arms put out as a defender's)
+  {
+    id: 'backpedal',
+    src: '06_06',
+    kind: 'gait',
+    from: 0.3,
+    to: 3.1,
+    level: { hip: -0.3, lean: 0.06, turn: 0, nod: 0.05, lx: 0.75, rx: 0.75, ly: -1.3, ry: -1.3, lz: 0.55, rz: 0.55 },
+  },
+  // pulling up out of a run (0: he's nearly stopped), and a defender closing out and breaking down into his stance
+  { id: 'stop', src: '127_05', kind: 'shot', from: 0.7, to: 1.75, anchor: 0.7, rate: 500, ground: true },
+  { id: 'closeout', src: '102_25', kind: 'shot', from: 1.45, to: 2.4, anchor: 1.45, rate: 500, ground: true },
   // guarding (the slide is captured going right; the clip goes left, and the puppet flips it back)
   { id: 'shuffle', src: '102_27', kind: 'gait', from: 0.5, to: 1.3, slide: true, mirror: true },
   { id: 'stance', src: '102_24', kind: 'loop', from: 1.85, to: 2.25 },
   { id: 'ready', src: '102_24', kind: 'loop', from: 2.25, to: 2.65 },
   // with the ball
-  { id: 'dribble', src: '86_14', kind: 'loop', from: 22.0, to: 25.6, ball: 'dribble', grip: 'top', tempo: 1.5, add: { hip: -0.18, lean: 0.06 } },
+  { id: 'dribble', src: '86_14', kind: 'loop', from: 22.0, to: 25.6, ball: 'dribble', grip: 'top', tempo: 1.2, add: { hip: -0.18, lean: 0.06 } },
   { id: 'dribbleRun', src: '06_04', kind: 'loop', from: 0.4, to: 3.0, ball: 'dribble', grip: 'top', add: { hip: -0.1, lean: 0.05 } },
+  // (walking it up, and backing away with it)
+  { id: 'dribbleWalk', src: '06_02', kind: 'loop', from: 2.2, to: 4.9, ball: 'dribble', grip: 'top', add: { hip: -0.08, lean: 0.03 } },
+  { id: 'dribbleBack', src: '06_06', kind: 'loop', from: 0.3, to: 3.1, ball: 'dribble', grip: 'top', add: { hip: -0.14, lean: 0.04 } },
   {
     id: 'crossover',
     src: '06_14',
@@ -83,12 +109,15 @@ const SPECS: Spec[] = [
     ],
     add: { hip: -0.3, lean: 0.1 },
   },
-  // a chest pass (0: it leaves his hands)
-  { id: 'pass', src: '15_12', kind: 'shot', from: 17.3, to: 17.95, anchor: 17.36, rate: 620, ball: [{ hand: 'both', from: -1, to: 17.36 }] },
+  // a chest pass, from drawing it in (0: it leaves his hands)
+  { id: 'pass', src: '15_12', kind: 'shot', from: 16.98, to: 17.95, anchor: 17.36, rate: 540, ball: [{ hand: 'both', from: -1, to: 17.36 }] },
   // shots (0: the release)
-  { id: 'jumper', src: '124_05', kind: 'shot', from: 2.8, to: 4.3, anchor: 'peak', rate: 780, grip: 'under', ball: [{ hand: 'both', from: -1, to: 99 }], jump: 1.5 },
-  { id: 'freeThrow', src: '124_04', kind: 'shot', from: 3.5, to: 5.45, anchor: 'peak', rate: 620, grip: 'under', ball: [{ hand: 'both', from: -1, to: 99 }] },
-  { id: 'layup', src: '124_06', kind: 'shot', from: 2.72, to: 4.5, anchor: 'peak', rate: 760, grip: 'under', ball: [{ hand: 'both', from: -1, to: 99 }], jump: 1.2 },
+  { id: 'jumper', src: '124_05', kind: 'shot', from: 2.8, to: 4.3, anchor: 'peak', rate: 600, grip: 'under', ball: [{ hand: 'both', from: -1, to: 99 }], jump: 1.5 },
+  { id: 'freeThrow', src: '124_04', kind: 'shot', from: 3.5, to: 5.45, anchor: 'peak', rate: 540, grip: 'under', ball: [{ hand: 'both', from: -1, to: 99 }] },
+  { id: 'layup', src: '124_06', kind: 'shot', from: 2.72, to: 4.5, anchor: 'peak', rate: 600, grip: 'under', ball: [{ hand: 'both', from: -1, to: 99 }], jump: 1.2 },
+  // a jump off two feet, in captured ms around its top: the crouch, the leap and the landing that the
+  // keyed jumps (a rebound, a block, a contest) take their body from (clips.ts)
+  { id: 'jump', src: '124_11', kind: 'shot', from: 3.45, to: 5.0, anchor: 'apex', rate: 1000 },
 ];
 
 const sub = (a: V, b: V): V => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -108,6 +137,27 @@ function smoothed(v: number[], sigma: number): number[] {
     }
     return sum / wt;
   });
+}
+
+/**
+ * Where he is along the floor, smoothed: the line he travels is taken out first and put back after, so a take
+ * that starts or ends mid-stride (a short one, cut from a run) isn't held back at its ends.
+ */
+function travelled(v: number[], sigma: number): number[] {
+  const n = v.length;
+  const mx = (n - 1) / 2;
+  const my = v.reduce((t, y) => t + y, 0) / n;
+  let sxy = 0;
+  let sxx = 0;
+  v.forEach((y, i) => {
+    sxy += (i - mx) * (y - my);
+    sxx += (i - mx) * (i - mx);
+  });
+  const k = sxx ? sxy / sxx : 0;
+  return smoothed(
+    v.map((y, i) => y - k * (i - mx)),
+    sigma,
+  ).map((y, i) => y + k * (i - mx));
 }
 
 /** A take, measured: everything a frame's pose needs, in the puppet's units. */
@@ -146,11 +196,11 @@ function measure(take: Take, byHead = false) {
     const turns = Math.round((yaw[0] - yawRaw[0]) / (Math.PI * 2));
     yaw = yaw.map((y) => y - turns * Math.PI * 2);
   }
-  const rx = smoothed(
+  const rx = travelled(
     Array.from({ length: F }, (_, f) => P(f, 'Hips')[0]),
     sig,
   );
-  const rz = smoothed(
+  const rz = travelled(
     Array.from({ length: F }, (_, f) => P(f, 'Hips')[2]),
     sig,
   );
@@ -274,7 +324,7 @@ function poseAt(m: Measured, ft: number, spec: Spec): { pose: Float32Array; hand
 }
 
 /** Left foot at its farthest behind him, each time, in frames (it leaves the floor there): a stride runs from one to the next. */
-function liftoffs(m: Measured, from: number, to: number): number[] {
+function liftoffs(m: Measured, from: number, to: number, win = 0.14): number[] {
   const z = smoothed(
     Array.from({ length: m.F }, (_, f) => {
       const d = sub(m.P(f, 'LeftFoot'), m.P(f, 'Hips'));
@@ -283,7 +333,7 @@ function liftoffs(m: Measured, from: number, to: number): number[] {
     0.025 / m.take.dt,
   );
   const out: number[] = [];
-  const gap = Math.round(0.14 / m.take.dt);
+  const gap = Math.round(win / m.take.dt);
   for (let f = Math.max(gap, from); f < Math.min(m.F - gap, to); f++) {
     let low = true;
     for (let d = -gap; d <= gap && low; d++) if (z[f + d] < z[f]) low = false;
@@ -337,7 +387,7 @@ interface Built {
 
 function build(spec: Spec): Built {
   const take = readBvh(`data/raw/mocap/${spec.src}.bvh`, 2);
-  const m = measure(take, spec.kind === 'shot' && spec.id !== 'crossover');
+  const m = measure(take, spec.kind === 'shot' && spec.id !== 'crossover' && !spec.ground);
   const dt = take.dt;
   const fr = (sec: number) => sec / dt;
   let from = fr(spec.from);
@@ -346,7 +396,7 @@ function build(spec: Spec): Built {
   let touches: Touch[] | null = Array.isArray(spec.ball) ? spec.ball : null;
 
   if (spec.kind === 'gait') {
-    const lifts = spec.slide ? together(m, Math.round(from), Math.round(to)) : liftoffs(m, Math.round(from), Math.round(to));
+    const lifts = spec.slide ? together(m, Math.round(from), Math.round(to)) : liftoffs(m, Math.round(from), Math.round(to), spec.win);
     if (lifts.length < 2) throw new Error(`${spec.id}: no full stride in ${spec.src} (${lifts.length} lift-offs)`);
     // (the stride nearest the middle of the stretch)
     const mid = (from + to) / 2;
@@ -388,7 +438,13 @@ function build(spec: Spec): Built {
     const ft = from + i * step;
     raw.push({ ...poseAt(m, ft, spec), sec: ft * dt });
   }
-  if (spec.kind === 'gait') for (const r of raw) r.pose[I.air] = 0;
+  if (spec.ground) for (const r of raw) r.pose[I.air] = r.pose[I.flu] = r.pose[I.fru] = r.pose[I.flf] = r.pose[I.frf] = r.pose[I.wide] = 0;
+  if (spec.kind === 'gait')
+    for (const r of raw) {
+      r.pose[I.air] = 0;
+      // (a runner's feet fall under him: how wide is the puppet's own business, see Puppet.step)
+      if (!spec.slide) r.pose[I.wide] = 0;
+    }
 
   // the ball: in a hand, or bouncing from the last hand to the next
   if (touches) {
@@ -461,16 +517,46 @@ function build(spec: Spec): Built {
         r.pose[I.gr] *= g;
       }
     }
+    if (spec.anchor === 'apex') {
+      // the top of a jump: his hips at their highest
+      let top = -Infinity;
+      for (const r of raw)
+        if (r.pose[I.hip] > top) {
+          top = r.pose[I.hip];
+          anchor = r.sec;
+        }
+    }
     const rate = spec.rate ?? 800;
     return { kind: 'shot', dur: 0, grip: spec.grip ?? 'side', at: raw.map((r) => Math.round((r.sec - anchor) * rate)), poses: raw.map((r) => r.pose) };
   }
   // a loop: its first frames are the take carrying on past its end, eased into its own start
   const poses = raw.slice(0, n).map((r) => r.pose);
+  for (const [c, v] of Object.entries(spec.level ?? {})) {
+    const i = I[c as keyof typeof I];
+    const mean = poses.reduce((t, p) => t + p[i], 0) / poses.length;
+    for (const r of raw) r.pose[i] += v - mean;
+  }
+  if (spec.swing)
+    for (const i of [I.lz, I.rz, I.ly, I.ry, I.twist, I.pyaw]) {
+      const mean = poses.reduce((t, p) => t + p[i], 0) / poses.length;
+      for (const r of raw) r.pose[i] = mean + (r.pose[i] - mean) * spec.swing;
+    }
   for (let i = 0; i < fade; i++) {
     const w = i / fade;
     const past = raw[n + i].pose;
     for (let c = 0; c < N; c++) poses[i][c] = past[c] + (poses[i][c] - past[c]) * w;
   }
+  // a stride going ahead is the same on both sides, half a stride apart: what one runner did with one arm only (a
+  // thing in his hand, a look to one side) is evened out, so a blend of two runners' strides has no limp in it
+  if (spec.kind === 'gait' && !spec.slide)
+    for (let i = 0; i < n / 2; i++) {
+      const other = Float32Array.from(poses[i + n / 2]);
+      mirror(other);
+      for (let c = 0; c < N; c++) poses[i][c] = (poses[i][c] + other[c]) / 2;
+      const back = Float32Array.from(poses[i]);
+      mirror(back);
+      poses[i + n / 2].set(back);
+    }
   // (and it ends where it began)
   poses.push(Float32Array.from(poses[0]));
   return { kind: spec.kind, dur: Math.round(((to - from) * dt * 1000) / (spec.tempo ?? 1)), grip: spec.grip ?? 'side', at: poses.map((_, i) => Number((i / n).toFixed(4))), poses };
