@@ -409,6 +409,7 @@ export const PARTS = [
   'lip',
   'beard',
   'goatee',
+  'strap',
   'white',
   'warm',
   'trim',
@@ -471,6 +472,7 @@ function human(look: Look, woman = false): Wear {
   if (!woman) {
     if (look.beard === 1) wear.beard = mix(look.skin, look.brows, 0.2);
     else if (look.beard === 2) wear.goatee = look.brows;
+    else if (look.beard === 5) wear.strap = look.brows;
     else if (look.beard >= 3) wear.beard = look.brows;
   }
   return wear;
@@ -524,9 +526,13 @@ const REF_WEAR: Wear = { top: '#8f9299', trim: '#17181c', legs: '#151517', shoe:
 /**
  * What the sitters' shader adds: each point between the pose he is in and the one he is going to, his colours
  * from his row of the palette, his head turned to what he watches, his trunk never quite still, a towel going round.
+ * (And where on him each point is as built, and whether it is a beard, for the beard's grain: see CAST_GRAIN.)
  */
 const CAST_HEAD = /* glsl */ `
+  varying vec3 vCastAt;
+  varying float vCastBeard;
   attribute float aPart;
+  attribute float aFade;
   attribute float aHead;
   attribute float aRow;
   attribute float aMix;
@@ -550,7 +556,32 @@ const CAST_HEAD = /* glsl */ `
   }`;
 const CAST_COLOR = /* glsl */ `
   castWear = texelFetch(uPalette, ivec2(int(aPart + 0.5), int(aRow + 0.5)), 0).rgb;
-  vColor *= castWear;`;
+  // (a beard's edge: thinning out to his skin)
+  castWear = mix(texelFetch(uPalette, ivec2(${PART.skin}, int(aRow + 0.5)), 0).rgb, castWear, aFade);
+  vColor *= castWear;
+  vCastAt = position;
+  vCastBeard = abs(aPart - ${PART.beard.toFixed(1)}) < 0.5 || abs(aPart - ${PART.goatee.toFixed(1)}) < 0.5 || abs(aPart - ${PART.strap.toFixed(1)}) < 0.5 ? aFade : 0.0;`;
+/**
+ * A beard up close is hairs, as a player's is (figure.ts paints his): lighter and darker in short strokes down his
+ * jaw, not one colour laid on him like a plate. Gone before a stroke is finer than a pixel, so far off it is the colour.
+ */
+const CAST_GRAIN = /* glsl */ `
+  varying vec3 vCastAt;
+  varying float vCastBeard;
+  float castHash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+  float castGrain(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mix(castHash(i), castHash(i + vec3(1.0, 0.0, 0.0)), f.x), mix(castHash(i + vec3(0.0, 1.0, 0.0)), castHash(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
+      mix(mix(castHash(i + vec3(0.0, 0.0, 1.0)), castHash(i + vec3(1.0, 0.0, 1.0)), f.x), mix(castHash(i + vec3(0.0, 1.0, 1.0)), castHash(i + 1.0), f.x), f.y), f.z);
+  }`;
+const CAST_GRAIN_COLOR = /* glsl */ `
+  if (vCastBeard > 0.0) {
+    vec3 castG = vCastAt * vec3(150.0, 55.0, 150.0);
+    float castFine = 1.0 - smoothstep(0.5, 1.4, length(fwidth(castG)));
+    diffuseColor.rgb *= 1.0 + castFine * vCastBeard * (0.55 * castGrain(castG) - 0.3);
+  }`;
 const CAST_NORMAL = /* glsl */ `
   objectNormal = castTurn(normalize(mix(objectNormal, aToN, aMix)));`;
 const CAST_MOVE = /* glsl */ `
@@ -615,6 +646,8 @@ interface Baked {
 interface Flesh {
   color: BufferAttribute;
   part: BufferAttribute;
+  /** How much of its part's colour a point shows over his skin's (all of it but at a beard's edge: see FADED). */
+  fade: BufferAttribute;
   head: BufferAttribute;
   index: BufferAttribute;
   /** Each part's corners: where they start in `index`, and how many (a part may have more than one run). */
@@ -623,12 +656,19 @@ interface Flesh {
   looks: Map<string, BufferAttribute>;
 }
 
+/**
+ * The parts whose colour thins out to his skin's at their edges, a point at a time (a beard: people.py beards keeps how
+ * much of it shows in the blue of its shade, which is a grey).
+ */
+const FADED: ReadonlySet<string> = new Set(['beard', 'goatee', 'strap']);
+
 /** A body's own points, then its props', run together (the same for every pose of a body with the same props). */
 function fleshOf(thing: Thing, props: Prop[]): Flesh {
   if (!thing.bones) throw new Error(`people.glb: ${thing.name} has no bones`);
   const heads = thing.bones.map((b) => OF_HEAD.has(b.name));
   const color: number[] = [];
   const part: number[] = [];
+  const fade: number[] = [];
   const head: number[] = [];
   const index: number[] = [];
   const runs = new Map<number, [number, number][]>();
@@ -639,8 +679,10 @@ function fleshOf(thing: Thing, props: Prop[]): Flesh {
     if (k === undefined) throw new Error(`people.glb: ${thing.name} has a part the app has no colour for (${p.material})`);
     const start = index.length;
     const [pos, col, on, by] = ['position', 'color', 'skinIndex', 'skinWeight'].map((a) => p.geo.getAttribute(a));
+    const faded = FADED.has(p.material);
     for (let i = 0; i < pos.count; i++) {
-      color.push(col ? col.getX(i) : 1, col ? col.getY(i) : 1, col ? col.getZ(i) : 1);
+      color.push(col ? col.getX(i) : 1, col ? col.getY(i) : 1, col ? (faded ? col.getY(i) : col.getZ(i)) : 1);
+      fade.push(col && faded ? col.getZ(i) : 1);
       part.push(k);
       let h = 0;
       for (let c = 0; c < 4; c++) if (heads[on.getComponent(i, c)]) h += by.getComponent(i, c);
@@ -657,6 +699,7 @@ function fleshOf(thing: Thing, props: Prop[]): Flesh {
     const start = index.length;
     for (let i = 0; i < count; i++) {
       color.push(1, 1, 1);
+      fade.push(1);
       part.push(PART[prop.part]);
       head.push(prop.head ? 1 : 0);
       index.push(from + i);
@@ -668,6 +711,7 @@ function fleshOf(thing: Thing, props: Prop[]): Flesh {
   return {
     color: new BufferAttribute(new Float32Array(color), 3),
     part: new BufferAttribute(new Float32Array(part), 1),
+    fade: new BufferAttribute(new Float32Array(fade), 1),
     head: new BufferAttribute(new Float32Array(head), 1),
     index: new BufferAttribute(from > 65535 ? new Uint32Array(index) : new Uint16Array(index), 1),
     runs,
@@ -977,11 +1021,18 @@ class Walker {
       const c = new Color();
       const corners: number[] = [];
       const all = suit.geo.index!.array;
+      const skinTone = new Color(wear.skin ?? '#000000');
+      const edge = new Color();
       for (const part of suit.parts) {
         const hex = wear[part.name as PartName];
         if (hex === undefined) continue;
         c.set(hex);
-        for (let i = part.from; i < part.from + part.count; i++) col.set([c.r * shade.getX(i), c.g * shade.getY(i), c.b * shade.getZ(i)], i * 3);
+        // (a beard's edge thins out to his skin: how much of it shows is its shade's blue, see FADED)
+        const faded = FADED.has(part.name);
+        for (let i = part.from; i < part.from + part.count; i++) {
+          const k = faded ? edge.copy(skinTone).lerp(c, shade.getZ(i)) : c;
+          col.set([k.r * shade.getX(i), k.g * shade.getY(i), k.b * (faded ? shade.getY(i) : shade.getZ(i))], i * 3);
+        }
         for (let i = part.start; i < part.start + part.size; i++) corners.push(all[i]);
       }
       geo.setAttribute('color', new BufferAttribute(col, 3));
@@ -1289,6 +1340,8 @@ const IDLE: readonly (readonly [number, number])[] = [
   [4.5, -22.6],
   [0, -20.8],
 ];
+/** The ball a referee gives a man comes in at his chest along its last this many ft (on the 6 ft 6 puppet), straight, from in front of him. */
+const HAND_IN = 1.4;
 /** A dead ball lies this long (ms) before a referee goes to pick it up. */
 const PICK_AFTER = 700;
 /** The lead runs down the floor this far toward the far sideline (ft from the floor's middle): outside the lanes the players run in, and never between the camera and the play. */
@@ -1298,6 +1351,8 @@ const REF_PACE = 25;
 const COACH_PACE = 4.5;
 const COACH_HURRY = 9;
 const BENCH_PACE = 6.5;
+/** A ball kid out on the floor when the break is over runs off it this fast (ft a second): he is gone before the ball is in play. */
+const KID_PACE = 13;
 /** A coach's box: from the table's end this far along his bench, this far behind the sideline. */
 const BOX = [18.6, 30] as const;
 const BOX_Z = -26.3;
@@ -1561,6 +1616,7 @@ export class Sideline {
     geo.setAttribute('aToN', to.normal);
     geo.setAttribute('color', flesh.color);
     geo.setAttribute('aPart', flesh.part);
+    geo.setAttribute('aFade', flesh.fade);
     geo.setAttribute('aHead', flesh.head);
     geo.setIndex(look.index);
     const mat = this.keep(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.82, vertexColors: true, side: DoubleSide }));
@@ -1581,8 +1637,11 @@ export class Sideline {
         .replace('#include <color_vertex>', `#include <color_vertex>${CAST_COLOR}`)
         .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>${CAST_NORMAL}`)
         .replace('#include <begin_vertex>', `#include <begin_vertex>${CAST_MOVE}`);
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', `#include <common>${CAST_GRAIN}`)
+        .replace('#include <color_fragment>', `#include <color_fragment>${CAST_GRAIN_COLOR}`);
     };
-    mat.customProgramCacheKey = () => 'cast2';
+    mat.customProgramCacheKey = () => 'cast3';
     this.castMats.push(mat);
     const row = new InstancedBufferAttribute(new Float32Array(ROWS), 1);
     const life = new InstancedBufferAttribute(new Float32Array(ROWS * 4), 4);
@@ -1772,6 +1831,11 @@ export class Sideline {
     for (const s of this.bench) s.w?.mirrored(on);
   }
 
+  /** The three referees, where they are (the cameras stand clear of them: scene.ts reads them, never moves them). */
+  get officials(): readonly { readonly fig: Fig }[] {
+    return this.refs;
+  }
+
   /**
    * One of the ten, as the scene is about to place him (where the play has him, the way he faces): a man the
    * sideline has on a way of its own for a moment (on from the table, over toward his bench at a timeout) is
@@ -1871,6 +1935,11 @@ export class Sideline {
     if (!w || this.mine || this.level >= 2) return;
     for (const r of this.refs) r.has = false;
     this.mine = { w, phase: 'to', t: 0, ms: 380 + 14 * Math.hypot(w.x - a.ball.x, w.z - a.ball.z), from: a.ball.clone(), pid: -1, bounce: false };
+  }
+
+  /** The man a referee's ball is on its way to (his hands take it: they don't keep out of its way), or -1. */
+  get handing(): number {
+    return this.mine?.phase === 'give' ? this.mine.pid : -1;
   }
 
   /** The referee with the ball gives it to a player: handed or tossed, or bounced to the man at the line. */
@@ -2137,13 +2206,21 @@ export class Sideline {
     const to = f.pup.carry(TMP2);
     // (a hand that isn't holding anything yet is no place to send it: his chest then)
     if (!(to.y > 1.5)) f.pup.world(0, 3.6 * f.pup.body.s, 0.9 * f.pup.body.s, to);
-    ball.set(m.from.x + (to.x - m.from.x) * u, m.from.y + (to.y - m.from.y) * u, m.from.z + (to.z - m.from.z) * u);
+    // (it comes into his hands from in front of him, never through his arms from beside or behind him: along a curve
+    // whose last part comes straight in at his chest, from HAND_IN ft out in front of where his hands have it)
+    const ahead = f.pup.world(0, 0, 1, TMP);
+    const [fx, fz] = [ahead.x - f.pup.x, ahead.z - f.pup.z];
+    const lead = Math.min(HAND_IN * f.pup.body.s, 0.45 * Math.hypot(to.x - m.from.x, to.z - m.from.z));
+    const cx = to.x + fx * lead;
+    const cz = to.z + fz * lead;
+    const bez = (a: number, c: number, b: number, w: number) => (1 - w) * (1 - w) * a + 2 * w * (1 - w) * c + w * w * b;
+    ball.set(bez(m.from.x, cx, to.x, u), m.from.y + (to.y - m.from.y) * u, bez(m.from.z, cz, to.z, u));
     if (m.bounce) {
       // (down to the floor a little past half way, and up into his hands)
       const k = 0.56;
       ball.y = m.t < k ? m.from.y + (BALL_R - m.from.y) * Math.pow(m.t / k, 1.5) : BALL_R + (to.y - BALL_R) * Math.sin(((m.t - k) / (1 - k)) * Math.PI * 0.5);
-      ball.x = m.from.x + (to.x - m.from.x) * m.t;
-      ball.z = m.from.z + (to.z - m.from.z) * m.t;
+      ball.x = bez(m.from.x, cx, to.x, m.t);
+      ball.z = bez(m.from.z, cz, to.z, m.t);
     } else ball.y += Math.sin(Math.PI * m.t) * 0.3;
     if (m.t >= 1) {
       this.mine = null;
@@ -2352,7 +2429,9 @@ export class Sideline {
       const hyaw = spot ? spot.yaw : s.yaw;
       const far = Math.hypot(hx - s.px, hz - s.pz);
       const feet = s.kind === 'kid' ? 'upright' : 'stand';
-      if (far > 0.3 && s.body === 'bench') {
+      // (a walker on his way is wherever his walker is, not at the spot he set off from: sent back there before he
+      // got where he was going, he walks back to it, and isn't left standing out on the floor where he was)
+      if ((far > 0.3 || (s.walking && s.w)) && s.body === 'bench') {
         // somewhere to go: on his feet first, then as a walker (or, on a slow device, slid there as he stands)
         want = feet;
         if (s.pose === feet && !s.next) {
@@ -2371,7 +2450,7 @@ export class Sideline {
             }
             const [gx, gz] = [hx + Math.sin(hyaw) * fwd, hz + Math.cos(hyaw) * fwd];
             const left = Math.hypot(gx - w.x, gz - w.z);
-            w.go(gx, gz, left < 2 ? hyaw : Math.atan2(gx - w.x, gz - w.z), s.storm ? STORM_PACE : BENCH_PACE, 'stand', a, {
+            w.go(gx, gz, left < 2 ? hyaw : Math.atan2(gx - w.x, gz - w.z), s.storm ? STORM_PACE : s.kind === 'kid' && !spot ? KID_PACE : BENCH_PACE, 'stand', a, {
               look: { x: ball.x, y: 4, z: ball.z },
               clear: s.kind === 'bench' && s.spent > 0,
             });

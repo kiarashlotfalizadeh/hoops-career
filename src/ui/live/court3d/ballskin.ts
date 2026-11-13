@@ -31,6 +31,17 @@ const DEPTH = 0.9;
 const EDGE = 0.22;
 const EDGE_TIGHT = 2.6;
 const EDGE_TINT = '1.0, 0.9, 0.78';
+/**
+ * Small on the picture, the ball's edge is drawn dark (this dark, this wide: CSS px), so a ball a few dots across
+ * keeps its round against the wood, a jersey or the crowd; from RIM_FULL dots across down it has all of it, from
+ * RIM_NONE up none (a close-up's ball is only leather).
+ */
+const RIM_DARK = '0.07, 0.045, 0.03';
+const RIM_PX = 1.1;
+const RIM_FULL = 9;
+const RIM_NONE = 18;
+/** The dark edge's strength (0..1) and width (a share of the ball's radius), set as the ball is put on the picture (see ballSize). */
+const RIM = { strength: { value: 0 }, width: { value: 0.2 } };
 
 /** A number in 0..1 from `i`, the same every time. */
 const rnd = (i: number) => {
@@ -96,11 +107,16 @@ export function leather(fill: string, skin: Texture): MeshStandardMaterial {
   const mat = new MeshStandardMaterial({ color: fill, roughness: 0.56, vertexColors: true });
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uPebble = { value: skin };
+    sh.uniforms.uRim = RIM.strength;
+    sh.uniforms.uRimW = RIM.width;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vBallP;\nvarying vec3 vBallN;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBallP = position;\nvBallN = normal;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform sampler2D uPebble;\nuniform mat3 normalMatrix;\nvarying vec3 vBallP;\nvarying vec3 vBallN;')
+      .replace(
+        '#include <common>',
+        '#include <common>\nuniform sampler2D uPebble;\nuniform mat3 normalMatrix;\nuniform float uRim;\nuniform float uRimW;\nvarying vec3 vBallP;\nvarying vec3 vBallN;',
+      )
       .replace(
         '#include <roughnessmap_fragment>',
         /* glsl */ `#include <roughnessmap_fragment>
@@ -127,11 +143,22 @@ export function leather(fill: string, skin: Texture): MeshStandardMaterial {
         /* glsl */ `// (its edge, where the face turns away from the camera: lit a little, broken up by the pebbles)
         float ballEdge = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), ${EDGE_TIGHT.toFixed(2)});
         outgoingLight += vec3(${EDGE_TINT}) * ballEdge * ${EDGE.toFixed(2)};
+        // (small on the picture: its very edge dark, a dot or so wide, off its round and not its pebbles)
+        float ballCos = clamp(dot(normalize(normalMatrix * normalize(vBallN)), normalize(vViewPosition)), 0.0, 1.0);
+        float ballSin = sqrt(1.0 - ballCos * ballCos);
+        outgoingLight = mix(outgoingLight, vec3(${RIM_DARK}), smoothstep(1.0 - uRimW * 1.6, 1.0 - uRimW * 0.4, ballSin) * uRim * 0.85);
         #include <opaque_fragment>`,
       );
   };
   mat.customProgramCacheKey = () => 'leather';
   return mat;
+}
+
+/** The ball is `px` dots across on the picture (CSS px): its dark edge for that size (see RIM_DARK). Says how strong it is (0..1). */
+export function ballSize(px: number): number {
+  RIM.strength.value = Math.min(1, Math.max(0, (RIM_NONE - px) / (RIM_NONE - RIM_FULL)));
+  RIM.width.value = Math.min(0.45, (2 * RIM_PX) / Math.max(1, px));
+  return RIM.strength.value;
 }
 
 /**

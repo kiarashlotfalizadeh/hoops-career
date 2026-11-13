@@ -238,8 +238,16 @@ const PATCH = 0.07;
 const WOOD_GRADE = [0.8, 0.81, 0.77];
 /** How far a strip's face is off flat at most (radians): the lamps in the varnish break up along them. */
 const TILT = 0.011;
+/**
+ * A parquet's squares (a floor laid so: Court.tsx paints which): this many strips a side (just under 5 ft),
+ * the strips turned in every other one; each square a shade of its own by this much.
+ */
+const PARQUET_STRIPS = 26;
+const PARQUET_TONE = 0.08;
 /** A lamp bank, as bright as it is (the floor shows a twentieth or so of it, more the flatter it is looked across). */
-const BANK_GLOW = new Color(1, 0.97, 0.92).multiplyScalar(30);
+const BANK_GLOW = new Color(1, 0.97, 0.92).multiplyScalar(21);
+/** A worn coat keeps this much of the lamps and the mirror a clear one shows (a broadcast floor: soft reflections, not a mirror). */
+const COAT_LEAST = 0.35;
 /**
  * How far a reflection spreads up and down, for each ft it goes from the floor to the lamp: the clear
  * coat's (sharp), the wood's under it (soft) and the varnish's haze. Across, it spreads less the flatter
@@ -255,9 +263,23 @@ const CLEAR = 1.3;
 const GLOSS_WOOD = 0.5;
 const GLOSS_PAINT = 0.72;
 const GLOSS_WORN = 0.22;
-/** The lane is this long from the baseline and this wide (ft): where the wear is. */
+/** The apron's paint: a satin, not the court's gloss. */
+const GLOSS_APRON = 0.34;
+/** How much a coat's clarity comes and goes across the floor (buffed by machine in big soft swirls), either way. */
+const BUFF = 0.24;
+/** The lane is this long from the baseline and this wide (ft): where the wear is most. */
 const LANE_L = 19;
 const LANE_W = 16;
+/** And how much of it there is up the middle of the floor end to end (the ball comes up it), and along each sideline (the referees, the inbounds). */
+const TRAFFIC_MID = 0.55;
+const TRAFFIC_SIDE = 0.4;
+/**
+ * The black marks shoes leave: at most one in a square of floor this wide (ft), in this share of the squares
+ * where the feet go most (a sixth of that where they don't), this much darker at their blackest. Seen only near.
+ */
+const SCUFF_CELL = 1.6;
+const SCUFF_SHARE = 0.34;
+const SCUFF_DARK = 0.5;
 /**
  * The floor's light. The lamps are in the rig (rig.ts) and in the building's light both: the floor takes
  * the rig's in full (they throw its shadows) and this much of the soft light from all round, so a shadow
@@ -302,15 +324,16 @@ const CONTACT = /* glsl */ `
       }
       float dx0 = - texelSize.x * shadowRadius;`;
 
-const FLOOR_HEAD = /* glsl */ `
-  varying vec3 vFloor;
-  uniform float uDetail;
-  uniform vec3 uWood;
-  uniform vec3 uBankAt[BANKS];
-  uniform vec4 uBankU[BANKS];
-  uniform vec4 uBankV[BANKS];
-  uniform vec3 uBankN[BANKS];
-  uniform vec3 uBankGlow;
+const glsl = (n: number) => (Number.isInteger(n) ? `${n}.0` : String(n));
+
+/**
+ * The floor's wear, which its shader and its mirror (arena.ts SHEEN) both read: a hash and a noise; where
+ * the feet go most (`fTraffic`, at a point on the floor, x along it and y across: 1 in the lanes); and how
+ * clear the coat is there (`fGlossAt`, given how bare the wood is: 1 bare, 0 painted), and how worn (`worn`).
+ * Paint has more coats than the wood, the apron is a satin, every coat is buffed a little uneven, and the
+ * feet scuff it dull in streaks along the floor where they go most.
+ */
+export const WEAR = /* glsl */ `
   float fHash(vec2 p) {
     vec3 q = fract(vec3(p.xyx) * 0.1031);
     q += dot(q, q.yzx + 33.33);
@@ -322,6 +345,43 @@ const FLOOR_HEAD = /* glsl */ `
     f = f * f * (3.0 - 2.0 * f);
     return mix(mix(fHash(i), fHash(i + vec2(1.0, 0.0)), f.x), mix(fHash(i + vec2(0.0, 1.0)), fHash(i + vec2(1.0, 1.0)), f.x), f.y);
   }
+  // (three sizes of it, each turned: no lattice shows in the varnish looked along)
+  float fCloud(vec2 p) {
+    return fNoise(p) * 0.5 + fNoise(mat2(0.8, 0.6, -0.6, 0.8) * p * 2.03 + 17.0) * 0.3 + fNoise(mat2(0.6, -0.8, 0.8, 0.6) * p * 4.1 + 5.0) * 0.2;
+  }
+  float fTraffic(vec2 p) {
+    float ax = abs(p.x);
+    float az = abs(p.y);
+    float lane = (1.0 - smoothstep(${glsl(LANE_L - 3)}, ${glsl(LANE_L + 2)}, ${glsl(COURT_LEN / 2)} - ax)) * (1.0 - smoothstep(${glsl(LANE_W / 2 - 1)}, ${glsl(LANE_W / 2 + 3)}, az));
+    float mid = ${glsl(TRAFFIC_MID)} * (1.0 - smoothstep(5.0, 13.0, az));
+    float side = ${glsl(TRAFFIC_SIDE)} * smoothstep(${glsl(HALF_W - 5)}, ${glsl(HALF_W - 1)}, az);
+    return max(lane, max(mid, side)) * (1.0 - smoothstep(${glsl(COURT_LEN / 2)}, ${glsl(COURT_LEN / 2 + 0.5)}, ax)) * (1.0 - smoothstep(${glsl(HALF_W)}, ${glsl(HALF_W + 0.5)}, az));
+  }
+  float fGlossAt(vec2 p, float bare, out float worn) {
+    float apron = max(smoothstep(${glsl(COURT_LEN / 2)}, ${glsl(COURT_LEN / 2 + 0.25)}, abs(p.x)), smoothstep(${glsl(HALF_W)}, ${glsl(HALF_W + 0.25)}, abs(p.y)));
+    float g = mix(mix(${glsl(GLOSS_PAINT)}, ${glsl(GLOSS_WOOD)}, bare), ${glsl(GLOSS_APRON)}, apron);
+    g *= 1.0 + ${glsl(BUFF)} * (2.0 * fCloud(p * 0.04 + 3.7) - 1.0);
+    // (streaks drawn out along the floor, the way the feet run; a little everywhere)
+    float s = fCloud(p * vec2(0.28, 0.9) + 11.0);
+    worn = smoothstep(0.4, 0.68, s) * (0.18 + 0.82 * fTraffic(p));
+    return mix(g, ${glsl(GLOSS_WORN)}, worn * 0.85);
+  }
+  // how much of the lamps and the mirror a coat this clear shows
+  float fCoat(float gloss) {
+    return mix(${glsl(COAT_LEAST)}, 1.0, smoothstep(${glsl(GLOSS_WORN)}, ${glsl(GLOSS_PAINT)}, gloss));
+  }`;
+
+const FLOOR_HEAD = /* glsl */ `
+  varying vec3 vFloor;
+  uniform float uDetail;
+  uniform float uParquet;
+  uniform vec3 uWood;
+  uniform vec3 uBankAt[BANKS];
+  uniform vec4 uBankU[BANKS];
+  uniform vec4 uBankV[BANKS];
+  uniform vec3 uBankN[BANKS];
+  uniform vec3 uBankGlow;
+  ${WEAR}
   // the grain: lines along the strip, each with a run of light and dark of its own (no two side by side
   // in step: a lattice of noise looked along shows as diamonds)
   float fLine(float run, float line) {
@@ -334,10 +394,6 @@ const FLOOR_HEAD = /* glsl */ `
     float i = floor(across);
     float f = fract(across);
     return mix(fLine(run, i), fLine(run, i + 1.0), f * f * (3.0 - 2.0 * f));
-  }
-  // (three sizes of it, each turned: no lattice shows in the varnish looked along)
-  float fCloud(vec2 p) {
-    return fNoise(p) * 0.5 + fNoise(mat2(0.8, 0.6, -0.6, 0.8) * p * 2.03 + 17.0) * 0.3 + fNoise(mat2(0.6, -0.8, 0.8, 0.6) * p * 4.1 + 5.0) * 0.2;
   }
   // how much of a pixel fw wide at x is covered by lines w wide every p (the lines' exact share: no shimmer)
   float fLines(float x, float p, float w, float fw) {
@@ -356,12 +412,18 @@ const FLOOR_HEAD = /* glsl */ `
 const FLOOR_WOOD = /* glsl */ `
   #include <map_fragment>
   // the strips: across the floor from its far edge, 2¼ in each; along it, each strip in lengths of
-  // its own with its joints staggered
-  float wAcross = HALF_EDGE - vFloor.z;
+  // its own with its joints staggered (a parquet: squares of strips each the square's length, every
+  // other square's turned across the floor; its squares counted from the floor's end and its near edge, where
+  // the 2D court's are: Court.tsx PARQUET_SQ)
+  vec2 wSq = floor(vec2(vFloor.x + HALF_LEN, HALF_EDGE - vFloor.z) / PARQUET_);
+  float wTurn = uParquet * mod(wSq.x + wSq.y, 2.0);
+  float wSqKey = uParquet * (wSq.x * 7.13 + wSq.y * 3.71);
+  float wAcross = mix(HALF_EDGE - vFloor.z, vFloor.x + HALF_LEN, wTurn);
+  float wAlong = mix(vFloor.x + HALF_LEN, HALF_EDGE - vFloor.z, wTurn);
   float wStripF = wAcross / STRIP_;
   float wStrip = floor(wStripF);
-  float wLen = STRIP_SHORT_ + (STRIP_LONG_ - STRIP_SHORT_) * fHash(vec2(wStrip, 3.1));
-  float wRun = vFloor.x + 60.0 + wLen * fHash(vec2(wStrip, 7.7));
+  float wLen = mix(STRIP_SHORT_ + (STRIP_LONG_ - STRIP_SHORT_) * fHash(vec2(wStrip, 3.1)), PARQUET_, uParquet);
+  float wRun = wAlong + wLen * fHash(vec2(wStrip, 7.7)) * (1.0 - uParquet);
   float wPiece = floor(wRun / wLen);
   float wFwA = fwidth(wAcross);
   float wFwL = fwidth(wRun);
@@ -374,11 +436,11 @@ const FLOOR_WOOD = /* glsl */ `
   // them; each size comes in as the one under it gets too fine to see, so the wood is wood at every size)
   float wBundleF = wStripF / BUNDLE_;
   float wBundle = floor(wBundleF);
-  float wBundleRun = (vFloor.x + 60.0) / (STRIP_LONG_ * 1.6) + fHash(vec2(wBundle, 9.3)) * 7.0;
+  float wBundleRun = wAlong / (STRIP_LONG_ * 1.6) + fHash(vec2(wBundle, 9.3 + wSqKey)) * 7.0;
   float wBundleTone = mix(fHash(vec2(wBundle, floor(wBundleRun))), fHash(vec2(wBundle, floor(wBundleRun) + 1.0)), smoothstep(0.8, 1.0, fract(wBundleRun))) - 0.5;
   float wBandF = wStripF / BAND_;
   float wBand = floor(wBandF);
-  float wBandRun = (vFloor.x + 60.0) / (STRIP_LONG_ * 3.1) + fHash(vec2(wBand, 4.1)) * 5.0;
+  float wBandRun = wAlong / (STRIP_LONG_ * 3.1) + fHash(vec2(wBand, 4.1 + wSqKey)) * 5.0;
   float wBandEdge = smoothstep(0.0, 0.25, fract(wBandF)) * (1.0 - smoothstep(0.75, 1.0, fract(wBandF)));
   float wBandTone = (mix(fHash(vec2(wBand, floor(wBandRun) + 0.5)), fHash(vec2(wBand, floor(wBandRun) + 1.5)), smoothstep(0.7, 1.0, fract(wBandRun))) - 0.5) * wBandEdge;
   float wSeenBundle = (1.0 - wNear / max(uDetail, 1e-3)) * (1.0 - smoothstep(STRIP_ * BUNDLE_ * 0.5, STRIP_ * BUNDLE_ * 1.6, wFwA));
@@ -386,11 +448,13 @@ const FLOOR_WOOD = /* glsl */ `
   // (and from across the building, on a phone: the lots the boards came in, a few ft wide and a long way along)
   float wLotF = wStripF / LOT_;
   float wLot = floor(wLotF);
-  float wLotRun = (vFloor.x + 60.0) / (STRIP_LONG_ * 4.3) + fHash(vec2(wLot, 2.9)) * 3.0;
+  float wLotRun = wAlong / (STRIP_LONG_ * 4.3) + fHash(vec2(wLot, 2.9 + wSqKey)) * 3.0;
   float wLotAcross = smoothstep(0.0, 0.5, fract(wLotF));
   float wLotAlong = smoothstep(0.55, 1.0, fract(wLotRun));
   float wLotTone = mix(mix(fHash(vec2(wLot - 1.0, floor(wLotRun) + 0.25)), fHash(vec2(wLot - 1.0, floor(wLotRun) + 1.25)), wLotAlong), mix(fHash(vec2(wLot, floor(wLotRun) + 0.25)), fHash(vec2(wLot, floor(wLotRun) + 1.25)), wLotAlong), wLotAcross) - 0.5;
   float wFar = 1.0 + (BUNDLE_TONE_ * wBundleTone * (0.35 + 0.65 * wSeenBundle) + BAND_TONE_ * wBandTone * wSeenBand + LOT_TONE_ * wLotTone);
+  // (a parquet's squares each a shade of their own, the turned ones a touch lighter: they take the light across their grain)
+  wFar *= 1.0 + uParquet * PARQUET_TONE_ * (fHash(wSq + 0.37) - 0.5 + 0.4 * (wTurn - 0.5));
   // (and it was laid in panels and has worn, a shade here and there, drawn out along the strips)
   // (these stay on a device that has given the strips up: they cost next to nothing, and a floor of one flat colour is not wood)
   float wPatch = wFar * (1.0 + PATCH_ * (fCloud(vec2(vFloor.x * 0.07, vFloor.z * 0.31)) - 0.5));
@@ -412,14 +476,37 @@ const FLOOR_WOOD = /* glsl */ `
   // the stained wood with it (a darker key, a two-tone arc, the apron), so a stain stays as much darker as it
   // was painted; the lines and the paint keep their own brightness, and stand off it)
   diffuseColor.rgb *= mix(vec3(1.0), WOOD_GRADE_, wStain);
-  // the wear: where the lanes are, the coat scuffed dull in streaks by feet (and a little everywhere)
-  float wLane = (1.0 - smoothstep(LANE_L_ - 3.0, LANE_L_ + 2.0, HALF_COURT - abs(vFloor.x))) * step(abs(vFloor.x), HALF_COURT) * (1.0 - smoothstep(LANE_W_ * 0.5 - 1.0, LANE_W_ * 0.5 + 3.0, abs(vFloor.z)));
-  float wScuff = fCloud(vFloor.xz * vec2(0.5, 0.8));
-  float wWorn = smoothstep(0.42, 0.7, wScuff) * (0.25 + 0.75 * wLane) * uDetail;
+  // the wear: the coat duller where the feet go most, the apron a satin, the paint's coats clearer (see WEAR)
+  float wWorn;
+  float fGloss = fGlossAt(vFloor.xz, wBare, wWorn);
   // each strip's face a little off flat, and its varnish a little more or less clear
   vec2 fTilt = (vec2(fHash(vec2(wStrip, 11.0)), fHash(vec2(wStrip, wPiece + 5.0))) - 0.5) * vec2(0.5, 2.0) * TILT_ * wNear * mix(0.5, 1.0, wBare);
-  float fGloss = mix(mix(GLOSS_PAINT_, GLOSS_WOOD_, wBare) + 0.34 * (fHash(vec2(wPiece, wStrip * 0.73)) - 0.5) * wNear * wBare, GLOSS_WORN_, wWorn * 0.8);
-  diffuseColor.rgb *= 1.0 - 0.04 * wWorn;`;
+  fTilt = mix(fTilt, fTilt.yx, wTurn);
+  fGloss += 0.3 * (fHash(vec2(wPiece, wStrip * 0.73)) - 0.5) * wNear * wBare * (1.0 - wWorn);
+  // (a scratched coat is a little greyer)
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15))), 0.14 * wWorn);
+  // the black marks shoes leave: a short curved streak in a square here and there, most where the feet go, the
+  // coat dull over it; under a dot wide it is its share of the dot, and gone before it could shimmer
+  {
+    vec2 sCell = floor(vFloor.xz / SCUFF_CELL_);
+    // (a dot's size on the floor, found out here: a derivative is no good inside a branch only some dots take)
+    float sFw = max(length(fwidth(vFloor.xz)) * 0.7, 1e-4);
+    if (fHash(sCell * 1.31 + 7.0) < SCUFF_SHARE_ * (0.16 + 0.84 * fTraffic(vFloor.xz)) && uDetail > 0.0) {
+      vec2 sMid = (sCell + 0.3 + 0.4 * vec2(fHash(sCell + 3.1), fHash(sCell + 5.7))) * SCUFF_CELL_;
+      // (mostly along the floor, the way the feet run, some any way at all)
+      float sTurn = (fHash(sCell + 9.3) - 0.5) * (fHash(sCell + 2.2) < 0.6 ? 0.9 : 6.3);
+      vec2 sDir = vec2(cos(sTurn), sin(sTurn));
+      vec2 sD = vFloor.xz - sMid;
+      float sAlong = dot(sD, sDir);
+      float sLen = 0.14 + 0.36 * fHash(sCell + 1.9);
+      float sAcross = dot(sD, vec2(-sDir.y, sDir.x)) - (fHash(sCell + 6.6) - 0.5) * 1.6 * sAlong * sAlong;
+      float sW = 0.01 + 0.022 * fHash(sCell + 8.1);
+      float sMark = (1.0 - smoothstep(sW - sFw, sW + sFw, abs(sAcross))) * min(1.0, sW / sFw) * (1.0 - smoothstep(sLen * 0.5, sLen, abs(sAlong)));
+      sMark *= (0.35 + 0.65 * fHash(sCell + 4.4)) * (1.0 - smoothstep(0.03, 0.12, sFw));
+      diffuseColor.rgb *= 1.0 - SCUFF_DARK_ * sMark;
+      fGloss = mix(fGloss, GLOSS_WORN_ * 0.5, sMark);
+    }
+  }`;
 
 const FLOOR_VARNISH = /* glsl */ `
   #include <lights_fragment_end>
@@ -470,18 +557,19 @@ const FLOOR_VARNISH = /* glsl */ `
       float haze = fSpread(u, hu, t * HAZE_S * across) * fSpread(v, hv, t * HAZE_S);
       glint += mix(soft, sharp * CLEAR_, fGloss) + HAZE_ * haze;
     }
-    // (looked along, the mirror over the floor has the lamps themselves: the coat's own are left to it)
-    reflectedLight.directSpecular += uBankGlow * glint * fres * smoothstep(0.04, 0.22, cosI);
+    // (looked along, the mirror over the floor has the lamps themselves: the coat's own are left to it; a worn
+    // coat shows less of them, so they come and go across the floor as its gloss does)
+    reflectedLight.directSpecular += uBankGlow * glint * fres * fCoat(fGloss) * smoothstep(0.04, 0.22, cosI);
   }`;
 
 /** What the floor's shader is told each frame (only the wood's detail is changed: shed on a slow device). */
 export interface FloorKnobs {
   uDetail: { value: number };
+  /** 1 for a floor laid in parquet (Court.tsx paintFloor says which on its canvas), 0 in strips. */
+  uParquet: { value: number };
   /** The bare wood's colour as the floor's canvas has it (linear): what isn't that is paint. */
   uWood: { value: Color };
 }
-
-const glsl = (n: number) => (Number.isInteger(n) ? `${n}.0` : String(n));
 
 /**
  * The bare wood's colour on the floor's canvas (the whole floor, sideways, as Court.tsx paints it): the
@@ -517,7 +605,7 @@ export function woodOf(cv: HTMLCanvasElement): Color {
  */
 export function varnish(mat: MeshStandardMaterial): FloorKnobs {
   const list = banks();
-  const knobs: FloorKnobs = { uDetail: { value: 1 }, uWood: { value: new Color(0xdcae76) } };
+  const knobs: FloorKnobs = { uDetail: { value: 1 }, uParquet: { value: 0 }, uWood: { value: new Color(0xdcae76) } };
   const uniforms = {
     ...knobs,
     uBankAt: { value: list.map((b) => b.at) },
@@ -529,7 +617,7 @@ export function varnish(mat: MeshStandardMaterial): FloorKnobs {
   const defs = {
     BANKS: String(list.length),
     HALF_EDGE: glsl(HALF_W + SIDE),
-    HALF_COURT: glsl(COURT_LEN / 2),
+    HALF_LEN: glsl(FLOOR_L / 2),
     STRIP_: glsl(STRIP),
     STRIP_SHORT_: glsl(STRIP_SHORT),
     STRIP_LONG_: glsl(STRIP_LONG),
@@ -545,17 +633,18 @@ export function varnish(mat: MeshStandardMaterial): FloorKnobs {
     BUNDLE_TONE_: glsl(BUNDLE_TONE),
     BAND_TONE_: glsl(BAND_TONE),
     PATCH_: glsl(PATCH),
+    PARQUET_: glsl(PARQUET_STRIPS * STRIP),
+    PARQUET_TONE_: glsl(PARQUET_TONE),
+    SCUFF_CELL_: glsl(SCUFF_CELL),
+    SCUFF_SHARE_: glsl(SCUFF_SHARE),
+    SCUFF_DARK_: glsl(SCUFF_DARK),
     WOOD_GRADE_: `vec3(${WOOD_GRADE.join(', ')})`,
     SHARP_: glsl(SPREAD_SHARP),
     SOFT_: glsl(SPREAD_SOFT),
     HAZE_S: glsl(SPREAD_HAZE),
     HAZE_: glsl(HAZE),
     CLEAR_: glsl(CLEAR),
-    GLOSS_WOOD_: glsl(GLOSS_WOOD),
-    GLOSS_PAINT_: glsl(GLOSS_PAINT),
     GLOSS_WORN_: glsl(GLOSS_WORN),
-    LANE_L_: glsl(LANE_L),
-    LANE_W_: glsl(LANE_W),
     DIRECT_: glsl(FLOOR_DIRECT),
     SHADE_: glsl(FLOOR_SHADE),
     HOLD_: glsl(FLOOR_HOLD),
@@ -913,15 +1002,19 @@ const UP = /* glsl */ `
     gl_FragColor = vec4(c / 16.0, 1.0);
   }`;
 
-/** How far out of focus a thing `z` ft from the camera is (0: sharp; 1: as soft as it gets): what is behind the man more than what is in front of him. */
+/**
+ * How far out of focus a thing `z` ft from the camera is (0: sharp; 1: as soft as it gets): sharp all the way
+ * from the nearest of what matters to the farthest (uFocus), softer the farther out of that, what is behind it
+ * more than what is in front of it.
+ */
 const UNSHARP = /* glsl */ `
-  uniform float uFocus;
+  uniform vec2 uFocus;
   uniform float uFocusAmt;
   uniform float uNear;
   uniform float uFar;
   float unsharp(float z) {
-    float off = (z - uFocus) / max(uFocus, 1.0);
-    return clamp(off > 0.0 ? off * 2.0 : -off * 1.2, 0.0, 1.0) * uFocusAmt;
+    float off = z > uFocus.y ? (z - uFocus.y) / max(uFocus.y, 1.0) * 2.0 : (uFocus.x - z) / max(uFocus.x, 1.0) * 1.2;
+    return clamp(off, 0.0, 1.0) * uFocusAmt;
   }`;
 
 /**
@@ -1057,6 +1150,7 @@ export class Lens {
   before: ((camera: Camera) => void) | null = null;
   readonly ao: Occlusion;
   private focusAt = 0;
+  private focusTo = 0;
   private focusAmt = 0;
   private readonly can: boolean;
   private readonly scene: WebGLRenderTarget;
@@ -1109,7 +1203,7 @@ export class Lens {
       uBlacks: { value: BLACKS },
       uVignette: { value: VIGNETTE },
       uAspect: { value: 1 },
-      uFocus: { value: 0 },
+      uFocus: { value: new Vector2() },
       uFocusAmt: { value: 0 },
       uNear: { value: 1 },
       uFar: { value: 100 },
@@ -1158,10 +1252,21 @@ export class Lens {
     this.bumped = Math.max(this.bumped, much);
   }
 
-  /** A close-up's depth of field: sharp `at` ft from the camera, softer away from it, by `much` (0: all sharp, as is usual). */
-  focus(at: number, much: number) {
+  /**
+   * A close-up's and a replay's depth of field: sharp from `at` ft from the camera to `to` (what matters, the
+   * nearest of it and the farthest), softer away from that, by `much` at most (0: all sharp, as is usual).
+   */
+  focus(at: number, much: number, to = at) {
     this.focusAt = at;
+    this.focusTo = Math.max(at, to);
     this.focusAmt = Math.max(0, Math.min(1, much));
+  }
+
+  /** How soft a thing `z` ft in front of the camera is drawn (0: sharp; 1: as soft as it gets), as UNSHARP has it: for the cast lab. */
+  blurAt(z: number): number {
+    if (!this.post || this.focusAmt <= 0) return 0;
+    const off = z > this.focusTo ? ((z - this.focusTo) / Math.max(this.focusTo, 1)) * 2 : ((this.focusAt - z) / Math.max(this.focusAt, 1)) * 1.2;
+    return Math.max(0, Math.min(1, off)) * this.focusAmt;
   }
 
   /** One picture of `scene` from `camera`; `ms` since the last (a bump dies away on it). */
@@ -1221,7 +1326,7 @@ export class Lens {
 
     // a close-up's soft background: the picture at a half of its size (the man in focus kept out of it),
     // then a quarter and an eighth, which the finish reads
-    f.uFocus.value = this.focusAt;
+    (f.uFocus.value as Vector2).set(this.focusAt, this.focusTo);
     f.uFocusAmt.value = dof ? this.focusAmt : 0;
     if (dof) {
       if (!this.soft.length) {

@@ -144,6 +144,142 @@ export interface Standing {
   ball: Pt;
 }
 
+const NO_WAY: Pt = { x: 0, y: 0 };
+
+/**
+ * The velocity (ft a ms) each player carries through each keyframe ([frame][offense..., defense...]), so a run
+ * through several frames is one smooth move instead of a stop at each: the court draws his path through them as a
+ * cubic Hermite (Court.tsx). He stops at a frame where he stands still on either side of it or turns back; a turn
+ * slows him, and he's never faster through a frame than on the slower of the moves either side of it (no overshoot).
+ */
+export function tangents(f: readonly Frame[], nO: number): Pt[][] {
+  const at = (i: number, j: number) => (j < nO ? f[i].o[j] : f[i].d[j - nO]);
+  const n = f[0] ? f[0].o.length + f[0].d.length : 0;
+  return f.map((_, i) =>
+    Array.from({ length: n }, (_, j) => {
+      if (i === 0 || i === f.length - 1) return NO_WAY;
+      const dtA = f[i].dur;
+      const dtB = f[i + 1].dur;
+      const p0 = at(i - 1, j);
+      const p1 = at(i, j);
+      const p2 = at(i + 1, j);
+      if (!dtA || !dtB || !p0 || !p1 || !p2) return NO_WAY;
+      const ax = p1.x - p0.x;
+      const ay = p1.y - p0.y;
+      const bx = p2.x - p1.x;
+      const by = p2.y - p1.y;
+      const la = Math.hypot(ax, ay);
+      const lb = Math.hypot(bx, by);
+      if (la < 0.05 || lb < 0.05) return NO_WAY;
+      const cos = (ax * bx + ay * by) / (la * lb);
+      if (cos <= 0) return NO_WAY;
+      const m = { x: (ax / dtA + bx / dtB) / 2, y: (ay / dtA + by / dtB) / 2 };
+      const lm = Math.hypot(m.x, m.y) || 1;
+      const cap = Math.min(la / dtA, lb / dtB) * cos;
+      return { x: (m.x / lm) * cap, y: (m.y / lm) * cap };
+    }),
+  );
+}
+
+/**
+ * No man is asked to go faster than a man can (see TOP). A keyframe says where each man is to be, and its `dur`
+ * is set by what the play needs (and PACE); this goes through a finished script twice:
+ *  - a man with nothing to do but get somewhere (LAGS: not on the ball, not about to have it, not meeting a man
+ *    body to body) goes no farther in a move than his legs take him: as fast as he was going, plus what he
+ *    gathers, up to RUN. He makes up the rest in the moves after (a defense getting back trails the ball up the
+ *    floor), running and facing the way he goes while he does;
+ *  - then each move lasts long enough that nobody's path through it, as the court draws it (tangents), is faster
+ *    than TOP anywhere: a man who has to be somewhere (the ball, a screen) takes as long as his legs need.
+ * What is changed is changed in place.
+ */
+function paced(frames: Frame[], nO: number) {
+  if (frames.length < 2) return;
+  const n = frames[0].o.length + frames[0].d.length;
+  const at = (i: number, j: number) => (j < nO ? frames[i].o[j] : frames[i].d[j - nO]);
+  const put = (i: number, j: number, p: Pt) => {
+    if (j < nO) frames[i].o[j] = p;
+    else frames[i].d[j - nO] = p;
+  };
+  // where each man is (after falling behind), where the plan had him, and how fast he went into it (ft a ms)
+  const now = Array.from({ length: n }, (_, j) => ({ ...at(0, j) }));
+  const plan = now.map((p) => ({ ...p }));
+  const went = new Float64Array(n);
+  for (let i = 1; i < frames.length; i++) {
+    const f = frames[i];
+    const next = frames[i + 1];
+    const want = Array.from({ length: n }, (_, j) => at(i, j));
+    const to = want.map((w, j) => {
+      const far = dist(w, now[j]);
+      const most = f.dur * Math.min(RUN, went[j] + GAIN * f.dur);
+      const free = f.dur > 0 && LAGS.has(f.act[j]) && f.hold !== j && next?.hold !== j && !f.meet?.some((m) => m.includes(j));
+      return free && far > most ? { x: now[j].x + ((w.x - now[j].x) * most) / far, y: now[j].y + ((w.y - now[j].y) * most) / far } : w;
+    });
+    // (never closer to another man than the plan has anyone: one who would be stops short of it on his way, or, if
+    // nowhere on it is clear, is where the plan has him after all)
+    const clear = (k: number, p: Pt) => to.every((q, j) => j === k || dist(p, q) >= APART);
+    for (let again = true, rounds = 0; again && rounds < 4 * n; rounds++) {
+      again = false;
+      for (let k = 0; k < n; k++) {
+        if (to[k] === want[k] || clear(k, to[k])) continue;
+        const far = dist(want[k], now[k]);
+        const got = dist(to[k], now[k]);
+        let spot: Pt = want[k];
+        for (const u of SHORT) {
+          const p = { x: now[k].x + ((want[k].x - now[k].x) * got * u) / far, y: now[k].y + ((want[k].y - now[k].y) * got * u) / far };
+          if (clear(k, p)) {
+            spot = p;
+            break;
+          }
+        }
+        to[k] = spot;
+        again = true;
+      }
+    }
+    for (let j = 0; j < n; j++) {
+      const was = now[j];
+      const run = dist(to[j], was);
+      if (to[j] !== want[j] || dist(was, plan[j]) > 0.05) {
+        // (behind the plan, or catching up on it: he runs, and faces the way he goes)
+        if (to[j] !== want[j]) put(i, j, to[j]);
+        if (f.act[j] === 'move' || run > (j < nO ? 1.5 : 12)) f.act[j] = 'move';
+        if (f.act[j] === 'move' && run > 2) f.face[j] = Math.atan2(to[j].y - was.y, to[j].x - was.x);
+      }
+      plan[j] = { ...want[j] };
+      went[j] = f.dur > 0 ? run / f.dur : 0;
+      now[j] = { ...to[j] };
+    }
+  }
+  // each move as long as its fastest path needs (a longer move slows the paths either side of it too: again, until none is too fast)
+  for (let pass = 0; pass < 8; pass++) {
+    const m = tangents(frames, nO);
+    let slowed = false;
+    for (let i = 1; i < frames.length; i++) {
+      const dt = frames[i].dur;
+      if (!dt) continue;
+      let peak = 0;
+      for (let j = 0; j < n; j++) {
+        const a = at(i - 1, j);
+        const b = at(i, j);
+        const ma = m[i - 1][j];
+        const mb = m[i][j];
+        // (the Hermite's speed along the way: its pull from a to b, and the velocities it leaves and arrives with)
+        for (let k = 0; k <= 10; k++) {
+          const u = k / 10;
+          const g = (6 * u * (1 - u)) / dt;
+          const h0 = 3 * u * u - 4 * u + 1;
+          const h1 = 3 * u * u - 2 * u;
+          peak = Math.max(peak, Math.hypot(g * (b.x - a.x) + h0 * ma.x + h1 * mb.x, g * (b.y - a.y) + h0 * ma.y + h1 * mb.y));
+        }
+      }
+      if (peak > TOP * 1.005) {
+        frames[i].dur = Math.ceil(dt * Math.min(3, peak / TOP));
+        slowed = true;
+      }
+    }
+    if (!slowed) break;
+  }
+}
+
 /** Where a script leaves the ten players and the ball: the next possession picks up from here. */
 export function standing(script: Script): Standing {
   const f = script.frames[script.frames.length - 1];
@@ -210,6 +346,20 @@ const DUNK_OPEN = 1.5;
 const LAND = 3.1;
 /** The quickest anyone crosses the floor, in feet a millisecond at 1× (a broadcast's pace, not a stopwatch's). */
 const PACE = 0.085;
+/**
+ * A man's legs, on the play's clock (ft a ms, and ft a ms squared). The 3D court plays the play at half a body's
+ * time (CourtView's COURT3D_PACE), so the play's 1× is a man's 2×: TOP is a sprint's 27 ft a second, never
+ * passed anywhere on his path (see paced); RUN the most a man who is only getting somewhere goes on a stretch of it,
+ * a beat under that, his path's swing through a keyframe making up the rest; GAIN how fast he gets up to it, about
+ * 20 ft a second squared of his own time.
+ */
+const TOP = 0.054;
+const RUN = 0.043;
+const GAIN = 0.00008;
+/** A man fallen behind who would be on top of another stops this much of the way short instead, the first that is clear. */
+const SHORT = [0.85, 0.7, 0.55, 0.4, 0.25];
+/** What a man may be doing and fall behind the plan: running somewhere, guarding, standing about. */
+const LAGS = new Set<Act>(['move', 'defend', 'guard', 'stand']);
 
 interface PInfo {
   pid: number;
@@ -613,6 +763,7 @@ export function buildScript(
   // a made technical free throw has no step of its own: the court ends on the scoreboard's score anyway
   if (score[0] !== log.score[0] || score[1] !== log.score[1]) snap(600, { flash: { text: 'Tech FT', kind: 'make', x: 0, y: 9 }, score: [...log.score] });
   if (frames.length === 1) snap(500);
+  paced(frames, oPids.length);
   return { off, oPids, dPids, frames, label: log.label, clockStart: log.clockStart, clockEnd: log.clockEnd, q: log.q, dir, ...(moment && { moment }) };
 
   /**

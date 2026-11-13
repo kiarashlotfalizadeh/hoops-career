@@ -10,7 +10,7 @@
 // With no possession to draw the court is never empty: the fives line up for the tip, the players
 // stand where the last play left them (a huddle, a stop), or the floor shows the shot chart (a break).
 import { useEffect, useRef, type MutableRefObject } from 'react';
-import { BASKET, COURT_LEN, toWorld, type Frame, type Pt, type Script } from './choreo';
+import { BASKET, COURT_LEN, tangents, toWorld, type Frame, type Pt, type Script } from './choreo';
 import type { ShotRecord, Team } from '../../core/types';
 import { FRANCHISES, type FranchiseDef } from '../../core/teams';
 import { inkOn, neutralVenue, venueLook, type MatchKit, type Venue } from '../teamColors';
@@ -124,6 +124,11 @@ const TRAIL = 8;
 const BODY = 1.45;
 /** Nothing written on the court is smaller than this (px). */
 const TEXT_MIN = 12;
+/** The 3D floor's canvas is painted this much finer than asked, up to this many dots a foot: its lines and letters hold together with a replay's camera close on them. */
+const BARE_FINE = 1.5;
+const BARE_MOST = 22;
+/** A parquet's square (ft: 26 strips of 2¼ in, as court3d/lens.ts lays them, from the same corner of the floor: its squares are these), four boards to a square from above. */
+const PARQUET_SQ = 26 * (2.25 / 12);
 
 const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -168,42 +173,11 @@ type Tangents = Pt[][];
 const ZERO: Pt = { x: 0, y: 0 };
 const tangentCache = new WeakMap<Script, Tangents>();
 
-/**
- * The velocity a player carries through a frame, so a run through several frames is one smooth move
- * instead of a stop at each. He stops at a frame where he stands still on either side of it or turns
- * back; a turn slows him, and he's never faster through a frame than on the slower of the moves
- * either side of it (no overshoot).
- */
+/** Each player's velocity through each frame of a script (choreo's `tangents`: what its pacing measures the paths by), kept. */
 function tangentsOf(sc: Script): Tangents {
   const hit = tangentCache.get(sc);
   if (hit) return hit;
-  const f = sc.frames;
-  const at = (i: number, j: number) => (j < sc.oPids.length ? f[i].o[j] : f[i].d[j - sc.oPids.length]);
-  const n = sc.oPids.length + sc.dPids.length;
-  const out: Tangents = f.map((_, i) =>
-    Array.from({ length: n }, (_, j) => {
-      if (i === 0 || i === f.length - 1) return ZERO;
-      const dtA = f[i].dur;
-      const dtB = f[i + 1].dur;
-      const p0 = at(i - 1, j);
-      const p1 = at(i, j);
-      const p2 = at(i + 1, j);
-      if (!dtA || !dtB || !p0 || !p1 || !p2) return ZERO;
-      const ax = p1.x - p0.x;
-      const ay = p1.y - p0.y;
-      const bx = p2.x - p1.x;
-      const by = p2.y - p1.y;
-      const la = Math.hypot(ax, ay);
-      const lb = Math.hypot(bx, by);
-      if (la < 0.05 || lb < 0.05) return ZERO;
-      const cos = (ax * bx + ay * by) / (la * lb);
-      if (cos <= 0) return ZERO;
-      const m = { x: (ax / dtA + bx / dtB) / 2, y: (ay / dtA + by / dtB) / 2 };
-      const lm = Math.hypot(m.x, m.y) || 1;
-      const cap = Math.min(la / dtA, lb / dtB) * cos;
-      return { x: (m.x / lm) * cap, y: (m.y / lm) * cap };
-    }),
-  );
+  const out = tangents(sc.frames, sc.oPids.length);
   tangentCache.set(sc, out);
   return out;
 }
@@ -567,7 +541,8 @@ const grain = (n: number) => {
  * no words along the sidelines. `bare`: the 3D court's, the wood one even colour (its floor draws its
  * own strips over it: see court3d/lens.ts), and the building's colours at full strength.
  */
-export function paintFloor(cv: HTMLCanvasElement, view: View, dpr: number, floor: CourtFloor | undefined, paints: Paints, bare = false) {
+export function paintFloor(cv: HTMLCanvasElement, asked: View, dpr: number, floor: CourtFloor | undefined, paints: Paints, bare = false) {
+  const view = bare ? { ...asked, k: Math.min(BARE_MOST, asked.k * BARE_FINE) } : asked;
   const { k, wide } = view;
   cv.width = Math.max(1, Math.round((wide ? FLOOR_L : FLOOR_W) * k * dpr));
   cv.height = Math.max(1, Math.round((wide ? FLOOR_W : FLOOR_L) * k * dpr));
@@ -580,6 +555,9 @@ export function paintFloor(cv: HTMLCanvasElement, view: View, dpr: number, floor
   // (no floor said: a plain neutral one, the paint in ink, a gold pinstripe)
   const home = floor?.kind === 'home' ? floor : null;
   const v = venueOf(floor);
+  const court = v.court;
+  // (how its boards are laid, for the 3D floor's shader, which draws them: court3d/scene.ts setFloor reads it)
+  cv.dataset.laying = court.laying;
   const wood = floor ? v.wood : paints.wood;
   // (the view from above lets the paint down into the wood: it is where the play is, not the play)
   const paintAlpha = bare ? 1 : 0.62;
@@ -610,7 +588,24 @@ export function paintFloor(cv: HTMLCanvasElement, view: View, dpr: number, floor
   ctx.fillStyle = wood;
   ctx.fillRect(-HALF_W - SIDE, -END, FLOOR_W, FLOOR_L);
   const board = 1.15;
-  for (let i = 0, x = -HALF_W - SIDE; !bare && x < HALF_W + SIDE; i++, x += board) {
+  // (a parquet: squares of four boards each, every other square's turned)
+  const sq = PARQUET_SQ;
+  for (let i = 0, x = -HALF_W - SIDE; !bare && court.laying === 'parquet' && x < HALF_W + SIDE; i++, x += sq) {
+    for (let j = 0, y = -END; y < COURT_LEN + END; j++, y += sq) {
+      // (the turned squares a shade lighter, as the 3D floor's take the light across their grain)
+      ctx.globalAlpha = ((i + j) % 2) * 0.05;
+      ctx.fillStyle = '#fff6e4';
+      ctx.fillRect(x, y, sq, sq);
+      for (let b = 0; b < 4; b++) {
+        const r = grain(i * 131 + j * 17 + b);
+        ctx.globalAlpha = Math.abs(r - 0.5) * 0.09;
+        ctx.fillStyle = r > 0.5 ? '#fff6e4' : paints.wood2;
+        if ((i + j) % 2) ctx.fillRect(x, y + (b * sq) / 4, sq, sq / 4);
+        else ctx.fillRect(x + (b * sq) / 4, y, sq / 4, sq);
+      }
+    }
+  }
+  for (let i = 0, x = -HALF_W - SIDE; !bare && court.laying === 'strips' && x < HALF_W + SIDE; i++, x += board) {
     const r = grain(i);
     ctx.globalAlpha = Math.abs(r - 0.5) * 0.09;
     ctx.fillStyle = r > 0.5 ? '#fff6e4' : paints.wood2;
@@ -626,15 +621,27 @@ export function paintFloor(cv: HTMLCanvasElement, view: View, dpr: number, floor
       ctx.fill();
     });
   }
-  // the apron, all round, and a pinstripe where it meets the court
+  // the apron, all round, and where it meets the court a pinstripe, two, or a band (kept inside the
+  // sidelines' words)
   ctx.fillStyle = v.apron;
   ctx.beginPath();
   ctx.rect(-HALF_W - SIDE, -END, FLOOR_W, FLOOR_L);
   ctx.rect(-HALF_W, 0, 2 * HALF_W, COURT_LEN);
   ctx.fill('evenodd');
-  ctx.strokeStyle = v.pin;
-  ctx.lineWidth = Math.max(px(1.5), 0.18);
-  ctx.strokeRect(-HALF_W - 0.45, -0.45, 2 * HALF_W + 0.9, COURT_LEN + 0.9);
+  ctx.strokeStyle = ctx.fillStyle = v.pin;
+  const edge = (out: number, thick: number) => {
+    ctx.lineWidth = Math.max(px(1), thick);
+    ctx.strokeRect(-HALF_W - out, -out, 2 * HALF_W + 2 * out, COURT_LEN + 2 * out);
+  };
+  if (court.border === 'band') {
+    ctx.beginPath();
+    ctx.rect(-HALF_W - 0.6, -0.6, 2 * HALF_W + 1.2, COURT_LEN + 1.2);
+    ctx.rect(-HALF_W - 0.22, -0.22, 2 * HALF_W + 0.44, COURT_LEN + 0.44);
+    ctx.fill('evenodd');
+  } else if (court.border === 'double') {
+    edge(0.3, 0.11);
+    edge(0.56, 0.11);
+  } else edge(0.45, Math.max(px(1.5), 0.18));
 
   // the keys: painted solid, or stained dark and edged in the paint
   ends(() => {
@@ -654,13 +661,45 @@ export function paintFloor(cv: HTMLCanvasElement, view: View, dpr: number, floor
     }
     ctx.globalAlpha = 1;
   });
-  // the center circle: filled, or a band of the paint inside its line (a big mark covers it: see below)
+  // the lanes' trim: a band of it a little inside their lines (inside a stained lane's edge of paint), or a pinstripe
+  ends(() => {
+    if (court.lane === 'plain') return;
+    const e = v.key === 'stain' ? 1.1 : 0;
+    ctx.globalAlpha = paintAlpha;
+    ctx.fillStyle = ctx.strokeStyle = court.trim;
+    if (court.lane === 'band') {
+      ctx.beginPath();
+      ctx.rect(-7.6 + e, 0, 15.2 - 2 * e, 18.6 - e);
+      ctx.rect(-7.05 + e, 0, 14.1 - 2 * e, 18.05 - e);
+      ctx.fill('evenodd');
+    } else {
+      const i = 0.62 + e;
+      ctx.lineWidth = Math.max(px(1), 0.14);
+      ctx.beginPath();
+      ctx.moveTo(-8 + i, 0);
+      ctx.lineTo(-8 + i, 19 - i);
+      ctx.lineTo(8 - i, 19 - i);
+      ctx.lineTo(8 - i, 0);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  });
+  // the center circle: filled, or a band of the paint inside its line (a big mark covers it, a name across
+  // it leaves it bare: see below)
   ctx.globalAlpha = paintAlpha;
   ctx.fillStyle = v.paint;
   ctx.beginPath();
   ctx.arc(0, COURT_LEN / 2, 6, 0, Math.PI * 2);
   if (v.circle === 'ring') ctx.arc(0, COURT_LEN / 2, 4.9, 0, Math.PI * 2, true);
-  if (v.circle !== 'big') ctx.fill();
+  if (v.circle !== 'big' && !(home && court.centre === 'word')) ctx.fill();
+  // (the name set round it: a fine ring of the trim inside the letters)
+  if (home && court.centre === 'ringed') {
+    ctx.strokeStyle = court.trim;
+    ctx.lineWidth = Math.max(px(1), 0.1);
+    ctx.beginPath();
+    ctx.arc(0, COURT_LEN / 2, 4.78, 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.globalAlpha = 1;
 
   // the lines
@@ -734,17 +773,36 @@ export function paintFloor(cv: HTMLCanvasElement, view: View, dpr: number, floor
   // the lettering and the mark are drawn upright on the screen, whichever way the floor is turned
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const at = (p: Pt) => project({ ...view, top: -END, ox: 0, oy: 0 }, p);
-  const words = (text: string, p: Pt, size: number, turn: boolean) => {
+  // (in the building's own lettering: solid, outlined, leaning or spaced wide; `outline` in that colour round them)
+  const words = (text: string, p: Pt, size: number, turn: boolean, ink = v.apronInk, outline = '', most = FLOOR_W * k * 0.8) => {
     if (!text || size < TEXT_MIN - 1) return;
     setFont(ctx, 820, size);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = v.apronInk;
     const q = at(p);
     ctx.save();
     ctx.translate(q.x, q.y);
     if (turn) ctx.rotate(-Math.PI / 2);
-    ctx.fillText(text, 0, 0.5);
+    if (court.words === 'italic') ctx.transform(1, 0, -0.24, 1, 0, 0);
+    if (court.words === 'wide' && 'letterSpacing' in ctx) {
+      // (the space comes after every letter, the last too: the words put back by half of it to sit in the middle)
+      ctx.letterSpacing = `${Math.round(size * 0.2)}px`;
+      ctx.translate(Math.round(size * 0.2) / 2, 0);
+    }
+    ctx.lineJoin = 'round';
+    if (court.words === 'outline' && !outline) {
+      ctx.lineWidth = Math.max(1, size * 0.075);
+      ctx.strokeStyle = ink;
+      ctx.strokeText(text, 0, 0.5, most);
+    } else {
+      if (outline) {
+        ctx.lineWidth = Math.max(1, size * 0.09);
+        ctx.strokeStyle = outline;
+        ctx.strokeText(text, 0, 0.5, most);
+      }
+      ctx.fillStyle = ink;
+      ctx.fillText(text, 0, 0.5, most);
+    }
     ctx.restore();
   };
   // along the baselines (sideways, each runs up the baseline it's painted along); along the sidelines, the
@@ -755,9 +813,41 @@ export function paintFloor(cv: HTMLCanvasElement, view: View, dpr: number, floor
   if (bare) for (const side of [-1, 1]) words(v.sideline, { x: side * (HALF_W + SIDE / 2 + 0.05), y: COURT_LEN / 2 }, SIDE * k * 0.62, !wide);
   const c = at({ x: 0, y: COURT_LEN / 2 });
   ctx.globalAlpha = bare ? 1 : 0.55;
-  if (home) drawMark(ctx, c.x, c.y, (v.circle === 'big' ? 15 : 8.6) * k, home);
+  // centre court: the name across it in big letters (the paint, edged in the trim), or the mark, and the name round it
+  if (home && court.centre === 'word') {
+    const name = court.words === 'italic' ? home.name : home.name.toUpperCase();
+    words(name, { x: 0, y: COURT_LEN / 2 }, 4.6 * k, !wide, v.paint, court.trim, 30 * k);
+  } else if (home) drawMark(ctx, c.x, c.y, (v.circle === 'big' ? 15 : 8.6) * k, home);
   else drawNeutralMark(ctx, c.x, c.y, 4.3 * k, v.pin, v.paint);
+  if (home && court.centre === 'ringed') {
+    const [first, then] = v.baselines;
+    ringed(ctx, c, 5.42 * k, 0.8 * k, `${first} • ${then === first ? first : then} • `.toUpperCase(), court.trim);
+  }
   ctx.globalAlpha = 1;
+}
+
+/** Words set round a circle (`r` px from `c` to their middle, `size` px), their tops out, from the top round the way a clock goes. */
+function ringed(ctx: CanvasRenderingContext2D, c: Pt, r: number, size: number, text: string, ink: string) {
+  if (size < TEXT_MIN - 1) return;
+  setFont(ctx, 780, size, 'semi-condensed');
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = ink;
+  // (said again till it goes most of the way round; each letter as much of the way round as it is wide, the gaps shared out evenly)
+  for (let n = 0; n < 3 && ctx.measureText(text).width < Math.PI * r; n++) text += text;
+  const glyphs = [...text];
+  const wide = glyphs.map((g) => ctx.measureText(g).width);
+  const gap = Math.max(0, (Math.PI * 2 * r - wide.reduce((a, b) => a + b, 0)) / glyphs.length);
+  let a = -Math.PI / 2;
+  glyphs.forEach((g, i) => {
+    const turn = (wide[i] + gap) / r;
+    ctx.save();
+    ctx.translate(c.x + Math.cos(a + turn / 2) * r, c.y + Math.sin(a + turn / 2) * r);
+    ctx.rotate(a + turn / 2 + Math.PI / 2);
+    ctx.fillText(g, 0, 0);
+    ctx.restore();
+    a += turn;
+  });
 }
 
 /** The team's mark as TeamLogo draws it (its shape in its colours, the abbreviation inside), `size` across. */

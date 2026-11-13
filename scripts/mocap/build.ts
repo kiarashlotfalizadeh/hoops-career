@@ -15,6 +15,8 @@ import { ANKLE, BALL_R, elbowPole, FARM, HIP, HIP_W, J, SHIN, spine, THIGH, UARM
 import { readBvh, type M3, type Take, type V } from './bvh';
 
 const PALM = BALL_R + 0.12;
+/** An elbow points in toward his middle no more than this (the sine of how far in from square to his side). */
+const INWARD = 0.35;
 const BODY = { s: 1, bulk: 1 };
 const wrap = (a: number) => a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -328,7 +330,21 @@ function poseAt(m: Measured, ft: number, spec: Spec): { pose: Float32Array; hand
     const cr: V = [dn[1] * p0.z - dn[2] * p0.y, dn[2] * p0.x - dn[0] * p0.z, dn[0] * p0.y - dn[1] * p0.x];
     // (an arm out straight has no elbow to speak of: it hangs)
     const bent = clamp((len(ep) / (len(e) || 1) - 0.12) / 0.2, 0, 1);
-    P[side > 0 ? I.lsw : I.rsw] = Math.atan2(dot(ep, cr), ep[0] * p0.x + ep[1] * p0.y + ep[2] * p0.z) * bent;
+    let th = Math.atan2(dot(ep, cr), ep[0] * p0.x + ep[1] * p0.y + ep[2] * p0.z);
+    // (an elbow never points in at his own body: where a take's does (an arm swung back past his hip, a marker that
+    // slipped) it is turned round its arm the short way, to where it points no more than INWARD in; the puppet's own
+    // elbow pole would otherwise put it through his back or flip it over)
+    const pl = Math.hypot(p0.x, p0.y, p0.z) || 1;
+    const inA = -(p0.x * a[0] + p0.y * a[1] + p0.z * a[2]) / pl;
+    const inB = -dot(cr, a) / pl;
+    const inR = Math.hypot(inA, inB);
+    if (inR > INWARD) {
+      const phi = Math.atan2(inB, inA);
+      const gap = Math.acos(INWARD / inR);
+      const off = wrap(th - phi);
+      if (Math.abs(off) < gap) th = phi + (off < 0 ? -gap : gap);
+    }
+    P[side > 0 ? I.lsw : I.rsw] = wrap(th) * bent;
     const k3 = (side > 0 ? J.sl : J.sr) * 3;
     hands[side > 0 ? 'l' : 'r'] = [JT[k3] + v[0], JT[k3 + 1] + v[1], JT[k3 + 2] + v[2]];
   }

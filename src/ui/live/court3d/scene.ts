@@ -48,9 +48,9 @@ import {
   type ShotKind,
   type Spin,
 } from './ballistics';
-import { lit as ledLit } from './ballskin';
+import { ballSize, lit as ledLit } from './ballskin';
 import { DUNK_AT, isDunk, type ClipId, type Gesture } from './clips';
-import { blocked, clearSeat, fenced, Operator, shot as newShot, TALL, type CamKind, type View } from './cameras';
+import { blocked, clearSeat, clutter, fenced, Operator, shot as newShot, TALL, type CamKind, type View } from './cameras';
 import { BIG_WORD, Director, INTRO_MS, WIPE_MS, type BigKind } from './director';
 import { Fig, figureGeo, type Geo } from './figure';
 import { air, arenaLight, HAZE_COLOR, HAZE_DENSITY, Lens, varnish, woodOf, type FloorKnobs } from './lens';
@@ -61,7 +61,7 @@ import { buildProps } from './props';
 import { Rig } from './rig';
 import { BALL_R, hash, J, type Body, type Puppet, type V3 } from './puppet';
 import { Sideline } from './sideline';
-import { BODY_GAP, clearance, clearOf, passPath, reach as reachTo, Spacing, swerve, type Meet, type PassPath } from './spacing';
+import { BODY_GAP, clearance, clearOf, into, PARTS, passPath, reach as reachTo, Spacing, swerve, type Meet, type PassPath } from './spacing';
 
 export interface SceneProps {
   kits: [MatchKit, MatchKit];
@@ -177,6 +177,18 @@ const AWAY_MS = 1500;
 const HUDDLE_MS = 2400;
 /** A close-up with a body in front of its man for this long (ms) is left. */
 const BLOCK_MS = 220;
+/**
+ * And one whose picture a body by the lens (or a basket's unit) is about to take this much of (cameras.ts `clutter`), with
+ * everyone where he will be this far on (s) at the pace he is going, is left at once; its seat is chosen clear of where
+ * everyone is and of where he will be this far on (s).
+ */
+const CLOSE_MESS = 0.2;
+const CROWD_AHEAD = 0.3;
+const SEAT_AHEAD = 0.8;
+/** But not before it has been on this long (ms): no flash of a picture (and none is taken that would be crowded at once). */
+const CLOSE_LEAST = 450;
+/** A teammate this near him (ft) may come over to him (a hand after a free throw, a hug after a big one): his seat is chosen as if he were this far off him (ft). */
+const MATE_NEAR = [16, 3];
 /** The final buzzer's picture goes from the winners to the crowd after this long (ms), and to the whole building after this. */
 const FINAL_CROWD = 5200;
 const FINAL_WIDE = 8600;
@@ -215,15 +227,40 @@ const GIVE = 0.4;
 const BEND_MS = 80;
 /** A loose ball is moved off a body at this speed at most, ft a second: it rolls off him, it doesn't jump. */
 const BALL_PUSH = 14;
+/**
+ * A hand this far onto the ball (Puppet.holds, 0..1) has it: the ball is where that hand is drawn; from HOLD_FROM to
+ * there, part of the way (hands only closing on it meet it on its way; they don't pull it to them).
+ */
+const HOLD_FROM = 0.2;
+const HOLD_SURE = 0.65;
+/** A pass leaves from where his hands had it, off where his move would have it by at most this far (ft). */
+const SLIP_MOST = 3.2;
+/** A pass is off the passer's hands this far through its move (and out of his body from there). */
+const PASS_OFF = 0.12;
+/** A referee's ball is the player's it is meant for when it got to within this far of him (ft). */
+const GIVEN_FT = 4;
+/** The ball is never drawn smaller than this across (CSS px): a small picture's is grown to it, by this much at most. */
+const BALL_LEAST_PX = 8.5;
+const BALL_GROW = 1.4;
 /** Steps aside may run this much faster than the clock when the game does: slower and the bodies meet, faster and they jump. */
 const ASIDE_PACE = 1.5;
 /** A possession whose first spot for a man is this far (ft) from where the last frame had him doesn't pick up from it: everyone is put on his spot. */
 const FRESH = 2.5;
-/** How soft a close-up's building goes behind its man (lens.focus), and a replay's (its cameras are wider). */
+/**
+ * How soft a close-up's building goes behind its man (lens.focus), and a replay's at most: a replay is sharp over
+ * all of its play (SHARP_NEAR) and its surroundings soften only a little.
+ */
 const CLOSE_SOFT = 0.6;
-const REPLAY_SOFT = 0.4;
-/** A replay of a shot pulls its focus from the man to the rim over this long before its moment (the script's ms): the outcome is the sharp thing. */
+const REPLAY_SOFT = 0.2;
+/** A replay of a shot keeps the rim and the men at it sharp from this long before the ball leaves his hand (the script's ms): the outcome is in it. */
 const PULL_MS = 450;
+/**
+ * In a replay, a man this near the man it is on (ft) is in the play (on him, contesting), and once the shot is going
+ * up a man this near the rim (going for the rebound); and the sharp stretch reaches this much (ft) past the nearest
+ * and the farthest of it: a body's own depth.
+ */
+const SHARP_NEAR = [7, 9];
+const SHARP_DEEP = 1.5;
 /** The focus follows what it is on over about this long (ms), never in a frame but on a cut. */
 const FOCUS_MS = 140;
 /** The flash of light on a slam, and on a shot at the buzzer that drops (lens.bump; none with reduced motion). */
@@ -321,6 +358,15 @@ const HANDS: V3[] = [];
 const NO_HANDS: V3[] = [];
 const TMP: V3 = { x: 0, y: 0, z: 0 };
 const TMP2: V3 = { x: 0, y: 0, z: 0 };
+/**
+ * A rebound off the iron is taken at the top of his jump within REB_NEAR ft of the rim, and at his chest
+ * from REB_FAR ft on (a long one has come down by the time he gets to it); give or take REB_JIT of that, a rebound.
+ */
+const REB_NEAR = 3;
+const REB_FAR = 11;
+const REB_JIT = 0.5;
+/** The ball for the hands it isn't in (Puppet.arms's `by`): where it is, and how fast it is going (ft a second). */
+const LOOSE = { at: new Vector3(), v: new Vector3() };
 const SIDE = { x: 0, z: 0 };
 const SEAT = { x: 0, z: 0 };
 /** A close-up's camera stands this far off its man (ft), this high; his hands go up this far over his head (on the 6 ft 6 puppet). */
@@ -345,6 +391,11 @@ const SLACK = 0.06;
 /** How far apart their trunks are held (ft, between spacing.ts shapes, which sit about this far inside his skin: so it is skin to skin), how much of what is off is taken up each frame, and the nearest and farthest their middles are ever held. */
 const TOUCH = 0.12;
 const FEEL = 0.6;
+/** A leg of one of two who meet may graze a leg or the trunk of the other this far (ft, into spacing.ts's shapes), no farther. */
+const LEG_GRAZE = 0.04;
+/** Two who meet and are into each other are moved apart, and looked at again, up to this many times a frame. */
+const LEG_PASSES = 3;
+const LEGS_TRUNK = [...PARTS.legs, ...PARTS.trunk];
 const NEAR_MIN = 0.75;
 const NEAR_MAX = 3.2;
 /** What a lean or a sit changes of that, at most either way (ft), learnt only from two this near (ft): farther, their trunks are not what's nearest. */
@@ -354,6 +405,26 @@ const FEEL_FAR = 3.6;
 const MEET_FROM = 4.5;
 const MEET_SPAN = 2;
 const NO_MEETS: Meet[] = [];
+/**
+ * Two whose trunks come within KNOCK_GAP (ft: see reaches) closing faster than KNOCK_MIN ft a second are knocked off
+ * each other, in full at KNOCK_MIN + KNOCK_HARD; a screen or a box-out as it is first met at least KNOCK_MEET of that;
+ * a pair once in KNOCK_EVERY ms. A man going faster than KNOCK_FAST ft a second (put somewhere new) knocks nobody.
+ */
+const KNOCK_GAP = 0.1;
+const KNOCK_MIN = 4;
+const KNOCK_HARD = 12;
+const KNOCK_MEET = 0.45;
+const KNOCK_EVERY = 900;
+/** Two who are on each other (within KNOCK_GAP) are apart again, and knocked as they next come together, only past this much more (ft). */
+const KNOCK_APART = 0.25;
+/** Two already on each other are knocked again only this hard (a share of KNOCK_HARD's). */
+const KNOCK_AGAIN = 0.35;
+/** A meeting gone from the plan this long (ms, the bodies') is over: the next one is knocked afresh. */
+const MEET_GONE = 1500;
+const KNOCK_FAST = 40;
+/** The ground a man gives to a knock: thrown at up to GIVE_V ft a second, and back as a spring of GIVE_W radians a second (about a third of a ft at the hardest). */
+const GIVE_V = 4.8;
+const GIVE_W = 7;
 const JA = new Float32Array(45);
 const JB = new Float32Array(45);
 const RV: V3 = { x: 0, y: 0, z: 0 };
@@ -470,6 +541,11 @@ export class CourtScene {
   private readonly ball = new Vector3(0, BALL_R, 0);
   private readonly from = new Vector3();
   private vy = 0;
+  // (how far off his move's own point the passer's hands had the ball as he let it go: the pass leaves from there)
+  private readonly slip = new Vector3();
+  // (a referee had the ball last frame; a referee has given it to a player this move)
+  private refBall = false;
+  private refGave = false;
   private moveKey = '';
   private lastScript: unknown = null;
   private scriptN = 0;
@@ -693,6 +769,9 @@ export class CourtScene {
     this.floorTex = tex;
     this.floorMat.map = tex;
     this.floorKnobs.uWood.value.copy(woodOf(cv));
+    // (laid in parquet or in strips, as its painter says; and the mirror over it told where its paint is)
+    this.floorKnobs.uParquet.value = cv.dataset.laying === 'parquet' ? 1 : 0;
+    this.arena.floorMap(tex, this.floorKnobs.uWood.value);
     this.floorMat.color.set(0xffffff);
     this.floorMat.needsUpdate = true;
   }
@@ -862,8 +941,10 @@ export class CourtScene {
             act,
             ms: play.ms,
             dur: play.dur,
-            // (at the buzzer the man with the ball lets it go: his arms are up, or his head is down, like everyone's)
-            ball: j === carried && said === b.act[j],
+            // (at the buzzer the man with the ball lets it go: his arms are up, or his head is down, like everyone's;
+            // the man a referee gives it to, to throw it in, has his hands up for it as it comes, and the man at the
+            // line has it for his routine once the referee has let go of it)
+            ball: (j === carried || (b.hold === j && a.hold !== j && said === 'hold' && (nb?.act[j] === 'inbound' || (nb?.act[j] === 'ft' && !this.refBall)))) && said === b.act[j],
             aim: AIMED.has(act) ? rim : undefined,
             cut,
             look: looks[j],
@@ -890,7 +971,7 @@ export class CourtScene {
       });
       figs.forEach((f, j) => CONTESTS.has(b.act[j]) && contest.add(f));
       // (two who meet: how near they came, for how near they are drawn next frame)
-      this.feel(pids);
+      this.feel(pids, own);
       // a possession that doesn't pick up where the last ended: the ball is where it starts
       const key = `${this.scriptN}:${bi}`;
       if (key !== this.moveKey) {
@@ -905,6 +986,7 @@ export class CourtScene {
         if (this.heldBy === null && !fresh) this.fromV.copy(this.ballV);
         else this.fromV.set(0, 0, 0);
         if (fresh || (b.hold !== undefined && b.hold >= 0)) this.swatted = false;
+        this.refGave = false;
         if (fresh) {
           const start = toWorld(sc.frames[0].ball, sc.dir);
           if (cut || Math.hypot(ball.x - sx(start), ball.z - sz(start)) > 12) {
@@ -1039,12 +1121,26 @@ export class CourtScene {
           }
         }
       } else if (this.swatted && !next) free = true;
-      else {
+      else if (!was && next && this.refGave && b.act[figs.indexOf(next)] === 'hold' && Math.hypot(ball.x - next.pup.x, ball.z - next.pup.z) < GIVEN_FT) {
+        // a referee has given it to the man waiting for it before the move is out: it is in his hands, not on its way
+        // from where the move began
+        holder = next;
+        set(ball, next.pup.bounced(next.pup.carry(TMP)));
+        this.give(next, null, ease);
+      } else {
         // a pass (to where his hands will be), or the ball loose on the floor
         const end = toWorld(b.ball, sc.dir);
         const to = next ? next.pup.carry(TMP) : { x: sx(end), y: BALL_R, z: sz(end) };
-        // (it leaves the passer's hands, wherever his dribble had it when he picked it up)
-        if (was && was !== next) set(this.from, was.pup.carry(TMP2));
+        // (it leaves the passer's hands, wherever his dribble had it when he picked it up: from where they had it as
+        // the move began, by as much off where his move would have it, and on with him from there)
+        if (was && was !== next) {
+          const c = was.pup.carry(TMP2);
+          if (!this.path) {
+            this.slip.set(this.from.x - c.x, this.from.y - c.y, this.from.z - c.z);
+            if (this.slip.length() > SLIP_MOST) this.slip.setLength(SLIP_MOST);
+          }
+          this.from.set(c.x + this.slip.x, Math.max(BALL_R, c.y + this.slip.y), c.z + this.slip.z);
+        }
         const far = Math.hypot(to.x - this.from.x, to.z - this.from.z);
         if (!this.path) {
           // a man in its lane, where he will be when it gets to him: it goes over a defender, and round anyone it can't go over
@@ -1063,6 +1159,14 @@ export class CourtScene {
         // (a rebound comes up off the rim and down into his hands)
         // (one that never met the iron only falls to him)
         const off = !!next && b.act[figs.indexOf(next)] === 'rebound' && this.from.y > RIM_H - 1 && this.fromV.y > -2;
+        // (and he takes it as high as it still is when he gets to it: up at the top of his jump close in, at his chest
+        // off a long one, give or take)
+        if (next && b.act[figs.indexOf(next)] === 'rebound') {
+          // (how far out from the rim he is going to take it: where the move has him at its end)
+          const e = toWorld([...b.o, ...b.d][figs.indexOf(next)], sc.dir);
+          const long = Math.hypot(sx(e) - rim.x, sz(e) - rim.z);
+          next.pup.rebound(off ? 1 - smooth(clamp((long - REB_NEAR) / (REB_FAR - REB_NEAR), 0, 1)) + (hash(this.scriptN, bi * 7 + 3) - 0.5) * REB_JIT : 1);
+        }
         // (a ball picked out of the air, off the iron or off a block, starts the way it was going: up, if it was on its way up)
         const flying = !was && this.fromV.lengthSq() > 4;
         const secs = play.dur / 1000 / pace;
@@ -1083,8 +1187,9 @@ export class CourtScene {
         // (the opening tip with no referee to throw it up: it rises between the two who jump for it)
         if (!next && b.act.includes('tip')) ball.y = this.from.y + (TIP_H - this.from.y) * Math.sin((lu * Math.PI) / 2);
         passing = true;
-        // (kept out of the bodies it goes by, eased: the two men's hands go with it)
-        this.give(was, next, ease);
+        // (kept out of the bodies it goes by, eased: the two men's hands go with it; once it is off the passer's
+        // hands, out of him too: a pass thrown back past him goes round him, not through him)
+        this.give(lu < PASS_OFF ? was : null, next, ease);
         if (lu >= 1) {
           if (next) holder = next;
           else free = true;
@@ -1233,16 +1338,32 @@ export class CourtScene {
       replay: this.director.onAir,
     });
     if (refs) hands.clear();
+    if (this.refBall && !refs) this.refGave = true;
+    this.refBall = !!refs;
 
     // (the ten on the floor: a free hand or an arm that would go into one of them rests on him: see Puppet.arms)
     const onFloor = [...this.figs].flatMap(([pid, f]) => (seen.has(pid) ? [f.pup] : []));
-    for (const [pid, f] of [...this.figs]) {
+    // (the man with the ball first: it is put where his hands are drawn, and anyone else's go to it there)
+    const has = holder as Fig | null;
+    const order = [...this.figs].sort(([, x], [, y]) => (y === has ? 1 : 0) - (x === has ? 1 : 0));
+    // (the ball where it isn't a man's, and how fast it is going: the hands of everyone else keep out of its way)
+    const bm0 = this.ballFrame.position;
+    if (sec > 0 && bm0.distanceTo(ball) < 20) LOOSE.v.set((ball.x - bm0.x) / sec, (ball.y - bm0.y) / sec, (ball.z - bm0.z) / sec);
+    else LOOSE.v.set(0, 0, 0);
+    LOOSE.at.copy(ball);
+    // (a pass or a rebound in the air last frame, in his hands now: they give with it, as fast as it came)
+    if (has && this.flying && hands.has(has)) has.pup.caught(this.ballV);
+    // (the man a referee is giving it to takes it: his hands don't keep out of its way)
+    const taking = this.arena.sideline.handing;
+    this.flying = passing && !holder;
+    for (const [pid, f] of order) {
       if (!seen.has(pid)) {
         this.drop(pid, f);
         continue;
       }
       f.ball = hands.has(f) ? ball : null;
-      f.pup.arms(hands.has(f) ? ball : null, onFloor);
+      f.pup.arms(hands.has(f) ? ball : null, onFloor, hands.has(f) || pid === taking ? null : LOOSE);
+      if (f === has && hands.has(f)) this.inHands(f);
       f.place();
       const hot = !!p.hot?.has(pid);
       // (the man with the ball has the broadcast's own ring: see marks.ts)
@@ -1556,19 +1677,41 @@ export class CourtScene {
     // (a close-up and a replay are on one man: what is nearer and farther than him goes soft, as a long lens has it)
     const sharp = d.onAir && r ? this.figs.get(r.star) : close;
     if (sharp && !calm) {
+      const lens = this.camera;
+      // (how far in front of the lens, along its look: the depth the focus is read in)
+      const deep = (x: number, y: number, z: number) => -A.set(x, y, z).applyMatrix4(lens.matrixWorldInverse).z;
       const j = sharp.pup.j;
       const c = sharp.pup.world(j[J.chest * 3], j[J.chest * 3 + 1], j[J.chest * 3 + 2], TMP);
-      let at = this.camera.position.distanceTo(A.set(c.x, c.y, c.z));
-      if (d.onAir && r && r.kind !== 'block') {
-        // (a shot: as the ball gets there the focus goes from him to the rim, the over-the-shoulder look's basket sharp as it drops)
-        const u = smooth(clamp((r.t - r.at + PULL_MS) / PULL_MS, 0, 1));
-        if (u > 0) at += (this.camera.position.distanceTo(A.set(r.rim.x, RIM_H, r.rim.z)) - at) * u;
+      let at = deep(c.x, c.y, c.z);
+      let to = at;
+      if (d.onAir && r) {
+        // a replay keeps the whole play sharp, from the nearest of it to the farthest: him, the other man (a block's
+        // shooter, an and-one's foul), a man on him, the ball; and once the shot is going up the rim and the men at it
+        const take = (x: number, y: number, z: number) => {
+          const u = deep(x, y, z);
+          if (u > 1) [at, to] = [Math.min(at, u), Math.max(to, u)];
+        };
+        const other = r.other >= 0 ? (r.other < r.sc.oPids.length ? r.sc.oPids[r.other] : r.sc.dPids[r.other - r.sc.oPids.length]) : null;
+        const up = r.kind !== 'block' && r.t >= r.rel - PULL_MS;
+        for (const [pid, f] of this.figs) {
+          const fj = f.pup.j;
+          const fc = f.pup.world(fj[J.chest * 3], fj[J.chest * 3 + 1], fj[J.chest * 3 + 2], TMP2);
+          const on = Math.hypot(fc.x - c.x, fc.z - c.z) < SHARP_NEAR[0] || (up && Math.hypot(fc.x - r.rim.x, fc.z - r.rim.z) < SHARP_NEAR[1]);
+          if (f !== sharp && pid !== other && !on) continue;
+          take(fc.x, fc.y, fc.z);
+          take(fc.x, fc.y + 2.2 * f.pup.body.s, fc.z);
+        }
+        take(ball.x, ball.y, ball.z);
+        if (up) take(r.rim.x, RIM_H, r.rim.z);
+        [at, to] = [at - SHARP_DEEP, to + SHARP_DEEP];
       }
       // (pulled as a focus puller pulls it, over FOCUS_MS: it is set afresh only on a cut to another camera or man)
       const key = d.onAir && r ? `${r.cam}/${r.t0}` : `close/${this.star}`;
-      this.focusAt = key === this.focusKey ? this.focusAt + (at - this.focusAt) * (1 - Math.exp(-real / FOCUS_MS)) : at;
+      const k = key === this.focusKey ? 1 - Math.exp(-real / FOCUS_MS) : 1;
+      this.focusAt += (at - this.focusAt) * k;
+      this.focusTo += (to - this.focusTo) * k;
       this.focusKey = key;
-      this.lens.focus(this.focusAt, d.onAir ? REPLAY_SOFT : CLOSE_SOFT);
+      this.lens.focus(this.focusAt, d.onAir ? REPLAY_SOFT : CLOSE_SOFT, this.focusTo);
     } else {
       this.lens.focus(0, 0);
       this.focusKey = '';
@@ -1580,8 +1723,25 @@ export class CourtScene {
     this.rig.turn();
     // (the house lights down for the open, a timeout, a home win: the building says how far)
     this.lens.exposure = (this.lit ??= this.lens.exposure) * this.arena.house;
+    this.sizeBall();
     this.lens.render(this.scene, this.camera, real);
     return labels;
+  }
+
+  /**
+   * The ball as big as it is, but never drawn smaller than BALL_LEAST_PX across (CSS px) from the camera that has
+   * the picture: farther off it is grown to that, by BALL_GROW at most (a close-up's or a replay's is life size);
+   * and its dark edge set for the size it is drawn (ballskin.ts ballSize).
+   */
+  private sizeBall() {
+    const cam = this.camera;
+    const e = cam.matrixWorld.elements;
+    const b = this.ballFrame.position;
+    const z = -(e[8] * (b.x - e[12]) + e[9] * (b.y - e[13]) + e[10] * (b.z - e[14]));
+    const px = z > 0.5 ? (BALL_R * this.h) / (z * Math.tan((cam.fov * Math.PI) / 360)) : Infinity;
+    const k = clamp(BALL_LEAST_PX / px, 1, BALL_GROW);
+    this.ballMesh.scale.setScalar(k);
+    ballSize(px * k);
   }
 
   /**
@@ -1608,7 +1768,117 @@ export class CourtScene {
     pids.forEach((pid, j) => this.planAt.set(pid, [at[j * 2], at[j * 2 + 1]]));
     this.aside(pids, at, go, own, cut);
     const meets = this.meets(play, pids, at);
-    return this.spacing.place(at, go, pids, own, aside, cut, meets, this.builds(pids));
+    const spots = this.spacing.place(at, go, pids, own, aside, cut, meets, this.builds(pids));
+    this.given(pids, spots, own, cut);
+    return spots;
+  }
+
+  /**
+   * The ground each man gives to a knock (see knocks): a step's worth the way he was pushed, eased out and back as a
+   * spring (GIVE_W), laid on his spot so his feet go with it.
+   */
+  private given(pids: readonly number[], at: Float32Array, own: number, cut: boolean) {
+    const sec = own / 1000;
+    pids.forEach((pid, j) => {
+      const g = this.gives.get(pid);
+      if (!g) return;
+      if (cut) {
+        this.gives.delete(pid);
+        return;
+      }
+      for (let left = sec; left > 1e-6;) {
+        const h = Math.min(left, 0.012);
+        left -= h;
+        for (const a of [0, 1]) {
+          g[a + 2] += (-GIVE_W * GIVE_W * g[a] - 2 * GIVE_W * g[a + 2]) * h;
+          g[a] += g[a + 2] * h;
+        }
+      }
+      if (Math.abs(g[0]) + Math.abs(g[1]) + Math.abs(g[2]) + Math.abs(g[3]) < 1e-3) this.gives.delete(pid);
+      at[j * 2] += g[0];
+      at[j * 2 + 1] += g[1];
+    });
+  }
+
+  /**
+   * Two of the ten who come into each other (their trunks within KNOCK_GAP, closing faster than KNOCK_MIN ft a
+   * second), or a screen or a box-out as it is first met: each is knocked off the other (Puppet.hit), the lighter the
+   * more, and gives a little ground (see given). A pair is knocked once in KNOCK_EVERY ms.
+   */
+  private knocks(pids: readonly number[], own: number) {
+    this.knockMs += own;
+    const sec = own / 1000;
+    const meetW = new Map<string, number>();
+    for (const m of this.meeting) meetW.set(`${pids[m.i]}:${pids[m.j]}`, m.w);
+    for (let a = 0; a < pids.length; a++) {
+      const A = this.figs.get(pids[a])?.pup;
+      const wa = this.knockWas.get(pids[a]);
+      if (!A?.placed || !wa || sec <= 0) continue;
+      for (let b = a + 1; b < pids.length; b++) {
+        const B = this.figs.get(pids[b])?.pup;
+        const wb = this.knockWas.get(pids[b]);
+        if (!B?.placed || !wb) continue;
+        const dx = B.x - A.x;
+        const dz = B.z - A.z;
+        const d = Math.hypot(dx, dz);
+        const key = `${pids[a]}:${pids[b]}`;
+        const mw = meetW.get(key) ?? meetW.get(`${pids[b]}:${pids[a]}`) ?? 0;
+        // (a meeting is knocked once, the first frame they touch once they are well into it; over for a while (a
+        // meeting can drop out of the plan for a frame between moves), it may be again)
+        if (mw > 0) {
+          if (this.knockMs - (this.knockSeen.get(key) ?? -1e9) > MEET_GONE) this.knockMet.delete(key);
+          this.knockSeen.set(key, this.knockMs);
+        }
+        // (their trunks touching, turned as they are: see reaches; and whether they were already on each other: they
+        // come apart only once a little way off. A screen or a box-out as it is first met, as near as their legs let
+        // them: see feel)
+        const met = mw > 0.6 && !this.knockMet.has(key);
+        const held = mw > 0 ? Math.max(0, this.holds.get(key) ?? this.holds.get(`${pids[b]}:${pids[a]}`) ?? 0) : 0;
+        const gap = d > FEEL_FAR || d < 1e-3 ? Infinity : d - reaches(dx / d, dz / d, A, B) - held;
+        const was = this.knockOn.has(key);
+        if (gap <= KNOCK_GAP) this.knockOn.add(key);
+        else if (gap > KNOCK_GAP + KNOCK_APART) this.knockOn.delete(key);
+        // (two the play has meet are knocked as they first meet, and not again: they are leaning on each other by design)
+        if (gap > KNOCK_GAP || (mw > 0 && !met)) continue;
+        // (how fast they were closing, from where each was last frame; a man put somewhere new closes on nobody)
+        const va = [(A.x - wa[0]) / sec, (A.z - wa[1]) / sec];
+        const vb = [(B.x - wb[0]) / sec, (B.z - wb[1]) / sec];
+        if (Math.hypot(va[0], va[1]) > KNOCK_FAST || Math.hypot(vb[0], vb[1]) > KNOCK_FAST) continue;
+        const close = ((va[0] - vb[0]) * dx + (va[1] - vb[1]) * dz) / d;
+        // (a screen or a box-out as they first come together jolts them, if they come together at all: two set side by
+        // side and leaning in aren't knocked)
+        let power = clamp((close - KNOCK_MIN) / KNOCK_HARD, 0, 1);
+        if (met && power > 0) power = Math.max(power, KNOCK_MEET);
+        // (as they come together: two who stay on each other, leaning and shoving, aren't knocked again unless one
+        // drives into the other hard)
+        else if (was && power < KNOCK_AGAIN) continue;
+        if (power <= 0 || this.knockMs - (this.knockAt.get(key) ?? -1e9) < KNOCK_EVERY) continue;
+        this.knockAt.set(key, this.knockMs);
+        if (met) this.knockMet.add(key);
+        // (the lighter man takes more of it)
+        const ma = A.body.s * A.body.s * A.body.bulk;
+        const mb = B.body.s * B.body.s * B.body.bulk;
+        for (const [P, sign, share] of [
+          [A, -1, mb / (ma + mb)],
+          [B, 1, ma / (ma + mb)],
+        ] as const) {
+          const k = clamp(2 * share, 0.5, 1.3) * power;
+          P.hit((sign * dx) / d, (sign * dz) / d, k);
+          if (P.floored >= 0) continue;
+          let g = this.gives.get(pids[P === A ? a : b]);
+          if (!g) this.gives.set(pids[P === A ? a : b], (g = new Float32Array(4)));
+          g[2] += ((sign * dx) / d) * GIVE_V * k;
+          g[3] += ((sign * dz) / d) * GIVE_V * k;
+        }
+      }
+    }
+    for (const pid of pids) {
+      const P = this.figs.get(pid)?.pup;
+      if (!P) continue;
+      const w = this.knockWas.get(pid);
+      if (w) [w[0], w[1]] = [P.x, P.z];
+      else this.knockWas.set(pid, [P.x, P.z]);
+    }
   }
 
   /**
@@ -1704,23 +1974,36 @@ export class CourtScene {
    * they are, less the room between their trunks and heads: spacing.ts clearance), against what their trunks' reach
    * says, for how near they are drawn next frame. As they lean, sit or turn, so does that: they touch, whatever each is doing.
    */
-  private feel(pids: readonly number[]) {
+  private feel(pids: readonly number[], own = 0) {
+    this.knocks(pids, own);
     for (const m of this.meeting) {
       const a = this.figs.get(pids[m.i])?.pup;
       const b = this.figs.get(pids[m.j])?.pup;
       const d = a && b ? Math.hypot(a.x - b.x, a.z - b.z) : Infinity;
       if (!a || !b || m.w < 0.5 || d > FEEL_FAR || d < 1e-3) continue;
-      const gap = clearance(jointsOf(a, JA), a.body.s, a.body.bulk, jointsOf(b, JB), b.body.s, b.body.bulk, false);
-      const k = `${pids[m.i]}:${pids[m.j]}`;
-      const was = this.holds.get(k) ?? 0;
-      const want = d - (gap - TOUCH) - reaches((b.x - a.x) / d, (b.z - a.z) / d, a, b);
-      this.holds.set(k, clamp(was + (want - was) * FEEL, -LEAN_MOST, LEAN_MOST));
-      // (and if this frame they are into each other, a lean or a sit come quicker than that: they are moved apart now, each his share)
-      const into = (TOUCH - SLACK - gap) * m.w;
-      if (into <= 0) continue;
       const [ux, uz] = [(b.x - a.x) / d, (b.z - a.z) / d];
-      a.nudge(-ux * into * (1 - m.share), -uz * into * (1 - m.share));
-      b.nudge(ux * into * m.share, uz * into * m.share);
+      for (let pass = 0; pass < LEG_PASSES; pass++) {
+        const [ja, jb] = [jointsOf(a, JA), jointsOf(b, JB)];
+        const gap = clearance(ja, a.body.s, a.body.bulk, jb, b.body.s, b.body.bulk, false);
+        // (their legs too: a box-out's seat is in the thighs of the man held off, his knees at the back of the other's,
+        // never through them. A leg of one inside a leg or the trunk of the other is as near as they come)
+        const legs = Math.max(
+          into(ja, a.body.s, a.body.bulk, jb, b.body.s, b.body.bulk, PARTS.legs, LEGS_TRUNK),
+          into(jb, b.body.s, b.body.bulk, ja, a.body.s, a.body.bulk, PARTS.legs, LEGS_TRUNK),
+        );
+        if (!pass) {
+          const k = `${pids[m.i]}:${pids[m.j]}`;
+          const was = this.holds.get(k) ?? 0;
+          const want = d - Math.min(gap - TOUCH, LEG_GRAZE - legs) - reaches(ux, uz, a, b);
+          this.holds.set(k, clamp(was + (want - was) * FEEL, -LEAN_MOST, LEAN_MOST));
+        }
+        // (and if this frame they are into each other, a lean or a sit come quicker than that: they are moved apart
+        // now, each his share. A leg through a man is never let be, however far into meeting they are)
+        const deep = Math.max((TOUCH - SLACK - gap) * m.w, legs - LEG_GRAZE - SLACK);
+        if (deep <= 0) break;
+        a.nudge(-ux * deep * (1 - m.share), -uz * deep * (1 - m.share));
+        b.nudge(ux * deep * m.share, uz * deep * m.share);
+      }
     }
   }
   /** The man meeting him (see meets): where he is, and how far into it. */
@@ -1735,6 +2018,14 @@ export class CourtScene {
   private readonly meeting: Meet[] = [];
   private touch: ({ pid: number; w: number } | undefined)[] = [];
   private readonly holds = new Map<string, number>();
+  /** Knocks (see knocks): the bodies' clock, when each pair was last knocked, where each man was last frame, the meetings already knocked and when each pair was last seen meeting, the pairs on each other, and the ground each man is giving (see given: x, z and how fast each is going). */
+  private knockMs = 0;
+  private readonly knockAt = new Map<string, number>();
+  private readonly knockWas = new Map<number, [number, number]>();
+  private readonly knockMet = new Set<string>();
+  private readonly knockSeen = new Map<string, number>();
+  private readonly knockOn = new Set<string>();
+  private readonly gives = new Map<number, Float32Array>();
 
   /**
    * What each of the ten looks at this move: a shooter the rim (from the move before he goes up); a passer the man
@@ -2133,6 +2424,23 @@ export class CourtScene {
   }
   /** How far the ball is off where its move has it, for the bodies by it (x, z). */
   private readonly bend = { x: 0, z: 0 };
+  /** The ball was in the air between two men last frame (a pass, a rebound): whoever has it now has just caught it. */
+  private flying = false;
+  /**
+   * The ball in the hands of the man who has it, as his arms are drawn this frame (Puppet.holds): in his palms, between
+   * them when both are on it, not where his move guessed they would be (a hand still on its way, an arm that can't
+   * reach); part of the way while his hands are only taking it. Still out of his own body.
+   */
+  private inHands(f: Fig) {
+    const w = f.pup.holds(TMP);
+    if (w <= HOLD_FROM) return;
+    const k = smooth(clamp((w - HOLD_FROM) / (HOLD_SURE - HOLD_FROM), 0, 1));
+    const ball = this.ball;
+    ball.set(ball.x + (TMP.x - ball.x) * k, ball.y + (TMP.y - ball.y) * k, ball.z + (TMP.z - ball.z) * k);
+    f.pup.keepOut(ball);
+    // (a dribble's next push starts from where his palm has it)
+    f.pup.heldAt(ball.y);
+  }
   /** Where the plan had each man last frame (x, z), before anyone stepped aside. */
   private readonly planAt = new Map<number, [number, number]>();
   private spotsFor(n: number): Float32Array {
@@ -2231,18 +2539,28 @@ export class CourtScene {
     const next = held && this.shot !== 'house' && (d.phase === 'wait' || d.phase === 'in');
     // (his head, and his hands up over it: what a close-up must see past a basket's unit)
     const face = who ? this.faceOf(who) : null;
-    // (a body in front of a close-up's man, or a basket's unit: the picture leaves him)
-    this.blockMs =
-      this.shot === 'close' &&
-      who &&
-      face &&
-      (blocked(who.pup.x, who.pup.z, this.seat.x, this.seat.z, this.others(who), v.n - 1) || fenced(this.seat.x, this.seat.y, this.seat.z, face[0], face[1], face[2]))
-        ? this.blockMs + real
-        : 0;
-    const over = held && ((this.shot === 'close' && (!who || this.blockMs > BLOCK_MS)) || (!next && (this.shotMs > this.cutLen || !quiet)));
-    // a close-up is taken from where its man is clear, his face to it if it can be; from nowhere, the home crowd instead, or nothing
-    if (this.cue === 'close' && who && face && clearSeat(who.pup.x, who.pup.z, who.pup.yaw, this.others(who), v.n - 1, CLOSE_OFF, SEAT, CLOSE_Y, face, 6) >= 3)
-      this.cue = who.side === 0 ? 'crowd' : null;
+    // (a body in front of a close-up's man, or a basket's unit: the picture leaves him; and at once when a body by the
+    // lens is about to take the picture, where everyone will be in a moment: a teammate on his way over to him)
+    let crowded = false;
+    if (this.shot === 'close' && who && face) {
+      const o = this.others(who, CROWD_AHEAD);
+      const p = cam.position;
+      crowded = this.shotMs > CLOSE_LEAST && this.crowds(p.x, p.y, p.z, this.look, Math.tan((cam.fov * Math.PI) / 360), aspect, o, this.restN);
+      this.blockMs =
+        blocked(who.pup.x, who.pup.z, this.seat.x, this.seat.z, o, this.restN / 2) || fenced(this.seat.x, this.seat.y, this.seat.z, face[0], face[1], face[2])
+          ? this.blockMs + real
+          : 0;
+    } else this.blockMs = 0;
+    const over = held && ((this.shot === 'close' && (!who || this.blockMs > BLOCK_MS || crowded)) || (!next && (this.shotMs > this.cutLen || !quiet)));
+    // a close-up is taken from where its man is clear (and stays clear: where everyone is going), his face to it if it
+    // can be, and not into a picture about to be crowded; from nowhere, the home crowd instead, or nothing
+    if (this.cue === 'close' && who && face) {
+      const clear = clearSeat(who.pup.x, who.pup.z, who.pup.yaw, this.others(who, SEAT_AHEAD, true), this.restN, CLOSE_OFF, SEAT, CLOSE_Y, face, 6) < 3;
+      const at = A.set(face[0], Math.max(4, face[1] - 0.9), face[2]);
+      const o = this.others(who, CROWD_AHEAD);
+      const tan = 3.2 / Math.min(1, aspect) / Math.hypot(SEAT.x - at.x, CLOSE_Y - at.y, SEAT.z - at.z);
+      if (!clear || this.crowds(SEAT.x, CLOSE_Y, SEAT.z, at, tan, aspect, o, this.restN)) this.cue = who.side === 0 ? 'crowd' : null;
+    }
     if (live) this.introSeen = false;
     else if (this.shot === 'intro' && this.shotMs > INTRO_MS) this.introSeen = true;
     const want: typeof this.shot = this.chosen
@@ -2269,7 +2587,15 @@ export class CourtScene {
     // (the play starting again takes the picture back from the building at once, the buzzer and a timeout take it
     // from anything, and the tip's line-up goes straight into the first possession; every other camera has its HOLD_MS)
     const timeout = want === 'bench' && this.cue === 'house';
-    const now = want === 'final' || want === 'house' || want === 'open' || want === 'intro' || timeout || (want === 'main' && (this.shot === 'wide' || this.chosen));
+    // (and a close-up about to be taken by a body by the lens is left at once: a cut away is better than his back)
+    const now =
+      want === 'final' ||
+      want === 'house' ||
+      want === 'open' ||
+      want === 'intro' ||
+      timeout ||
+      (want === 'main' && (this.shot === 'wide' || this.chosen)) ||
+      (this.shot === 'close' && crowded);
     if (want !== this.shot && (this.shotMs > HOLD_MS || now)) {
       this.shot = want;
       this.shotMs = 0;
@@ -2453,8 +2779,9 @@ export class CourtScene {
   private aimed = false;
   // how much of him a close-up holds over and under where it looks (ft)
   private closeHalf = 3.2;
-  // where the focus is (ft from the lens), and the shot it is on (a replay's look, a close-up's man)
+  // where the focus is (ft from the lens: sharp from the one to the other), and the shot it is on (a replay's look, a close-up's man)
   private focusAt = 0;
+  private focusTo = 0;
   private focusKey = '';
   /** A man's head and a point over it where his hands go up (x, y, z each), for a close-up's line of sight past a basket's unit. */
   private faceOf(who: Fig): Float32Array {
@@ -2464,18 +2791,46 @@ export class CourtScene {
     return this.face;
   }
   private readonly face = new Float32Array(6);
-  /** Everyone on the floor but `who` (x, z each), for a close-up's line of sight. */
-  private others(who: Fig): Float32Array {
+  /**
+   * A close-up from (px, py, pz) on `at`, `tan` the tangent of half of it top to bottom, is about to be taken by a body
+   * by its lens or a basket's unit (CLOSE_MESS): `o`, `n` of them, as `others` has them.
+   */
+  private crowds(px: number, py: number, pz: number, at: V3, tan: number, aspect: number, o: Float32Array, n: number): boolean {
+    const far = Math.hypot(px - at.x, pz - at.z);
+    return clutter(px, py, pz, at.x, at.y, at.z, tan, aspect, far + 25, o, n, Math.max(6, Math.min(far * 0.8, far - 4))) > CLOSE_MESS;
+  }
+  /**
+   * Everyone on the floor but `who`, and the referees (x, z each; how many in `restN`), for a close-up's line of
+   * sight; and with `ahead` (s), each of them again after them where he will be by then, at the pace he is going
+   * (`mates`: a teammate near him as if on his way over to him, MATE_NEAR).
+   */
+  private others(who: Fig, ahead = 0, mates = false): Float32Array {
     const out = this.rest;
     let n = 0;
-    for (const f of this.figs.values()) {
-      if (f === who || n >= out.length) continue;
-      out[n++] = f.pup.x;
-      out[n++] = f.pup.z;
+    const put = (f: Fig, s: number, mate: boolean) => {
+      if (f === who || n >= out.length) return;
+      const p = f.pup;
+      const far = Math.hypot(p.x - who.pup.x, p.z - who.pup.z);
+      if (s > 0 && mate && far < MATE_NEAR[0]) {
+        const u = Math.max(0, 1 - MATE_NEAR[1] / (far || 1));
+        out[n++] = p.x + (who.pup.x - p.x) * u;
+        out[n++] = p.z + (who.pup.z - p.z) * u;
+        return;
+      }
+      // (his pace ahead and to his right, as the floor has it)
+      const [sn, cs] = [Math.sin(p.yaw), Math.cos(p.yaw)];
+      out[n++] = p.x + (p.vf * sn - p.vs * cs) * s;
+      out[n++] = p.z + (p.vf * cs + p.vs * sn) * s;
+    };
+    for (let k = 0; k < (ahead > 0 ? 2 : 1); k++) {
+      for (const f of this.figs.values()) put(f, k * ahead, mates && f.side === who.side);
+      for (const r of this.arena.sideline.officials) put(r.fig, k * ahead, false);
     }
+    this.restN = n / 2;
     return out;
   }
-  private readonly rest = new Float32Array(20);
+  private readonly rest = new Float32Array(48);
+  private restN = 0;
 
   /** Into a replay or out of it: the next frame starts afresh (everyone on his spot, the ball where its move has it, a cut). */
   private recut() {
@@ -2498,7 +2853,9 @@ export class CourtScene {
   replay(sc: Script | null): boolean {
     // (its seat is chosen for this picture's shape, not the last replay's)
     this.director.size(this.w / this.h, this.h);
-    return this.director.start(sc);
+    // (and clear of the referees, as clear as of the ten)
+    const refs = this.arena.sideline.officials.flatMap((r) => [r.fig.pup.x, r.fig.pup.z]);
+    return this.director.start(sc, refs);
   }
   /** A tap on the court: the replay goes, through its wipe. */
   skipReplay() {

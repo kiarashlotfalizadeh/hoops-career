@@ -34,11 +34,13 @@ import {
   MeshStandardMaterial,
   type Object3D,
   PlaneGeometry,
+  Points,
   Quaternion,
   RepeatWrapping,
   type Scene,
   ShaderMaterial,
   SRGBColorSpace,
+  type Texture,
   UnsignedByteType,
   Vector2,
   Vector3,
@@ -48,14 +50,15 @@ import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { COURT_LEN } from '../choreo';
 import { END, FLOOR_L, FLOOR_W, HALF_W, SIDE, type GameInfo, type Stage } from '../Court';
-import type { MatchKit, Venue } from '../../teamColors';
+import type { MatchKit, Roofing, Venue } from '../../teamColors';
 import type { Occasion } from '../occasion';
 import { BIG, Boards } from './boards';
-import { Bowl, DEEP, ENDX, FAR, RISE, ROOF_TOP, ROWS, TOP } from './bowl';
+import { Bowl, DEEP, ENDX, FAR, RISE, ROOF_TOP, ROWS, type Seat, TOP } from './bowl';
 import { Crowd } from './crowd';
 import { Confetti, Flashes, Show, Streamers } from './fx';
-import type { Props } from './props';
+import { BOARD_KINDS, type BoardKind, type Props } from './props';
 import type { Sideline } from './sideline';
+import { WEAR } from './lens';
 
 type Keep = <T extends { dispose(): void }>(o: T) => T;
 
@@ -157,6 +160,8 @@ const SHEEN_LITE = 640;
  * The floor's sheen: what the varnish mirrors, stronger the flatter you look across it, and blurred the
  * more the higher over the floor what it shows is (a glossy floor's reflection is sharp where a foot meets
  * it and soft by the head): `tDepth` is the mirror's depth, `uUnproject` takes it back to the building.
+ * It is as clear as the coat is where it lies (lens.ts WEAR, `#include <wear>`: the floor's own canvas,
+ * `tFloor`, says where the paint is): fainter and softer where the feet have worn it, and on the apron.
  */
 const SHEEN = {
   name: 'FloorSheen',
@@ -167,7 +172,9 @@ const SHEEN = {
     textureMatrix: { value: null },
     uUnproject: { value: null },
     uSize: { value: null },
-    strength: { value: 0.85 },
+    tFloor: { value: null },
+    uWood: { value: null },
+    strength: { value: 0.62 },
   },
   vertexShader: /* glsl */ `
     uniform mat4 textureMatrix;
@@ -184,8 +191,11 @@ const SHEEN = {
     uniform mat4 uUnproject;
     uniform vec2 uSize;
     uniform float strength;
+    uniform sampler2D tFloor;
+    uniform vec3 uWood;
     varying vec4 vUv;
     varying vec3 vView;
+    #include <wear>
     vec3 lit(vec2 uv, float lod) {
       vec3 c = textureLod(tDiffuse, uv, lod).rgb;
       return c * c;
@@ -199,6 +209,11 @@ const SHEEN = {
       // (nothing drawn there, or so far off the mirror's tipped clip runs out: the roof, high up)
       float high = at.w <= 0.0 || depth > 0.9999 ? 200.0 : clamp(at.y / at.w, 0.0, 200.0);
       float far = max(length(vView), 1.0);
+      // how clear the coat is here: paint or bare wood, worn or not (the floor's canvas, as its own shader reads it)
+      vec3 spot = cameraPosition - vView;
+      vec3 paint = texture2D(tFloor, vec2(spot.x / ${FLOOR_L.toFixed(3)} + 0.5, 0.5 - spot.z / ${FLOOR_W.toFixed(3)})).rgb;
+      float worn;
+      float coat = fCoat(fGlossAt(spot.xz, 1.0 - smoothstep(0.05, 0.16, length(paint - uWood)), worn));
       // (each 2¼ in strip's face is a little off flat: its piece of the mirror sits a little up or down, the more
       // the higher what it shows; strips too fine to see don't)
       float across = (${(FLOOR_W / 2).toFixed(3)} - (cameraPosition.z - vView.z)) / 0.1875;
@@ -206,7 +221,7 @@ const SHEEN = {
       uv.y += off * 0.05 * min(high, 30.0) / far * (1.0 - smoothstep(0.45, 1.3, fwidth(across)));
       // (the taps turned a little from dot to dot: rows of seats don't come back as a lattice)
       float turn = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
-      vec2 r = vec2(0.32, 1.0) * clamp((0.05 + high) * ${SHEEN_SOFT} / far, 0.0, 0.03) * (0.7 + 0.6 * turn);
+      vec2 r = vec2(0.32, 1.0) * clamp((0.05 + high) * ${SHEEN_SOFT} / far * (1.0 + 0.9 * (1.0 - coat)), 0.0, 0.034) * (0.7 + 0.6 * turn);
       float lod = log2(max(r.y * uSize.y * 0.4, 1.0)) + 0.6 + min(high, 40.0) * 0.05;
       // (the mirror's picture is in the screen's terms: its taps are added up as light, near enough, and put back)
       vec3 c = lit(uv, lod * 0.5) * 0.24;
@@ -217,7 +232,7 @@ const SHEEN = {
       // (a clear coat mirrors as glass does: a twenty-fifth of what is over it from above, most of it looked along)
       float graze = pow(1.0 - clamp(normalize(vView).y, 0.0, 1.0), 5.0);
       // (and fainter the higher what it shows: a varnish is not a mirror, the roof is a blur in it)
-      gl_FragColor = vec4(c, strength * (0.04 + 0.96 * graze) / (1.0 + high * 0.03));
+      gl_FragColor = vec4(c, strength * coat * (0.04 + 0.96 * graze) / (1.0 + high * 0.03));
     }`,
 };
 
@@ -252,10 +267,18 @@ export class Arena {
   private showTo = 1;
   private tipped = false;
   /** The roof's steel and the lights on it (only a camera looking up sees them: the first thing a slow device gives up). */
-  private readonly steel: Object3D[];
+  private steel: Object3D[] = [];
+  /** Which roof is built (Venue.roof), what every roof is made of, and the frames of the banks of lights its steel carries. */
+  private roofKey = '';
+  private readonly roofKit: RoofKit;
+  private readonly rigs: { wide: number; g: Matrix4 }[] = [];
+  /** The scoreboards, one of each kind (props.ts BOARD_KINDS): the building's own is shown. */
+  private readonly scoreboards = new Map<BoardKind, Object3D>();
   /** The benches: each part of the people on them (who wears which team's colours), their chairs' padding, the pads on the baskets. */
   private readonly seatMat = new MeshStandardMaterial({ color: 0x222222, roughness: 0.75, vertexColors: true });
   private readonly team: MeshStandardMaterial;
+  /** The stanchions' badge (props.ts): the home side's name on their pads. */
+  private readonly badge: CanvasTexture;
   /** The ribbon of lamps along the top of the lower bowl, in a building that has one (Venue.fascia). */
   private readonly fasciaLeds: Mesh;
   /** The step a slow device is on (see shed). */
@@ -293,6 +316,7 @@ export class Arena {
     keep(this.lamp);
     this.boards = new Boards(keep);
     this.team = props.team;
+    this.badge = props.badge;
     const dark = keep(new MeshLambertMaterial({ color: 0x17171a }));
     const add = (m: Mesh) => (this.group.add(m), m);
 
@@ -318,17 +342,10 @@ export class Arena {
     this.group.add(props.chairs(this.bowl.chairs, this.seatMat));
     this.crowd = new Crowd(keep, props.crowd(), this.bowl.seats);
     this.group.add(this.crowd.group);
-    let k = 29;
-    const pick = () => ((k = (k * 16807) % 2147483647) & 0xffff) / 0xffff;
     const q = new Quaternion();
     const up = new Vector3(0, 1, 0);
     const at = new Vector3();
     const size = new Vector3();
-
-    // cameras in the stands: a share of the seats, held up over a head toward the floor, and some up in the deck
-    const cams: number[] = [];
-    for (const s of this.bowl.seats) if (pick() < FLASH_SHARE) cams.push(s.x + 0.6 * Math.sin(s.turn), s.y + 5, s.z + 0.6 * Math.cos(s.turn));
-    cams.push(...this.bowl.high);
 
     // the people round the floor (sideline.ts): the benches, the coaches, the referees, the table's crew
     this.group.add(sideline.group);
@@ -349,7 +366,6 @@ export class Arena {
     // thing all round the bowl one shape, a draw, not one a side)
     for (const r of this.bowl.ribbons) this.boards.ribbon(r.x, r.y, r.z, r.w, 2.3, r.turn);
     const banks: BufferGeometry[] = [];
-    const roof = new Roof();
     const bank = (wide: number, x: number, z: number, turn: number) => {
       const g = new Matrix4().compose(at.set(x, 0, z), q.setFromAxisAngle(up, turn), size.set(1, 1, 1));
       // (a bank of lights over each side: what the floor's varnish catches)
@@ -359,7 +375,7 @@ export class Arena {
         // (its housing: a dark box behind the lamps' face)
         darks.push(new BoxGeometry(wide * 0.11 + 0.8, 4, 1.2).translate(0, 0, -0.64).applyMatrix4(hung).applyMatrix4(g));
       }
-      roof.rig(wide, g, LAMP_Y);
+      this.rigs.push({ wide, g });
     };
     bank(2 * (ENDX + TOP), 0, -(FAR + TOP + 1), 0);
     bank(2 * (FAR + TOP), -(ENDX + TOP + 1), 0, Math.PI / 2);
@@ -372,13 +388,35 @@ export class Arena {
     };
     one(darks, dark);
     one(banks, this.lamp);
-    // the roof: trusses over the floor and the lights on them, the banners on the far side's
-    this.steel = roof.build(keep, this.group);
-    this.boards.banners(roof.banners);
+    // the roof (each building's own: see roofed), and the banners on the far side's truss
+    this.roofKit = {
+      unit: keep(new BoxGeometry(1, 1, 1)),
+      // (the steel shows a little whatever the light: the lamps point down, and a roof is never quite black)
+      steel: keep(new MeshLambertMaterial({ color: 0xffffff, emissive: 0x1e2025 })),
+      glow: keep(new MeshBasicMaterial({ color: 0xfff1dc })),
+      deck: new Mesh(keep(new PlaneGeometry(310, 290)), keep(new MeshLambertMaterial({ map: ribbed(keep), emissiveMap: ribbed(keep), side: DoubleSide }))),
+      ceiling: new Mesh(
+        keep(new PlaneGeometry(300, 280)),
+        keep(new MeshLambertMaterial({ color: CEILING_TONE, emissive: CEILING_GLOW, map: tiled(keep), emissiveMap: tiled(keep), side: DoubleSide })),
+      ),
+    };
+    for (const m of [this.roofKit.deck, this.roofKit.ceiling]) {
+      m.rotation.x = Math.PI / 2;
+      this.group.add(m);
+    }
+    // the scoreboards: one of each kind, all in the same screens and ribbon (the building's is shown: see roofed)
+    const [ring, screens] = [this.boards.ringFace(), this.boards.screenFace()];
+    for (const kind of BOARD_KINDS) {
+      const board = props.scoreboard(ring, screens, kind);
+      this.scoreboards.set(kind, board);
+      this.group.add(board);
+    }
+    const roof = this.roofed(ROOFING)!;
+    this.boards.banners(BANNERS);
     this.boards.build();
     this.fasciaLeds = this.boards.fascia(this.bowl.fasciaRuns);
     this.group.add(this.boards.group);
-    this.flashes = new Flashes(keep, cams);
+    this.flashes = new Flashes(keep, cameras(this.bowl.seats, this.bowl.high));
     this.group.add(this.flashes.points);
     this.confetti = new Confetti(keep);
     this.group.add(this.confetti.mesh);
@@ -386,13 +424,11 @@ export class Arena {
     this.group.add(this.streamers.mesh);
     this.lights = new Show(keep, roof.spots);
     this.group.add(this.lights.group);
-    const scoreboard = props.scoreboard(this.boards.ringFace(), this.boards.screenFace());
-    scoreboard.position.set(0, 62, 0);
-    this.group.add(scoreboard);
 
     // the varnish (its picture keeps its depth, for how soft each part of it is, and its sizes down, to be read soft)
     // (one sample a dot: every dot of it is read through a blur)
-    this.sheen = new Reflector(keep(new PlaneGeometry(FLOOR_L, FLOOR_W)), { textureWidth: 640, textureHeight: 400, clipBias: 0.02, shader: SHEEN, multisample: 0 });
+    const shader = { ...SHEEN, fragmentShader: SHEEN.fragmentShader.replace('#include <wear>', WEAR) };
+    this.sheen = new Reflector(keep(new PlaneGeometry(FLOOR_L, FLOOR_W)), { textureWidth: 640, textureHeight: 400, clipBias: 0.02, shader, multisample: 0 });
     const shot = this.sheen.getRenderTarget();
     // Its picture is drawn as the screen's is (lens.ts screenTarget: the tone curve on, the screen's terms, 8
     // bits). Drawn as three draws into any other target, every material in the building changed its program
@@ -408,6 +444,7 @@ export class Arena {
     su.tDepth.value = shot.depthTexture;
     su.uUnproject.value = this.unproject;
     su.uSize.value = new Vector2(640, 400);
+    su.uWood.value = new Color(0xdcae76);
     this.sheen.rotation.x = -Math.PI / 2;
     this.sheen.position.y = 0.012;
     this.sheen.renderOrder = 2;
@@ -459,14 +496,103 @@ export class Arena {
     this.boards.paint(board, venue?.seed, venue?.boards);
     // (the stanchions' pads: the building's colour as a rule; in its own building, what it pads them in)
     this.team.color.set(venue?.pad ?? board);
+    this.badged(venue);
     this.fasciaLeds.visible = venue?.fascia === 'ribbon' && this.level < 1;
     this.seatMat.color.set(board).multiplyScalar(0.75);
     this.bowl.paint(board, venue);
+    this.roofed(venue?.roof ?? ROOFING);
+    this.recam();
     this.sideline.paint(board);
     this.crowd.paint(board, this.trim, venue?.seats, venue?.seatMix, venue?.letters, venue?.crowd);
     this.lights.colours(board);
     this.lampTone.set(venue?.house ?? 0xfff1dc);
     this.lamp.color.copy(this.lampTone);
+  }
+
+  /**
+   * The roof over the floor as this building has it (Venue.roof: see Roof), built again when it changes: its steel
+   * and lights (the last building's given back), the deck or the ceiling over them, the light show's spots where its
+   * catwalks hang them, and its scoreboard shown, at its size, from the roof's frame.
+   */
+  private roofed(look: Roofing): Roof | null {
+    const key = JSON.stringify(look);
+    if (key === this.roofKey) return null;
+    this.roofKey = key;
+    const roof = new Roof(look);
+    for (const o of this.steel) {
+      this.group.remove(o);
+      (o as InstancedMesh).dispose();
+    }
+    for (const r of this.rigs) roof.rig(r.wide, r.g, LAMP_Y);
+    this.steel = roof.build(this.roofKit, this.group);
+    for (const o of this.steel) o.visible = this.level < 1;
+    const { deck, ceiling } = this.roofKit;
+    const open = look.kind === 'open';
+    deck.position.set(0, ROOF_TOP, 14);
+    (deck.material as MeshLambertMaterial).color.set(open ? OPEN_DECK : DECK);
+    (deck.material as MeshLambertMaterial).emissive.set(open ? 0x000000 : DECK_GLOW);
+    ceiling.position.set(0, CEILING_Y, 14);
+    ceiling.visible = look.kind === 'ceiling';
+    for (const [kind, board] of this.scoreboards) {
+      board.visible = kind === look.board;
+      board.scale.setScalar(look.size);
+      board.position.set(0, BOARD_Y, 0);
+    }
+    // (the light show's spots, as many as ever, moved to this roof's: fx.ts Show made its beams, pools and glare for them)
+    for (const o of this.lights?.group.children ?? []) {
+      const geo = (o as Mesh).geometry;
+      for (const name of o instanceof Points ? ['aFrom', 'position'] : ['aFrom']) {
+        const at = geo.getAttribute(name);
+        roof.spots.forEach((p, i) => at.setXYZ(i, p.x, p.y, p.z));
+        at.needsUpdate = true;
+      }
+    }
+    return roof;
+  }
+
+  /** The cameras in the stands, where this building's seats are (its aisles and tunnels are its own): as many as the first building had, spread over them. */
+  private recam() {
+    const at = this.flashes.points.geometry.getAttribute('position');
+    const cams = cameras(this.bowl.seats, this.bowl.high);
+    const n = cams.length / 3;
+    for (let i = 0; i < at.count; i++) {
+      const j = Math.floor((i * n) / at.count) * 3;
+      at.setXYZ(i, cams[j], cams[j + 1], cams[j + 2]);
+    }
+    at.needsUpdate = true;
+  }
+
+  /**
+   * The stanchions' badge: the home side's name in white between two fine rules, spaced wide, as a pad
+   * is lettered (in the building's own lettering's lean); none on a neutral floor.
+   */
+  private badged(venue: Venue | undefined) {
+    const cv = this.badge.image as HTMLCanvasElement;
+    const ctx = cv.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    const name = venue?.letters ? venue.baselines[1].toUpperCase() : '';
+    if (name) {
+      const { width: w, height: h } = cv;
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = 0.7;
+      ctx.fillRect(w * 0.08, h * 0.12, w * 0.84, h * 0.035);
+      ctx.fillRect(w * 0.08, h * 0.845, w * 0.84, h * 0.035);
+      ctx.globalAlpha = 0.95;
+      const px = Math.round(h * 0.52);
+      ctx.font = `800 ${px}px "Archivo Variable", system-ui, sans-serif`;
+      ctx.font = `800 condensed ${px}px "Archivo Variable", system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      if ('letterSpacing' in ctx) ctx.letterSpacing = `${Math.round(px * 0.12)}px`;
+      ctx.save();
+      ctx.translate(w / 2 + Math.round(px * 0.06), h / 2 + 2);
+      if (venue?.court.words === 'italic') ctx.transform(1, 0, -0.22, 1, 0, 0);
+      ctx.fillText(name, 0, 0, w * 0.82);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+    this.badge.needsUpdate = true;
   }
 
   /** The benches in tonight's kits; each coach in a dark suit, his tie his team's colour. The visitors' fans in theirs; the boards and the confetti in both. */
@@ -713,6 +839,13 @@ export class Arena {
     this.dark.needsUpdate = true;
   }
 
+  /** The floor's canvas (Court.tsx paintFloor) and its bare wood's colour (linear): where the mirror is clearer, over paint. */
+  floorMap(map: Texture, wood: Color) {
+    const su = (this.sheen.material as ShaderMaterial).uniforms;
+    su.tFloor.value = map;
+    (su.uWood.value as Color).copy(wood);
+  }
+
   /** A device that can't keep up: no mirror in the floor. */
   lite(on: boolean) {
     this.sheen.visible = !on;
@@ -730,54 +863,80 @@ export class Arena {
 }
 
 /**
- * The roof: its deck, box trusses under it over the floor (four chords and the lacing between), a frame
- * the scoreboard's cables hang from, a truss over each side's banks of lights with the lights on
- * hangers, lights along the trusses over the floor, two catwalks along the floor's length with their
- * rails and the spots that sweep the floor in a light show on them, a cluster of speakers toward each
- * corner of the floor, and the banners on the far side's truss. Every bar is one instance of one box (a
- * draw for all the steel, each bar in its own grey), every light one of another, the banners one shape
- * (see Boards.banners).
+ * The roof, as a building has it (Venue.roof): over the floor deep box trusses (four chords and the lacing
+ * between), arched ribs across a dark open roof with purlins between them, or nothing to see under a flat
+ * ceiling but the rings of lights let into it (the deck and the ceiling themselves are the arena's: RoofKit);
+ * two catwalks along the floor's length, a ring of them round the scoreboard, or two across over the ends, each
+ * with its rails and the spots that sweep the floor in a light show on its floor side; the frame the scoreboard's
+ * cables hang from (as big as the board); a truss over each side's banks of lights with the lights on hangers; a
+ * cluster of speakers toward each corner of the floor; and a batten over the banners. Every bar is one instance
+ * of one box (a draw for all the steel, each bar in its own grey), every light one of another.
  */
 class Roof {
   private readonly bars: Matrix4[] = [];
   private readonly tints: number[] = [];
   private readonly lights: Matrix4[] = [];
-  /** Where the spots that sweep the floor hang. */
+  /** Where the spots that sweep the floor hang (SPOTS of them, whatever the catwalks). */
   readonly spots: Vector3[] = [];
-  readonly banners: { x: number; y: number; z: number; w: number; h: number }[] = [];
   private readonly q = new Quaternion();
   private readonly y = new Vector3(0, 1, 0);
+  /** How high the underside of what is over the floor is, over a point of it (what a hanger goes up to). */
+  private readonly under: (x: number, z: number) => number;
 
-  constructor() {
+  constructor(look: Roofing) {
     const v = (x: number, y: number, z: number) => new Vector3(x, y, z);
-    // over the floor: three along it, four across, under the roof
-    for (const z of [-70, -35, 0, 35, 70, 105]) this.truss(v(-132, ROOF_Y, z), v(132, ROOF_Y, z), 4, 5, 8);
-    for (const x of [-95, -45, 45, 95]) this.truss(v(x, ROOF_Y - 5.2, -100), v(x, ROOF_Y - 5.2, 118), 4, 4.6, 8);
-    // a catwalk either side of the scoreboard, hung under the trusses: a deck, a rail each side on posts, hangers
-    // up; the spots are on its floor-side rail
-    for (const z of [-19, 19]) {
-      const y = ROOF_Y - 13;
-      this.plank(v(-104, y, z), v(104, y, z), 3.4, 0.25, 0x2c2e33);
-      for (const s of [-1, 1]) {
-        for (const h of [1.7, 3.3]) this.bar(v(-104, y + h, z + s * 1.7), v(104, y + h, z + s * 1.7), 0.1, 0x55585f);
-        for (let x = -104; x <= 104; x += 8) this.bar(v(x, y, z + s * 1.7), v(x, y + 3.3, z + s * 1.7), 0.1, 0x55585f);
+    if (look.kind === 'trusses') {
+      // deep box trusses: six across the floor, four along it under them, lights under the middle two
+      const low = ROOF_Y - DEEP_TRUSS - 0.2;
+      for (const z of [-70, -35, 0, 35, 70, 105]) this.truss(v(-132, ROOF_Y, z), v(132, ROOF_Y, z), 4, DEEP_TRUSS, 8);
+      for (const x of [-95, -45, 45, 95]) this.truss(v(x, low, -100), v(x, low, 118), 4, 4.6, 8);
+      for (const z of [-35, 35]) for (let x = -110; x <= 110; x += 11) this.light(v(x + (z > 0 ? 5.5 : 0), ROOF_Y - DEEP_TRUSS - 0.4, z));
+      this.under = () => low - 4.6;
+    } else if (look.kind === 'ceiling') {
+      // rings of lights let into the ceiling round the scoreboard
+      for (const [rx, rz, n] of CEILING_RINGS)
+        for (let i = 0; i < n; i++) this.light(v(rx * Math.cos((i / n) * 2 * Math.PI), CEILING_Y - 0.2, rz * Math.sin((i / n) * 2 * Math.PI)), CEILING_LIGHT);
+      this.under = () => CEILING_Y;
+    } else {
+      // arched ribs across the floor (deep girders, no lacing), purlins along it between them, lights hung under the ribs
+      const arch = (z: number) => ROOF_Y + 0.5 - ARCH_RISE * ((z - 9) / 109) ** 2;
+      for (const x of RIBS) {
+        for (let i = 0; i < 16; i++) {
+          const [z0, z1] = [-100 + (218 * i) / 16, -100 + (218 * (i + 1)) / 16];
+          this.plank(v(x, arch(z0) - 2.2, z0), v(x, arch(z1) - 2.2, z1), 1.4, 4.4, 0x2a2c31);
+        }
+        for (const z of [-35, 35]) for (const s of [-1, 1]) this.light(v(x + s * 1.6, arch(z) - 4.9, z));
       }
-      for (const x of [-95, -45, 45, 95]) for (const s of [-1, 1]) this.bar(v(x + s * 1.6, y + 3.3, z + s * 1.7), v(x + s * 1.6, ROOF_Y - 9.8, z + s * 1.7), 0.14);
-      const side = z < 0 ? 1 : -1;
-      for (let x = -84; x <= 84; x += 24) {
-        const at = v(x + (z > 0 ? 12 : 0), y - 1.1, z + side * 1.9);
-        if (Math.abs(at.x) > 96) continue;
-        this.spots.push(at);
-        this.plank(at.clone().setY(y - 0.2), at.clone().setY(y - 0.75), 0.5, 0.5, 0x1a1b1e);
-        this.plank(v(at.x, at.y + 0.5, at.z), v(at.x, at.y - 0.7, at.z + side * 0.5), 1.1, 1.1, 0x16171a);
+      for (let z = -88; z <= 120; z += 26) this.bar(v(-132, arch(z) - 0.3, z), v(132, arch(z) - 0.3, z), 0.4);
+      this.under = (_x, z) => arch(z) - 4.4;
+    }
+
+    // the catwalks, a little under what is over the floor, and the spots on their floor sides
+    const cy = Math.min(ROOF_Y - 13, this.under(0, 19) - 4.6);
+    if (look.catwalk === 'sides') {
+      for (const z of [-19, 19]) {
+        this.catwalk(v(-104, cy, z), v(104, cy, z));
+        for (let x = -84; x <= 84; x += 24) this.spot(v(x + (z > 0 ? 12 : 0), cy - 1.1, z - Math.sign(z) * 1.9), v(0, 0, -Math.sign(z)));
+      }
+    } else if (look.catwalk === 'ring') {
+      const [X, Z] = RING;
+      const corners = [v(-X, cy, -Z), v(X, cy, -Z), v(X, cy, Z), v(-X, cy, Z)];
+      corners.forEach((c, i) => this.catwalk(c, corners[(i + 1) % 4]));
+      for (const x of [-36, -18, 0, 18, 36]) for (const s of [-1, 1]) this.spot(v(x, cy - 1.1, s * (Z - 1.9)), v(0, 0, -s));
+      for (const z of [-18, 0, 18]) for (const s of [-1, 1]) this.spot(v(s * (X - 1.9), cy - 1.1, z), v(-s, 0, 0));
+    } else {
+      for (const s of [-1, 1]) {
+        this.catwalk(v(s * ENDS_X, cy, -64), v(s * ENDS_X, cy, 74));
+        for (let z = -52; z <= 60; z += 16) this.spot(v(s * (ENDS_X - 1.9), cy - 1.1, z), v(-s, 0, 0));
       }
     }
+
     // speakers: a hanging run of boxes toward each corner of the floor, curling in under itself as such runs do
     for (const sx of [-1, 1])
       for (const sz of [-1, 1]) {
         const [cx, cz] = [sx * 30, sz * 31];
         const out = v(sx, 0, sz * 0.75).normalize();
-        this.bar(v(cx, ROOF_Y - 5.4, cz), v(cx, ROOF_Y - 18, cz), 0.12);
+        this.bar(v(cx, this.under(cx, cz), cz), v(cx, ROOF_Y - 18, cz), 0.12);
         for (let i = 0; i < 8; i++) {
           const tilt = 0.05 + i * 0.075;
           const mid = v(cx, ROOF_Y - 18.8 - i * 1.55, cz).addScaledVector(out, -i * i * 0.06);
@@ -785,24 +944,28 @@ class Roof {
           this.plank(mid.clone().addScaledVector(dir, -1.2), mid.clone().addScaledVector(dir, 1.2), 4.2, 1.45, i % 2 ? 0x1b1c20 : 0x222429);
         }
       }
-    // lights along the middle ones, pointed down at the floor
-    for (const z of [-35, 35]) for (let x = -110; x <= 110; x += 11) this.light(v(x + (z > 0 ? 5.5 : 0), ROOF_Y - 3.4, z));
-    // the scoreboard's: a frame over its cables, and four hangers up to the truss over the middle of the floor
-    const top = 74;
-    for (const [ax, az, bx, bz] of [
-      [-7, -7, 7, -7],
-      [7, -7, 7, 7],
-      [7, 7, -7, 7],
-      [-7, 7, -7, -7],
+    // the scoreboard's: a frame over its cables (its size, its shape: a long board's is long), hangers up from its corners
+    const top = BOARD_Y + BOARD_CABLES * look.size;
+    const long = look.board === 'long';
+    const [ax, az] = (long ? [14.5, 4.4] : [7, 7]).map((f) => f * look.size);
+    const [kx, kz] = (long ? [13, 2.6] : [3.96, 3.96]).map((f) => f * look.size);
+    for (const [sx, sz, ex, ez] of [
+      [-1, -1, 1, -1],
+      [1, -1, 1, 1],
+      [1, 1, -1, 1],
+      [-1, 1, -1, -1],
     ])
-      this.truss(v(ax, top + 2, az), v(bx, top + 2, bz), 1.6, 1.6, 3.5);
+      this.truss(v(sx * ax, top + 2, sz * az), v(ex * ax, top + 2, ez * az), 1.6, 1.6, 3.5);
     for (const sx of [-1, 1])
       for (const sz of [-1, 1]) {
-        this.bar(v(sx * 3.96, top, sz * 3.96), v(sx * 6.2, top + 1.2, sz * 6.2), 0.16);
-        this.bar(v(sx * 6.2, top + 2.8, sz * 6.2), v(sx * 6.2, ROOF_Y - 2.5, 0), 0.14);
+        this.bar(v(sx * kx, top, sz * kz), v(sx * (ax - 0.8), top + 1.2, sz * (az - 0.8)), 0.16);
+        this.bar(v(sx * ax, top + 2, sz * az), v(sx * ax, this.under(sx * ax, sz * az), sz * az), 0.14);
       }
-    // the banners: on the far side's truss, facing the floor
-    for (let i = 0; i < 6; i++) this.banners.push({ x: (i - 2.5) * 19, y: ROOF_Y - 5.4 - 11, z: -70 + 2.4, w: 10, h: 22 });
+    // the banners' batten, and its hangers
+    const batten = BANNERS[0].y + BANNERS[0].h / 2 + 0.3;
+    const bz = BANNERS[0].z - 0.3;
+    this.bar(v(-60, batten, bz), v(60, batten, bz), 0.3);
+    for (const x of [-40, 40]) this.bar(v(x, batten, bz), v(x, this.under(x, bz), bz), 0.12);
   }
 
   /** A bar from a to b, `t` thick (in the steel's grey, or its own). */
@@ -849,8 +1012,47 @@ class Roof {
     }
   }
 
-  private light(at: Vector3) {
-    this.lights.push(new Matrix4().compose(at, this.q.identity(), new Vector3(1.5, 0.55, 1.5)));
+  /** A catwalk from a to b (at its deck's height): the deck, a rail each side on posts, hangers up to the roof every so often. */
+  private catwalk(a: Vector3, b: Vector3) {
+    const d = b.clone().sub(a);
+    const len = d.length();
+    d.divideScalar(len);
+    this.plank(a, b, 3.4, 0.25, 0x2c2e33);
+    for (const s of [-1, 1]) {
+      const off = new Vector3(-d.z, 0, d.x).multiplyScalar(s * 1.7);
+      const on = (t: number, h: number) =>
+        a
+          .clone()
+          .addScaledVector(d, t)
+          .add(off)
+          .setY(a.y + h);
+      for (const h of [1.7, 3.3]) this.bar(on(0, h), on(len, h), 0.1, 0x55585f);
+      for (let t = 0; t <= len; t += 8) this.bar(on(t, 0), on(t, 3.3), 0.1, 0x55585f);
+      for (let t = 9; t < len; t += 40) {
+        const p = on(t, 3.3);
+        this.bar(p, p.clone().setY(this.under(p.x, p.z)), 0.14);
+      }
+    }
+  }
+
+  /** A spot under a catwalk's floor side (`to` the way to the floor's middle, level), in its fixture. */
+  private spot(at: Vector3, to: Vector3) {
+    this.spots.push(at);
+    this.plank(at.clone().setY(at.y + 0.9), at.clone().setY(at.y + 0.35), 0.5, 0.5, 0x1a1b1e);
+    this.plank(
+      at.clone().setY(at.y + 0.5),
+      at
+        .clone()
+        .addScaledVector(to, 0.5)
+        .setY(at.y - 0.7),
+      1.1,
+      1.1,
+      0x16171a,
+    );
+  }
+
+  private light(at: Vector3, size = LIGHT) {
+    this.lights.push(new Matrix4().compose(at, this.q.identity(), size));
   }
 
   /** Over a side's banks of lights (its frame `g`; the banks `y` up, 30 ft back): a truss along them, each bank on two hangers. */
@@ -864,34 +1066,43 @@ class Roof {
       }
   }
 
-  /** The steel and the lights, made (and given back, to be hidden on a slow device); the roof's deck over them stays. */
-  build(keep: Keep, group: Group): Object3D[] {
-    const unit = keep(new BoxGeometry(1, 1, 1));
-    // (the steel shows a little whatever the light: the lamps point down, and a roof is never quite black)
-    const steel = keep(new MeshLambertMaterial({ color: 0xffffff, emissive: 0x1e2025 }));
-    const glow = keep(new MeshBasicMaterial({ color: 0xfff1dc }));
-    const made: Object3D[] = [];
+  /** The steel and the lights, made of the kit's box and materials (given back to be hidden on a slow device, or dropped for another building's). */
+  build(kit: RoofKit, group: Group): InstancedMesh[] {
+    const made: InstancedMesh[] = [];
     const c = new Color();
     for (const [list, mat] of [
-      [this.bars, steel],
-      [this.lights, glow],
+      [this.bars, kit.steel],
+      [this.lights, kit.glow],
     ] as const) {
-      const mesh = keep(new InstancedMesh(unit, mat, list.length));
+      const mesh = new InstancedMesh(kit.unit, mat, list.length);
       list.forEach((m, i) => mesh.setMatrixAt(i, m));
-      if (mat === steel) this.tints.forEach((t, i) => mesh.setColorAt(i, c.set(t)));
+      if (mat === kit.steel) this.tints.forEach((t, i) => mesh.setColorAt(i, c.set(t)));
       mesh.frustumCulled = false;
       group.add(mesh);
       made.push(mesh);
     }
-    const deck = new Mesh(
-      keep(new PlaneGeometry(310, 290)),
-      keep(new MeshLambertMaterial({ color: 0x2c2e33, emissive: 0x17181c, map: ribbed(keep), emissiveMap: ribbed(keep), side: DoubleSide })),
-    );
-    deck.rotation.x = Math.PI / 2;
-    deck.position.set(0, ROOF_TOP, 14);
-    group.add(deck);
+    if (this.spots.length !== SPOTS) throw new Error(`the roof hangs ${this.spots.length} spots, not ${SPOTS}`);
     return made;
   }
+}
+
+/** What every building's roof is made of (the arena keeps them; each roof's steel and lights are instances of these): the deck, and a ceiling under it in a building with one. */
+interface RoofKit {
+  unit: BoxGeometry;
+  steel: MeshLambertMaterial;
+  glow: MeshBasicMaterial;
+  deck: Mesh;
+  ceiling: Mesh;
+}
+
+/** The cameras in the stands: a share of the seats, held up over a head toward the floor, and some up in the deck (bowl.ts high). */
+function cameras(seats: readonly Seat[], high: readonly number[]): number[] {
+  let k = 29;
+  const pick = () => ((k = (k * 16807) % 2147483647) & 0xffff) / 0xffff;
+  const cams: number[] = [];
+  for (const s of seats) if (pick() < FLASH_SHARE) cams.push(s.x + 0.6 * Math.sin(s.turn), s.y + 5, s.z + 0.6 * Math.cos(s.turn));
+  cams.push(...high);
+  return cams;
 }
 
 /** The roof's deck from below: ribbed sheet between purlins. */
@@ -921,5 +1132,64 @@ function ribbed(keep: Keep): CanvasTexture {
   return ribs;
 }
 
+/** A ceiling from below: square acoustic panels in a grid of joints, a panel here and there a shade off. */
+let tiles: CanvasTexture | null = null;
+function tiled(keep: Keep): CanvasTexture {
+  if (tiles) return tiles;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 64;
+  const ctx = cv.getContext('2d')!;
+  for (let i = 0; i < 4; i++)
+    for (let j = 0; j < 4; j++) {
+      const g = 168 + (((i * 7 + j * 13) % 5) - 2) * 6;
+      ctx.fillStyle = `rgb(${g}, ${g}, ${g + 2})`;
+      ctx.fillRect(i * 16, j * 16, 16, 16);
+    }
+  ctx.fillStyle = '#5a5a5c';
+  for (let x = 0; x < 64; x += 16) {
+    ctx.fillRect(x, 0, 1, 64);
+    ctx.fillRect(0, x, 64, 1);
+  }
+  tiles = keep(new CanvasTexture(cv));
+  tiles.colorSpace = SRGBColorSpace;
+  tiles.wrapS = tiles.wrapT = RepeatWrapping;
+  tiles.repeat.set(30, 28);
+  tiles.anisotropy = 4;
+  return tiles;
+}
+
 /** How high the tops of the roof's trusses over the floor are (ft). */
 const ROOF_Y = 104;
+/** How deep a trussed roof's trusses across the floor are (ft). */
+const DEEP_TRUSS = 7;
+/** A light's box (ft), and one let into a ceiling (wider, flatter). */
+const LIGHT = new Vector3(1.5, 0.55, 1.5);
+const CEILING_LIGHT = new Vector3(2.6, 0.2, 2.6);
+/** A building with a ceiling: how high it hangs (under the trusses, over the banners), its panels' tone and their glow, and its rings of lights round the scoreboard (ft across, ft along, how many). */
+const CEILING_Y = 99.5;
+const CEILING_TONE = 0x8c8e93;
+const CEILING_GLOW = 0x4a4c52;
+const CEILING_RINGS: readonly (readonly [number, number, number])[] = [
+  [30, 24, 16],
+  [56, 44, 26],
+  [84, 66, 36],
+];
+/** A dark open roof's: its deck, near black; where its arched ribs cross the floor; how far they fall from the middle to the walls (ft). */
+const OPEN_DECK = 0x0d0e10;
+const RIBS = [-110, -66, -22, 22, 66, 110];
+const ARCH_RISE = 16.5;
+/** A trussed roof's deck, and its glow. */
+const DECK = 0x2c2e33;
+const DECK_GLOW = 0x17181c;
+/** Catwalks in a ring round the scoreboard: half its length and width (ft); across over the ends: how far out. */
+const RING = [46, 36] as const;
+const ENDS_X = 52;
+/** How many spots the light show has, whatever the catwalks (fx.ts Show makes them once). */
+const SPOTS = 16;
+/** Where the scoreboard's middle hangs (ft), and how far over it its cables go up to the roof's frame (arena.py CABLE_Y). */
+const BOARD_Y = 62;
+const BOARD_CABLES = 12;
+/** A building with nothing said of its roof (before one is painted): deep trusses, catwalks along the sides, the big scoreboard. */
+const ROOFING: Roofing = { kind: 'trusses', catwalk: 'sides', board: 'four', size: 1 };
+/** The banners: in front of the far side's truss (or under the ceiling), facing the floor. */
+const BANNERS = Array.from({ length: 6 }, (_, i) => ({ x: (i - 2.5) * 19, y: ROOF_Y - 5.4 - 11, z: -70 + 2.4, w: 10, h: 22 }));

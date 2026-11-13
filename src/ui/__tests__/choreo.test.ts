@@ -7,7 +7,7 @@ import { FLOOR_L, FLOOR_W, pose, type Stage } from '../live/Court';
 import { attackDir, BASKET, buildScript, captionAt, COURT_LEN, faceWorld, standing, toWorld, type Frame, type Pt, type Script, type Standing } from '../live/choreo';
 import { Director, REPLAY_GAP, type BigKind } from '../live/court3d/director';
 import { ballIn, into, PARTS, Spacing, sunk } from '../live/court3d/spacing';
-import { blocked, CAM_KINDS, camKind, clearSeat, fenced, Operator, seen, shot, type View } from '../live/court3d/cameras';
+import { blocked, CAM_KINDS, camKind, clearSeat, clutter, fenced, Operator, seen, shot, type View } from '../live/court3d/cameras';
 import { captured, CHANNELS, CLIPS, DUNK_AT, DUNKS, GESTURES, I, mirror, N, PASSES, sample, span } from '../live/court3d/clips';
 import { occasionOf } from '../live/occasion';
 import { figureGeo } from '../live/court3d/figure';
@@ -18,6 +18,7 @@ import peopleGlb from '../live/court3d/models/people.glb?inline';
 import { bouncePass, meets, planShot, RIM_H, shotAt, shotSpeed, spinFor, Spring, stretch, type How } from '../live/court3d/ballistics';
 import { NET, NetSim } from '../live/court3d/net';
 import { BALL_R, baseClip, bodyOf, hash, HIP, J, Puppet } from '../live/court3d/puppet';
+import { ballSize } from '../live/court3d/ballskin';
 import { House } from '../live/court3d/boards';
 import { ShotClock, shotText } from '../live/shotClock';
 import { createTicker } from '../live/ticker';
@@ -702,14 +703,20 @@ describe('live court choreography', () => {
         'fanE',
         'fanF',
         'fanFar',
+        'fanG',
+        'fanH',
         'fanKid',
         'fanLow',
         'fanMidA',
         'fanMidB',
+        'fanMidC',
         'hoop',
         'net',
         'rim',
         'scoreboard',
+        'scoreboardHalo',
+        'scoreboardLong',
+        'scoreboardSlim',
         'stall',
         'table',
       ]);
@@ -847,6 +854,43 @@ describe('live court choreography', () => {
       }
       expect(sh.clip).not.toBe('jumper');
       expect(peak).toBeGreaterThan(HIP + 0.8);
+      // --- arms, hands and the ball ---
+      {
+        // a fast ball caught is given with: his hands, and the ball in them, go back toward his chest and out again
+        const caught = (give: boolean) => {
+          const cg = new Puppet(bodyOf(78, 215));
+          const at = { x: 0, y: 0, z: 0 };
+          const zs: number[] = [];
+          for (let t = 0; t < 900; t += 16) {
+            cg.update({ x: 0, z: 0, yaw: 0, act: 'catch', ms: t, dur: 400, ball: true }, 16);
+            if (give && t === 400) cg.caught({ x: 0, y: 0, z: -35 });
+            cg.arms(cg.carry(at));
+            zs.push(at.z);
+          }
+          return zs;
+        };
+        const still = caught(false);
+        const gave = caught(true).map((z, i) => z - still[i]);
+        expect(Math.min(...gave.slice(25, 35))).toBeLessThan(-0.15);
+        expect(Math.abs(gave[gave.length - 1])).toBeLessThan(0.02);
+        // a free hand doesn't go through a ball that isn't his: a pass across where it is goes by it
+        const dg = new Puppet(bodyOf(78, 215));
+        for (let t = 0; t < 400; t += 16) {
+          dg.update({ x: 0, z: 0, yaw: 0, act: 'stand', ms: t, dur: 3000, ball: false }, 16);
+          dg.arms(null);
+        }
+        const hand = dg.world(dg.j[J.hr * 3], dg.j[J.hr * 3 + 1], dg.j[J.hr * 3 + 2], { x: 0, y: 0, z: 0 });
+        const by = { at: { x: hand.x - 8, y: hand.y, z: hand.z }, v: { x: 30, y: 0, z: 0 } };
+        let closest = Infinity;
+        for (let t = 0; t < 560; t += 16) {
+          by.at.x += 30 * 0.016;
+          dg.update({ x: 0, z: 0, yaw: 0, act: 'stand', ms: 400 + t, dur: 3000, ball: false }, 16);
+          dg.arms(null, [], by);
+          const h = dg.world(dg.j[J.hr * 3], dg.j[J.hr * 3 + 1], dg.j[J.hr * 3 + 2], { x: 0, y: 0, z: 0 });
+          closest = Math.min(closest, Math.hypot(h.x - by.at.x, h.y - by.at.y, h.z - by.at.z));
+        }
+        expect(closest).toBeGreaterThan(BALL_R + 0.05);
+      }
       // the moves a take covers are captured motion (measured on these same channels); the rest are keyed
       for (const id of [
         'walk',
@@ -1107,6 +1151,205 @@ describe('live court choreography', () => {
         flying = now;
       }
       expect(floorY).toBeLessThan(BALL_R + 0.2);
+
+      // ---- the ball's side of his hands (Puppet.holds, bounced's pick-up and gather, ballskin's ballSize) ----
+      // held, the ball is where his hands are drawn (the scene puts it there: see CourtScene.inHands)
+      const hd = new Puppet(bodyOf(78, 215));
+      const held = { x: 0, y: 0, z: 0 };
+      for (let t = 0; t < 600; t += 16) {
+        hd.update({ x: 0, z: 0, yaw: 0, act: 'hold', ms: t, dur: 600, ball: true, who: 5 }, 16);
+        const ball = hd.bounced(hd.carry(out));
+        hd.arms(ball);
+        const w = hd.holds(held);
+        if (t > 300) {
+          expect(w).toBeGreaterThan(0.9);
+          expect(Math.hypot(held.x - ball.x, held.y - ball.y, held.z - ball.z)).toBeLessThan(0.05);
+        }
+      }
+      // a dribble picked up on its way down comes up off the floor into his hands: never pulled up in a frame
+      const pk = new Puppet(bodyOf(78, 215));
+      let since = -1;
+      let lastY = -1;
+      let rise = 0;
+      for (let t = 0; t < 1600; t += 16) {
+        const d = pk.dribble;
+        if (since < 0 && t > 600 && d && d.phase > 0.3 && d.phase < 0.5) since = t;
+        pk.update({ x: 0, z: t * 0.012, yaw: 0, act: since >= 0 ? 'hold' : 'dribble', ms: t, dur: 1600, ball: true, who: 9 }, 16);
+        const y = pk.bounced(pk.carry(out)).y;
+        if (since >= 0 && t - since < 400) rise = Math.max(rise, y - lastY);
+        lastY = y;
+      }
+      expect(since).toBeGreaterThan(0);
+      expect(rise).toBeLessThan(0.8);
+      // his own dribble gathered (a catch with the ball already his): down once in front of him, and back in his hands
+      // by the catch
+      const ga = new Puppet(bodyOf(78, 215));
+      let gLow = 9;
+      let gStep = 0;
+      lastY = -1;
+      for (let t = 0; t < 520; t += 16) {
+        ga.update({ x: 0, z: 0, yaw: 0, act: 'catch', ms: t, dur: 500, ball: true, who: 7 }, 16);
+        const ball = ga.bounced(ga.carry(out));
+        ga.arms(ball);
+        gLow = Math.min(gLow, ball.y);
+        if (lastY >= 0) gStep = Math.max(gStep, Math.abs(ball.y - lastY));
+        lastY = ball.y;
+        if (t >= 480) {
+          expect(ga.holds(held)).toBeGreaterThan(0.9);
+          expect(Math.hypot(held.x - ball.x, held.y - ball.y, held.z - ball.z)).toBeLessThan(0.15);
+        }
+      }
+      expect(gLow).toBeLessThan(BALL_R + 0.2);
+      expect(gStep).toBeLessThan(0.8);
+      // small on the picture, the ball's edge is drawn dark; up close it is only leather
+      expect(ballSize(6)).toBe(1);
+      expect(ballSize(13)).toBeGreaterThan(0);
+      expect(ballSize(13)).toBeLessThan(1);
+      expect(ballSize(40)).toBe(0);
+      // ---- end of the ball's side ----
+    }
+
+    // locomotion: no path the court draws asks a man to go faster than a man runs; his steps are his speed's (step ×
+    // cadence = speed, his cadence rising with it and his step no longer than about 7.5 ft however fast); setting off his
+    // steps are shorter than an even run's, pulling up he leans back; and a man sent backward faster than a man backs
+    // up turns and runs
+    {
+      // (a real game, sampled along each path on the bodies' clock: the 3D court plays the play at half)
+      const league = newLeague();
+      const sim = new GameSim(
+        { team: league.teams[2], players: teamPlayers(league, 2) },
+        { team: league.teams[3], players: teamPlayers(league, 3) },
+        { rng: new Rng(7), type: 'regular', record: true, injuries: false },
+      );
+      let fastest = 0;
+      let before: Standing | undefined;
+      let q = 0;
+      while (!sim.over) {
+        sim.step();
+        for (const l of sim.drainLogs()) {
+          const sc = buildScript(l, info, undefined, undefined, undefined, undefined, l.q === q ? before : undefined);
+          [before, q] = [standing(sc), l.q];
+          const end = sc.frames.reduce((t, f) => t + f.dur, 0);
+          let was = pose(sc, 0, false);
+          for (let t = 10; t <= end; t += 10) {
+            const p = pose(sc, t, false);
+            [...p.o, ...p.d].forEach((m, j) => {
+              const w = j < p.o.length ? was.o[j] : was.d[j - p.o.length];
+              fastest = Math.max(fastest, (Math.hypot(m.x - w.x, m.y - w.y) / 10) * 1000 * 0.5);
+            });
+            was = p;
+          }
+        }
+      }
+      expect(fastest).toBeGreaterThan(20);
+      expect(fastest).toBeLessThan(28.5);
+      // (a man running at a speed: his steps, from one foot down to the other, and how long each takes)
+      const steps = (v: (t: number) => number, until: number, from = 0, to = until) => {
+        const m = new Puppet(bodyOf(78, 215));
+        const out: { len: number; ms: number; v: number }[] = [];
+        let z = 0;
+        let last: { k: number; z: number; t: number } | null = null;
+        const down = [true, true];
+        let lean = Infinity;
+        for (let t = 0; t < until; t += 16) {
+          z += (v(t) * 16) / 1000;
+          m.update({ x: 0, z, yaw: 0, act: 'move', ms: t, dur: 9999, ball: false, who: 3 }, 16);
+          if (t >= from && t < to) lean = Math.min(lean, m.pose[I.lean]);
+          m.feet.forEach((f, k) => {
+            const on = !f.swing && m.pose[I.air] < 0.5;
+            if (on && !down[k]) {
+              if (last && last.k !== k && t >= from && t < to) out.push({ len: f.z - last.z, ms: t - last.t, v: v(t) });
+              last = { k, z: f.z, t };
+            }
+            down[k] = on;
+          });
+        }
+        return { out, lean };
+      };
+      const even = [4.5, 11, 18, 26].map((v) => steps(() => v, 4000, 1500).out);
+      for (const [i, run] of even.entries()) {
+        const len = run.reduce((n, s) => n + s.len, 0) / run.length;
+        const rate = (1000 * run.length) / run.reduce((n, s) => n + s.ms, 0);
+        expect(Math.abs((len * rate) / [4.5, 11, 18, 26][i] - 1)).toBeLessThan(0.08);
+        if (i) expect(rate).toBeGreaterThan((1000 * even[i - 1].length) / even[i - 1].reduce((n, s) => n + s.ms, 0));
+        expect(len).toBeLessThan(7.5);
+      }
+      // (getting up to 26 ft a second at 15 ft a second squared, his steps through 14..22 against an even run's at 18;
+      // pulling up from it, his lean against an even run's)
+      const going = steps((t) => Math.min(26, (15 * t) / 1000), 2200, 900, 1500).out;
+      expect(going.reduce((n, s) => n + s.len, 0) / going.length).toBeLessThan((0.95 * even[2].reduce((n, s) => n + s.len, 0)) / even[2].length);
+      const evenLean = steps(() => 26, 3000, 2000).lean;
+      const stopping = steps((t) => (t < 2000 ? 26 : Math.max(0, 26 - (30 * (t - 2000)) / 1000)), 3000, 2200, 2800);
+      expect(stopping.lean).toBeLessThan(evenLean - 0.15);
+      // (sent backward at 20 ft a second facing the other way: within half a second he has turned and runs)
+      const back = new Puppet(bodyOf(78, 215));
+      for (let t = 0; t < 900; t += 16) back.update({ x: 0, z: (-20 * t) / 1000, yaw: 0, act: 'screen', ms: t, dur: 9999, ball: false, who: 4 }, 16);
+      expect(Math.abs(Math.cos(back.yaw) + 1)).toBeLessThan(0.1);
+      expect(['run', 'jog', 'sprint']).toContain(back.clip);
+    }
+
+    // legs and body (round 2): a sprinter's knee folds over frames, never most of the way in one; his first swing from a
+    // stand is short and quick; a big turn at a run is slower than one from a walk; a hard knock is taken with a step
+    {
+      const kneeOf = (m: Puppet) => {
+        const j = m.j;
+        const a = [j[J.jl * 3] - j[J.kl * 3], j[J.jl * 3 + 1] - j[J.kl * 3 + 1], j[J.jl * 3 + 2] - j[J.kl * 3 + 2]];
+        const b = [j[J.fl * 3] - j[J.kl * 3], j[J.fl * 3 + 1] - j[J.kl * 3 + 1], j[J.fl * 3 + 2] - j[J.kl * 3 + 2]];
+        return Math.acos((a[0] * b[0] + a[1] * b[1] + a[2] * b[2]) / (Math.hypot(a[0], a[1], a[2]) * Math.hypot(b[0], b[1], b[2])));
+      };
+      const sprinter = new Puppet(bodyOf(78, 215));
+      let fold = 0;
+      let was = 0;
+      for (let t = 0, z = 0; t < 3000; t += 33) {
+        z += (Math.min(25, t / 40) * 33) / 1000;
+        sprinter.update({ x: 0, z, yaw: 0, act: 'move', ms: t, dur: 9999, ball: false, who: 3 }, 16, 33);
+        const k = kneeOf(sprinter);
+        if (t > 1500) fold = Math.max(fold, was - k);
+        was = k;
+      }
+      expect(fold).toBeLessThan(0.75);
+      // (from a stand at 26 ft a second squared: his first foot is up no longer than an even run's swing at 18 ft a second)
+      const first = new Puppet(bodyOf(78, 215));
+      let up = -1;
+      let swing = 0;
+      for (let t = 0, z = 0; t < 1200 && !swing; t += 16) {
+        z += (Math.min(24, Math.max(0, t - 300) * 0.026) * 16) / 1000;
+        first.update({ x: 0, z, yaw: 0, act: z > 0 ? 'move' : 'stand', ms: t, dur: 9999, ball: false, who: 3 }, 16);
+        if (up < 0 && first.feet[0].swing) up = t;
+        else if (up >= 0 && !first.feet[0].swing) swing = t - up;
+      }
+      expect(swing).toBeGreaterThan(0);
+      expect(swing).toBeLessThan(380);
+      // (told to face back: running at 20 ft a second he comes round slower than from a walk)
+      const turnAt = (v: number) => {
+        const m = new Puppet(bodyOf(78, 215));
+        let most = 0;
+        for (let t = 0, z = 0; t < 1400; t += 16) {
+          z += (v * 16) / 1000;
+          const before = m.yaw;
+          m.update({ x: 0, z, yaw: t < 900 ? 0 : 2.6, act: 'defend', ms: t, dur: 9999, ball: false, who: 5 }, 16);
+          if (t > 900) most = Math.max(most, Math.abs(m.yaw - before) / 0.016);
+        }
+        return most;
+      };
+      expect(turnAt(20)).toBeLessThan(0.7 * turnAt(3));
+      // (stood, knocked hard from in front: he is thrown back past what a soft one does, and steps back to take it)
+      const hitBy = (power: number) => {
+        const m = new Puppet(bodyOf(78, 215));
+        let lean = 9;
+        let stepped = false;
+        for (let t = 0; t < 1600; t += 16) {
+          if (t === 1008) m.hit(0, -1, power);
+          m.update({ x: 0, z: 0, yaw: 0, act: 'defend', ms: t, dur: 9999, ball: false, who: 5 }, 16);
+          if (t > 1008) lean = Math.min(lean, m.pose[I.lean]);
+          if (t > 1008 && m.feet.some((f) => f.swing)) stepped = true;
+        }
+        return { lean, stepped };
+      };
+      const [soft, hard] = [hitBy(0.2), hitBy(0.9)];
+      expect(hard.lean).toBeLessThan(soft.lean - 0.15);
+      expect(hard.stepped).toBe(true);
+      expect(soft.stepped).toBe(false);
     }
 
     // the ten of a real game as the 3D court draws them (the plan's spots kept apart, then the bodies): no two trunks
@@ -1305,6 +1548,36 @@ describe('live court choreography', () => {
         expect(fenced(seat.x, 5.2, seat.z, see[0], see[1], see[2]) || fenced(seat.x, 5.2, seat.z, see[3], see[4], see[5])).toBe(false);
       }
     }
+    // what a picture is made of (cameras.ts clutter), and a phone's upright court (the main camera's tall frame)
+    {
+      // from low behind the basket, straight at its rim, the picture is mostly its unit; from the near apron little of
+      // it is; a man by the lens takes his share of it
+      const rimX = COURT_LEN / 2 - BASKET.y;
+      const half = Math.tan(0.35);
+      const apron = clutter(rimX - 20, 6, 28, rimX, 9, 0, half, 1.6, 40);
+      expect(clutter(rimX + 7.5, 5, 0, rimX, 10, 0, half, 1.6, 40)).toBeGreaterThan(0.3);
+      expect(apron).toBeLessThan(0.05);
+      expect(clutter(rimX - 20, 6, 28, rimX, 9, 0, half, 1.6, 40, [rimX - 18, 24], 1, 10)).toBeGreaterThan(apron + 0.2);
+      // about square, the main camera stands higher and nearer than in a wide frame, and the floor fills its picture:
+      // the far sideline is high in it (a quarter of it or less is the stands over it), and the ten are all in it
+      const set = [20, 0, 30, 20, 30, -20, 44, 22, 40, -6, 24, 0, 33, 16, 33, -16, 42, 17, 41, -3];
+      const framed = (aspect: number) => {
+        const op = new Operator();
+        const s = shot();
+        for (let i = 0; i < 300; i++) op.aim('tv', { ball: { x: 20, y: 4, z: 2 }, men: set, n: 10, end: 1, aspect, near: 0, tight: 0 }, 16, false, s);
+        return s;
+      };
+      const [wide, square] = [framed(1.69), framed(1)];
+      expect(square.py).toBeGreaterThan(wide.py + 12);
+      expect(square.pz).toBeLessThan(wide.pz - 12);
+      expect(seen(square, 1, square.lx, 0, -28).y).toBeGreaterThan(0.45);
+      expect(seen(wide, 1.69, wide.lx, 0, -28).y).toBeLessThan(0.4);
+      for (let i = 0; i < 10; i++)
+        for (const y of [0, 7]) {
+          const p = seen(square, 1, set[i * 2], y, set[i * 2 + 1]);
+          expect(Math.max(Math.abs(p.x), Math.abs(p.y))).toBeLessThan(1);
+        }
+    }
     // an instant replay (director.ts) keeps its outcome in the picture, clear of the lower third and the Replay bug, from
     // whichever camera: the man with the ball at its moment (a block's shooter and blocker before it, an and-one's foul),
     // the ball's flight and the basket from the release until the ball is out of the net; a shot from range is seen from
@@ -1362,6 +1635,9 @@ describe('live court choreography', () => {
       let [dunkF, fencedF, looks, wider] = [0, 0, 0, 0];
       const offSlam: number[] = [];
       const missed: string[] = [];
+      // (cameras, round 2: the widest each over-the-shoulder look went, degrees top to bottom)
+      const shoulders: number[] = [];
+      let shoulder = 0;
       // as a desktop and a phone show it
       for (const [w, h] of [
         [820, 436],
@@ -1450,6 +1726,7 @@ describe('live court choreography', () => {
             was.copy(fwd);
             if (r.swap >= 0) continue;
             [lo, hi] = [Math.min(lo, cam.fov), Math.max(hi, cam.fov)];
+            if (r.cam === 'tight' && r.back) shoulder = Math.max(shoulder, cam.fov);
             // (from the finish to the end of his hang, nothing of the basket's unit between the lens and the ball, into the rim and through)
             if (dunk && t >= rel && t < rel + 280) {
               dunkF++;
@@ -1480,7 +1757,9 @@ describe('live court choreography', () => {
             if (r.back && t === r.t0 && Math.hypot(r.seat.x - rim.x, r.seat.z - rim.z) > Math.hypot(from.x - rim.x, from.z - rim.z)) behind++;
           }
           close();
-          if (dunk && lowStep < Infinity) offSlam.push(slowT - (rel + DUNK_AT * PACE));
+          if (shoulder) shoulders.push(shoulder);
+          shoulder = 0;
+          if (dunk && b.kind !== 'block' && lowStep < Infinity) offSlam.push(slowT - (rel + DUNK_AT * PACE));
           d.end();
           reels++;
           if (ok) kept++;
@@ -1498,6 +1777,30 @@ describe('live court choreography', () => {
       expect(offSlam.length).toBeGreaterThan(10);
       expect(Math.max(...offSlam.map(Math.abs)), offSlam.join()).toBeLessThan(60);
       expect(wider / looks).toBeLessThan(0.05);
+      // (cameras, round 2) over his shoulder is a long lens from well behind him: mostly no wider than 34 degrees
+      shoulders.sort((a, b) => a - b);
+      expect(shoulders.length).toBeGreaterThan(10);
+      expect(shoulders[Math.floor(shoulders.length / 2)]).toBeLessThan(34);
+    }
+    // (cameras, round 2) the floor's camera (Baseline) holds the board over it while the play is at its basket: both of
+    // the board's top corners in a wide picture, its rim in a phone's upright one
+    {
+      const rimX = COURT_LEN / 2 - BASKET.y;
+      const set = [-20, 4, -14, -10, -8, 6, -22, -14, -5, -2, -18, 2, -12, -8, -7, 8, -24, 12, -4, 1].map((v, i) => (i % 2 ? v : rimX + v));
+      for (const aspect of [1.6, 1]) {
+        const op = new Operator();
+        const s = shot();
+        for (let i = 0; i < 300; i++) op.aim('low', { ball: { x: rimX - 20, y: 4, z: 4 }, men: set, n: 10, end: 1, aspect, near: 0, tight: 0 }, 16, false, s);
+        for (const [x, y, z] of aspect > 1.5
+          ? [
+              [rimX + 1.25, 13.5, 3],
+              [rimX + 1.25, 13.5, -3],
+            ]
+          : [[rimX, 10, 0]]) {
+          const p = seen(s, aspect, x, y, z);
+          expect(Math.max(Math.abs(p.x), Math.abs(p.y))).toBeLessThan(1);
+        }
+      }
     }
     // the ball's flight: every shot starts in the hand, a make ends under the net and a miss never goes down through the
     // ring, whichever way it ends; a jumper spins back; the rim rings and comes to rest
@@ -1638,6 +1941,41 @@ describe('live court choreography', () => {
       const shake = sample(GESTURES.shake, 480, new Float32Array(N));
       expect(shake[I.rz]).toBeGreaterThan(1);
       expect(shake[I.ry]).toBeLessThan(-0.5);
+    }
+    // actions and contact (puppet.ts round, elbow, hit): a contest's arm comes down round his shoulder at its length,
+    // no faster than an arm turns, its elbow never flipped over in a frame; a knock throws his trunk and it comes back
+    {
+      const ac = new Puppet(bodyOf(78, 215));
+      const dir = (a: number, b: number) => {
+        const v = [0, 1, 2].map((k) => ac.j[b * 3 + k] - ac.j[a * 3 + k]);
+        const l = Math.hypot(...v) || 1;
+        return v.map((x) => x / l);
+      };
+      let fastest = 0;
+      let nearest = Infinity;
+      let was: number[] | null = null;
+      for (let t = 0; t < 1500; t += 16) {
+        const on = t < 640;
+        ac.update({ x: 0, z: 0, yaw: 0, act: on ? 'contest' : 'defend', ms: on ? t : t - 640, dur: on ? 640 : 9000, ball: false, who: 9 }, 16);
+        ac.arms(null);
+        const up = dir(J.sr, J.er);
+        if (was) fastest = Math.max(fastest, Math.acos(Math.min(1, up[0] * was[0] + up[1] * was[1] + up[2] * was[2])) / 0.016);
+        was = up;
+        // (on its way down from over his head: never folded in to his shoulder)
+        if (t > 640 + 230 && t < 640 + 440) nearest = Math.min(nearest, Math.hypot(...[0, 1, 2].map((k) => ac.j[J.hr * 3 + k] - ac.j[J.sr * 3 + k])));
+      }
+      expect(fastest).toBeLessThan(30);
+      expect(nearest).toBeGreaterThan(1.3);
+      // (against the same man left alone: pushed back from in front of him, his trunk goes back, then comes up again)
+      const [kn, calm] = [new Puppet(bodyOf(78, 215)), new Puppet(bodyOf(78, 215))];
+      const back: number[] = [];
+      for (let t = 0; t < 1400; t += 16) {
+        if (t === 320) kn.hit(0, -1, 1);
+        for (const m of [kn, calm]) m.update({ x: 0, z: 0, yaw: 0, act: 'stand', ms: t, dur: 9000, ball: false, who: 4 }, 16);
+        back.push(calm.pose[I.lean] - kn.pose[I.lean]);
+      }
+      expect(Math.max(...back.slice(20, 40))).toBeGreaterThan(0.1);
+      expect(Math.abs(back[back.length - 1])).toBeLessThan(0.01);
     }
   });
 });

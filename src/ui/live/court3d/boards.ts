@@ -1018,6 +1018,8 @@ export class Boards {
   /** The first of the partners this building carries, and its boards' own look (its own: see paint). */
   private adFrom = 0;
   private style: 0 | 1 = 0;
+  /** The building's own number (Venue.seed): which banners it hangs (see flags). */
+  private seed = 0;
   private ms = 0;
   private fontsIn = false;
   private dimTo = 1;
@@ -1081,19 +1083,20 @@ export class Boards {
   }
 
   /**
-   * Banners hanging in the roof (each its middle at x, y, z, `w` by `h` ft, facing +z), in the home side's colours with
-   * its letters and stripes, four looks in turn. No years, no titles: the game knows of none.
+   * Banners hanging in the roof (each its middle at x, y, z, `w` by `h` ft, facing +z), in the home side's colours: each
+   * its own picture (see flags), so a building hangs as many as it has and its own. No years, no titles: the game knows
+   * of none.
    */
   banners(list: { x: number; y: number; z: number; w: number; h: number }[]) {
     if (!list.length) return;
     const cv = document.createElement('canvas');
-    cv.width = 4 * FLAG_PX[0];
+    cv.width = list.length * FLAG_PX[0];
     cv.height = FLAG_PX[1];
     const tex = this.keep(new CanvasTexture(cv));
     tex.colorSpace = SRGBColorSpace;
     tex.anisotropy = 4;
     this.flags = { cv, tex };
-    const geo = faces(list.map((b, i) => ({ ...b, turn: 0, u: [(i % 4) / 4, (i % 4) / 4 + 0.25] as [number, number] })));
+    const geo = faces(list.map((b, i) => ({ ...b, turn: 0, u: [i / list.length, (i + 1) / list.length] as [number, number] })));
     const mat = this.keep(new MeshLambertMaterial({ map: tex, side: DoubleSide, alphaTest: 0.5 }));
     this.group.add(new Mesh(this.keep(geo), mat));
   }
@@ -1128,9 +1131,10 @@ export class Boards {
   }
   /** The building's colour, and (`seed`: its own number) which of the partners it carries first; `style` its boards' own look (Venue.boards). */
   paint(board: string, seed = 0, style: 0 | 1 = 0) {
-    if (board === this.board && seed % ADS.length === this.adFrom && style === this.style) return;
+    if (board === this.board && seed === this.seed && style === this.style) return;
     this.board = board;
     this.adFrom = seed % ADS.length;
+    this.seed = seed;
     this.style = style;
     this.stale();
   }
@@ -1259,10 +1263,10 @@ export class Boards {
       }
     };
 
-    const flagKey = `${look.home.abbr}|${look.home.fill}|${look.home.trim}|${this.fontsIn}`;
+    const flagKey = `${look.home.abbr}|${look.home.fill}|${look.home.trim}|${this.seed}|${this.fontsIn}`;
     if (this.flags && flagKey !== this.flagKey) {
       this.flagKey = flagKey;
-      flags(this.flags.cv, look.home);
+      flags(this.flags.cv, look.home, this.seed);
       this.flags.tex.needsUpdate = true;
     }
     const gap = this.slow ? PAINT_MS * 2 : PAINT_MS;
@@ -1324,14 +1328,36 @@ export class Boards {
 /** A banner's picture, px across and down (it hangs a little over twice as long as it is wide). */
 const FLAG_PX = [128, 282];
 
-/** The banners: four looks side by side, each cut to a point or a swallowtail at its foot (clear there). */
-function flags(cv: HTMLCanvasElement, side: Side) {
+/** Numbers a building may have retired (numbers only: nobody's name, and no years). */
+const RETIRED = ['33', '6', '23', '32', '1', '11', '34', '21', '3', '8', '10', '13', '15', '24', '44', '50', '7', '12', '5', '42'];
+/** The fewest banners a building hangs (the roof has places for more: the rest are left empty), and the most of them numbers. */
+const FLAGS_LEAST = 3;
+const FLAGS_NUMBERS = 3;
+
+/**
+ * The banners, one picture each side by side: as many as the building hangs (by its own number, `seed`:
+ * Venue.seed), from the middle places out, the rest left clear; each one of four looks in its colours with its
+ * letters, or a number it has retired (big, in white, over its letters and a band), together at one end. Each
+ * is cut to a point or a swallowtail at its foot (clear there).
+ */
+function flags(cv: HTMLCanvasElement, side: Side, seed: number) {
   const ctx = cv.getContext('2d')!;
   const [w, h] = FLAG_PX;
+  const n = Math.round(cv.width / w);
+  const pick = (k: number, of: number) => (Math.imul(seed ^ Math.imul(k, 0x9e3779b9), 0x85ebca6b) >>> 0) % of;
+  const hung = Math.min(n, FLAGS_LEAST + pick(1, Math.max(1, n - FLAGS_LEAST + 1)));
+  const numbers = pick(2, FLAGS_NUMBERS + 1);
+  const left = pick(4, 2) === 0;
+  const places = [...Array(n).keys()]
+    .sort((a, b) => Math.abs(a - (n - 1) / 2) - Math.abs(b - (n - 1) / 2) || a - b)
+    .slice(0, hung)
+    .sort((a, b) => a - b);
   ctx.clearRect(0, 0, cv.width, cv.height);
-  for (let k = 0; k < 4; k++) {
+  places.forEach((at, j) => {
+    const k = (j + pick(3, 4)) % 4;
+    const number = left ? j < numbers : j >= hung - numbers;
     ctx.save();
-    ctx.translate(k * w, 0);
+    ctx.translate(at * w, 0);
     // the cloth's outline: straight down, then a point (or a swallowtail) at the foot
     ctx.beginPath();
     ctx.moveTo(0, 0);
@@ -1347,46 +1373,54 @@ function flags(cv: HTMLCanvasElement, side: Side) {
     }
     ctx.closePath();
     ctx.clip();
-    ctx.fillStyle = k === 2 ? side.deep : side.fill;
+    ctx.fillStyle = k === 2 && !number ? side.deep : side.fill;
     ctx.fillRect(0, 0, w, h);
     const band = (y: number, t: number, c: string) => {
       ctx.fillStyle = c;
       ctx.fillRect(0, y, w, t);
     };
-    switch (k) {
-      case 0:
-        band(h * 0.06, h * 0.03, side.trim);
-        band(h * 0.1, h * 0.012, WHITE);
-        band(h * 0.66, h * 0.04, side.trim);
-        band(h * 0.72, h * 0.04, WHITE);
-        band(h * 0.78, h * 0.04, side.trim);
-        write(ctx, side.abbr, w / 2, h * 0.38, w * 0.5, w * 0.84, WHITE);
-        break;
-      case 1:
-        ctx.fillStyle = side.trim;
-        for (const x of [0.2, 0.5, 0.8]) ctx.fillRect(w * x - w * 0.05, h * 0.36, w * 0.1, h * 0.6);
-        band(h * 0.08, h * 0.2, WHITE);
-        write(ctx, side.abbr, w / 2, h * 0.18, w * 0.36, w * 0.8, side.fill);
-        break;
-      case 2:
-        ctx.strokeStyle = side.fill;
-        ctx.lineWidth = w * 0.08;
-        ctx.strokeRect(w * 0.04, w * 0.04, w * 0.92, h * 1.2);
-        write(ctx, side.abbr, w / 2, h * 0.3, w * 0.42, w * 0.76, WHITE);
-        chevrons(ctx, w * 0.22, w * 0.8, h * 0.5, h * 0.64, 1, side.trim);
-        break;
-      default:
-        ctx.fillStyle = side.trim;
-        ctx.beginPath();
-        ctx.moveTo(0, h * 0.42);
-        ctx.lineTo(w, h * 0.3);
-        ctx.lineTo(w, h * 0.4);
-        ctx.lineTo(0, h * 0.52);
-        ctx.fill();
-        write(ctx, side.abbr, w / 2, h * 0.16, w * 0.4, w * 0.8, WHITE);
-        band(h * 0.7, h * 0.025, WHITE);
-        break;
-    }
+    if (number) {
+      // a retired number: its letters small at the top, the number big, a band under it
+      band(h * 0.05, h * 0.02, side.trim);
+      write(ctx, side.abbr, w / 2, h * 0.13, w * 0.24, w * 0.6, WHITE);
+      write(ctx, RETIRED[(pick(5, RETIRED.length) + j * 7) % RETIRED.length], w / 2, h * 0.43, w * 0.66, w * 0.86, WHITE);
+      band(h * 0.66, h * 0.035, side.trim);
+      band(h * 0.71, h * 0.012, WHITE);
+    } else
+      switch (k) {
+        case 0:
+          band(h * 0.06, h * 0.03, side.trim);
+          band(h * 0.1, h * 0.012, WHITE);
+          band(h * 0.66, h * 0.04, side.trim);
+          band(h * 0.72, h * 0.04, WHITE);
+          band(h * 0.78, h * 0.04, side.trim);
+          write(ctx, side.abbr, w / 2, h * 0.38, w * 0.5, w * 0.84, WHITE);
+          break;
+        case 1:
+          ctx.fillStyle = side.trim;
+          for (const x of [0.2, 0.5, 0.8]) ctx.fillRect(w * x - w * 0.05, h * 0.36, w * 0.1, h * 0.6);
+          band(h * 0.08, h * 0.2, WHITE);
+          write(ctx, side.abbr, w / 2, h * 0.18, w * 0.36, w * 0.8, side.fill);
+          break;
+        case 2:
+          ctx.strokeStyle = side.fill;
+          ctx.lineWidth = w * 0.08;
+          ctx.strokeRect(w * 0.04, w * 0.04, w * 0.92, h * 1.2);
+          write(ctx, side.abbr, w / 2, h * 0.3, w * 0.42, w * 0.76, WHITE);
+          chevrons(ctx, w * 0.22, w * 0.8, h * 0.5, h * 0.64, 1, side.trim);
+          break;
+        default:
+          ctx.fillStyle = side.trim;
+          ctx.beginPath();
+          ctx.moveTo(0, h * 0.42);
+          ctx.lineTo(w, h * 0.3);
+          ctx.lineTo(w, h * 0.4);
+          ctx.lineTo(0, h * 0.52);
+          ctx.fill();
+          write(ctx, side.abbr, w / 2, h * 0.16, w * 0.4, w * 0.8, WHITE);
+          band(h * 0.7, h * 0.025, WHITE);
+          break;
+      }
     // (cloth: lighter where it bellies, darker at its edges and in its folds)
     const fold = ctx.createLinearGradient(0, 0, w, 0);
     fold.addColorStop(0, 'rgba(0,0,0,0.35)');
@@ -1397,7 +1431,7 @@ function flags(cv: HTMLCanvasElement, side: Side) {
     ctx.fillStyle = fold;
     ctx.fillRect(0, 0, w, h);
     ctx.restore();
-  }
+  });
 }
 
 /** The ribbon along the top of the lower bowl at full light: under the others (it runs right across the broadcast's picture). */

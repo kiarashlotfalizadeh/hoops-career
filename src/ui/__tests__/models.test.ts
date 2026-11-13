@@ -44,12 +44,12 @@ const HAIR_PIECES = ['bun', 'tail', 'twists', 'locs', 'braids', 'afro', 'hightop
 const PLAYER = ['skin', 'hair', 'jersey', 'trim', 'cloth', 'shoe', 'white', 'collar', 'high'];
 /** And the parts of his head that are his alone (figure.py's mouth and ears: court3d/figure.ts gives each its place on his sheet). */
 const PLAYER_HEAD = ['ear', 'mouth', 'teeth'];
-const ARENA = ['pad', 'steel', 'team', 'edge', 'glass', 'clock', 'led', 'iron', 'cord', 'seat', 'dark', 'board', 'screen', 'ribbon', 'leather', 'seam'];
+const ARENA = ['pad', 'steel', 'team', 'edge', 'glass', 'clock', 'led', 'iron', 'cord', 'seat', 'dark', 'board', 'screen', 'ribbon', 'leather', 'seam', 'glassEdge'];
 const FAN = ['fan'];
 const PROPS = ['ball', 'chair', 'hoop', 'net', 'rim', 'scoreboard', 'table', 'stall'];
 /** The spectators: the rows by the floor's, and the plainer ones behind them (court3d/props.ts asks for each by name). */
-const FANS_NEAR = ['fanA', 'fanB', 'fanC', 'fanD', 'fanE', 'fanF', 'fanKid'];
-const FANS_MID = ['fanMidA', 'fanMidB'];
+const FANS_NEAR = ['fanA', 'fanB', 'fanC', 'fanD', 'fanE', 'fanF', 'fanG', 'fanH', 'fanKid'];
+const FANS_MID = ['fanMidA', 'fanMidB', 'fanMidC'];
 
 type List = { data: Float32Array | Uint8Array | Uint16Array; type: string; normalized?: boolean };
 const CODE = (a: List['data']) => (a instanceof Uint8Array ? 5121 : a instanceof Uint16Array ? 5123 : 5126);
@@ -331,6 +331,16 @@ describe("the 3D court's models", () => {
       // (the widest of one picture's own are the few small ones round the very top of his head, where its picture meets at a point: under a quarter of the sheet)
       expect(wide, 'a triangle stretched across the sheet').toBeLessThan(0.24);
       expect(geo.shorts[1] - geo.shorts[0]).toBeGreaterThan(1);
+      // (his hair's fuzz: his scalp again in layers, the last all the way out, a few thousand triangles; over his hairline,
+      // so none of it is on his face, his brows or his ears)
+      const fuzz = geo.fuzz;
+      expect(fuzz.index!.count / 3).toBeGreaterThan(2000);
+      expect(fuzz.index!.count / 3).toBeLessThan(8000);
+      expect(most(fuzz.getAttribute('fuzz').array)).toBe(1);
+      const fp = fuzz.getAttribute('position');
+      let brow = Infinity;
+      for (let i = 0; i < fp.count; i++) if (fp.getZ(i) > 0.25) brow = Math.min(brow, fp.getY(i));
+      expect(brow, 'fuzz on his face').toBeGreaterThan(6.27);
       // and the men he is dressed as: each the same man every time, every way of wearing hair turning up over a league,
       // and two men picked at random hardly ever the same at a glance (his hair, his beard, his skin within a shade)
       expect(lookOf(1234)).toEqual(lookOf(1234));
@@ -398,11 +408,14 @@ describe("the 3D court's models", () => {
         }
     }
 
-    // the spectators: under a thousand triangles by the floor and under five hundred behind, each point marked with the part of him it is (the crowd's shader moves him by it)
+    // the spectators: under 1150 triangles by the floor (a hand, a nose and lips on each; 250 more for one with hair of his
+    // own, who carries every style of it, all but one folded away) and under five hundred behind, each point marked with the
+    // part of him it is (the crowd's shader moves him by it)
     {
       for (const fan of fans) {
         expect(fan.parts.length).toBe(1);
-        expect(triangles(fan)).toBeLessThanOrEqual(FANS_MID.includes(fan.name) ? 500 : 1050);
+        const styled = Array.from(fan.parts[0].geo.getAttribute('aPart').array).some((v) => v > 1.26 && v < 1.4);
+        expect(triangles(fan)).toBeLessThanOrEqual(FANS_MID.includes(fan.name) ? 500 : styled ? 1400 : 1150);
         const marks = fan.parts[0].geo.getAttribute('aPart');
         expect(marks?.itemSize).toBe(1);
         // (0 trunk, 1 head, 2 and 3 arms, 4 legs; a mark may carry a little more: a quarter for skin or an end in its own colour, a half for a cap)
@@ -430,6 +443,8 @@ describe("the 3D court's models", () => {
     // the building's props, all of them together, stay cheap; the table's LED front keeps the uv its picture goes on by
     {
       expect(PROPS.reduce((n, name) => n + triangles(arena.get(name)!), 0)).toBeLessThanOrEqual(12_000);
+      // (each building hangs one scoreboard of four kinds: none of them dearer than the props' share leaves room for)
+      for (const name of ['scoreboardHalo', 'scoreboardSlim', 'scoreboardLong']) expect(triangles(arena.get(name)!), name).toBeLessThanOrEqual(2_500);
       expect(
         arena
           .get('table')!

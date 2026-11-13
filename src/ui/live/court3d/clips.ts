@@ -351,18 +351,23 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
       [0, { bx: 0.5, by: 4.5, bz: 1.35, gl: 0, gr: 1, rx: 0.3, ry: -0.65, rz: 1.5, lx: 0.45, ly: -1.1, lz: 0.5, twist: 0.12, surge: 0.2, hip: -0.2, lean: 0.2 }],
       [60, { gl: 0, gr: 0, rx: 0.2, ry: -0.45, rz: 2.0, lx: 0.5, ly: -1.3, lz: 0.3, twist: 0.3, surge: 0.28, hip: -0.16, lean: 0.27 }],
       [170, { gl: 0, gr: 0, rx: 0.2, ry: -0.6, rz: 1.8, lx: 0.45, ly: -1.5, lz: 0.25, twist: 0.26, surge: 0.2, lean: 0.2 }],
-      [360, { gl: 0, gr: 0 }],
+      // (and let go of: the arm falls in front of him, the rest of the way after)
+      [270, { gl: 0, gr: 0, rx: 0.25, ry: -0.95, rz: 1.6, lx: 0.4, ly: -1.65, lz: 0.3, twist: 0.18, surge: 0.1, lean: 0.14 }],
+      [360, { gl: 0, gr: 0, rx: 0.3, ry: -1.45, rz: 1.05 }],
     ],
     { grip: 'under' },
   ),
   // (two hands over his head: back behind it, then thrown from there)
   passOver: clip('passOver', 'shot', 0, {}, [
-    [-230, { ...HOLD }],
+    // (the ball already on its way up in front of his face: from over his head (an inbound) it doesn't dip to his chest first)
+    [-230, { bx: 0, by: 6.2, bz: 0.6, gl: 1, gr: 1, hip: -0.08, lean: 0.04 }],
     [-100, { bx: 0, by: 7.5, bz: -0.15, gl: 1, gr: 1, lean: -0.1, surge: -0.1, hip: -0.06, nod: 0.1 }],
     [0, { bx: 0, by: 7.45, bz: 0.75, gl: 1, gr: 1, lean: 0.1, surge: 0.14, hip: -0.1 }],
     [55, { gl: 0, gr: 0, lx: 0.15, ly: 1.25, lz: 1.6, rx: 0.15, ry: 1.25, rz: 1.6, lean: 0.2, surge: 0.22, hip: -0.12 }],
     [170, { gl: 0, gr: 0, lx: 0.2, ly: 0.6, lz: 1.5, rx: 0.2, ry: 0.6, rz: 1.5, lean: 0.16, surge: 0.16 }],
-    [360, { gl: 0, gr: 0 }],
+    // (the follow-through let go of: the arms come down in front of him, still reaching, and fall the rest of the way after)
+    [280, { gl: 0, gr: 0, lx: 0.3, ly: -0.35, lz: 1.5, rx: 0.3, ry: -0.35, rz: 1.5, lean: 0.1, surge: 0.08 }],
+    [360, { gl: 0, gr: 0, lx: 0.3, ly: -1.15, lz: 1.05, rx: 0.3, ry: -1.15, rz: 1.05 }],
   ]),
   // (he shows his hands where he wants it, reaches for it, and gives with it as it comes in)
   catch: clip('catch', 'shot', 0, { bx: 0, by: 4.5, bz: 1.25 }, [
@@ -584,7 +589,10 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
     [-220, { hip: -0.45, lx: 0.9, ly: -0.8, lz: 0.7, rx: 0.5, ry: 0.4, rz: 1 }],
     [40, { hip: 0.4, air: 0.8, rx: 0.15, ry: 2.05, rz: 0.9, lx: 0.8, ly: -0.6, lz: 0.6, lean: 0.1 }],
     [230, { hip: -0.25, rx: 0.2, ry: 1.6, rz: 0.9, lx: 0.8, ly: -0.8, lz: 0.5 }],
-    [420, { hip: -0.2, lx: 0.9, ly: -1.2, lz: 0.5, rx: 0.9, ry: -1.2, rz: 0.5 }],
+    // (the arm comes down round him, out in front and to his side at its length, not folded down through his shoulder)
+    [295, { hip: -0.24, rx: 0.85, ry: 1.1, rz: 1.25, lx: 0.85, ly: -0.95, lz: 0.5 }],
+    [360, { hip: -0.22, rx: 1.25, ry: 0.05, rz: 1.35, lx: 0.88, ly: -1.1, lz: 0.5 }],
+    [440, { hip: -0.2, lx: 0.9, ly: -1.2, lz: 0.5, rx: 0.95, ry: -1.15, rz: 0.6 }],
   ]),
   screen: clip('screen', 'loop', 2000, { hip: -0.3, wide: 0.6, lean: 0.06, lx: -0.55, ly: -0.95, lz: 0.5, rx: -0.55, ry: -1.1, rz: 0.42 }, [
     [0, {}],
@@ -1085,6 +1093,12 @@ export const ARMS = [I.lx, I.ly, I.lz, I.rx, I.ry, I.rz, I.lsw, I.rsw];
 export const TRUNK = [I.lean, I.twist, I.tilt, I.nod, I.turn];
 /** A held follow-through after a jumper or a free throw: the shooting arm up, wrist dropped, the guide hand off the ball. */
 export const FOLLOW: PoseKey = { rx: 0.08, ry: 1.92, rz: 0.85, lx: 0.38, ly: 0.5, lz: 0.8 };
+/** A pass's follow-through: the arms on after the ball, toward where it went (two hands from his chest, one, or over his head). */
+export const PASS_FOLLOW: Partial<Record<ClipId, PoseKey>> = {
+  pass: { lx: 0.12, ly: -0.5, lz: 1.85, rx: 0.12, ry: -0.5, rz: 1.85 },
+  passOne: { rx: 0.15, ry: -0.6, rz: 1.85 },
+  passOver: { lx: 0.2, ly: 0.35, lz: 1.65, rx: 0.2, ry: 0.35, rz: 1.65 },
+};
 
 /** A captured stance shorter than this (ms) is a snatch of a man shifting his weight: looped at its own speed it twitches, so it's played over this long. */
 const LOOP_MIN = 1100;

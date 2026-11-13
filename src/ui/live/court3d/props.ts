@@ -8,9 +8,11 @@
 import {
   BufferAttribute,
   BufferGeometry,
+  CanvasTexture,
   Color,
   DynamicDrawUsage,
   Group,
+  IcosahedronGeometry,
   InstancedMesh,
   Matrix4,
   Mesh,
@@ -19,6 +21,7 @@ import {
   MeshStandardMaterial,
   PlaneGeometry,
   Quaternion,
+  SRGBColorSpace,
   Vector3,
   type Material,
   type Object3D,
@@ -47,11 +50,12 @@ export interface Props {
   /** The dark under the ball where it meets the floor (a flat round, a foot across, on y = 0): the caller places, sizes and fades it. */
   ballShadow(): Mesh;
   /**
-   * The scoreboard (its origin is its centre; its cables go 12 ft up from there); `ribbon` is the caller's material for its
-   * ring (u twice round it, v up its outside), `screens` for its four screens (u across each as you face it, v up it, the
-   * same picture on each; the screen underneath and the edges of the screens show the picture's bottom row).
+   * A scoreboard of a `kind` (its origin is its centre; its cables go 12 ft up from there); `ribbon` is the caller's
+   * material for its ring (u twice round it, v up its outside and its inside), `screens` for its screens (u across each as
+   * you face it, v up it, the same picture on each; the screen underneath and the edges of the screens show the
+   * picture's bottom row).
    */
-  scoreboard(ribbon: Material, screens: Material): Object3D;
+  scoreboard(ribbon: Material, screens: Material, kind?: BoardKind): Object3D;
   /**
    * The spectators (each sat on y = 0 facing +z, his feet on his own step, 1.3 under him): the shapes the crowd is drawn
    * from. `near` are the people of the rows by the floor (under a thousand triangles each) and `kid` a child among them, `mid` those of the rows behind, `low` one of some 140 triangles (a slow device's),
@@ -66,6 +70,39 @@ export interface Props {
   readonly clock: MeshBasicMaterial;
   /** The strip of lights round each board (ballskin.ts `lit` turns them on). */
   readonly led: MeshBasicMaterial;
+  /** The stanchions' badge, on each side of the base and its front (BADGE wide by BADGE_H, transparent): the caller paints its canvas and flags it. */
+  readonly badge: CanvasTexture;
+}
+
+/** The badge's canvas (dots), and its size on the base's sides and front (ft, wide by high). */
+export const BADGE = 512;
+export const BADGE_H = 168;
+const BADGE_SIDE: [number, number] = [4.5, 1.48];
+const BADGE_FRONT: [number, number] = [2.9, 0.95];
+/** A knot in the live net (ft, from its middle to its points: arena.py KNOT). */
+const KNOT_R = 0.026;
+/**
+ * A cord's braid: its strands cross it every this many ft, a little darker between (seen only near: it is
+ * gone before it could shimmer).
+ */
+const BRAID = 0.032;
+const BRAID_VERT = /* glsl */ `
+  vBraid = position.y + 0.4 * (position.x + position.z);
+  #include <project_vertex>`;
+const BRAID_FRAG = /* glsl */ `
+  #include <color_fragment>
+  {
+    float strand = 0.5 + 0.5 * sin(vBraid * ${((2 * Math.PI) / BRAID).toFixed(3)});
+    diffuseColor.rgb *= mix(1.0, 0.8 + 0.2 * strand, 1.0 - smoothstep(0.3, 0.6, fwidth(vBraid) / ${BRAID}));
+  }`;
+/** The net's cords braided (and `more`, the vertex shader's other changes). */
+function braided(mat: MeshStandardMaterial, key: string, more: (vs: string) => string = (vs) => vs, uniforms: Record<string, { value: unknown }> = {}) {
+  mat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, uniforms);
+    sh.vertexShader = more(sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vBraid;').replace('#include <project_vertex>', BRAID_VERT));
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vBraid;').replace('#include <color_fragment>', BRAID_FRAG);
+  };
+  mat.customProgramCacheKey = () => key;
 }
 
 /** What a game ball's leather and its seams are taken toward (see ball). */
@@ -121,14 +158,14 @@ function clockMap(geo: BufferGeometry) {
  * its widest, the top: the narrower foot shows a little less of the sides), v from its foot to its top; the
  * screen underneath, and the thin edges, the picture's bottom row (its foot).
  */
-function screenMap(geo: BufferGeometry) {
+function screenMap(geo: BufferGeometry, under: number) {
   const pos = geo.getAttribute('position');
   const nor = geo.getAttribute('normal');
   const p = new Vector3();
   const n = new Vector3();
   // first how wide and tall each face is: its way out, quartered
   const span = new Map<number, { half: number; lo: number; hi: number }>();
-  const which = (q: Vector3, m: Vector3) => (q.y < UNDER_Y || Math.abs(m.y) > 0.8 ? null : ((Math.round(Math.atan2(m.z, m.x) / (Math.PI / 2)) % 4) + 4) % 4);
+  const which = (q: Vector3, m: Vector3) => (q.y < under || Math.abs(m.y) > 0.8 ? null : ((Math.round(Math.atan2(m.z, m.x) / (Math.PI / 2)) % 4) + 4) % 4);
   const across = (q: Vector3, m: Vector3) => {
     const l = Math.hypot(m.x, m.z) || 1;
     // (to your right as you face it: out of it, turned a quarter)
@@ -155,8 +192,8 @@ function screenMap(geo: BufferGeometry) {
 
 /**
  * The ring under the scoreboard, as a run of ribbon: u twice round it (its points split where it comes back round,
- * or the last strip would squeeze the whole picture in), v up its outside; its top, underside and inside show the
- * picture's bottom row.
+ * or the last strip would squeeze the whole picture in), v up its outside and its inside (the picture turned round
+ * there); its top and underside show the picture's bottom row.
  */
 function ringMap(geo: BufferGeometry): BufferGeometry {
   const flat = geo.index ? geo.toNonIndexed() : geo;
@@ -179,22 +216,28 @@ function ringMap(geo: BufferGeometry): BufferGeometry {
     for (let k = 0; k < 3; k++) {
       p.fromBufferAttribute(pos, t + k);
       n.fromBufferAttribute(nor, t + k);
-      const out = n.x * p.x + n.z * p.z > 0.5 * Math.hypot(p.x, p.z) && Math.abs(n.y) < 0.5;
-      uv[(t + k) * 2] = us[k];
-      uv[(t + k) * 2 + 1] = out ? (p.y - b.min.y) / (b.max.y - b.min.y) : 0.004;
+      const facing = (n.x * p.x + n.z * p.z) / Math.hypot(p.x, p.z);
+      const side = Math.abs(n.y) < 0.5 && Math.abs(facing) > 0.5;
+      // (its inside is seen from across it: the picture turned round, to read left to right from there too)
+      uv[(t + k) * 2] = facing < 0 ? RING_TURNS - us[k] : us[k];
+      uv[(t + k) * 2 + 1] = side ? (p.y - b.min.y) / (b.max.y - b.min.y) : 0.004;
     }
   }
   flat.setAttribute('uv', new BufferAttribute(uv, 2));
   return flat;
 }
 
-/** The screens' points under this height (ft from the scoreboard's middle) are the screen underneath it. */
-const UNDER_Y = -4;
+/** The scoreboards' kinds (teamColors.ts Roofing.board), and each one's model in arena.glb (arena.py BOARDS). */
+export const BOARD_KINDS = ['four', 'halo', 'slim', 'long'] as const;
+export type BoardKind = (typeof BOARD_KINDS)[number];
+const BOARD_MODELS: Record<BoardKind, string> = { four: 'scoreboard', halo: 'scoreboardHalo', slim: 'scoreboardSlim', long: 'scoreboardLong' };
+/** The screens' points under this height (ft from the scoreboard's middle) are the screen underneath it (a long one's side screens come down further). */
+const UNDER_Y: Record<BoardKind, number> = { four: -4, halo: -4, slim: -4, long: -7 };
 /** How many times the ribbon's picture goes round the ring. */
 const RING_TURNS = 2;
 
 /** The parts of the basket unit that throw no shadow: the glass lets the light through, the clock's face lies on its box. */
-const NO_SHADOW = new Set(['glass', 'clock', 'led']);
+const NO_SHADOW = new Set(['glass', 'clock', 'led', 'glassEdge']);
 // (What else throws one: the rim and the ball. Not the net, whose cords are thinner than a point of the
 // shadow's map and would only shimmer. Not the table or the chairs: the light comes from the near side,
 // so theirs would fall behind them, off the floor, on ground that takes no shadow. Not the scoreboard: a
@@ -223,32 +266,48 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
   const chair = shapes('chair');
   const table = shapes('table');
   const ball = shapes('ball');
-  const scoreboard = shapes('scoreboard');
+  const boards = new Map(BOARD_KINDS.map((kind) => [kind, shapes(BOARD_MODELS[kind])]));
   const fans = (names: string[]) =>
     names.map((name) => {
       const geo = shapes(name).get('fan');
       if (!geo) throw new Error(`arena.glb: ${name} has no shape`);
       return geo;
     });
-  const near = fans(['fanA', 'fanB', 'fanC', 'fanD', 'fanE', 'fanF']);
+  const near = fans(['fanA', 'fanB', 'fanC', 'fanD', 'fanE', 'fanF', 'fanG', 'fanH']);
   const [kid] = fans(['fanKid']);
-  const mid = fans(['fanMidA', 'fanMidB']);
+  const mid = fans(['fanMidA', 'fanMidB', 'fanMidC']);
   const [fanLow] = fans(['fanLow']);
   const [fanFar] = fans(['fanFar']);
   const stall = shapes('stall').get('seat');
   clockMap(hoop.get('clock')!);
-  const boardScreens = scoreboard.get('screen');
-  if (boardScreens) screenMap(boardScreens);
-  const band = scoreboard.get('ribbon');
-  if (band) scoreboard.set('ribbon', keep(ringMap(band)));
+  for (const [kind, board] of boards) {
+    const boardScreens = board.get('screen');
+    if (boardScreens) screenMap(boardScreens, UNDER_Y[kind]);
+    const band = board.get('ribbon');
+    if (band) board.set('ribbon', keep(ringMap(band)));
+  }
 
   // what things are made of: padding, steel, the white on the glass, a screen that is off
   const team = keep(new MeshStandardMaterial({ color: 0x222222, roughness: 0.6, vertexColors: true }));
   const pad = keep(new MeshStandardMaterial({ color: 0x1c1c1f, roughness: 0.6, vertexColors: true }));
   const steel = keep(new MeshStandardMaterial({ color: 0x2b2d31, roughness: 0.45, vertexColors: true }));
   const edge = keep(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, vertexColors: true }));
-  // (glass: what is behind it, and the lamps on its face)
+  // (glass: what is behind it, and the lamps on its face; its edge, green end on)
   const glass = keep(pane());
+  // (the edge holds the light that comes in through the pane: a faint glow of its own, so it reads from a replay's camera)
+  const glassEdge = keep(new MeshStandardMaterial({ color: '#6c9d8c', emissive: '#132c25', roughness: 0.15 }));
+  // (the stanchions' badge: the caller paints it; a decal a hair off the pad, drawn over it)
+  const badgeCv = document.createElement('canvas');
+  badgeCv.width = BADGE;
+  badgeCv.height = BADGE_H;
+  const badge = keep(new CanvasTexture(badgeCv));
+  badge.colorSpace = SRGBColorSpace;
+  badge.anisotropy = 4;
+  const badgeMat = keep(
+    new MeshStandardMaterial({ map: badge, transparent: true, roughness: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+  );
+  const badgeSide = keep(new PlaneGeometry(...BADGE_SIDE));
+  const badgeFront = keep(new PlaneGeometry(...BADGE_FRONT));
   const led = keep(lights());
   const screen = keep(new MeshBasicMaterial({ color: 0x2b3038 }));
   // (the clocks' faces: the caller puts the clocks on them)
@@ -256,6 +315,10 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
   // (the rim's orange enamel: it takes the lamps)
   const iron = keep(new MeshStandardMaterial({ color: '#e4501a', roughness: 0.36, vertexColors: true }));
   const cord = keep(new MeshStandardMaterial({ color: 0xf4f4f0, roughness: 0.9, vertexColors: true }));
+  braided(cord, 'cord');
+  // (the live net's knots: a small round of cord where two cross, in its shade)
+  const knot = keep(new IcosahedronGeometry(KNOT_R, 0));
+  knot.setAttribute('color', new BufferAttribute(new Float32Array(knot.getAttribute('position').count * 3).fill(0.86), 3));
   // (black furniture, but not so black that a monitor on the table or the scoreboard's corners are lost in the dark behind them)
   const dark = keep(new MeshLambertMaterial({ color: 0x26272c, vertexColors: true }));
 
@@ -274,13 +337,26 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
     team,
     clock,
     led,
+    badge,
 
     basket() {
       const group = new Group();
-      for (const m of dress('hoop', hoop, { pad, steel, team, edge, glass, clock, led })) {
+      for (const m of dress('hoop', hoop, { pad, steel, team, edge, glass, clock, led, glassEdge })) {
         m.castShadow = !NO_SHADOW.has(m.name);
         // (the pane is drawn after what is seen through it)
         if (m.name === 'glass') m.renderOrder = 2;
+        group.add(m);
+      }
+      // the badge on each side of the base (read from outside it) and on its front, toward the floor
+      for (const [geo, x, y, z, turn] of [
+        [badgeSide, -11.4, 1.72, 1.712, 0],
+        [badgeSide, -11.4, 1.72, -1.712, Math.PI],
+        [badgeFront, -8.268, 1.16, 0, Math.PI / 2],
+      ] as const) {
+        const m = new Mesh(geo, badgeMat);
+        m.position.set(x, y, z);
+        m.rotation.y = turn;
+        m.renderOrder = 1;
         group.add(m);
       }
       // (the rim tips and the net swings about the rim's centre: each is its own thing, there)
@@ -288,11 +364,9 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
       // (each net has its own cords' material: the two are not pulled together)
       const swish = new Vector3();
       const cords = keep(cord.clone());
-      cords.onBeforeCompile = (sh) => {
-        sh.uniforms.uSwish = { value: swish };
-        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform vec3 uSwish;').replace('#include <begin_vertex>', NET_PULL);
-      };
-      cords.customProgramCacheKey = () => 'net';
+      braided(cords, 'net', (vs) => vs.replace('#include <common>', '#include <common>\nuniform vec3 uSwish;').replace('#include <begin_vertex>', NET_PULL), {
+        uSwish: { value: swish },
+      });
       const [mesh] = dress('net', net, { cord: cords });
       ring.position.y = mesh.position.y = RIM_H;
       ring.castShadow = true;
@@ -312,9 +386,19 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
       // (it is always by the rim, wherever its cords fly: no need to find its bounds each frame)
       live.frustumCulled = false;
       live.visible = false;
+      // (its knots, every row but the loops on the hooks: shown with it)
+      const knots = new InstancedMesh(knot, cord, NET.n * NET.k);
+      knots.frustumCulled = false;
+      live.add(knots);
+      const spot = new Matrix4();
       const draw = () => {
         cordPoints(sim, at.array as Float32Array, facing.array as Float32Array);
         at.needsUpdate = facing.needsUpdate = true;
+        for (let i = 0; i < knots.count; i++) {
+          const o = (NET.n + i) * 3;
+          knots.setMatrixAt(i, spot.makeTranslation(sim.at[o], sim.at[o + 1], sim.at[o + 2]));
+        }
+        knots.instanceMatrix.needsUpdate = true;
       };
       draw();
       group.add(live);
@@ -341,7 +425,7 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
     },
 
     table(board) {
-      return new Group().add(...dress('table', table, { board, dark, screen }));
+      return new Group().add(...dress('table', table, { board, dark, screen, steel }));
     },
 
     ball(fill, seam) {
@@ -364,8 +448,8 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
       return mesh;
     },
 
-    scoreboard(ribbon, screens) {
-      return new Group().add(...dress('scoreboard', scoreboard, { ribbon, dark, screen: screens }));
+    scoreboard(ribbon, screens, kind = 'four') {
+      return new Group().add(...dress(BOARD_MODELS[kind], boards.get(kind)!, { ribbon, dark, screen: screens }));
     },
 
     crowd() {

@@ -1,5 +1,5 @@
 # The building's props, as models: the basket unit (hoop), its rim and net, a bench chair, the scorer's
-# table, the ball, the centre-hung scoreboard, the spectators the crowd is made of (fanA and the rest)
+# table, the ball, the centre-hung scoreboards (four kinds: a building hangs one), the spectators the crowd is made of (fanA and the rest)
 # and a seat in the stands (stall). One .glb,
 # a thing each, all at the origin of their own frame (see each builder). Feet, the game's frame (x, y up,
 # z). Every thing carries its shade ("Col").
@@ -17,6 +17,8 @@ PROUD = 0.026
 #: How thick the board's glass is, and how wide the strip of lights round it.
 GLASS = 0.045
 LED = 0.075
+#: How much of the glass's edge shows outside the strip of lights, end on (ft).
+RIM_GLASS = 0.03
 #: The spectators' joints, which the crowd's shader knows too (FAN_MOVE in court3d/crowd.ts: change both).
 #: An arm swings about its shoulder (x to either side, y; z = 0). A thigh is FAN_THIGH long, back from the knee (y, z), and swings up about it.
 FAN_SHOULDER = (0.69, 1.55)
@@ -128,6 +130,8 @@ def hoop():
     team = material('team', (0.55, 0.07, 0.09), 0.55)
     edge = material('edge', (0.92, 0.92, 0.92), 0.5)
     glass = see_through(material('glass', (0.8, 0.9, 0.95), 0.05, shade=False), 0.22)
+    # (the pane's own edge: tempered glass is green seen end on)
+    edge_glass = material('glassEdge', (0.42, 0.62, 0.55), 0.1, shade=False)
     clock = material('clock', (0.03, 0.045, 0.07), 0.25, shade=False)
     led = material('led', (0.6, 0.03, 0.03), 0.3, shade=False)
     out = []
@@ -136,6 +140,10 @@ def hoop():
     out.append(of(bevel(prism([(-14.3, 0.22), (-14.3, 2.3), (-13.5, 3.1), (-9.7, 3.1), (-8.5, 1.9), (-8.5, 0.22)], -1.7, 1.7), 0.12, 2), pad))
     out.append(of(slab(-14.15, -8.62, 0, 0.3, -1.58, 1.58), steel))
     out.append(of(bevel(prism([(-8.8, 0.3), (-8.28, 0.3), (-8.28, 1.992), (-9.544, 3.256), (-9.9, 2.9), (-8.8, 1.8)], -1.76, 1.76), 0.09, 2), team))
+    # (piping down its sewn edges, in the base's black: the front and the slope over it, each side)
+    for s in (-1, 1):
+        for a, b in (((-8.3, 0.32), (-8.3, 1.97)), ((-8.3, 1.97), (-9.53, 3.2))):
+            out.append(of(rod((a[0], a[1], s * 1.72), (b[0], b[1], s * 1.72), 0.04, 6, up=(0, 0, 1)), pad))
     # (a housing on its back, and the two handles it is wheeled away by)
     out.append(of(bevel(slab(-14.05, -12.7, 2.9, 3.55, -1.15, 1.15), 0.1, 1), steel))
     for s in (-1, 1):
@@ -162,15 +170,30 @@ def hoop():
     out.append(of(bevel(prism([at(0, 0), at(s_low, 0), at(s_up, thick), at(0, thick)], -0.48, 0.48), 0.07, 1), pad))
     # (its pad: under and in front of it, where a player lands)
     out.append(of(bevel(prism([at(1.2, -0.24), at(9.7, -0.24), at(9.85, 0.52), at(1.2, 0.52)], -0.64, 0.64), 0.09, 2), team))
+    # (piping along its seams underneath, and the seam round its end)
+    for s in (-1, 1):
+        a, b = at(1.3, -0.2), at(9.62, -0.2)
+        out.append(of(rod((a[0], a[1], s * 0.6), (b[0], b[1], s * 0.6), 0.032, 6, up=(0, 0, 1)), pad))
+    a = at(9.75, -0.2)
+    out.append(of(rod((a[0], a[1], -0.6), (a[0], a[1], 0.6), 0.032, 6, up=(1, 0, 0)), pad))
     # where the arm meets the board
     out.append(of(bevel(slab(back - 0.05, FACE - 0.08, 9.66, 11.46, -0.6, 0.6), 0.06, 1), steel))
 
     # the board: a pane of glass (its face at FACE), its white edge and square, a steel frame behind
     out.append(of(slab(FACE - GLASS, FACE, 9.5, 13, -3, 3), glass))
+    # (its edge all round, a shade proud of the pane so the two don't flicker)
+    e = 0.012
+    for y0, y1, z0, z1 in ((13 - e, 13 + 0.004, -3 - 0.004, 3 + 0.004), (9.5 - 0.004, 9.5 + e, -3 - 0.004, 3 + 0.004), (9.5, 13, -3 - 0.004, -3 + e), (9.5, 13, 3 - e, 3 + 0.004)):
+        out.append(of(slab(FACE - GLASS - 0.002, FACE + 0.002, y0, y1, z0, z1), edge_glass))
     # the lights round its edge that go red at the horn: a strip let into the frame on every side, seen from the floor and from behind
     l0, l1 = FACE - GLASS - 0.03, FACE + 0.012
     for y0, y1, z0, z1 in ((13, 13 + LED, -3 - LED, 3 + LED), (9.62, 13, -3 - LED, -3), (9.62, 13, 3, 3 + LED)):
         out.append(of(slab(l0, l1, y0, y1, z0, z1), led))
+    # (and outside them the glass's edge as a camera off to the side or under it sees it, end on: a fine green
+    # line round the board's top and sides)
+    g = RIM_GLASS
+    for y0, y1, z0, z1 in ((13 + LED, 13 + LED + g, -3 - LED - g, 3 + LED + g), (9.62, 13 + LED, -3 - LED - g, -3 - LED), (9.62, 13 + LED, 3 + LED, 3 + LED + g)):
+        out.append(of(slab(l0, l1, y0, y1, z0, z1), edge_glass))
     # (and along the foot of the glass, behind it, over the padding: seen through the pane)
     out.append(of(slab(l0, FACE - GLASS - 0.004, 9.63, 9.63 + LED, -2.84, 2.84), led))
     f0, f1 = FACE - PROUD, FACE + PROUD
@@ -184,11 +207,12 @@ def hoop():
         out.append(of(slab(b1, b0, y0, y1, z0, z1), steel))
     # the plate the rim bolts to
     out.append(of(slab(FACE - GLASS - PROUD + 0.004, FACE + PLATE, 9.58, 10.08, -0.36, 0.36), steel))
-    # padding along the bottom edge and up the lower sides
+    # padding along the bottom edge and up the lower sides: moulded foam, round on every edge, a seam along its face
     p0, p1 = FACE - 0.34, FACE + 0.085
-    out.append(of(bevel(slab(p0, p1, 9.3, 9.62, -3.09, 3.09), 0.05, 2), pad))
+    out.append(of(bevel(slab(p0, p1, 9.3, 9.62, -3.09, 3.09), 0.1, 3), pad))
     for s in (-1, 1):
-        out.append(of(bevel(slab(p0, p1, 9.62, 10.78, s * 2.86, s * 3.09), 0.05, 2), pad))
+        out.append(of(bevel(slab(p0, p1, 9.62, 10.78, s * 2.86, s * 3.09), 0.08, 3), pad))
+    out.append(of(rod((p1 + 0.004, 9.46, -2.95), (p1 + 0.004, 9.46, 2.95), 0.012, 4, up=(1, 0, 0)), steel))
 
     # braces: two from the top of the board's frame down to the arm, two from the arm out to the frame's sides
     for s in (-1, 1):
@@ -209,6 +233,11 @@ def hoop():
         out.append(of(slab(FACE - 0.5, FACE - 0.26, 13.85, 14.6, s * 1.15, s * 1.18), steel))
     # (its two faces: one panel through the box, standing a little proud of it front and back)
     out.append(of(slab(cx0 - PROUD, cx1 + PROUD, 13.58, 14.87, -1.02, 1.02), clock))
+    # (a hood over each face, so the lamps above don't wash it out)
+    for x0, x1 in ((cx1, cx1 + 0.2), (cx0 - 0.2, cx0)):
+        out.append(of(bevel(slab(x0, x1, 14.93, 14.99, -1.14, 1.14), 0.012), steel))
+        for s in (-1, 1):
+            out.append(of(slab(x0, x1, 14.45, 14.93, s * 1.1 - 0.025, s * 1.1 + 0.025), steel))
     # (and the lights round each face, which go red with the board's)
     for x0, x1 in ((cx1 + 0.004, cx1 + PROUD + 0.012), (cx0 - PROUD - 0.012, cx0 - 0.004)):
         for y0, y1, z0, z1 in ((14.87, 14.93, -1.08, 1.08), (13.52, 13.58, -1.08, 1.08), (13.58, 14.87, -1.08, -1.02), (13.58, 14.87, 1.02, 1.08)):
@@ -216,7 +245,7 @@ def hoop():
 
     o = finish(out, 'hoop')
     # (the white on the glass is paint: it takes no shade from the frame behind it)
-    shade(o, plain=('glass', 'clock', 'edge', 'led'), floor=0, reach=2.2, rays=64)
+    shade(o, plain=('glass', 'clock', 'edge', 'led', 'glassEdge'), floor=0, reach=2.2, rays=64)
     return o
 
 
@@ -230,6 +259,8 @@ TIE_Y = -0.06
 TIE_R = 0.776
 #: The net: cords round it, rows of knots down it, how long it hangs, how wide its mouth is, how it narrows (net.ts: change both).
 NET_N, NET_K, NET_LEN, NET_MOUTH, NET_TAPER = 12, 7, 1.3, 0.37, 1.6
+#: A knot in the net: from its middle to its points (court3d/props.ts KNOT_R: change both).
+KNOT = 0.026
 
 
 def rim():
@@ -238,12 +269,20 @@ def rim():
     seg, around = 48, 10
     ring = hoop_loft([[((R + r * cos(2 * pi * j / around)) * cos(2 * pi * i / seg), r * sin(2 * pi * j / around), (R + r * cos(2 * pi * j / around)) * sin(2 * pi * i / seg)) for j in range(around)] for i in range(seg)], 'ring')
     out = [ring]
-    # the hooks: a bent wire under the ring for each loop of the net, down and back up outside it
+    # the hooks: a bent wire eye under the ring for each loop of the net, down, round and back up to the ring outside it
     for m in range(NET_N):
         c, s = cos(2 * pi * m / NET_N), sin(2 * pi * m / NET_N)
         at = lambda rad, y: (rad * c, y, rad * s)
-        out.append(rod(at(R - 0.012, -r * 0.7), at(TIE_R - 0.004, TIE_Y - 0.022), 0.0085, 3, cap=False, up=(c, 0, s)))
-        out.append(rod(at(TIE_R - 0.004, TIE_Y - 0.022), at(TIE_R + 0.034, TIE_Y + 0.012), 0.0085, 3, cap=False, up=(c, 0, s)))
+        eye = [at(R - 0.014, -r * 0.7), at(TIE_R - 0.006, TIE_Y - 0.024), at(TIE_R + 0.03, TIE_Y - 0.012), at(R + 0.026, -r * 0.6)]
+        for a, b in zip(eye, eye[1:]):
+            out.append(rod(a, b, 0.011, 5, cap=False, up=(c, 0, s)))
+    # the flange: a flat strip welded under the back of the ring, where the arms and the mount take it
+    band = []
+    # (wide and deep enough to show as a ledge under the ring's back from a replay's camera beside it or under it)
+    for i in range(15):
+        a = pi - 1.0 + 2.0 * i / 14
+        band.append([((R + dr) * cos(a), y, (R + dr) * sin(a)) for dr, y in ((-0.09, -r + 0.004), (0.068, -r + 0.004), (0.068, -r - 0.034), (-0.09, -r - 0.034))])
+    out.append(loft(band, 'flange', cap=True))
     x0 = FACE + PLATE
     # the mount: a plate bolted to the board, the box of the breakaway hinge out from it to the ring's back (deep at
     # the board, shallow under the ring), and the cover plate over its spring
@@ -286,6 +325,13 @@ def net():
         # (a cord's three sides: one of them faces out of the net)
         mid = (Vector(a) + Vector(b)) / 2
         out.append(of(rod(a, b, thick, 3, cap=False, up=(mid.x, 0, mid.z)), cord))
+    # (a knot where two cords cross, and at the foot of each V)
+    for k in range(1, NET_K + 1):
+        for m in range(NET_N):
+            x, y, z = node(k, m)
+            K = KNOT
+            out.append(of(mesh_obj('knot', [(x + K, y, z), (x - K, y, z), (x, y + K, z), (x, y - K, z), (x, y, z + K), (x, y, z - K)],
+                                   [(0, 2, 4), (2, 1, 4), (1, 3, 4), (3, 0, 4), (2, 0, 5), (1, 2, 5), (3, 1, 5), (0, 3, 5)]), cord))
     o = join(out, 'net')
     smooth(o)
     # (cords this thin shade nothing: a little darker toward the mouth, where less light gets in)
@@ -327,6 +373,10 @@ def table():
     out = [of(slab(-L, L, 0.14, 2.56, -0.62, 0.55), dark)]
     out.append(of(sheet([(led[0], led[2], 0.6), (led[1], led[2], 0.6), (led[1], led[3], 0.6), (led[0], led[3], 0.6)]), board))
     out.append(of(bevel(slab(-L - 0.2, L + 0.2, 2.56, 2.7, -0.72, 0.78), 0.035, 1), dark))
+    # (a steel nosing along the top's front edge, and a toe strip under the LED face: what frames it up close)
+    steel = material('steel')
+    out.append(of(bevel(slab(-L - 0.2, L + 0.2, 2.6, 2.68, 0.76, 0.81), 0.012), steel))
+    out.append(of(slab(-L + 0.02, L - 0.02, 0.15, 0.2, 0.5, 0.59), steel))
     out.append(of(slab(-L - 0.04, L + 0.04, 0, 0.16, -0.54, 0.5), dark))
     for s in (-1, 1):
         out.append(of(bevel(slab(s * L, s * (L + 0.15), 0, 2.56, -0.67, 0.69), 0.035, 1), dark))
@@ -427,11 +477,12 @@ def ball():
     return o
 
 
-# --- the spectators: the people the crowd is made of. Six grown-ups and a child for the rows by the floor
+# --- the spectators: the people the crowd is made of. Eight grown-ups and a child for the rows by the floor
 # --- (under a thousand triangles each: a man in a collared top, a big man in a cap, a woman with her
 # --- hair down, one with it tied back and bare arms, a man with a lot of hair in a hood, a bald man in a
-# --- jacket), two plainer ones for the rows behind (fanMid*: round limbs and shoulders, a hand, a head of
-# --- hair, under five hundred triangles), one of some hundred and forty for a device that can't draw those
+# --- jacket, a woman in a coat with her hair up, a heavy man in a beanie), three plainer ones for the rows
+# --- behind (fanMid*: round limbs and shoulders, a hand, a head of hair or a cap, under five hundred
+# --- triangles), one of some hundred and forty for a device that can't draw those
 # --- (fanLow), the twenty-odd triangles anyone is where he is only a blur (fanFar), and the seat they sit
 # --- in (stall). None has a face painted on it: the crowd's shader draws one where it is near enough ---
 
@@ -503,32 +554,91 @@ def marked(o, part):
     return o
 
 
-def oval(y, w, f, b, n, cz=0.0, square=1.0):
-    """A ring round him at one height: `w` to each side, `f` out in front and `b` behind; `square` under 1 fills its corners out."""
+def hair_fall(part, hs, hy, near):
+    """Her hair down: round the back of her head from temple to temple, on down to her shoulders."""
+    k = 7 if near else 5
+
+    def fall(y, r, back):
+        return [(r * cos(a) * hs, hy(y), -0.02 - back * sin(a)) for a in (pi * (0.04 + 0.92 * j / (k - 1)) for j in range(k))]
+
+    rows = [fall(2.6, 0.22, 0.26), fall(2.4, 0.32, 0.36), fall(2.1, 0.335, 0.37), fall(1.8, 0.35, 0.34), fall(1.5, 0.37, 0.37)]
+    if not near:
+        rows = [rows[0], rows[1], rows[3], rows[4]]
+    verts = [p for r in rows for p in r]
+    faces = [(i * k + j, i * k + j + 1, (i + 1) * k + j + 1, (i + 1) * k + j) for i in range(len(rows) - 1) for j in range(k - 1)]
+    o = mesh_obj('fall', verts, faces)
+    me = o.data
+    if sum(f.normal.dot(f.center - B(0, 2.0, 0.1)) * f.area for f in me.polygons) < 0:
+        me.flip_normals()
+    me.attributes.new('_PART', 'FLOAT', 'POINT').data.foreach_set('value', [part] * len(verts))
+    return o
+
+
+def hair_styles(hs, hy):
+    """
+    Every style of hair a spectator in the rows by the floor may have (HAIR_STYLES, in its order), each marked
+    his hair and its place in the list: an afro standing well off his head, a bun on the crown, a ponytail,
+    her hair down to her shoulders, a head of curls (a fuller crop, lumpy all over). Each shaded as hair is,
+    darker under itself.
+    """
+    mark = {s: 1.25 + 0.02 * (i + 1) for i, s in enumerate(HAIR_STYLES)}
+    tail = [oval(hy(y), r, r, r, 6, cz) for y, r, cz in ((2.5, 0.1, -0.33), (2.25, 0.12, -0.43), (1.95, 0.09, -0.44))]
+    out = [
+        marked(ellipsoid((0, hy(2.5), -0.07), (0.42 * hs, 0.37 * hs, 0.43 * hs), 8, 5, 'afro'), mark['afro']),
+        marked(ellipsoid((0, hy(2.63), -0.25), (0.14 * hs, 0.13 * hs, 0.14 * hs), 6, 4, 'bun'), mark['bun']),
+        fan_piece(tail, mark['tail'], 'tail', start=True, tip=(0, hy(1.72), -0.4)),
+        hair_fall(mark['long'], hs, hy, True),
+    ]
+    mid = B(0, hy(2.48), -0.05)
+    curls = ellipsoid((0, hy(2.48), -0.05), (0.33 * hs, 0.28 * hs, 0.36 * hs), 8, 5, 'curls')
+    for v in curls.data.vertices:
+        lump = 0.5 + 0.5 * sin(v.co.x * 41) * sin(v.co.y * 37 + 1) * sin(v.co.z * 43 + 2)
+        v.co += (v.co - mid).normalized() * 0.055 * lump
+    out.append(marked(curls, mark['curls']))
+    for o in out:
+        paint(o, lambda x, y, z: 0.6 + 0.32 * min(1.0, max(0.0, (y - 1.6) / 0.9)))
+    return out
+
+
+def oval(y, w, f, b, n, cz=0.0, square=1.0, pinch=0.0):
+    """
+    A ring round him at one height: `w` to each side, `f` out in front and `b` behind; `square` under 1 fills
+    its corners out; `pinch` draws its front half in toward the middle (a jaw narrowing to the chin; under 0
+    pushes it out, a cheekbone).
+    """
     out = []
     for k in range(n):
         a = 2 * pi * (k + 0.5) / n
         c, s = cos(a), sin(a)
-        c = math.copysign(abs(c) ** square, c)
+        c = math.copysign(abs(c) ** square, c) * (1 - pinch * max(s, 0.0))
         out.append((w * c, y, cz + (f if s > 0 else b) * math.copysign(abs(s) ** square, s)))
     return out
 
 
 #: The spectators: who each is. `n` sides to the trunk, `hn` to the head, `m` to a limb; `sleeve` long,
-#: short or none; `hair` short, none, long, up, tail, big; a `cap`, a `hood`, a `collar`, a `jacket`; a
-#: `woman`'s build; a `kid`'s (a bigger head on a smaller body: the crowd draws him small); how far his
-#: belly comes forward; how thick his limbs are.
+#: short or none; `hair` short, none, long, up, tail, big; a `cap` or a `beanie`, a `hood`, a `collar`, a
+#: `jacket` (or a `coat`: thicker, and down over his lap); a `woman`'s build; a `kid`'s (a bigger head on a
+#: smaller body: the crowd draws him small); how far his belly comes forward; how thick his limbs are; how
+#: broad his shoulders are. The crowd's shader varies each one more (belly, shoulders, head, bulk): these
+#: are where each starts.
+#: In the rows by the floor, whoever has hair of his own and nothing on his head carries every style of it
+#: below, each one shown only on whoever the crowd's shader gives it to (crowd.ts HAIR_STYLE): its `_PART` is
+#: his hair's (1.25) and a fiftieth for each place in this list (change both).
+HAIR_STYLES = ('afro', 'bun', 'tail', 'long', 'curls')
 FANS = {
-    'fanA': dict(n=12, hn=10, m=8, sleeve='long', hair='short', collar=True, belly=0.0, limb=1.0),
-    'fanB': dict(n=12, hn=10, m=8, sleeve='short', hair='none', cap=True, belly=0.15, limb=1.14),
-    'fanC': dict(n=12, hn=10, m=8, sleeve='long', hair='long', woman=True, belly=-0.02, limb=0.82),
-    'fanD': dict(n=12, hn=10, m=8, sleeve='none', hair='tail', woman=True, belly=-0.03, limb=0.8),
-    'fanE': dict(n=12, hn=10, m=8, sleeve='long', hair='big', hood=True, belly=0.04, limb=1.04),
-    'fanF': dict(n=12, hn=10, m=8, sleeve='long', hair='none', jacket=True, collar=True, belly=0.08, limb=1.08),
-    'fanKid': dict(n=12, hn=10, m=8, sleeve='short', hair='short', kid=True, belly=0.02, limb=0.92),
-    'fanMidA': dict(n=8, hn=8, m=6, sleeve='short', hair='short', belly=0.05, limb=1.08),
-    'fanMidB': dict(n=8, hn=8, m=6, sleeve='long', hair='long', woman=True, belly=-0.02, limb=0.86),
-    'fanLow': dict(n=5, hn=5, m=3, sleeve='short', hair='short', low=True, belly=0.03, limb=1.0),
+    'fanA': dict(n=12, hn=12, m=8, sleeve='long', hair='short', collar=True, belly=0.0, limb=1.0, broad=1.0),
+    'fanB': dict(n=12, hn=12, m=8, sleeve='short', hair='none', cap=True, belly=0.15, limb=1.14, broad=1.06),
+    'fanC': dict(n=12, hn=12, m=8, sleeve='long', hair='long', woman=True, belly=-0.02, limb=0.82, broad=1.0),
+    'fanD': dict(n=12, hn=12, m=8, sleeve='none', hair='tail', woman=True, belly=-0.03, limb=0.8, broad=0.97),
+    'fanE': dict(n=12, hn=12, m=8, sleeve='long', hair='big', hood=True, belly=0.04, limb=1.04, broad=0.96),
+    'fanF': dict(n=12, hn=12, m=8, sleeve='long', hair='none', jacket=True, collar=True, belly=0.08, limb=1.08, broad=1.02),
+    'fanG': dict(n=12, hn=12, m=8, sleeve='long', hair='up', woman=True, coat=True, collar=True, belly=0.0, limb=0.84, broad=1.02),
+    'fanH': dict(n=12, hn=12, m=8, sleeve='long', hair='short', beanie=True, hood=True, belly=0.3, limb=1.2, broad=1.1),
+    'fanKid': dict(n=12, hn=12, m=8, sleeve='short', hair='short', kid=True, belly=0.02, limb=0.92, broad=1.0),
+    'fanMidA': dict(n=8, hn=8, m=6, sleeve='short', hair='short', belly=0.05, limb=1.08, broad=1.0),
+    'fanMidB': dict(n=8, hn=8, m=6, sleeve='long', hair='long', woman=True, belly=-0.02, limb=0.86, broad=1.0),
+    'fanMidC': dict(n=8, hn=8, m=6, sleeve='long', hair='none', cap=True, jacket=True, belly=0.2, limb=1.12, broad=1.06),
+    'fanLow': dict(n=5, hn=5, m=3, sleeve='short', hair='short', low=True, belly=0.03, limb=1.0, broad=1.0),
 }
 
 
@@ -551,10 +661,11 @@ def fan(name):
 
     # his trunk: hips in the seat, a belly, a waist, the chest, round shoulders, a collar, his neck
     belly = w['belly']
-    thick = 0.035 if w.get('jacket') or w.get('hood') else 0.0
+    coat = w.get('coat', False)
+    thick = 0.06 if coat else 0.035 if w.get('jacket') or w.get('hood') else 0.0
     hips = (0.5 if woman else 0.47) + thick
     waist = (0.37 if woman else 0.45) + thick + belly * 0.3
-    sw = (0.53 if woman else 0.6) * (0.9 if kid else 1) + thick
+    sw = (0.53 if woman else 0.6) * (0.9 if kid else 1) * w['broad'] + thick
     bust = 0.075 if woman else 0.02
     trunk = [
         oval(-0.04, hips, 0.3 + belly * 0.5, 0.3, n, 0.02, 0.8),
@@ -579,20 +690,25 @@ def fan(name):
         parts.append(fan_piece([oval(1.69, 0.22, 0.17, 0.19, n, -0.04), oval(1.83, 0.27, 0.2, 0.24, n, -0.05)], 0, 'collar'))
     if w.get('hood'):
         parts.append(marked(ellipsoid((0, 1.72, -0.25), (0.34, 0.2, 0.16), 8 if near else 6, 4, 'hood'), 0))
-    if near and w.get('jacket'):
-        # (its hem standing off his lap)
-        parts.append(fan_piece([oval(0.06, hips + 0.05, 0.37 + belly * 0.5, 0.33, n, 0.02, 0.8), oval(0.22, hips + 0.02, 0.33 + belly * 0.6, 0.31, n, 0.01, 0.8)], 0, 'hem'))
+    if near and (w.get('jacket') or coat):
+        # (its hem standing off his lap; a coat's further, and its front edges down over his thighs)
+        out = 0.06 if coat else 0.0
+        parts.append(fan_piece([oval(0.06, hips + 0.05 + out, 0.37 + belly * 0.5 + out * 2, 0.33 + out, n, 0.02, 0.8), oval(0.22, hips + 0.02 + out, 0.33 + belly * 0.6 + out, 0.31 + out, n, 0.01, 0.8)], 0, 'hem'))
+    if near and coat:
+        for s in (-1, 1):
+            parts.append(fan_piece([[(s * 0.04, 0.1, 0.36), (s * 0.3, 0.1, 0.33), (s * 0.3, 0.16, 0.36), (s * 0.04, 0.16, 0.4)], [(s * 0.06, 0.12, 0.95), (s * 0.3, 0.12, 0.9), (s * 0.3, 0.2, 0.92), (s * 0.06, 0.2, 0.96)]], 0, 'skirt', start=True, end=True))
 
-    # his head: a neck, the jaw out to a chin, his mouth, cheeks, eyes set back under a brow, a forehead, the crown
+    # his head: a neck, the jaw out to a chin (narrowing to it: no cylinder of a face), his mouth, cheeks, eyes
+    # set back under a brow, a forehead, the crown
     hs = (0.94 if woman else 1.0) * (1.16 if kid else 1)
     hy = lambda y: 1.74 + (y - 1.74) * (1.12 if kid else 1)
     head = [
         oval(hy(1.74), 0.13 * hs, 0.12, 0.14, hn, -0.04),
-        oval(hy(1.9), 0.2 * hs, 0.25 * hs, 0.19 * hs, hn, -0.01),
-        oval(hy(2.03), 0.245 * hs, 0.3 * hs, 0.25 * hs, hn, -0.01),
-        oval(hy(2.15), 0.27 * hs, 0.315 * hs, 0.29 * hs, hn, -0.01),
+        oval(hy(1.9), 0.2 * hs, 0.25 * hs, 0.19 * hs, hn, -0.01, pinch=0.3),
+        oval(hy(2.03), 0.245 * hs, 0.3 * hs, 0.25 * hs, hn, -0.01, pinch=0.18),
+        oval(hy(2.15), 0.27 * hs, 0.315 * hs, 0.29 * hs, hn, -0.01, pinch=0.05),
         oval(hy(2.3), 0.28 * hs, 0.29 * hs, 0.31 * hs, hn, -0.015),
-        oval(hy(2.41), 0.285 * hs, 0.315 * hs, 0.32 * hs, hn, -0.02),
+        oval(hy(2.41), 0.285 * hs, 0.315 * hs, 0.32 * hs, hn, -0.02, pinch=-0.03),
         oval(hy(2.53), 0.26 * hs, 0.27 * hs, 0.3 * hs, hn, -0.03),
         oval(hy(2.63), 0.17 * hs, 0.17 * hs, 0.2 * hs, hn, -0.04),
     ]
@@ -600,7 +716,10 @@ def fan(name):
         head = [head[0], head[2], head[5], head[7]]
     elif not near:
         head = [head[0], head[1], head[3], head[4], head[5], head[7]]
-    hair, cap = w['hair'], w.get('cap', False)
+    hair, beanie = w['hair'], w.get('beanie', False)
+    cap = w.get('cap', False) or beanie
+    # (whoever carries the styles: his own long hair, tail or bun is one of them)
+    styled = near and not cap and not w.get('hood') and hair != 'none'
     top = CAP if cap else (SKIN if hair == 'none' else HAIR)
     back = SKIN if hair == 'none' and not w.get('jacket') else HAIR
     grown = []
@@ -616,40 +735,36 @@ def fan(name):
                 grown.append(SKIN)
     parts.append(fan_piece(head, grown + [top], 'head', tip=(0, hy(2.69), -0.04)))
     if near:
-        # a nose, and his ears: what tell a face from the back of a head at the first rows' distance
-        parts.append(fan_piece([[(0.065 * hs, hy(2.13), 0.29 * hs), (-0.065 * hs, hy(2.13), 0.29 * hs), (0, hy(2.33), 0.27 * hs)]], SKIN, 'nose', tip=(0, hy(2.17), 0.41 * hs)))
+        # a nose (its bridge down from between his eyes, out to a rounded tip over the wings of his nostrils,
+        # back under to his lip), his lips, and his ears: what tell a face from the back of a head at the
+        # first rows' distance
+        nose = [
+            [(0.03 * hs, hy(2.33), 0.28 * hs), (-0.03 * hs, hy(2.33), 0.28 * hs), (0, hy(2.335), 0.3 * hs)],
+            [(0.045 * hs, hy(2.24), 0.285 * hs), (-0.045 * hs, hy(2.24), 0.285 * hs), (0, hy(2.25), 0.335 * hs)],
+            [(0.068 * hs, hy(2.15), 0.285 * hs), (-0.068 * hs, hy(2.15), 0.285 * hs), (0, hy(2.175), 0.385 * hs)],
+        ]
+        parts.append(fan_piece(nose, SKIN, 'nose', start=True, tip=(0, hy(2.115), 0.33 * hs)))
+        parts.append(marked(ellipsoid((0, hy(2.035), 0.272 * hs), (0.088 * hs, 0.034, 0.05), 6, 3, 'lips'), SKIN))
         for s in (-1, 1):
             parts.append(marked(ellipsoid((s * 0.283 * hs, hy(2.24), -0.03), (0.03, 0.085, 0.055), 4, 3, 'ear'), SKIN))
-    # his hair: a crop over his skull, a lot of it, down to her shoulders, tied back in a tail; or a cap
-    seg = (8, 5) if near else (6, 4)
-    if cap:
+    # his hair: a crop over his skull, a lot of it, down to her shoulders, tied back in a tail; or a cap, or a
+    # knitted beanie with its cuff turned up
+    seg = (8, 4) if near else (6, 4)
+    if beanie:
+        parts.append(marked(ellipsoid((0, hy(2.54), -0.04), (0.305 * hs, 0.26 * hs, 0.34 * hs), *seg, 'beanie'), CAP))
+        parts.append(fan_piece([oval(hy(2.43), 0.3 * hs, 0.33 * hs, 0.345 * hs, hn, -0.025), oval(hy(2.55), 0.31 * hs, 0.335 * hs, 0.355 * hs, hn, -0.035)], CAP, 'cuff'))
+    elif cap:
         parts.append(marked(ellipsoid((0, hy(2.5), -0.03), (0.305 * hs, 0.2 * hs, 0.335 * hs), *seg, 'cap'), CAP))
         parts.append(fan_piece([[(0.25, hy(2.44), 0.22), (-0.25, hy(2.44), 0.22), (-0.25, hy(2.48), 0.22), (0.25, hy(2.48), 0.22)], [(0.18, hy(2.39), 0.66), (-0.18, hy(2.39), 0.66), (-0.18, hy(2.415), 0.66), (0.18, hy(2.415), 0.66)]], CAP, 'brim', end=True))
     elif hair == 'big':
         parts.append(marked(ellipsoid((0, hy(2.5), -0.07), (0.39 * hs, 0.32 * hs, 0.39 * hs), *seg, 'hair'), HAIR))
     elif hair != 'none' and not low:
         parts.append(marked(ellipsoid((0, hy(2.47), -0.055), (0.3 * hs, 0.245 * hs, 0.335 * hs), *seg, 'hair'), HAIR))
-    if hair == 'long':
-        # her hair down: round the back of her head from temple to temple, on down to her shoulders
-        k = 7 if near else 5
-
-        def fall(y, r, back):
-            return [(r * cos(a) * hs, y, -0.02 - back * sin(a)) for a in (pi * (0.04 + 0.92 * j / (k - 1)) for j in range(k))]
-
-        rows = [fall(2.6, 0.22, 0.26), fall(2.4, 0.32, 0.36), fall(2.1, 0.335, 0.37), fall(1.8, 0.35, 0.34), fall(1.5, 0.37, 0.37)]
-        if not near:
-            rows = [rows[0], rows[1], rows[3], rows[4]]
-        verts = [p for r in rows for p in r]
-        faces = [(i * k + j, i * k + j + 1, (i + 1) * k + j + 1, (i + 1) * k + j) for i in range(len(rows) - 1) for j in range(k - 1)]
-        o = mesh_obj('fall', verts, faces)
-        me = o.data
-        if sum(f.normal.dot(f.center - B(0, 2.0, 0.1)) * f.area for f in me.polygons) < 0:
-            me.flip_normals()
-        me.attributes.new('_PART', 'FLOAT', 'POINT').data.foreach_set('value', [HAIR] * len(verts))
-        parts.append(o)
-    if hair == 'up':
+    if hair == 'long' and not styled:
+        parts.append(hair_fall(HAIR, hs, hy, near))
+    if hair == 'up' and not styled:
         parts.append(marked(ellipsoid((0, 2.62, -0.3), (0.15, 0.15, 0.15), 6, 4, 'bun'), HAIR))
-    if hair == 'tail':
+    if hair == 'tail' and not styled:
         tail = [oval(y, r, r, r, 6, cz) for y, r, cz in ((2.5, 0.1, -0.33), (2.25, 0.12, -0.43), (1.95, 0.09, -0.44))]
         parts.append(fan_piece(tail, HAIR, 'tail', start=True, tip=(0, 1.72, -0.4)))
 
@@ -657,27 +772,41 @@ def fan(name):
     limb = w['limb']
     for s in (1, -1):
         # an arm, hanging: the round of his shoulder, the upper arm, the elbow (a ring either side of where it
-        # bends), the forearm, the wrist, his hand
+        # bends), the forearm, the wrist, his hand. In the first rows the arm has its muscle (the shoulder's
+        # cap, the upper arm, the forearm full under the elbow and thin to the wrist), a sleeve stands off it
+        # as cloth does, and the hand is a hand: the palm, the knuckles, the fingers together, a thumb
         arm = 2 if s > 0 else 3
-        line = [(1.69, 0.09, 0.1), (1.6, 0.17, 0.18), (1.38, 0.16, 0.165), (1.0, 0.14, 0.145), (0.68, 0.122, 0.125), (0.52, 0.118, 0.12), (0.1, 0.105, 0.105), (-0.22, 0.075, 0.07), (-0.33, 0.095, 0.05), (-0.5, 0.08, 0.04)]
+        cuff = {'long': -0.25, 'short': 0.95, 'none': 1.5}[w['sleeve']]
+        if near:
+            line = [(1.7, 0.1, 0.11), (1.6, 0.185, 0.195), (1.4, 0.175, 0.18), (1.1, 0.16, 0.165), (0.68, 0.128, 0.13), (0.52, 0.128, 0.128), (0.3, 0.132, 0.126), (-0.2, 0.078, 0.07), (-0.3, 0.094, 0.05), (-0.42, 0.1, 0.047), (-0.53, 0.086, 0.04)]
+        else:
+            line = [(1.69, 0.09, 0.1), (1.6, 0.17, 0.18), (1.38, 0.16, 0.165), (1.0, 0.14, 0.145), (0.68, 0.122, 0.125), (0.52, 0.118, 0.12), (0.1, 0.105, 0.105), (-0.22, 0.075, 0.07), (-0.33, 0.095, 0.05), (-0.5, 0.08, 0.04)]
         if low:
             # (a ring just over the elbow: the shader bends what is under FAN_ELBOW)
             line = [line[1], (0.62, 0.122, 0.125), line[7], line[9]]
         elif not near:
             line = [line[0], line[1], line[3], line[4], line[5], line[7], line[8], line[9]]
+        # (cloth over the arm: a sleeve a little off it, a coat's or a hood's more)
+        cloth = (0.03 if coat else 0.022 if thick else 0.012) if near else 0.0
         rings = []
         for i, (y, across, deep) in enumerate(line):
             # (few sides are measured to their corners: a little more, to be as thick across)
             g = (limb if y > -0.25 else 1.0) * (1.0 if near else 1.5 if low else 1.24)
-            rings.append([(s * (sx - 0.02) + across * g * cos(2 * pi * (k + 0.5) / m), y, deep * g * sin(2 * pi * (k + 0.5) / m)) for k in range(m)])
+            pad = cloth if y > cuff and y < 1.65 else 0.0
+            rings.append([(s * (sx - 0.02) + (across * g + pad) * cos(2 * pi * (k + 0.5) / m), y, (deep * g + pad) * sin(2 * pi * (k + 0.5) / m)) for k in range(m)])
         # where his sleeve ends: at the wrist, between the shoulder and the elbow, or there is none. In the
         # first rows the ring there is doubled (cloth above it, skin below)
-        cuff = {'long': -0.25, 'short': 0.95, 'none': 1.5}[w['sleeve']]
         last = max(i for i, (y, _, _) in enumerate(line) if y > cuff)
         if near:
             rings.insert(last + 1, rings[last])
         marks = [arm + (0 if i <= last else 0.25) for i in range(len(rings)) for _ in range(m)]
-        parts.append(fan_piece(rings, marks + [marks[-1]], 'arm', start=True, tip=(s * (sx - 0.02), -0.58, 0.0)))
+        parts.append(fan_piece(rings, marks + [marks[-1]], 'arm', start=True, tip=(s * (sx - 0.02), -0.6 if near else -0.58, 0.0)))
+        if near:
+            # (his thumb: off the inside of his palm, forward and down along his fingers)
+            ax = s * (sx - 0.02) - s * 0.075
+            thumb = [oval(-0.25, 0.032, 0.03, 0.03, 4, 0.04)]
+            thumb = [[(ax + x, y, z) for (x, y, z) in r] for r in thumb]
+            parts.append(fan_piece(thumb, arm + 0.25, 'thumb', start=True, tip=(ax + s * 0.01, -0.43, 0.075)))
 
         # a leg: the thigh from the hip out to the knee (the knees a little apart), the shin down to his step, a shoe
         ky, kz = FAN_KNEE
@@ -692,7 +821,7 @@ def fan(name):
         knee = ring((s * 0.33, ky, kz), (1, 0, 0), d, lw - 0.03, 0.24)
         calf = ring((s * 0.335, -0.5, 1.2), (1, 0, 0), (0, 0, 1), lw - 0.05, 0.18 * limb)
         ankle = ring((s * 0.335, FAN_FOOT + 0.14, 1.2), (1, 0, 0), (0, 0, 1), 0.115, 0.125)
-        parts.append(fan_piece([hip, thigh, knee, calf, ankle] if near else [hip, knee, ankle], 4, 'leg'))
+        parts.append(fan_piece([hip, knee, calf, ankle] if near else [hip, knee, ankle], 4, 'leg'))
         f0, f1 = FAN_FOOT, FAN_FOOT + 0.2
         heel = [(s * 0.215, f0, 1.03), (s * 0.455, f0, 1.03), (s * 0.455, f1, 1.03), (s * 0.215, f1, 1.03)]
         arch = [(s * 0.215, f0, 1.38), (s * 0.465, f0, 1.38), (s * 0.455, f1 - 0.02, 1.38), (s * 0.225, f1 - 0.02, 1.38)]
@@ -721,6 +850,12 @@ def fan(name):
     for v in me.vertices:
         v.co = hung[v.index]
     me.update()
+    if styled:
+        # (the styles of hair go on after his shade is baked: one he hasn't got on must not shade the face under it)
+        out.name = name + 'Bare'
+        out = join([out] + hair_styles(hs, hy), name)
+        set_material(out, material('fan', (0.3, 0.3, 0.33), 0.8))
+        smooth(out, 75)
 
     # (no face is painted on him: a few points across a head would carry it as a band; crowd.ts draws it)
     paint(out, lambda x, y, z: 1.0)
@@ -788,13 +923,34 @@ def fan_look(fan, name, at, up=0.0, keen=True, clap=0.0, tone=0.7, wear=(0.1, 0.
     return o
 
 
-# --- the scoreboard: four screens leaning down, a ring under it, hung from the roof; the origin is its centre ---
+# --- the scoreboards: each building hangs one kind (court3d/arena.ts BOARDS, teamColors.ts Roofing.board); the
+# --- origin is its centre, and it hangs by cables 12 ft up from there ---
 
-def scoreboard():
-    dark = material('dark')
-    screen = material('screen')
-    ribbon = material('ribbon', (0.55, 0.07, 0.09), 0.4, shade=False)
+#: The cables' tops (ft over the scoreboard's middle): the roof's frame is there (court3d/arena.ts BOARD_CABLES).
+CABLE_Y = 12
+#: A halo's: how big the scoreboard in it is (of the four-sided one), the ring's radius in and out, its foot and top (ft).
+HALO_CORE = 0.66
+HALO_R = (15.6, 16.1)
+HALO_Y = (-6.1, -3.9)
+
+
+def facing(c, out, wide, tall, name='face'):
+    """A flat face, `wide` by `tall` ft about `c`, toward `out` (level): as one stood in front of it sees it."""
+    c, n = Vector(c), Vector(out).normalized()
+    right = n.cross(Vector((0, 1, 0))) * -1
+    up = Vector((0, 1, 0))
+    u, v = right * (wide / 2), up * (tall / 2)
+    return sheet([tuple(c - u - v), tuple(c + u - v), tuple(c + u + v), tuple(c - u + v)], name)
+
+
+def cable(a, b, out, dark, r=0.12):
+    out.append(of(rod(a, b, r, 4, cap=False), dark))
+
+
+def four_board(dark, screen, ribbon, ring=True, cables=True):
+    """The big four-sided one: four screens leaning down, a ring of ribbon under it, a truss on top."""
     cham = 1.5
+
     def eight(h, y):
         """The eight corners of a square with its corners cut, `h` from the middle to a side."""
         g = h - cham
@@ -815,12 +971,13 @@ def scoreboard():
             pts.append((h + 0.07, y_low + (y_top - y_low) * v, zs * (h - cham - 0.3)))
         out.append(of(transform(sheet(pts), turn), screen))
     # the ring under it, and what it hangs by
-    seg, r_in, r_out, r0, r1 = 48, 8.7, 9.25, -5.5, -4.25
-    ring = hoop_loft([[(r * cos(2 * pi * i / seg), y, r * sin(2 * pi * i / seg)) for r, y in ((r_in, r0), (r_out, r0), (r_out, r1), (r_in, r1))] for i in range(seg)], 'ring')
-    out.append(of(ring, ribbon))
-    for q in range(4):
-        a = pi / 4 + q * pi / 2
-        out.append(of(beam(((r_in + 0.25) * cos(a), r1 - 0.1, (r_in + 0.25) * sin(a)), (7.6 * cos(a), y_low + 0.3, 7.6 * sin(a)), 0.3, 0.3, cap=False), dark))
+    if ring:
+        seg, r_in, r_out, r0, r1 = 48, 8.7, 9.25, -5.5, -4.25
+        band = hoop_loft([[(r * cos(2 * pi * i / seg), y, r * sin(2 * pi * i / seg)) for r, y in ((r_in, r0), (r_out, r0), (r_out, r1), (r_in, r1))] for i in range(seg)], 'ring')
+        out.append(of(band, ribbon))
+        for q in range(4):
+            a = pi / 4 + q * pi / 2
+            out.append(of(beam(((r_in + 0.25) * cos(a), r1 - 0.1, (r_in + 0.25) * sin(a)), (7.6 * cos(a), y_low + 0.3, 7.6 * sin(a)), 0.3, 0.3, cap=False), dark))
     out.append(of(loft([eight(6.4, -4.3), eight(8.4, y_low)], 'belly', cap=True), dark))
     fix_normals(out[-1])
     # (a screen under it too, for the seats right below: every camera in the building looks up at this side)
@@ -832,19 +989,95 @@ def scoreboard():
         turn = Matrix.Rotation(q * pi / 2, 4, 'Y')
         out.append(of(transform(slab(5.6, 6.4, 5.5, 6.3, -6.4, 6.4), turn), dark))
         a = pi / 4 + q * pi / 2
-        out.append(of(rod((8.2 * cos(a), 6.2, 8.2 * sin(a)), (5.6 * cos(a), 12, 5.6 * sin(a)), 0.12, 4, cap=False), dark))
+        if cables:
+            cable((8.2 * cos(a), 6.2, 8.2 * sin(a)), (5.6 * cos(a), CABLE_Y, 5.6 * sin(a)), out, dark)
     out.append(of(bevel(slab(-2, 2, 5.5, 7.1, -2, 2), 0.12, 1), dark))
-    out.append(of(rod((0, 7.0, 0), (0, 12, 0), 0.45, 6, cap=False), dark))
-    o = finish(out, 'scoreboard')
+    if cables:
+        out.append(of(rod((0, 7.0, 0), (0, CABLE_Y, 0), 0.45, 6, cap=False), dark))
+    return out
+
+
+def halo_board(dark, screen, ribbon):
+    """A smaller four-sided one in a big ring of ribbon round under it (a halo), each on its own cables."""
+    k = HALO_CORE
+    out = four_board(dark, screen, ribbon, ring=False, cables=False)
+    for o in out:
+        transform(o, Matrix.Scale(k, 4))
+    (r0, r1), (y0, y1), seg = HALO_R, HALO_Y, 72
+    around = lambda r, y, i: (r * cos(2 * pi * i / seg), y, r * sin(2 * pi * i / seg))
+    out.append(of(hoop_loft([[around(r, y, i) for r, y in ((r0, y0), (r1, y0), (r1, y1), (r0, y1))] for i in range(seg)], 'halo'), ribbon))
+    # (its lips, top and bottom: a dark rim a little wider than the ribbon)
+    for a, b in ((y1, y1 + 0.35), (y0 - 0.35, y0)):
+        out.append(of(hoop_loft([[around(r, y, i) for r, y in ((r0 - 0.06, a), (r1 + 0.06, a), (r1 + 0.06, b), (r0 - 0.06, b))] for i in range(seg)], 'lip'), dark))
+    for q in range(4):
+        a = pi / 4 + q * pi / 2
+        top = (5.6 * cos(a), CABLE_Y, 5.6 * sin(a))
+        cable(((r0 + r1) / 2 * cos(a), y1 + 0.35, (r0 + r1) / 2 * sin(a)), top, out, dark, 0.1)
+        cable((8.2 * k * cos(a), 6.2 * k, 8.2 * k * sin(a)), top, out, dark)
+    out.append(of(rod((0, 7.0 * k, 0), (0, CABLE_Y, 0), 0.4, 6, cap=False), dark))
+    return out
+
+
+def slim_board(dark, screen, ribbon):
+    """A slim one: four flat panels standing square round a dark middle, open at the corners, a lid, a band of ribbon under."""
+    w, d, y0, y1 = 7.8, 8.0, -3.3, 3.5
+    out = []
+    for q in range(4):
+        turn = Matrix.Rotation(q * pi / 2, 4, 'Y')
+        out.append(of(transform(bevel(slab(d - 0.5, d, y0, y1, -w, w), 0.06, 1), turn), dark))
+        out.append(of(transform(facing((d + 0.02, (y0 + y1) / 2, 0), (1, 0, 0), 15.0, 6.3), turn), screen))
+    out.append(of(bevel(slab(-6, 6, -4.4, 3.0, -6, 6), 0.1, 1), dark))
+    out.append(of(bevel(slab(-8.5, 8.5, y1, y1 + 0.3, -8.5, 8.5), 0.08, 1), dark))
+    seg = 48
+    out.append(of(hoop_loft([[(r * cos(2 * pi * i / seg), y, r * sin(2 * pi * i / seg)) for r, y in ((6.9, -4.4), (7.35, -4.4), (7.35, -3.6), (6.9, -3.6))] for i in range(seg)], 'band'), ribbon))
+    # (and its screen underneath, under the band)
+    out.append(of(slab(-4.9, 4.9, -4.52, -4.42, -4.9, 4.9), screen))
+    for q in range(4):
+        a = pi / 4 + q * pi / 2
+        cable((7.6 * cos(a), y1 + 0.3, 7.6 * sin(a)), (5.6 * cos(a), CABLE_Y, 5.6 * sin(a)), out, dark)
+    return out
+
+
+#: A long one's: half its length (along the floor), half its depth, its foot and top (ft).
+LONG = (15.6, 5.4, -6.4, 6.4)
+
+
+def long_board(dark, screen, ribbon):
+    """A long one: a box along the floor, a big screen on each long side to the sides' stands, a small one on each end to the baskets'."""
+    L, D, y0, y1 = LONG
+    out = [of(bevel(slab(-L, L, y0, y1, -D, D), 0.35, 2), dark)]
+    for s in (-1, 1):
+        out.append(of(facing((0, 0, s * (D + 0.04)), (0, 0, s), 28.9, 12.2), screen))
+        out.append(of(facing((s * (L + 0.04), 3.6, 0), (s, 0, 0), 9.8, 4.13), screen))
+        # (a dark trim along the top of each long side, and a rail on top the cables hang it by)
+        out.append(of(slab(-L + 0.4, L - 0.4, y1, y1 + 0.5, s * 2.6 - 0.25, s * 2.6 + 0.25), dark))
+    out.append(of(bevel(slab(-L + 1.2, L - 1.2, y0 - 0.9, y0, -D + 1.0, D - 1.0), 0.15, 1), dark))
+    out.append(of(slab(-7.5, 7.5, y0 - 1.02, y0 - 0.9, -2.6, 2.6), screen))
+    for sx in (-1, 1):
+        for sz in (-1, 1):
+            cable((sx * (L - 2.6), y1 + 0.5, sz * 2.6), (sx * (L - 2.6), CABLE_Y, sz * 2.6), out, dark, 0.14)
+    return out
+
+
+def scoreboard(name='scoreboard', kind='four'):
+    dark = material('dark')
+    screen = material('screen')
+    ribbon = material('ribbon', (0.55, 0.07, 0.09), 0.4, shade=False)
+    build = {'four': four_board, 'halo': halo_board, 'slim': slim_board, 'long': long_board}[kind]
+    o = finish(build(dark, screen, ribbon), name)
     shade(o, plain=('screen', 'ribbon'), reach=4.5, low=0.5)
     return o
+
+
+#: The scoreboards by kind, as arena.glb names them.
+BOARDS = {'four': 'scoreboard', 'halo': 'scoreboardHalo', 'slim': 'scoreboardSlim', 'long': 'scoreboardLong'}
 
 
 # --- build, write, look ---
 
 a = args()
 reset()
-objs = [f() for f in (hoop, rim, net, chair, table, ball, scoreboard, fan_far, stall)] + [fan(name) for name in FANS]
+objs = [f() for f in (hoop, rim, net, chair, table, ball, fan_far, stall)] + [scoreboard(name, kind) for kind, name in BOARDS.items()] + [fan(name) for name in FANS]
 things = {o.name: o for o in objs}
 for name, o in things.items():
     mats = ', '.join(f'{m.name} {sum(len(p.vertices) - 2 for p in o.data.polygons if p.material_index == i)}' for i, m in enumerate(o.data.materials))
@@ -873,7 +1106,8 @@ if 'preview' in a:
     look('chair', [T['chair']], [((5, 4, 8), (0, 1.5, 0), 4.2), ((-8, 3, -5), (0, 1.5, 0), 4.2), ((9, 1.5, 0.2), (0, 1.5, 0), 4.2), ((2, 9, 20), (0, 1.5, 0), 12)], size=(520, 520), ground=0, sheet_cols=2)
     look('table', [T['table']], [((6, 12, 40), (0, 1.5, 0), 37), ((10, 5, 9), (-13.5, 1.8, 0), 10), ((-6, 5, -9), (0, 2.2, 0), 9), ((-10, 4, 8), (15.5, 1.5, 0), 6)], size=(900, 420), ground=0, sheet_cols=1)
     look('ball', [T['ball']], [((3, 2, 8), (0, 0, 0), 1.0), ((8, 1, 1), (0, 0, 0), 1.0), ((1, 8, 2), (0, 0, 0), 1.0), ((-4, -1, 6), (0, 0, 0), 1.0), ((3, 2, 8), (0, 0, 0), 5), ((5, 0.5, 5), (0.39, 0, 0.1), 0.3)], size=(440, 440), sheet_cols=3)
-    look('scoreboard', [T['scoreboard']], [((10, -14, 40), (0, 1, 0), 30), ((25, 6, 30), (0, 1, 0), 30), ((4, -30, 12), (0, 0, 0), 30), ((10, -30, 80), (0, 1, 0), 90)], size=(560, 560), sheet_cols=2)
+    for name in BOARDS.values():
+        look(name, [T[name]], [((10, -14, 40), (0, 1, 0), 30), ((25, 6, 30), (0, 1, 0), 30), ((4, -30, 12), (0, 0, 0), 30), ((10, -30, 80), (0, 1, 0), 90)], size=(560, 560), sheet_cols=2)
     # the spectators as the crowd shows them: each sat in a seat, then one on his feet with his arms in the
     # air, one clapping, one half way up (they stay in the .blend, off to one side)
     looks = [(0.1, 0.16, 0.34), (0.45, 0.07, 0.08), (0.5, 0.48, 0.44), (0.08, 0.3, 0.16), (0.3, 0.3, 0.33), (0.1, 0.16, 0.34), (0.42, 0.36, 0.2)]
@@ -896,6 +1130,6 @@ if 'preview' in a:
         o.hide_render = False
 
 # the .blend, laid out to be looked at: the basket put together, the rest spread along the floor
-for o, at in ((things['rim'], (0, 10, 0)), (things['net'], (0, 10, 0)), (things['chair'], (-4, 0, 14)), (things['ball'], (2, 0.39, 14)), (things['table'], (0, 0, 22)), (things['scoreboard'], (0, 34, 22)), (things['stall'], (8, 0, 14)), (things['fanFar'], (11, 1.3, 14)), *((things[name], (14 + 3 * i, 1.3, 14)) for i, name in enumerate(FANS))):
+for o, at in ((things['rim'], (0, 10, 0)), (things['net'], (0, 10, 0)), (things['chair'], (-4, 0, 14)), (things['ball'], (2, 0.39, 14)), (things['table'], (0, 0, 22)), *((things[name], (i * 40 - 60, 34, 22)) for i, name in enumerate(BOARDS.values())), (things['stall'], (8, 0, 14)), (things['fanFar'], (11, 1.3, 14)), *((things[name], (14 + 3 * i, 1.3, 14)) for i, name in enumerate(FANS))):
     o.location = B(*at)
 save_blend(os.path.join(a['blend'], 'arena.blend'))

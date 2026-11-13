@@ -37,7 +37,7 @@ import type { PerspectiveCamera, Vector3 } from 'three';
 import { BASKET, COURT_LEN, toWorld, type Pt, type Script } from '../choreo';
 import { HALF_W, pose, SIDE, type Stage } from '../Court';
 import { planShot, shotAt, type Shot } from './ballistics';
-import { blocked, clearSeat, fenced, SEAT_X, SEAT_Z } from './cameras';
+import { blocked, clearSeat, clutter, fenced, SEAT_X, SEAT_Z, TALL } from './cameras';
 import { DUNK_AT } from './clips';
 import type { V3 } from './puppet';
 
@@ -94,8 +94,19 @@ const BENCH_Z = -(HALF_W + SIDE + 2.5);
 const TIGHT_OFF = 23;
 /** The building's shot before the tip lasts this long (ms). */
 export const INTRO_MS = 3400;
-/** The near side's replay camera stands this far along the floor from the man (ft). */
-const SIDE_OFF = 18;
+/**
+ * The near side's replay camera stands this far along the floor from the man (ft), toward the basket: the ball's whole
+ * flight across the picture. A picture squarer than TALL has no room across for that (the man at one edge, the rim at
+ * the other, and the floor and the stands filling the rest): by the time it is this much squarer the camera stands
+ * this far behind him instead (ft, away from the basket), the man, the flight and the rim nearer a line, the flight up it.
+ */
+const SIDE_OFF = [18, -26];
+const SIDE_SPAN = 0.9;
+/** And this high (ft), the wide frame's and the tallest's: from higher the floor's depth goes up a tall picture, the men spread up it. */
+const SIDE_Y = [11.5, 17];
+/** Out across the floor to here (z); a man this much nearer it than that (ft) is too near its lens, at one edge of its picture and the rim at the other. */
+const SIDE_Z = 31;
+const SIDE_NEAR = 13;
 
 /** What makes a play worth seeing again, and which is kept when a possession has two. */
 export type BigKind = 'winner' | 'buzzer' | 'and1' | 'dunk' | 'three' | 'block';
@@ -154,14 +165,37 @@ const SWAT_GO = 6;
 /**
  * Tight on a man shooting from farther out than this (ft): over his shoulder, behind and to one side of
  * him, this far off (ft, the nearer first), this high, and this far round from straight behind (radians),
- * looking past him at the rim.
+ * looking past him at the rim: a longer lens from farther back and a little over his head, so the man, the
+ * flight and the rim are in a line and the picture is no wider than this (degrees top to bottom, in a wide
+ * frame; a play it can't hold so, or a seat the floor's edges keep from being behind him, as in the corner,
+ * is another camera's). A seat more than this far round from behind him (radians) is not behind him.
  */
 const SHOULDER_FROM = 11;
-const SHOULDER_OFF = [14, 19];
-const SHOULDER_Y = 7.6;
-const SHOULDER_TURN = [28, 42, 58, 72].map((d) => (d * Math.PI) / 180);
+const SHOULDER_OFF = [21, 27];
+const SHOULDER_Y = 8.8;
+const SHOULDER_TURN = [14, 26, 40, 56].map((d) => (d * Math.PI) / 180);
+const SHOULDER_WIDEST = 30;
+const SHOULDER_ROUND = (50 * Math.PI) / 180;
 /** A seat this near (ft) where he is on his way to the shot costs more the nearer. */
 const RUN_BY = 12;
+/**
+ * A seat whose picture is more than this much the basket's unit or a man by the lens (cameras.ts `clutter`) is
+ * not that camera's: the next is taken. Short of it, a seat costs this much more for all of its picture so taken
+ * (against 1 for needing to go as wide as the camera goes): of two that hold the play, the cleaner picture.
+ */
+const MESS_MOST = 0.2;
+const MESS_COST = 4;
+/** A man is by the lens when he is nearer it than this share of the way to the man the replay is on, and this much (ft) nearer; or this near it whatever. */
+const FORE = [0.8, 4, 6];
+/**
+ * Where else the fixed cameras may stand, from their own seat (ft; `seatFor` takes the cleanest picture of them):
+ * behind the basket, farther along the baseline and farther back; over the board, higher and off to the near side
+ * (not out over the floor: over a man running under it, the picture would whip round); under it, along the baseline
+ * either way.
+ */
+const BASE_TRY = { z: [0, 5, 10], x: [0, 2.5] };
+const RIM_TRY = { y: [0, 2.5], z: [0, 3] };
+const FLOOR_TRY = { z: [0, 3, -3], x: [0, -2] };
 /** Until a replay has been drawn, its picture is taken to be a phone's (the tighter safe area): width over height, and px high. */
 const SHAPE = [1.3, 288];
 /**
@@ -179,10 +213,14 @@ const BALL_HIS = 3;
  * need (from its seat, up front) over this: it starts near enough to how wide it ends that it has little to open.
  */
 const AHEAD = 260;
+/** And the flight and the basket are drawn in this far ahead (the script's ms) for how wide it is going: it has opened out for a shot from range by the time the ball goes up, not as it does. */
+const AHEAD_SHOT = 700;
 const WIDEN = 14;
 const NARROW = 7;
 const SPEED_UP = 0.35;
 const ZOOM_MOST = 1.3;
+/** And for a shot it is never tighter than that by its release, coming to it over this long before (the script's ms): a replay that picks the play up just before the shot starts nearly as wide as the shot needs, so it has little to open as the ball goes up. */
+const RUN_UP = 900;
 /** The highest thing it must show is put this high in the picture (-1..1) when there is room: the man doesn't sink under empty air. */
 const TOP_AT = 0.66;
 /** A camera's own aim moves from one thing to the next over this long (the script's ms), not in a frame. */
@@ -353,6 +391,22 @@ function hold(seat: V3, want: V3, tan0: number, pts: ArrayLike<number>, n: numbe
   return out;
 }
 
+/** A seat behind a man at (x, z) shooting at `rim`, over his shoulder: not too far round from his back, nor pulled in on him (SHOULDER_ROUND). */
+function behind(seat: V3, x: number, z: number, rim: { x: number; z: number }) {
+  const a = Math.atan2(seat.x - x, seat.z - z) - Math.atan2(x - rim.x, z - rim.z);
+  return Math.abs(Math.atan2(Math.sin(a), Math.cos(a))) <= SHOULDER_ROUND && Math.hypot(seat.x - x, seat.z - z) >= SHOULDER_OFF[0] * 0.6;
+}
+
+/**
+ * Where the trail referee keeps with the ball at (bx, bz), the basket being attacked at the `e` end (sideline.ts officiate):
+ * this far behind it along the floor, no farther up it than this (ft from the middle); across, this far out toward the far
+ * side, this much more for each ft the ball is out, between these (x, z).
+ */
+const TRAIL = { back: 13, most: 15, z: [-7, 0.4, -15, -3] };
+function trail(bx: number, bz: number, e: number): [number, number] {
+  return [e * Math.min(e * bx - TRAIL.back, TRAIL.most), clamp(TRAIL.z[0] + bz * TRAIL.z[1], TRAIL.z[2], TRAIL.z[3])];
+}
+
 /** A smooth wobble, -1..1: two slow waves that never line up (a hand on a camera, not a machine). */
 function wob(t: number, a: number, b: number, phase: number) {
   return Math.sin(t * a + phase) * 0.62 + Math.sin(t * b + phase * 2.3 + 1.1) * 0.38;
@@ -394,6 +448,17 @@ export class Director {
   // where the man is on the run-up, at LEAD_AT (x, z each): a close camera doesn't stand where he runs by it
   private readonly run: number[] = [];
   private readonly chk: number[] = [];
+  // the others on the floor at the moment (x, z each); and at each of the times `moment` tries, the others and where the
+  // man is and when (x, the script's ms, z): what may stand by a replay camera's lens, how near it is, what it looks at
+  private readonly men: number[] = [];
+  private readonly crowd: number[][] = [];
+  // the referees where the play left them (x, z each): they stand by a lens as much as the ten do
+  private readonly refs: number[] = [];
+  private readonly at: number[] = [];
+  // what a seat's picture comes to (`judge`)
+  private readonly verdict = { need: 0, mess: 0 };
+  // what a replay camera looks at, and how much of the scene it keeps there (`framing`)
+  private readonly frameAt0 = { x: 0, y: 0, z: 0, span: 0 };
   private readonly cuts: number[] = [];
   private aspect = SHAPE[0];
   private high = SHAPE[1];
@@ -425,9 +490,10 @@ export class Director {
 
   /**
    * The court has finished `sc`: a replay of its big play starts if there is one worth it (and none was
-   * shown in the last REPLAY_GAP). True: the court is to wait until `released`.
+   * shown in the last REPLAY_GAP). True: the court is to wait until `released`. `refs`: where the referees
+   * are (x, z each; the replay has them about where they were), for its camera to stand clear of.
    */
-  start(sc: Script | null): boolean {
+  start(sc: Script | null, refs: ArrayLike<number> = []): boolean {
     const b = this.big;
     if (this.phase !== 'off' || !sc || !b || b.sc !== sc || b.ago > STALE_MS || this.gap < REPLAY_GAP * (this.speed > 1.05 ? 1.5 : 1)) return false;
     // the shot: who let it go and how (a dunk's moment is its slam, the bodies' DUNK_AT into its move)
@@ -455,6 +521,8 @@ export class Director {
     }
     if (t0 < 0) t0 = Math.max(0, want);
     if (t1 - t0 < 400) return false;
+    this.refs.length = 0;
+    for (let i = 0; i < refs.length; i++) this.refs.push(refs[i]);
     const cams = CAMS[b.kind];
     const pids = [...sc.oPids, ...sc.dPids];
     const j = pids.indexOf(b.star);
@@ -669,15 +737,20 @@ export class Director {
   /**
    * The replay is seen from `cam` if that camera sees this play at all (the basket's cameras only a play
    * at it; the near side's not with the man in the corner, where it would stand past the baseline with the
-   * basket's post across its picture) and its seat can hold what must be seen at the moment (the gantry's
+   * basket's post across its picture, nor with him by its lens, SIDE_NEAR) and its seat can hold what must be seen at the moment (the gantry's
    * long lens always can).
    */
   private take(cam: ReelCam, r: Reel): boolean {
     if (AT_RIM.has(cam) && Math.hypot(r.x - r.rim.x, r.z - r.rim.z) > RIM_NEAR) return false;
-    if (cam === 'side' && Math.abs(r.x + (r.rim.x < 0 ? -1 : 1) * SIDE_OFF) > MID + 3) return false;
+    if (cam === 'side' && (Math.abs(this.sideSeat(r.x, r.rim.x < 0 ? -1 : 1).x) > MID + 3 || SIDE_Z - r.z < SIDE_NEAR)) return false;
     const seat = this.seatFor(cam, r);
-    const need = this.need(seat);
-    if (cam !== 'slash' && (need > this.widest(cam) || this.fenced(seat))) return false;
+    const { need, mess } = this.judge(seat, cam, r);
+    if (cam !== 'slash' && (need > this.widest(cam, r.back) || this.fenced(seat) || mess > MESS_MOST)) return false;
+    // (over his shoulder only from behind him, with nobody between him and the lens at the shot, nor a referee (the last
+    // of each crowd: those where the play left them, and the trail) on the way to it: they stand where they stand, the players go by)
+    const nr = this.refs.length / 2 + 1;
+    const by = (m: number[], c: number, refs: boolean) => blocked(this.at[c * 3], this.at[c * 3 + 2], seat.x, seat.z, refs ? m.slice(-nr * 2) : m, refs ? nr : m.length / 2);
+    if (cam === 'tight' && r.back && (!behind(seat, r.x, r.z, r.rim) || this.crowd.some((m, c) => by(m, c, c < this.crowd.length - 1)))) return false;
     r.cam = cam;
     r.seat = seat;
     r.wide = need;
@@ -696,24 +769,62 @@ export class Director {
     return run > this.seeCut / 4;
   }
 
-  /** The most a camera opens out: the tangent of half its picture top to bottom. */
-  private widest(cam: ReelCam) {
-    return Math.tan((WIDEST[cam] * Math.PI) / 360 / Math.min(1, this.aspect));
+  /** Where the near side's camera stands for a man at `x` going at the `e` end, in a picture this shape (SIDE_OFF, SIDE_Y). */
+  private sideSeat(x: number, e: number): V3 {
+    const u = smooth(clamp((TALL - this.aspect) / SIDE_SPAN, 0, 1));
+    return { x: x + e * (SIDE_OFF[0] + (SIDE_OFF[1] - SIDE_OFF[0]) * u), y: SIDE_Y[0] + (SIDE_Y[1] - SIDE_Y[0]) * u, z: SIDE_Z };
   }
 
-  /** How wide a picture from `seat` must be to hold what the replay must show, at the widest of the times `moment` tries (the tangent of half of it top to bottom). */
-  private need(seat: V3): number {
+  /** The most a camera opens out (`back`: the tight one over his shoulder): the tangent of half its picture top to bottom. */
+  private widest(cam: ReelCam, back = false) {
+    return Math.tan(((cam === 'tight' && back ? SHOULDER_WIDEST : WIDEST[cam]) * Math.PI) / 360 / Math.min(1, this.aspect));
+  }
+
+  /**
+   * What a picture from `seat` comes to, at the times `moment` tries: how wide it must be to hold what the replay
+   * must show, at the widest of them (`need`: the tangent of half of it top to bottom); and how much of it the
+   * basket's units and the men by its lens take, at the worst of them (`mess`: cameras.ts `clutter`, the picture
+   * as wide as it must be there, the units as far as half as far again past what it looks at). Not `mess`: the
+   * width alone (the dearer half left out).
+   */
+  private judge(seat: V3, cam: ReelCam, r: Reel, mess = true): { need: number; mess: number } {
     const sa = this.safe(this.aspect, this.high);
-    let most = 0;
+    const out = this.verdict;
+    [out.need, out.mess] = [0, 0];
     for (let c = 0, from = 0; c < this.cuts.length; from = this.cuts[c++]) {
       const P = this.chk.slice(from, this.cuts[c]);
       const m = P.length / 3;
       const mid = { x: 0, y: 0, z: 0 };
       for (let i = 0; i < m; i++) [mid.x, mid.y, mid.z] = [mid.x + P[i * 3] / m, mid.y + P[i * 3 + 1] / m, mid.z + P[i * 3 + 2] / m];
       limits(seat, null, 1, P, P.length, this.aspect, sa, 0);
-      most = Math.max(most, hold(seat, mid, 0, P, P.length, this.aspect, Infinity, this.aim).tan);
+      out.need = Math.max(out.need, hold(seat, mid, 0, P, P.length, this.aspect, Infinity, this.aim).tan);
+      if (!mess) continue;
+      // (the picture as the camera takes it: its own, turned and opened out as little as holds what it must show)
+      const man = { x: this.at[c * 3], y: 4.6, z: this.at[c * 3 + 2] };
+      const F = this.framing(cam, r, man, null, man, this.at[c * 3 + 1]);
+      const d = Math.hypot(seat.x - F.x, seat.y - F.y, seat.z - F.z);
+      const own = Math.tan((clamp((2 * Math.atan(F.span / 2 / d) * 180) / Math.PI / Math.min(1, this.aspect), 9, WIDEST[cam]) * Math.PI) / 360);
+      const A = hold(seat, F, own, P, P.length, this.aspect, this.widest(cam), this.aim);
+      const far = Math.hypot(A.x - seat.x, A.y - seat.y, A.z - seat.z) * 1.5 + 6;
+      const to = Math.hypot(man.x - seat.x, man.z - seat.z);
+      const fore = Math.max(FORE[2], Math.min(to * FORE[0], to - FORE[1]));
+      const men = this.crowd[c];
+      out.mess = Math.max(out.mess, clutter(seat.x, seat.y, seat.z, A.x, A.y, A.z, A.tan, this.aspect, far, men, men.length / 2, fore));
     }
-    return most;
+    return out;
+  }
+
+  /** Of `seats`, the one whose picture holds the play tightest with the least of it a basket's unit or a man by the lens (MESS_COST), and nothing of a unit in front of the man (`fenced`). */
+  private cleanest(seats: V3[], cam: ReelCam, r: Reel): V3 {
+    let [best, low] = [seats[0], Infinity];
+    for (const seat of seats) {
+      // (its picture's make-up only when the rest of it leaves the seat a chance)
+      let cost = this.judge(seat, cam, r, false).need / this.widest(cam);
+      cost += (cost > 1 ? 10 : 0) + (this.fenced(seat) ? 6 : 0);
+      if (cost < low) cost += MESS_COST * this.judge(seat, cam, r).mess;
+      if (cost < low) [best, low] = [seat, cost];
+    }
+    return best;
   }
 
   /**
@@ -744,6 +855,15 @@ export class Director {
     };
     this.cuts.length = 0;
     this.run.length = 0;
+    this.men.length = this.crowd.length = this.at.length = 0;
+    for (const p of [...r.sc.frames[r.k].o, ...r.sc.frames[r.k].d]) {
+      const w = toWorld(p, r.sc.dir);
+      if (Math.hypot(sx(w) - r.x, sz(w) - r.z) > 0.5) this.men.push(sx(w), sz(w));
+    }
+    // (the referees where the play left them, and the trail where he was as the ball went up)
+    const e0 = r.rim.x < 0 ? -1 : 1;
+    const go = r.from ?? r;
+    this.men.push(...this.refs, ...trail(go.x, go.z, e0));
     // (and what must be seen past a basket's unit: his chest and head on the run-up, at the moment his head and the ball
     // in his hands, at the rim for a dunk)
     const E = this.see;
@@ -764,6 +884,15 @@ export class Director {
       man(sx(s), sz(s), 3, 6.6 + HEAD_ROOM);
       eye(sx(s), 4.6, sz(s));
       this.run.push(sx(s), sz(s));
+      this.at.push(sx(s), t, sz(s));
+      this.crowd.push([
+        ...[...pl.o, ...pl.d].flatMap((p, i) => {
+          const w = toWorld(p, r.sc.dir);
+          return i === j ? [] : [sx(w), sz(w)];
+        }),
+        ...this.refs,
+        ...trail(sx(toWorld(pl.ball, r.sc.dir)), sz(toWorld(pl.ball, r.sc.dir)), e0),
+      ]);
       eye(sx(s), 6.8, sz(s));
       // (the ball's man drawn in toward him from far off, as `must` has the ball)
       const bw = toWorld(pl.ball, r.sc.dir);
@@ -793,7 +922,7 @@ export class Director {
       const l = Math.hypot(r.x - r.rim.x, r.z - r.rim.z) || 1;
       eye(r.rim.x + ((r.x - r.rim.x) / l) * 0.8, RIM_H + 0.3, r.rim.z + ((r.z - r.rim.z) / l) * 0.8);
       eye(r.rim.x, RIM_H - 0.4, r.rim.z);
-    }
+    } else if (r.kind !== 'block') eye(r.rim.x, RIM_H, r.rim.z);
     this.seeN = e;
     if (r.kind === 'block') put(r.x, RIM_H, r.z);
     else {
@@ -807,6 +936,8 @@ export class Director {
       man(sx(p), sz(p), 3.5, 8);
     }
     this.cuts.push(n);
+    this.at.push(r.x, r.at, r.z);
+    this.crowd.push(this.men);
   }
 
   /** The safe area of a picture this shape and this many px high: clear of the lower third and the bug (see THIRD_PX). */
@@ -822,8 +953,8 @@ export class Director {
 
   /**
    * Where a replay's camera stands: past the baseline and low, nearer the camera's side than the man
-   * (and clear of the basket's post); on the near side's apron, low, up the floor of the man or (a man in
-   * the corner) down it; over the board, looking down on the rim; on the floor under the basket, looking
+   * (and clear of the basket's post); on the near side's apron, low, up the floor of the man (a squarer
+   * picture: down it, SIDE_OFF); over the board, looking down on the rim; on the floor under the basket, looking
    * up; beside the main camera on its gantry, a long lens; or low and close on him where nobody stands
    * between: at the rim in front of his face, from range (or a face that can't be seen with the basket)
    * over his shoulder. A dunk's close camera goes by where he took off, not where he lands (under the rim,
@@ -834,34 +965,44 @@ export class Director {
     const [x, z] = cam === 'tight' && r.dunk && r.from ? [r.from.x, r.from.z] : [r.x, r.z];
     const e = rim.x < 0 ? -1 : 1;
     r.back = false;
-    if (cam === 'base') return { x: e * (MID + 2.5), y: 3.6, z: clamp(z + 9, 13, 24) };
+    if (cam === 'base')
+      return this.cleanest(
+        BASE_TRY.z.flatMap((dz) => BASE_TRY.x.map((dx) => ({ x: e * (MID + 2.5 + dx), y: 3.6, z: clamp(z + 9, 13, 24) + dz }))),
+        cam,
+        r,
+      );
     if (cam === 'side') {
-      const up = x + e * SIDE_OFF;
-      return { x: Math.abs(up) <= MID + 3 ? up : x - e * (SIDE_OFF + 4), y: 11.5, z: 31 };
+      return this.sideSeat(x, e);
     }
-    if (cam === 'rim') return { x: e * (MID - 4.7), y: 15.6, z: 3.6 };
-    if (cam === 'floor') return { x: e * (MID + 1), y: 1.1, z: 7 };
+    if (cam === 'rim')
+      return this.cleanest(
+        RIM_TRY.y.flatMap((dy) => RIM_TRY.z.map((dz) => ({ x: e * (MID - 4.7), y: 15.6 + dy, z: 3.6 + dz }))),
+        cam,
+        r,
+      );
+    if (cam === 'floor')
+      return this.cleanest(
+        FLOOR_TRY.z.flatMap((dz) => FLOOR_TRY.x.map((dx) => ({ x: e * (MID + 1 + dx), y: 1.1, z: 7 + dz }))),
+        cam,
+        r,
+      );
     // (as high as the main camera, beside it: lower, its picture would take in the side of the platform's cut in the stands)
     if (cam === 'slash') return { x: e * 6, y: 36, z: 81 };
-    const f = r.sc.frames[r.k];
-    const others: number[] = [];
-    for (const p of [...f.o, ...f.d]) {
-      const w = toWorld(p, r.sc.dir);
-      if (Math.hypot(sx(w) - r.x, sz(w) - r.z) > 0.5) others.push(sx(w), sz(w));
-    }
+    const others = this.men;
     // (he went at the basket: his face is toward it, and so is the camera's first choice; but not from behind the
     // basket's unit, its arm or its board across him, and nobody in front of him)
     if (Math.hypot(x - rim.x, z - rim.z) <= SHOULDER_FROM) {
       const at = { x, z: z + TIGHT_OFF };
       const cost = clearSeat(x, z, Math.atan2(rim.x - x, rim.z - z), others, others.length / 2, TIGHT_OFF, at, 5.2, this.see, this.seeN);
       const seat = { x: at.x, y: 5.2, z: at.z };
-      if (cost < 3 && !this.fenced(seat) && this.need(seat) <= this.widest('tight')) return seat;
+      const { need, mess } = this.judge(seat, 'tight', r);
+      if (cost < 3 && !this.fenced(seat) && need <= this.widest('tight') && mess <= MESS_MOST) return seat;
     }
     // over his shoulder: behind him and to one side, so he hides none of the flight, the rim past him; the
     // seat that holds it all tightest, with nobody in front of him or the rim and its back to the near side's dark
     r.back = true;
     const back = Math.atan2(x - rim.x, z - rim.z);
-    const most = this.widest('tight');
+    const most = this.widest('tight', true);
     const all = [...others, x, z];
     const seat = { x: 0, y: SHOULDER_Y, z: 0 };
     const best = { x: x, y: SHOULDER_Y, z: z + SHOULDER_OFF[0] };
@@ -872,14 +1013,18 @@ export class Director {
           const a = back + way * turn;
           seat.x = clamp(x + Math.sin(a) * off, -SEAT_X, SEAT_X);
           seat.z = clamp(z + Math.cos(a) * off, SEAT_Z[0], SEAT_Z[1]);
-          const need = this.need(seat);
+          const { need } = this.judge(seat, 'tight', r, false);
           const [lx, lz] = [(rim.x + x) / 2 - seat.x, (rim.z + z) / 2 - seat.z];
           let cost = need / most + (need > most ? 10 : 0) + Math.max(0, lz / (Math.hypot(lx, lz) || 1)) * 1.5;
           if (blocked(x, z, seat.x, seat.z, others, others.length / 2)) cost += 3;
           if (blocked(rim.x, rim.z, seat.x, seat.z, all, all.length / 2)) cost += 2;
           if (this.fenced(seat)) cost += 6;
+          // (a seat the floor's edges have pulled round off his back is not over his shoulder)
+          if (!behind(seat, x, z, rim)) cost += 10;
           // (nor where he runs by it on the way: the picture would whip round after him)
           for (let i = 0; i < this.run.length; i += 2) cost += 3 * Math.max(0, 1 - Math.hypot(seat.x - this.run[i], seat.z - this.run[i + 1]) / RUN_BY);
+          // (and its picture's make-up, only when the rest leaves it a chance)
+          if (cost < low) cost += MESS_COST * this.judge(seat, 'tight', r).mess;
           if (cost < low) {
             low = cost;
             [best.x, best.z] = [seat.x, seat.z];
@@ -999,6 +1144,66 @@ export class Director {
   }
 
   /**
+   * What `cam` looks at (x, y, z) and how much of the scene it keeps top to bottom there (`span`, ft), with the
+   * man's chest at `s`, his head at `head` (null: not known), the ball at `ball`, `t` into the script: low behind
+   * the basket on the man and the rim over him, low on the near side on the ball and the rim it is going at, over
+   * the board on the rim, from the floor under it, the gantry's long lens on the lane, or tight on the man.
+   */
+  private framing(cam: ReelCam, r: Reel, s: V3, head: V3 | null, ball: V3, t: number): { x: number; y: number; z: number; span: number } {
+    const F = this.frameAt0;
+    // (after the moment, eased over SHIFT)
+    const past = smooth(clamp((t - r.at - 120 + SHIFT / 2) / SHIFT, 0, 1));
+    if (cam === 'base') {
+      // (the rim stays in it on the way up; after the moment it lets him have the picture)
+      const w = 0.34 - 0.16 * past;
+      F.x = s.x + (r.rim.x - s.x) * w;
+      F.y = Math.max(4.4, s.y + (RIM_H - s.y) * w);
+      F.z = s.z + (r.rim.z - s.z) * w;
+      F.span = clamp(Math.hypot(s.x - r.rim.x, s.z - r.rim.z) * 0.55 + 10, 11, 24);
+    } else if (cam === 'side') {
+      // (the ball and the rim it is going at, low in the picture: the flight goes over them inside it, not the camera up after it)
+      F.x = ball.x + (r.rim.x - ball.x) * 0.35;
+      F.y = clamp(ball.y * 0.35 + 3, 4, 7.5);
+      F.z = ball.z + (r.rim.z - ball.z) * 0.35;
+      F.span = clamp(Math.max(Math.hypot(ball.x - r.rim.x, ball.z - r.rim.z) * 0.45 + 9, (ball.y - F.y) * 2 + 6), 11, 28);
+    } else if (cam === 'rim') {
+      // (over the board: the rim under it, the man coming up at it)
+      F.x = r.rim.x + (s.x - r.rim.x) * 0.45;
+      F.y = Math.min(RIM_H - 0.5, Math.max(6.5, s.y + 1.5));
+      F.z = r.rim.z + (s.z - r.rim.z) * 0.45;
+      F.span = clamp(Math.hypot(s.x - r.rim.x, s.z - r.rim.z) * 0.8 + 9, 9, 17);
+    } else if (cam === 'floor') {
+      // (from the floor under it: the rim against the roof, the man going up into the picture)
+      F.x = r.rim.x + (s.x - r.rim.x) * 0.5;
+      F.y = (RIM_H + Math.max(5, s.y)) / 2 + 0.5;
+      F.z = r.rim.z + (s.z - r.rim.z) * 0.5;
+      F.span = clamp(Math.hypot(s.x - r.rim.x, s.z - r.rim.z) * 0.9 + 11, 11, 20);
+    } else if (cam === 'slash') {
+      // (the gantry's second camera, a long lens: the man and the basket he is going at, the lane between them)
+      F.x = s.x + (r.rim.x - s.x) * 0.4;
+      F.y = 4.5 + Math.max(0, ball.y - 9) * 0.3;
+      F.z = s.z + (r.rim.z - s.z) * 0.4;
+      F.span = clamp(Math.hypot(s.x - r.rim.x, s.z - r.rim.z) * 0.5 + 11, 12, 24);
+    } else if (r.back) {
+      // (over his shoulder: past his head toward the rim, the flight between them)
+      const face = head ? head.y : s.y + 2;
+      F.x = s.x + (r.rim.x - s.x) * 0.4;
+      F.y = face + (RIM_H + 1.5 - face) * 0.5;
+      F.z = s.z + (r.rim.z - s.z) * 0.4;
+      F.span = 9;
+    } else {
+      // (on him, from his waist to over his head; at the rim on his way up, the rim too)
+      const w = clamp(1 - (Math.hypot(s.x - r.rim.x, s.z - r.rim.z) - 4) / 8, 0, 1) * 0.35 * (1 - past);
+      const face = head ? head.y - 1.1 : s.y + 0.6;
+      F.x = s.x + (r.rim.x - s.x) * w;
+      F.y = Math.max(3.8, face + (RIM_H - face) * w);
+      F.z = s.z + (r.rim.z - s.z) * w;
+      F.span = 6.6 + w * 14;
+    }
+    return F;
+  }
+
+  /**
    * The replay's camera: low behind the basket on the man and the rim over him, low on the near side on
    * the ball and the rim it is going at, or tight on the man (on the shoulder). `star`: his chest (null: he
    * isn't on the floor). Whatever it frames, what the replay must show is held in the picture clear of the
@@ -1009,60 +1214,7 @@ export class Director {
     const s = star ?? ball;
     this.aspect = aspect;
     this.high = high;
-    let tx: number;
-    let ty: number;
-    let tz: number;
-    // how much of the scene it keeps top to bottom (ft)
-    let span: number;
-    // (after the moment, eased over SHIFT)
-    const past = smooth(clamp((r.t - r.at - 120 + SHIFT / 2) / SHIFT, 0, 1));
-    if (r.cam === 'base') {
-      // (the rim stays in it on the way up; after the moment it lets him have the picture)
-      const w = 0.34 - 0.16 * past;
-      tx = s.x + (r.rim.x - s.x) * w;
-      ty = Math.max(4.4, s.y + (RIM_H - s.y) * w);
-      tz = s.z + (r.rim.z - s.z) * w;
-      span = clamp(Math.hypot(s.x - r.rim.x, s.z - r.rim.z) * 0.55 + 10, 11, 24);
-    } else if (r.cam === 'side') {
-      // (the ball and the rim it is going at, low in the picture: the flight goes over them inside it, not the camera up after it)
-      tx = ball.x + (r.rim.x - ball.x) * 0.35;
-      ty = clamp(ball.y * 0.35 + 3, 4, 7.5);
-      tz = ball.z + (r.rim.z - ball.z) * 0.35;
-      span = clamp(Math.max(Math.hypot(ball.x - r.rim.x, ball.z - r.rim.z) * 0.45 + 9, (ball.y - ty) * 2 + 6), 11, 28);
-    } else if (r.cam === 'rim') {
-      // (over the board: the rim under it, the man coming up at it)
-      tx = r.rim.x + (s.x - r.rim.x) * 0.45;
-      ty = Math.min(RIM_H - 0.5, Math.max(6.5, s.y + 1.5));
-      tz = r.rim.z + (s.z - r.rim.z) * 0.45;
-      span = clamp(Math.hypot(s.x - r.rim.x, s.z - r.rim.z) * 0.8 + 9, 9, 17);
-    } else if (r.cam === 'floor') {
-      // (from the floor under it: the rim against the roof, the man going up into the picture)
-      tx = r.rim.x + (s.x - r.rim.x) * 0.5;
-      ty = (RIM_H + Math.max(5, s.y)) / 2 + 0.5;
-      tz = r.rim.z + (s.z - r.rim.z) * 0.5;
-      span = clamp(Math.hypot(s.x - r.rim.x, s.z - r.rim.z) * 0.9 + 11, 11, 20);
-    } else if (r.cam === 'slash') {
-      // (the gantry's second camera, a long lens: the man and the basket he is going at, the lane between them)
-      tx = s.x + (r.rim.x - s.x) * 0.4;
-      ty = 4.5 + Math.max(0, ball.y - 9) * 0.3;
-      tz = s.z + (r.rim.z - s.z) * 0.4;
-      span = clamp(Math.hypot(s.x - r.rim.x, s.z - r.rim.z) * 0.5 + 11, 12, 24);
-    } else if (r.back) {
-      // (over his shoulder: past his head toward the rim, the flight between them)
-      const face = head ? head.y : s.y + 2;
-      tx = s.x + (r.rim.x - s.x) * 0.4;
-      ty = face + (RIM_H + 1.5 - face) * 0.5;
-      tz = s.z + (r.rim.z - s.z) * 0.4;
-      span = 9;
-    } else {
-      // (on him, from his waist to over his head; at the rim on his way up, the rim too)
-      const w = clamp(1 - (Math.hypot(s.x - r.rim.x, s.z - r.rim.z) - 4) / 8, 0, 1) * 0.35 * (1 - past);
-      const face = head ? head.y - 1.1 : s.y + 0.6;
-      tx = s.x + (r.rim.x - s.x) * w;
-      ty = Math.max(3.8, face + (RIM_H - face) * w);
-      tz = s.z + (r.rim.z - s.z) * w;
-      span = 6.6 + w * 14;
-    }
+    const { x: tx, y: ty, z: tz, span } = this.framing(r.cam, r, s, head, ball, r.t);
     // where the picture is going: the camera's own picture, opened out only as much as holds what it must show a
     // little ahead (AHEAD), and never tighter than ZOOM_MOST in from the widest the replay will need; turned only
     // as much as holds what it must show now, the highest of it TOP_AT up the picture
@@ -1084,10 +1236,13 @@ export class Director {
     const [ax, ay, az] = [clamp(W.vx * AHEAD, -8, 8), clamp(W.vy * AHEAD, -2, 2), clamp(W.vz * AHEAD, -8, 8)];
     const ahead = { x: s.x + ax, y: s.y + ay, z: s.z + az };
     const top = head ? { x: head.x + ax, y: head.y + ay, z: head.z + az } : null;
-    const m = this.must(r, ahead, top, ball, this.soon, AHEAD);
+    const m = this.must(r, ahead, top, ball, this.soon, AHEAD_SHOT);
     // (off the lower third and the bug all the way across: room for the easing to lag in)
     limits(r.seat, null, 1, this.soon, m, aspect, sa, ROOM);
-    const soon = hold(r.seat, T, Math.max(Math.tan(own), Math.min(most, r.wide / ZOOM_MOST)), this.soon, m, aspect, most, this.aim, ROOM).tan;
+    // (a shot: the nearer the release, the nearer the widest it will need with the easing's room, RUN_UP; and back out of it as the flight is let go of)
+    const shot = !r.flight ? 0 : r.t < r.rel ? clamp(1 - (r.rel - r.t) / RUN_UP, 0, 1) : 1 - smooth(clamp((r.t - r.at) / ARC_GO, 0, 1));
+    const zoom = ZOOM_MOST - (ZOOM_MOST - 1) * shot;
+    const soon = hold(r.seat, T, Math.max(Math.tan(own), Math.min(most, (r.wide * (1 + ROOM * shot)) / zoom)), this.soon, m, aspect, most, this.aim, ROOM).tan;
     const n = this.must(r, s, head, ball, this.pts);
     limits(r.seat, null, 1, this.pts, n, aspect, sa, ROOM);
     const A = hold(r.seat, T, soon, this.pts, n, aspect, most, this.aim, ROOM, TOP_AT);

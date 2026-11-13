@@ -310,6 +310,8 @@ export interface Venue {
   fascia: 'glass' | 'wall' | 'ribbon';
   concourse: 'dark' | 'brick' | 'stone' | 'timber' | 'paint';
   suites: { frame: string; light: 0 | 1 | 2; bays: number };
+  /** How its stands are built (court3d/bowl.ts Stands): its aisles and tunnels, its corners, its upper levels. */
+  stands: Stands;
   seatMix: 'sections' | 'confetti' | 'fade';
   aisles: string;
   crowd: number;
@@ -317,6 +319,61 @@ export interface Venue {
   boards: 0 | 1;
   /** The letters the fans' signs carry (the team's abbreviation; none on a neutral floor). */
   letters: string;
+  /** How its floor is drawn past its colours (see CourtLook). */
+  court: CourtLook;
+  /** Its roof, its catwalks and its scoreboard (see Roofing). */
+  roof: Roofing;
+}
+
+/**
+ * What is over the floor, the building's own (court3d/arena.ts Roof; what a camera looking up, or the broadcast's
+ * wide one along the top of its picture, tells two buildings apart by): its roof (deep trusses of steel, a flat
+ * ceiling with rings of lights let into it, or a dark open roof on arched ribs), where its catwalks run (along the
+ * sides, a ring round the scoreboard, or across over the ends), and its scoreboard (a big four-sided one, a small
+ * one in a halo of ribbon, a slim one of four flat panels, or a long one with screens on its ends) and how big (1
+ * its usual size).
+ */
+export interface Roofing {
+  kind: 'trusses' | 'ceiling' | 'open';
+  catwalk: 'sides' | 'ring' | 'ends';
+  board: 'four' | 'halo' | 'slim' | 'long';
+  size: number;
+}
+
+/**
+ * How a floor is drawn past its colours (Court.tsx paintFloor), the building's own every night: how its
+ * boards are laid (in strips along the floor, or a parquet of squares with every other one turned); its
+ * lanes' paint (plain, a band of the trim inside their lines, or a pinstripe of it a little in); centre
+ * court (the mark alone, the mark with the name set round the circle, or the name in big letters across
+ * it); its words (solid capitals, outlined, a leaning italic, or spaced wide); where the court meets the
+ * apron (one pinstripe, two, or a band); and the trim its details are drawn in (it reads on the paint).
+ */
+export interface CourtLook {
+  laying: 'strips' | 'parquet';
+  lane: 'plain' | 'band' | 'pin';
+  centre: 'mark' | 'ringed' | 'word';
+  words: 'block' | 'outline' | 'italic' | 'wide';
+  border: 'pin' | 'double' | 'band';
+  trim: string;
+}
+
+/** The floors laid in parquet whatever the hash says: a famous one. */
+const PARQUET = new Set(['BOS']);
+
+/**
+ * How a building's stands are built, past its colours (what tells two buildings apart from the broadcast's
+ * camera when their colours are alike): how many seats between its aisles; the row its tunnels come up
+ * through the lower bowl at (each four rows deep), and whether every aisle in reach has one or every other;
+ * its corners' rows filled with seats or closed under a cover in its colour; and over the walkway, which rows
+ * of the upper deck it has (of one slope: the first and the last; under the first a second ring of suites, a
+ * club level, in front of the deck's first rows where they are missing).
+ */
+export interface Stands {
+  aisle: number;
+  vom: number;
+  tunnels: 1 | 2;
+  corners: 'seats' | 'covered';
+  deck: [number, number];
 }
 
 /** The maple's stains, light to dark. */
@@ -345,6 +402,12 @@ export function venueLook(colors: [string, string, string], paint: string, trim:
   const h = hashOf(abbrev.toUpperCase());
   /** The `salt`th pick of `n`: each pick its own run of the hash. */
   const pick = (n: number, salt: number) => (Math.imul(h ^ (salt * 0x9e3779b9), 0x85ebca6b) >>> 0) % n;
+  /** The same, its bits stirred first: a pick of four is not the same pick of four as every other's (the floor's). */
+  const deal = (n: number, salt: number) => {
+    let x = Math.imul(h ^ Math.imul(salt, 0x9e3779b9), 0x85ebca6b);
+    x = Math.imul(x ^ (x >>> 13), 0xc2b2ae35);
+    return ((x ^ (x >>> 16)) >>> 0) % n;
+  };
   const wood = STAINS[pick(STAINS.length, 1)];
   // the team's second colour, if it is one that stands apart from the first and is deep enough for white letters
   // (the Bulls' black, the Celtics' gold no; the Pelicans' red yes): else the paint again
@@ -368,6 +431,20 @@ export function venueLook(colors: [string, string, string], paint: string, trim:
   const concourse = (['dark', 'brick', 'stone', 'timber', 'paint'] as const)[pick(5, 12)];
   const framePick = pick(3, 13);
   const suites = { frame: framePick === 0 ? '#0b0c0e' : framePick === 1 ? '#8d9199' : mix(paint, '#000000', 0.45), light: pick(3, 14) as 0 | 1 | 2, bays: [6, 8, 10][pick(3, 15)] };
+  const stands: Stands = {
+    aisle: [15, 19, 23][pick(3, 21)],
+    vom: [5, 8, 10][pick(3, 22)],
+    tunnels: pick(3, 23) ? 1 : 2,
+    corners: pick(3, 24) ? 'seats' : 'covered',
+    deck: (
+      [
+        [0, 13],
+        [0, 16],
+        [4, 13],
+        [0, 9],
+      ] as [number, number][]
+    )[pick(4, 25)],
+  };
   const seatMix = (['sections', 'sections', 'confetti', 'fade'] as const)[pick(4, 16)];
   const aisles = ['#c9a13a', '#c8c4ba', rail, '#5a5c63'][pick(4, 19)];
   const crowd = [0.26, 0.36, 0.46, 0.6][pick(4, 20)];
@@ -394,12 +471,28 @@ export function venueLook(colors: [string, string, string], paint: string, trim:
     fascia,
     concourse,
     suites,
+    stands,
     seatMix,
     aisles,
     crowd,
     pad,
     boards: pick(2, 18) as 0 | 1,
     letters: abbrev.toUpperCase(),
+    court: {
+      laying: PARQUET.has(abbrev.toUpperCase()) || deal(9, 30) === 0 ? 'parquet' : 'strips',
+      lane: (['plain', 'band', 'pin'] as const)[deal(3, 31)],
+      // (a big mark across the circle is its centre already)
+      centre: circle === 'big' ? 'mark' : (['mark', 'ringed', 'word'] as const)[deal(3, 32)],
+      words: (['block', 'outline', 'italic', 'wide'] as const)[deal(4, 33)],
+      border: (['pin', 'double', 'band'] as const)[deal(3, 34)],
+      trim: lookDistance(trim, paint) > 0.14 && contrast(trim, paint) >= 1.6 ? trim : second && contrast(second, paint) >= 1.6 ? second : '#ffffff',
+    },
+    roof: {
+      kind: (['trusses', 'ceiling', 'open'] as const)[deal(3, 40)],
+      catwalk: (['sides', 'ring', 'ends'] as const)[deal(3, 41)],
+      board: (['four', 'halo', 'slim', 'long'] as const)[deal(4, 42)],
+      size: [0.9, 1, 1.12][deal(3, 43)],
+    },
   };
 }
 
@@ -426,11 +519,14 @@ export function neutralVenue(name: string): Venue {
     fascia: 'glass',
     concourse: 'stone',
     suites: { frame: '#8d9199', light: 1, bays: 8 },
+    stands: { aisle: 19, vom: 8, tunnels: 1, corners: 'seats', deck: [0, 13] },
     seatMix: 'sections',
     aisles: '#c8c4ba',
     crowd: 0.2,
     pad: '#26282d',
     boards: 1,
     letters: '',
+    court: { laying: 'strips', lane: 'pin', centre: 'mark', words: 'wide', border: 'double', trim: '#c9a24a' },
+    roof: { kind: 'trusses', catwalk: 'sides', board: 'four', size: 1 },
   };
 }

@@ -96,10 +96,10 @@ export const BEARDS = ['none', 'stubble', 'goatee', 'beard', 'full', 'strap'] as
  * A five drawn from six kinds, each off its kind, is five men.
  */
 export const FACES = [
-  { name: 'long', wide: 0.955, long: 1.055, jaw: 0.97, chin: 1.08, ridge: 0.4, nose: 0.95, lips: 0.45, cheeks: 0.2, full: -0.4, point: 0.4, flare: -0.3, deep: 0.2 },
+  { name: 'long', wide: 0.965, long: 1.035, jaw: 0.98, chin: 1.05, ridge: 0.4, nose: 0.95, lips: 0.45, cheeks: 0.2, full: -0.2, point: 0.4, flare: -0.2, deep: 0.2 },
   { name: 'broad', wide: 1.065, long: 0.965, jaw: 1.04, chin: 0.96, ridge: 0.5, nose: 1.06, lips: 0.55, cheeks: 0.5, full: 0.4, point: -0.2, flare: 0.5, deep: -0.2 },
   { name: 'square', wide: 1.02, long: 1.0, jaw: 1.11, chin: 1.03, ridge: 0.6, nose: 1.0, lips: 0.4, cheeks: 0.1, full: -0.1, point: 0.5, flare: 0.9, deep: 0.3 },
-  { name: 'narrow', wide: 0.935, long: 1.01, jaw: 0.9, chin: 1.0, ridge: 0.3, nose: 0.9, lips: 0.5, cheeks: 0.7, full: -0.7, point: 0.0, flare: -0.6, deep: 0.4 },
+  { name: 'narrow', wide: 0.95, long: 1.0, jaw: 0.94, chin: 1.0, ridge: 0.3, nose: 0.92, lips: 0.5, cheeks: 0.55, full: -0.45, point: 0.1, flare: -0.4, deep: 0.4 },
   { name: 'heavy', wide: 1.01, long: 0.99, jaw: 1.04, chin: 1.0, ridge: 1.0, nose: 1.07, lips: 0.5, cheeks: 0.0, full: 0.3, point: 0.2, flare: 0.6, deep: 0.8 },
   { name: 'soft', wide: 1.0, long: 0.975, jaw: 0.94, chin: 0.9, ridge: 0.1, nose: 0.97, lips: 0.75, cheeks: -0.5, full: 0.8, point: -0.5, flare: -0.4, deep: -0.6 },
 ] as const;
@@ -209,7 +209,8 @@ export function lookOf(pid: number): Look {
       bridge: span(13, 0.86, 1.14),
       ridge: Math.min(1, Math.max(0, kind.ridge + span(15, -0.25, 0.25))),
       lips: Math.min(1, Math.max(0, kind.lips + span(16, -0.25, 0.25) + (tone - 3.5) * 0.04)),
-      tilt: span(17, 0.3, 1.9),
+      // (most men's outer corners a little higher than the inner ones, a few's level, a few's a good deal higher)
+      tilt: span(17, 0.1, 1.4),
       open: span(18, 0.86, 1.08),
       kind: kinds,
       cheeks: off(kind.cheeks, 28),

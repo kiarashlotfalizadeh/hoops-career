@@ -80,7 +80,7 @@ from figure import (  # noqa: E402
 )
 
 # what the app colours by who he is (sideline.ts PARTS: the names are its own)
-EYE, IRIS, BROW, LIP, BEARD, GOATEE, HAIR_TOP, BOB = 'eye', 'iris', 'brow', 'lip', 'beard', 'goatee', 'hairTop', 'bob'
+EYE, IRIS, BROW, LIP, BEARD, GOATEE, STRAP, HAIR_TOP, BOB = 'eye', 'iris', 'brow', 'lip', 'beard', 'goatee', 'strap', 'hairTop', 'bob'
 WARM, TOP, LEGS, METAL, SUIT, LAPEL, SHIRT, TIE = 'warm', 'top', 'legs', 'metal', 'suit', 'lapel', 'shirt', 'tie'
 # a sleeve ends this far down the arm: a warm-up's and a jacket's at the wrist, a referee's above the elbow
 CUFF = ARM - 0.06
@@ -152,11 +152,13 @@ def lapel(p):
 
 # --- his face and his hair: skins of their own, just off his head ---
 
-def patch(name, mat, to_n, f, us, vs, out, kind=FACE):
+def patch(name, mat, to_n, f, us, vs, out, kind=FACE, fade=None):
     """
     A thin skin over part of his head: where f(u, v) is over 0, on a grid of (u, v) that `to_n` turns into
     directions from the head's middle, `out(u, v)` feet off his skin. The grid's cells are cut along
-    f = 0, so its edge is a line however coarse the grid.
+    f = 0, so its edge is a line however coarse the grid; `fade(u, v)` (0 to 1), if given, is how much of
+    its colour each point shows over his skin's (`_FADE`: the app takes it the rest of the way to his skin;
+    in the file it is the blue of its shade, see the build).
     """
     (u0, u1, nu), (v0, v1, nv) = us, vs
     verts, index, faces, seen = [], {}, [], {}
@@ -166,11 +168,14 @@ def patch(name, mat, to_n, f, us, vs, out, kind=FACE):
             seen[p] = f(*p)
         return seen[p]
 
+    shows = []
+
     def vert(p):
         key = (round(p[0], 6), round(p[1], 6))
         if key not in index:
             index[key] = len(verts)
             verts.append(tuple(on_head(to_n(*p), out(*p) if callable(out) else out)))
+            shows.append(fade(*p) if fade else 1.0)
         return index[key]
 
     def cross(a, b):
@@ -205,6 +210,8 @@ def patch(name, mat, to_n, f, us, vs, out, kind=FACE):
                 if len(ids) >= 3:
                     faces.append(ids)
     o = mesh_obj(name, verts, faces)
+    if fade:
+        o.data.attributes.new('_FADE', 'FLOAT', 'POINT').data.foreach_set('value', shows)
     set_material(o, material(mat))
     return tag(o, kind)
 
@@ -234,11 +241,14 @@ MOUTH_W, MOUTH_Y = 0.3, -0.52
 
 
 def lids(px, py):
-    """An eye, from its middle: how far across and up a point is, and where the upper and the lower lid are there."""
+    """
+    An eye, from its middle: how far across and up a point is, and where the upper and the lower lid are there (a
+    player's, figure.ts's EYE_OPEN: his upper lid over the top of his iris, as a man's is, not a stare).
+    """
     ex, ey = abs(px) - EYE_X, py - EYE_Y
     k = max(0.0, 1 - min(1.0, abs(ex) / EYE_W) ** 2)
-    tilt = 0.012 * ex / EYE_W
-    return ex, ey, tilt + 0.056 * k ** 0.55, tilt - 0.037 * k ** 0.8
+    tilt = 0.01 * ex / EYE_W
+    return ex, ey, tilt + 0.042 * k ** 0.55, tilt - 0.037 * k ** 0.8
 
 
 def eye_open(px, py):
@@ -276,7 +286,10 @@ def mouth_line(px, py):
 
 
 def whiskers(n):
-    """Where a beard grows (figure.ts's): round his mouth (over the lip, down beside it, his chin), and his jaw and cheeks; each 0..1."""
+    """
+    Where a beard grows (figure.ts's): round his mouth (over the lip, down beside it, his chin), his jaw and cheeks, and
+    a strap's trimmed band (down from his sideburn to the corner of his jaw, along it and round his chin); each 0..1.
+    """
     nx, ny, nz = unit(n)
     ax = abs(nx)
     fz = max(nz, 0.3)
@@ -289,7 +302,10 @@ def whiskers(n):
     chin = sstep(-0.635, -0.695, py) * sstep(0.42, 0.34, apx) * front_ * sstep(-1.25, -1.0, py)
     round_ = max(tache, bars, chin) * (1 - mouth)
     cheek = sstep(0.05, -0.09, ny + 0.52 - 0.62 * (ax - 0.3) - 0.5 * (ax - 0.3) ** 2) * sstep(-0.99, -0.9, ny) * sstep(-0.1, 0.06, nz) * (1 - mouth)
-    return round_, cheek
+    jaw = max(0.25 * ax - ny - 0.4 * nz - 0.83, -ny + 0.12 * nz - 1.137)
+    ramus = sstep(0.14, 0.09, nz + 0.06 * (ny + 0.3)) * sstep(0.62, 0.74, ax) * sstep(0.32, 0.18, ny)
+    strap = max(sstep(-0.27, -0.21, jaw - 0.12 * sstep(0.5, 0.1, ax)), ramus) * sstep(-0.99, -0.9, ny) * sstep(-0.12, -0.05, nz) * (1 - mouth)
+    return round_, cheek, strap
 
 
 def face():
@@ -306,15 +322,36 @@ def face():
     ]
 
 
+#: Where a beard's skin stops (how thick its hair has grown: whiskers' 0..1, taken over BEARD_EDGE round each place),
+#: and where it shows all its colour: between them it thins out to his skin over a wide edge (figure.ts's beards do the
+#: same), never a line round it. BEARD_EDGE is in radians round and up his head (a tenth is about a third of an inch).
+BEARD_CUT = 0.14
+BEARD_FULL = 0.7
+BEARD_EDGE = 0.14
+
+
+def thinned(w):
+    """How thick a beard has grown at a place (`w` of round_him's angles), taken over a square BEARD_EDGE to each side of it: its edge a slope."""
+    steps = [BEARD_EDGE * (k / 2 - 1) for k in range(5)]
+    return lambda a, e: sum(w(a + da, e + de) for da in steps for de in steps) / 25
+
+
 def beards():
-    """His beard, two skins: all of his jaw (cheeks, chin, round his mouth), and a goatee (round his mouth only). The app shows one of them, or neither."""
-    full = lambda a, e: max(whiskers(round_him(a, e))) - 0.5  # noqa: E731
-    goat = lambda a, e: whiskers(round_him(a, e))[0] - 0.5  # noqa: E731
+    """His beard, three skins: all of his jaw (cheeks, chin, round his mouth), a goatee (round his mouth only), a strap (along his jaw). The app shows one of them, or none."""
+    full_w = thinned(lambda a, e: max(whiskers(round_him(a, e))[:2]))
+    goat_w = thinned(lambda a, e: whiskers(round_him(a, e))[0])
+    full = lambda a, e: full_w(a, e) - BEARD_CUT  # noqa: E731
+    goat = lambda a, e: goat_w(a, e) - BEARD_CUT  # noqa: E731
+    strap_w = thinned(lambda a, e: whiskers(round_him(a, e))[2])
+    strap = lambda a, e: strap_w(a, e) - BEARD_CUT  # noqa: E731
+    thin = lambda w: (lambda a, e: sstep(BEARD_CUT, BEARD_FULL, w(a, e)))  # noqa: E731
     # (it lies closer at its edge than in its middle)
     deep = lambda f, most: (lambda a, e: 0.004 + most * sstep(0.0, 0.35, f(a, e)))  # noqa: E731
     return [
-        patch('beard', BEARD, round_him, full, (-1.9, 1.9, 44), (-1.5, 0.2, 22), deep(full, 0.012)),
-        patch('goatee', GOATEE, round_him, goat, (-0.75, 0.75, 30), (-1.4, -0.3, 26), deep(goat, 0.01)),
+        patch('beard', BEARD, round_him, full, (-1.9, 1.9, 44), (-1.5, 0.2, 22), deep(full, 0.012), fade=thin(full_w)),
+        patch('goatee', GOATEE, round_him, goat, (-0.75, 0.75, 30), (-1.4, -0.3, 26), deep(goat, 0.01), fade=thin(goat_w)),
+        # (a strap is a narrow band: a coarser skin than a full beard's does, and its edge fades all the same)
+        patch('strap', STRAP, round_him, strap, (-1.9, 1.9, 30), (-1.5, 0.2, 14), deep(strap, 0.006), fade=thin(strap_w)),
     ]
 
 
@@ -638,13 +675,29 @@ def without(fig, names):
     fig.data.update()
 
 
+def face_hollows(x, y, z):
+    """
+    The shade figure.ts paints into a player's face and his head here has no picture for: the socket deepest up
+    beside the nose and the thin skin under each eye, the sides of the nose, under its tip and its nostrils, the groove
+    under the lower lip. A little of each (a face is small: see finish), so a man on the bench has the player's face.
+    """
+    px, py, pz = x / HEAD_W, (y - HEAD_C[1]) / HEAD_H, z - HEAD_C[2]
+    if pz < 0.15 * HEAD_D or abs(py) > 1.0:
+        return 1.0
+    ax = abs(px)
+    c = 1.0 - 0.09 * bump(ax, py, 0.22, 0.15, 0.08, 0.07) - 0.05 * bump(ax, py, 0.34, -0.05, 0.13, 0.04)
+    c -= 0.05 * bump(ax, py, 0.125, -0.08, 0.04, 0.16) + 0.08 * bump(ax, py, 0.0, -0.36, 0.13, 0.03) + 0.06 * bump(ax, py, 0.075, -0.335, 0.03, 0.012)
+    c -= 0.06 * bump(ax, py, 0.0, -0.68, 0.17, 0.04)
+    return c
+
+
 def one_head(figs):
     """
     Every body here has the same head, face, beards and hair, built by the same steps: all that differs is
     the baked shade, by a hair (a collar under one jaw, a jacket under another). Given the first body's
     shade, those parts are the same numbers in each, and the file keeps them once (run.ts pack).
     """
-    heads = {'hair', 'white', EYE, IRIS, BROW, LIP, BEARD, GOATEE, HAIR_TOP, BOB, 'bun', 'tail', 'twists', 'locs', 'braids', 'afro', 'hightop', 'curls'}
+    heads = {'hair', 'white', EYE, IRIS, BROW, LIP, BEARD, GOATEE, STRAP, HAIR_TOP, BOB, 'bun', 'tail', 'twists', 'locs', 'braids', 'afro', 'hightop', 'curls'}
     key = lambda v: (round(v.co.x, 4), round(v.co.y, 4), round(v.co.z, 4))  # noqa: E731
     shade = None
     for fig in figs:
@@ -667,7 +720,7 @@ if __name__ == '__main__':
     materials()
     for name, color in ((EYE, (0.02, 0.015, 0.012)), (IRIS, (0.1, 0.06, 0.03)), (BROW, (0.05, 0.04, 0.035)), (LIP, (0.3, 0.14, 0.12))):
         material(name, color, 0.7)
-    for name in (BEARD, GOATEE, HAIR_TOP, BOB):
+    for name in (BEARD, GOATEE, STRAP, HAIR_TOP, BOB):
         material(name, (0.05, 0.04, 0.035), 0.8)
     for name, color in ((WARM, (0.08, 0.1, 0.2)), (TOP, (0.3, 0.3, 0.32)), (LEGS, (0.02, 0.02, 0.025)), (METAL, (0.5, 0.5, 0.52)), (LAPEL, (0.015, 0.016, 0.02))):
         material(name, color, 0.75)
@@ -678,16 +731,30 @@ if __name__ == '__main__':
         DETAIL = detail
         for name, dress in (('bench', dress_bench), ('staff', dress_staff), ('official', dress_official)):
             fig, rig_ob = finish(dress(copy(hi, 'hi2')), name + suffix)
+            paint(fig, face_hollows)
             rig_ob.name = name + suffix + 'Rig'
             report(fig)
             people += [fig, rig_ob]
         one_head(people[-6::2])
     bpy.data.objects.remove(hi)
+    # (how much of a beard's colour shows over his skin, `_FADE` (see beards), goes in its shade's blue: the shade
+    # is a grey, and the file has no other list to spend on it; sideline.ts reads it back out)
+    for fig in people[0::2]:
+        me = fig.data
+        fade = me.attributes.get('_FADE')
+        if fade is None:
+            continue
+        slots = {i for i, m in enumerate(me.materials) if m.name in (BEARD, GOATEE, STRAP)}
+        col = me.color_attributes['Col']
+        for vi in {vi for f in me.polygons if f.material_index in slots for vi in f.vertices}:
+            c = col.data[vi].color
+            col.data[vi].color = (c[0], c[1], fade.data[vi].value, c[3])
+        me.attributes.remove(fade)
     export_glb(os.path.join(a['out'], 'people.glb'), people)
     save_blend(os.path.join(a['blend'], 'people.blend'))
     if 'preview' in a:
         # (each as one of the people he may be: a man with curls and a beard, a woman with her hair to her jaw, a man with a crop and a goatee)
-        every = {BEARD, GOATEE, HAIR_TOP, BOB, 'bun', 'tail', 'twists', 'locs', 'braids', 'afro', 'hightop', 'curls'}
+        every = {BEARD, GOATEE, STRAP, HAIR_TOP, BOB, 'bun', 'tail', 'twists', 'locs', 'braids', 'afro', 'hightop', 'curls'}
         for fig, wears in zip(people[0::2], ({BEARD, 'curls'}, {BOB}, {GOATEE, HAIR_TOP}) * 2):
             without(fig, every - wears)
         # (the far bodies stand behind the near ones: the first three looks have them small, as they are seen)

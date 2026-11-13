@@ -195,7 +195,20 @@ describe('display helpers', () => {
       expect(new Set(venues.map((x) => x.v.concourse))).toEqual(new Set(['dark', 'brick', 'stone', 'timber', 'paint']));
       expect(new Set(venues.map(({ v }) => `${v.fascia}|${v.concourse}|${v.suites.bays}|${v.seatMix}`)).size, 'shells').toBeGreaterThanOrEqual(22);
       expect(new Set(venues.map((x) => x.v.crowd)).size, 'crowds').toBeGreaterThanOrEqual(3);
+      // (and built otherwise, not only painted: every kind of aisle, tunnel, corner and upper deck is some building's, and few share stands)
+      expect(new Set(venues.map(({ v }) => `${v.stands.aisle}|${v.stands.vom}`)).size, 'aisles and tunnels').toBe(9);
+      expect(new Set(venues.map(({ v }) => `${v.stands.corners}|${v.stands.deck.join()}`)).size, 'corners and decks').toBe(8);
+      expect(new Set(venues.map(({ v }) => JSON.stringify(v.stands))).size, 'stands').toBeGreaterThanOrEqual(20);
       expect(contrast(neutralVenue('NBA Cup').apronInk, neutralVenue('NBA Cup').apron)).toBeGreaterThanOrEqual(3);
+      // (and its floor is drawn its own way, not only recoloured: every laying, lane, centre, lettering and edge is
+      // some floor's, few floors share all five, and the trim its details are drawn in stands off its paint)
+      for (const key of ['laying', 'lane', 'centre', 'words', 'border'] as const)
+        expect(new Set(venues.map(({ v }) => v.court[key])).size, key).toBe(key === 'laying' ? 2 : key === 'words' ? 4 : 3);
+      expect(new Set(venues.map(({ v }) => [v.court.laying, v.court.lane, v.court.centre, v.court.words, v.court.border].join())).size, 'floors').toBeGreaterThanOrEqual(25);
+      for (const { f, v } of venues) expect(lookDistance(v.court.trim, v.paint), `${f.abbrev} trim`).toBeGreaterThan(0.12);
+      // (and over the floor: every roof, catwalk and scoreboard is some building's, and few share all of it)
+      for (const key of ['kind', 'catwalk', 'board', 'size'] as const) expect(new Set(venues.map(({ v }) => v.roof[key])).size, key).toBe(key === 'board' ? 4 : 3);
+      expect(new Set(venues.map(({ v }) => JSON.stringify(v.roof))).size, 'roofs').toBeGreaterThanOrEqual(20);
       // the break's chart: a dozen shots at the rim are eased apart into marks that read as a dozen, none far from where it was
       const pile = spread(
         Array.from({ length: 12 }, () => ({ x: 100, y: 50 })),

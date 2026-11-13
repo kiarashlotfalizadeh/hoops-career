@@ -26,7 +26,7 @@ import {
 } from 'three';
 import { COURT_LEN } from '../choreo';
 import { END, HALF_W, SIDE } from '../Court';
-import type { Venue } from '../../teamColors';
+import type { Stands, Venue } from '../../teamColors';
 import { unshadowed } from './rig';
 
 type Keep = <T extends { dispose(): void }>(o: T) => T;
@@ -58,18 +58,26 @@ const SILL = 43.7;
 const BAND = 47.4;
 /** The ribbon's middle. */
 export const RIBBON_Y = 45.5;
-/** The upper deck: its rows, a row's depth and rise. */
-const UP_ROWS = 14;
+/**
+ * The upper deck: a row's depth and rise (every building's is of the one slope: Venue.stands says which of its
+ * rows it has), and the rows every building's has (cameras go off in them: Bowl.high).
+ */
 const UP_DEEP = 2.7;
 const UP_RISE = 2.0;
+const UP_ALL = [4, 9];
+/** A building that closes its corners' high rows (Venue.stands): the first of them, and how tall a band of the name printed on the cover is (ft). */
+const COVER_ROW = 11;
+const COVER_BAND = 4.5;
+/** Where a building with a short upper deck has a ring of lit windows on the wall over it (ft over its last row, and how tall). */
+const CLERESTORY = [7, 5.5];
 /** How tall a row of its people's picture stands (ft): someone on his feet with his arms up fills it. */
 const UP_TALL = 4.4;
 /** How many seats one turn of that picture is across (two runs of twenty-one, each with an aisle: no row repeats inside 80 ft). */
 const UP_SEATS = 42;
 /** How high the walls go (the roof's deck). */
 export const ROOF_TOP = 106;
-/** A tunnel out through the stands: the rows it takes (its floor is the first's step, its roof the step after the last), half its width, and the aisles (ft along a side from its middle) that have one. */
-const VOM = [8, 12];
+/** A tunnel out through the stands: how many rows it takes (its floor is the first's step, its roof the step after the last: the first is the building's, Venue.stands), and half its width. */
+const VOM_ROWS = 5;
 const VOM_HALF = 2.5 * SEAT;
 /** The players' tunnels, out under each end's stands by the far corners: the rows one takes, half its width, how far its middle is from the corner. */
 const GATE_ROWS = 5;
@@ -80,9 +88,12 @@ const PRESS = 27;
 /** The broadcast's platform in the near stands (under where its main camera looks from): the rows it takes, and half its width. */
 const DECK_ROWS = [14, 16];
 const DECK_HALF = 8.5;
-/** An aisle every this many seats; the first this many from a side's middle. */
-const AISLE_EVERY = 19;
-const AISLE_FIRST = 9;
+/**
+ * A building's stands before its own are known (Venue.stands): an aisle every nineteen seats (the first half
+ * that from a side's middle), tunnels from the eighth row in every aisle that has room for one, seats round
+ * the corners, the upper deck's fourteen rows.
+ */
+const STANDS: Stands = { aisle: 19, vom: 8, tunnels: 1, corners: 'seats', deck: [0, 13] };
 /** How many of an aisle's steps have someone stood on them (the top row's share: fewer by the floor). */
 const AISLE_STAND = 0.06;
 /** The row of chairs on the floor along the near side, and in the far corners past the benches. */
@@ -550,7 +561,7 @@ export class Bowl {
   /** Where a ribbon of lamps runs along the wall at the top of the lower bowl, in a building that has one (the boards make it). */
   readonly fasciaRuns: { x: number; y: number; z: number; w: number; h: number; turn: number }[] = [];
   /** That wall (shown in a building that has one: see fascia). */
-  private readonly band: Mesh;
+  private band: Mesh | null = null;
   private readonly bandMat: MeshLambertMaterial;
   private readonly bandTex: CanvasTexture;
   private readonly suiteTex: CanvasTexture;
@@ -577,7 +588,98 @@ export class Bowl {
   private readonly fine: Object3D[] = [];
   private board = '';
 
-  constructor(keep: Keep) {
+  /** The building's faces as built for its stands (see build: built again for another building's), and its stands then. */
+  private built: Mesh[] = [];
+  private shape = '';
+  /** The pictures' and the fine parts' materials (made once, for every building). */
+  private readonly mats: { rows: Material; suites: Material; shops: Material; doors: Material; signs: Material; pane: Material; rail: Material; spilt: Material };
+  /** The step a slow device is on (see shed), and whether the wall along the top of the lower bowl is up (see paint). */
+  private level: 0 | 1 | 2 = 0;
+  private banded = false;
+
+  constructor(private readonly keep: Keep) {
+    const picture = (tex: CanvasTexture | null, glow: number) => {
+      const mat = keep(new MeshBasicMaterial({ map: tex, vertexColors: true, side: DoubleSide }));
+      this.lit.push({ mat, glow });
+      return mat;
+    };
+    this.concrete = keep(new MeshLambertMaterial({ vertexColors: true, side: DoubleSide }));
+    this.concrete.onBeforeCompile = unshadowed;
+    this.trim = keep(new MeshLambertMaterial({ vertexColors: true, side: DoubleSide }));
+    this.trim.onBeforeCompile = unshadowed;
+    this.bandTex = texture(keep, 1024, 64, (cv) => paintBand(cv, '#3a3c42', ''));
+    this.bandMat = keep(new MeshLambertMaterial({ map: this.bandTex, vertexColors: true, side: DoubleSide }));
+    this.bandMat.onBeforeCompile = unshadowed;
+    this.steps = keep(new MeshLambertMaterial({ vertexColors: true, side: DoubleSide }));
+    this.steps.onBeforeCompile = unshadowed;
+    this.deck = texture(keep, 2048, 256, (cv) => paintDeck(cv, '#2a2c33'));
+    const rows = picture(this.deck, DECK_GLOW);
+    rows.alphaTest = 0.5;
+    // (each seat's person is drawn sat, the picture's lower half, or on his feet, its upper: the more of them the
+    // more the building cheers, each at his own moment)
+    rows.onBeforeCompile = (sh) => {
+      sh.uniforms.uUp = this.up;
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uUp;').replace(
+        '#include <map_fragment>',
+        `{
+          float seat = floor(vMapUv.x * ${UP_SEATS}.0);
+          float keen = fract(sin(seat * 12.9898) * 43758.5453);
+          vec2 at = vec2(vMapUv.x, vMapUv.y + 0.5 * step(keen, uUp * 1.3 - 0.15));
+          diffuseColor *= textureGrad(map, at, dFdx(vMapUv), dFdy(vMapUv));
+        }`,
+      );
+    };
+    rows.customProgramCacheKey = () => 'upperRows';
+    this.suiteTex = texture(keep, 1024, 96, (cv) => paintSuites(cv));
+    this.shops = texture(keep, 1024, 96, (cv) => paintShops(cv));
+    const spilt = keep(new MeshBasicMaterial({ vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, side: DoubleSide }));
+    this.lit.push({ mat: spilt, glow: 1 });
+    this.mats = {
+      rows,
+      suites: picture(this.suiteTex, SUITE_GLOW),
+      shops: picture(this.shops, SHOP_GLOW),
+      doors: picture(texture(keep, 128, 96, paintDoor, false), DOOR_GLOW),
+      signs: picture(texture(keep, 64, 24, paintExit, false), SIGN_GLOW),
+      // (glass: mostly what is behind it, and the building's lights on its face)
+      pane: keep(
+        new MeshStandardMaterial({ color: 0xcfe0ea, roughness: 0.08, metalness: 0, envMapIntensity: 0.35, transparent: true, opacity: 0.14, side: DoubleSide, depthWrite: false }),
+      ),
+      rail: keep(new MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.6 })),
+      spilt,
+    };
+    this.apron = keep(new MeshLambertMaterial({ color: 0x1d1e22 }));
+    this.glowFloor = keep(new MeshBasicMaterial({ vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false }));
+    // the chairs on the floor: along the near side (not where the opening's camera starts from), and in the far corners past the benches
+    for (let x = -47; x <= 47; x += 2.35) {
+      if (x > -12 && x < -1) continue;
+      this.chairs.push({ x, y: 0, z: COURT_Z, turn: Math.PI });
+    }
+    for (const e of [-1, 1]) for (let i = 0; i < 6; i++) this.chairs.push({ x: e * (42.5 + i * 2.35), y: 0, z: -(HALF_W + SIDE + 3.6), turn: 0 });
+    this.build(STANDS);
+  }
+
+  /**
+   * The building's faces for its stands (Venue.stands), and every seat and standing place in them: made again
+   * when a building with other stands is painted (its seats with them: the crowd sits again, crowd.ts). The
+   * ribbon's and the fascia's runs and the upper deck's points are where they are in every building.
+   */
+  private build(st: Stands) {
+    const keep = this.keep;
+    for (const m of this.built) {
+      this.group.remove(m);
+      m.geometry.dispose();
+    }
+    this.built = [];
+    this.fine.length = 0;
+    this.seats.length = 0;
+    this.ribbons.length = 0;
+    this.high.length = 0;
+    this.fasciaRuns.length = 0;
+    this.shape = JSON.stringify(st);
+    const vom = [st.vom, st.vom + VOM_ROWS - 1];
+    const every = st.aisle;
+    const first = Math.floor(every / 2);
+    const [deck0, deck1] = st.deck;
     const concrete = new Soup();
     const trim = new Soup();
     const glass = new Soup();
@@ -590,21 +692,24 @@ export class Bowl {
     const shops = new Soup();
     const deck = new Soup();
     const band = new Soup();
+    const cover = new Soup();
     let n = 97;
     const rnd = () => ((n = (n * 16807) % 2147483647) & 0xffff) / 0xffff;
     const WARM = '#ffb060';
 
     for (const s of SIDES) {
       const aisles: number[] = [];
-      for (let k = AISLE_FIRST; (k + 0.5) * SEAT < s.half + TOP; k += AISLE_EVERY) aisles.push((k + 0.5) * SEAT, -(k + 0.5) * SEAT);
-      // (a tunnel where an aisle is well inside the side at the tunnel's rows: not across a corner)
-      const tunnels = aisles.filter((u) => Math.abs(u) + VOM_HALF + 6 < s.half + VOM[0] * DEEP && (s.k === 0 || s.k === 3 || Math.abs(u) < 30));
+      for (let k = first; (k + 0.5) * SEAT < s.half + TOP; k += every) aisles.push((k + 0.5) * SEAT, -(k + 0.5) * SEAT);
+      // (a tunnel where an aisle is well inside the side at the tunnel's rows, not across a corner: in every such aisle, or every other)
+      const tunnels = aisles.filter(
+        (u, i) => Math.floor(i / 2) % st.tunnels === 0 && Math.abs(u) + VOM_HALF + 6 < s.half + vom[0] * DEEP && (s.k === 0 || s.k === 3 || Math.abs(u) < 30),
+      );
       // (the players' tunnel: under the end stands, by the far corner)
       const gates = s.k === 1 ? [s.half - GATE_IN] : s.k === 2 ? [-(s.half - GATE_IN)] : [];
       /** What comes through a row: each a middle and half a width. */
       const holes = (row: number): [number, number][] =>
         [
-          ...(row >= VOM[0] && row <= VOM[1] ? tunnels.map((t): [number, number] => [t, VOM_HALF]) : []),
+          ...(row >= vom[0] && row <= vom[1] ? tunnels.map((t): [number, number] => [t, VOM_HALF]) : []),
           ...(row < GATE_ROWS ? gates.map((t): [number, number] => [t, GATE_HALF]) : []),
         ].sort((a, b) => a[0] - b[0]);
       const inTunnel = (row: number, u: number) =>
@@ -647,8 +752,10 @@ export class Bowl {
         for (let k = -Math.ceil((s.half + d) / SEAT); (k + 0.5) * SEAT < s.half + d - 0.5; k++) {
           const u = (k + 0.5) * SEAT;
           if (u < -(s.half + d) + 0.5) continue;
-          const aisle = (k >= 0 ? k : -k - 1) % AISLE_EVERY === AISLE_FIRST;
+          const aisle = (k >= 0 ? k : -k - 1) % every === first;
           if (inTunnel(i, u) || well(i, u)) continue;
+          // (a building that closes its corners' high rows: nobody in them, under the cover)
+          if (st.corners === 'covered' && i >= COVER_ROW && Math.abs(u) > s.half - SEAT / 2) continue;
           if (aisle) {
             // an aisle: a half step in each row, its edges marked (in the building's own: Venue.aisles)
             const [a, b] = [u - SEAT / 2, u + SEAT / 2];
@@ -680,7 +787,7 @@ export class Bowl {
       // the tunnels: a landing at the first row's level (the players': the ground), walls up to the roof of it, the
       // concourse's light in its mouth
       const mouths = [
-        ...tunnels.map((t) => ({ t, half: VOM_HALF, r0: VOM[0], r1: VOM[1], y0: Y0 + VOM[0] * RISE })),
+        ...tunnels.map((t) => ({ t, half: VOM_HALF, r0: vom[0], r1: vom[1], y0: Y0 + vom[0] * RISE })),
         ...gates.map((t) => ({ t, half: GATE_HALF, r0: 0, r1: GATE_ROWS - 1, y0: 0 })),
       ];
       for (const { t, half, r0, r1, y0 } of mouths) {
@@ -734,6 +841,17 @@ export class Bowl {
         );
       }
 
+      // (a building that closes its corners' high rows: a cover over them, its name printed along it in bands,
+      // clear of the steps under it)
+      if (st.corners === 'covered') {
+        const [d0, y0] = [COVER_ROW * DEEP, Y0 + COVER_ROW * RISE + 1.6];
+        const [a, b] = [s.half, s.half + d0];
+        const [c, d] = [s.half + TOP, s.half];
+        const v = Math.hypot(TOP - d0, TOP_Y - Y0 - COVER_ROW * RISE) / COVER_BAND;
+        cover.quad(P(s, -b, y0, d0), P(s, -a, y0, d0), P(s, -d, TOP_Y + 1.6, TOP), P(s, -c, TOP_Y + 1.6, TOP), '#ffffff', [0.7, 0.7, 1, 1], [-b / BAND_FT, 0, -a / BAND_FT, v]);
+        cover.quad(P(s, a, y0, d0), P(s, b, y0, d0), P(s, c, TOP_Y + 1.6, TOP), P(s, d, TOP_Y + 1.6, TOP), '#ffffff', [0.7, 0.7, 1, 1], [a / BAND_FT, 0, b / BAND_FT, v]);
+      }
+
       // the top of the bowl: a rail of glass behind the last row, the walkway, people standing at the rail
       {
         const e = s.half + TOP;
@@ -782,20 +900,36 @@ export class Bowl {
         const mid = P(s, (s.hi - s.lo) / 2, RIBBON_Y, f - 0.33);
         this.ribbons.push({ x: mid[0], y: mid[1], z: mid[2], w: fhi - flo - 1, turn: s.turn });
 
-        // the upper deck: glass along its front, its rows (a picture), the wall behind up to the roof
-        glass.quad(P(s, flo, BAND, f - 0.2), P(s, fhi, BAND, f - 0.2), P(s, fhi, BAND + 2.6, f - 0.2), P(s, flo, BAND + 2.6, f - 0.2), '#ffffff');
-        rail.bar(P(s, flo, BAND + 2.65, f - 0.2), P(s, fhi, BAND + 2.65, f - 0.2), 0.16, 0.16, '#8d9199');
+        // the upper deck: the rows of its slope the building has (Venue.stands), glass along the front of the first;
+        // in front of them, where its first rows are missing, a second ring of suites (a club level) on the
+        // suites' face and its floor back to them; its rows (a picture); the wall behind up to the roof, a ring of
+        // lit windows along it over a short deck
         const u0 = f + 0.4;
-        const u1 = u0 + UP_ROWS * UP_DEEP;
-        const top = BAND + UP_ROWS * UP_RISE;
-        const [dlo, dhi] = [flo - UP_ROWS * UP_DEEP, fhi + UP_ROWS * UP_DEEP];
-        concrete.quad(P(s, flo, BAND, u0), P(s, fhi, BAND, u0), P(s, dhi, top, u1), P(s, dlo, top, u1), '#1d1e22', [0.9, 0.9, 0.5, 0.5]);
-        for (let r = 0; r < UP_ROWS; r++) {
+        const [a0, a1] = [deck0 * UP_DEEP, (deck1 + 1) * UP_DEEP];
+        const [y0, top] = [BAND + deck0 * UP_RISE, BAND + (deck1 + 1) * UP_RISE];
+        const u1 = u0 + a1;
+        if (deck0) {
+          suites.quad(P(s, flo, BAND, f), P(s, fhi, BAND, f), P(s, fhi, y0 - 1.2, f), P(s, flo, y0 - 1.2, f), '#ffffff', 0.85, [
+            flo / SUITE_FT + 0.37,
+            0,
+            fhi / SUITE_FT + 0.37,
+            1,
+          ]);
+          concrete.quad(P(s, flo, y0 - 1.2, f - 0.3), P(s, fhi, y0 - 1.2, f - 0.3), P(s, fhi, y0, f - 0.3), P(s, flo, y0, f - 0.3), '#202226');
+          concrete.quad(P(s, flo, y0, f - 0.3), P(s, fhi, y0, f - 0.3), P(s, fhi + a0, y0, u0 + a0), P(s, flo - a0, y0, u0 + a0), '#26282d', 0.7);
+        }
+        const [glo, ghi] = [flo - a0, fhi + a0];
+        const gz = deck0 ? u0 + a0 - 0.2 : f - 0.2;
+        glass.quad(P(s, glo, y0, gz), P(s, ghi, y0, gz), P(s, ghi, y0 + 2.6, gz), P(s, glo, y0 + 2.6, gz), '#ffffff');
+        rail.bar(P(s, glo, y0 + 2.65, gz), P(s, ghi, y0 + 2.65, gz), 0.16, 0.16, '#8d9199');
+        const [dlo, dhi] = [flo - a1, fhi + a1];
+        concrete.quad(P(s, glo, y0, u0 + a0), P(s, ghi, y0, u0 + a0), P(s, dhi, top, u1), P(s, dlo, top, u1), '#1d1e22', [0.9, 0.9, 0.5, 0.5]);
+        for (let r = deck0; r <= deck1; r++) {
           // (a row: its people's picture stood up along the back of its step, each row's run of it begun somewhere else)
           const back = r * UP_DEEP + 1.3;
           const y = BAND + r * UP_RISE + 0.75;
           const off = Math.floor(rnd() * UP_SEATS) / UP_SEATS + r * 3;
-          const light = 0.95 - 0.5 * (r / (UP_ROWS - 1));
+          const light = 0.95 - 0.5 * (r / 13);
           deck.quad(
             P(s, flo - back, y, u0 + back),
             P(s, fhi + back, y, u0 + back),
@@ -807,30 +941,35 @@ export class Bowl {
           );
         }
         concrete.quad(P(s, dlo, top, u1), P(s, dhi, top, u1), P(s, dhi, ROOF_TOP, u1), P(s, dlo, ROOF_TOP, u1), '#26282d', [0.9, 0.9, 0.35, 0.35]);
+        if (deck1 < 13) {
+          const [w0, w1] = [top + CLERESTORY[0], top + CLERESTORY[0] + CLERESTORY[1]];
+          suites.quad(P(s, dlo, w0, u1 - 0.05), P(s, dhi, w0, u1 - 0.05), P(s, dhi, w1, u1 - 0.05), P(s, dlo, w1, u1 - 0.05), '#ffffff', 0.55, [
+            dlo / SUITE_FT,
+            0,
+            dhi / SUITE_FT,
+            1,
+          ]);
+        }
         for (let u = -Math.floor((fhi - 20) / 60) * 60; u < fhi - 20; u += 60)
           signs.quad(
-            P(s, u - 1.5, top + 8, u1 - 0.1),
-            P(s, u + 1.5, top + 8, u1 - 0.1),
-            P(s, u + 1.5, top + 9.1, u1 - 0.1),
-            P(s, u - 1.5, top + 9.1, u1 - 0.1),
+            P(s, u - 1.5, top + 3, u1 - 0.1),
+            P(s, u + 1.5, top + 3, u1 - 0.1),
+            P(s, u + 1.5, top + 4.1, u1 - 0.1),
+            P(s, u - 1.5, top + 4.1, u1 - 0.1),
             '#ffffff',
             1,
             [0, 0, 1, 1],
           );
+        // (points up in the rows every building's deck has: the cameras going off there)
         for (let i = 0; i < (fhi - flo) * 0.5; i++) {
-          const up = 0.1 + 0.85 * rnd();
-          const span = fhi - flo + 2 * up * UP_ROWS * UP_DEEP;
-          this.high.push(...P(s, flo - up * UP_ROWS * UP_DEEP + rnd() * span, BAND + up * UP_ROWS * UP_RISE + 4, u0 + up * UP_ROWS * UP_DEEP));
+          const r = UP_ALL[0] + (UP_ALL[1] + 0.5 - UP_ALL[0]) * rnd();
+          const span = fhi - flo + 2 * r * UP_DEEP;
+          this.high.push(...P(s, flo - r * UP_DEEP + rnd() * span, BAND + r * UP_RISE + 4, u0 + r * UP_DEEP));
         }
       }
     }
 
-    // the chairs on the floor: along the near side (not where the opening's camera starts from), and in the far corners past the benches
-    for (let x = -47; x <= 47; x += 2.35) {
-      if (x > -12 && x < -1) continue;
-      this.chairs.push({ x, y: 0, z: COURT_Z, turn: Math.PI });
-    }
-    for (const e of [-1, 1]) for (let i = 0; i < 6; i++) this.chairs.push({ x: e * (42.5 + i * 2.35), y: 0, z: -(HALF_W + SIDE + 3.6), turn: 0 });
+    // the chairs on the floor (see the constructor), and the people in them
     for (const c of this.chairs) this.seats.push({ x: c.x, y: 0.12, z: c.z, turn: c.turn, row: 0, side: c.turn ? 3 : 0, kind: 'court', lit: 0.85, stall: false });
 
     // --- what stands about on the ground and in the stands: the broadcast's cameras, press row, cables, the corners ---
@@ -932,69 +1071,31 @@ export class Bowl {
       );
     }
 
-    // made: each kind of face one shape, in what it is made of
+    // made: each kind of face one shape, in what it is made of (the materials are the building's for good: see the constructor)
     const add = (soup: Soup, mat: Material, order = 0) => {
       const mesh = new Mesh(soup.geo(keep), mat);
       mesh.renderOrder = order;
       this.group.add(mesh);
+      this.built.push(mesh);
       return mesh;
     };
-    const picture = (soup: Soup, tex: CanvasTexture | null, glow: number) => {
-      const mat = keep(new MeshBasicMaterial({ map: tex, vertexColors: true, side: DoubleSide }));
-      this.lit.push({ mat, glow });
-      return add(soup, mat);
-    };
-    this.concrete = keep(new MeshLambertMaterial({ vertexColors: true, side: DoubleSide }));
-    this.concrete.onBeforeCompile = unshadowed;
     add(concrete, this.concrete);
-    this.trim = keep(new MeshLambertMaterial({ vertexColors: true, side: DoubleSide }));
-    this.trim.onBeforeCompile = unshadowed;
     add(trim, this.trim);
-    this.bandTex = texture(keep, 1024, 64, (cv) => paintBand(cv, '#3a3c42', ''));
-    this.bandMat = keep(new MeshLambertMaterial({ map: this.bandTex, vertexColors: true, side: DoubleSide }));
-    this.bandMat.onBeforeCompile = unshadowed;
     this.band = add(band, this.bandMat);
-    this.steps = keep(new MeshLambertMaterial({ vertexColors: true, side: DoubleSide }));
-    this.steps.onBeforeCompile = unshadowed;
+    this.band.visible = this.banded;
+    add(cover, this.bandMat);
     this.fine.push(add(nosing, this.steps));
-    this.band.visible = false;
-    this.deck = texture(keep, 2048, 256, (cv) => paintDeck(cv, '#2a2c33'));
-    const rows = picture(deck, this.deck, DECK_GLOW).material as MeshBasicMaterial;
-    rows.alphaTest = 0.5;
-    // (each seat's person is drawn sat, the picture's lower half, or on his feet, its upper: the more of them the
-    // more the building cheers, each at his own moment)
-    rows.onBeforeCompile = (sh) => {
-      sh.uniforms.uUp = this.up;
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uUp;').replace(
-        '#include <map_fragment>',
-        `{
-          float seat = floor(vMapUv.x * ${UP_SEATS}.0);
-          float keen = fract(sin(seat * 12.9898) * 43758.5453);
-          vec2 at = vec2(vMapUv.x, vMapUv.y + 0.5 * step(keen, uUp * 1.3 - 0.15));
-          diffuseColor *= textureGrad(map, at, dFdx(vMapUv), dFdy(vMapUv));
-        }`,
-      );
-    };
-    rows.customProgramCacheKey = () => 'upperRows';
-    this.suiteTex = texture(keep, 1024, 96, (cv) => paintSuites(cv));
-    picture(suites, this.suiteTex, SUITE_GLOW);
-    this.shops = texture(keep, 1024, 96, (cv) => paintShops(cv));
-    picture(shops, this.shops, SHOP_GLOW);
-    picture(doors, texture(keep, 128, 96, paintDoor, false), DOOR_GLOW);
-    picture(signs, texture(keep, 64, 24, paintExit, false), SIGN_GLOW);
-    // (glass: mostly what is behind it, and the building's lights on its face)
-    const pane = keep(
-      new MeshStandardMaterial({ color: 0xcfe0ea, roughness: 0.08, metalness: 0, envMapIntensity: 0.35, transparent: true, opacity: 0.14, side: DoubleSide, depthWrite: false }),
-    );
-    this.fine.push(add(glass, pane, 1));
-    this.fine.push(add(rail, keep(new MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.6 }))));
-    const spilt = keep(new MeshBasicMaterial({ vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, side: DoubleSide }));
-    this.lit.push({ mat: spilt, glow: 1 });
-    this.fine.push(add(spill, spilt, 1));
+    add(deck, this.mats.rows);
+    add(suites, this.mats.suites);
+    add(shops, this.mats.shops);
+    add(doors, this.mats.doors);
+    add(signs, this.mats.signs);
+    this.fine.push(add(glass, this.mats.pane, 1));
+    this.fine.push(add(rail, this.mats.rail));
+    this.fine.push(add(spill, this.mats.spilt, 1));
 
     // the ground round the floor, out to the stands: dark, a little of the building's colour in it; and on it
     // the light the boards behind the baskets and along the far side throw (the building's colour, as they are)
-    this.apron = keep(new MeshLambertMaterial({ color: 0x1d1e22 }));
     const ground = new Soup();
     const [gx, gf, gn] = [ENDX + 0.5, -(FAR + 0.5), NEAR + 0.5];
     ground.quad([-gx, -0.012, gn], [gx, -0.012, gn], [gx, -0.012, gf], [-gx, -0.012, gf], '#ffffff');
@@ -1004,17 +1105,20 @@ export class Bowl {
     for (const e of [-1, 1]) glow.quad([e * ex, 0.02, 22], [e * ex, 0.02, -22], [e * (ex - 7.5), 0.02, -22], [e * (ex - 7.5), 0.02, 22], '#ffffff', [0.3, 0.3, 0, 0]);
     const fz = -(FAR - 1.9);
     glow.quad([-ENDX, 0.02, fz], [ENDX, 0.02, fz], [ENDX, 0.02, fz + 5.5], [-ENDX, 0.02, fz + 5.5], '#ffffff', [0.2, 0.2, 0, 0]);
-    this.glowFloor = keep(new MeshBasicMaterial({ vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false }));
     this.fine.push(add(glow, this.glowFloor, 1));
+    this.shed(this.level);
   }
 
   /**
    * The building's colour: the ground round the floor, the boards' light on the ground; and its own
    * (`venue`: the home team's building) the walls' padded tops, the empty seats of the upper deck's
    * picture, the concrete's tone and the house lights' colour on what is lit, what its concourse's wall is
-   * made of, its suites' glass, and the wall along the top of its lower bowl if it has one.
+   * made of, its suites' glass, and the wall along the top of its lower bowl if it has one. A building whose
+   * stands are built otherwise than the last's (Venue.stands) is built again first: its seats with it.
    */
   paint(board: string, venue?: Venue) {
+    const stands = venue?.stands ?? STANDS;
+    if (JSON.stringify(stands) !== this.shape) this.build(stands);
     const key = venue
       ? `${board}|${venue.seed}|${venue.rail}|${venue.seats[2]}|${venue.concrete}|${venue.house}|${venue.fascia}|${venue.concourse}|${JSON.stringify(venue.suites)}|${venue.paint}|${venue.aisles}`
       : board;
@@ -1037,7 +1141,8 @@ export class Bowl {
     // (its suites, and the wall along the top of its lower bowl if it has one)
     paintSuites(this.suiteTex.image as HTMLCanvasElement, venue?.suites);
     this.suiteTex.needsUpdate = true;
-    this.band.visible = !!venue && venue.fascia !== 'glass';
+    this.banded = !!venue && venue.fascia !== 'glass';
+    if (this.band) this.band.visible = this.banded;
     paintBand(this.bandTex.image as HTMLCanvasElement, venue?.rail ?? board, venue?.baselines[1] ?? '');
     this.bandTex.needsUpdate = true;
     const step = this.stepTone.set(venue?.aisles ?? '#8f8a72');
@@ -1069,6 +1174,7 @@ export class Bowl {
 
   /** A device that can't keep up: no glass, rails, nor light spilt on the steps and the ground, nor the aisles' marked edges. */
   shed(level: 0 | 1 | 2) {
+    this.level = level;
     for (const o of this.fine) o.visible = level < 1;
   }
 }

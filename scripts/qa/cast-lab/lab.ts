@@ -7,22 +7,24 @@
 //   lab.film({ k, n, from, every, cam, w, h, cols, most, speed, calm, replays, tip, final, only, scale })
 //       possessions k..k+n-1 (and their replays), a cell every `every` frames from `from` ms of the clock into
 //       possession k; `tip`: the line-up for this long (ms) first; `final`: the buzzer held this long (ms) after;
-//       `only: 'replay'`: the replays' own frames alone; `scale`: each cell drawn at this much of its size;
+//       `only: 'replay'`: the replays' own frames alone ('close': the live cut-ins'); `scale`: each cell drawn at this much of its size;
 //       `turn`: whose turn among the replay's cameras it is (director.ts CAMS: the same camera run after run)
-//   lab.watch({ k, n, cam, speed, calm })   the same, not drawn: how long each camera had the picture (ms), the
+//   lab.watch({ k, n, cam, speed, calm, audit, makeup })   the same, not drawn: how long each camera had the picture (ms), the
 //       cuts (and where each camera but the main one came on), the replays, and the most the main camera's aim
-//       moved in a frame (degrees)
+//       moved in a frame (degrees); `audit`: what the main picture is made of (the stands, the basket's unit, a body by
+//       the lens) and the play by its edges (see watch); `makeup: false`: the edges alone, quicker
 //   lab.reels({ w, h, cam, k, n, rows })   the replays' numbers, not drawn: a dunk framed and hidden by the basket's
-//       unit, how wide and how fast the picture went, the room over what it must show, turns, focus (see reels)
+//       unit, how wide and how fast the picture went, the room over what it must show, turns, focus, each camera's
+//       (`byCam`: how wide, the man by the side, crowded, a referee in the way), the live cut-ins (`close`) (see reels)
 //   lab.faces({ k, tip, w, h, cols, dist, fov, turn, low, pids })   each of the ten up close in the game's light (see faces)
 //   ?seed=n&home=n&away=n&league=n picks the game.
-import { Mesh, PerspectiveCamera, Raycaster, Vector3, type Object3D } from 'three';
+import { Mesh, PerspectiveCamera, Raycaster, Vector2, Vector3, type Object3D } from 'three';
 import { createLeague, defaultSettings } from '../../../src/core/league/create';
 import { teamPlayers } from '../../../src/core/league/helpers';
 import { composites } from '../../../src/core/ratings';
 import { Rng } from '../../../src/core/random';
 import { GameSim } from '../../../src/core/sim/engine';
-import { buildScript, standing, type Script, type Standing } from '../../../src/ui/live/choreo';
+import { buildScript, COURT_LEN, standing, type Script, type Standing } from '../../../src/ui/live/choreo';
 import { shotAt, type Shot } from '../../../src/ui/live/court3d/ballistics';
 import { emptyStage, paintFloor, pose as poseAt, readPaints, type CourtFloor, type Stage } from '../../../src/ui/live/Court';
 import type { CamKind } from '../../../src/ui/live/court3d/cameras';
@@ -104,7 +106,11 @@ interface Reel {
   swap: number;
   dunk: boolean;
   rim: { x: number; z: number };
+  seat: { x: number; y: number; z: number };
   flight: Shot | null;
+  sc: Script;
+  other: number;
+  back: boolean;
 }
 const inner = scene as unknown as {
   camera: PerspectiveCamera;
@@ -114,8 +120,8 @@ const inner = scene as unknown as {
   figs: Map<number, Fig>;
   units: Object3D[];
   ball: Vector3;
-  lens: { render: (...a: unknown[]) => void; focusAt: number };
-  director: { phase: string; onAir: boolean; gap: number; replayed: unknown; n: number; reel: Reel | null };
+  lens: { render: (...a: unknown[]) => void; focusAt: number; blurAt: (z: number) => number };
+  director: { phase: string; onAir: boolean; gap: number; replayed: unknown; n: number; reel: Reel | null; judge?: (seat: Reel['seat'], cam: string, r: Reel) => { mess: number } };
 };
 /**
  * The director may show the next possession's replay, and the camera cut in on its scorer, whatever was shown before;
@@ -346,12 +352,14 @@ function film({
   const cells: { bmp: HTMLCanvasElement; labels: Labels; note: string }[] = [];
   const seen = new Set<string>();
   let i = 0;
-  // (`only: 'replay'`: the replays' own frames, not their wipes; noted with how far from its moment (ms) and how wide)
+  // (`only: 'replay'`: the replays' own frames, not their wipes, noted with how far from its moment (ms) and how wide;
+  // 'close': the live cut-ins' alone)
   run({ k, n, cam, speed, calm, replays, tip, final }, (labels, at) => {
     if (at.k === k && at.t >= 0 && at.t < from) return true;
     const r = inner.director.reel;
     const on = inner.director.onAir && r && r.swap < 0;
     if (only === 'replay' && (!on || labels.wipe)) return true;
+    if (only === 'close' && (on || inner.shot !== 'close')) return true;
     if (on) seen.add(`${r.kind} ${r.cam}${r.slow < 0.25 ? '2' : ''}`);
     const note = on
       ? `${cells.length} k${at.k} ${r.kind} ${r.cam}${r.slow < 0.25 ? '2' : ''} ${Math.round(r.t - (r.dunk ? r.rel + 90 : r.at))}ms ${inner.camera.fov.toFixed(1)}°`
@@ -378,6 +386,170 @@ function film({
 const SUPPORT = new Set(['pad', 'steel', 'team', 'clock', 'led']);
 /** What the lower third and the Replay bug cover (CSS px across and up, as court3d.css draws them). */
 const COVER = { third: [262, 62], bug: [100, 36] };
+/** A body as the lab sees it: round-ended bones between his joints, each this thick (ft, on the 6 ft 6 puppet). */
+const BONES: readonly (readonly [number, number, number])[] = [
+  [J.head, J.head, 0.42],
+  [J.head, J.chest, 0.3],
+  [J.chest, J.hips, 0.62],
+  [J.sl, J.sr, 0.3],
+  [J.sl, J.el, 0.22],
+  [J.el, J.hl, 0.2],
+  [J.sr, J.er, 0.22],
+  [J.er, J.hr, 0.2],
+  [J.hips, J.kl, 0.32],
+  [J.kl, J.fl, 0.24],
+  [J.hips, J.kr, 0.32],
+  [J.kr, J.fr, 0.24],
+];
+/** Rays across the picture and up it, for what it is made of (`Look`). */
+const GRID = [20, 12];
+/** The safe frame a tight picture keeps what it must show in, with a margin: this much of the half picture across, and up to here and down to here (-1..1). */
+const MARGIN = { x: 0.92, top: 0.9, foot: -0.94 };
+/** A body is in the foreground when it is nearer the lens than this share of the way to the man, and this much (ft) nearer; or this near the lens whatever. */
+const FORE = { share: 0.8, by: 4, near: 6 };
+/** The unit and a foreground body together over this much of the picture is a lot of it; a man this soft (lens.blurAt) is soft to the eye. */
+const LOTS = 0.15;
+const SOFT = 0.15;
+/** The unit and a foreground body together over this much of the picture is a crowded one; a referee over this much of it is one in the way. */
+const CROWD = 0.3;
+const REF_IN = 0.02;
+/** A man this near the picture's sides (of the half picture across) is at its edge. */
+const SIDE_AT = 0.75;
+/** The replay's tight cameras: on the man, near him. */
+const TIGHT = new Set(['tight', 'base', 'rim', 'floor']);
+/** The ball this near the picture's sides (a share of its width) is by the edge. */
+const EDGE_AT = 0.1;
+/** Everything about the picture worth knowing, not drawn: see `survey`. */
+interface Look {
+  /** Shares of the picture: the basket's unit (its arm, its pads, its board's frame, its clocks) the first thing a ray meets; a body in the foreground; the floor or a man on it. */
+  unit: number;
+  fg: number;
+  floor: number;
+  /** Of `fg`, the share a referee takes. */
+  ref: number;
+  /** A body in the foreground or the basket's unit between the lens and one of the `keep` points (what). */
+  cover: string | null;
+}
+
+/** Everyone on the floor and round it the camera may see: the ten, and the referees. */
+function people(): Fig[] {
+  const side = (inner as unknown as { arena: { sideline: { refs: { fig: Fig }[] } } }).arena.sideline;
+  return [...inner.figs.values(), ...side.refs.map((r) => r.fig)];
+}
+
+/**
+ * The picture from `c`, ray by ray (GRID): what share of it the basket's unit takes, a body in the foreground
+ * (nearer the lens than `deep` ft, by FORE) that is not one of `own`, and the floor and the men on it; and
+ * whether any of `keep` (what, x, y, z) has such a body or the unit in front of it (by more than its `short`, ft). `parts`: the units' meshes.
+ */
+const survey = (() => {
+  const ray = new Raycaster();
+  const ndc = new Vector2();
+  const P = new Vector3();
+  // (each body's joints in the scene, and the middle of him with how far his bones reach from it)
+  const joints: Float64Array[] = [];
+  const reach: number[][] = [];
+  // the nearest a ray (o, d: d of length 1) comes to the bone (a..b) and how far along it that is: [miss, t]
+  const near = (o: Vector3, d: Vector3, a: ArrayLike<number>, ai: number, b: ArrayLike<number>, bi: number, out: number[]) => {
+    const [ux, uy, uz] = [b[bi] - a[ai], b[bi + 1] - a[ai + 1], b[bi + 2] - a[ai + 2]];
+    const [wx, wy, wz] = [o.x - a[ai], o.y - a[ai + 1], o.z - a[ai + 2]];
+    const uu = ux * ux + uy * uy + uz * uz;
+    const ud = ux * d.x + uy * d.y + uz * d.z;
+    const uw = ux * wx + uy * wy + uz * wz;
+    const dw = d.x * wx + d.y * wy + d.z * wz;
+    const den = uu - ud * ud;
+    let s = uu < 1e-9 ? 0 : den > 1e-9 ? Math.max(0, Math.min(1, (uw - ud * dw) / den)) : 0;
+    let t = Math.max(0, ud * s - dw);
+    if (uu > 1e-9) s = Math.max(0, Math.min(1, (uw + ud * t) / uu));
+    t = Math.max(0, ud * s - dw);
+    out[0] = Math.hypot(wx + d.x * t - ux * s, wy + d.y * t - uy * s, wz + d.z * t - uz * s);
+    out[1] = t;
+  };
+  const hit = [0, 0];
+  // the nearest body a ray meets (its index, and how far), not counting `skip`
+  const first = (o: Vector3, d: Vector3, bodies: Fig[], skip: Set<Fig>, far = Infinity): [number, number] => {
+    let [who, at] = [-1, far];
+    for (let i = 0; i < bodies.length; i++) {
+      if (skip.has(bodies[i])) continue;
+      const R = reach[i];
+      const [cx, cy, cz] = [R[0] - o.x, R[1] - o.y, R[2] - o.z];
+      const along = cx * d.x + cy * d.y + cz * d.z;
+      if (along < -R[3] || cx * cx + cy * cy + cz * cz - along * along > R[3] * R[3]) continue;
+      const J3 = joints[i];
+      const s = bodies[i].pup.body.s;
+      for (const [a, b, r] of BONES) {
+        near(o, d, J3, a * 3, J3, b * 3, hit);
+        if (hit[0] < r * s && hit[1] < at) [who, at] = [i, hit[1]];
+      }
+    }
+    return [who, at];
+  };
+  return (c: PerspectiveCamera, deep: number, own: Set<Fig>, keep: { what: string; p: { x: number; y: number; z: number }; short?: number }[], parts: Object3D[]): Look => {
+    const bodies = people();
+    bodies.forEach((f, i) => {
+      const J3 = (joints[i] ??= new Float64Array(45));
+      const j = f.pup.j;
+      let [mx, my, mz] = [0, 0, 0];
+      for (let k = 0; k < 15; k++) {
+        const w = f.pup.world(j[k * 3], j[k * 3 + 1], j[k * 3 + 2], { x: 0, y: 0, z: 0 });
+        [J3[k * 3], J3[k * 3 + 1], J3[k * 3 + 2]] = [w.x, w.y, w.z];
+        [mx, my, mz] = [mx + w.x / 15, my + w.y / 15, mz + w.z / 15];
+      }
+      let r = 0;
+      for (let k = 0; k < 15; k++) r = Math.max(r, Math.hypot(J3[k * 3] - mx, J3[k * 3 + 1] - my, J3[k * 3 + 2] - mz));
+      reach[i] = [mx, my, mz, r + 0.7];
+    });
+    const fore = Math.max(0, Math.min(deep * FORE.share, deep - FORE.by));
+    const isFore = (t: number) => t < fore || t < FORE.near;
+    let [unit, fg, floor, ref] = [0, 0, 0, 0];
+    // (the ten first in `people`, then the referees)
+    const ten = inner.figs.size;
+    const o = c.position;
+    for (let gy = 0; gy < GRID[1]; gy++)
+      for (let gx = 0; gx < GRID[0]; gx++) {
+        ndc.set(((gx + 0.5) / GRID[0]) * 2 - 1, ((gy + 0.5) / GRID[1]) * 2 - 1);
+        ray.setFromCamera(ndc, c);
+        ray.far = 400;
+        const d = ray.ray.direction;
+        const u = ray.intersectObjects(parts, false)[0]?.distance ?? Infinity;
+        const [who, at] = first(o, d, bodies, own, u);
+        if (who >= 0 && isFore(at)) {
+          fg++;
+          if (who >= ten) ref++;
+        } else if (u < Infinity && who < 0) unit++;
+        // (the floor and its apron, or a man on it nearer than the floor there)
+        const tf = d.y < -1e-4 ? -o.y / d.y : Infinity;
+        P.copy(o).addScaledVector(d, tf);
+        if (who >= 0 || (tf < u && Math.abs(P.x) < COURT_LEN / 2 + 4 && Math.abs(P.z) < 29)) floor++;
+      }
+    const all = GRID[0] * GRID[1];
+    let cover: string | null = null;
+    for (const { what, p, short = 0.25 } of keep) {
+      const far = o.distanceTo(P.set(p.x, p.y, p.z));
+      ray.set(o, P.sub(o).normalize());
+      ray.far = far - short;
+      const [who, at] = first(o, ray.ray.direction, bodies, own, far - 1.5);
+      const u = ray.intersectObjects(parts, false)[0];
+      if ((who >= 0 && isFore(at)) || u) {
+        cover = `${what}/${who >= 0 && isFore(at) ? (who >= ten ? 'ref' : 'body') : u.object.name}`;
+        break;
+      }
+    }
+    return { unit: unit / all, fg: fg / all, floor: floor / all, ref: ref / all, cover };
+  };
+})();
+
+/** The basket units' parts that hide what is behind them (SUPPORT), at both ends, as three.js meshes. */
+function supports(): Object3D[][] {
+  return inner.units.map((u) => {
+    u.updateMatrixWorld(true);
+    const out: Object3D[] = [];
+    u.traverse((o) => {
+      if (o instanceof Mesh && SUPPORT.has(o.name)) out.push(o);
+    });
+    return out;
+  });
+}
 
 /**
  * The replays' numbers, not drawn (nothing is rendered): each possession with a big play is run on its own, the
@@ -387,8 +559,14 @@ const COVER = { third: [262, 62], bug: [100, 36] };
  * the lens and his head, a hand or the ball; for all, how wide the picture went and how fast it widened (deg/s),
  * how much of the picture is over the highest thing it must show (`room`) and the share of frames that has it all
  * in the lower half (`sunk`), the most the look turned in a frame (deg) and the focus moved (ft), a body between the
- * lens and the man, and where the slowest moment fell (ms after the slam, or the moment). And the live cut-ins on
- * a dunk's scorer: his head and hands in the picture, the unit in front of them. `trace`: each replay frame's
+ * lens and the man, and where the slowest moment fell (ms after the slam, or the moment). And what each picture is
+ * made of (`survey`): all it must show and his hands up inside a margin (MARGIN: `kept`, and what was `out`), the
+ * share of it the basket's unit and a body by the lens take (`unit`, `fg`, the `worst`, frames with more than LOTS:
+ * `big`), frames with one of them in front of him, his head, the ball or the rim (`covered`), and the blur on the
+ * men in the play and the ball (`blur`: the mean, the most, frames with one of them SOFT). And the live cut-ins: on
+ * a dunk's scorer his head and hands in the picture, the unit in front of them; on anyone (`close`), how many and how
+ * many went in under half a second (`flash`), the margin and the make-up as for a replay (and frames over CROWD, a
+ * referee in the way). Each camera's (`byCam`, over his shoulder apart): how wide it went, his chest by the side. `trace`: each replay frame's
  * [k, look, ms from the moment, fov, focus (ft), turn (deg), the highest must-see point's height in the picture].
  */
 function reels({ w: cw = 1440, h: ch = 900, cam = 'tv' as CamKind, k = 0, n = 1e9, rows = false, trace = false, turn = undefined as number | undefined } = {}) {
@@ -400,22 +578,17 @@ function reels({ w: cw = 1440, h: ch = 900, cam = 'tv' as CamKind, k = 0, n = 1e
   const dunks = new Set(find('dunk'));
   const ray = new Raycaster();
   const [P, D, F, F0] = [new Vector3(), new Vector3(), new Vector3(), new Vector3()];
-  const parts = inner.units.map((u) => {
-    u.updateMatrixWorld(true);
-    const out: Object3D[] = [];
-    u.traverse((o) => {
-      if (o instanceof Mesh && SUPPORT.has(o.name)) out.push(o);
-    });
-    return out;
-  });
+  const parts = supports();
+  const both = [...parts[0], ...parts[1]];
   const c = inner.camera;
   const proj = (x: number, y: number, z: number) => P.set(x, y, z).project(c);
-  const safe = (v: Vector3) =>
-    v.z < 1 &&
-    Math.abs(v.x) < 0.97 &&
-    Math.abs(v.y) < 0.96 &&
-    !(v.x < -1 + (2 * COVER.third[0]) / cw && v.y < -1 + (2 * COVER.third[1]) / ch) &&
-    !(v.x < -1 + (2 * COVER.bug[0]) / cw && v.y > 1 - (2 * COVER.bug[1]) / ch);
+  const off = (v: Vector3) =>
+    (v.x < -1 + (2 * COVER.third[0]) / cw && v.y < -1 + (2 * COVER.third[1]) / ch) || (v.x < -1 + (2 * COVER.bug[0]) / cw && v.y > 1 - (2 * COVER.bug[1]) / ch);
+  const safe = (v: Vector3) => v.z < 1 && Math.abs(v.x) < 0.97 && Math.abs(v.y) < 0.96 && !off(v);
+  // (and with a margin: what a tight picture keeps everything in)
+  const kept = (v: Vector3) => v.z < 1 && Math.abs(v.x) < MARGIN.x && v.y < MARGIN.top && v.y > MARGIN.foot && !off(v);
+  // (how far in front of the lens, along its look: the depth the lens's focus reads)
+  const depth = (p: { x: number; y: number; z: number }) => -P.set(p.x, p.y, p.z).applyMatrix4(c.matrixWorldInverse).z;
   // (the unit at that end between the lens and the point)
   const hidden = (end: number, x: number, y: number, z: number) => {
     D.set(x, y, z).sub(c.position);
@@ -461,9 +634,54 @@ function reels({ w: cw = 1440, h: ch = 900, cam = 'tv' as CamKind, k = 0, n = 1e
     body: number;
     steps: number[];
     last: { fov: number; t: number; focus: number } | null;
+    /** The picture's make-up summed over its frames (`survey`), the most of the unit and the foreground together, frames with more than LOTS of them, frames with one in front of what it must show. */
+    unit: number;
+    fg: number;
+    worst: number;
+    big: number;
+    cov: number;
+    covBy: Record<string, number>;
+    /** Frames with all it must show (and his hands up, the other man's head) inside the margin (MARGIN), and what was out. */
+    kept: number;
+    out: Record<string, number>;
+    /** The blur on the men in the play (him, the other man, a man on him, a man at the rim once the ball is up) and the ball: summed, how many, the most, frames with one of them soft (SOFT). */
+    blur: number;
+    blurN: number;
+    blurMost: number;
+    soft: number;
+    /** What the director made of its seat's picture up front (director.ts `judge`: the share of it a unit or a man by the lens). */
+    est: number;
+    /** Over his shoulder (the tight camera behind him); frames with his chest by the picture's side (SIDE_AT); the referees' share summed, frames with one in the way (REF_IN), frames over CROWD. */
+    back: boolean;
+    edge: number;
+    ref: number;
+    refF: number;
+    crowd: number;
   }
   const out: Row[] = [];
   const live = { frames: 0, inF: 0, occF: 0, miss: {} as Record<string, number> };
+  // (every cut-in, not only a dunk's: his head and his hands up inside the margin, and the picture's make-up)
+  const close = {
+    n: 0,
+    flash: 0,
+    run: 0,
+    frames: 0,
+    kept: 0,
+    out: {} as Record<string, number>,
+    unit: 0,
+    fg: 0,
+    worst: 0,
+    big: 0,
+    cov: 0,
+    at: [] as number[],
+    ref: 0,
+    refF: 0,
+    crowd: 0,
+  };
+  let wasClose = false;
+  let nth = 0;
+  let lastClose: ReturnType<typeof survey> | null = null;
+  let lastReel: ReturnType<typeof survey> | null = null;
   let row: Row | null = null;
   let key = '';
   const J3 = (f: Fig, j: number) => f.pup.world(f.pup.j[j * 3], f.pup.j[j * 3 + 1], f.pup.j[j * 3 + 2], { x: 0, y: 0, z: 0 });
@@ -474,6 +692,37 @@ function reels({ w: cw = 1440, h: ch = 900, cam = 'tv' as CamKind, k = 0, n = 1e
       const r = d.reel;
       c.updateMatrixWorld();
       if (!d.onAir || !r) {
+        const g = inner.shot === 'close' && inner.star !== null ? inner.figs.get(inner.star) : undefined;
+        if (g && !wasClose) close.n++;
+        // (and one that went in under half a second: a flash of a picture)
+        if (g) close.run++;
+        else if (wasClose) [close.flash, close.run] = [close.flash + (close.run * FRAME < 500 ? 1 : 0), 0];
+        wasClose = !!g;
+        if (g) {
+          const head = J3(g, J.head);
+          const up = J3(g, J.chest).y + 0.5;
+          const pts = [...[J3(g, J.hl), J3(g, J.hr)].filter((p) => p.y > up).map((p) => ({ what: 'hand', p })), { what: 'head', p: { ...head, y: head.y + 0.45 * g.pup.body.s } }];
+          close.frames++;
+          let all = true;
+          for (const { what, p } of pts)
+            if (!kept(proj(p.x, p.y, p.z))) {
+              all = false;
+              close.out[what] = (close.out[what] ?? 0) + 1;
+            }
+          if (all) close.kept++;
+          // (every other frame: the one before it stands in for it)
+          const L = (lastClose =
+            nth++ % 2 && lastClose ? lastClose : survey(c, c.position.distanceTo(P.set(head.x, head.y - 1, head.z)), new Set([g]), [{ what: 'head', p: head }], both));
+          close.unit += L.unit;
+          close.fg += L.fg;
+          if (L.unit + L.fg > close.worst) close.at = [kk, Math.round(100 * L.unit), Math.round(100 * L.fg)];
+          close.worst = Math.max(close.worst, L.unit + L.fg);
+          if (L.unit + L.fg > LOTS) close.big++;
+          if (L.unit + L.fg > CROWD) close.crowd++;
+          close.ref += L.ref;
+          if (L.ref > REF_IN) close.refF++;
+          if (L.cover) close.cov++;
+        }
         // a live cut-in on a dunk's scorer: his head, and his hands when they are up (over his chest: a close-up is his waist up)
         const f = inner.shot === 'close' && dunks.has(kk) && inner.star !== null ? inner.figs.get(inner.star) : undefined;
         if (f) {
@@ -524,6 +773,25 @@ function reels({ w: cw = 1440, h: ch = 900, cam = 'tv' as CamKind, k = 0, n = 1e
           body: 0,
           steps: [],
           last: null,
+          unit: 0,
+          fg: 0,
+          worst: 0,
+          big: 0,
+          cov: 0,
+          covBy: {},
+          kept: 0,
+          out: {},
+          blur: 0,
+          blurN: 0,
+          blurMost: 0,
+          soft: 0,
+          // (none before the director judged its seats)
+          est: inner.director.judge?.(r.seat, r.cam, r).mess ?? -1,
+          back: r.cam === 'tight' && r.back,
+          edge: 0,
+          ref: 0,
+          refF: 0,
+          crowd: 0,
         };
         out.push(row);
       }
@@ -538,15 +806,72 @@ function reels({ w: cw = 1440, h: ch = 900, cam = 'tv' as CamKind, k = 0, n = 1e
       const hands = [J3(f, J.hl), J3(f, J.hr)];
       const chest = J3(f, J.chest);
       R.frames++;
+      if (Math.abs(proj(chest.x, chest.y, chest.z).x) > SIDE_AT) R.edge++;
       // (what it must show: his head, the ball while it is in play, the rim; a dunk's hands)
-      const must: { what: string; p: { x: number; y: number; z: number } }[] = [
-        { what: 'head', p: top },
-        { what: 'rim', p: { x: r.rim.x, y: 10, z: r.rim.z } },
-      ];
+      const must: { what: string; p: { x: number; y: number; z: number } }[] = [{ what: 'head', p: top }];
+      // (a shot's rim from his take-off, or a little before the release: on the run-up the picture is his)
+      if (r.kind !== 'block' && r.t >= (r.dunk ? slam - 450 : r.rel - 100)) must.push({ what: 'rim', p: { x: r.rim.x, y: 10, z: r.rim.z } });
       if (r.kind !== 'block' && (r.t < slam || b.y > 6)) must.push({ what: 'ball', p: { x: b.x, y: b.y, z: b.z } });
       // (and while a shot is in the air, the top of its flight)
       if (r.flight && r.t >= r.rel && r.t < r.at) must.push({ what: 'arc', p: shotAt(r.flight, 0.5, { x: 0, y: 0, z: 0 }) });
       if (r.dunk) must.push({ what: 'hand', p: hands[0] }, { what: 'hand', p: hands[1] }, { what: 'head', p: head });
+      // (inside the margin, all of it, and his hands up and the other man's head too)
+      const more = [...must];
+      for (const p of hands) if (p.y > chest.y + 0.5) more.push({ what: 'hand', p });
+      const pids = [...r.sc.oPids, ...r.sc.dPids];
+      const other = r.other >= 0 ? inner.figs.get(pids[r.other]) : undefined;
+      if (other) {
+        const oh = J3(other, J.head);
+        more.push({ what: 'other', p: { ...oh, y: oh.y + 0.45 * other.pup.body.s } });
+      }
+      let inAll = true;
+      for (const m of more)
+        if (!kept(proj(m.p.x, m.p.y, m.p.z))) {
+          inAll = false;
+          R.out[m.what] = (R.out[m.what] ?? 0) + 1;
+        }
+      if (inAll) R.kept++;
+      // (the picture's make-up: the unit, a body in front of him; and him, his head, the ball, the rim behind one)
+      // (the rim: a unit in front of it by more than the rim is wide, not its own bracket behind it)
+      const keep: { what: string; p: { x: number; y: number; z: number }; short?: number }[] = [
+        { what: 'head', p: head },
+        { what: 'chest', p: chest },
+        { what: 'rim', p: { x: r.rim.x, y: 10, z: r.rim.z }, short: 1 },
+      ];
+      if (r.kind !== 'block' && (r.t < slam || b.y > 6)) keep.push({ what: 'ball', p: { x: b.x, y: b.y, z: b.z } });
+      const own = new Set([f]);
+      if (other) own.add(other);
+      const L = (lastReel = nth++ % 2 && lastReel ? lastReel : survey(c, c.position.distanceTo(P.set(chest.x, chest.y, chest.z)), own, keep, both));
+      R.unit += L.unit;
+      R.fg += L.fg;
+      R.worst = Math.max(R.worst, L.unit + L.fg);
+      if (L.unit + L.fg > LOTS) R.big++;
+      if (L.unit + L.fg > CROWD) R.crowd++;
+      R.ref += L.ref;
+      if (L.ref > REF_IN) R.refF++;
+      if (L.cover) {
+        R.cov++;
+        R.covBy[L.cover] = (R.covBy[L.cover] ?? 0) + 1;
+      }
+      // (the blur on the men in the play and the ball, as the lens draws them)
+      let most = 0;
+      const blurOn = (p: { x: number; y: number; z: number }) => {
+        const u = inner.lens.blurAt(depth(p));
+        R.blur += u;
+        R.blurN++;
+        most = Math.max(most, u);
+      };
+      for (const g of inner.figs.values()) {
+        const gc = J3(g, J.chest);
+        const near = Math.hypot(gc.x - chest.x, gc.z - chest.z) < 7 || (r.t >= r.rel && Math.hypot(gc.x - r.rim.x, gc.z - r.rim.z) < 9);
+        if (g === f || g === other || near) {
+          blurOn(gc);
+          blurOn(J3(g, J.head));
+        }
+      }
+      if (r.kind !== 'block' && (r.t < slam || b.y > 6)) blurOn(b);
+      R.blurMost = Math.max(R.blurMost, most);
+      if (most > SOFT) R.soft++;
       let hi = -Infinity;
       for (const m of must) hi = Math.max(hi, proj(m.p.x, m.p.y, m.p.z).y);
       R.room += (1 - Math.min(1, hi)) / 2;
@@ -614,10 +939,12 @@ function reels({ w: cw = 1440, h: ch = 900, cam = 'tv' as CamKind, k = 0, n = 1e
   const r1 = (x: number) => Math.round(x * 10) / 10;
   const sum = (xs: Row[], f: (o: Row) => number) => xs.reduce((a, o) => a + f(o), 0);
   const dk = out.filter((o) => o.dunkF > 0);
+  const tight = out.filter((o) => TIGHT.has(o.cam));
   const miss: Record<string, number> = {};
   for (const o of dk) for (const [what, m] of Object.entries(o.miss)) miss[what] = (miss[what] ?? 0) + m;
   const spread = out.map((o) => o.fov1 - o.fov0);
   const stat = (xs: number[]) => ({ med: r1(med(xs)), max: r1(Math.max(0, ...xs)) });
+  const camOf = (o: Row) => (o.back ? 'shoulder' : o.cam);
   // (the middle of the slowest stretch: the frames within 3% of its slowest step; not the last, cut short at the end)
   const slowAt = (o: Row) => {
     let low = Infinity;
@@ -643,6 +970,78 @@ function reels({ w: cw = 1440, h: ch = 900, cam = 'tv' as CamKind, k = 0, n = 1e
       slowAfterSlam: dk.map(slowAt),
     },
     live: { frames: live.frames, framed: pct(live.inF, live.frames), hidden: pct(live.occF, live.frames) },
+    // (all of it inside the margin, and what was out; the tight cameras' alone; the unit's and a foreground body's share of
+    // the picture, the most, frames over LOTS, frames with one in front of him, his head, the ball or the rim; the blur)
+    kept: pct(
+      sum(out, (o) => o.kept),
+      sum(out, (o) => o.frames),
+    ),
+    out: Object.fromEntries(
+      [...new Set(out.flatMap((o) => Object.keys(o.out)))].map((what) => [
+        what,
+        pct(
+          sum(out, (o) => o.out[what] ?? 0),
+          sum(out, (o) => o.frames),
+        ),
+      ]),
+    ),
+    tightKept: pct(
+      sum(tight, (o) => o.kept),
+      sum(tight, (o) => o.frames),
+    ),
+    unit: pct(
+      sum(out, (o) => o.unit),
+      sum(out, (o) => o.frames),
+    ),
+    fg: pct(
+      sum(out, (o) => o.fg),
+      sum(out, (o) => o.frames),
+    ),
+    worst: stat(out.map((o) => 100 * o.worst)),
+    big: pct(
+      sum(out, (o) => o.big),
+      sum(out, (o) => o.frames),
+    ),
+    covered: pct(
+      sum(out, (o) => o.cov),
+      sum(out, (o) => o.frames),
+    ),
+    coveredBy: Object.fromEntries(
+      [...new Set(out.flatMap((o) => Object.keys(o.covBy)))].map((what) => [
+        what,
+        pct(
+          sum(out, (o) => o.covBy[what] ?? 0),
+          sum(out, (o) => o.frames),
+        ),
+      ]),
+    ),
+    blur: {
+      mean: pct(
+        sum(out, (o) => o.blur),
+        sum(out, (o) => o.blurN),
+      ),
+      most: stat(out.map((o) => 100 * o.blurMost)),
+      soft: pct(
+        sum(out, (o) => o.soft),
+        sum(out, (o) => o.frames),
+      ),
+    },
+    close: {
+      n: close.n,
+      flash: close.flash,
+      frames: close.frames,
+      kept: pct(close.kept, close.frames),
+      out: Object.fromEntries(Object.entries(close.out).map(([what, m]) => [what, pct(m, close.frames)])),
+      unit: pct(close.unit, close.frames),
+      fg: pct(close.fg, close.frames),
+      worst: r1(100 * close.worst),
+      worstAt: close.at,
+      big: pct(close.big, close.frames),
+      crowd: pct(close.crowd, close.frames),
+      ref: pct(close.ref, close.frames),
+      refF: pct(close.refF, close.frames),
+      covered: pct(close.cov, close.frames),
+    },
     fovSpread: stat(spread),
     widenRate: stat(out.map((o) => o.rate)),
     room: r1(
@@ -674,6 +1073,39 @@ function reels({ w: cw = 1440, h: ch = 900, cam = 'tv' as CamKind, k = 0, n = 1e
       sum(out, (o) => o.body),
       sum(out, (o) => o.frames),
     ),
+    crowd: pct(
+      sum(out, (o) => o.crowd),
+      sum(out, (o) => o.frames),
+    ),
+    ref: pct(
+      sum(out, (o) => o.refF),
+      sum(out, (o) => o.frames),
+    ),
+    // (each camera's: its looks, how wide it went at the most (median, most of them), his chest by the side, crowded, a referee in the way)
+    byCam: Object.fromEntries(
+      [...new Set(out.map(camOf))].map((cm) => {
+        const xs = out.filter((o) => camOf(o) === cm);
+        return [
+          cm,
+          {
+            looks: xs.length,
+            fov: stat(xs.map((o) => o.fov1)),
+            edge: pct(
+              sum(xs, (o) => o.edge),
+              sum(xs, (o) => o.frames),
+            ),
+            crowd: pct(
+              sum(xs, (o) => o.crowd),
+              sum(xs, (o) => o.frames),
+            ),
+            ref: pct(
+              sum(xs, (o) => o.refF),
+              sum(xs, (o) => o.frames),
+            ),
+          },
+        ];
+      }),
+    ),
     // (each look's own counts, to add up over several games)
     rows: rows ? out.map(({ steps, last, ...o }) => ({ ...o, slow: slowAt({ steps, last, ...o }) })) : undefined,
     liveCounts: live,
@@ -683,8 +1115,17 @@ function reels({ w: cw = 1440, h: ch = 900, cam = 'tv' as CamKind, k = 0, n = 1e
   };
 }
 
-/** The same run, not filmed: who had the picture and for how long, the cuts, and how hard the camera was moved. */
-function watch({ k = 0, n = 20, cam = 'tv' as CamKind, speed = 1, calm = false, replays = true, tip = 0, final = 0, w: cw = 800, h: ch = 474 } = {}) {
+/**
+ * The same run, not filmed: who had the picture and for how long, the cuts, and how hard the camera was moved.
+ * `audit` (nothing drawn): the camera that follows the play, frame by frame (`frames`), as a phone's picture asks
+ * of it: how much of it is the floor and the men on it (the rest is the stands over it and the seats under it,
+ * `stands`: its median and the most), the basket's unit and a body in the foreground (`unit`, `fg`, as reels has
+ * them), the ball by the picture's edge (`edge`: in its outer EDGE_AT across or near its top or foot), the ball
+ * going toward the side it is already near (`ahead`), a man by the ball off the picture or at its side (`men`), and the
+ * basket the ball is near off it (`rim`), or its board cut by the picture's edge (`board`: shares of the frames with the
+ * ball this near it).
+ */
+function watch({ k = 0, n = 20, cam = 'tv' as CamKind, speed = 1, calm = false, replays = true, tip = 0, final = 0, w: cw = 800, h: ch = 474, audit = false, makeup = true } = {}) {
   scene.size(cw, ch, 1);
   const on: Record<string, number> = {};
   let cuts = 0;
@@ -694,7 +1135,14 @@ function watch({ k = 0, n = 20, cam = 'tv' as CamKind, speed = 1, calm = false, 
   let worst = 0;
   let real = 0;
   const dir = { x: 0, y: 0, z: 0 };
-  const e = inner.camera.matrixWorld.elements;
+  const c = inner.camera;
+  const e = c.matrixWorld.elements;
+  const render = inner.lens.render;
+  if (audit) inner.lens.render = () => {};
+  const parts = supports().flat();
+  const P = new Vector3();
+  const A = { frames: 0, stands: [] as number[], unit: 0, fg: 0, edge: 0, ahead: 0, men: 0, rimN: 0, rim: 0, board: 0 };
+  let bx = 0;
   run({ k, n, cam, speed, calm, replays, tip, final }, (_l, at) => {
     on[at.shot] = (on[at.shot] ?? 0) + FRAME;
     real = at.real;
@@ -708,11 +1156,75 @@ function watch({ k = 0, n = 20, cam = 'tv' as CamKind, speed = 1, calm = false, 
       worst = Math.max(worst, (Math.acos(Math.min(1, dot)) * 180) / Math.PI);
     }
     [dir.x, dir.y, dir.z] = [-e[8], -e[9], -e[10]];
+    if (audit && at.shot === 'main' && at.t >= 0) {
+      c.updateMatrixWorld();
+      const b = inner.ball;
+      const sc = scripts[at.k];
+      A.frames++;
+      // (not `makeup`: the edges alone, much quicker)
+      if (makeup) {
+        const L = survey(c, c.position.distanceTo(b), new Set(), [], parts);
+        A.stands.push(1 - L.floor);
+        A.unit += L.unit;
+        A.fg += L.fg;
+      }
+      const v = P.set(b.x, b.y, b.z).project(c);
+      if (Math.abs(v.x) > 1 - 2 * EDGE_AT || v.y > 0.85 || v.y < -0.9) A.edge++;
+      if (was === 'main' && Math.abs(v.x) > 0.6 && Math.sign(v.x) === Math.sign(v.x - bx) && Math.abs(v.x - bx) > 0.002) A.ahead++;
+      bx = v.x;
+      let off = false;
+      for (const f of inner.figs.values()) {
+        if (Math.hypot(f.pup.x - b.x, f.pup.z - b.z) > 12) continue;
+        for (const y of [0, 7]) {
+          const m = P.set(f.pup.x, y, f.pup.z).project(c);
+          if (Math.abs(m.x) > 0.96 || Math.abs(m.y) > 1) off = true;
+        }
+      }
+      if (off) A.men++;
+      if (sc) {
+        const rx = (sc.dir === 1 ? -1 : 1) * (COURT_LEN / 2 - 5.25);
+        if (Math.hypot(b.x - rx, b.z) < 22) {
+          A.rimN++;
+          const m = P.set(rx, 10, 0).project(c);
+          if (Math.abs(m.x) > 0.92 || Math.abs(m.y) > 0.95) A.rim++;
+          // (and the board whole, its corners off the picture's sides by a little)
+          const bx = rx + Math.sign(rx) * 1.25;
+          for (const [z, y] of [
+            [-3, 13.5],
+            [3, 13.5],
+            [-3, 10],
+            [3, 10],
+          ]) {
+            const q = P.set(bx, y, z).project(c);
+            if (Math.abs(q.x) > 0.96 || Math.abs(q.y) > 0.98) {
+              A.board++;
+              break;
+            }
+          }
+        }
+      }
+    }
     was = at.shot;
     return true;
   });
+  inner.lens.render = render;
   for (const key of Object.keys(on)) on[key] = Math.round(on[key]);
-  return { real: Math.round(real), cuts, reels, worstTurnDeg: Math.round(worst * 100) / 100, on, log };
+  const pct = (a: number, b: number) => (b ? Math.round((1000 * a) / b) / 10 : null);
+  const st = [...A.stands].sort((a, b) => a - b);
+  const view = audit
+    ? {
+        frames: A.frames,
+        stands: { med: pct(st[Math.floor(st.length / 2)] ?? 0, 1), most: pct(st[st.length - 1] ?? 0, 1) },
+        unit: pct(A.unit, A.frames),
+        fg: pct(A.fg, A.frames),
+        edge: pct(A.edge, A.frames),
+        ahead: pct(A.ahead, A.frames),
+        men: pct(A.men, A.frames),
+        rim: pct(A.rim, A.rimN),
+        board: pct(A.board, A.rimN),
+      }
+    : undefined;
+  return { real: Math.round(real), cuts, reels, worstTurnDeg: Math.round(worst * 100) / 100, on, log: audit ? undefined : log, view };
 }
 
 /**

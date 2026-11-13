@@ -43,7 +43,7 @@ ARM_OUT = math.radians(38)
 
 # the clothes
 WAIST = HIP + 0.42
-HEM = KN_Y + 0.36
+HEM = KN_Y + 0.3
 # where the shorts' two legs part (lower than his own fork: they hang)
 FORK = HIP - 0.66
 TUCK = WAIST - 0.07
@@ -229,7 +229,7 @@ def lids(px, py):
     ex, ey = abs(px) - EYE_X, py - EYE_Y
     k = max(0.0, 1 - min(1.0, abs(ex) / EYE_W) ** 2)
     tilt = 0.012 * ex / EYE_W
-    return ex, ey, tilt + 0.056 * k ** 0.55, tilt - 0.037 * k ** 0.8
+    return ex, ey, tilt + 0.046 * k ** 0.55, tilt - 0.037 * k ** 0.8
 
 
 def brow_at(apx):
@@ -249,19 +249,21 @@ def skull(n):
     cranium = ray(n, (0, 0.2, -0.1), (0.915, 0.75, 0.955))
     x = abs(n[0])
     m = (x, n[1], n[2])
-    low = ray(n, (0, -0.32, 0.0), (0.86, 0.95, 0.9))
+    low = ray(n, (0, -0.32, 0.0), (0.94, 0.95, 0.9))
     # (its front; the cheeks' turn back to the cheekbones; the jaw's side, narrowing from its corner under the ear to
     # the chin; the back edge of the jaw, up from that corner to the ear: behind it, his neck takes over)
-    low = smin(low, flat(m, (0, -0.1, 1), (0, -0.45, 0.842)), 0.07)
-    low = smin(low, flat(m, (0.7, -0.2, 0.7), (0.5, -0.1, 0.81)), 0.26)
-    low = smin(low, flat(m, (1, -0.12, 0.4), (0.73, -0.55, -0.2)), 0.1)
-    low = smin(low, flat(m, (0, -0.12, -1), (0, -0.55, -0.4)), 0.24)
+    # (each turn rounded over a good width: a cheek and a jaw are round under the light, not cut in planes; and the
+    # front is broad, the cheeks carried well out before they turn back, so a face is never pinched to its middle)
+    low = smin(low, flat(m, (0, -0.07, 1), (0, -0.45, 0.85)), 0.15)
+    low = smin(low, flat(m, (0.62, -0.18, 0.76), (0.56, -0.1, 0.83)), 0.36)
+    low = smin(low, flat(m, (1, -0.1, 0.34), (0.83, -0.55, -0.2)), 0.2)
+    low = smin(low, flat(m, (0, -0.12, -1), (0, -0.55, -0.4)), 0.26)
     # (under it: the jaw's edge runs back from the chin nearly level, rising a little to its corner, so a jaw has an
     # angle under the ear and a line along its foot; the chin's own under side is level)
-    low = smin(low, flat(m, (0.1, -1, -0.3), (0, -0.965, 0.45)), 0.09)
-    low = smin(low, flat(m, (0, -1, 0.12), (0, -0.96, 0.7)), 0.08)
+    low = smin(low, flat(m, (0.1, -1, -0.3), (0, -0.965, 0.45)), 0.15)
+    low = smin(low, flat(m, (0, -1, 0.12), (0, -0.96, 0.7)), 0.13)
     # (the face's block runs into the skull round its sides without a crease where the two meet)
-    return smax(cranium, low, 0.22)
+    return smax(cranium, low, 0.26)
 
 
 def head_r(n):
@@ -280,8 +282,8 @@ def head_r(n):
     # the temples, a little hollow behind the brow's end; the cheekbone's arch back toward the ear; the jaw's
     # muscle over its corner, and the corner itself (a jaw has an angle under the ear, not a curve); the bump
     # behind the ear; the back of the skull over the nape
-    t -= 0.03 * b3(0.82, 0.3, 0.42, 0.2, 0.22, 0.24)
-    t += 0.045 * b3(0.7, -0.1, 0.55, 0.2, 0.12, 0.26)
+    t -= 0.012 * b3(0.82, 0.3, 0.42, 0.2, 0.22, 0.24)
+    t += 0.045 * b3(0.7, -0.1, 0.55, 0.22, 0.14, 0.28)
     t += 0.018 * b3(0.86, -0.08, 0.2, 0.16, 0.12, 0.3)
     t += 0.03 * b3(0.76, -0.4, 0.1, 0.18, 0.24, 0.26)
     t += 0.03 * b3(0.74, -0.66, -0.1, 0.12, 0.1, 0.16)
@@ -305,13 +307,14 @@ def head_r(n):
     d += 0.007 * g(0, 0.24, 0.1, 0.07)
     # the eye's socket: a hollow under the brow, deepest at its top beside the nose; shallow toward the cheekbone
     # and under the eye, where the cheek comes up to the lower lid
-    d -= 0.04 * g(EYE_X - 0.02, EYE_Y + 0.045, 0.2, 0.095)
-    d -= 0.012 * g(0.25, 0.13, 0.08, 0.07)
+    # (and the eye set back in it, most at its inner corner under the brow: the bridge of the nose stands in front of it)
+    d -= 0.035 * g(EYE_X - 0.01, EYE_Y + 0.045, 0.2, 0.095)
+    d -= 0.014 * g(0.23, 0.13, 0.08, 0.07)
     # (the ball of the eye in it, filling it out to its lids, which stand on it: no pit with a bead at its bottom;
     # each lid's edge has a thickness, the upper one's fold lies over it, the lower one runs into the cheek)
     ex, ey, up, lo = lids(apx, py)
     on_eye = sstep(EYE_W + 0.05, EYE_W - 0.03, abs(ex))
-    d += 0.072 * g(EYE_X, EYE_Y + 0.004, 0.165, 0.085)
+    d += 0.064 * g(EYE_X, EYE_Y + 0.004, 0.165, 0.085)
     d += 0.011 * math.exp(-(((ey - up - 0.006) / 0.012) ** 2)) * on_eye
     d += 0.012 * math.exp(-(((ey - up - 0.036) / 0.02) ** 2)) * sstep(EYE_W + 0.07, EYE_W - 0.02, abs(ex))
     d += 0.008 * math.exp(-(((ey - lo + 0.008) / 0.012) ** 2)) * on_eye
@@ -319,8 +322,8 @@ def head_r(n):
     # his cheekbones, out and down from the outer corner of each eye, and their arch back toward the ear; the
     # front of the cheek under the eye, full beside the nose; the hollow under the bone
     d += 0.036 * g(0.53, -0.15, 0.17, 0.11)
-    d += 0.03 * g(0.36, -0.25, 0.16, 0.13)
-    d -= 0.024 * g(0.66, -0.5, 0.15, 0.16)
+    d += 0.034 * g(0.4, -0.28, 0.2, 0.16)
+    d -= 0.012 * g(0.66, -0.5, 0.15, 0.16)
     # (the fold from each wing of the nose down past the corner of the mouth, the cheek full beside it)
     fx, fy = apx - 0.225, py + 0.31
     along = clamp((fx * 0.13 - fy * 0.3) / (0.13 ** 2 + 0.3 ** 2))
@@ -329,17 +332,19 @@ def head_r(n):
     d += 0.01 * math.exp(-(((fold - 0.07) / 0.045) ** 2)) * (1 if fx - 0.13 * along > 0 else 0) * sstep(1.2, 0.6, along)
     # the nose: its root between the eyes, under the glabella, narrow; its bridge a ridge rising to the tip,
     # widening as it goes; the tip a ball of its own; cut in under it to the lip; the side walls run out into the cheeks
-    d -= 0.012 * g(0, 0.13, 0.07, 0.05)
+    # (a bridge with some breadth to it between the eyes: a narrow one pinches the whole face in to it)
+    # (it stands well out of his face, from its root between his eyes on: a face whose nose is low reads flat, a mask)
+    d -= 0.003 * g(0, 0.13, 0.09, 0.05)
     u = clamp((0.15 - py) / (0.15 - NOSE_TIP))
-    high = (0.022 + 0.088 * u ** 1.25) * sstep(NOSE_FOOT, NOSE_TIP - 0.004, py) * sstep(0.3, 0.14, py)
-    wide = 0.04 + 0.05 * u ** 2.2
+    high = (0.034 + 0.098 * u ** 1.3) * sstep(NOSE_FOOT, NOSE_TIP - 0.004, py) * sstep(0.3, 0.14, py)
+    wide = 0.052 + 0.045 * u ** 2.0
     d += high * math.exp(-((apx / wide) ** 2.4))
     d += 0.16 * high * math.exp(-((apx / (wide * 1.8)) ** 2))
-    d += 0.032 * g(0, NOSE_TIP - 0.012, 0.062, 0.05)
+    d += 0.038 * g(0, NOSE_TIP - 0.012, 0.062, 0.05)
     # (its wings, each round its nostril, about as wide as the inner corners of the eyes are apart; the crease
     # behind the wing; the nostrils, under, and the little column between them)
-    d += 0.058 * g(0.148, -0.298, 0.05, 0.042)
-    d -= 0.02 * g(0.228, -0.288, 0.026, 0.058)
+    d += 0.064 * g(0.148, -0.298, 0.05, 0.042)
+    d -= 0.026 * g(0.228, -0.288, 0.026, 0.058)
     d -= 0.024 * g(0.075, NOSE_FOOT + 0.01, 0.032, 0.016)
     # the mouth: it stands out on the arch of the teeth behind it, the skin over the upper lip coming down and
     # forward from the nose to the lip's edge, which is a little ridge (the line a lip is drawn by); each lip its
@@ -349,19 +354,21 @@ def head_r(n):
     arch = max(0.0, 1 - t_ * t_)
     across = max(0.0, 1 - (px / (MOUTH_W + 0.01)) ** 2) ** 0.7
     edge = MOUTH_Y + 0.054 * arch ** 0.6 * (1 - 0.24 * math.exp(-((t_ / 0.14) ** 2)))
-    d += 0.042 * g(0, -0.53, 0.42, 0.21)
+    d += 0.024 * g(0, -0.53, 0.48, 0.24)
     d += 0.014 * sstep(-0.35, -0.46, py) * sstep(edge - 0.004, edge + 0.01, py) * math.exp(-((px / 0.32) ** 2))
-    d += across * 0.036 * math.exp(-(((py - MOUTH_Y - 0.027 * arch ** 0.6) / 0.027) ** 2))
-    d += across * 0.007 * math.exp(-(((py - edge) / 0.009) ** 2))
-    d += across * 0.05 * math.exp(-(((py - MOUTH_Y + 0.047 * arch ** 0.8) / 0.036) ** 2))
+    d += across * 0.041 * math.exp(-(((py - MOUTH_Y - 0.027 * arch ** 0.6) / 0.028) ** 2))
+    d += across * 0.009 * math.exp(-(((py - edge) / 0.009) ** 2))
+    d += across * 0.057 * math.exp(-(((py - MOUTH_Y + 0.047 * arch ** 0.8) / 0.04) ** 2))
     d -= across * 0.024 * math.exp(-(((py - MOUTH_Y) / 0.012) ** 2))
-    d -= 0.014 * g(0, -0.41, 0.03, 0.055)
-    d += 0.008 * g(0.058, -0.415, 0.022, 0.05)
-    d -= 0.012 * g(MOUTH_W + 0.01, MOUTH_Y - 0.02, 0.045, 0.045)
+    d -= 0.016 * g(0, -0.41, 0.03, 0.055)
+    d += 0.01 * g(0.058, -0.415, 0.022, 0.05)
+    # (the corners tucked in, and the knot of muscle just out from each, where the cheek meets the lips)
+    d -= 0.02 * g(MOUTH_W + 0.01, MOUTH_Y - 0.01, 0.04, 0.04)
+    d += 0.012 * g(MOUTH_W + 0.08, MOUTH_Y - 0.02, 0.05, 0.09)
     # the groove under the lower lip, and the chin: a ball standing out in front, squarer below
-    d -= 0.026 * g(0, -0.685, 0.21, 0.04)
-    d += 0.056 * g(0, -0.83, 0.22, 0.12)
-    d += 0.016 * g(0.17, -0.91, 0.1, 0.08)
+    d -= 0.032 * g(0, -0.685, 0.21, 0.04)
+    d += 0.07 * g(0, -0.84, 0.22, 0.12)
+    d += 0.02 * g(0.2, -0.9, 0.12, 0.09)
     return t + d * front
 
 
@@ -1092,7 +1099,7 @@ def thin_body(hi, tris):
     return thin(hi, tris)
 
 
-def shorts_form(legs=None, folds=0.016):
+def shorts_form(legs=None, folds=0.022):
     """
     The shorts as a solid of their own (cloth hangs from the hips; it doesn't cling to what's under
     it): a seat round both hips down to the fork, a loose leg each side with a gap between the two,
@@ -1114,7 +1121,8 @@ def shorts_form(legs=None, folds=0.016):
     parts = [solid([ring((0, y, zc), rx, rzf, 40, rzb, square=2.5) for y, rx, rzf, rzb, zc in seat], 'seat')]
     for s in (1, -1):
         # (the two legs are one cloth down to the fork, and part below it: seen from in front, an upturned V between them)
-        low = legs or [(HEM - 0.25, 0.45, 0.372, 0.425, 0.435), (HEM, 0.445, 0.37, 0.425, 0.435), (FORK - 0.12, 0.415, 0.372, 0.425, 0.44)]
+        # (cut wide, as the game's are: the legs flare a little to the hem, standing off his thighs all round)
+        low = legs or [(HEM - 0.25, 0.46, 0.392, 0.45, 0.46), (HEM, 0.455, 0.39, 0.45, 0.46), (FORK - 0.12, 0.42, 0.382, 0.435, 0.45)]
         up = [(FORK + 0.04, 0.385, 0.392, 0.428, 0.445), (HIP - 0.3, 0.385, 0.4, 0.43, 0.45), (HIP - 0.05, 0.4, 0.37, 0.425, 0.45), (HIP + 0.12, 0.4, 0.29, 0.37, 0.4)]
         parts.append(solid([ring((s * cx, y, 0.012), rx, rzf, 28, rzb) for y, cx, rx, rzf, rzb in low + up], 'leg'))
     form = join(parts, 'shorts')
@@ -1177,8 +1185,11 @@ def dress_player(hi, q=1.0):
     # the vest: his trunk, a little looser, cut at the armholes and the V of the neck, tucked in; a band of trim round each opening
     vest = copy(mid, 'vest')
     # (it stands a little further off him round the armholes: the skin that goes on under their edge never shows through)
-    push(vest, lambda p: 0.017 + 0.022 * sstep(-0.32, -0.08, max(pit(p, 1), pit(p, -1))) + 0.016 * sstep(WAIST, WAIST + 0.14, p[1]) + 0.034 * sstep(WAIST + 0.1, WAIST + 0.45, p[1]) * sstep(5.0, 4.4, p[1]))
-    relax(vest, 10)
+    # (and it is cloth, not paint: it stands off his chest a little and hangs from it, so it is well off his belly and
+    # the small of his back, and blouses over the waistband it's tucked into)
+    push(vest, lambda p: 0.026 + 0.034 * sstep(-0.32, -0.08, max(pit(p, 1), pit(p, -1))) + 0.022 * sstep(WAIST, WAIST + 0.14, p[1]) + 0.05 * sstep(WAIST + 0.1, WAIST + 0.45, p[1]) * sstep(5.2, 4.55, p[1]))
+    # (smoothed well: it bridges the hollows of his chest and back, and doesn't show every muscle under it)
+    relax(vest, 16)
     # (it gathers in folds over the waistband it's tucked into, and hangs in a few under each arm)
     for v in vest.data.vertices:
         p = G(v.co)
@@ -1186,10 +1197,28 @@ def dress_player(hi, q=1.0):
         waist = sstep(WAIST + 0.6, WAIST + 0.14, p[1]) * sstep(TUCK - 0.04, WAIST + 0.1, p[1])
         side = sstep(0.3, 0.55, abs(p[0])) * sstep(WAIST + 0.2, 4.3, p[1]) * sstep(4.85, 4.5, p[1])
         # (only ever out from him: a fold in toward him would let his skin through)
-        k = 1 + 0.03 * waist * (1.1 + math.sin(a * 7 + 0.6) + 0.5 * math.sin(a * 13 + 2.0)) + 0.018 * side * (1 + math.sin(p[1] * 9 + a * 3))
+        k = 1 + 0.04 * waist * (1.1 + math.sin(a * 7 + 0.6) + 0.5 * math.sin(a * 13 + 2.0)) + 0.026 * side * (1 + math.sin(p[1] * 9 + a * 3))
         v.co = B(p[0] * k, p[1], p[2] * k)
+    # (and it hangs from the fullest of his chest and his shoulder blades, nearly straight down to where it's tucked
+    # in: it bridges the hollow under his chest and the small of his back, as a vest does, and doesn't cling under them)
+    peak = {}
+    for v in vest.data.vertices:
+        x, y, z = G(v.co)
+        if 4.7 < y < 5.3 and abs(x) < 0.7:
+            key = (round(x / 0.05), z > 0)
+            peak[key] = max(peak.get(key, 0.0), abs(z))
+    for v in vest.data.vertices:
+        x, y, z = G(v.co)
+        crest = peak.get((round(x / 0.05), z > 0))
+        if crest is None or not TUCK < y < 5.1:
+            continue
+        hang = crest - 0.07 * (5.05 - y)
+        k = sstep(TUCK + 0.15, TUCK + 0.55, y) * sstep(0.68, 0.4, abs(x))
+        if hang > abs(z):
+            v.co = B(x, y, math.copysign(abs(z) + (hang - abs(z)) * k, z))
     vest.data.update()
-    thin(vest, (5400 if q >= 1 else 3000) * q)
+    relax(vest, 2)
+    thin(vest, (5340 if q >= 1 else 3000) * q)
     relax(vest, 3 if q >= 1 else 1)
     in_vest = lambda p: p[1] > TUCK and p[1] < 5.75 and pit(p, 1) <= 0 and pit(p, -1) <= 0 and vee(p) <= 0  # noqa: E731
     cut(vest, [level(TUCK), plane_pit(1), plane_pit(-1), plane_vee(1), plane_vee(-1), plane_pit(1, -TRIM), plane_pit(-1, -TRIM), plane_vee(1, -TRIM), plane_vee(-1, -TRIM)], in_vest)
@@ -1197,7 +1226,7 @@ def dress_player(hi, q=1.0):
 
     # the shorts: their own shape over his hips, a leg each; a waistband, a hem band and a stripe down each side
     shorts = shorts_form()
-    thin(shorts, 3400 * q)
+    thin(shorts, 3320 * q)
     stripe = lambda p: abs(p[2] - 0.02) < 0.075 and abs(p[0]) > 0.45  # noqa: E731
     cut(
         shorts,

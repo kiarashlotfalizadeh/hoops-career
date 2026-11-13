@@ -8,6 +8,7 @@
 //   &eye=3,5.5,6&at=0,5,0&fov=28 (a camera of one's own, ft: for a close look at a shoulder, a shoe)
 //   &arms=up|shoot|fwd|hip|out|across|back|down (both arms put there, whatever the move has them do; arms=all, or a list of them: each man the next)
 //   faces: ?move=idle&n=6&gap=1.5&camY=6.4&lookY=6.25&zoom=3.6&yaw=12&from=100&to=100  (&beard=0..5: none, stubble, goatee, beard, full, strap)
+//   &kind=0..5 (everyone's head the kind's own, as look.ts's FACES has it: long, broad, square, narrow, heavy, soft)  &kinds=1 (each the next kind)
 //   &face=1 (his jaw open and his brows down, as in a roar)
 import {
   AmbientLight,
@@ -25,7 +26,7 @@ import {
 } from 'three';
 import type { Act } from '../../../src/ui/live/choreo';
 import { Fig, figureGeo, settleHeads } from '../../../src/ui/live/court3d/figure';
-import { BEARDS, lookOf, SKINS, STYLES } from '../../../src/ui/live/court3d/look';
+import { BEARDS, FACES, lookOf, SKINS, STYLES } from '../../../src/ui/live/court3d/look';
 import { loadModels } from '../../../src/ui/live/court3d/models';
 import { BALL_R, bodyOf, FARM, J, UARM, type Drive } from '../../../src/ui/live/court3d/puppet';
 import type { MatchKit } from '../../../src/ui/teamColors';
@@ -134,6 +135,25 @@ const figs = Array.from({ length: n }, (_, i) => {
   if (q.has('tones')) look.tone = i % SKINS.length;
   if (q.has('tone')) look.tone = num('tone', 0) % SKINS.length;
   look.skin = SKINS[look.tone];
+  if (q.has('kind') || q.has('kinds')) {
+    const kind = (q.has('kinds') ? i : num('kind', 0)) % FACES.length;
+    const k = FACES[kind];
+    Object.assign(look.face, {
+      wide: k.wide,
+      long: k.long,
+      jaw: k.jaw,
+      chin: k.chin,
+      ridge: k.ridge,
+      nose: k.nose,
+      lips: k.lips,
+      cheeks: k.cheeks,
+      full: k.full,
+      point: k.point,
+      flare: k.flare,
+      deep: k.deep,
+      kind,
+    });
+  }
   const f = new Fig(
     geo,
     bodyOf(num('h', 78), num('w', 215)),
@@ -283,4 +303,4 @@ addEventListener('resize', () => {
   cam.updateProjectionMatrix();
   renderer.render(scene, cam);
 });
-(window as unknown as { lab: unknown }).lab = { figs, renderer, scene, cam };
+(window as unknown as { lab: unknown }).lab = { figs, renderer, scene, cam, J };

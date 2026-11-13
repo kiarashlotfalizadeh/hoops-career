@@ -64,6 +64,32 @@ const HEAD = 7.6;
 const BOARD_TOP = 14.2;
 /** A frame this shape or squarer is a phone held upright: its cameras stand higher and frame tighter. */
 export const TALL = 1.5;
+/**
+ * And the main camera goes this much higher and nearer the floor (ft up, ft in) by the time the frame is this much
+ * squarer than TALL (a phone's upright court is about square): looking down more steeply, the floor and the men on it
+ * fill a tall picture, not the stands over them.
+ */
+const TALL_UP = [10, 18];
+const TALL_SPAN = 0.6;
+/** And its spare room up and down goes this way (as a rig's `sky`): a little under the play, onto the near floor, not over it into the stands. */
+const TALL_SKY = -0.2;
+/**
+ * A picture taller than it is wide (none on the page, which is never narrower than square) holds the men nearer the
+ * ball, and its least across is less: this much less by the time it is half as wide as it is tall.
+ */
+const THIN = 0.3;
+/**
+ * The floor's camera stands this far along the floor from the middle (ft: in the photographers' row, sideline.ts, between
+ * two of them), this high (over their heads, the board over it and the play in one picture), this far off the middle across.
+ */
+const LOW = [MID + 7.5, 6, 14.3];
+/** A backboard's half width (ft): the picture holds its top corners. */
+const BOARD_HALF = 3;
+/**
+ * But a tall picture from there holds the board only this high (ft: its rim, and a little over it), by the time it is
+ * TALL_SPAN squarer than TALL: the whole board right over the lens, with the men across it, is a picture of the roof.
+ */
+const LOW_TALL = 11;
 /** The near side's seats end here (z), this high with the people in them: past them there is nothing built. */
 const NEAR_EDGE = 42.5;
 const NEAR_TOP = 8.5;
@@ -91,7 +117,7 @@ const RIGS: Record<CamKind, Rig> = {
   tv: { reach: [27, 54], rim: [36, 58], cover: [50, 112], coverTall: [40, 104], pad: [0.07, 0.16, 0.1], sky: 0.45, ball: 0.5, follow: 0.5, zoom: 1.3 },
   side: { reach: [17, 36], rim: [17, 30], cover: [36, 80], coverTall: [29, 70], pad: [0.12, 0.2, 0.2], sky: 0.3, ball: 0.7, follow: 0.42, zoom: 1.1 },
   end: { reach: [60, 110], rim: [80, 120], cover: [56, 70], coverTall: [50, 62], pad: [0.08, 0.14, 0.08], sky: 0.2, ball: 0.3, follow: 0.7, zoom: 1.6 },
-  low: { reach: [15, 34], rim: [13, 22], cover: [20, 60], coverTall: [16, 50], pad: [0.16, 0.22, 0.1], sky: 0.4, ball: 0.7, follow: 0.4, zoom: 1.1 },
+  low: { reach: [15, 34], rim: [24, 38], cover: [20, 60], coverTall: [16, 50], pad: [0.16, 0.22, 0.1], sky: 0.4, ball: 0.7, follow: 0.4, zoom: 1.1 },
   top: { reach: [27, 54], rim: [36, 58], cover: [52, 100], coverTall: [42, 96], pad: [0.08, 0.06, 0.06], sky: 0, ball: 0, follow: 0.6, zoom: 1.4 },
 };
 
@@ -99,13 +125,19 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 const smooth = (u: number) => u * u * (3 - 2 * u);
 const deg = (r: number) => (r * 180) / Math.PI;
 
-/** Where a camera stands: `x` is where the play is along the floor (the dolly and the overhead go with it), `end` the end being attacked. */
-export function mount(kind: CamKind, tall: boolean, x: number, end: -1 | 0 | 1, out: Shot): Shot {
-  // (the main camera stands on the broadcast's platform in the near stands, bowl.ts DECK_ROWS: over the heads in front of it)
-  if (kind === 'tv') [out.px, out.py, out.pz] = [0, tall ? 46 : 36, tall ? 80 : 81];
+/**
+ * Where a camera stands: `x` is where the play is along the floor (the dolly and the overhead go with it), `end` the
+ * end being attacked; `aspect`, the picture's shape.
+ */
+export function mount(kind: CamKind, aspect: number, x: number, end: -1 | 0 | 1, out: Shot): Shot {
+  const tall = aspect < TALL;
+  // (the main camera stands on the broadcast's platform in the near stands, bowl.ts DECK_ROWS: over the heads in front of
+  // it; for a tall picture higher and nearer, the taller the more (TALL_UP), so the floor fills it rather than the stands)
+  const up = smooth(clamp((TALL - aspect) / TALL_SPAN, 0, 1));
+  if (kind === 'tv') [out.px, out.py, out.pz] = [0, tall ? 46 + TALL_UP[0] * up : 36, tall ? 80 - TALL_UP[1] * up : 81];
   else if (kind === 'side') [out.px, out.py, out.pz] = [clamp(x * 0.72, -30, 30), tall ? 16 : 13, 50];
   else if (kind === 'end') [out.px, out.py, out.pz] = [-(end || -1) * (MID + 30), tall ? 44 : 36, 0];
-  else if (kind === 'low') [out.px, out.py, out.pz] = [(end || -1) * (MID + 7.5), 4.6, 15];
+  else if (kind === 'low') [out.px, out.py, out.pz] = [(end || -1) * LOW[0], LOW[1], LOW[2]];
   else [out.px, out.py, out.pz] = [clamp(x, -34, 34), 50, 15];
   return out;
 }
@@ -113,11 +145,13 @@ export function mount(kind: CamKind, tall: boolean, x: number, end: -1 | 0 | 1, 
 /**
  * The points a camera is to hold (x, y, z each, into `pts`; how many numbers): each man's feet and head,
  * the ball and the floor under it, the floor `lead` ft ahead of it, the basket being attacked and the top
- * of its board. A man far from the ball counts for less the farther he is (he is drawn in toward it), so
+ * corners of its board. A man far from the ball counts for less the farther he is (he is drawn in toward it), so
  * nobody enters or leaves the picture's sums in one frame.
  */
 export function gather(kind: CamKind, v: View, lead: number, pts: number[]): number {
   const rig = RIGS[kind];
+  // (a picture taller than it is wide holds the men nearer the ball, THIN)
+  const thin = 1 - THIN * clamp((1 - v.aspect) / 0.5, 0, 1);
   const b = v.ball;
   let n = 0;
   const put = (x: number, y: number, z: number) => {
@@ -131,7 +165,7 @@ export function gather(kind: CamKind, v: View, lead: number, pts: number[]): num
     const dx = v.men[i * 2] - b.x;
     const dz = v.men[i * 2 + 1] - b.z;
     const far = round ? Math.hypot(dx, dz) : Math.abs(dx);
-    const w = 1 - smooth(clamp((far - rig.reach[0]) / (rig.reach[1] - rig.reach[0]), 0, 1));
+    const w = 1 - smooth(clamp((far - rig.reach[0] * thin) / ((rig.reach[1] - rig.reach[0]) * thin), 0, 1));
     put(b.x + dx * w, 0, b.z + dz * w);
     put(b.x + dx * w, HEAD, b.z + dz * w);
   }
@@ -146,9 +180,13 @@ export function gather(kind: CamKind, v: View, lead: number, pts: number[]): num
     const rx = v.end * RIM_X;
     const far = round ? Math.hypot(rx - b.x, b.z) : Math.abs(rx - b.x);
     const w = 1 - smooth(clamp((far - rig.rim[0]) / (rig.rim[1] - rig.rim[0]), 0, 1));
-    put(b.x + (rx - b.x) * w, 3 + (BOARD_TOP - 3) * w, b.z * (1 - w));
-    // (and the baseline under it: the picture ends past the basket, not on it)
-    put(b.x + (v.end * (MID + 1.5) - b.x) * w, 3 - 3 * w, b.z * (1 - w));
+    // (the floor's camera, under the board, in a tall picture: only up to the rim, not the board over it, LOW_TALL)
+    const top = kind === 'low' ? BOARD_TOP + (LOW_TALL - BOARD_TOP) * smooth(clamp((TALL - v.aspect) / TALL_SPAN, 0, 1)) : BOARD_TOP;
+    put(b.x + (rx - b.x) * w, 3 + (top - 3) * w, b.z * (1 - w) - BOARD_HALF * w);
+    put(b.x + (rx - b.x) * w, 3 + (top - 3) * w, b.z * (1 - w) + BOARD_HALF * w);
+    // (and the baseline under it: the picture ends past the basket, not on it; the floor's camera is past it already, and
+    // the floor at its feet would turn it down onto the photographers by it)
+    if (kind !== 'low') put(b.x + (v.end * (MID + 1.5) - b.x) * w, 3 - 3 * w, b.z * (1 - w));
   }
   return n;
 }
@@ -219,10 +257,11 @@ export function fit(
   }
   measure();
   const [lo, hi] = tall ? rig.coverTall : rig.cover;
+  const thin = 1 - THIN * clamp((1 - aspect) / 0.5, 0, 1);
   const halfX = ((x1 - x0) / 2) * (1 + rig.pad[0] * 2);
   const halfY = (y1 - y0) / 2;
   // (how much of the floor it holds across, where it looks: between the rig's least, less a little at the basket and late, and its most)
-  const least = (lo * (1 - 0.1 * squeeze)) / 2 / depth / aspect;
+  const least = (lo * thin * (1 - 0.1 * squeeze)) / 2 / depth / aspect;
   const most = hi / 2 / depth / aspect;
   const tanV = clamp(Math.max(halfY, halfX / aspect), least, Math.max(least, most));
   // the spare room: across, toward the ball; up and down, over the play or under it
@@ -230,7 +269,9 @@ export function fit(
   const spareY = Math.max(0, tanV - halfY);
   const cx = (x0 + x1) / 2;
   const cy = (y0 + y1) / 2;
-  turn(cx + clamp((tx - cx) * rig.ball, -spareX, spareX), cy + spareY * rig.sky);
+  // (the floor's camera keeps the play in the middle of a tall one: under it is the floor at its feet and the
+  // photographers by it, over it the roof)
+  turn(cx + clamp((tx - cx) * rig.ball, -spareX, spareX), cy + spareY * (!tall ? rig.sky : kind === 'low' ? 0 : TALL_SKY));
   measure();
   // (never under the near side's seats, where nothing is built: the picture's foot stays on them)
   let fov = 2 * Math.atan(tanV);
@@ -286,6 +327,12 @@ const POST_R = 2.3;
 /** A close-up's camera is asked to stand this near the floor's edges at most (ft past the baselines; z from, to). */
 export const SEAT_X = MID + 8.5;
 export const SEAT_Z = [-9, 33];
+/**
+ * A close-up's picture as `clearSeat` judges it: looking this high on him (ft), this much of him over and under that
+ * (ft), this shape; a seat costs this much more for all of it a basket's unit or a man by the lens (`clutter`).
+ */
+const SEAT_LOOK = [4.8, 3.4, 1.6];
+const SEAT_MESS = 6;
 
 /**
  * The basket's unit as something that hides what is behind it (scripts/blender/arena.py hoop(), a little
@@ -416,6 +463,9 @@ export function clearSeat(
         cost += 6;
         break;
       }
+    // (and a picture of him that is not mostly a basket's unit or a man by the lens: his waist to over his head, across a wide frame)
+    const fore = Math.max(6, Math.min(far * 0.8, far - 4));
+    cost += SEAT_MESS * clutter(cx, high, cz, x, Math.max(high, SEAT_LOOK[0]), z, SEAT_LOOK[1] / far, SEAT_LOOK[2], far + 25, others, n, fore);
     if (cost < best) {
       best = cost;
       out.x = cx;
@@ -423,6 +473,67 @@ export function clearSeat(
     }
   }
   return best;
+}
+
+/** The rays across a picture `clutter` tries (across, up): a coarse grid, enough to tell a share of a tenth from a third. */
+const RAYS = [8, 5];
+/** A man near a lens, as `clutter` has him: a post this high (ft) and this thick each side of his middle. */
+const BODY = [6.8, 1.1];
+// (clutter's working numbers: a ray as a line, x, y, z at each end; a man as one)
+const RAY = [0, 0, 0, 0, 0, 0];
+const MAN = [0, 0, 0, 0, BODY[0], 0];
+
+/**
+ * How much of a picture the basket's units and the men near its lens take (0..1): the picture from (cx, cy, cz)
+ * looking at (lx, ly, lz), `tan` the tangent of half of it top to bottom, `aspect` its shape. A ray of a coarse
+ * grid across it counts when a unit stands on it within `far` ft (`fenced`: its base, its arm, its board's frame
+ * and pads, its shot clock), or one of `men` (x, z each, `n` of them) nearer the lens than `fore` ft does: a
+ * picture that is mostly padded steel or a man's back is a poor one, whatever it holds.
+ */
+export function clutter(
+  cx: number,
+  cy: number,
+  cz: number,
+  lx: number,
+  ly: number,
+  lz: number,
+  tan: number,
+  aspect: number,
+  far: number,
+  men: ArrayLike<number> = [],
+  n = 0,
+  fore = 0,
+): number {
+  let [fx, fy, fz] = [lx - cx, ly - cy, lz - cz];
+  const fl = Math.hypot(fx, fy, fz) || 1;
+  [fx, fy, fz] = [fx / fl, fy / fl, fz / fl];
+  // (level, as three's lookAt has it: right is along the floor)
+  const flat = Math.hypot(fx, fz) || 1e-6;
+  const [rx, rz] = [-fz / flat, fx / flat];
+  const [ux, uy, uz] = [-rz * fy, rz * fx - rx * fz, rx * fy];
+  let hit = 0;
+  [RAY[0], RAY[1], RAY[2]] = [cx, cy, cz];
+  for (let j = 0; j < RAYS[1]; j++)
+    for (let i = 0; i < RAYS[0]; i++) {
+      const a = (((i + 0.5) / RAYS[0]) * 2 - 1) * tan * aspect;
+      const b = (((j + 0.5) / RAYS[1]) * 2 - 1) * tan;
+      let [dx, dy, dz] = [fx + rx * a + ux * b, fy + uy * b, fz + rz * a + uz * b];
+      const dl = Math.hypot(dx, dy, dz);
+      [dx, dy, dz] = [dx / dl, dy / dl, dz / dl];
+      if (fenced(cx, cy, cz, cx + dx * far, cy + dy * far, cz + dz * far)) {
+        hit++;
+        continue;
+      }
+      [RAY[3], RAY[4], RAY[5]] = [cx + dx * fore, cy + dy * fore, cz + dz * fore];
+      for (let k = 0; k < n; k++) {
+        [MAN[0], MAN[2], MAN[3], MAN[5]] = [men[k * 2], men[k * 2 + 1], men[k * 2], men[k * 2 + 1]];
+        if (apart(RAY, MAN) < BODY[1]) {
+          hit++;
+          break;
+        }
+      }
+    }
+  return hit / (RAYS[0] * RAYS[1]);
 }
 
 /** A man at (x, z) seen from (cx, cz): one of `others` stands in the way. */
@@ -499,7 +610,6 @@ export class Operator {
   aim(kind: CamKind, v: View, real: number, calm: boolean, out: Shot): boolean {
     const rig = RIGS[kind];
     const sec = real / 1000;
-    const tall = v.aspect < TALL;
     const b = v.ball;
     let cut = !(calm ? this.still : this.on) || kind !== this.kind;
     this.kind = kind;
@@ -512,7 +622,7 @@ export class Operator {
       const half = cut ? (b.x < 0 ? -1 : 1) : this.half * b.x < -CALM_OVER ? (-this.half as -1 | 1) : this.half;
       if (half !== this.half) cut = true;
       this.half = half;
-      const w = mount(kind, tall, half * 24, end, this.want);
+      const w = mount(kind, v.aspect, half * 24, end, this.want);
       fit(kind, w.px, w.py, w.pz, this.pts, halfPts(half, this.pts), v.aspect, half * 24, 0, 0, out);
       this.on = false;
       this.still = true;
@@ -523,7 +633,7 @@ export class Operator {
     this.ballX = b.x;
     this.vx = cut ? 0 : this.vx + (vx - this.vx) * (1 - Math.exp(-real / 320));
     const lead = clamp(this.vx * LEAD, -LEAD_MOST, LEAD_MOST);
-    const w = mount(kind, tall, b.x + lead, end, this.want);
+    const w = mount(kind, v.aspect, b.x + lead, end, this.want);
     if (cut) this.px.x = w.px;
     else if (sec > 0) ease(this.px, w.px, 0.9, sec);
     this.px.v = cut ? 0 : this.px.v;
