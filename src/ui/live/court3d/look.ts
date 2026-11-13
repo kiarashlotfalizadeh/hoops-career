@@ -6,8 +6,10 @@
 export interface Look {
   /** His skin, one of SKINS. */
   skin: string;
-  /** His hair's colour (one that goes with his skin). */
+  /** His hair's colour (one that goes with his skin, or now and then one he has dyed it). */
   hair: string;
+  /** His brows' colour, and his beard's: his hair's own, whatever he has done to the hair on his head. */
+  brows: string;
   /** How he wears it: an index into STYLES (0 is a shaved head). */
   style: number;
   /** His beard: an index into BEARDS (0 is none). */
@@ -18,6 +20,14 @@ export interface Look {
   eyes: string;
   /** How heavy his eyebrows are, 0..1. */
   brow: number;
+  /** How far his hairline has gone back at his temples, 0..1 (most men: none of the way). */
+  recede: number;
+  /** A notch shaved through the end of one eyebrow. */
+  notch: boolean;
+  /** Which side of him a part in his hair, or a notch in a brow, is on (1 his left). */
+  side: 1 | -1;
+  /** How his barber cuts it (0..1 each): how high the sides are taken down toward his skin, and how long it is left on top. */
+  cut: { sides: number; top: number };
   /**
    * His face's shape: how wide and how long his head is, his jaw's width and length, his nose's width and
    * how far it stands out (each about 1); then how heavy his brow's ridge is and how full his lips are
@@ -30,7 +40,10 @@ export interface Look {
 /** Eight tones of skin, lightest to darkest. */
 export const SKINS: readonly string[] = ['#e2b998', '#d6a986', '#c59876', '#b28462', '#986c4e', '#7e563e', '#66453a', '#503629'];
 
-/** How he may wear his hair (0 shaved). `piece` is hair that is a shape of its own on the model (figure.py), where a style has one. */
+/**
+ * How he may wear his hair (0 shaved). `piece` is hair that is a shape of its own on the model (figure.py), where a
+ * style has one. (New ones go on the end: a man's style is an index into this.)
+ */
 export const STYLES = [
   { name: 'shaved', piece: null },
   { name: 'buzz', piece: null },
@@ -45,6 +58,9 @@ export const STYLES = [
   { name: 'braids', piece: 'braids' },
   { name: 'crop', piece: null },
   { name: 'locs', piece: 'locs' },
+  { name: 'waves', piece: null },
+  { name: 'part', piece: null },
+  { name: 'mohawk', piece: null },
 ] as const;
 
 /** His beard (0 none). */
@@ -72,6 +88,9 @@ const BROWN = '#553a25';
 const LIGHT_BROWN = '#7a5a38';
 const BLOND = '#a8875a';
 const AUBURN = '#6a3520';
+/** What some men dye theirs: bleached, or nearly white. */
+const BLEACHED = '#b8925a';
+const PLATINUM = '#cfc2a4';
 
 /** Which colours of hair go with a tone of skin (the commoner ones more than once). */
 const HAIRS: readonly (readonly string[])[] = [
@@ -92,8 +111,10 @@ const TONE_SHARE = [0.08, 0.09, 0.1, 0.13, 0.16, 0.17, 0.15, 0.12];
  * How likely each style is (in STYLES' order), for straighter hair (the lighter tones) and for
  * tightly curled hair (the darker ones); the tones between mix the two.
  */
-const STRAIGHT = [0.07, 0.17, 0.22, 0.04, 0, 0, 0, 0.09, 0.09, 0, 0.02, 0.3, 0];
-const CURLED = [0.08, 0.15, 0.2, 0.12, 0.06, 0.07, 0.08, 0.01, 0.03, 0.05, 0.06, 0, 0.09];
+const STRAIGHT = [0.07, 0.13, 0.15, 0.05, 0, 0, 0, 0.09, 0.09, 0, 0.02, 0.27, 0, 0, 0.08, 0.03];
+const CURLED = [0.08, 0.1, 0.12, 0.12, 0.06, 0.07, 0.09, 0.01, 0.03, 0.05, 0.06, 0, 0.09, 0.08, 0.05, 0.03];
+/** The styles a man may dye (short hair and curls: not hair worn long, which is its own colour). */
+const DYED = ['buzz', 'fade', 'curls', 'twists', 'waves', 'mohawk', 'hightop'];
 const BEARD_SHARE = [0.28, 0.2, 0.17, 0.17, 0.1, 0.08];
 const EYES = ['#3b2516', '#2e1c11', '#4a2f1a', '#5b4426', '#56664a', '#4f6a80'];
 
@@ -128,21 +149,30 @@ export function lookOf(pid: number): Look {
   );
   const hairs = HAIRS[tone];
   const span = (salt: number, lo: number, hi: number) => lo + (hi - lo) * r(salt);
+  const own = hairs[Math.floor(r(3) * hairs.length) % hairs.length];
+  // (one man in sixteen or so has dyed what he can: bleached, now and then nearly white)
+  const dyed = DYED.includes(STYLES[style].name) && r(19) < 0.13 ? (r(20) < 0.7 ? BLEACHED : PLATINUM) : null;
   const kinds = Math.floor(r(14) * FACES.length) % FACES.length;
   const kind = FACES[kinds];
   return {
     skin: SKINS[tone],
-    hair: hairs[Math.floor(r(3) * hairs.length) % hairs.length],
+    hair: dyed ?? own,
+    brows: own,
     style,
     beard: pick(BEARD_SHARE, r(4)),
     tone,
     // (light eyes only with the lighter tones, and not often)
     eyes: EYES[tone < 2 && r(5) < 0.4 ? 4 + (r(6) < 0.5 ? 0 : 1) : Math.floor(r(6) * 4) % 4],
     brow: span(7, 0.35, 1),
+    // (most men's hairline is where it was; one in eight or so has gone back at the temples, a few a long way)
+    recede: r(21) < 0.12 ? span(22, 0.25, 0.8) : 0,
+    notch: r(23) < 0.07,
+    side: r(24) < 0.5 ? 1 : -1,
+    cut: { sides: r(25), top: r(26) },
     face: {
-      wide: kind.wide + span(8, -0.02, 0.02),
-      long: kind.long + span(9, -0.02, 0.02),
-      jaw: kind.jaw + span(10, -0.03, 0.03),
+      wide: kind.wide + span(8, -0.03, 0.03),
+      long: kind.long + span(9, -0.03, 0.03),
+      jaw: kind.jaw + span(10, -0.04, 0.04),
       chin: kind.chin + span(11, -0.04, 0.05),
       // (a broader nose and fuller lips go with a darker tone, loosely)
       nose: kind.nose * span(12, 0.9, 1.08) + tone * 0.022,

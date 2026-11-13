@@ -7,10 +7,15 @@
 // board and the report or the huddle; at the final buzzer it freezes under the final score.
 // Nothing sits over the court while the game plays: the call bar (live/CallBar.tsx) shows the running
 // call, the graphics, the one banner, the offers and the playback controls, one at a time.
+// A phone gets it sideways (live/turn.ts): the court fills the screen under a slim strip (the scorebug
+// and the call bar side by side), the bench bar is a rail at the right edge, and the console a drawer
+// that a view opens over the court (a stop opens it on the report or the huddle). Held upright, the
+// page is turned so the phone is turned too, unless Settings keep the upright layout.
 // The broadcast itself runs in useLiveGame (live/useLiveGame.ts); this screen draws it and makes the
 // coaching moves (live/coaching.ts). The game is a journal (state/live.ts): every move goes into it,
 // so the game picks up where it was after the app is closed.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { RotateCcw, Smartphone, X } from 'lucide-react';
 import { useStore } from '../../state/store';
 import { edit } from '../../state/actions';
 import { neutralSite, userGameOnDay } from '../../core/league/games';
@@ -27,10 +32,11 @@ import { canGoBack } from '../nav';
 import { sealedGame, simDecided, skipChoices } from '../live/skip';
 import { courtFloor } from '../live/Court';
 import { CourtView } from '../live/CourtView';
+import { occasionOf } from '../live/occasion';
 import { bodyOf } from '../live/court3d/puppet';
 import { drawnPlayer } from '../live/drawn';
 import { offPlan, resetToPlan } from '../live/pills';
-import { ScoreBug, gameContext } from '../live/ScoreBug';
+import { BugMore, ScoreBug, gameContext } from '../live/ScoreBug';
 import { TacticsPanel } from '../live/TacticsPanel';
 import { BoxPanel, type BoxTab } from '../live/BoxPanel';
 import { OppPlayer } from '../live/OppPlayer';
@@ -39,7 +45,7 @@ import { Lineup } from '../live/Lineup';
 import { Feed } from '../live/Feed';
 import { CallBar } from '../live/CallBar';
 import { BreakBoard } from '../live/BreakBoard';
-import { FinalFrame } from '../live/FinalFrame';
+import { FINAL_HOLD, FinalFrame } from '../live/FinalFrame';
 import { BenchBar, type ConsoleView } from '../live/BenchBar';
 import { StaffView } from '../live/StaffView';
 import { PlanView } from '../live/PlanView';
@@ -61,7 +67,11 @@ import { teamPlayers } from '../../core/league/helpers';
 import { breakStory, crowdLevel, currentRun, isClutch, RUN_MIN } from '../live/atmosphere';
 import { Crowd, clutchSlowAlways, setClutchSlowAlways } from '../live/Atmos';
 import { COACH_MARKS, CoachMark, coachMarksSeen, markCoachMarksSeen } from '../live/CoachMarks';
+import { lockSideways, unlockSideways, useLiveShape } from '../live/turn';
 import '../live/live.css';
+
+/** How long the turned page says to turn the phone (ms). */
+const TURN_HINT_MS = 4500;
 
 export default function Live() {
   const s = useLiveGame();
@@ -75,6 +85,29 @@ export default function Live() {
   const conRef = useRef<HTMLDivElement>(null);
   // a tap on the court brings the playback controls up in the call bar
   const [courtTap, setCourtTap] = useState(0);
+
+  // a phone: sideways (or turned so the phone is), or the upright layout; the console a drawer sideways
+  const onAir = status === 'live' || (status === 'final' && s.buzzer);
+  const shape = useLiveShape(league.settings.liveTurn, onAir);
+  const side = shape === 'side' || shape === 'turned';
+  const [drawer, setDrawer] = useState(false);
+  const setTurn = (to: 'side' | 'upright') => edit((l) => void (l.settings.liveTurn = to));
+  // turned: a word to turn the phone, for a moment; and where the screen can be locked sideways, it is
+  // (on the first touch: a lock needs one), and let go when the game is
+  const [hint, setHint] = useState(false);
+  useEffect(() => {
+    if (shape !== 'turned') return;
+    setHint(true);
+    const t = setTimeout(() => setHint(false), TURN_HINT_MS);
+    return () => clearTimeout(t);
+  }, [shape]);
+  const locked = useRef(false);
+  const tryLock = () => {
+    if (locked.current) return;
+    locked.current = true;
+    lockSideways();
+  };
+  useEffect(() => () => void (locked.current && unlockSideways()), []);
 
   const persist = !!game?.keep;
   // (each side's healthy players, best first: the 3D benches seat whoever of them is not on the floor)
@@ -178,10 +211,12 @@ export default function Live() {
 
   const huddling = s.huddling;
   const stop: 'break' | 'huddle' | null = s.atBreak ? 'break' : huddling ? 'huddle' : null;
-  // a stop opens on its report (or the huddle), at the top
+  // a stop opens on its report (or the huddle), at the top (sideways, the drawer opens for it, and
+  // closes again when play goes on)
   useEffect(() => {
-    if (!stop) return;
+    if (!stop) return setDrawer(false);
     setCview('staff');
+    setDrawer(true);
     conRef.current?.scrollTo({ top: 0 });
   }, [stop]);
 
@@ -234,6 +269,8 @@ export default function Live() {
   // ------------------------------------------------------------ the final: the result, the report, the next game
   // (a game watched to the buzzer holds on the frozen floor under the final score first: see FinalFrame below)
   const frozen = over && s.buzzer && status === 'final';
+  // (what the end is: the 3D picture celebrates it, and the frame holds longer for the bigger ones)
+  const occasion = frozen ? occasionOf(league, game.game, game.logs, view.sides[0].score > view.sides[1].score ? 0 : 1) : undefined;
   if (over && !frozen) {
     const final = status === 'final';
     return (
@@ -493,8 +530,9 @@ export default function Live() {
 
   return (
     <main
-      className={`page lv${atBreak ? ' at-break' : ''}${stop ? ' stopped' : ''}${stop || moreBench || frozen ? ' compact' : ''}${clutch ? ' clutch' : ''}${frozen ? ' at-final' : ''}`}
+      className={`page lv${atBreak ? ' at-break' : ''}${stop ? ' stopped' : ''}${stop || moreBench || frozen ? ' compact' : ''}${clutch ? ' clutch' : ''}${frozen ? ' at-final' : ''}${side ? ' side' : ''}${shape === 'turned' ? ' turned' : ''}${side && drawer && !frozen ? ' drawer' : ''}`}
       data-tip={tipUp ? COACH_MARKS[tip].at.join(' ') : undefined}
+      onPointerDown={shape === 'turned' ? tryLock : undefined}
     >
       {/* the scorebug is the visible title: screen readers get a heading to land on */}
       <h1 className="sr-only">
@@ -521,8 +559,10 @@ export default function Live() {
           clutch={clutch}
           keyPlays={s.keyPlays}
           onLeave={over ? undefined : leave}
+          slim={side}
+          shotClock={!stop && !s.intro && !frozen}
         >
-          {s.others.length > 0 && <ScoreTicker league={league} games={s.others} elapsed={view.elapsed} done={false} onOpen={() => setPanel('scores')} />}
+          {!side && s.others.length > 0 && <ScoreTicker league={league} games={s.others} elapsed={view.elapsed} done={false} onOpen={() => setPanel('scores')} />}
         </ScoreBug>
       </div>
 
@@ -594,7 +634,8 @@ export default function Live() {
       </div>
 
       {/* the court: nothing sits over it while the game plays but its own short labels (the call bar has the rest) */}
-      <div className="lv-stage" onClick={stop || frozen || s.intro ? undefined : () => setCourtTap((n) => n + 1)}>
+      {/* (sideways, a tap on the court with the drawer out puts the drawer away) */}
+      <div className="lv-stage" onClick={side && drawer && !frozen ? () => setDrawer(false) : stop || frozen || s.intro ? undefined : () => setCourtTap((n) => n + 1)}>
         <CourtView
           look={league.settings.courtLook ?? '3d'}
           onLook={(v) => edit((l) => void (l.settings.courtLook = v))}
@@ -609,7 +650,7 @@ export default function Live() {
           jersey={jersey}
           onDone={s.courtDone}
           onReached={s.courtReached}
-          onTick={(c, sc) => s.ticker.set(c, sc)}
+          onTick={(c, sc, shot) => s.ticker.set(c, sc, false, shot)}
           onBeat={s.beat.set}
           names={nameOf}
           abbrevs={[home.abbrev, away.abbrev]}
@@ -621,6 +662,7 @@ export default function Live() {
           idle={s.intro ? { kind: 'tip', fives: [view.sides[0].on, view.sides[1].on] } : atBreak ? { kind: 'chart', shots: view.box.shots ?? [] } : { kind: 'hold' }}
           clutch={clutch}
           final={frozen ? (view.sides[0].score > view.sides[1].score ? 0 : 1) : undefined}
+          occasion={occasion}
           label={
             frozen
               ? 'Court: the final buzzer.'
@@ -634,6 +676,38 @@ export default function Live() {
         {/* the building: the home crowd's glow around the floor (a neutral floor's crowd has no side) */}
         {!s.intro && !stop && !frozen && <Crowd level={crowd} color={neutral ? 'var(--accent)' : kits[0].color} clutch={clutch} />}
         {tipUp && <CoachMark step={tip} onNext={nextTip} />}
+        {/* a phone: the way to the other layout, in the court's corner; turned, a word to turn the phone */}
+        {(shape === 'turned' || shape === 'upright') && !frozen && !s.intro && (
+          <button
+            type="button"
+            className={`lv-turn${shape === 'upright' ? ' to-side' : ''}`}
+            data-turn-toggle=""
+            onClick={(e) => {
+              e.stopPropagation();
+              setTurn(shape === 'upright' ? 'side' : 'upright');
+            }}
+            aria-label={shape === 'upright' ? 'Watch sideways' : 'Keep the phone upright'}
+            title={shape === 'upright' ? 'Watch sideways' : 'Keep upright'}
+          >
+            <Smartphone size={16} aria-hidden="true" />
+          </button>
+        )}
+        {hint && shape === 'turned' && (
+          <div className="lv-turn-hint" role="status" onClick={(e) => e.stopPropagation()}>
+            <RotateCcw size={18} aria-hidden="true" />
+            <span>Turn your phone sideways</span>
+            <button
+              type="button"
+              className="lv-turn-keep"
+              onClick={() => {
+                setHint(false);
+                setTurn('upright');
+              }}
+            >
+              Keep upright
+            </button>
+          </div>
+        )}
         {s.intro && (
           <Intro
             league={league}
@@ -655,13 +729,25 @@ export default function Live() {
             score={[view.sides[0].score, view.sides[1].score]}
             label={view.q > 4 ? `Final · ${view.q === 5 ? 'OT' : `${view.q - 4}OT`}` : 'Final'}
             won={view.sides[userSide].score > view.sides[1 - userSide].score}
+            hold={occasion && (league.settings.courtLook ?? '3d') === '3d' ? FINAL_HOLD[occasion] : undefined}
             onDone={s.endBuzzer}
           />
         )}
       </div>
 
       <div className="lv-con" ref={conRef}>
-        {!stop && !frozen && (
+        {/* sideways: the drawer's head, with what the slim strip leaves out and the way to put it away */}
+        {side && (
+          <div className="lv-side-head">
+            <BugMore context={context} wpHome={wpHome} kits={kits} abbrevs={[home.abbrev, away.abbrev]} momentum={night?.momentum}>
+              {s.others.length > 0 && <ScoreTicker league={league} games={s.others} elapsed={view.elapsed} done={false} onOpen={() => setPanel('scores')} />}
+            </BugMore>
+            <button type="button" className="lv-side-x" onClick={() => setDrawer(false)} aria-label="Close the console">
+              <X size={20} aria-hidden="true" />
+            </button>
+          </div>
+        )}
+        {!side && !stop && !frozen && (
           <button
             className="lv-grab"
             onClick={() => edit((l) => void (l.settings.liveView = moreBench ? 'court' : 'bench'))}
@@ -677,9 +763,12 @@ export default function Live() {
       {!frozen && (
         <div className="lv-bar">
           <BenchBar
-            view={cview}
+            // (sideways, a view is on only while the drawer is out; the one that's on puts it away)
+            view={side && !drawer ? null : cview}
             onView={(v) => {
+              if (side && drawer && v === cview) return setDrawer(false);
               setCview(v);
+              if (side) setDrawer(true);
               conRef.current?.scrollTo({ top: 0 });
             }}
             calls={calls}

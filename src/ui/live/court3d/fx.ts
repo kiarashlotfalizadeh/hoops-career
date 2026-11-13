@@ -1,5 +1,6 @@
 // What goes off in the building at a big moment: cameras and phones flashing in the stands (a late free
-// throw, a dunk, the buzzer), confetti and streamers from the roof when the home side wins, and the
+// throw, a dunk, the buzzer), confetti and streamers from the roof for a title (in the champions' colours)
+// and a little of it when the home side wins a series, and the
 // light show while the house lights are down (the open, a timeout, a home win): the roof's spots
 // sweeping the floor, each a beam through the air, a pool of light where it lands and the lamp's own
 // glare. Each is one draw, made up in its shader from a time and a few numbers a piece: nothing is moved
@@ -136,6 +137,9 @@ export class Confetti {
   readonly mesh: InstancedMesh;
   private readonly t = { value: 0 };
   private readonly mat: MeshBasicMaterial;
+  /** How much of it comes down (a series' share of a title's), and a slow device's third of that. */
+  private much = 1;
+  private few = false;
 
   constructor(keep: Keep) {
     const geo = keep(new PlaneGeometry(0.36, 0.24));
@@ -165,7 +169,7 @@ export class Confetti {
     keep(this.mesh);
   }
 
-  /** The home side's colours, its second colour and white, a piece each in turn. */
+  /** The winners' colours, their second colour and white, a piece each in turn. */
   colours(fill: string, trim: string) {
     const c = new Color();
     const set = [fill, trim, '#f4f2ec', fill, '#d8d4c8'];
@@ -173,7 +177,14 @@ export class Confetti {
     this.mesh.instanceColor!.needsUpdate = true;
   }
 
-  /** The home side has won (ms since the buzzer; under 0: no win, nothing in the air). */
+  /** How much of it comes down this time (1: all of it). */
+  share(much: number) {
+    if (much === this.much) return;
+    this.much = much;
+    this.count();
+  }
+
+  /** It has been let go (ms since the buzzer; under 0: nothing in the air). */
   update(won: number, dim: number, calm: boolean) {
     const on = !calm && won >= CONFETTI_AFTER;
     this.mesh.visible = on;
@@ -184,7 +195,12 @@ export class Confetti {
 
   /** A device that can't keep up: a third of the pieces. */
   lite(on: boolean) {
-    this.mesh.count = on ? Math.floor(PIECES / 3) : PIECES;
+    this.few = on;
+    this.count();
+  }
+
+  private count() {
+    this.mesh.count = Math.floor((PIECES * this.much) / (this.few ? 3 : 1));
   }
 }
 
@@ -245,7 +261,7 @@ export class Streamers {
     keep(this.mesh);
   }
 
-  /** The home side's colours and white, a strip each in turn. */
+  /** The winners' colours and white, a strip each in turn. */
   colours(fill: string, trim: string) {
     const c = new Color();
     const set = [fill, '#f4f2ec', trim, fill];
@@ -253,7 +269,7 @@ export class Streamers {
     this.mesh.instanceColor!.needsUpdate = true;
   }
 
-  /** The home side has won (ms since the buzzer; under 0: no win, nothing in the air). */
+  /** They have been let go (ms since the buzzer; under 0: nothing in the air). */
   update(won: number, dim: number, calm: boolean) {
     const on = !calm && !this.off && won >= CONFETTI_AFTER;
     this.mesh.visible = on;

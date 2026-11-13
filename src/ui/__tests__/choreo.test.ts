@@ -1,12 +1,15 @@
 // The live court's keyframes: players (1.45 ft circles) shouldn't be drawn on top of each other, the
 // sets and defenses look like themselves, its score follows the scoreboard, timeouts name their caller
 // and the captions call the play.
-import { Scene } from 'three';
+import { PerspectiveCamera, Scene, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { FLOOR_L, FLOOR_W } from '../live/Court';
-import { attackDir, buildScript, captionAt, faceWorld, standing, toWorld, type Frame } from '../live/choreo';
+import { FLOOR_L, FLOOR_W, pose, type Stage } from '../live/Court';
+import { attackDir, BASKET, buildScript, captionAt, COURT_LEN, faceWorld, standing, toWorld, type Frame, type Pt, type Script, type Standing } from '../live/choreo';
+import { Director, REPLAY_GAP, type BigKind } from '../live/court3d/director';
+import { ballIn, Spacing, sunk } from '../live/court3d/spacing';
 import { blocked, CAM_KINDS, camKind, clearSeat, Operator, seen, shot, type View } from '../live/court3d/cameras';
-import { captured, CHANNELS, CLIPS, DUNK_AT, DUNKS, I, mirror, N, PASSES, sample, span } from '../live/court3d/clips';
+import { captured, CHANNELS, CLIPS, DUNK_AT, DUNKS, GESTURES, I, mirror, N, PASSES, sample, span } from '../live/court3d/clips';
+import { occasionOf } from '../live/occasion';
 import { figureGeo } from '../live/court3d/figure';
 import { readGlb } from '../live/court3d/glb';
 import arenaGlb from '../live/court3d/models/arena.glb?inline';
@@ -16,9 +19,12 @@ import { bouncePass, meets, planShot, RIM_H, shotAt, shotSpeed, spinFor, Spring,
 import { NET, NetSim } from '../live/court3d/net';
 import { BALL_R, baseClip, bodyOf, hash, HIP, J, Puppet } from '../live/court3d/puppet';
 import { House } from '../live/court3d/boards';
+import { ShotClock, shotText } from '../live/shotClock';
+import { createTicker } from '../live/ticker';
 import { Rig, unshadowed } from '../live/court3d/rig';
 import { lit, ROWS } from '../live/court3d/bowl';
 import type { PossLog, PossStep } from '../../core/sim/log';
+import type { League } from '../../core/types';
 import { createLeague, defaultSettings } from '../../core/league/create';
 import { teamPlayers } from '../../core/league/helpers';
 import { applyPatch } from '../../core/ai/lab';
@@ -56,6 +62,10 @@ const closest = (f: Frame) => {
   for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) min = Math.min(min, Math.hypot(all[i].x - all[j].x, all[i].y - all[j].y));
   return min;
 };
+
+/** At most this share of pairs of men a frame have trunks inside each other, and of frames a man's ball inside his own body (a real game, as the 3D court draws it: about 0.00007 and none; the ball was in 5% of frames before it was kept out). */
+const TRUNKS_MAX = 0.0002;
+const MINE_MAX = 0.005;
 
 const scores = (s: ReturnType<typeof buildScript>) => s.frames.filter((f) => f.score).map((f) => f.score);
 
@@ -365,6 +375,17 @@ describe('live court choreography', () => {
       at(s.frames.length, 690);
       expect(house.moment).toMatchObject({ call: 'timeout', side: 1 });
       expect(house.shot).toBe(14);
+      // the scorebug keeps its own shot clock off the same frames, and shows what the boards show
+      const bug = new ShotClock();
+      expect(bug.read(s, { i: 1, clock: 700 })).toBe(24);
+      expect(bug.read(s, { i: s.frames.length, clock: 690 })).toBe(house.shot);
+      expect([shotText(24), shotText(13.2), shotText(4.96), shotText(0.04)]).toEqual(['24', '14', '4.9', '0.0']);
+      // the ticker carries it to the scorebug; a jump (a skip, a break) leaves it off until the court plays on
+      const ticker = createTicker(720, [0, 0]);
+      ticker.set(700, [0, 0], false, 24);
+      expect(ticker.get().shot).toBe(24);
+      ticker.set(650, [2, 0], true);
+      expect(ticker.get()).toMatchObject({ clock: 650, score: [2, 0], shot: null });
     }
 
     // the caller of a real timeout named: the engine's step says whose it was
@@ -555,6 +576,10 @@ describe('live court choreography', () => {
       expect(calls).toEqual(['basket', 'andOne', 'free']);
       expect(house.line).toBe(true);
       expect(house.shot).toBeNull();
+      // (and the scorebug's, frame by frame, the same)
+      const bug = new ShotClock();
+      for (let i = 1; i <= s.frames.length; i++) bug.read(s, { i, clock: 40 - i });
+      expect(bug.line).toBe(true);
     }
 
     // a make as the clock runs out marked: at the buzzer, and the shot that wins it from behind in the 4th
@@ -894,6 +919,18 @@ describe('live court choreography', () => {
       expect(flights).toBeGreaterThan(1);
       hk.update({ x: 0, z: 0, yaw: 0, act: 'stand', ms: 0, dur: 500, ball: false, who: 9 }, 16);
       expect(hk.dribble).toBeNull();
+      // a catch into a dribble on the move: his hands go round the ball, from its sides to its top, they don't jump there
+      const cd = new Puppet(bodyOf(78, 215));
+      let jump = 0;
+      const hand = [0, 0, 0];
+      for (let t = 0; t < 900; t += 16) {
+        cd.update({ x: 0, z: t * 0.01, yaw: 0, act: t < 300 ? 'catch' : 'dribble', ms: t < 300 ? t : t - 300, dur: t < 300 ? 300 : 600, ball: true, who: 7 }, 16);
+        cd.arms(cd.bounced(cd.carry(out)));
+        const k = J.hl * 3;
+        if (t > 250 && t < 520) jump = Math.max(jump, Math.hypot(cd.j[k] - hand[0], cd.j[k + 1] - hand[1], cd.j[k + 2] - hand[2]));
+        [hand[0], hand[1], hand[2]] = [cd.j[k], cd.j[k + 1], cd.j[k + 2]];
+      }
+      expect(jump).toBeLessThan(0.4);
       // a hanging dunk keeps his hands on the ring for a beat after the slam
       const hg = new Puppet(bodyOf(78, 215));
       // (a man whose first dunk is that one)
@@ -961,17 +998,22 @@ describe('live court choreography', () => {
       // the ball with the play live is ready for it, not stood to attention, and he turns to a thing behind him as a body does
       const twin = [0, 1].map(() => new Puppet(bodyOf(78, 215)));
       let spin = 0;
+      let snap = 0;
+      let turned = 0;
       for (let t = 0; t < 1500; t += 16)
         for (const m of twin) {
           const before = m.yaw;
           m.update({ x: 0, z: 0, yaw: t < 700 ? 0 : 3, act: 'stand', ms: t, dur: 1500, ball: false, who: 41 }, 16);
           spin = Math.max(spin, Math.abs(m.yaw - before));
+          // (the turn gathers speed and gives it up over frames: it never starts or stops in one)
+          if (m === twin[0]) [snap, turned] = [Math.max(snap, Math.abs(m.yaw - before - turned)), m.yaw - before];
         }
       for (let i = 0; i < N; i++) expect(twin[0].pose[i]).toBe(twin[1].pose[i]);
       expect(twin[0].clip.startsWith('spot')).toBe(true);
       expect(twin[0].pose[I.hip]).toBeLessThan(-0.05);
       expect(Math.abs(twin[0].yaw - 3)).toBeLessThan(0.1);
       expect(spin).toBeLessThan(0.2);
+      expect(snap).toBeLessThan(0.04);
       // a dribble as the scene flies it: off the floor, and the palm on the ball as it leaves his hand and as it comes back
       const bd = new Puppet(bodyOf(78, 215));
       let flying = 1;
@@ -991,6 +1033,116 @@ describe('live court choreography', () => {
         flying = now;
       }
       expect(floorY).toBeLessThan(BALL_R + 0.2);
+    }
+
+    // the ten of a real game as the 3D court draws them (the plan's spots kept apart, then the bodies): no two trunks
+    // go into each other and no man's ball goes through his own head or legs (spacing.ts's shapes, as the motion lab
+    // measures whole games); two big men side by side are kept as far apart as their shoulders need, and two who meet
+    // (a box-out) are drawn body to body and no nearer
+    {
+      const lg = newLeague();
+      const sim = new GameSim(
+        { team: lg.teams[2], players: teamPlayers(lg, 2) },
+        { team: lg.teams[5], players: teamPlayers(lg, 5) },
+        { rng: new Rng(23), type: 'regular', record: true, injuries: false },
+      );
+      const plays: Script[] = [];
+      let before: [number, number] = [0, 0];
+      let left: { at: Standing; q: number } | undefined;
+      while (!sim.over && plays.length < 24) {
+        sim.step();
+        for (const l of sim.drainLogs()) {
+          const sc = buildScript(l, info, before, undefined, undefined, undefined, left?.q === l.q ? left.at : undefined);
+          before = [...l.score] as [number, number];
+          left = { at: standing(sc), q: l.q };
+          if (sc.frames.length) plays.push(sc);
+        }
+      }
+      const space = new Spacing();
+      const men = new Map<number, Puppet>();
+      const world = new Map<number, Float32Array>();
+      const [at, go, build] = [new Float32Array(20), new Float32Array(20), new Float32Array(30)];
+      const v = { x: 0, y: 0, z: 0 };
+      const scene = (p: Pt, dir: 1 | -1) => {
+        const w = toWorld(p, dir);
+        return { x: w.y - COURT_LEN / 2, z: -w.x };
+      };
+      let frames = 0;
+      let trunks = 0;
+      let mine = 0;
+      for (const sc of plays) {
+        const pids = [...sc.oPids, ...sc.dPids];
+        const total = sc.frames.reduce((n, f) => n + f.dur, 0);
+        const rim = scene(BASKET, sc.dir);
+        for (let t = 0; t <= total; t += 16) {
+          const play = pose(sc, t, false);
+          const carried = play.carried ? play.a.hold! : -1;
+          pids.forEach((pid, j) => {
+            const now = scene(j < 5 ? play.o[j] : play.d[j - 5], sc.dir);
+            const a = scene(j < 5 ? play.a.o[j] : play.a.d[j - 5], sc.dir);
+            const b = scene(j < 5 ? play.b.o[j] : play.b.d[j - 5], sc.dir);
+            [at[j * 2], at[j * 2 + 1], go[j * 2], go[j * 2 + 1]] = [now.x, now.z, b.x - a.x, b.z - a.z];
+            const m = men.get(pid);
+            const k = m ? m.body.s * Math.sqrt(m.body.bulk) : 1;
+            [build[j * 3], build[j * 3 + 1], build[j * 3 + 2]] = [1.12 * k, 0.48 * k, m?.placed ? m.yaw : NaN];
+          });
+          space.place(at, go, pids, 32, 16, t === 0, [], build);
+          frames++;
+          pids.forEach((pid, j) => {
+            let m = men.get(pid);
+            const pl = lg.players[pid];
+            if (!m) men.set(pid, (m = new Puppet(bodyOf(pl?.heightIn ?? 78, pl?.weightLb ?? 215, pl?.ratings.str))));
+            const act = play.b.act[j];
+            const aimed = act === 'layup' || act === 'dunk' || act === 'floater' || act === 'jumper' || act === 'release';
+            m.update(
+              {
+                x: at[j * 2],
+                z: at[j * 2 + 1],
+                yaw: Math.PI - faceWorld(play.b.face[j], sc.dir),
+                act,
+                ms: play.ms,
+                dur: play.dur,
+                ball: j === carried,
+                aim: aimed ? rim : undefined,
+                cut: t === 0,
+                who: pid,
+              },
+              16,
+              32,
+              16,
+            );
+            let w = world.get(pid);
+            if (!w) world.set(pid, (w = new Float32Array(45)));
+            for (let q = 0; q < 15; q++) {
+              m.world(m.j[q * 3], m.j[q * 3 + 1], m.j[q * 3 + 2], v);
+              [w[q * 3], w[q * 3 + 1], w[q * 3 + 2]] = [v.x, v.y, v.z];
+            }
+            if (j === carried && ballIn(m.bounced(m.carry(v)), w, m.body.s, m.body.bulk, BALL_R, false) > 0.1) mine++;
+          });
+          for (let i = 0; i < 10; i++)
+            for (let j = i + 1; j < 10; j++) {
+              const [a, b] = [men.get(pids[i])!, men.get(pids[j])!];
+              if (sunk(world.get(pids[i])!, a.body.s, a.body.bulk, world.get(pids[j])!, b.body.s, b.body.bulk, false) > 0.1) trunks++;
+            }
+        }
+      }
+      expect(frames).toBeGreaterThan(3000);
+      expect(trunks / (frames * 45)).toBeLessThan(TRUNKS_MAX);
+      expect(mine / frames).toBeLessThan(MINE_MAX);
+      // (two big men side by side, the plan a shoulder's width too near: kept apart by their shoulders; two who meet, touching)
+      const pair = new Spacing();
+      const two = new Float32Array([0, 0, 2.3, 0, 9, 9]);
+      for (let k = 0; k < 30; k++) {
+        two.set([0, 0, 2.3, 0, 9, 9]);
+        pair.place(two, new Float32Array(6), [1, 2, 3], 16, 16, false, [], new Float32Array([1.35, 0.55, 0, 1.35, 0.55, 0, 1.1, 0.5, 0]));
+      }
+      expect(two[2] - two[0]).toBeGreaterThan(2.7);
+      for (let k = 0; k < 30; k++) {
+        two.set([0, 0, 0, 2.9, 9, 9]);
+        pair.place(two, new Float32Array(6), [1, 2, 3], 16, 16, false, [{ i: 0, j: 1, w: 1, near: 1.25, share: 0.5 }], new Float32Array([1.1, 0.5, 0, 1.1, 0.5, 0, 1.1, 0.5, 0]));
+      }
+      expect(Math.hypot(two[2] - two[0], two[3] - two[1])).toBeCloseTo(1.25, 1);
+      expect([two[4], two[5]]).toEqual([9, 9]);
     }
 
     // the cameras that follow the play (cameras.ts): each of the five, in a wide frame and a phone's
@@ -1062,6 +1214,173 @@ describe('live court choreography', () => {
       expect(blocked(0, 0, 0, 22, inTheWay, 3)).toBe(true);
       clearSeat(40, 0, Math.PI / 2, [], 0, 22, seat);
       expect(Math.abs(seat.z)).toBeGreaterThan(4);
+    }
+    // an instant replay (director.ts) keeps its outcome in the picture, clear of the lower third and the Replay bug, from
+    // whichever camera: the man with the ball at its moment (a block's shooter and blocker before it, an and-one's foul),
+    // the ball's flight and the basket from the release until the ball is out of the net; a shot from range is seen from
+    // behind the shooter; and the picture never jumps. Drawn on stand-ins for the scene's bodies and ball
+    {
+      const MID = COURT_LEN / 2;
+      const PACE = 0.5;
+      const STEP = 1000 / 60;
+      const RANK: Record<BigKind, number> = { winner: 6, buzzer: 5, and1: 4.5, dunk: 4, three: 2, block: 1 };
+      const on = (p: Pt, sc: Script) => ({ x: toWorld(p, sc.dir).y - MID, z: -toWorld(p, sc.dir).x });
+      const startOf = (sc: Script, k: number) => sc.frames.slice(1, k).reduce((t, f) => t + f.dur, 0);
+      // the big play of each possession of four real games, as the scene notes it
+      const bigs: { sc: Script; k: number; kind: BigKind; star: number; shooter: number; fouler: number }[] = [];
+      const league = newLeague();
+      for (const [h, a, seed] of [
+        [0, 1, 5],
+        [2, 3, 7],
+        [4, 9, 11],
+        [6, 8, 13],
+      ]) {
+        const sim = new GameSim(
+          { team: league.teams[h], players: teamPlayers(league, h) },
+          { team: league.teams[a], players: teamPlayers(league, a) },
+          { rng: new Rng(seed), type: 'regular', record: true, injuries: false },
+        );
+        while (!sim.over) {
+          sim.step();
+          for (const l of sim.drainLogs()) {
+            const sc = buildScript(l, info);
+            let best: (typeof bigs)[number] | null = null;
+            for (let k = 1; k < sc.frames.length; k++) {
+              const [g, f, nx] = [sc.frames[k - 1], sc.frames[k], sc.frames[k + 1]];
+              const shooter = g.hold ?? -1;
+              const kind: BigKind | null =
+                shooter < 0
+                  ? null
+                  : f.swat !== undefined
+                    ? 'block'
+                    : f.fx === 'make' && g.act[shooter] !== 'ft'
+                      ? (sc.moment ?? (nx?.flash?.text === 'And one!' ? 'and1' : g.act[shooter] === 'dunk' ? 'dunk' : f.flash?.text === '+3' ? 'three' : null))
+                      : null;
+              if (kind && (!best || RANK[kind] > RANK[best.kind]))
+                best = { sc, k, kind, star: kind === 'block' ? f.swat! : shooter, shooter, fouler: kind === 'and1' ? (nx.foul ?? -1) : -1 };
+            }
+            if (best) bigs.push(best);
+          }
+        }
+      }
+      // (inside the picture, and off what the lower third and the bug cover of it, px)
+      const safe = (p: Vector3, w: number, h: number) =>
+        p.z < 1 && Math.abs(p.x) < 0.97 && Math.abs(p.y) < 0.96 && !(p.x < -1 + 524 / w && p.y < -1 + 124 / h) && !(p.x < -1 + 200 / w && p.y > 1 - 72 / h);
+      let [reels, kept, behind, turned, zoomed] = [0, 0, 0, 0, 0];
+      const missed: string[] = [];
+      // as a desktop and a phone show it
+      for (const [w, h] of [
+        [820, 436],
+        [375, 288],
+      ]) {
+        const d = new Director();
+        const cam = new PerspectiveCamera(30, w / h, 0.3, 500);
+        const [fwd, was] = [new Vector3(), new Vector3()];
+        for (const b of bigs) {
+          const { sc, k } = b;
+          const live: Stage = { script: sc, play: pose(sc, 1e9, false), standers: [], ball: null };
+          d.feed(live, REPLAY_GAP * PACE, REPLAY_GAP, REPLAY_GAP, false);
+          const pids = [...sc.oPids, ...sc.dPids];
+          d.note(sc, k, b.kind, pids[b.star], b.star < sc.oPids.length ? sc.off : ((1 - sc.off) as 0 | 1));
+          if (!d.start(sc)) continue;
+          const nO = sc.oPids.length;
+          const rim = on(BASKET, sc);
+          const [g, fk] = [sc.frames[k - 1], sc.frames[k]];
+          const rel = startOf(sc, k);
+          const dunk = g.act[b.shooter] === 'dunk';
+          const at = rel + fk.dur * (b.kind === 'block' ? 0.32 : 0.86);
+          // where a man is at `t`, up for his shot or his block and down again
+          const man = (t: number, j: number) => {
+            const pl = pose(sc, t, false);
+            const up = j === b.shooter || j === b.star ? (dunk ? 3.2 : j === b.star && b.kind === 'block' ? 2.4 : 1.6) : 0;
+            const [s0, s1] = [rel - g.dur * 0.5, rel + fk.dur * (dunk ? 0.6 : 0.35)];
+            return { ...on(j < nO ? pl.o[j] : pl.d[j - nO], sc), y: t > s0 && t < s1 ? up * Math.sin((Math.PI * (t - s0)) / (s1 - s0)) : 0 };
+          };
+          // the ball: in the hands that have it, up into the shot, thrown as the scene throws it (ballistics.ts), slammed
+          // through the rim, or off the blocker's hand
+          const from = { ...on(g.o[b.shooter] ?? g.ball, sc), y: dunk ? 9.6 : 8.6 };
+          const flight = planShot({ from, rim, kind: g.act[b.shooter] === 'layup' ? 'layup' : 'jumper', made: true, secs: fk.dur / 1000 / PACE, next: null, r: [0.3, 0.6, 0.4] });
+          const hand = b.kind === 'block' ? { ...on(fk.d[b.star - nO], sc), y: 9.4 } : from;
+          const fall = (p: { x: number; y: number; z: number }, vx: number, vy: number, vz: number, s: number) =>
+            new Vector3(p.x + vx * s, Math.max(0.4, p.y + vy * s - 16 * s * s), p.z + vz * s);
+          const ballAt = (t: number) => {
+            const pl = pose(sc, t, false);
+            const secs = (ms: number) => (t - rel - ms) / 1000 / PACE;
+            if (t < rel) {
+              if (!pl.carried) return new Vector3(on(pl.ball, sc).x, 4, on(pl.ball, sc).z);
+              const m = man(t, pl.a.hold!);
+              return new Vector3(m.x, m.y + (pl.i === k - 1 && pl.a.hold === b.shooter ? 4 + (from.y - 4) * Math.min(1, pl.ms / pl.dur) : 3.6), m.z);
+            }
+            const u = (t - rel) / fk.dur;
+            if (b.kind === 'block') {
+              if (u < 0.32) return new Vector3(from.x, from.y, from.z).lerp(new Vector3(hand.x, hand.y, hand.z), u / 0.32);
+              const l = Math.hypot(hand.x - from.x, hand.z - from.z) || 1;
+              return fall(hand, ((hand.x - from.x) / l) * 16, 2, ((hand.z - from.z) / l) * 16, secs(0.32 * fk.dur));
+            }
+            if (dunk) {
+              const m = man(t, b.shooter);
+              const v = Math.min(1, (t - rel) / 90);
+              return t - rel < 90
+                ? new Vector3(m.x + (rim.x - m.x) * v, from.y + (RIM_H - 0.2 - from.y) * v, m.z + (rim.z - m.z) * v)
+                : fall({ ...rim, y: RIM_H - 0.2 }, 0, -17, 0, secs(90));
+            }
+            if (u <= 1) return Object.assign(new Vector3(), shotAt(flight, u, { x: 0, y: 0, z: 0 }));
+            const [end, v] = [shotAt(flight, 1, { x: 0, y: 0, z: 0 }), shotSpeed(flight, 1, { x: 0, y: 0, z: 0 })];
+            return fall(end, v.x * 0.3, v.y, v.z * 0.3, secs(fk.dur));
+          };
+          let [ok, moment, look, fov] = [true, false, '', 0];
+          for (let f = 0; f < 4000 && d.phase !== 'off'; f++) {
+            d.feed(live, STEP * PACE, STEP, STEP, false);
+            const r = d.reel;
+            if (!d.onAir || !r) continue;
+            const t = r.t;
+            const m = man(t, b.star);
+            const [chest, head, ball] = [{ x: m.x, y: 4.5 + m.y, z: m.z }, { x: m.x, y: 6.4 + m.y, z: m.z }, ballAt(t)];
+            d.aimReel(cam, chest, head, ball, w / h, STEP, h);
+            cam.updateMatrixWorld();
+            cam.getWorldDirection(fwd);
+            // (the same look from one frame to the next turns and zooms as an operator does, never at once)
+            if (look === `${r.cam}${r.t0}` && r.swap < 0) {
+              turned = Math.max(turned, (fwd.angleTo(was) * 180) / Math.PI);
+              zoomed = Math.max(zoomed, Math.abs(cam.fov - fov));
+            }
+            [look, fov] = [`${r.cam}${r.t0}`, cam.fov];
+            was.copy(fwd);
+            if (r.swap >= 0) continue;
+            const see = (what: string, x: number, y: number, z: number) => {
+              if (safe(new Vector3(x, y, z).project(cam), w, h)) return;
+              if (ok) missed.push(`${b.kind} ${r.cam} ${w}px: ${what} at ${(t - rel).toFixed(0)} ms`);
+              ok = false;
+            };
+            if (b.kind !== 'block' && t >= rel && t <= r.t1) {
+              if (t < (dunk ? rel + 90 : at) || ball.y >= 6) see('ball', ball.x, ball.y, ball.z);
+              see('rim', rim.x, RIM_H, rim.z);
+            }
+            if (b.kind === 'block' && t < at) {
+              const s = man(t, b.shooter);
+              see('shooter', s.x, 5 + s.y, s.z);
+              see('blocker', chest.x, chest.y, chest.z);
+            }
+            if (!moment && t >= at) {
+              moment = true;
+              see('man', chest.x, chest.y, chest.z);
+              see('head', head.x, head.y, head.z);
+              if (b.kind === 'block') see('ball', ball.x, ball.y, ball.z);
+              if (b.fouler >= 0) see('foul', man(t, b.fouler).x, 5, man(t, b.fouler).z);
+            }
+            // (over his shoulder: behind him, the rim past him)
+            if (r.back && t === r.t0 && Math.hypot(r.seat.x - rim.x, r.seat.z - rim.z) > Math.hypot(from.x - rim.x, from.z - rim.z)) behind++;
+          }
+          d.end();
+          reels++;
+          if (ok) kept++;
+        }
+      }
+      expect(reels).toBeGreaterThan(300);
+      expect(kept / reels, missed.slice(0, 6).join('; ')).toBeGreaterThanOrEqual(0.99);
+      expect(behind).toBeGreaterThan(20);
+      expect(turned).toBeLessThan(8);
+      expect(zoomed).toBeLessThan(3);
     }
     // the ball's flight: every shot starts in the hand, a make ends under the net and a miss never goes down through the
     // ring, whichever way it ends; a jumper spins back; the rim rings and comes to rest
@@ -1175,6 +1494,33 @@ describe('live court choreography', () => {
       let off = 0;
       for (let i = 0; i < rest.length; i++) off = Math.max(off, Math.abs(net.at[i] - rest[i]));
       expect(off).toBeLessThan(0.2);
+    }
+
+    // the end of a game: what kind of win it is (the 3D court celebrates each its own way)
+    {
+      const at = (q: number, clockEnd: number, score: [number, number]): PossLog => ({ ...log([]), q, clockEnd, score });
+      const logs = [at(1, 600, [2, 0]), at(4, 30, [98, 99]), at(4, 4, [100, 99])];
+      const lg = { playoffs: [{ id: 's', round: 2, conf: 'E', high: 0, low: 1, highSeed: 1, lowSeed: 8, highWins: 2, lowWins: 1 }] as League['playoffs'] };
+      expect(occasionOf(lg, { type: 'regular' }, logs, 0)).toBe('late');
+      // (the lead taken with half a minute left, or a lead kept from the start, is just a win)
+      expect(occasionOf(lg, { type: 'regular' }, [at(1, 600, [2, 0]), at(4, 30, [100, 99])], 0)).toBe('win');
+      expect(occasionOf(lg, { type: 'regular' }, logs, 1)).toBe('win');
+      expect(occasionOf(lg, { type: 'playoffs', seriesId: 's' }, logs.slice(0, 2), 1)).toBe('playoff');
+      lg.playoffs[0].highWins = 4;
+      lg.playoffs[0].winner = 0;
+      expect(occasionOf(lg, { type: 'playoffs', seriesId: 's' }, logs, 0)).toBe('clinch');
+      lg.playoffs[0].round = 4;
+      expect(occasionOf(lg, { type: 'playoffs', seriesId: 's' }, logs, 0)).toBe('title');
+      expect(occasionOf(lg, { type: 'cup', cup: 'final' }, logs, 1)).toBe('title');
+      // (its moves: down on his knees and sat on the floor are off his feet, below a crouch; a handshake reaches out at the waist)
+      const pose = (id: 'kneel' | 'floor' | 'crouch' | 'hug') => sample(CLIPS[id], 0.3, new Float32Array(N));
+      expect(pose('kneel')[I.air]).toBe(1);
+      expect(pose('floor')[I.hip]).toBeLessThan(pose('kneel')[I.hip]);
+      expect(pose('kneel')[I.hip]).toBeLessThan(pose('crouch')[I.hip] + 0.1);
+      expect(pose('hug')[I.lz]).toBeGreaterThan(0.6);
+      const shake = sample(GESTURES.shake, 480, new Float32Array(N));
+      expect(shake[I.rz]).toBeGreaterThan(1);
+      expect(shake[I.ry]).toBeLessThan(-0.5);
     }
   });
 });

@@ -1,11 +1,15 @@
 // The live scorebug, the broadcast's ink bar over the court. Its top line has the way out and what's
 // at stake; under it each team's block in its colour for the night (its name, the ball beside the team
 // that has it, timeouts left and team fouls, both labelled), the scores in the condensed black cut,
-// and between them the period and the clock on their plate with the run on now under it; then the
-// sliver of each team's chance to win, and the night's other scores (`children`). The clock and the
-// score follow the court as it animates them (`ticker`); everything else is as of the possession the
-// court last finished drawing (`view`). A basket pops its team's figure; clutch time turns the clock's
-// plate to the brand's red and says so. Every team colour is the kit's (teamColors.matchKits).
+// and between them the period and the clock on their plate, the shot clock beside it, and the run on
+// now under them; then the sliver of each team's chance to win (`WinBar`), and the night's other
+// scores (`children`). On a phone held sideways it is a slim strip (`slim`): the way out, the blocks,
+// the scores and the clocks; what's at stake, the win bar and the other scores go to the console's
+// drawer (`BugMore`). The clocks and the score follow the court as it animates them (`ticker`; the
+// shot clock is the same one the arena's boards show, shotClock.ts); everything else is as of the
+// possession the court last finished drawing (`view`). A basket pops its team's figure; clutch time
+// turns the clock's plate to the brand's red and says so; under five the shot clock shows tenths in
+// the warning colour. Every team colour is the kit's (teamColors.matchKits).
 import { useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import { ChevronLeft, Zap } from 'lucide-react';
 import type { League, ScheduledGame, Team } from '../../core/types';
@@ -16,6 +20,7 @@ import { fmtClock, periodLabel } from '../stats';
 import type { MatchKit } from '../teamColors';
 import type { Drawn } from './drawn';
 import type { Ticker } from './ticker';
+import { SHOT_WARN, shotText } from './shotClock';
 import { useChanged } from '../motion';
 
 /** A run this long gets a line under the clock. */
@@ -111,6 +116,8 @@ export function ScoreBug({
   clutch,
   keyPlays,
   onLeave,
+  slim,
+  shotClock = true,
   children,
 }: {
   ticker: Ticker;
@@ -139,8 +146,12 @@ export function ScoreBug({
   children?: ReactNode;
   /** The way out: the game waits where it is, to be resumed from the Continue bar or its Matchup page. */
   onLeave?: () => void;
+  /** A phone held sideways: one slim strip (no top line, run, win bar or bottom line: see BugMore). */
+  slim?: boolean;
+  /** The shot clock may show (not before the tip, at a stop or at the final). */
+  shotClock?: boolean;
 }) {
-  const { clock, score } = useSyncExternalStore(ticker.subscribe, ticker.get);
+  const { clock, score, shot } = useSyncExternalStore(ticker.subscribe, ticker.get);
   const qLabel = periodLabel(quarter);
   const brk = !!atBreak;
   const tight = !!clutch && !brk;
@@ -166,6 +177,11 @@ export function ScoreBug({
       : `end of ${qLabel}`
     : `${qLabel} ${fmtClock(clock)}${tight ? ', clutch time' : ''}${has !== null ? `, ${(has === 0 ? home : away).abbrev} ball` : ''}${bonus.length ? `, ${bonus.join(' and ')} in the bonus` : ''}${run ? `, ${run.abbrev} on a ${run.a}-${run.b} run` : ''}${mo ? `, momentum ${moHome ? home.abbrev : away.abbrev}` : ''}`;
   const wp = wpHome !== undefined ? Math.min(1, Math.max(0, wpHome)) : null;
+  // the shot clock beside the game clock while the game plays: its room is kept while it is off (at the
+  // line, the game clock under it), so the clock never moves; a stop has none (screen readers aren't
+  // told it every second: the bug's label leaves it out)
+  const shotRoom = shotClock && !brk;
+  const shotOn = shotRoom && shot !== null;
 
   // a team's half: its block (name, the ball, timeouts left, team fouls this period), then its score on
   // the ink with "Bonus" under it when it shoots free throws on every foul from here
@@ -194,12 +210,20 @@ export function ScoreBug({
     );
   };
 
+  const leaveLabel = 'Leave the game. It waits here: resume it from Continue.';
   return (
-    <div className={`lv-lb${tight ? ' clutch' : ''}${brk ? ' brk' : ''}`}>
-      {/* its top line: the way out on the left, what's at stake (or that it's live) in the middle */}
-      {onLeave ? (
+    <div className={`lv-lb${tight ? ' clutch' : ''}${brk ? ' brk' : ''}${slim ? ' slim' : ''}`}>
+      {/* its top line: the way out on the left, what's at stake (or that it's live) in the middle;
+          the slim strip keeps only the way out, at its start */}
+      {slim ? (
+        onLeave && (
+          <button type="button" className="lv-lb-leave icon" onClick={onLeave} aria-label={leaveLabel}>
+            <ChevronLeft size={20} aria-hidden="true" />
+          </button>
+        )
+      ) : onLeave ? (
         <div className="lv-lb-top has-leave">
-          <button type="button" className="lv-lb-leave" onClick={onLeave} aria-label="Leave the game. It waits here: resume it from Continue.">
+          <button type="button" className="lv-lb-leave" onClick={onLeave} aria-label={leaveLabel}>
             <ChevronLeft size={15} aria-hidden="true" /> Leave
           </button>
           <span className={`lv-lb-ctx ellipsis${context ? '' : ' live'}`}>{context ?? 'Live'}</span>
@@ -222,33 +246,82 @@ export function ScoreBug({
         aria-label={`${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}, ${state}${wp !== null ? `. ${home.abbrev}: ${oddsWord(wp)}` : ''}`}
       >
         {side(away, a, 1)}
-        <div className="lv-lb-mid" aria-hidden="true">
+        <div className={`lv-lb-mid${shotRoom ? ' has-shot' : ''}`} aria-hidden="true">
           <span className="lv-lb-q">
             {brk ? 'Break' : qLabel}
             {tight && <span className="lv-lb-clutch">Clutch</span>}
           </span>
+          {shotRoom && <span className={`lv-lb-sk${shotOn ? '' : ' off'}`}>Shot</span>}
           <span className="lv-lb-plate num">{brk ? (quarter === 2 ? 'Half' : `End ${qLabel}`) : fmtClock(clock)}</span>
-          <span className="lv-lb-run num">
-            {runShown && (
-              <span key={`${runShown.abbrev}-${runShown.a}`} className={run ? undefined : 'out'}>
-                {keepFigures(`${runShown.abbrev} ${runShown.a}-${runShown.b} run`)}
-              </span>
-            )}
-          </span>
+          {shotRoom && <span className={`lv-lb-shot num${shotOn ? '' : ' off'}${shotOn && shot < SHOT_WARN ? ' warn' : ''}`}>{shotOn ? shotText(shot) : ''}</span>}
+          {!slim && (
+            <span className="lv-lb-run num">
+              {runShown && (
+                <span key={`${runShown.abbrev}-${runShown.a}`} className={run ? undefined : 'out'}>
+                  {keepFigures(`${runShown.abbrev} ${runShown.a}-${runShown.b} run`)}
+                </span>
+              )}
+            </span>
+          )}
         </div>
         {side(home, h, 0)}
       </div>
-      {wp !== null && (
-        <div className="lv-lb-wp" aria-hidden="true">
-          <span className="lv-lb-wp-k">To win</span>
-          <span className="lv-lb-wp-ab num">{away.abbrev}</span>
-          <span className={`lv-lb-wp-bar${mo ? ` mo-${mo} ${moHome ? 'mo-home' : 'mo-away'}` : ''}`}>
-            <i className="away" style={{ '--wp': 1 - wp, background: kits[1].night } as CSSProperties} />
-            <i className="home" style={{ '--wp': wp, background: kits[0].night } as CSSProperties} />
-          </span>
-          <span className="lv-lb-wp-ab num">{home.abbrev}</span>
+      {!slim && wp !== null && <WinBar wp={wp} kits={kits} abbrevs={[home.abbrev, away.abbrev]} momentum={momentum} />}
+      {!slim && children}
+    </div>
+  );
+}
+
+/**
+ * The sliver of each team's chance to win, in the kits' colours as they read on ink: away on the left,
+ * home on the right, as the scores sit; the side with the momentum (−1 away .. 1 home) stands thicker.
+ */
+export function WinBar({ wp, kits, abbrevs, momentum = 0 }: { wp: number; kits: [MatchKit, MatchKit]; abbrevs: [string, string]; momentum?: number }) {
+  // the side with the momentum, and how strongly (0 none, 1, 2 surging)
+  const mo = Math.abs(momentum) >= 0.55 ? 2 : Math.abs(momentum) >= 0.3 ? 1 : 0;
+  return (
+    <div className="lv-lb-wp" aria-hidden="true">
+      <span className="lv-lb-wp-k">To win</span>
+      <span className="lv-lb-wp-ab num">{abbrevs[1]}</span>
+      <span className={`lv-lb-wp-bar${mo ? ` mo-${mo} ${momentum > 0 ? 'mo-home' : 'mo-away'}` : ''}`}>
+        <i className="away" style={{ '--wp': 1 - wp, background: kits[1].night } as CSSProperties} />
+        <i className="home" style={{ '--wp': wp, background: kits[0].night } as CSSProperties} />
+      </span>
+      <span className="lv-lb-wp-ab num">{abbrevs[0]}</span>
+    </div>
+  );
+}
+
+/**
+ * What the slim strip leaves out, at the head of the console's drawer (a phone held sideways): what's
+ * at stake, the win bar and the night's other scores (`children`), on the bug's ink. Nothing to show: nothing.
+ */
+export function BugMore({
+  context,
+  wpHome,
+  kits,
+  abbrevs,
+  momentum,
+  children,
+}: {
+  context?: string;
+  wpHome?: number;
+  kits: [MatchKit, MatchKit];
+  /** [home, away]. */
+  abbrevs: [string, string];
+  momentum?: number;
+  children?: ReactNode;
+}) {
+  const wp = wpHome !== undefined ? Math.min(1, Math.max(0, wpHome)) : null;
+  if (!context && wp === null && !children) return null;
+  return (
+    <div className="lv-lb more">
+      {context && (
+        <div className="lv-lb-top">
+          <span className="lv-lb-ctx ellipsis">{context}</span>
         </div>
       )}
+      {wp !== null && <WinBar wp={wp} kits={kits} abbrevs={abbrevs} momentum={momentum} />}
       {children}
     </div>
   );

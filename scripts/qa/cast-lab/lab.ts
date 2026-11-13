@@ -10,8 +10,9 @@
 //   lab.watch({ k, n, cam, speed, calm })   the same, not drawn: how long each camera had the picture (ms), the
 //       cuts (and where each camera but the main one came on), the replays, and the most the main camera's aim
 //       moved in a frame (degrees)
+//   lab.faces({ k, tip, w, h, cols, dist, fov, turn, low, pids })   each of the ten up close in the game's light (see faces)
 //   ?seed=n&home=n&away=n&league=n picks the game.
-import type { PerspectiveCamera } from 'three';
+import { PerspectiveCamera } from 'three';
 import { createLeague, defaultSettings } from '../../../src/core/league/create';
 import { teamPlayers } from '../../../src/core/league/helpers';
 import { composites } from '../../../src/core/ratings';
@@ -20,7 +21,9 @@ import { GameSim } from '../../../src/core/sim/engine';
 import { buildScript, standing, type Script, type Standing } from '../../../src/ui/live/choreo';
 import { emptyStage, paintFloor, pose as poseAt, readPaints, type CourtFloor, type Stage } from '../../../src/ui/live/Court';
 import type { CamKind } from '../../../src/ui/live/court3d/cameras';
-import { bodyOf } from '../../../src/ui/live/court3d/puppet';
+import { settleHeads, type Fig } from '../../../src/ui/live/court3d/figure';
+import { BEARDS, FACES, STYLES } from '../../../src/ui/live/court3d/look';
+import { bodyOf, J } from '../../../src/ui/live/court3d/puppet';
 import { CourtScene, loadModels, type Labels } from '../../../src/ui/live/court3d/scene';
 import { matchKits } from '../../../src/ui/teamColors';
 
@@ -344,5 +347,58 @@ function watch({ k = 0, n = 20, cam = 'tv' as CamKind, speed = 1, calm = false, 
   return { real: Math.round(real), cuts, reels, worstTurnDeg: Math.round(worst * 100) / 100, on, log };
 }
 
-(window as unknown as { lab: unknown }).lab = { scripts, find, film, watch, scene, winner, teams };
+/**
+ * The cast up close, in the game's own light: the ten lined up for the tip (`tip` ms of it, so each is where the
+ * page would have him), then each man's head and shoulders as a close-up has him, from in front of him and a
+ * little to one side (`turn`, degrees), `dist` ft off, `fov` degrees. Into #strip, a cell a man.
+ */
+function faces({
+  k = 0,
+  tip = 1500,
+  w: cw = 420,
+  h: ch = 480,
+  cols = 5,
+  dist = 4.2,
+  fov = 20,
+  turn = 18,
+  low = 0.15,
+  pids,
+}: { k?: number; tip?: number; w?: number; h?: number; cols?: number; dist?: number; fov?: number; turn?: number; low?: number; pids?: number[] } = {}) {
+  scene.size(cw, ch, 1);
+  run({ k, n: 0, cam: 'tv', speed: 1, calm: true, replays: false, tip, final: 0 }, () => true);
+  settleHeads();
+  run({ k, n: 0, cam: 'tv', speed: 1, calm: true, replays: false, tip: 50, final: 0 }, () => true);
+  const figs = (scene as unknown as { figs: Map<number, Fig> }).figs;
+  const cam = new PerspectiveCamera(fov, cw / ch, 0.3, 400);
+  const who = pids ?? [...figs.keys()];
+  const strip = document.getElementById('strip') as HTMLCanvasElement;
+  strip.width = Math.min(cols, who.length) * cw;
+  strip.height = Math.ceil(who.length / cols) * ch;
+  const g = strip.getContext('2d')!;
+  const out: string[] = [];
+  who.forEach((pid, i) => {
+    const f = figs.get(pid);
+    if (!f) return;
+    const p = f.pup;
+    const j = p.j;
+    const head = p.world(j[J.head * 3], j[J.head * 3 + 1], j[J.head * 3 + 2], { x: 0, y: 0, z: 0 });
+    const t = (turn * Math.PI) / 180;
+    const fx = p.front.x * Math.cos(t) + p.left.x * Math.sin(t);
+    const fz = p.front.z * Math.cos(t) + p.left.z * Math.sin(t);
+    const ahead = p.world(j[J.head * 3] + fx * dist, j[J.head * 3 + 1] + 0.25, j[J.head * 3 + 2] + fz * dist, { x: 0, y: 0, z: 0 });
+    cam.position.set(ahead.x, ahead.y, ahead.z);
+    cam.lookAt(head.x, head.y - low, head.z);
+    cam.updateMatrixWorld();
+    scene.still(cam);
+    g.drawImage(canvas, (i % cols) * cw, Math.floor(i / cols) * ch);
+    const l = f.look;
+    g.font = '11px system-ui';
+    g.fillStyle = '#fff';
+    g.fillText(`${pid} ${nameOf(pid)} · tone ${l.tone} · ${STYLES[l.style].name} · ${BEARDS[l.beard]}`, (i % cols) * cw + 4, Math.floor(i / cols) * ch + 12);
+    out.push(`${pid}: tone ${l.tone}, ${STYLES[l.style].name}, ${BEARDS[l.beard]}, ${FACES[l.face.kind].name}${l.recede ? ', receding' : ''}${l.hair !== l.brows ? ', dyed' : ''}`);
+  });
+  return out;
+}
+
+(window as unknown as { lab: unknown }).lab = { scripts, find, film, watch, faces, scene, winner, teams };
 document.title = 'Cast lab ready';

@@ -1,0 +1,344 @@
+/* A phone's live game, sideways (live/turn.ts: .side). The court fills the screen: over it a slim strip
+   (the scorebug's strip, then the call bar), down the right edge the bench bar as a rail (the moment's
+   action over the four views), and the console a drawer that comes out from under the rail over the
+   court, in until a view is picked (a stop brings it out on the report or the huddle). Held upright
+   the whole page is turned a quarter round, clockwise (:root[data-turned]): the body, so the sheets and
+   the toasts turn with it, sized to the glass the other way round. Last of the partials: it overrides
+   both the phone's upright rules and the sideways ones. */
+
+/* the page's width and height as the layout sees them (turned: the glass's height is its width) */
+:root {
+  --lv-vw: 100vw;
+  --lv-vh: 100dvh;
+}
+:root[data-turned] {
+  --lv-vw: 100dvh;
+  --lv-vh: 100vw;
+}
+:root[data-turned] body {
+  position: fixed;
+  top: 0;
+  left: 100vw;
+  width: 100vh;
+  width: 100dvh;
+  height: 100vw;
+  /* (not the glass's height, as html and body have it otherwise: the sheets and toasts sit at its foot) */
+  min-height: 0;
+  overflow: hidden;
+  transform-origin: 0 0;
+  rotate: 90deg;
+  /* the glass's insets as the turned page has them: its left is the glass's top (the notch), its
+     right the glass's foot (the home bar) */
+  --safe-t: env(safe-area-inset-right, 0px);
+  --safe-r: env(safe-area-inset-bottom, 0px);
+  --safe-b: env(safe-area-inset-left, 0px);
+  --safe-l: env(safe-area-inset-top, 0px);
+  --gut-l: max(16px, var(--safe-l));
+  --gut-r: max(16px, var(--safe-r));
+}
+:root[data-turned] .app {
+  min-height: 0;
+  height: 100%;
+}
+/* a sheet fits the turned page's height */
+:root[data-turned] .sheet {
+  max-height: calc(100vw - 16px);
+}
+
+/* ------------------------------------------------------------------ the layout */
+:root[data-gameday] .app main.page.lv.side,
+.app main.page.lv.side {
+  --strip-h: 52px;
+  --rail-w: 64px;
+  max-width: none;
+  width: 100%;
+  height: var(--lv-vh);
+  margin: 0;
+  /* (the notch's side is the building, in ink; the rail takes the other side's inset itself) */
+  padding: 0 0 0 var(--safe-l);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: var(--strip-h) minmax(0, 1fr);
+  grid-template-areas:
+    'bug call bar'
+    'stage stage bar';
+  gap: 0;
+  background: var(--ink);
+  /* (a narrow one, a small phone or one with a notch, slims the strip's scorebug: below) */
+  container: lv-side / inline-size;
+}
+.lv.side .lv-bug,
+.lv.side .lv-call,
+.lv.side .lv-stage {
+  align-self: stretch;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+.lv.side .lv-bug {
+  grid-area: bug;
+  height: var(--strip-h);
+}
+.lv.side .lv-call {
+  grid-area: call;
+  /* (a hair of ink between the strip's two plates) */
+  border-left: 1px solid color-mix(in srgb, var(--paper-ink) 13%, transparent);
+}
+.lv.side .lv-cb {
+  --cb-h: var(--strip-h);
+}
+/* the court: everything under the strip, left of the rail */
+.lv.side .lv-stage {
+  grid-area: stage;
+  display: block;
+  min-height: 0;
+  border-radius: 0;
+  --court-h: 100%;
+}
+.lv.side .lv-stage .court-view {
+  height: 100%;
+}
+
+/* a narrow page (a small phone, or the room a notch leaves): the scorebug's strip a size down, so the
+   call bar keeps room for playback's four buttons */
+@container lv-side (max-width: 800px) {
+  .lv-lb.slim > .lv-lb-leave {
+    width: 34px;
+  }
+  .lv-lb.slim .lv-lb-ab {
+    font-size: 15px;
+  }
+  .lv-lb.slim .lv-lb-meta {
+    font-stretch: 76%;
+  }
+  .lv-lb.slim .lv-lb-id {
+    padding: 4px 4px 6px 6px;
+  }
+  .lv-lb.slim .lv-lb-side.home .lv-lb-id {
+    padding: 4px 6px 6px 4px;
+  }
+  .lv-lb.slim .lv-lb-pts {
+    min-width: 38px;
+    padding: 2px 3px 3px;
+  }
+  .lv-lb.slim .lv-lb-score {
+    font-size: 28px;
+  }
+  .lv-lb.slim .lv-lb-score.wide {
+    font-size: 25px;
+  }
+  .lv-lb.slim .lv-lb-bonus {
+    padding: 0 3px;
+  }
+  .lv-lb.slim .lv-lb-mid {
+    gap: 2px 3px;
+    padding: 3px 4px;
+  }
+  .lv-lb.slim .lv-lb-plate {
+    min-width: 50px;
+    padding: 4px 4px;
+    font-size: 17px;
+  }
+  .lv-lb.slim .lv-lb-shot {
+    min-width: 32px;
+    padding: 4px 2px;
+    font-size: 17px;
+  }
+}
+
+/* ------------------------------------------------------------------ the rail */
+.lv.side .lv-bar {
+  grid-area: bar;
+  position: relative;
+  inset: auto;
+  z-index: 40;
+  align-self: stretch;
+  width: calc(var(--rail-w) + var(--safe-r));
+  margin: 0;
+  padding: 6px calc(4px + var(--safe-r)) calc(6px + var(--safe-b)) 4px;
+  border-radius: 0;
+  box-shadow: -1px 0 0 var(--line);
+}
+.lv.side .lv-bb {
+  height: 100%;
+  max-width: none;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.lv.side .lv-bb-views {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lv.side .lv-bb-btn {
+  height: 54px;
+  flex: none;
+}
+.lv.side .lv-bb-to {
+  height: 58px;
+  border-radius: var(--radius-md);
+}
+/* the badge of timeouts left sits inside the rail's edge */
+.lv.side .lv-bb-n {
+  right: -11px;
+}
+/* at a stop, the way on: the icon over its word, a solid ink block */
+.lv.side .lv-bb-go {
+  height: 64px;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0 2px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  line-height: 1.1;
+  white-space: normal;
+  text-align: center;
+}
+
+/* ------------------------------------------------------------------ the drawer */
+.lv.side .lv-con {
+  position: absolute;
+  z-index: 30;
+  /* (placed against the page's box, not a grid area) */
+  grid-area: auto;
+  top: var(--strip-h);
+  bottom: 0;
+  right: calc(var(--rail-w) + var(--safe-r));
+  width: min(400px, calc(100% - var(--rail-w) - var(--safe-r) - var(--safe-l) - 100px));
+  padding: 0 14px calc(14px + var(--safe-b));
+  background: var(--bg);
+  box-shadow: -18px 0 36px -22px rgba(24, 18, 8, 0.6);
+  /* in: under the rail, out of the tab order and the screen reader's way */
+  visibility: hidden;
+  translate: 100% 0;
+  transition:
+    translate var(--dur) var(--ease-in),
+    visibility 0s linear var(--dur);
+}
+.lv.side.drawer .lv-con {
+  visibility: visible;
+  translate: 0 0;
+  transition: translate var(--dur-slow) var(--ease-out);
+}
+/* the drawer's head: what's at stake, the win bar and the other scores on the bug's ink, and the way
+   to put the drawer away */
+.lv-side-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px 0 12px;
+}
+.lv-side-head > .lv-lb {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.lv-side-x {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin: -4px -10px 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--text-2);
+}
+.lv-side-x:active {
+  background: var(--surface-2);
+}
+.lv.side .lv-con > .lv-bd {
+  margin-top: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lv.side .lv-con,
+  .lv.side.drawer .lv-con {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------ the other layout, a word to turn
+   On a phone, the court's foot corner has the way to the other layout (an ink button, as the camera's);
+   turned, a plate over the court says to turn the phone for a moment, with the way to keep it upright. */
+.lv-turn {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--lv-plate);
+  color: var(--paper-ink);
+  cursor: pointer;
+  transition: scale var(--dur-fast) ease;
+}
+.lv-turn::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+.lv-turn:active {
+  scale: 0.92;
+}
+.lv-turn:focus-visible {
+  outline: 2px solid var(--paper-ink);
+  outline-offset: 2px;
+}
+/* (the phone drawn the way it would go: sideways) */
+.lv-turn.to-side svg {
+  rotate: 90deg;
+}
+.lv-turn-hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 7;
+  translate: -50% -50%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 24px);
+  padding: 6px 6px 6px 16px;
+  border-radius: var(--radius-pill);
+  background: var(--lv-plate);
+  color: var(--paper-ink);
+  font-size: 14px;
+  font-weight: 680;
+  white-space: nowrap;
+  box-shadow: var(--shadow-float);
+  animation: pop var(--dur-slow) var(--ease-out) both;
+}
+.lv-turn-hint > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lv-turn-keep {
+  position: relative;
+  flex: none;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--paper-ink) 16%, transparent);
+  color: var(--paper-ink);
+  font-size: 13px;
+  font-weight: 680;
+}
+.lv-turn-keep::after {
+  content: '';
+  position: absolute;
+  inset: -4px 0;
+}
+.lv-turn-keep:active {
+  background: color-mix(in srgb, var(--paper-ink) 26%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .lv-turn-hint {
+    animation: none;
+  }
+}

@@ -4,15 +4,18 @@
 // takes the drawing context away from an app in the background: the 2D court shows meanwhile (onLost)
 // and the scene is built again when the context is back. Over the picture, the broadcast's graphics:
 // the tags over the handler and a tapped man, the play's word, the lower third on a cut-in or a replay, the replay's bug and wipe
-// (written each frame from what the scene says, no re-render).
+// (written each frame from what the scene says, no re-render). The tags and the word are seated each frame where they
+// leave clear what the scene says is being played (the ball, its way to the rim, the rim, the faces and hands round it).
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import { Rewind } from 'lucide-react';
-import { FLOOR_L, paintFloor, readPaints, type CourtFloor, type GameInfo, type Stage } from './Court';
+import { FLOOR_L, paintFloor, readPaints, venueOf, type CourtFloor, type GameInfo, type Stage } from './Court';
 import type { MatchKit } from '../teamColors';
 import type { CamKind } from './court3d/cameras';
 import type { Body } from './court3d/puppet';
 import { loadModels, type Models } from './court3d/models';
-import type { CourtScene, Labels, Lite } from './court3d/scene';
+import type { CourtScene, Disc, Labels, Lite } from './court3d/scene';
+import { localPoint } from './turn';
+import type { Occasion } from './occasion';
 
 /** Where CourtView reaches the broadcast: an instant replay at a possession's end, and its end. */
 export interface Cast {
@@ -37,6 +40,8 @@ export interface Court3DProps {
   hot?: ReadonlySet<number>;
   /** The game is over: the side that won it. */
   final?: 0 | 1;
+  /** And what kind of win it is. */
+  occasion?: Occasion;
   floor?: CourtFloor;
   clutch?: boolean;
   /** The camera that follows the play. */
@@ -146,6 +151,7 @@ export default function Court3D(props: Court3DProps) {
     // how sharp it's drawn: full, or less on a device that can't keep up
     let level = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? TOUCH_START : 0;
     let sized = '';
+    let camWas = live.current.cam;
     let frames = 0;
     let spent = 0;
     let told = false;
@@ -182,8 +188,9 @@ export default function Court3D(props: Court3DProps) {
       },
       skip: () => scene?.skipReplay(),
       tap: (x, y) => {
-        const box = canvas.getBoundingClientRect();
-        return !!scene && gone < 0 && !live.current.hide && scene.tap(x - box.left, y - box.top);
+        // (on the canvas's own box: a phone's page may be turned a quarter round, see turn.ts)
+        const at = localPoint(canvas, x, y);
+        return !!scene && gone < 0 && !live.current.hide && scene.tap(at.x, at.y);
       },
       end: () => {
         scene?.endReplay();
@@ -255,6 +262,11 @@ export default function Court3D(props: Court3DProps) {
         scene.size(w, h, ratio);
         dirty = true;
       }
+      // (a camera picked while the game is stopped is drawn at once: the chip's name and the picture never disagree)
+      if (p.cam !== camWas) {
+        camWas = p.cam;
+        dirty = true;
+      }
       const fl = p.floor;
       const key = `${fl ? JSON.stringify(fl) : ''}|${fontsIn}`;
       if (key !== floorKey) {
@@ -292,10 +304,12 @@ export default function Court3D(props: Court3DProps) {
           game: p.game?.(),
           hot: p.hot,
           final: p.final,
+          occasion: p.occasion,
           clutch: p.clutch,
           cam: p.cam,
           bench: p.bench,
           board: fl?.kind === 'home' ? fl.paint : paints.ink,
+          venue: venueOf(fl),
           warn,
         },
         dt,
@@ -402,9 +416,173 @@ const WIPE_LEAN = 14;
 /** The wipe's run, as wide as the picture this many times (the ink, then its team's colour on the leading edge). */
 const WIPE_RUN = 1.62;
 
-/** Two tags nearer than this across and up the page (px) would lie on each other. */
-const TAG_WIDE = 130;
-const TAG_HIGH = 26;
+/** A tag's foot is this far (px, at its full size) over the point over his head: its notch is between. */
+const TAG_FOOT = 5;
+/** A tag is drawn no smaller than this of its own size, so its name stays readable (where it is short of room it gives up the name: BRIEF_NEAR). */
+const TAG_LEAST = 0.84;
+/** Two words, or a word and a word's box, are at least this far apart (px). */
+const WORD_GAP = 4;
+/**
+ * Where a tag may stand: over his head, a row higher, beside his head on either side, two rows higher, up to
+ * either side (the nearest that is clear is taken; of two as near, the first). Each is how far across (its half
+ * width and most of its height) and how far up or down (its height and the gap).
+ */
+const TAG_SEATS: readonly (readonly [number, number])[] = [
+  [0, 0],
+  [0, -1],
+  [-1, 0.75],
+  [1, 0.75],
+  [0, -2],
+  [-1, -0.75],
+  [1, -0.75],
+];
+/** And a play's word: on its point, over it, either side of it, two rows over, under it, up to either side, three rows over. */
+const FLASH_SEATS: readonly (readonly [number, number])[] = [
+  [0, 0],
+  [0, -1],
+  [-1, 0],
+  [1, 0],
+  [0, -2],
+  [0, 1],
+  [-1, -1],
+  [1, -1],
+  [0, -3],
+];
+/**
+ * A seat counts this much against itself for each px it is off the first (in px of overlap): a word goes farther
+ * from its point only to be clearer. And the seat it has counts this much for itself: it doesn't hop between two.
+ */
+const SEAT_COST = 0.1;
+const SEAT_STAY = 2;
+/** A px of a word on a head or a hand counts this much against its seat (a px off the picture two). */
+const SOFT_COST = 2;
+/**
+ * A tag's number alone counts this much against it (px of overlap): little in a crowd or on a small picture (it
+ * keeps close to its man rather than going far with his name), a lot elsewhere (it goes beside him first).
+ */
+const BRIEF_NEAR = 2;
+const BRIEF_FAR = 8;
+/** A picture narrower or shorter than this (px) is a small one (as court3d.css has it). */
+const SMALL_W = 600;
+const SMALL_H = 360;
+/** A word keeps a new seat at least this long (ms) while it stays clear: it doesn't twitch back and forth. */
+const SEAT_HOLD = 450;
+/** A word goes to a new seat over this long (ms): it slides there, it doesn't jump (unless the slide would cross the ball). */
+const SEAT_MS = 70;
+
+/** A box on the picture (px): its left, top, right and bottom. */
+interface Box {
+  l: number;
+  t: number;
+  r: number;
+  b: number;
+}
+/**
+ * Where a word sits: its size at its full size (measured as it comes on), the seat it has and since when, how far
+ * it is off its first seat (eased), when it was last put.
+ */
+interface Seat {
+  key: string;
+  w: number;
+  h: number;
+  /** A tag's number alone, how wide (its brief form). */
+  nw: number;
+  i: number;
+  since: number;
+  ox: number;
+  oy: number;
+  on: boolean;
+  at: number;
+}
+const seats = new WeakMap<HTMLElement, Seat>();
+const seatOf = (el: HTMLElement) => {
+  let s = seats.get(el);
+  if (!s) seats.set(el, (s = { key: '', w: 0, h: 0, nw: 0, i: 0, since: 0, ox: 0, oy: 0, on: false, at: 0 }));
+  return s;
+};
+/** How much the seat a word has is preferred to the others (px of overlap): all of it while it is new. */
+const stay = (s: Seat) => (s.on && performance.now() - s.since < SEAT_HOLD ? 1e6 : SEAT_STAY);
+
+/**
+ * How much a box lies on what it must leave clear (px): never on a hard disc nor another word (Infinity); how far
+ * into a soft one (SOFT_COST); what of it is off the picture, twice.
+ */
+function cost(x: Box, keep: readonly Disc[], taken: readonly Box[], w: number, h: number): number {
+  let n = 0;
+  for (const d of keep) {
+    const into = d.r - Math.hypot(Math.max(x.l - d.x, 0, d.x - x.r), Math.max(x.t - d.y, 0, d.y - x.b));
+    if (into <= 0) continue;
+    if (!d.soft) return Infinity;
+    n += into * SOFT_COST;
+  }
+  for (const o of taken) if (x.l < o.r + WORD_GAP && o.l < x.r + WORD_GAP && x.t < o.b + WORD_GAP && o.t < x.b + WORD_GAP) return Infinity;
+  return n + 2 * (Math.max(0, -x.l) + Math.max(0, x.r - w) + Math.max(0, -x.t) + Math.max(0, x.b - h));
+}
+
+/**
+ * The seat for a word of this size (px, as drawn) whose point is (x, y): `over` it by that much (a tag's foot) or
+ * on it (null: a play's word's middle). The first in `list` that is clear, unless the one it `had` is clear too
+ * (it is preferred by `hold`), and what it costs; null if every one lies on something it must leave clear. (`pw`,
+ * `ph`: the picture's size.)
+ */
+function seatFor(
+  list: readonly (readonly [number, number])[],
+  had: number,
+  hold: number,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  over: number | null,
+  keep: readonly Disc[],
+  taken: readonly Box[],
+  pw: number,
+  ph: number,
+): { i: number; box: Box; n: number } | null {
+  let best: { i: number; box: Box; n: number } | null = null;
+  let least = Infinity;
+  list.forEach(([u, v], i) => {
+    const cx = x + u * (w / 2 + 0.7 * h);
+    const t = (over === null ? y - h / 2 : y - over - h) + v * (h + WORD_GAP);
+    const box = { l: cx - w / 2, t, r: cx + w / 2, b: t + h };
+    const c = cost(box, keep, taken, pw, ph);
+    // (a new seat is held only while it is all clear)
+    const n = c + Math.hypot(cx - x, v * (h + WORD_GAP)) * SEAT_COST - (i === had ? (c > 0 ? SEAT_STAY : hold) : 0);
+    if (n < least) [least, best] = [n, { i, box, n }];
+  });
+  return best;
+}
+
+/**
+ * A word to its seat `box` (the first seat's is `first`): slid there from the one it had, or put straight there if
+ * it wasn't showing or the slide would take it over the ball, its way or the rim (`keep`); drawn `size` of its own
+ * size, and `grow` of that about its middle (a play's word coming in).
+ */
+function sit(el: HTMLElement, s: Seat, i: number, box: Box, first: Box, keep: readonly Disc[], size: number, alpha: number, grow = 1) {
+  const now = performance.now();
+  const tx = box.l - first.l;
+  const ty = box.t - first.t;
+  const k = s.on ? 1 - Math.exp(-Math.min(100, now - s.at) / SEAT_MS) : 1;
+  s.ox += (tx - s.ox) * k;
+  s.oy += (ty - s.oy) * k;
+  const dx = first.l + s.ox - box.l;
+  const dy = first.t + s.oy - box.t;
+  if ((dx || dy) && cost({ l: box.l + dx, t: box.t + dy, r: box.r + dx, b: box.b + dy }, keep, [], Infinity, Infinity) === Infinity) [s.ox, s.oy] = [tx, ty];
+  if (i !== s.i || !s.on) s.since = now;
+  s.i = i;
+  s.on = true;
+  s.at = now;
+  const gx = ((box.r - box.l) * (1 - grow)) / 2;
+  const gy = ((box.b - box.t) * (1 - grow)) / 2;
+  el.style.opacity = alpha >= 1 ? '1' : alpha.toFixed(3);
+  el.style.transform = `translate3d(${Math.round(first.l + s.ox + gx)}px, ${Math.round(first.t + s.oy + gy)}px, 0) scale(${(size * grow).toFixed(3)})`;
+}
+
+/** A word out of sight. */
+function hide(el: HTMLElement, s: Seat) {
+  s.on = false;
+  if (el.style.opacity !== '0') el.style.opacity = '0';
+}
 
 /** The graphics over the picture this frame (each written only when it changes). */
 function paint(
@@ -417,32 +595,8 @@ function paint(
   w: number,
   h: number,
 ) {
-  // (two tags on men side by side: the second stands over the first, not on it)
-  const [first, second] = l.tags;
-  const lift = first && second && Math.abs(first.x - second.x) < TAG_WIDE && Math.abs(first.y - second.y) < TAG_HIGH ? TAG_HIGH : 0;
-  tags.forEach((tag, i) => {
-    if (!tag) return;
-    const t = l.tags[i] ?? null;
-    if (t && t.text && tag.dataset.key !== `${t.num}/${t.text}`) {
-      tag.dataset.key = `${t.num}/${t.text}`;
-      tag.children[0].textContent = t.num;
-      tag.children[1].textContent = t.text;
-      tag.style.setProperty('--c3d-team', t.color);
-    }
-    if (t && (tag.dataset.late === '1') !== t.late) tag.dataset.late = t.late ? '1' : '0';
-    // (it stands on its point: over his head, clear of him)
-    if (!t || !t.text) tag.style.opacity = '0';
-    else {
-      tag.style.opacity = '1';
-      tag.style.transform = `translate(${Math.round(t.x)}px, ${Math.round(t.y - (i ? lift : 0))}px) translate(-50%, -100%)`;
-    }
-  });
-  // (a play's word lands: it comes up to its size as it comes in)
-  if (flash) {
-    if (l.flash && flash.textContent !== l.flash.text) flash.textContent = l.flash.text;
-    place(flash, l.flash, l.flash?.alpha ?? 0, true);
-    if (l.flash) flash.dataset.kind = l.flash.kind;
-  }
+  // the lower third (the words over the play keep off it, and it gives way to the ball when the ball is under it)
+  let under: Box | null = null;
   if (third) {
     const t = l.third;
     if (t && third.dataset.key !== t.key) {
@@ -453,6 +607,76 @@ function paint(
       third.style.setProperty('--c3d-team', t.color);
     }
     if (third.classList.contains('on') !== !!t) third.classList.toggle('on', !!t);
+    if (t) {
+      under = { l: third.offsetLeft, t: third.offsetTop, r: third.offsetLeft + third.offsetWidth, b: third.offsetTop + third.offsetHeight };
+      const ball = l.ball;
+      const on = !!ball && cost(under, [ball], [], w, h) === Infinity;
+      if (third.classList.contains('under') !== on) third.classList.toggle('under', on);
+    }
+  }
+  const taken: Box[] = under ? [under] : [];
+  // the tags: each in the first seat round his head that leaves the ball, its way and the rim clear (and the heads and
+  // hands round it if it can), and not on the other; its number alone if only that fits near him (BRIEF_NEAR); none
+  // if nothing does
+  const size = Math.max(TAG_LEAST, l.size);
+  tags.forEach((tag, i) => {
+    if (!tag) return;
+    const s = seatOf(tag);
+    const t = l.tags[i] ?? null;
+    if (!t || !t.text) return hide(tag, s);
+    const key = `${t.num}/${t.text}`;
+    if (tag.dataset.key !== key || !s.on) {
+      if (tag.dataset.key !== key) {
+        tag.dataset.key = key;
+        tag.children[0].textContent = t.num;
+        tag.children[1].textContent = t.text;
+        tag.style.setProperty('--c3d-team', t.color);
+      }
+      // (its size, whole: measured as it comes on, so the fonts are in)
+      tag.dataset.brief = '0';
+      s.key = key;
+      s.w = tag.offsetWidth;
+      s.h = tag.offsetHeight;
+      s.nw = (tag.children[0] as HTMLElement).offsetWidth;
+    }
+    if ((tag.dataset.late === '1') !== t.late) tag.dataset.late = t.late ? '1' : '0';
+    const hh = s.h * size;
+    const foot = TAG_FOOT * size;
+    const was = tag.dataset.brief === '1';
+    const whole = seatFor(TAG_SEATS, was ? -1 : s.i, stay(s), t.x, t.y, s.w * size, hh, foot, l.keep, taken, w, h);
+    const brief = seatFor(TAG_SEATS, was ? s.i : -1, stay(s), t.x, t.y, s.nw * size, hh, foot, l.keep, taken, w, h);
+    const giveUp = l.crowd || w < SMALL_W || h < SMALL_H ? BRIEF_NEAR : BRIEF_FAR;
+    const short = !whole || (!!brief && brief.n + giveUp < whole.n);
+    const seat = short ? brief : whole;
+    if (!seat) return hide(tag, s);
+    if ((tag.dataset.brief === '1') !== short) tag.dataset.brief = short ? '1' : '0';
+    // (beside his head, the notch points at nothing)
+    const side = TAG_SEATS[seat.i][0] !== 0;
+    if ((tag.dataset.side === '1') !== side) tag.dataset.side = side ? '1' : '0';
+    const ww = (short ? s.nw : s.w) * size;
+    sit(tag, s, seat.i, seat.box, { l: t.x - ww / 2, t: t.y - foot - hh, r: t.x + ww / 2, b: t.y - foot }, l.keep, size, 1);
+    taken.push(seat.box);
+  });
+  // (a play's word lands where it covers nothing being played: it comes up to its size as it comes in)
+  if (flash) {
+    const f = l.flash;
+    const s = seatOf(flash);
+    if (!f || !f.text || f.alpha <= 0) hide(flash, s);
+    else {
+      if (flash.textContent !== f.text) flash.textContent = f.text;
+      flash.dataset.kind = f.kind;
+      if (s.key !== f.text || !s.on) {
+        s.key = f.text;
+        s.w = flash.offsetWidth;
+        s.h = flash.offsetHeight;
+      }
+      const a = Math.min(1, f.alpha);
+      const fw = s.w * l.size;
+      const fh = s.h * l.size;
+      const seat = seatFor(FLASH_SEATS, s.i, stay(s), f.x, f.y, fw, fh, null, l.keep, taken, w, h);
+      if (!seat) hide(flash, s);
+      else sit(flash, s, seat.i, seat.box, { l: f.x - fw / 2, t: f.y - fh / 2, r: f.x + fw / 2, b: f.y + fh / 2 }, l.keep, l.size, a, a < 1 ? 0.84 + 0.16 * a : 1);
+    }
   }
   if (bug && bug.classList.contains('on') !== l.replay) bug.classList.toggle('on', l.replay);
   if (wipe) {
@@ -470,15 +694,4 @@ function paint(
     const x = -(run + lean) + (w + run + 2 * lean) * at;
     (wipe.firstElementChild as HTMLElement).style.transform = `translate3d(${x.toFixed(1)}px, 0, 0) skewX(-${WIPE_LEAN}deg)`;
   }
-}
-
-/** A label at its point of the picture (or out of sight). */
-function place(el: HTMLElement, at: { x: number; y: number; text: string } | null, alpha: number, grow = false) {
-  if (!at || !at.text) {
-    el.style.opacity = '0';
-    return;
-  }
-  const a = Math.max(0, Math.min(1, alpha));
-  el.style.opacity = String(a);
-  el.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(at.y)}px) translate(-50%, 0)${grow && a < 1 ? ` scale(${(0.84 + 0.16 * a).toFixed(3)})` : ''}`;
 }

@@ -3,6 +3,7 @@ import type { ShotRecord } from '../../core/types';
 import { periodLabel } from '../stats';
 import { wpText } from '../../core/analysis/winProb';
 import { reducedMotion } from '../motion';
+import { localPoint } from '../live/turn';
 import './gameday.css';
 
 /**
@@ -290,8 +291,9 @@ export function WinProbChart({
     return best;
   };
   const onPointer = (e: React.PointerEvent<SVGSVGElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    setAt(nearest(((e.clientX - r.left) / r.width) * w));
+    // (in the svg's own box: the live game's page may be turned a quarter round on a phone)
+    const at = localPoint(e.currentTarget, e.clientX, e.clientY);
+    setAt(nearest((at.x / at.w) * w));
   };
   const shown = at !== null && at < points.length ? at : null;
   const tipLeft = shown !== null ? Math.min(Math.max(x(points[shown].t), 110), w - 110) : 0;

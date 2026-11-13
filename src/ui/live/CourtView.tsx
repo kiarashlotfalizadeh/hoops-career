@@ -5,6 +5,8 @@
 // An instant replay holds the play's clock: the court's word that a possession is over waits here
 // until the replay of its big play has been shown (a tap on the court skips it), so the game never
 // moves on behind it. A tap on a man in the 3D picture tags him for a while, and is only that.
+// The clock it reports carries the possession's shot clock, read off the same stage the 3D building's
+// boards read (shotClock.ts), so the scorebug and the arena always show the same number.
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Grid2x2, SwitchCamera, Video } from 'lucide-react';
 import { Court, emptyStage, type CourtProps, type GameInfo } from './Court';
@@ -12,6 +14,8 @@ import type { Script } from './choreo';
 import type { Cast } from './Court3D';
 import { CAM_KINDS, CAM_NAME, camKind, type CamKind } from './court3d/cameras';
 import type { Body } from './court3d/puppet';
+import { ShotClock } from './shotClock';
+import type { Occasion } from './occasion';
 import './styles/court3d.css';
 
 const Court3D = lazy(() => import('./Court3D'));
@@ -57,11 +61,14 @@ export interface CourtViewProps extends CourtProps {
   replays?: boolean;
   /** The court has played the possession out, before any replay of it: what is felt as it happens (a buzzer-beater's buzz) goes here, not in onDone. */
   onReached?: () => void;
+  /** The game is over: what kind of win it is (the 3D picture celebrates it so). */
+  occasion?: Occasion;
 }
 
-export function CourtView({ look, onLook, cam, onCam, bench, body, game, replays, onReached, ...court }: CourtViewProps) {
+export function CourtView({ look, onLook, cam, onCam, bench, body, game, replays, onReached, occasion, ...court }: CourtViewProps) {
   const kind = camKind(cam);
   const stage = useRef(emptyStage());
+  const [shotClock] = useState(() => new ShotClock());
   // (this session only: the picture came up, the device couldn't draw it, or drew it too slowly)
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -145,7 +152,21 @@ export function CourtView({ look, onLook, cam, onCam, bench, body, game, replays
         } else if (shown && cast.current?.tap(e.clientX, e.clientY)) e.stopPropagation();
       }}
     >
-      <Court {...court} speed={speed} stage={stage} mute={shown} onDone={onDone} />
+      <Court
+        {...court}
+        speed={speed}
+        stage={stage}
+        mute={shown}
+        onDone={onDone}
+        onTick={
+          court.onTick &&
+          ((c, sc) => {
+            // (the court has just written this frame to the stage)
+            const { script, play } = stage.current;
+            court.onTick!(c, sc, script && play ? shotClock.read(script, play) : null);
+          })
+        }
+      />
       {on && (
         <Suspense fallback={null}>
           <Court3D
@@ -158,6 +179,7 @@ export function CourtView({ look, onLook, cam, onCam, bench, body, game, replays
             game={game}
             hot={court.hot}
             final={court.final}
+            occasion={occasion}
             floor={court.floor}
             clutch={court.clutch}
             cam={kind}
@@ -187,6 +209,8 @@ export function CourtView({ look, onLook, cam, onCam, bench, body, game, replays
           className="court-cam court-cam-kind"
           onClick={(e) => {
             e.stopPropagation();
+            // (a replay on the picture goes: the camera named on the chip is the one the picture comes back to)
+            if (held.current) cast.current?.skip();
             onCam(CAM_KINDS[(CAM_KINDS.indexOf(kind) + 1) % CAM_KINDS.length]);
           }}
           aria-label={`Camera: ${CAM_NAME[kind]}. Switch to the next camera`}

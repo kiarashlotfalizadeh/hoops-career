@@ -1,8 +1,9 @@
 /* The scorebug, the broadcast's own graphics package: one ink bar over the floor. Its top line (the way
    out, what's at stake), each team's block in its kit colour (name, the ball, timeouts and fouls, its
    trim along the foot), its score in the condensed black cut on the ink, the period and the clock on a
-   plate between them with the run under it, the sliver of each team's chance to win; then the bottom
-   line of the night's other scores, with its sheet. Labels in sentence case; no glows, no gradients.
+   plate between them with the shot clock beside it and the run under them, the sliver of each team's
+   chance to win; then the bottom line of the night's other scores, with its sheet. A phone held
+   sideways gets the slim strip (.slim, at the end). Labels in sentence case; no glows, no gradients.
    Inside the bar the ink inverts. Only opacity and transform move. */
 .lv-lb {
   --text: var(--paper-ink);
@@ -341,7 +342,8 @@
   opacity: 1;
   transform: none;
 }
-/* between the scores: the period, the clock on its plate, the run on now (a line always kept for it) */
+/* between the scores: the period, the clock on its plate, the run on now (a line always kept for it);
+   while the game plays the shot clock stands beside the clock, "Shot" over it */
 .lv-lb-mid {
   display: flex;
   flex-direction: column;
@@ -350,6 +352,64 @@
   gap: 3px;
   min-width: 78px;
   padding: 5px 6px;
+}
+.lv-lb-mid.has-shot {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-areas:
+    'q sk'
+    'clock shot'
+    'run run';
+  align-content: center;
+  justify-items: center;
+  align-items: stretch;
+  gap: 3px 4px;
+}
+.lv-lb-mid.has-shot > .lv-lb-q {
+  grid-area: q;
+}
+.lv-lb-mid.has-shot > .lv-lb-plate {
+  grid-area: clock;
+}
+.lv-lb-mid.has-shot > .lv-lb-run {
+  grid-area: run;
+}
+.lv-lb-sk {
+  grid-area: sk;
+  font-family: var(--mono);
+  font-stretch: normal;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 15px;
+  color: var(--text-2);
+}
+/* the shot clock: whole seconds a size under the game clock, its own plate; under five, tenths in the
+   warning colour. Off (at the line, the game clock under it, between plays at a stop) its room stays */
+.lv-lb-shot {
+  grid-area: shot;
+  min-width: 40px;
+  padding: 5px 5px;
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  font-family: var(--mono);
+  font-stretch: normal;
+  font-weight: 600;
+  font-size: 19px;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+  /* (its figure in the middle of the row the clock's plate sets) */
+  display: grid;
+  place-items: center;
+}
+.lv-lb-shot.warn {
+  color: var(--warn);
+}
+.lv-lb-shot.off,
+.lv-lb-sk.off {
+  visibility: hidden;
 }
 .lv-lb-q {
   display: flex;
@@ -420,41 +480,92 @@
   }
 }
 
-/* a small phone (320 wide): everything a size down, so a block keeps room for "Timeouts 7" beside a
-   three-figure score */
-@media (max-width: 359px) {
-  .lv-lb-mid {
-    min-width: 64px;
-    padding: 5px 2px;
-  }
-  .lv-lb-plate {
-    min-width: 58px;
-    padding: 4px 4px;
-    font-size: 18px;
-  }
-  .lv-lb-pts {
-    min-width: 44px;
-    padding: 4px 3px 5px;
-  }
-  .lv-lb-score,
-  .lv-lb-score.wide {
-    font-size: 31px;
-  }
-  .lv-lb-score.wide {
-    font-size: 27px;
-  }
-  .lv-lb-id {
-    padding-left: 8px;
-  }
-  .lv-lb-side.home .lv-lb-id {
-    padding-right: 8px;
-  }
-  .lv-lb-ab {
-    font-size: 17px;
-  }
-  .lv-lb-meta {
-    font-stretch: 80%;
-  }
+/* ------------------------------------------------------------------ the slim strip (a phone held sideways)
+   One row the strip's height: the way out (an icon), each team's block and score, the clocks between.
+   Its top line, the run, the win bar and the other scores are in the console's drawer (BugMore). */
+.lv-lb.slim {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+}
+.lv-lb.slim > .lv-lb-leave {
+  flex: none;
+  width: 38px;
+  min-height: 0;
+  justify-content: center;
+  padding: 0;
+  border-radius: 0;
+}
+.lv-lb.slim > .lv-lb-leave::after {
+  inset: 0;
+}
+.lv-lb.slim .lv-lb-main {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.lv-lb.slim .lv-lb-id {
+  gap: 2px;
+  padding: 4px 5px 6px 7px;
+}
+.lv-lb.slim .lv-lb-side.home .lv-lb-id {
+  padding: 4px 7px 6px 5px;
+}
+.lv-lb.slim .lv-lb-ab {
+  font-size: 16px;
+}
+.lv-lb.slim .lv-lb-poss,
+.lv-lb.slim .lv-lb-ball {
+  width: 12px;
+  height: 12px;
+}
+.lv-lb.slim .lv-lb-meta {
+  gap: 0;
+  line-height: 13px;
+}
+.lv-lb.slim .lv-lb-pts {
+  min-width: 42px;
+  gap: 1px;
+  padding: 2px 4px 3px;
+}
+.lv-lb.slim .lv-lb-score {
+  font-size: 31px;
+}
+.lv-lb.slim .lv-lb-score.wide {
+  font-size: 27px;
+}
+.lv-lb.slim .lv-lb-bonus {
+  line-height: 13px;
+}
+.lv-lb.slim .lv-lb-mid {
+  min-width: 0;
+  gap: 2px 4px;
+  padding: 3px 5px;
+}
+.lv-lb.slim .lv-lb-q,
+.lv-lb.slim .lv-lb-sk {
+  line-height: 13px;
+}
+.lv-lb.slim .lv-lb-plate {
+  min-width: 58px;
+  padding: 4px 6px;
+  font-size: 19px;
+}
+.lv-lb.slim .lv-lb-shot {
+  min-width: 38px;
+  padding: 4px 4px;
+  font-size: 19px;
+}
+.lv-lb.slim.brk .lv-lb-plate {
+  padding: 4px 8px;
+  font-size: 14px;
+}
+
+/* the drawer's head (BugMore): what's at stake, the win bar, the other scores, on the bug's ink */
+.lv-lb.more {
+  border-radius: var(--radius-md);
+}
+.lv-lb.more > :first-child {
+  border-top: 0;
 }
 
 /* clutch time: the clock's plate turns to the brand's red (white on it keeps 4.5:1) and the period
@@ -688,6 +799,110 @@
 .lv-as-st .live {
   color: var(--text);
   font-weight: 600;
+}
+
+/* a phone held upright: the bug a size slimmer, so the court has the height (every line keeps its
+   words: the top line, the blocks, the win bar, the other scores) */
+@media (max-width: 599px) {
+  .lv-lb-top {
+    min-height: 24px;
+  }
+  .lv-lb-main {
+    min-height: 54px;
+  }
+  .lv-lb-q,
+  .lv-lb-sk {
+    line-height: 13px;
+  }
+  .lv-lb-id {
+    gap: 3px;
+    padding: 5px 6px 7px 10px;
+  }
+  .lv-lb-side.home .lv-lb-id {
+    padding: 5px 10px 7px 6px;
+  }
+  .lv-lb-ab {
+    font-size: 18px;
+  }
+  .lv-lb-pts {
+    min-width: 52px;
+    padding: 3px 5px 4px;
+  }
+  .lv-lb-score {
+    font-size: clamp(32px, 9vw, 40px);
+  }
+  .lv-lb-score.wide {
+    font-size: clamp(29px, 8vw, 37px);
+  }
+  .lv-lb-mid {
+    min-width: 72px;
+    gap: 2px;
+    padding: 2px 4px;
+  }
+  .lv-lb-mid.has-shot {
+    gap: 2px 3px;
+  }
+  .lv-lb-plate {
+    min-width: 56px;
+    padding: 3px 5px;
+    font-size: 19px;
+  }
+  .lv-lb-shot {
+    min-width: 36px;
+    padding: 3px 3px;
+    font-size: 17px;
+  }
+  .lv-lb-wp {
+    height: 18px;
+  }
+  .lv-tk {
+    min-height: 22px;
+  }
+}
+
+/* a small phone (320 wide): everything a size down, so a block keeps room for "Timeouts 7" beside a
+   three-figure score */
+@media (max-width: 359px) {
+  .lv-lb-mid {
+    min-width: 64px;
+    padding: 5px 2px;
+  }
+  .lv-lb-plate {
+    min-width: 50px;
+    padding: 4px 3px;
+    font-size: 17px;
+  }
+  .lv-lb-shot {
+    min-width: 32px;
+    padding: 4px 2px;
+    font-size: 16px;
+  }
+  .lv-lb-mid.has-shot {
+    column-gap: 2px;
+  }
+  .lv-lb-pts {
+    min-width: 44px;
+    padding: 4px 3px 5px;
+  }
+  .lv-lb-score,
+  .lv-lb-score.wide {
+    font-size: 31px;
+  }
+  .lv-lb-score.wide {
+    font-size: 27px;
+  }
+  .lv-lb-id {
+    padding-left: 8px;
+  }
+  .lv-lb-side.home .lv-lb-id {
+    padding-right: 8px;
+  }
+  .lv-lb-ab {
+    font-size: 17px;
+  }
+  .lv-lb-meta {
+    font-stretch: 80%;
+  }
 }
 
 /* reduced motion: everything still shows and still changes, nothing moves (a basket flashes its figure) */

@@ -281,8 +281,8 @@ export function seen(s: Shot, aspect: number, x: number, y: number, z: number): 
 const POST = [0.5, 8];
 const POST_R = 2.3;
 /** A close-up's camera is asked to stand this near the floor's edges at most (ft past the baselines; z from, to). */
-const SEAT_X = MID + 8.5;
-const SEAT_Z = [-9, 33];
+export const SEAT_X = MID + 8.5;
+export const SEAT_Z = [-9, 33];
 
 /**
  * How much of a man at (x, z) a body at (ox, oz) hides from a camera at (cx, cz): 0 none, more the more

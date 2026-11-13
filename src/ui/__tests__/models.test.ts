@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { figureGeo } from '../live/court3d/figure';
 import { merged, placed, readGlb, type Thing } from '../live/court3d/glb';
+import { lookOf, STYLES } from '../live/court3d/look';
 import { PARTS, POSE_NAMES, posed } from '../live/court3d/sideline';
 
 /** The bones the puppet drives, then the leaves only the figure turns: his fingers' joints, his jaw, his nose (court3d/figure.ts keeps the same names in its `B`; it is not exported). */
@@ -330,6 +331,17 @@ describe("the 3D court's models", () => {
       // (the widest of one picture's own are the few small ones round the very top of his head, where its picture meets at a point: under a quarter of the sheet)
       expect(wide, 'a triangle stretched across the sheet').toBeLessThan(0.24);
       expect(geo.shorts[1] - geo.shorts[0]).toBeGreaterThan(1);
+      // and the men he is dressed as: each the same man every time, every way of wearing hair turning up over a league,
+      // and two men picked at random hardly ever the same at a glance (his hair, his beard, his skin within a shade)
+      expect(lookOf(1234)).toEqual(lookOf(1234));
+      const looks = Array.from({ length: 3000 }, (_v, pid) => lookOf(pid));
+      expect(new Set(looks.map((l) => l.style)).size).toBe(STYLES.length);
+      let alike = 0;
+      for (let k = 0; k < 3000; k++) {
+        const [a, b] = [looks[k], looks[(k * 7919 + 13) % 3000]];
+        if (a !== b && a.style === b.style && a.beard === b.beard && Math.abs(a.tone - b.tone) <= 1 && a.hair === b.hair) alike++;
+      }
+      expect(alike / 3000, 'two men who look alike').toBeLessThan(0.03);
     }
 
     // the people round the floor: three bodies, each one skin on the player's own bones, with a face, a jaw and a fuller

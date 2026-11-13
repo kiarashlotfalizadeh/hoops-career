@@ -1,11 +1,12 @@
 // Display helpers shared by the screens, the order a tapped column header gives a sortable table, and
-// every team's play button, switches and links in a colour that reads.
+// every team's play button, switches and links in a colour that reads, its building its own.
 import { describe, expect, it } from 'vitest';
 import type { League, Player, PlayerStats } from '../../core/types';
 import { blankStats } from '../../core/playerGen';
 import { f0, f1, finalLabel, fmtClock, gamesMemo, ordinal, ordinalSuffix, p0, p1, playerSeason, seasonLine, signed, startingFive, wholeMinutes } from '../stats';
 import { compareCells, fmtNum } from '../components/ui';
-import { applyAccent, contrast } from '../teamColors';
+import { applyAccent, contrast, lookDistance, matchKits, neutralVenue, venueLook } from '../teamColors';
+import { spread } from '../live/Court';
 import { FRANCHISES } from '../../core/teams';
 import { keepFigures } from '../../core/format';
 
@@ -173,6 +174,34 @@ describe('display helpers', () => {
         expect(contrast(set['--team-text'], '#121212') >= 1.5 || set['--team-link-line'] === 'underline', f.abbrev).toBe(true);
       }
       globalThis.document = was;
+    }
+    {
+      // every home team's building is its own, the same every night: the words round its floor read on its
+      // apron, and two teams in the same colours (two navies) still differ in more than one way
+      const venues = FRANCHISES.map((f) => {
+        const [kit] = matchKits(f.colors, ['#777777', '#999999', '#bbbbbb']);
+        const v = venueLook(f.colors, kit.color, kit.trim, f.abbrev, f.name, f.region);
+        expect(venueLook(f.colors, kit.color, kit.trim, f.abbrev, f.name, f.region), f.abbrev).toEqual(v);
+        expect(contrast(v.apronInk, v.apron), `${f.abbrev} letters on the apron`).toBeGreaterThanOrEqual(3);
+        return { f, v, picks: [v.wood, v.key, v.arc, v.apron === v.paint, v.circle, v.seats.join(), v.house] };
+      });
+      for (const a of venues)
+        for (const b of venues)
+          if (a.f !== b.f && lookDistance(a.v.paint, b.v.paint) < 0.12)
+            expect(a.picks.filter((p, i) => p !== b.picks[i]).length, `${a.f.abbrev} and ${b.f.abbrev}`).toBeGreaterThanOrEqual(2);
+      expect(new Set(venues.map((x) => x.v.wood)).size, 'stains').toBeGreaterThanOrEqual(4);
+      expect(contrast(neutralVenue('NBA Cup').apronInk, neutralVenue('NBA Cup').apron)).toBeGreaterThanOrEqual(3);
+      // the break's chart: a dozen shots at the rim are eased apart into marks that read as a dozen, none far from where it was
+      const pile = spread(
+        Array.from({ length: 12 }, () => ({ x: 100, y: 50 })),
+        10,
+        30,
+      );
+      for (const [i, p] of pile.entries()) {
+        expect(Math.hypot(p.x - 100, p.y - 50)).toBeLessThanOrEqual(30.001);
+        for (const q of pile.slice(i + 1)) expect(Math.hypot(p.x - q.x, p.y - q.y)).toBeGreaterThan(7);
+      }
+      expect(spread([{ x: 1, y: 1 }], 10, 30)[0].x).toBeCloseTo(1, 0);
     }
     {
       // the OVR tiers read as text on white, on the paper and under a white figure (a solid badge); figures in text never break at a hyphen

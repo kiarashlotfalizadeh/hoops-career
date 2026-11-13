@@ -5,7 +5,8 @@
 
    The court's canvas takes its shape from here (--court-ar, or a fixed --court-h): upright it is a
    window on the floor that pans with the ball; given a wide box it shows the whole floor
-   (live/Court.tsx picks the view from the box it gets). */
+   (live/Court.tsx picks the view from the box it gets). A phone gets the sideways layout instead
+   unless Settings keep it upright (side.css). */
 :root {
   /* the bench bar's row */
   --lq-h: 58px;
@@ -61,9 +62,13 @@
     align-self: stretch;
     margin: 0 calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l));
   }
-  /* the window on the floor: never more than two fifths of the screen's height */
+  /* the window on the floor: as tall as the screen is wide, at most not quite half its height (the
+     console under it keeps the rest; held sideways, the court has the screen: side.css) */
   .lv .lv-stage {
-    --court-h: min(calc(100vw / var(--court-tall)), 40dvh);
+    --court-h: min(100vw, 46dvh);
+  }
+  .lv .lv-cb {
+    --cb-h: 48px;
   }
   /* the whole floor, sideways: a break, a huddle, or the smaller court the user asked for */
   .lv.compact .lv-stage {

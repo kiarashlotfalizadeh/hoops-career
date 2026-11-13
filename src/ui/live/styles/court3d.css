@@ -21,6 +21,8 @@
   pointer-events: none;
   line-height: 1.2;
   color: var(--on-ink, #fff);
+  /* (the graphics are cut for the picture's own size, not the screen's: see the small picture's below) */
+  container-type: size;
 }
 /* (the picture comes up over the 2D court, it doesn't pop in) */
 .court-view[data-look='3d'] .c3d {
@@ -60,10 +62,12 @@
   font-stretch: semi-condensed;
   white-space: nowrap;
   opacity: 0;
+  transform-origin: 0 0;
   will-change: transform, opacity;
 }
 /* a tag over a head (the man with the ball, a man tapped): his number on his team's colour, his name,
-   on an ink plate with a notch under it that points at him */
+   on an ink plate with a notch under it that points at him. The frame loop seats it (Court3D's paint):
+   over his head, or higher, or beside it, wherever it leaves the ball, its way and the rim clear */
 .c3d-tag {
   position: absolute;
   top: 0;
@@ -71,12 +75,12 @@
   display: inline-flex;
   align-items: stretch;
   height: 20px;
-  margin-top: -5px;
   border-radius: 4px;
   background: color-mix(in srgb, var(--ink, #121212) 90%, transparent);
   color: var(--on-ink, #fff);
   white-space: nowrap;
   opacity: 0;
+  transform-origin: 0 0;
   will-change: transform, opacity;
   transition: opacity var(--dur-fast, 0.15s) linear;
 }
@@ -90,6 +94,17 @@
   translate: -50% 0;
   background: color-mix(in srgb, var(--ink, #121212) 90%, transparent);
   clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+/* (seated beside his head, the notch would point at nothing) */
+.c3d-tag[data-side='1']::after {
+  display: none;
+}
+/* (where only his number fits: the number alone) */
+.c3d-tag[data-brief='1'] .c3d-tag-name {
+  display: none;
+}
+.c3d-tag[data-brief='1'] .c3d-tag-n {
+  border-radius: 4px;
 }
 .c3d-tag-name {
   align-self: center;
@@ -121,9 +136,8 @@
 .c3d-tag-n:empty {
   display: none;
 }
-/* a play's word: a plate in the scoreboard's condensed cut */
+/* a play's word: a plate in the scoreboard's condensed cut, seated by the frame loop where it covers nothing being played */
 .c3d-flash {
-  margin-top: -16px;
   padding: 4px 12px 5px;
   border-radius: 6px;
   font-family: var(--display, sans-serif);
@@ -165,6 +179,10 @@
   transition:
     opacity var(--dur, 0.22s) var(--ease-out, ease-out),
     translate var(--dur, 0.22s) var(--ease-out, ease-out);
+}
+/* (the ball under it: it gives way, the ball is the picture) */
+.c3d-third.on.under {
+  opacity: 0.3;
 }
 .c3d-third-n {
   display: grid;
@@ -265,7 +283,8 @@
   letter-spacing: -0.04em;
   white-space: nowrap;
 }
-@media (max-width: 599px) {
+/* a small picture (a phone, upright or on its side): the graphics in their compact cut, so they don't take the play's room */
+@container (max-width: 599px) or (max-height: 360px) {
   .c3d-third {
     left: 8px;
     bottom: 8px;

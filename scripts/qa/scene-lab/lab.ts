@@ -9,14 +9,19 @@
 //   &game=1 (a game on the boards: Q4, 2:31 left, 88-85)  &call=three|dunk|andOne|block|steal|buzzer|timeout (a big moment, the home side's;
 //   &by=1 the visitors')  &def=1 (the home side on defence)  &ft=1 (a visitor at the line, the end behind it waving)  &clutch=1  &final=0|1 (who won)
 //   &final=0|1 (the game over, that side the winners: with no eye or shot, the broadcast's own camera finds them)
+//   &occasion=win|late|playoff|clinch|title (what kind of win it is: with &final)  &after=4000 (ms the still is taken after: the buzzer, a &call)
+//   &play=1 (a play on, the home side with the ball: the stands sit back for it)
 //   &mood=1 (the house lights down, as for the open, a timeout and the clutch: with a shot or an eye)
 //   &tip=1 (the ten lined up for the tip, the ball in the centre circle: with no eye or shot, the broadcast's opening camera)
+//   &home=BOS&vs=MIL (whose building, and who visits: abbreviations; Washington and Milwaukee by default)  &neutral=1 (the Cup final's floor)
 import { PerspectiveCamera, type Scene, type WebGLRenderer } from 'three';
-import { emptyStage, paintFloor, readPaints, type CourtFloor, type Stage } from '../../../src/ui/live/Court';
+import { FRANCHISES } from '../../../src/core/teams';
+import { courtFloor, emptyStage, paintFloor, readPaints, venueOf, type Stage } from '../../../src/ui/live/Court';
 import { settleHeads } from '../../../src/ui/live/court3d/figure';
 import { bodyOf } from '../../../src/ui/live/court3d/puppet';
 import { CourtScene, loadModels } from '../../../src/ui/live/court3d/scene';
 import { matchKits } from '../../../src/ui/teamColors';
+import type { Occasion } from '../../../src/ui/live/occasion';
 
 const q = new URLSearchParams(location.search);
 const num = (k: string, d: number) => (q.has(k) ? Number(q.get(k)) : d);
@@ -41,11 +46,26 @@ const SHOTS: Record<string, [number[], number[], number]> = {
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const paints = readPaints(canvas);
-const kits = matchKits(q.has('away') ? ['#0c2340', '#c8102e', '#ffffff'] : ['#002b5c', '#e31837', '#c4ced4'], ['#00471b', '#eee1c6', '#0077c0']);
+const team = (abbrev: string) => {
+  const tid = Math.max(
+    0,
+    FRANCHISES.findIndex((f) => f.abbrev === abbrev.toUpperCase()),
+  );
+  return { tid, ...FRANCHISES[tid] };
+};
+const home = team(q.get('home') ?? 'WAS');
+const away = team(q.get('vs') ?? 'MIL');
+const kits = matchKits(q.has('away') ? ['#0c2340', '#c8102e', '#ffffff'] : home.colors, away.colors);
 const scene = new CourtScene(canvas, paints.ball, paints.ballSeam, await loadModels());
 scene.lite(q.has('lite') ? (Math.min(3, Number(q.get('lite')) || 3) as 1 | 2 | 3) : 0);
+// (the app's face, which the lab's page doesn't load itself: the floor's lettering and the boards' are in it)
+const face = new FontFace('Archivo Variable', 'url(/node_modules/@fontsource-variable/archivo/files/archivo-latin-wdth-normal.woff2)', {
+  weight: '100 900',
+  stretch: '62% 125%',
+});
+(document.fonts as unknown as { add(f: FontFace): void }).add(await face.load().catch(() => face));
 const floorCv = document.createElement('canvas');
-const floor: CourtFloor = { kind: 'home', abbrev: 'WAS', name: 'Wizards', colors: ['#002b5c', '#e31837', '#c4ced4'], paint: kits[0].color, trim: kits[0].trim, mark: 'circle' };
+const floor = courtFloor(home, kits[0], q.has('neutral'), 'NBA Cup');
 paintFloor(floorCv, { wide: true, k: 14, w: 0, h: 0, top: 0, ox: 0, oy: 0 }, 1, floor, paints, true);
 scene.setFloor(floorCv);
 
@@ -87,32 +107,30 @@ const props = {
   jersey: (pid: number) => String([3, 11, 23, 34, 5, 0, 12, 22, 7, 15][pid - 1] ?? pid),
   body: (pid: number) => bodyOf(...builds[(pid - 1) % 5]),
   names: (pid: number) => ['Young', 'Porter Jr.', 'Antetokounmpo', 'Lee', 'Sarr', 'George', 'Coulibaly', 'Trent Jr.', 'Kuzma', 'Turner'][pid - 1] ?? '',
-  board: kits[0].color,
+  board: q.has('neutral') ? paints.ink : kits[0].color,
+  venue: venueOf(floor),
   warn: paints.warn,
   // (the game as the court has played it: the letters on the kits, the boards)
-  game: { abbrevs: ['WAS', 'MIL'] as [string, string], score: [54, 51] as [number, number], clock: 312, q: 3 },
+  game: { abbrevs: [home.abbrev, away.abbrev] as [string, string], score: [54, 51] as [number, number], clock: 312, q: 3 },
   ...(q.has('final') && { final: (Number(q.get('final')) ? 1 : 0) as 0 | 1 }),
+  ...(q.has('occasion') && { occasion: q.get('occasion') as Occasion }),
 };
 
 // (the boards' game, made up: the lab has no court to play one)
 if (q.has('game')) {
-  Object.assign(props, { game: { abbrevs: ['WAS', 'MIL'], score: [88, 85], clock: 151.4, q: 4 }, clutch: q.has('clutch') });
-  if (q.has('final')) Object.assign(props, { final: Number(q.get('final')), game: { abbrevs: ['WAS', 'MIL'], score: [104, 99], clock: 0, q: 4 } });
-  // (the app's face, which the lab's page doesn't load itself)
-  const face = new FontFace('Archivo Variable', 'url(/node_modules/@fontsource-variable/archivo/files/archivo-latin-wdth-normal.woff2)', {
-    weight: '100 900',
-    stretch: '62% 125%',
-  });
-  (document.fonts as unknown as { add(f: FontFace): void }).add(await face.load().catch(() => face));
+  Object.assign(props, { game: { abbrevs: [home.abbrev, away.abbrev], score: [88, 85], clock: 151.4, q: 4 }, clutch: q.has('clutch') });
+  if (q.has('final')) Object.assign(props, { final: Number(q.get('final')), game: { abbrevs: [home.abbrev, away.abbrev], score: [104, 99], clock: 0, q: 4 } });
 }
 type Lab = {
   cheer(n: number): void;
+  sideline: { happen(what: string, side: 0 | 1): void; deadMs: number };
   update(ms: number, calm: boolean): void;
   shed(level: number): void;
   boards: { shout(call: string, side: 0 | 1 | null): void; house: { pretend: unknown } };
 };
 const inner = scene as unknown as { renderer: WebGLRenderer; scene: Scene; arena: Lab; rig: { mood(to: number, ms: number): void; drama: number } };
 if (q.has('def') || q.has('ft')) inner.arena.boards.house.pretend = { off: 1, line: q.has('ft'), end: -1, shot: q.has('ft') ? null : 11.2 };
+if (q.has('play')) inner.arena.boards.house.pretend = { off: 0, line: false, end: 1, shot: 14 };
 const [eye0, at0, fov0] = SHOTS[q.get('shot') ?? 'main'] ?? SHOTS.main;
 const eye = vec('eye', eye0);
 const at = vec('at', at0);
@@ -127,9 +145,19 @@ function draw() {
   for (let i = 0; i < 30; i++) {
     // (a still wants the men's finished heads, which a game paints between frames)
     if (i === 27) settleHeads();
-    if (q.has('cheer')) inner.arena.cheer(1);
-    if (q.has('call') && i === 18) inner.arena.boards.shout(q.get('call')!, q.has('by') ? 1 : 0);
+    if (q.has('cheer') && i === 0) inner.arena.cheer(1);
+    if (q.has('call') && i === 18) {
+      inner.arena.boards.shout(q.get('call')!, q.has('by') ? 1 : 0);
+      // (the benches and the coaches take it too)
+      const said = ({ three: 'three', dunk: 'dunk', andOne: 'and1', block: 'block', buzzer: 'buzzer' } as Record<string, string>)[q.get('call')!];
+      if (said) inner.arena.sideline.happen(said, q.has('by') ? 1 : 0);
+    }
     scene.frame(stage, props, 16, (num('t', 2) * 1000) / 30, false, 16);
+  }
+  // (as long after as asked: the buzzer, a bench's reaction; for a reaction, the ball not left dead so long the benches go to a huddle)
+  for (let ms = 0; ms < num('after', 0); ms += 33) {
+    if (q.has('call')) inner.arena.sideline.deadMs = 0;
+    scene.frame(stage, props, 33, 33, false, 33);
   }
   cam.aspect = w / h;
   cam.position.set(eye[0], eye[1], eye[2]);

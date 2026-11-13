@@ -28,6 +28,7 @@ import {
 import { BASKET, COURT_LEN, toWorld, type Script } from '../choreo';
 import type { GameInfo, Stage } from '../Court';
 import type { MatchKit } from '../../teamColors';
+import { ShotClock, shotText } from '../shotClock';
 
 type Keep = <T extends { dispose(): void }>(o: T) => T;
 
@@ -46,10 +47,6 @@ export interface Moment {
   /** How long ago (ms of the clock's real time). */
   ms: number;
 }
-
-/** A possession's shot clock, and what an offensive rebound off the iron sets it to. */
-const SHOT = 24;
-const SHOT_RESET = 14;
 
 /**
  * The game as the building sees it, read off the stage each frame: the score and clock (from the page),
@@ -72,11 +69,8 @@ export class House {
   private script: Script | null = null;
   private seen = 0;
   private score: [number, number] | null = null;
-  // the shot clock: the game clock it was last set at, what to, and where a shot off the iron stopped it
-  private from = 0;
-  private to = SHOT;
-  private held: number | null = null;
-  private walk = Infinity;
+  // the shot clock (the scorebug keeps one of its own off the same stage: the two always agree)
+  private readonly clock = new ShotClock();
   /** Who made the last basket, for which side, and what he has now; and every scorer's points so far (as the court has played them). */
   star: { pid: number; side: 0 | 1; pts: number } | null = null;
   private readonly points = new Map<number, { side: 0 | 1; pts: number }>();
@@ -107,22 +101,14 @@ export class House {
       this.script = sc;
       this.seen = 0;
       this.score = game ? [game.score[0], game.score[1]] : null;
-      this.from = sc.clockStart;
-      this.to = SHOT;
-      this.held = null;
-      // (the walk to the line is the frame before his first shot from it)
-      const ft = sc.frames.findIndex((f) => f.act.includes('ft'));
-      this.walk = ft < 0 ? Infinity : ft - 1;
     }
     this.off = sc.off;
     this.end = toWorld(BASKET, sc.dir).y < COURT_LEN / 2 ? -1 : 1;
     // (the frames before the move it is in have been reached)
     const reached = Math.min(play.i, sc.frames.length);
-    for (; this.seen < reached; this.seen++) this.saw(sc, this.seen, play.clock);
-    this.line = play.i >= this.walk;
-    const shot = Math.max(0, this.held ?? this.to - (this.from - play.clock));
-    // (off at the line, and once the game clock has less on it than the shot clock)
-    this.shot = this.line || play.clock < shot ? null : shot;
+    for (; this.seen < reached; this.seen++) this.saw(sc, this.seen);
+    this.shot = this.clock.read(sc, play);
+    this.line = this.clock.line;
   }
 
   /** A side's top scorer so far (null: nobody has scored for it). */
@@ -132,7 +118,7 @@ export class House {
     return best;
   }
 
-  private saw(sc: Script, k: number, clock: number) {
+  private saw(sc: Script, k: number) {
     const f = sc.frames[k];
     const text = f.flash?.text ?? '';
     const call = (c: Call, side: 0 | 1 | null) => void (this.moment = { call: c, side, ms: 0 });
@@ -156,13 +142,6 @@ export class House {
       call('timeout', ab && text === `Timeout ${ab[0]}` ? 0 : ab && text === `Timeout ${ab[1]}` ? 1 : null);
     }
     if (f.score) this.score = [f.score[0], f.score[1]];
-    // a shot off the iron stops the shot clock; the offense keeping the ball starts it again from 14
-    if (f.fx) this.held = Math.max(0, this.to - (this.from - clock));
-    if (text === 'Off. rebound' || text === 'Team rebound') {
-      this.from = clock;
-      this.to = SHOT_RESET;
-      this.held = null;
-    }
   }
 }
 
@@ -340,10 +319,6 @@ export function clockText(s: number, tenths = true): string {
     return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
   }
   return (Math.floor(Math.max(0, s) * 10) / 10).toFixed(1);
-}
-/** The shot clock: whole seconds, and tenths under five. */
-export function shotText(s: number): string {
-  return s >= 5 ? String(Math.ceil(s - 1e-6)) : (Math.floor(s * 10) / 10).toFixed(1);
 }
 const period = (q: number) => (q <= 4 ? `Q${q}` : q === 5 ? 'OT' : `${q - 4}OT`);
 
@@ -1003,6 +978,8 @@ export class Boards {
   private readonly keep: Keep;
   private kits: [MatchKit, MatchKit] | null = null;
   private board = '';
+  /** The first of the partners this building carries (its own: see paint). */
+  private adFrom = 0;
   private ms = 0;
   private fontsIn = false;
   private dimTo = 1;
@@ -1100,9 +1077,11 @@ export class Boards {
     this.kits = kits;
     this.stale();
   }
-  paint(board: string) {
-    if (board === this.board) return;
+  /** The building's colour, and (`seed`: its own number) which of the partners it carries first. */
+  paint(board: string, seed = 0) {
+    if (board === this.board && seed % ADS.length === this.adFrom) return;
     this.board = board;
+    this.adFrom = seed % ADS.length;
     this.stale();
   }
   private stale() {
@@ -1206,7 +1185,7 @@ export class Boards {
       return shows[0]!;
     };
     /** The partner whose turn it is on a board that changes every `every` s (each board `off` along from the others). */
-    const ad = (every: number, off: number): Show => ({ kind: 'ad', i: Math.floor(secs / every) + off });
+    const ad = (every: number, off: number): Show => ({ kind: 'ad', i: Math.floor(secs / every) + off + this.adFrom });
     const want = (l: Lamps): Show => {
       if (l.kind === 'clock') return { kind: 'clock' };
       if (take) return take;

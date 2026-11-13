@@ -85,6 +85,12 @@ export interface Frame {
   swat?: number;
   /** A whistle: who it was on (an index into [offense..., defense...]), for the 3D figures to react. */
   foul?: number;
+  /**
+   * Who meets whom body to body as the play gets here, two indices into [offense..., defense...]: a screener and
+   * the man guarding the one he screens for, a man boxing out and the man he holds off. The 3D court draws them
+   * touching (the 2D court leaves them where they are).
+   */
+  meet?: [number, number][];
 }
 
 export interface Script {
@@ -495,6 +501,11 @@ export function buildScript(
   const follow = () => {
     dPids.forEach((pid, i) => d.set(pid, defendSpot(pid, i)));
   };
+  /** A screener and the man he screens (the one guarding `freed`, man to man), as a frame's `meet`. */
+  const screens = (scr: number, freed: number): Partial<Frame> => {
+    const on = zone || junk ? undefined : guardOf.get(freed);
+    return on !== undefined && dPids.includes(on) ? { meet: [[oPids.indexOf(scr), nO + dPids.indexOf(on)]] } : {};
+  };
   const moveTo = (pid: number, p: Pt) => {
     const at = { x: clamp(p.x, -24, 24), y: clamp(p.y, 0.5, COURT_LEN - 1) };
     outside.delete(pid);
@@ -723,7 +734,7 @@ export function buildScript(
         moveTo(scr, { x: hp.x + 3, y: hp.y - 1.5 });
         follow();
         does(scr, 'screen', hp);
-        snap(480);
+        snap(480, screens(scr, h));
         moveTo(h, { x: hp.x - 4, y: hp.y - 6 });
         moveTo(scr, { x: hp.x + 1, y: 12 });
         follow();
@@ -807,6 +818,7 @@ export function buildScript(
         follow();
         // (the set's name once, on its first screen)
         snap(480, {
+          ...screens(scr, cut),
           ...(n === 0 && log.set && { flash: { text: SETS[log.set.id].short, kind: 'info' as const, x: spot.x, y: spot.y + 3 } }),
           ...cap(`${N(scr)} screens for ${N(cut)}`),
         });
@@ -958,6 +970,7 @@ export function buildScript(
           .sort((a, b) => dist(o.get(a)!, BASKET) - dist(o.get(b)!, BASKET))
           .slice(0, 2);
         const boxing = new Set<number>();
+        const held: [number, number][] = [];
         for (const p of oPids) {
           if (p === pid) continue;
           const at = o.get(p)!;
@@ -973,6 +986,7 @@ export function buildScript(
           const by = dPids.filter((p) => p !== near && !boxing.has(p)).sort((a, b) => dist(d.get(a)!, m) - dist(d.get(b)!, m))[0];
           if (by === undefined || r < 0.5 || dist(d.get(by)!, m) > 9) continue;
           boxing.add(by);
+          held.push([nO + dPids.indexOf(by), oPids.indexOf(g)]);
           d.set(by, { x: m.x + ((BASKET.x - m.x) / r) * APART, y: m.y + ((BASKET.y - m.y) / r) * APART });
         }
         clearLanding();
@@ -980,6 +994,7 @@ export function buildScript(
         for (const p of dPids) does(p, p === near ? 'land' : boxing.has(p) ? 'boxout' : 'stand', BASKET);
         snap(st.zone === 'rim' ? 380 : Math.round(520 + far * 7), {
           ...(blocker !== undefined && { swat: nO + dPids.indexOf(blocker) }),
+          ...(held.length && { meet: held }),
           ballZ: st.zone === 'rim' ? 2.4 : 4.5 + far * 0.24,
           fx: made ? 'make' : 'miss',
           flash: made ? { text: flashText, kind: 'make', x: 0, y: 10 } : { text: 'Miss', kind: 'miss', x: 0, y: 10 },

@@ -253,6 +253,12 @@ export default function Settings() {
                 help="Players as figures, seen from a broadcast camera. Off: the 2D floor from above. The camera button on the court switches too."
               />
               <Toggle
+                on={st.liveTurn !== 'upright'}
+                onChange={(v) => set('liveTurn', v ? 'side' : 'upright')}
+                label="Sideways on a phone"
+                help="The game fills the screen sideways, so turn your phone. Off: the upright layout."
+              />
+              <Toggle
                 on={st.liveWinProb !== false}
                 onChange={(v) => set('liveWinProb', v)}
                 label="Win bar"

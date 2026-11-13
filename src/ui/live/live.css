@@ -5,7 +5,8 @@
    colours only where a team is the subject (the bug's blocks, the paint, the lineups, the graphics);
    the ink runs the controls. Text over the court is white: it sits on the broadcast's ink plates. */
 
-/* One partial per part of the screen, in cascade order (held sideways last: it overrides the rest). */
+/* One partial per part of the screen, in cascade order (held sideways last: it overrides the rest; a
+   phone's sideways layout after that, over both). */
 @import './styles/page.css';
 @import './styles/scorebug.css';
 @import './styles/court.css';
@@ -14,3 +15,4 @@
 @import './styles/views.css';
 @import './styles/atmos.css';
 @import './styles/landscape.css';
+@import './styles/side.css';

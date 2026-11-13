@@ -13,19 +13,37 @@ import { useEffect, useRef, type MutableRefObject } from 'react';
 import { BASKET, COURT_LEN, toWorld, type Frame, type Pt, type Script } from './choreo';
 import type { ShotRecord, Team } from '../../core/types';
 import { FRANCHISES, type FranchiseDef } from '../../core/teams';
-import { inkOn, type MatchKit } from '../teamColors';
+import { inkOn, neutralVenue, venueLook, type MatchKit, type Venue } from '../teamColors';
 
 /**
  * The floor the game is played on: maple, with the home team's colour painted in both keys and the
- * center circle (its mark there, its name along the baselines), or a neutral one (the Cup final).
+ * center circle (its mark there, its name along the baselines), or a neutral one (the Cup final). Its
+ * building (`venue`, teamColors.ts; worked out from the rest when not said) says how: the stain, the
+ * keys, the apron, the circle, the words, and round the 3D floor the stands.
  */
 export type CourtFloor =
-  { kind: 'home'; abbrev: string; name: string; colors: [string, string, string]; paint: string; trim: string; mark: FranchiseDef['mark'] } | { kind: 'neutral'; name: string };
+  | { kind: 'home'; abbrev: string; name: string; colors: [string, string, string]; paint: string; trim: string; mark: FranchiseDef['mark']; venue?: Venue }
+  | { kind: 'neutral'; name: string; venue?: Venue };
+
+/** A floor's building (a plain neutral one for no floor). */
+export function venueOf(floor: CourtFloor | undefined): Venue {
+  if (floor?.venue) return floor.venue;
+  return floor?.kind === 'home' ? venueLook(floor.colors, floor.paint, floor.trim, floor.abbrev, floor.name, '') : neutralVenue(floor?.name ?? '');
+}
 
 /** The floor of a game at `home`'s arena in tonight's colours (`kit`), or a neutral one; `neutralName` goes along the baselines there. */
-export function courtFloor(home: Pick<Team, 'tid' | 'abbrev' | 'name' | 'colors'>, kit: MatchKit, neutral: boolean, neutralName = ''): CourtFloor {
-  if (neutral) return { kind: 'neutral', name: neutralName };
-  return { kind: 'home', abbrev: home.abbrev, name: home.name, colors: home.colors, paint: kit.color, trim: kit.trim, mark: FRANCHISES[home.tid]?.mark ?? 'circle' };
+export function courtFloor(home: Pick<Team, 'tid' | 'abbrev' | 'name' | 'region' | 'colors'>, kit: MatchKit, neutral: boolean, neutralName = ''): CourtFloor {
+  if (neutral) return { kind: 'neutral', name: neutralName, venue: neutralVenue(neutralName) };
+  return {
+    kind: 'home',
+    abbrev: home.abbrev,
+    name: home.name,
+    colors: home.colors,
+    paint: kit.color,
+    trim: kit.trim,
+    mark: FRANCHISES[home.tid]?.mark ?? 'circle',
+    venue: venueLook(home.colors, kit.color, kit.trim, home.abbrev, home.name, home.region),
+  };
 }
 
 /** What the court shows between possessions. */
@@ -45,7 +63,8 @@ export interface CourtProps {
   kits: [MatchKit, MatchKit];
   jersey: (pid: number) => string;
   onDone: () => void;
-  onTick?: (clock: number, score: [number, number] | null) => void;
+  /** The clock and score reached as the possession plays (and the shot clock, null while off: CourtView reads it off the stage). */
+  onTick?: (clock: number, score: [number, number] | null, shot?: number | null) => void;
   /** The last frame the court has reached, as it changes (the call bar's caption follows it). */
   onBeat?: (frame: number) => void;
   /** The ball handler's name tag (none without it). */
@@ -540,10 +559,13 @@ const grain = (n: number) => {
 };
 
 /**
- * The floor, painted once at the canvas's size: maple boards along its length, the darker apron,
- * the home team's paint in both keys and the center circle, the lines, the baskets, its mark at
- * center court. Flat, as a broadcast graphic draws it (no lighting, no gloss). `bare`: the wood one
- * even colour, no boards (the 3D court's floor draws its own strips over it: see court3d/lens.ts).
+ * The floor, painted once at the canvas's size: the maple in its building's stain, the apron, the keys
+ * and the center circle as the building does them (venue: teamColors.ts), the lines, the baskets, the
+ * mark at center court and the words round the floor. Flat, as a broadcast graphic draws it (no
+ * lighting, no gloss). The view from above (the tactics view) keeps it quiet, so the players, the ball
+ * and the marks read first: boards only a breath apart, the paint and the mark let down into the wood,
+ * no words along the sidelines. `bare`: the 3D court's, the wood one even colour (its floor draws its
+ * own strips over it: see court3d/lens.ts), and the building's colours at full strength.
  */
 export function paintFloor(cv: HTMLCanvasElement, view: View, dpr: number, floor: CourtFloor | undefined, paints: Paints, bare = false) {
   const { k, wide } = view;
@@ -555,42 +577,91 @@ export function paintFloor(cv: HTMLCanvasElement, view: View, dpr: number, floor
   if (wide) ctx.setTransform(0, -s, s, 0, END * s, (HALF_W + SIDE) * s);
   else ctx.setTransform(s, 0, 0, s, (HALF_W + SIDE) * s, END * s);
   const px = (n: number) => n / k;
-  // a neutral floor (the Cup final): the paint in ink, a gold pinstripe
+  // (no floor said: a plain neutral one, the paint in ink, a gold pinstripe)
   const home = floor?.kind === 'home' ? floor : null;
-  const paint = home?.paint ?? paints.ink;
-  const trim = home?.trim ?? '#c9a24a';
+  const v = venueOf(floor);
+  const wood = floor ? v.wood : paints.wood;
+  // (the view from above lets the paint down into the wood: it is where the play is, not the play)
+  const paintAlpha = bare ? 1 : 0.62;
+  const ends = (draw: () => void) => {
+    for (const turn of [0, 1]) {
+      ctx.save();
+      if (turn) {
+        ctx.translate(0, COURT_LEN);
+        ctx.scale(-1, -1);
+      }
+      draw();
+      ctx.restore();
+    }
+  };
+  const arcR = 23.75;
+  const cornerY = BASKET.y + Math.sqrt(arcR * arcR - 22 * 22);
+  const ang = Math.atan2(cornerY - BASKET.y, -22);
+  const threes = () => {
+    ctx.beginPath();
+    ctx.moveTo(-22, 0);
+    ctx.lineTo(-22, cornerY);
+    ctx.arc(0, BASKET.y, arcR, ang, Math.PI - ang, true);
+    ctx.lineTo(22, 0);
+  };
 
-  // boards along the court's length, each a shade apart, their joints staggered
-  ctx.fillStyle = paints.wood;
+  // the wood: one even stain (the 3D floor draws its strips); from above, boards along the court's
+  // length a breath apart (no seams, no joints, no grain: the court's own lines are enough for the eye)
+  ctx.fillStyle = wood;
   ctx.fillRect(-HALF_W - SIDE, -END, FLOOR_W, FLOOR_L);
   const board = 1.15;
   for (let i = 0, x = -HALF_W - SIDE; !bare && x < HALF_W + SIDE; i++, x += board) {
     const r = grain(i);
-    ctx.globalAlpha = r > 0.5 ? (r - 0.5) * 0.5 : (0.5 - r) * 0.9;
+    ctx.globalAlpha = Math.abs(r - 0.5) * 0.09;
     ctx.fillStyle = r > 0.5 ? '#fff6e4' : paints.wood2;
     ctx.fillRect(x, -END, board, FLOOR_L);
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = paints.seam;
-    ctx.fillRect(x, -END, px(1), FLOOR_L);
-    for (let y = -END - grain(i + 99) * 11; y < COURT_LEN + END; y += 11) ctx.fillRect(x, y, board, px(1));
   }
-  // the apron: stained darker all round, a pinstripe in the trim where it meets the court
-  ctx.fillStyle = 'rgba(96, 54, 16, 0.42)';
+  ctx.globalAlpha = 1;
+  // a two-tone floor: inside each three-point line a stain of its own
+  if (v.arc) {
+    ctx.fillStyle = v.arc;
+    ends(() => {
+      threes();
+      ctx.closePath();
+      ctx.fill();
+    });
+  }
+  // the apron, all round, and a pinstripe where it meets the court
+  ctx.fillStyle = v.apron;
   ctx.beginPath();
   ctx.rect(-HALF_W - SIDE, -END, FLOOR_W, FLOOR_L);
   ctx.rect(-HALF_W, 0, 2 * HALF_W, COURT_LEN);
   ctx.fill('evenodd');
-  ctx.strokeStyle = trim;
+  ctx.strokeStyle = v.pin;
   ctx.lineWidth = Math.max(px(1.5), 0.18);
   ctx.strokeRect(-HALF_W - 0.45, -0.45, 2 * HALF_W + 0.9, COURT_LEN + 0.9);
 
-  // the paint: both keys and the center circle, solid in the home team's colour
-  ctx.fillStyle = paint;
-  ctx.fillRect(-8, 0, 16, 19);
-  ctx.fillRect(-8, COURT_LEN - 19, 16, 19);
+  // the keys: painted solid, or stained dark and edged in the paint
+  ends(() => {
+    if (v.key === 'stain') {
+      ctx.fillStyle = 'rgba(74, 40, 14, 0.34)';
+      ctx.fillRect(-8, 0, 16, 19);
+      ctx.globalAlpha = paintAlpha;
+      ctx.fillStyle = v.paint;
+      ctx.beginPath();
+      ctx.rect(-8, 0, 16, 19);
+      ctx.rect(-6.9, 0, 13.8, 17.9);
+      ctx.fill('evenodd');
+    } else {
+      ctx.globalAlpha = paintAlpha;
+      ctx.fillStyle = v.paint;
+      ctx.fillRect(-8, 0, 16, 19);
+    }
+    ctx.globalAlpha = 1;
+  });
+  // the center circle: filled, or a band of the paint inside its line (a big mark covers it: see below)
+  ctx.globalAlpha = paintAlpha;
+  ctx.fillStyle = v.paint;
   ctx.beginPath();
   ctx.arc(0, COURT_LEN / 2, 6, 0, Math.PI * 2);
-  ctx.fill();
+  if (v.circle === 'ring') ctx.arc(0, COURT_LEN / 2, 4.9, 0, Math.PI * 2, true);
+  if (v.circle !== 'big') ctx.fill();
+  ctx.globalAlpha = 1;
 
   // the lines
   ctx.strokeStyle = paints.line;
@@ -608,12 +679,7 @@ export function paintFloor(cv: HTMLCanvasElement, view: View, dpr: number, floor
   ctx.arc(0, COURT_LEN / 2, 6, 0, Math.PI * 2);
   ctx.stroke();
   // each end the same, turned about center court
-  for (const turn of [0, 1]) {
-    ctx.save();
-    if (turn) {
-      ctx.translate(0, COURT_LEN);
-      ctx.scale(-1, -1);
-    }
+  ends(() => {
     ctx.lineWidth = line;
     ctx.strokeStyle = paints.line;
     ctx.strokeRect(-8, 0, 16, 19);
@@ -629,14 +695,7 @@ export function paintFloor(cv: HTMLCanvasElement, view: View, dpr: number, floor
     ctx.setLineDash([]);
     // the three-point line: straight in the corners, the arc above them
     ctx.lineWidth = line;
-    const arcR = 23.75;
-    const cornerY = BASKET.y + Math.sqrt(arcR * arcR - 22 * 22);
-    const ang = Math.atan2(cornerY - BASKET.y, -22);
-    ctx.beginPath();
-    ctx.moveTo(-22, 0);
-    ctx.lineTo(-22, cornerY);
-    ctx.arc(0, BASKET.y, arcR, ang, Math.PI - ang, true);
-    ctx.lineTo(22, 0);
+    threes();
     ctx.stroke();
     // the restricted area, the lane's hash marks and blocks
     ctx.beginPath();
@@ -670,32 +729,35 @@ export function paintFloor(cv: HTMLCanvasElement, view: View, dpr: number, floor
     ctx.beginPath();
     ctx.arc(0, BASKET.y, 0.75, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.restore();
-  }
+  });
 
   // the lettering and the mark are drawn upright on the screen, whichever way the floor is turned
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const at = (p: Pt) => project({ ...view, top: -END, ox: 0, oy: 0 }, p);
-  const name = floor?.name ?? '';
-  const size = END * k * 0.56;
-  if (name && size >= TEXT_MIN - 1) {
+  const words = (text: string, p: Pt, size: number, turn: boolean) => {
+    if (!text || size < TEXT_MIN - 1) return;
     setFont(ctx, 820, size);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = paints.line;
-    for (const y of [-END / 2 - 0.25, COURT_LEN + END / 2 + 0.25]) {
-      const p = at({ x: 0, y });
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      // (sideways, it runs up the baseline it's painted along)
-      if (wide) ctx.rotate(-Math.PI / 2);
-      ctx.fillText(name, 0, 0.5);
-      ctx.restore();
-    }
-  }
+    ctx.fillStyle = v.apronInk;
+    const q = at(p);
+    ctx.save();
+    ctx.translate(q.x, q.y);
+    if (turn) ctx.rotate(-Math.PI / 2);
+    ctx.fillText(text, 0, 0.5);
+    ctx.restore();
+  };
+  // along the baselines (sideways, each runs up the baseline it's painted along); along the sidelines, the
+  // city, on the 3D floor only (from above it is one more thing to read)
+  const size = END * k * 0.56;
+  words(v.baselines[0], { x: 0, y: -END / 2 - 0.25 }, size, wide);
+  words(v.baselines[1], { x: 0, y: COURT_LEN + END / 2 + 0.25 }, size, wide);
+  if (bare) for (const side of [-1, 1]) words(v.sideline, { x: side * (HALF_W + SIDE / 2 + 0.05), y: COURT_LEN / 2 }, SIDE * k * 0.62, !wide);
   const c = at({ x: 0, y: COURT_LEN / 2 });
-  if (home) drawMark(ctx, c.x, c.y, 8.6 * k, home);
-  else drawNeutralMark(ctx, c.x, c.y, 4.3 * k, trim, paint);
+  ctx.globalAlpha = bare ? 1 : 0.55;
+  if (home) drawMark(ctx, c.x, c.y, (v.circle === 'big' ? 15 : 8.6) * k, home);
+  else drawNeutralMark(ctx, c.x, c.y, 4.3 * k, v.pin, v.paint);
+  ctx.globalAlpha = 1;
 }
 
 /** The team's mark as TeamLogo draws it (its shape in its colours, the abbreviation inside), `size` across. */
@@ -1001,57 +1063,170 @@ function drawFlash(ctx: CanvasRenderingContext2D, view: View, at: Pt, text: stri
 }
 
 /**
- * The shot chart a break shows on the floor: each team's shots at the end it attacks first (upright,
- * both at the one end in view), a made
- * one a dot in its colour and a miss a cross in it, both edged in white, with its count beside center
- * court. (Told apart by shape, not by which is filled: on a key painted the team's own colour a
- * filled dot reads as a ring and a white one as the solid mark.)
+ * The shot chart a break shows on the floor. The floor steps back under an ink veil, so the marks are
+ * the picture, each in its team's colour as it reads on ink (the break board's chips): a make a solid
+ * dot, a miss a thinner cross, under the makes, both edged in ink so a pile of them reads as so many
+ * shots. Each team's shots are at the end it attacks first (upright, both at the one end in view, told
+ * apart by colour). Marks that land on one another are eased apart (spread), never far and the same
+ * way every time. Each team's count beside center court, its colour beside it, and the key under it.
  */
 function drawChart(ctx: CanvasRenderingContext2D, view: View, shots: ShotRecord[], kits: [MatchKit, MatchKit], abbrevs: [string, string] | undefined, paints: Paints) {
   const k = view.k;
-  const r = Math.max(0.85 * k, 3.5);
+  const r = Math.max(0.8 * k, 4);
+  ctx.fillStyle = 'rgba(18, 18, 18, 0.58)';
+  ctx.fillRect(0, 0, view.w, view.h);
   // (upright, the window shows one end: both teams' shots go on it, told apart by colour)
   const dirOf = (t: 0 | 1) => (t === 0 || !view.wide ? 1 : -1) as 1 | -1;
-  // misses under makes: a make is a dot in the team's colour, a miss a cross in it
+  // misses first (under), then makes; each set in the order it was taken
+  const order = [...shots.filter((sh) => !sh.made), ...shots.filter((sh) => sh.made)];
+  const at = spread(
+    order.map((sh) => project(view, toWorld({ x: sh.x, y: sh.y }, dirOf(sh.t)))),
+    r * 1.75,
+    r * 5,
+  );
   ctx.lineCap = 'round';
-  for (const made of [false, true]) {
-    for (const sh of shots) {
-      if (sh.made !== made) continue;
-      const p = project(view, toWorld({ x: sh.x, y: sh.y }, dirOf(sh.t)));
-      const kit = kits[sh.t];
-      ctx.beginPath();
-      if (made) {
-        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-        ctx.fillStyle = kit.color;
-        ctx.fill();
-        ctx.strokeStyle = paints.line;
-        ctx.lineWidth = Math.max(1.5, r * 0.3);
-        ctx.stroke();
-        continue;
-      }
-      const a = r * 0.8;
-      ctx.moveTo(p.x - a, p.y - a);
-      ctx.lineTo(p.x + a, p.y + a);
-      ctx.moveTo(p.x + a, p.y - a);
-      ctx.lineTo(p.x - a, p.y + a);
-      // (white under the colour: the cross keeps its edge on any paint)
-      ctx.strokeStyle = paints.line;
-      ctx.lineWidth = Math.max(4, r * 0.95);
+  order.forEach((sh, i) => {
+    const p = at[i];
+    const color = kits[sh.t].night;
+    ctx.beginPath();
+    if (sh.made) {
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.strokeStyle = paints.ink;
+      ctx.lineWidth = Math.max(1.5, r * 0.22);
       ctx.stroke();
-      ctx.strokeStyle = kit.color;
-      ctx.lineWidth = Math.max(2, r * 0.5);
-      ctx.stroke();
+      return;
     }
-  }
+    const a = r * 0.7;
+    ctx.moveTo(p.x - a, p.y - a);
+    ctx.lineTo(p.x + a, p.y + a);
+    ctx.moveTo(p.x + a, p.y - a);
+    ctx.lineTo(p.x - a, p.y + a);
+    // (ink under the colour: crosses on crosses keep their edges)
+    ctx.strokeStyle = paints.ink;
+    ctx.lineWidth = Math.max(4, r * 0.8);
+    ctx.stroke();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(2, r * 0.38);
+    ctx.stroke();
+  });
   ctx.lineCap = 'butt';
-  // each team's count, on its half's sideline beside center court (clear of the arc and the mark)
+  // each team's count beside center court on the far sideline's apron, clear of the shots (upright, along the
+  // foot of the window), the one whose shots are on the left to the left of the line; the key on the near one
+  const px = Math.max(TEXT_MIN, Math.min(15, k * 2.6));
+  const mid = project(view, { x: 0, y: COURT_LEN / 2 });
+  const row = view.wide ? project(view, { x: HALF_W + SIDE / 2, y: COURT_LEN / 2 }).y : view.h - px * 1.2 - 6;
   for (const t of [0, 1] as const) {
     const mine = shots.filter((s) => s.t === t);
     if (!mine.length) continue;
     const made = mine.filter((s) => s.made).length;
-    const p = project(view, view.wide ? toWorld({ x: 21 * dirOf(t), y: 37 }, dirOf(t)) : { x: t === 0 ? -13 : 13, y: 36 });
-    pill(ctx, view, p.x, p.y, `${abbrevs?.[t] ?? (t === 0 ? 'Home' : 'Away')} ${made} of ${mine.length}`, Math.max(TEXT_MIN, Math.min(15, k * 2.6)), paints.line, paints, 700);
+    const left = view.wide ? project(view, toWorld(BASKET, dirOf(t))).x < mid.x : t === 1;
+    chip(
+      ctx,
+      view,
+      mid.x + (left ? -1 : 1) * px * 0.4,
+      row,
+      `${abbrevs?.[t] ?? (t === 0 ? 'Home' : 'Away')} ${made} of ${mine.length}`,
+      px,
+      left ? 'right' : 'left',
+      paints,
+      kits[t].night,
+    );
   }
+  if (!shots.length) return;
+  const foot = view.wide ? project(view, { x: -(HALF_W + SIDE / 2), y: COURT_LEN / 2 }).y : row - px * 1.9;
+  chip(ctx, view, mid.x, foot, '', px, 'key', paints);
+}
+
+/**
+ * Marks that land on one another (a dozen at the rim), eased apart: each pair closer than `gap` px is
+ * pushed apart along the line between them, a few times over, and none ends up more than `most` px from
+ * where it was. Two on the very same spot start a hair apart, each its own way round, so the same shots
+ * always land in the same places.
+ */
+export function spread(pts: Pt[], gap: number, most: number): Pt[] {
+  const out = pts.map((p, i) => ({ x: p.x + Math.cos(i * 2.39996) * gap * 0.02, y: p.y + Math.sin(i * 2.39996) * gap * 0.02 }));
+  for (let pass = 0; pass < 14; pass++) {
+    let moved = false;
+    for (let i = 0; i < out.length; i++) {
+      for (let j = i + 1; j < out.length; j++) {
+        const dx = out[j].x - out[i].x;
+        const dy = out[j].y - out[i].y;
+        const d = Math.hypot(dx, dy);
+        if (d >= gap || d === 0) continue;
+        const push = (gap - d) / 2;
+        out[i].x -= (dx / d) * push;
+        out[i].y -= (dy / d) * push;
+        out[j].x += (dx / d) * push;
+        out[j].y += (dy / d) * push;
+        moved = true;
+      }
+    }
+    // (never far from where it was taken)
+    out.forEach((p, i) => {
+      const dx = p.x - pts[i].x;
+      const dy = p.y - pts[i].y;
+      const d = Math.hypot(dx, dy);
+      if (d > most) {
+        p.x = pts[i].x + (dx / d) * most;
+        p.y = pts[i].y + (dy / d) * most;
+      }
+    });
+    if (!moved) break;
+  }
+  return out;
+}
+
+/**
+ * A chart's label: an ink pill at (x, y), its `anchor` edge there (or centered), a team's count with a dot
+ * of its colour before it; or, for `key`, what the marks mean: a dot, Made, a cross, Missed.
+ */
+function chip(ctx: CanvasRenderingContext2D, view: View, x: number, y: number, text: string, px: number, anchor: 'left' | 'right' | 'key', paints: Paints, swatch?: string) {
+  setFont(ctx, 700, px, 'semi-condensed');
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  const dot = px * 0.36;
+  const gap = px * 0.4;
+  const words = anchor === 'key' ? ['Made', 'Missed'].map((w) => ctx.measureText(w).width) : [ctx.measureText(text).width];
+  const inner = anchor === 'key' ? 2 * (dot * 2 + gap) + words[0] + words[1] + px * 0.9 : dot * 2 + gap + words[0];
+  const w = inner + px * 1.1;
+  const h = px * 1.55;
+  const x0 = clamp(anchor === 'right' ? x - w : anchor === 'left' ? x : x - w / 2, 4, view.w - w - 4);
+  const cy = clamp(y, h / 2 + 4, view.h - h / 2 - 4);
+  ctx.fillStyle = paints.ink;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x0, cy - h / 2, w, h, h / 2);
+  else ctx.rect(x0, cy - h / 2, w, h);
+  ctx.fill();
+  let cx = x0 + px * 0.55;
+  ctx.fillStyle = ctx.strokeStyle = swatch ?? paints.line;
+  if (anchor !== 'key') {
+    ctx.beginPath();
+    ctx.arc(cx + dot, cy, dot, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = paints.line;
+    ctx.fillText(text, cx + dot * 2 + gap, cy + 0.5);
+    return;
+  }
+  // the key, in white: a dot for a make, a cross for a miss
+  ctx.beginPath();
+  ctx.arc(cx + dot, cy, dot, 0, Math.PI * 2);
+  ctx.fill();
+  cx += dot * 2 + gap;
+  ctx.fillText('Made', cx, cy + 0.5);
+  cx += words[0] + px * 0.9;
+  const a = dot * 0.8;
+  ctx.lineWidth = Math.max(2, px * 0.15);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx + dot - a, cy - a);
+  ctx.lineTo(cx + dot + a, cy + a);
+  ctx.moveTo(cx + dot + a, cy - a);
+  ctx.lineTo(cx + dot - a, cy + a);
+  ctx.stroke();
+  ctx.lineCap = 'butt';
+  ctx.fillText('Missed', cx + dot * 2 + gap, cy + 0.5);
 }
 
 /** Clutch time: the building's lights come down around the floor. */

@@ -9,7 +9,9 @@
 // one of six kinds, each man off his kind (look.ts), and his face works: his jaw comes open on his teeth
 // in the air and when he shouts, his brows come down, his eyes blink. Close up the material draws his
 // eyes itself (see EYES), and his head is lit by a lamp on the camera as well as the building's, so his
-// dark skin is a face with planes and not a shape (the material's uTone, uBlink, uIris, uEye).
+// dark skin is a face with planes and not a shape (the material's uTone, uBlink, uIris, uEye). His skin
+// has a grain close up and a warm edge where a lamp's light leaves it (PORES, SKIN_WRAP), and goes to his
+// hair and his beard over a little way, as their picture does, never in a step.
 //
 // Everything he wears is one picture (his sheet, see `Sheet`): his vest with its number and name, the
 // shorts with their side panels and the team's mark, his head (his face, his hair and beard),
@@ -460,6 +462,9 @@ const STUFF = {
   sock: [0.92, 0.7, 0.55],
   sleeve: [0.5, 0.45, 0.25],
   terry: [0.95, 0.85, 0.8],
+  tape: [0.7, 0.2, 0.15],
+  // (a headband: terry too, but on his head its second channel says how much of his skin a point is, and it is none)
+  band: [0.95, 0.3, 0],
   leather: [0.4, 0, 0],
   // (behind his lips: wet teeth, and the dark)
   tooth: [0.25, 0, 0],
@@ -649,6 +654,8 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
   const simg = new ImageData(sw, sh);
   const skin = rgbOf(look.skin);
   const hair = rgbOf(look.hair);
+  // (his brows and his beard are his hair's own colour, whatever he has done to the hair on his head)
+  const brows = rgbOf(look.brows);
   const iris = rgbOf(look.eyes);
   const bandRgb = band ? rgbOf(band) : null;
   // (lips are the skin's colour, redder; darker skin's are browner than they are red, the upper one darker than
@@ -674,6 +681,15 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
     return [Math.sin(el), Math.cos(el)] as const;
   });
   const c: Rgb = [0, 0, 0];
+  /**
+   * What the point is made of (how rough, how much of a sheen: the stuff picture's first two channels), mixed from one
+   * stuff toward another as its colour is: skin goes to hair over a hairline, to a beard over its edge, never in a step.
+   */
+  const sv = [0, 0];
+  const made = (k: Stuff, t: number) => {
+    sv[0] += (STUFF[k][0] - sv[0]) * t;
+    sv[1] += (STUFF[k][1] - sv[1]) * t;
+  };
   /** Mixes the point's colour toward another. */
   const to = (k: Rgb | readonly number[], t: number) => {
     c[0] += (k[0] - c[0]) * t;
@@ -701,7 +717,8 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
       c[0] = skin[0];
       c[1] = skin[1];
       c[2] = skin[2];
-      let stuff: Stuff = 'skin';
+      sv[0] = STUFF.skin[0];
+      sv[1] = STUFF.skin[1];
       let lift = 0;
       const ax = Math.abs(nx);
       // (each kind of grain is worked out only where something is drawn with it: most points need none)
@@ -714,7 +731,10 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
         const px = (nx / fz) * 0.8;
         const py = (ny / fz) * 0.8;
         const apx = Math.abs(px);
-        stuff = 'face';
+        made('face', 1);
+        // (and its shine: most down his nose and across his forehead, least on his cheeks; uneven, as skin is)
+        sv[0] +=
+          -0.1 * bump(px, py, 0, -0.1, 0.09, 0.3) - 0.06 * bump(px, py, 0, 0.45, 0.4, 0.16) + 0.05 * bump(apx, py, 0.5, -0.3, 0.2, 0.22) + 0.04 * (noise(nx * 40, ny * 40) - 0.5);
         // skin is never one colour: lighter where the bone is near it and the light falls (his forehead, the bridge of his
         // nose, his chin), redder where the blood is (his cheeks, the end of his nose), uneven everywhere
         const mottle = noise(nx * 21 + nz * 13, ny * 21 - nz * 9) - 0.5;
@@ -725,7 +745,7 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
         if (py < 0.3 && py > -0.3 && apx < 0.2) to([skin[0] * 1.1, skin[1] * 1.08, skin[2] * 1.05], 0.3 * bump(px, py, 0, -0.03, 0.032, 0.16));
         if (py < -0.7) to([skin[0] * 1.06, skin[1] * 1.04, skin[2] * 1.02], 0.25 * bump(px, py, 0, -0.86, 0.14, 0.08));
         if (py < 0.3 && py > -0.75) to([skin[0] * 1.05, skin[1] * 0.87, skin[2] * 0.84], 0.4 * bump(apx, py, 0.56, -0.24, 0.24, 0.2) + 0.4 * bump(px, py, 0, -0.25, 0.12, 0.09));
-        if (py > 0.3 && py < 0.66) stuff = 'sweat';
+        made('sweat', sstep(0.26, 0.34, py) * sstep(0.7, 0.6, py) * 0.7);
         // the hollows: round the eyes (darkest beside the nose and under the eye), under the brow, beside the nose and
         // under it, its nostrils, the fold from its wing past the mouth, under the lower lip, under the cheekbone
         if (py > -0.2 && py < 0.4 && apx < 0.9)
@@ -737,7 +757,7 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
         // (a clean-shaven man's jaw is a shade darker where his beard would be)
         if (look.beard === 0 && py < -0.3)
           to(
-            [hair[0] * 0.6 + skin[0] * 0.4, hair[1] * 0.6 + skin[1] * 0.4, hair[2] * 0.6 + skin[2] * 0.4],
+            [brows[0] * 0.6 + skin[0] * 0.4, brows[1] * 0.6 + skin[1] * 0.4, brows[2] * 0.6 + skin[2] * 0.4],
             shadow * (0.5 * sstep(-0.36, -0.42, py) * sstep(0.42, 0.3, apx) * (1 - bump(px, py, 0, -0.52, 0.3, 0.07)) + 0.5 * sstep(-0.62, -0.72, py)),
           );
         // his mouth: the upper lip with its bow, the fuller lower one, the line between them, the paler edge round them
@@ -761,7 +781,7 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
               to([1, 0.94, 0.9], 0.16 * inLip * bump(px, py, 0.01, my - 0.04 * full, 0.1, 0.014));
               shade(0.16 * inLip * sstep(my - 0.05 * full, low, py));
             } else shade(0.1 * inLip * sstep(up - 0.03, my, py));
-            if (inLip > 0.5) stuff = 'lip';
+            made('lip', inLip);
           }
           // (the line between them, deepest at the corners)
           to([skin[0] * 0.16, skin[1] * 0.09, skin[2] * 0.09], 0.9 * sstep(0.0085, 0.003, Math.abs(py - my + 0.03 * t * t * t)) * sstep(mw + 0.02, mw - 0.03, apx));
@@ -785,20 +805,20 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
           to([skin[0] * 0.45, skin[1] * 0.36, skin[2] * 0.34], 0.5 * sstep(0.014, 0.0, Math.abs(ey - up - 0.034)) * sstep(ew + 0.05, ew - 0.03, Math.abs(ex)));
           to([skin[0] * 1.06, skin[1] * 0.92, skin[2] * 0.9], 0.3 * sstep(0.012, 0.002, Math.abs(ey - low + 0.012)) * sstep(ew, ew - 0.04, Math.abs(ex)));
           if (open > 0) {
-            const white: Rgb = [0.68, 0.65, 0.62];
+            const white: Rgb = [0.6, 0.57, 0.53];
             // (the lid's shadow on the top of the eye; its corners redder)
-            const lidShade = 0.5 + 0.5 * sstep(up, up - 0.045, ey);
+            const lidShade = 0.42 + 0.58 * sstep(up, up - 0.05, ey);
             to([white[0] * lidShade, white[1] * lidShade * (1 - 0.16 * t * t), white[2] * lidShade * (1 - 0.2 * t * t)], open);
             const r = Math.hypot(ex / IRIS[0], (ey - IRIS[2]) / IRIS[1]);
             if (r < 1.1) {
               const ir = sstep(1.08, 0.94, r) * open;
-              const glow = 0.75 + 0.75 * sstep(0.4, 0.85, r) - 0.9 * sstep(0.8, 1.0, r);
+              const glow = 0.95 + 0.35 * sstep(0.44, 0.6, r) * sstep(0.9, 0.62, r) - 0.6 * sstep(0.78, 1.0, r);
               to([iris[0] * glow * lidShade, iris[1] * glow * lidShade, iris[2] * glow * lidShade], ir);
-              to([0.02, 0.015, 0.015], sstep(0.46, 0.36, r) * open);
+              to([0.02, 0.015, 0.015], sstep(0.49, 0.39, r) * open);
               // (the light in his eye, up and toward his nose's other side: the same side in both)
               to([1, 1, 1], 0.7 * open * sstep(0.22, 0.08, Math.hypot((px - Math.sign(px) * EYE[0] - 0.02) / IRIS[0], (ey - IRIS[2] - 0.016) / IRIS[1])));
             }
-            if (open > 0.5) stuff = 'eye';
+            made('eye', open);
           }
           // lashes along the upper lid (heavier toward its outer end), a thinner line under the lower one
           to([0.06, 0.045, 0.04], 0.9 * sstep(0.014, 0.004, Math.abs(ey - up - 0.004)) * sstep(ew + 0.025, ew - 0.01, Math.abs(ex)) * (0.75 + 0.25 * sstep(-ew, ew, ex)));
@@ -814,79 +834,95 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
           const along = apx * Math.cos(lean) + py * Math.sin(lean);
           const hairs = noise((apx * Math.sin(lean) - py * Math.cos(lean)) * 95, along * 16);
           // (its edges are hairs, not a line: thinner, and broken)
-          const on = sstep(thick * (1.05 + 0.5 * (hairs - 0.5)), thick * 0.3, Math.abs(py - yb)) * sstep(-0.07, 0.07, q + 0.08 * (hairs - 0.5)) * sstep(1.05, 0.88, q);
-          to([hair[0] * 0.85, hair[1] * 0.85, hair[2] * 0.85], on * (0.5 + 0.42 * look.brow) * (0.55 + 0.6 * hairs));
+          // (a notch shaved through one of them, near its end, if he has one)
+          const notch = look.notch && Math.sign(px) === look.side ? sstep(0.02, 0.008, Math.abs(q - 0.68)) : 0;
+          const on =
+            sstep(thick * (1.05 + 0.5 * (hairs - 0.5)), thick * 0.3, Math.abs(py - yb)) * sstep(-0.07, 0.07, q + 0.08 * (hairs - 0.5)) * sstep(1.05, 0.88, q) * (1 - notch);
+          to([brows[0] * 0.85, brows[1] * 0.85, brows[2] * 0.85], on * (0.5 + 0.42 * look.brow) * (0.55 + 0.6 * hairs));
         }
       }
 
       // his beard: stubble, a goatee round his mouth, all of his jaw (shorter up his cheeks), a full one, or a strap
-      // along the line of his jaw; its edge thins out into single hairs, and it is hairs all through
-      if (look.beard > 0 && nz > -0.25 && ny < 0.32) {
+      // along the line of his jaw; its edge thins out into single hairs over a little way (no plate laid on him), and
+      // it is hairs all through, his skin showing between them; round a goatee or a strap the rest of his beard's
+      // ground has the shadow of a shave
+      if (look.beard > 0 && nz > -0.25 && ny < 0.36) {
         const fz = Math.max(nz, 0.3);
         const px = (nx / fz) * 0.8;
         const py = (ny / fz) * 0.8;
         const apx = Math.abs(px);
-        const front = nz > 0.3 ? 1 : 0;
+        const front = sstep(0.2, 0.36, nz);
         // (round the mouth: over the lip, down beside it, the chin; never on the lips)
-        const lips = front * sstep(0.31, 0.25, apx) * sstep(-0.63, -0.6, py) * sstep(-0.44, -0.47, py);
-        const tache = front * sstep(-0.345, -0.39, py) * sstep(-0.54, -0.47, py) * sstep(0.38, 0.29, apx) * (1 - 0.75 * bump(px, py, 0, -0.4, 0.03, 0.035));
-        const bars = front * sstep(0.2, 0.27, apx) * sstep(0.42, 0.33, apx) * sstep(-0.46, -0.54, py) * sstep(-1.0, -0.8, py);
-        const chin = sstep(-0.63, -0.71, py) * sstep(0.44, 0.32, apx) * front * sstep(-1.3, -1.05, py);
+        const lips = front * sstep(0.32, 0.25, apx) * sstep(-0.645, -0.6, py) * sstep(-0.435, -0.475, py);
+        const tache = front * sstep(-0.33, -0.4, py) * sstep(-0.55, -0.47, py) * sstep(0.4, 0.28, apx) * (1 - 0.65 * bump(px, py, 0, -0.39, 0.035, 0.04));
+        const bars = front * sstep(0.18, 0.28, apx) * sstep(0.45, 0.32, apx) * sstep(-0.44, -0.56, py) * sstep(-1.05, -0.8, py);
+        const chin = sstep(-0.61, -0.73, py) * sstep(0.47, 0.3, apx) * front * sstep(-1.35, -1.05, py);
         // (the tuft under the lower lip)
-        const patch = front * bump(px, py, 0, -0.655, 0.05, 0.035);
+        const patch = front * bump(px, py, 0, -0.655, 0.06, 0.04);
         const round = Math.max(tache, bars, chin, patch) * (1 - lips);
         // (his jaw and cheeks: under a line from his ear down to the corner of his mouth, as far as under his chin)
         // (the line is a man's own, never ruled: it wanders a little)
         const line = ny + 0.52 - 0.62 * (ax - 0.3) - 0.5 * (ax - 0.3) * (ax - 0.3) + 0.06 * (noise(ax * 3.5 + 3, nz * 3.5) - 0.5);
-        const under = sstep(-1.0, -0.9, ny) * sstep(-0.2, -0.08, nz) * (1 - lips);
+        const under = sstep(-1.02, -0.88, ny) * sstep(-0.24, -0.05, nz) * (1 - lips);
         // (and up in front of his ear it narrows to the sideburn his hair comes down to meet)
-        const burn = sstep(0.0, 0.09, nz) * sstep(0.34, 0.2, nz) * sstep(0.3, 0.16, ny) * sstep(-0.3, -0.1, ny) * sstep(0.6, 0.8, ax);
+        const burn = sstep(-0.02, 0.1, nz) * sstep(0.36, 0.18, nz) * sstep(0.32, 0.14, ny) * sstep(-0.32, -0.08, ny) * sstep(0.58, 0.8, ax);
+        const high = sstep(0.04, -0.14, ny - 0.25 * (nz + 0.1));
         const cheek = Math.max(
-          (look.beard === 1 ? sstep(0.16, -0.3, line + 0.25 * ax * ax) : sstep(0.05, -0.08, line + 0.2 * (ax - 0.5) * (ax - 0.5))) *
-            under *
-            sstep(0.0, -0.12, ny - 0.25 * (nz + 0.1)),
+          (look.beard === 1 ? sstep(0.2, -0.32, line + 0.25 * ax * ax) : sstep(0.1, -0.12, line + 0.2 * (ax - 0.5) * (ax - 0.5))) * under * high,
           burn * (look.beard === 2 || look.beard === 5 ? 0 : 1),
         );
+        // (where a shaved beard's shadow is: a little further up than any beard)
+        const ground = Math.max(round, sstep(0.2, -0.1, line + 0.2 * (ax - 0.5) * (ax - 0.5)) * under * high);
         // (a strap: a finger's width along the edge of his jaw, from ear to ear by way of his chin)
         const edge = Math.max(0.25 * ax - ny - 0.66 * nz - 0.71, -ny + 0.12 * nz - 1.137);
-        const strap = Math.max(sstep(-0.27, -0.17, edge) * sstep(0.01, -0.04, edge) * sstep(-0.12, -0.3, ny), 0.9 * patch) * under;
+        const strap = Math.max(sstep(-0.29, -0.16, edge) * sstep(0.03, -0.05, edge) * sstep(-0.1, -0.32, ny), 0.9 * patch) * under;
         // (hairs: fine ones every way for stubble, longer ones lying down his jaw for a beard)
         const speck = noise(nx * 64 + nz * 41, ny * 64 - nz * 29);
         const strand = noise(nx * 52 + nz * 26, ny * 17 + nz * 7);
-        const frayed = (m: number, by: number) => sstep(0.5 - by, 0.5 + by, m + (strand - 0.5) * 2 * by + (speck - 0.5) * by);
+        const fine2 = noise(nx * 150 + nz * 90, ny * 60 - nz * 50);
+        // (how thick it grows there: thinning out to nothing over its edge, in single hairs)
+        const frayed = (m: number, by: number) => sstep(0.5 - by, 0.5 + by, m + (strand - 0.5) * 1.6 * by + (speck - 0.5) * by + (fine2 - 0.5) * 0.8 * by);
+        const shave = ground * (0.12 + 0.12 * speck);
         let on = 0;
         let deep = 0;
-        if (look.beard === 1) on = Math.max(round, cheek) * (0.17 + 0.2 * speck);
+        if (look.beard === 1) on = Math.max(round, cheek) * (0.15 + 0.22 * speck + 0.08 * fine2);
         else if (look.beard === 2) {
-          const m = frayed(round, 0.22);
-          on = m * (0.74 + 0.26 * strand);
-          deep = 0.009 * m;
+          const m = frayed(round, 0.34);
+          on = Math.max(m * (0.7 + 0.22 * strand + 0.08 * fine2), shave);
+          deep = 0.009 * sstep(0.35, 0.95, round);
         } else if (look.beard === 5) {
-          const m = frayed(strap, 0.2);
-          on = Math.max(m * (0.72 + 0.28 * strand), Math.max(round, cheek) * (0.1 + 0.1 * speck));
-          deep = 0.007 * m;
+          const m = frayed(strap, 0.3);
+          on = Math.max(m * (0.7 + 0.22 * strand + 0.08 * fine2), shave);
+          deep = 0.007 * sstep(0.35, 0.95, strap);
         } else {
-          const m = frayed(Math.max(round, cheek), look.beard === 4 ? 0.2 : 0.3);
-          on = m * (0.72 + 0.28 * strand) * (look.beard === 3 ? 0.9 : 1);
-          deep = (look.beard === 4 ? 0.03 + 0.045 * sstep(-0.5, -0.9, ny) : 0.011) * m * sstep(0.2, 0.6, Math.max(round, cheek));
+          const all = Math.max(round, cheek);
+          const m = frayed(all, look.beard === 4 ? 0.32 : 0.38);
+          on = Math.max(m * (0.72 + 0.2 * strand + 0.08 * fine2) * (look.beard === 3 ? 0.9 : 1), shave);
+          deep = (look.beard === 4 ? 0.03 + 0.045 * sstep(-0.5, -0.9, ny) : 0.011) * sstep(0.3, 0.95, all);
         }
         if (on > 0) {
           // (lighter where a hair catches the light, darker between two; a touch of his skin's warmth in it)
-          const g = 0.55 + 0.7 * strand + 0.25 * (speck - 0.5);
-          to([hair[0] * g + 0.03 * skin[0], hair[1] * g + 0.02 * skin[1], hair[2] * g + 0.015 * skin[2]], on);
-          if (on > 0.5) stuff = 'beard';
+          const g = 0.55 + 0.6 * strand + 0.25 * (speck - 0.5) + 0.2 * (fine2 - 0.5);
+          to([brows[0] * g + 0.03 * skin[0], brows[1] * g + 0.02 * skin[1], brows[2] * g + 0.015 * skin[2]], on);
+          made('beard', sstep(0.15, 0.65, on));
           lift = Math.max(lift, deep);
         }
       }
 
       // his hair: over the hairline, as he wears it
       const round = Math.atan2(ax, nz);
-      const line = ny - hairlineAt(round);
-      if (line > -0.12) {
-        // (no line drawn round his head: the hair thins out to the skin over a little way, unevenly, as a hairline does)
-        const over = (soft: number) => sstep(-0.9 * soft, 1.6 * soft, line + (fine() - 0.5) * soft * 1.5);
-        // (how far up from the hairline of his sides and back: a fade is skin there and hair by the crown; never at his forehead)
-        const fade = Math.max(sstep(0.0, 0.3, line), sstep(1.0, 0.45, round));
+      // (a man whose hairline has gone back has lost it most at his temples, a little across his forehead)
+      const line = ny - hairlineAt(round) - look.recede * (0.15 * Math.exp(-(((round - 0.78) / 0.3) ** 2)) + 0.05 * Math.exp(-((round / 0.5) ** 2)));
+      if (line > -0.14) {
+        // (no line drawn round his head: the hair thins out to the skin over a little way, unevenly, as a hairline
+        // does, a few short hairs ahead of it)
+        const wisp = noise(nx * 13 + nz * 7, ny * 13 - nz * 5);
+        const over = (soft: number) => sstep(-0.9 * soft, 1.5 * soft, line + (fine() - 0.5) * soft * 0.8 + (wisp - 0.5) * soft * 1.2);
+        // (how far up his sides and back: a fade is skin there and hair by the crown, never at his forehead. Each man's
+        // barber takes it as high as he does, and leaves as much on top)
+        const high = -0.2 + 0.55 * look.cut.sides;
+        const fade = Math.max(sstep(high, high + 0.24, ny), sstep(1.15, 0.75, round) * sstep(0.3, 0.45, ny));
+        const top = 0.6 + 0.8 * look.cut.top;
         const curled = style === 'curls' || style === 'afro' || style === 'twists' || style === 'locs' || style === 'hightop';
         const curl = curled ? noise(nx * 34 + nz * 23, ny * 34 + nz * 17) : 0;
         // (rows and combed hair run front to back, evenly round him)
@@ -899,11 +935,11 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
             cover = 0.14 * over(0.1);
             break;
           case 'buzz':
-            cover = (0.66 + 0.12 * fine()) * over(0.06);
+            cover = (0.56 + 0.2 * look.cut.top + 0.12 * fine()) * over(0.06);
             break;
           case 'fade':
-            cover = 0.94 * over(0.07) * (0.2 + 0.8 * fade);
-            lift = 0.02 * fade * over(0.05);
+            cover = 0.94 * over(0.045) * (0.2 + 0.8 * fade);
+            lift = 0.02 * top * fade * over(0.05);
             tex = 0.85 + 0.3 * fine();
             break;
           case 'curls':
@@ -947,26 +983,52 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
             break;
           case 'crop':
             cover = over(0.04) * (0.55 + 0.45 * fade);
-            lift = 0.01 + 0.05 * sstep(0.3, 0.7, ny) * over(0.05) + 0.025 * sstep(0.35, 0.9, nz) * sstep(0.5, 0.7, ny);
+            lift = 0.01 + 0.05 * top * sstep(0.3, 0.7, ny) * over(0.05) + 0.025 * top * sstep(0.35, 0.9, nz) * sstep(0.5, 0.7, ny);
             tex = 0.7 + 0.6 * streak;
             break;
+          case 'waves': {
+            // (brushed flat, in rings round his crown: ridge and trough, as far down as the hairline)
+            const fromCrown = Math.acos(Math.max(-1, Math.min(1, 0.85 * ny - 0.53 * nz)));
+            const ring = 0.5 + 0.5 * Math.sin(fromCrown * 58 + 4 * (wisp - 0.5) + Math.atan2(nx, -nz) * 1.5);
+            cover = (0.84 + 0.1 * fine()) * over(0.05);
+            lift = 0.007 * over(0.05);
+            tex = 0.68 + 0.5 * ring;
+            break;
+          }
+          case 'part': {
+            // (a short fade, longer on top, a line shaved through it on one side, from his forehead back)
+            const on = Math.abs(across * look.side - 0.44) / Math.max(0.15, nz + 0.6);
+            const cut = sstep(0.022, 0.01, on) * sstep(0.25, 0.4, ny) * sstep(-0.5, -0.1, nz);
+            cover = 0.94 * over(0.045) * (0.2 + 0.8 * fade) * (1 - 0.85 * cut);
+            lift = (0.018 + 0.012 * sstep(0.45, 0.75, ny)) * top * fade * over(0.05) * (1 - 0.6 * cut);
+            tex = 0.82 + 0.3 * fine();
+            break;
+          }
+          case 'mohawk': {
+            // (a strip over the top from his forehead to his crown, the sides cut to his skin)
+            const strip = sstep(0.44, 0.27, Math.abs(nx) / Math.max(0.3, Math.hypot(ny, nz))) * sstep(0.12, 0.35, ny);
+            cover = over(0.05) * Math.max(0.18, strip);
+            lift = (0.012 + 0.036 * sstep(0.3, 0.75, ny)) * top * strip * over(0.05);
+            tex = 0.72 + 0.5 * noise(nx * 34 + nz * 23, ny * 34 + nz * 17);
+            break;
+          }
         }
         if (cover > 0) {
           to([hair[0] * tex, hair[1] * tex, hair[2] * tex], cover);
-          if (cover > 0.4) stuff = 'hair';
-          else if (ny > 0.3) stuff = 'scalp';
+          if (ny > 0.3) made('scalp', sstep(0.0, 0.2, cover));
+          made('hair', sstep(0.2, 0.7, cover));
         }
       } else if (nz < 0.1 && ny > -0.5 && ax > 0.8) {
         // (his ears: a little redder than his cheeks, their bowl in shade)
         to([skin[0] * 1.04, skin[1] * 0.9, skin[2] * 0.87], 0.35);
         shade(0.22 * bump(nz, ny, -0.2, -0.06, 0.035, 0.07));
       }
-      if (bandRgb && ny > 0.1 && Math.abs(ny - 0.34 - 0.13 * nz) < 0.062) {
-        c[0] = bandRgb[0];
-        c[1] = bandRgb[1];
-        c[2] = bandRgb[2];
-        stuff = 'terry';
-        lift = Math.max(lift * 0.5, 0.012);
+      // (a headband, its edges a little soft as cloth's are: no stair of pixels down them)
+      const onBand = bandRgb && ny > 0.1 ? sstep(0.068, 0.058, Math.abs(ny - 0.34 - 0.13 * nz)) : 0;
+      if (onBand > 0) {
+        to(bandRgb!, onBand);
+        made('band', onBand);
+        lift = lift + (Math.max(lift * 0.5, 0.012) - lift) * onBand;
       }
       const o = (j * w + i) * 4;
       img.data[o] = c[0] * 255;
@@ -975,9 +1037,8 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
       img.data[o + 3] = 255;
       if (i % sk === 0 && j % sk === 0) {
         const so = ((j / sk) * sw + i / sk) * 4;
-        const v = STUFF[stuff];
-        simg.data[so] = v[0] * 255;
-        simg.data[so + 1] = v[1] * 255;
+        simg.data[so] = sv[0] * 255;
+        simg.data[so + 1] = sv[1] * 255;
         simg.data[so + 2] = (lift / HAIR_MAX) * 255;
         simg.data[so + 3] = 255;
       }
@@ -1094,7 +1155,7 @@ function sewn(ctx: CanvasRenderingContext2D, text: string, x: number, y: number,
   ctx.fillText(text, x, y, most);
 }
 
-/** A man's own things, the same every night (from his seed): a headband, what he wears on his arms and legs, his shoes. */
+/** A man's own things, the same every night (from his seed): a headband, what he wears on his arms and legs (tape round a wrist), his shoes. */
 interface Gear {
   band: string | null;
   /** A shooting sleeve: on which arm (0 left, 1 right) and its colour. */
@@ -1108,6 +1169,8 @@ interface Gear {
   tights: string | null;
   pads: { legs: (0 | 1)[]; color: string } | null;
   armband: { arm: 0 | 1; color: string } | null;
+  /** White tape round a wrist or both (under a wristband, none). */
+  tape: (0 | 1)[] | null;
   /** His shoes: the upper's colour and its second one, the foam's and the tread's, the laces'; cut high round the ankle or low. */
   shoe: { base: string; accent: string; sole: string; tread: string; lace: string; high: boolean };
 }
@@ -1156,7 +1219,9 @@ function gearOf(seed: number, kit: MatchKit): Gear {
   // (pads go on bare knees: a man in a leg sleeve has his knee covered already)
   const pads = !leg && padRoll < 0.16 ? { legs: (padRoll < 0.1 ? [0, 1] : [r() < 0.5 ? 0 : 1]) as (0 | 1)[], color: one([BLACK, BLACK, WHITE]) } : null;
   const armband = !sleeve && r() < 0.1 ? { arm: (r() < 0.5 ? 0 : 1) as 0 | 1, color: one(allowed) } : null;
-  return { band, sleeve, wrist, leg, sockDrop, shoe, tights, pads, armband };
+  const tapeRoll = r();
+  const tape = tapeRoll < 0.18 ? ((tapeRoll < 0.07 ? [0, 1] : [r() < 0.5 ? 0 : 1]) as (0 | 1)[]).filter((k) => !wrist?.arms.includes(k)) : null;
+  return { band, sleeve, wrist, leg, sockDrop, shoe, tights, pads, armband, tape: tape?.length ? tape : null };
 }
 
 /** How far along the shoe's picture a place on the foot is (0 the heel's end, 1 the toe's), from how far forward of the ankle it is (ft). */
@@ -1575,6 +1640,7 @@ function paint(kit: MatchKit, num: string, name: string, mark: string, gear: Gea
       if (gear.sleeve?.arm === side) span(0.28, 2.08, gear.sleeve.color, 'sleeve');
       if (gear.wrist?.arms.includes(side)) span(1.86, 2.1, gear.wrist.color, 'terry');
       if (gear.armband?.arm === side) span(0.62, 0.72, gear.armband.color, 'terry');
+      if (gear.tape?.includes(side)) span(2.0, 2.14, '#ebe8e1', 'tape');
     } else {
       // socks from the shoe up to mid-calf (lower for some), a band of the team's colour at the top of a white one
       const sock = kit.light ? WHITE : kit.color;
@@ -1611,13 +1677,55 @@ vec3 knitNormal( vec3 surf_pos, vec3 surf_norm, vec2 dHdxy, float faceDirection 
   float fDet = dot( vSigmaX, R1 ) * faceDirection;
   vec3 vGrad = sign( fDet ) * ( dHdxy.x * R1 + dHdxy.y * R2 );
   return normalize( abs( fDet ) * surf_norm - vGrad );
+}
+// (numbers that look random and are a place's own, and the same eased between places: his skin's grain)
+float grain3( vec3 p ) {
+  p = fract( p * 0.3183099 + 0.1 );
+  p *= 17.0;
+  return fract( p.x * p.y * p.z * ( p.x + p.y + p.z ) );
+}
+float noise3( vec3 x ) {
+  vec3 i = floor( x );
+  vec3 f = fract( x );
+  f = f * f * ( 3.0 - 2.0 * f );
+  return mix(
+    mix( mix( grain3( i ), grain3( i + vec3( 1.0, 0.0, 0.0 ) ), f.x ), mix( grain3( i + vec3( 0.0, 1.0, 0.0 ) ), grain3( i + vec3( 1.0, 1.0, 0.0 ) ), f.x ), f.y ),
+    mix( mix( grain3( i + vec3( 0.0, 0.0, 1.0 ) ), grain3( i + vec3( 1.0, 0.0, 1.0 ) ), f.x ), mix( grain3( i + vec3( 0.0, 1.0, 1.0 ) ), grain3( i + vec3( 1.0, 1.0, 1.0 ) ), f.x ), f.y ),
+    f.z );
 }`;
 /** The knit's stitches: this many to the sheet's width (a few millimetres apart on his vest), and how deep they are (ft: a tenth of a millimetre). */
 const KNIT = 640;
 const KNIT_DEEP = 0.0003;
+/**
+ * His skin close up: its grain (pores and the little hills between them, this many to the foot of him as built:
+ * a millimetre or so apart), and the grain of hair cropped close (tufts a few millimetres across); how deep each
+ * is (ft). Worked out in his own frame (where he is as built), so it goes with him and never swims.
+ */
+const PORES = 260;
+const PORES_DEEP = 0.00014;
+const TUFTS = 110;
+const TUFTS_DEEP = 0.0009;
+/** How far past the line where the light stops falling on his skin it still comes out of it, warmer (a share of the turn: see RE_Direct_Skin). */
+const WRAP_SKIN = '0.55';
 /** How much light of its own his head has (a share of its colour), for the lightest skin; the darkest has this many times that again (see uTone). */
 const FACE_FILL = '0.32';
 const FACE_FILL_DARK = '3.2';
+/**
+ * Light that goes into skin comes out of it a little way on, redder: past the line where a lamp stops falling on
+ * him his skin keeps a warm edge of it, as no cloth does (a soft terminator, not a hard one). `skinWrap` is how
+ * much of his skin the point is (set where his colour is worked out).
+ */
+const SKIN_WRAP = /* glsl */ `
+float skinWrap = 0.0;
+void RE_Direct_Skin( const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight ) {
+  RE_Direct_Physical( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );
+  float nl = dot( geometryNormal, directLight.direction );
+  float wrap = saturate( ( nl + ${WRAP_SKIN} ) / ( 1.0 + ${WRAP_SKIN} ) );
+  float past = max( wrap * wrap - saturate( nl ), 0.0 );
+  reflectedLight.directDiffuse += skinWrap * past * directLight.color * BRDF_Lambert( material.diffuseColor ) * vec3( 1.0, 0.4, 0.26 );
+}
+#undef RE_Direct
+#define RE_Direct RE_Direct_Skin`;
 
 /** Where a place on the plane of his face (figure.py's face_at) is on the sheet, in uv. */
 function faceUv(px: number, py: number): [number, number] {
@@ -1675,20 +1783,26 @@ const EYES = (() => {
         float top = up + 0.016 * smoothstep( 0.0, 0.4, uBlink );
         float gap = inX * smoothstep( low - aa, low + aa, ey ) * ( 1.0 - smoothstep( top - aa, top + aa, ey ) );
         float under = 1.0 - smoothstep( lid - aa, lid + aa, ey );
-        // the ball: its white, in the lid's shade at the top and redder at the corners
-        float lidShade = 0.42 + 0.58 * smoothstep( lid, lid - 0.05, ey );
-        vec3 eye = ${rgb([0.7, 0.67, 0.64])} * lidShade * vec3( 1.0, 1.0 - 0.2 * t * t, 1.0 - 0.26 * t * t );
+        // the ball: its white (never as white as a picture of one: it is wet, and in the shade of his lid and his brow),
+        // in the lid's shade at the top, greyer and redder toward the corners
+        float lidShade = 0.36 + 0.64 * smoothstep( lid, lid - 0.055, ey );
+        vec3 eye = ${rgb([0.6, 0.57, 0.53])} * lidShade * vec3( 1.0, 1.0 - 0.22 * t * t, 1.0 - 0.3 * t * t );
         vec2 ip = vec2( ex / ${f(IRIS[0])}, ( ey - ${f(IRIS[2])} ) / ${f(IRIS[1])} );
         float r = length( ip );
         float ar = aa / ${f(IRIS[1])};
         float ang = atan( ip.y, ip.x );
         float fibre = 0.86 + 0.14 * sin( ang * 26.0 + 3.0 * sin( ang * 7.0 ) );
-        vec3 ic = uIris * ( 0.8 + 1.1 * smoothstep( 0.38, 0.8, r ) - 1.5 * smoothstep( 0.78, 1.0, r ) ) * fibre * lidShade;
+        // (an iris is its own colour all through, a little lighter in a ring round the pupil and dark at its rim: no glow)
+        vec3 ic = uIris * ( 0.95 + 0.4 * smoothstep( 0.44, 0.6, r ) * ( 1.0 - smoothstep( 0.62, 0.9, r ) ) - 0.6 * smoothstep( 0.78, 1.0, r ) ) * fibre * lidShade;
         eye = mix( eye, max( ic, vec3( 0.0 ) ), 1.0 - smoothstep( 1.0 - ar, 1.0 + ar, r ) );
-        eye = mix( eye, vec3( 0.002 ), 1.0 - smoothstep( 0.42 - ar, 0.42 + ar, r ) );
+        eye = mix( eye, vec3( 0.002 ), 1.0 - smoothstep( 0.45 - ar, 0.45 + ar, r ) );
         // (the light in it: up and to one side, the same side in both)
         float cl = length( vec2( ( ex - side * 0.02 ) / ${f(IRIS[0])}, ( ey - ${f(IRIS[2] + 0.017)} ) / ${f(IRIS[1])} ) );
-        eye = mix( eye, vec3( 1.0 ), 0.9 * ( 1.0 - smoothstep( 0.13 - ar, 0.13 + ar, cl ) ) );
+        eye = mix( eye, vec3( 1.0 ), 0.85 * ( 1.0 - smoothstep( 0.11 - ar, 0.11 + ar, cl ) ) );
+        // (the wet edge of his lower lid along the bottom of it, and the pink of its inner corner)
+        float wet = inX * ( 1.0 - smoothstep( low + 0.004, low + 0.012 + aa, ey ) );
+        eye = mix( eye, uSkin * vec3( 1.3, 0.95, 0.9 ) + vec3( 0.04, 0.025, 0.025 ), 0.5 * wet );
+        eye = mix( eye, ${rgb([0.62, 0.38, 0.35])} * lidShade, 0.75 * smoothstep( - w + 0.045, - w + 0.012, ex ) );
         // (and a fainter one across from it, the floor's)
         float cl2 = length( vec2( ( ex + side * 0.022 ) / ${f(IRIS[0])}, ( ey - ${f(IRIS[2] - 0.014)} ) / ${f(IRIS[1])} ) );
         eye = mix( eye, vec3( 0.6, 0.5, 0.4 ), 0.3 * ( 1.0 - smoothstep( 0.1, 0.3, cl2 ) ) );
@@ -1699,22 +1813,30 @@ const EYES = (() => {
         float lash = inX * ( 1.0 - smoothstep( 0.006, 0.006 + 2.0 * aa, abs( ey - lid - 0.003 ) ) ) * ( 0.7 + 0.3 * smoothstep( - w, w, ex ) );
         diffuseColor.rgb = mix( diffuseColor.rgb, ${rgb([0.07, 0.05, 0.045])}, 0.92 * lash * show );
         shut = max( shut, gap * ( 1.0 - under ) );
+        eyeK = max( eyeK, gap * under * show );
       }
     }`;
 })();
 
-/** What a man's material is told of him as he plays: how dark his skin is (0 the lightest tone, 1 the darkest), its colour, how far shut his eyes are; his eyes' colour, and how they are set (their tilt, how far open). */
+/**
+ * What a man's material is told of him as he plays: how dark his skin is (0 the lightest tone, 1 the darkest), its
+ * colour, how far shut his eyes are; his eyes' colour, and how they are set (their tilt, how far open); how far his
+ * mouth is open (shut, his teeth are in the dark behind his lips).
+ */
 interface Told {
   uTone: { value: number };
   uSkin: { value: Color };
   uBlink: { value: number };
   uIris: { value: Color };
   uEye: { value: Vector2 };
+  uMouth: { value: number };
 }
 
 /** Where his head is on the sheet (in uv): there the stuff picture's third channel is how far his hair stands off him, not a knit. */
 const HEAD_UV = [R_HEAD[0] / SHEET, 1 - (R_HEAD[1] + R_HEAD[3]) / SHEET, (R_HEAD[0] + R_HEAD[2]) / SHEET, 1 - R_HEAD[1] / SHEET].map((v) => v.toFixed(4));
 const ON_HEAD = (uv: string) => `( ${uv}.x > ${HEAD_UV[0]} && ${uv}.y > ${HEAD_UV[1]} && ${uv}.y < ${HEAD_UV[3]} )`;
+/** Where his teeth are on the sheet (in uv). */
+const TEETH_UV = [R_TEETH[0] / SHEET, (R_TEETH[0] + R_TEETH[2]) / SHEET, 1 - R_TEETH[1] / SHEET].map((v) => v.toFixed(4));
 
 /**
  * His material, from his sheet and its stuff picture. `plain` (a device that can't keep up) is a
@@ -1728,24 +1850,44 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
     sh.uniforms.uStuff = { value: stuff };
     Object.assign(sh.uniforms, told);
     // his hair stands off his head by as much as his crop says (pushed out as built, before his bones carry it)
+    // (and where each point of him is as built, for his skin's grain: see PORES)
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform sampler2D uStuff;')
-      .replace('#include <begin_vertex>', `#include <begin_vertex>\nif ${ON_HEAD('uv')} transformed += normal * textureLod( uStuff, uv, 0.0 ).b * ${HAIR_MAX.toFixed(3)};`);
+      .replace('#include <common>', '#include <common>\nuniform sampler2D uStuff;\nvarying vec3 vRest;')
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>\nvRest = position;\nif ${ON_HEAD('uv')} transformed += normal * textureLod( uStuff, uv, 0.0 ).b * ${HAIR_MAX.toFixed(3)};`,
+      );
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', `#include <common>\n${STUFF_PARS}\nuniform float uTone;\nuniform vec3 uSkin;\nuniform float uBlink;\nuniform vec3 uIris;\nuniform vec2 uEye;`)
+      .replace(
+        '#include <common>',
+        `#include <common>\n${STUFF_PARS}\nuniform float uTone;\nuniform vec3 uSkin;\nuniform float uBlink;\nuniform vec3 uIris;\nuniform vec2 uEye;\nuniform float uMouth;\nvarying vec3 vRest;`,
+      )
+      .replace('#include <lights_physical_pars_fragment>', `#include <lights_physical_pars_fragment>\n${SKIN_WRAP}`)
       // (skin's hollows are warm, not grey: the shade baked into him takes less of its red than of its blue)
       .replace(
         '#include <color_fragment>',
         /* glsl */ `vec4 stuff = texture2D( uStuff, vMapUv );
-        float skinK = smoothstep( 0.92, 0.98, stuff.g );
+        // (how much of his skin a point is: on his head it goes from skin to hair over his hairline and his beard's
+        // edge as the picture does, so nothing his skin has stops in a step there)
+        float skinK = ${ON_HEAD('vMapUv')} ? smoothstep( 0.35, 0.97, stuff.g ) : smoothstep( 0.92, 0.98, stuff.g );
+        skinWrap = skinK;
         float shut = 0.0;
+        float eyeK = 0.0;
         ${EYES}
+        // (an eye drawn by the picture, far off: the whites take none of his face's own light, or they glow)
+        eyeK = max( eyeK, skinK * ( 1.0 - smoothstep( 0.1, 0.22, stuff.r ) ) );
         // (dark skin's hollows go to black under a light from above long before light skin's do: its shade is let off some)
         vec3 baked = mix( vColor.rgb, vec3( 1.0 ), 0.35 * uTone * skinK );
-        diffuseColor.rgb *= mix( vColor.rgb, pow( baked, vec3( 0.84, 1.03, 1.16 ) ), skinK );`,
+        diffuseColor.rgb *= mix( vColor.rgb, pow( baked, vec3( 0.84, 1.03, 1.16 ) ), skinK );
+        // (his teeth, in the dark behind his lips till his mouth comes open)
+        if ( vMapUv.x > ${TEETH_UV[0]} && vMapUv.x < ${TEETH_UV[1]} && vMapUv.y < ${TEETH_UV[2]} ) diffuseColor.rgb *= mix( 0.1, 1.0, smoothstep( 0.03, 0.4, uMouth ) );`,
       )
-      // (dark skin is read by the light that glances off it more than by the little it gives back: it has more of a shine)
-      .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = mix( stuff.r, 0.55, shut ) * ( 1.0 - 0.2 * uTone * skinK );')
+      // (dark skin is read by the light that glances off it more than by the little it gives back: it has more of a shine;
+      // and no skin is one shine all over: a little more here, a little less there)
+      .replace(
+        '#include <roughnessmap_fragment>',
+        'float roughnessFactor = mix( stuff.r, 0.55, shut ) * ( 1.0 - 0.2 * uTone * skinK ) * ( skinK > 0.0 ? 1.0 + 0.16 * skinK * ( noise3( vRest * 38.0 ) - 0.5 ) : 1.0 );',
+      )
       // (and what light comes to it off the building is warmer on it than on cloth: a little of it has been through him)
       // (his head has a little light of its own, most where it faces the camera: under the arena's top light a face is read by it)
       .replace(
@@ -1757,7 +1899,7 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
         // down from it is not, so his brow, his nose and his jaw are shapes in it and not one flat glow)
         float lamp = saturate( dot( normal, normalize( normalize( vViewPosition ) + ( viewMatrix * vec4( 0.0, 0.55, 0.0, 0.0 ) ).xyz ) ) );
         // (the darker his skin, the more of that light it needs to be a face and not a shape; and the rest of his skin has some too)
-        if ${ON_HEAD('vMapUv')} reflectedLight.indirectDiffuse += diffuseColor.rgb * ${FACE_FILL} * ( 1.0 + ${FACE_FILL_DARK} * uTone ) * ( 0.14 + 0.86 * lamp * lamp );
+        if ${ON_HEAD('vMapUv')} reflectedLight.indirectDiffuse += diffuseColor.rgb * ${FACE_FILL} * ( 1.0 + ${FACE_FILL_DARK} * uTone ) * ( 0.14 + 0.86 * lamp * lamp ) * ( 1.0 - 0.75 * eyeK );
         else reflectedLight.indirectDiffuse += diffuseColor.rgb * 0.7 * uTone * skinK * ( 0.3 + 0.7 * toward );
         // (and a rim of light along the edges that face up: the top light catching the round of a brow, a cheek, a shoulder)
         float rim = pow( 1.0 - toward, 3.0 ) * saturate( 0.35 + 0.65 * dot( normal, normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz ) ) );
@@ -1776,6 +1918,19 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
           if ( fine > 0.0 ) {
             float h = sin( kp.x * 6.2832 ) * sin( kp.y * 6.2832 + 1.4 * sin( kp.x * 3.1416 ) );
             normal = knitNormal( - vViewPosition, normal, vec2( dFdx( h ), dFdy( h ) ) * ${KNIT_DEEP} * stuff.b * fine, faceDirection );
+          }
+        }
+        {
+          // his skin's grain close up (the little hills of it, and its pores), and his cropped hair's (on his head, what
+          // is not skin: his hair, his beard); each gone before it is finer than the pixels
+          vec3 pp = vRest * ${PORES.toFixed(1)};
+          float hills = skinK * ( 1.0 - smoothstep( 0.25, 0.6, length( fwidth( pp * 0.37 ) ) ) );
+          float pores = skinK * ( 1.0 - smoothstep( 0.3, 0.7, length( fwidth( pp ) ) ) );
+          vec3 tp = vRest * ${TUFTS.toFixed(1)};
+          float tufts = ( ${ON_HEAD('vMapUv')} ? 1.0 - skinK : 0.0 ) * ( 1.0 - smoothstep( 0.3, 0.7, length( fwidth( tp ) ) ) );
+          if ( hills + tufts > 0.0 ) {
+            float h = ${PORES_DEEP} * ( hills * noise3( pp * 0.37 ) - pores * 0.6 * smoothstep( 0.7, 0.92, noise3( pp ) ) ) + ${TUFTS_DEEP} * tufts * noise3( tp );
+            normal = knitNormal( - vViewPosition, normal, vec2( dFdx( h ), dFdy( h ) ), faceDirection );
           }
         }`,
       )
@@ -1872,6 +2027,7 @@ export class Fig {
       uBlink: { value: 0 },
       uIris: { value: new Color(look.eyes) },
       uEye: { value: new Vector2(EYE_TILT * look.face.tilt, EYE_OPEN * look.face.open) },
+      uMouth: { value: 0 },
     };
     // (he blinks in his own time: every few seconds, never with the man beside him)
     this.blinks = [3.1 + (((seed * 7) % 11) / 11) * 2.6, ((seed * 13) % 17) / 17];
@@ -1969,21 +2125,28 @@ export class Fig {
    * where it points now, with none of the arm's own twist. The cap of his shoulder and his armpit hang on
    * it, so an arm overhead, forward or at his side bends there in two gentle turns. (Both swings are taken
    * from an arm straight out to the side: the one way an arm never points is straight in through his chest.)
+   * An arm let down below where it was built goes less of the way with it: the top of a shoulder stays where
+   * it is over an arm that hangs (taken half way, its cap would swing out over the arm, a ball on his side).
    */
   private girdle(k: number, arm: number, side: 1 | -1, joint: Vector3, elbow: Vector3) {
     const chest = this.bones[B.chest].quaternion;
     const now = W3.copy(elbow).sub(joint).normalize().applyQuaternion(Q.copy(chest).invert());
     const out = E.set(side, 0, 0);
     QA.setFromUnitVectors(out, D.set(side * Math.sin(ARM_OUT), -Math.cos(ARM_OUT), 0));
-    QB.setFromUnitVectors(out, now).slerp(QA, 0.5).multiply(QA.invert());
+    const lowered = -Math.cos(ARM_OUT) - now.y;
+    const way = 0.5 - 0.2 * sstep(0, 0.18, lowered);
+    QB.setFromUnitVectors(out, now)
+      .slerp(QA, 1 - way)
+      .multiply(QA.invert());
     const b = this.bones[k];
     b.position.copy(joint);
     b.quaternion
       .copy(chest)
       .multiply(QB)
       .multiply(Q.setFromAxisAngle(ZA, side * ARM_OUT));
-    // (as thick as his arm is where it meets it)
+    // (as thick as his arm is where it meets it; an arm let down draws the cap in over it a little, as its muscle lies flat)
     b.scale.copy(this.bones[arm].scale);
+    b.scale.x *= 1 - 0.1 * sstep(0, 0.18, lowered);
   }
 
   /** The skin onto the puppet's joints. */
@@ -2041,6 +2204,7 @@ export class Fig {
     const ease = 1 - Math.exp(-dt * 14);
     this.jawOpen += (Math.max(0.3 * air, open * talk) - this.jawOpen) * ease;
     this.frown += (Math.max(0.6 * air, frown) - this.frown) * ease;
+    this.told.uMouth.value = this.jawOpen;
     // (his jaw swings about its hinge by his ear, not about where it is scaled from)
     const jaw = this.bones[B.jaw];
     Q.setFromAxisAngle(XA, JAW_SWING * this.jawOpen);

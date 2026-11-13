@@ -323,8 +323,12 @@ first: wide screens get the same single column, centred, at most 788px. Grid col
 
 ## The live game
 
-Broadcast first. From the top: the ink scorebug, the call bar, the court, the console, with the bench
-bar in the tab bar's place. The scorebug, the call bar and the court are the broadcast's graphics
+Broadcast first. From the top: the ink scorebug (the game clock with the shot clock beside it,
+`live/shotClock.ts`, the same number the arena's boards show), the call bar, the court, the console,
+with the bench bar in the tab bar's place. A phone plays sideways (`live/turn.ts`,
+`live/styles/side.css`): the court fills the screen under a slim strip with the scorebug and the call
+bar, the bench bar is a rail on the right and the console a drawer it opens. Held upright the page is
+turned so the phone is turned; Settings ("Sideways on a phone", `settings.liveTurn`) keeps it upright. The scorebug, the call bar and the court are the broadcast's graphics
 package (ink plates, white type); the console is paper and card stock like every other screen.
 
 - **The court is a full court and never leaves the screen.** Teams attack fixed ends (they swap at the
@@ -335,7 +339,7 @@ package (ink plates, white type); the console is paper and card stock like every
   the view from the box the layout gives it (`--court-ar` / `--court-h`, `live/styles/page.css`).
 - **Two pictures of the one play** (`live/CourtView.tsx`). By default a 3D broadcast camera high on
   the near sideline (`live/Court3D.tsx`, `live/court3d/`): athletes in the night's kits,
-  each as tall and as broad as his listed height and weight, all one neutral tone (no likeness). The camera button in the court's
+  each as tall and as broad as his listed height and weight, each a generic man of his own (skin, face, hair and beard from his id, `court3d/look.ts`; no likeness). The camera button in the court's
   corner switches to the 2D floor from straight above (the tactics view), and back; the choice is
   saved (`settings.courtLook`). The chip beside it goes round the 3D picture's five cameras
   (`court3d/cameras.ts`, saved as `settings.courtCam`): Broadcast (the default: a gantry camera at
@@ -343,8 +347,9 @@ package (ink plates, white type); the console is paper and card stock like every
   and wider on a break), Sideline (lower, closer, on a dolly), End zone (high behind the offense),
   Baseline (on the floor by the basket being attacked) and Overhead. Each is framed for the box's
   shape (a phone's stand higher and frame tighter). A tap on a player tags him for a few seconds; the
-  man with the ball always wears his tag over his head and a ring in his team's colour under him,
-  which turns to the warning colour and beats when the shot clock is under five. The 2D court always runs underneath: it keeps the play's clock,
+  man with the ball wears his tag over his head (not while he shoots; in a crowd one tag, the number
+  alone if only that fits: the words never cover the ball, its path or the rim) and a ring in his
+  team's colour under him, which turns to the warning colour and beats when the shot clock is under five. The 2D court always runs underneath: it keeps the play's clock,
   draws the break's shot chart, and is the whole court where WebGL 2 is missing or the 3D scene
   fails to load. If frames run slow the picture is first drawn less sharp, then the court offers 2D.
   three.js loads with the first 3D frame, never with the app.
@@ -356,9 +361,8 @@ package (ink plates, white type); the console is paper and card stock like every
   `figure.glb` is the player: one fused skin on the puppet's 18 bones (shoulders, elbows and knees
   bend without a seam), a face, cropped hair, fingered hands, sneakers with a soft collar, a V-neck
   vest with sewn trim tucked into shorts cut as their own garment (a seat, a leg each that parts at
-  the fork and swings a beat behind his thigh), every hollow's shade baked in. Everyone is one
-  neutral tone; hair is that tone a little darker, one of a few crops per player, and his name is
-  over his number on his back. `people.glb` is that same body posed and baked: two bench sitters
+  the fork and swings a beat behind his thigh), every hollow's shade baked in. Skin, eyes, hair
+  and beard are painted per man (`look.ts`), and his name is over his number on his back. `people.glb` is that same body posed and baked: two bench sitters
   and a coach in a suit with folded arms. `arena.glb` is the basket unit, rim, net, ball, bench
   chair, scorer's table, scoreboard, a seat of the stands and the spectators the crowd is made of
   (six grown-ups and a child of about 1,000 triangles for the rows by the floor, two of under 500 for the rows behind, one
@@ -383,7 +387,7 @@ package (ink plates, white type); the console is paper and card stock like every
   dark where things meet found from the picture's depth (`court3d/ao.ts`), a restrained glow on the
   brightest things, a warm grade, darker corners, a soft background behind a close-up). Each player wears one painted picture (`court3d/figure.ts`): his kit with
   an outlined number, his name arched on the back, the abbreviation on the front and a team mark on
-  the shorts, and, his own every night, one of seven crops and maybe a headband, a sleeve, wristbands
+  the shorts, and, his own every night, one of ten cuts and maybe a headband, a sleeve, wristbands
   or a leg sleeve (one draw a player). The building (`court3d/arena.ts`, `court3d/boards.ts`,
   `court3d/fx.ts`) is alive: the scorer's table, the baseline and far-side boards, the ribbon and the
   scoreboard's screens are LED boards showing the score, period and clock as the court has played
@@ -400,9 +404,19 @@ package (ink plates, white type); the console is paper and card stock like every
   women and children in the home colours, a visitors' block, seats in the building's colour where
   nobody sits. They shift, follow the ball, stand for a basket (the cheer goes out from the play),
   stand nervously late in a close game, wave towels, rally at a visitor's free throw, hold phones up,
-  and leave late in a blowout; cameras flash on big moments; a home win brings an ovation, confetti
-  and streamers. The house lights go down, with spots sweeping the floor, before the tip, at a
-  timeout and after a home win. Banners in the home colours (letters and stripes, no years) hang in
+  and leave late in a blowout; cameras flash on big moments. Each sits his own way (forward on his
+  knees, sat back, arms folded, chin on a fist, head down over a phone; a few stand in the aisles and
+  the top rows), no two side by side alike; a cheer reaches each in his own moment and he holds it his
+  own while, and not everyone stands for a small one. While a play is on the stands sit back (stiller,
+  a shade darker and greyer, no flashes, the boards a notch down) and come back up at a dead ball and
+  a big moment. The end is the kind of win it is (`live/occasion.ts`: the game's type, its series, when
+  the lead was taken for good): an ordinary win has handshakes toward centre court, the coaches meeting
+  by the table and the crowd standing to clap; a late winner the scorer mobbed, his bench storming the
+  floor and the losers down on their haunches; a playoff win chest bumps, roars and towels; a series
+  won the five jumping together with the bench round them; a title a hug, a man on his knees, one sat
+  on the floor, the crowd on its feet throughout, confetti and streamers in the champions' colours.
+  The house lights go down, with spots sweeping the floor, before the tip, at a timeout and after a
+  big home win. Banners in the home colours (letters and stripes, no years) hang in
   the roof.
 - **The broadcast cuts** (`court3d/director.ts`, `aim` in `scene.ts`): the building from high before
   the tip, an orbit round the line-up, a crane down into the chosen camera (a little operator drift,
@@ -449,12 +463,21 @@ package (ink plates, white type); the console is paper and card stock like every
   dead-ball rests (hands on hips, on knees after a long stretch). Over every clip, a layer of its own:
   each man looks at something (the ball, his man, the rim, his target), breathes, keeps his hands
   busy on defence, and gestures (a flex, a point, a high five on the way back, a hand up for the foul,
-  a protest, chest bumps at the buzzer). The ball misses off the front rim, the back iron or round the
+  a protest, chest bumps at the buzzer). Bodies that meet are drawn touching (`Frame.meet`: a screen
+  and the man it is set on, a box-out and the crasher; `court3d/spacing.ts` keeps everyone else apart,
+  the walk to a timeout's bench too). The ball misses off the front rim, the back iron or round the
   ring, some makes rattle in, and passes go on a bounce under a defender in the lane.
   `scripts/qa/figure-lab/` shows any move as a strip of moments on the dev server, and
   `scripts/qa/motion-lab/` plays a simulated game through the real scene and measures it.
 - **The floor is the home team's**: maple, its colour in both keys and the centre circle, its mark at
-  centre court, its name along the baselines. The Cup final's floor is neutral.
+  centre court, its name along the baselines. The Cup final's floor is neutral. **Each building is its
+  own** (`venueLook` in `teamColors.ts`, from the team's colours and a hash of its letters, the same
+  every night): the maple's stain (pale blonde to deep honey), keys painted or stained and edged, a
+  two-tone arc or none, the apron in its colour, its second or a dark stain, the circle filled, ringed
+  or under a big mark, its city or name round the floor; in 3D the seats by section, the walls'
+  padded tops, the concourse's signs and plates, a warm, plain or cool house and its partners' order.
+  Shapes, colours and the team's own name: no real arena's marks. The 2D floor keeps it quiet (boards
+  a breath apart, the paint and the mark let down into the wood) so the play reads first.
 - **One colour a team, all night** (`matchKits` in `teamColors.ts`, `s.kits` in the live game): the
   scorebug's block, the win bar, the call bar's chips, the shot chart and the players on the floor
   all read from the same kit. The home team wears white trimmed in its colour (it stands on its own
@@ -468,7 +491,9 @@ package (ink plates, white type); the console is paper and card stock like every
   banner, a callout, a graphic, the crowd's line, or by default the running call of the play.
 - **The court is never empty.** Before the tip the fives stand around the centre circle; in a huddle
   or a stop the players stay where the play left them; at a break the floor shows every shot so far
-  (each team's at the end it attacks first, a make solid, a miss a ring).
+  (each team's at the end it attacks first, under an ink veil, in its colour as it reads on ink: a make
+  a solid dot, a miss a thinner cross, both edged in ink and a pile eased apart so it reads as so many
+  shots; each team's count and a Made/Missed key on the sideline aprons).
 - **The breaks keep the court.** At a period's end or in your timeout the stage becomes the compact
   whole floor and the console opens on the break board (`BreakBoard`: the line score, and at a break
   the team comparisons) above the period report or the huddle. The next period starts from the bench bar.

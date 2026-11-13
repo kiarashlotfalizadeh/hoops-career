@@ -3,12 +3,16 @@
 // and a head for a slow device and the floor's mirror), his own size, build, skin, hair and clothes,
 // drawn in a handful of instanced draws a side (a side nobody is looking at is not drawn at all). What
 // he wears is more than a colour where the camera is near enough to tell: the fragment shader draws a
-// face on him and, by his own number, a jacket open over a shirt, a replica top, hoops, a check. Nothing is moved from here frame by frame: the
-// shader sits each one in his seat, shifts him about, turns his head to the ball's end, leans a few on
-// their knees, holds a phone up in a few hands, stands them up (a cheer goes out from the play across
-// the building; a nervous end has them up with their hands at their faces), waves the towels, and
-// empties the seats of those who have seen enough of a blowout. The seats themselves are here too,
-// in the building's colour where nobody is in one.
+// face on him and, by his own number, a jacket open over a shirt, a replica top, hoops, a check; no two side
+// by side in the same colour or the same model. Nothing is moved from here frame by frame: the shader sits
+// each one in his seat his own way (forward on his knees, sat back, arms folded, chin on a fist, head down
+// over a phone), shifts him about (less while a play is on, and greyer and a shade darker: the floor is the
+// brightest thing in the building), turns his head to the ball's end, holds a phone up in a few hands, stands
+// them up (a cheer goes out from the play across the building, each up in his own moment and down after his
+// own while, not everyone for a small one; a nervous end has them up with their hands at their faces; the
+// end of a game as many on their feet as the kind of win calls for), waves the towels, and empties the seats
+// of those who have seen enough of a blowout. The seats themselves are here too, in the building's colour
+// where nobody is in one.
 import {
   BufferGeometry,
   Color,
@@ -22,10 +26,10 @@ import {
   MeshLambertMaterial,
   PlaneGeometry,
   Quaternion,
-  Vector2,
   Vector3,
+  Vector4,
 } from 'three';
-import type { Seat } from './bowl';
+import { section, type Seat } from './bowl';
 import { unshadowed } from './rig';
 
 type Keep = <T extends { dispose(): void }>(o: T) => T;
@@ -93,26 +97,31 @@ const STALL_TONE = 0.5;
 const STALL_MOST = 0.22;
 /** A colour the lamps hardly reach has little colour left: how much of a cloth's is kept in the darkest rows (all of it by the floor). */
 const DIM_COLOUR = 0.55;
+/** And how much of it goes while a play is on (the stands sit back behind the floor). */
+const LIVE_GREY = 0.3;
 
 /**
  * What the crowd's shader adds to a plain lit one. `aWho` is a fan's own numbers: his beat (0 to 1), who
- * he is for (0 the home side, 1 the same with a towel, 2 the visitors, 3 someone standing at the rail
- * behind the top row), his skin, and how much of the bowl's light reaches his seat. He sways and shifts
- * in his seat and his head follows the ball (uBall: its x and z, and in y how closely); as the cheer
- * comes up he stands (the keen ones first, those nearest the play first: uFrom is where it was, uLag the
- * cheer as it was a moment ago), most with their arms in the air, the rest clapping. A nervous end
- * (uStand) has the home crowd on its feet, hands down or up at their faces. A towel goes round over a
- * head (uWave); in the end behind the basket a visitor shoots free throws at, the home crowd gets up
- * and waves both arms (uRally, uEnd: that end's side of x); the visitors' fans get up for their own
- * (uAway), and the rest hold still while they do (uHush). A few hold a phone up when there is something
- * to film (uPhone). The rows by the floor take the boards' light (uLed). Those who have left (uLeave, uLeaveAway) are not there. The models
- * (scripts/blender/arena.py) say which of their points are what by `aPart`, and their joints are the
- * numbers here: change both. `fanAt` is where one of a fan's points is (the towels in their hands use it too).
+ * he is for (0 the home side, 1 the same with a towel, 2 the visitors, 3 someone on his feet at the rail
+ * or in an aisle), his skin, and how much of the bowl's light reaches his seat. He sits his own way (forward
+ * with his elbows on his knees, sat back, upright with his hands on his knees, hands together in his lap,
+ * arms folded, chin on a fist, his head down over a phone), sways and shifts in it (less while a play is on,
+ * uLive: the floor is what is watched) and his head follows the ball (uBall: its x and z, and in y how
+ * closely). A cheer goes out across the building from the play (uRipA, uRipB: the last two, each when it
+ * started, how big, and where): he gets up as it reaches him, in his own moment and for his own while, and
+ * not everyone for a small one; a few clap where they sit. Up, most of the keen have their arms in the air and
+ * jump (the more so the louder the building is, uLoud), the rest clap. A nervous end (uStand) has the home
+ * crowd on its feet, hands down or up at their faces; the end of a game (uOvation) as many of the winners'
+ * crowd on their feet as it says. A towel goes round over a head (uWave); in the end behind the basket a
+ * visitor shoots free throws at, the home crowd gets up and waves both arms (uRally, uEnd: that end's side of
+ * x); the visitors' fans get up for their own (uAway), and the rest hold still while they do (uHush). A few
+ * hold a phone up when there is something to film (uPhone). The rows by the floor take the boards' light
+ * (uLed). Those who have left (uLeave, uLeaveAway) are not there. The models (scripts/blender/arena.py) say
+ * which of their points are what by `aPart`, and their joints are the numbers here: change both. `fanAt` is
+ * where one of a fan's points is (the towels in their hands use it too).
  */
 const FAN_MOVE = /* glsl */ `
   uniform float uTime;
-  uniform float uCheer;
-  uniform float uLag;
   uniform float uAway;
   uniform float uWave;
   uniform float uHush;
@@ -122,23 +131,40 @@ const FAN_MOVE = /* glsl */ `
   uniform float uPhone;
   uniform float uLeave;
   uniform float uLeaveAway;
+  uniform float uOvation;
+  uniform float uLoud;
+  uniform float uLive;
+  uniform vec4 uRipA;
+  uniform vec4 uRipB;
   uniform vec3 uBall;
-  uniform vec2 uFrom;
   float fanRally(float kind, mat4 seat) {
     // (a seat in the end stands faces along x; which end, its side of the floor)
     vec3 facing = seat[2].xyz;
     return kind > 1.5 ? 0.0 : uRally * step(0.7 * length(facing), abs(facing.x)) * step(0.0, seat[3].x * uEnd);
+  }
+  /** A cheer as it gets to him (r: when it started, how big, where): up in his own moment, the far end a moment later, and down after his own while. */
+  float fanCheer(vec4 r, float seed, mat4 seat) {
+    float t = uTime - r.x;
+    float on = distance(seat[3].xz, r.zw) / 110.0 + 0.55 * fract(seed * 5.13);
+    float hold = (0.6 + 2.8 * fract(seed * 8.71)) * (0.4 + r.y);
+    // (a small one gets the keen up; a big one nearly everyone)
+    float goes = step(fract(seed * 3.71) * 0.85, r.y);
+    return goes * smoothstep(on, on + 0.35, t) * (1.0 - smoothstep(on + hold, on + hold + 0.8, t));
   }
   /** How far he is on his feet, and how far his arms are up with it. */
   vec2 fanUp(float seed, float kind, mat4 seat) {
     bool away = kind > 1.5 && kind < 2.5;
     float rally = fanRally(kind, seat);
     float towel = kind > 0.5 && kind < 1.5 ? max(uWave, rally) : 0.0;
-    float lag = clamp(distance(seat[3].xz, uFrom) / 190.0, 0.0, 1.0);
-    float cheer = away ? uAway : mix(uCheer, uLag, lag);
-    float arms = max(smoothstep(0.0, 0.35, cheer * 1.5 - seed), max(towel, rally));
+    float cheer = away ? smoothstep(0.0, 0.35, uAway * 1.5 - seed) : max(fanCheer(uRipA, seed, seat), fanCheer(uRipB, seed, seat));
+    // (the end of a game: his side's crowd on its feet, as many as it says)
+    float ovation = away ? 0.0 : step(fract(seed * 2.93), uOvation);
+    float arms = max(max(cheer, ovation), max(towel, rally));
     float tense = away ? 0.0 : smoothstep(0.0, 0.3, uStand * 1.3 - fract(seed * 3.7));
-    return vec2(max(arms, max(tense, step(2.5, kind))), arms);
+    // (a few clap where they sit; a few in the top rows are on their feet all night)
+    float sits = step(0.82, fract(seed * 6.13)) * (1.0 - ovation);
+    float always = step(fract(seed * 41.3), 0.08 * smoothstep(17.0, 26.0, seat[3].y));
+    return vec2(max(max(cheer * (1.0 - sits), ovation), max(max(tense, always), max(step(2.5, kind), max(towel, rally) * (1.0 - sits)))), arms);
   }
   /** How far gone he is (0 in his seat, 1 left): as the leaving reaches his number he gets up, and is away a moment after. */
   float fanGone(vec4 who) {
@@ -156,7 +182,9 @@ const FAN_MOVE = /* glsl */ `
     float up = max(ups.x, smoothstep(0.0, 0.45, gone));
     float arms = ups.y;
     float habit = fract(seed * 17.31);
-    float hop = arms * 0.22 * abs(sin(uTime * 7.0 + beat * 9.0));
+    // (the keen: arms in the air when he is up, the more of them the louder it is, each jumping as high as he likes; the rest clap)
+    float keen = step(1.0 - mix(0.25, 0.8, uLoud), fract(seed * 7.3));
+    float hop = arms * keen * (0.06 + 0.2 * uLoud) * (0.5 + fract(seed * 19.1)) * abs(sin(uTime * 7.0 + beat * 9.0));
     // getting up: a thigh (1.2 long) swings up about the knee, which stays over his feet
     float swing = up * 1.5708;
     if (part > 3.5) {
@@ -169,27 +197,31 @@ const FAN_MOVE = /* glsl */ `
       }
       return p;
     }
-    // (a few sit forward, elbows toward their knees; the rest sit back, each at his own angle)
-    float bend = (habit < 0.2 ? 0.34 : 0.05 * sin(beat * 3.0)) * (1.0 - up);
+    // (how he sits: forward toward his knees, sat back, a little forward with his chin on a fist, or upright at his own angle)
+    float bend = (habit < 0.16 ? 0.34 : habit < 0.28 ? -0.14 : habit > 0.74 && habit < 0.84 ? 0.2 : 0.05 * sin(beat * 3.0)) * (1.0 - up);
     if (part > 1.5) {
       // an arm: it swings from the shoulder, and its forearm (the points under the elbow as it hangs) about
       // the elbow. A pose is how far forward the upper arm is, how far the elbow is bent, and how far his
       // hand comes in across him (under 0: out from him)
       float side = part < 2.5 ? 1.0 : -1.0;
       vec3 piv = vec3(side * 0.69, 1.55, 0.0);
-      float keen = step(0.3, fract(seed * 7.3));
       float clap = sin(uTime * 15.0 + beat);
       float fist = step(fract(seed * 11.3), 0.3) * step(2.5, part);
       bool cloth = part < 2.5 && towel > 0.0;
       float wave = max(part < 2.5 ? towel : 0.0, rally);
-      // sat: hands on his knees, elbows on them with his hands together (those sat forward), hands together in
-      // his lap, or (a few) one hand up with a phone
-      float folded = step(0.45, habit) * step(habit, 0.7);
-      float phone = habit > 0.84 && part < 2.5 ? uPhone : 0.0;
-      vec3 lap = habit < 0.2 ? vec3(0.7, 1.55, 0.72) : vec3(0.3, 1.15, 0.0);
-      vec3 sat = mix(mix(lap, vec3(0.22, 1.42, 0.8), folded), vec3(1.0, 1.35, 0.25), phone);
-      // on his feet with nothing to cheer: arms down, or both hands up at his face
-      vec3 stood = habit < (kind > 2.5 ? 0.1 : 0.35) ? vec3(0.95, 2.25, 0.5) : vec3(0.06, 0.2, 0.0);
+      // sat: elbows on his knees with his hands together (those forward), hands on his knees (those sat back
+      // and upright), hands together in his lap, arms folded, chin on a fist, a phone in both hands at his lap,
+      // or (a few) one hand up with a phone when there is something to film
+      vec3 sat = habit < 0.16 ? vec3(0.7, 1.55, 0.72)
+        : habit < 0.45 ? vec3(0.3, 1.15, 0.0)
+        : habit < 0.6 ? vec3(0.22, 1.42, 0.8)
+        : habit < 0.74 ? (part < 2.5 ? vec3(0.24, 1.78, 2.0) : vec3(0.18, 1.62, 1.8))
+        : habit < 0.84 ? (part < 2.5 ? vec3(0.3, 1.15, 0.0) : vec3(0.95, 2.55, 0.42))
+        : habit < 0.92 ? vec3(0.55, 1.95, 0.72)
+        : vec3(0.3, 1.15, 0.0);
+      sat = mix(sat, vec3(1.0, 1.35, 0.25), habit > 0.92 && part < 2.5 ? uPhone : 0.0);
+      // on his feet with nothing to cheer: arms down, or both hands up at his face (not on his way out)
+      vec3 stood = habit < (kind > 2.5 ? 0.1 : 0.35) && gone < 0.01 ? vec3(0.95, 2.25, 0.5) : vec3(0.06, 0.2, 0.0);
       // cheering: both arms up, each as high and as bent as he likes, or one fist and the other hand at his
       // chest; the rest clap in front of their chests
       float pump = sin(uTime * 9.0 + beat * 3.0);
@@ -208,20 +240,24 @@ const FAN_MOVE = /* glsl */ `
       p = piv + r;
       p.x -= side * 0.6 * (max(pose.z, 0.0) * reach - max(-pose.z, 0.0) * smoothstep(1.2, 2.8, p.y));
     } else if (part > 0.5) {
-      // his head, about his neck: toward the ball, loosely, and off round the building now and then
+      // his head, about his neck: toward the ball, loosely, and off round the building now and then (hardly at all
+      // while a play is on); down over his phone, if that is where he is
       vec2 to = uBall.xz - seat[3].xz;
       float yaw = clamp(atan(dot(to, seat[0].xz), dot(to, seat[2].xz)), -0.8, 0.8) * uBall.y;
-      yaw += 0.22 * sin(uTime * 0.23 + beat * 7.0) + 0.5 * smoothstep(0.9, 1.0, sin(uTime * 0.11 + beat * 23.0));
+      yaw += (0.22 * sin(uTime * 0.23 + beat * 7.0) + 0.5 * smoothstep(0.9, 1.0, sin(uTime * 0.11 + beat * 23.0))) * (1.0 - 0.75 * uLive);
       vec2 h = p.xz - vec2(0.0, -0.03);
       p.xz = vec2(0.0, -0.03) + vec2(h.x * cos(yaw) + h.y * sin(yaw), h.y * cos(yaw) - h.x * sin(yaw));
+      float nod = habit > 0.84 && habit < 0.92 ? 0.42 * (1.0 - up) : 0.0;
+      vec2 n = p.yz - vec2(1.95, 0.0);
+      p.yz = vec2(1.95, 0.0) + vec2(n.x * cos(nod) - n.y * sin(nod), n.x * sin(nod) + n.y * cos(nod));
     }
     p.yz = vec2(p.y * cos(bend) - p.z * sin(bend), p.y * sin(bend) + p.z * cos(bend));
     // the rest of him goes where the top of his thighs goes: up, and forward over his feet
     p.y += 1.2 * sin(swing) + hop;
     p.z += 1.2 * (1.0 - cos(swing));
-    // (he leans from the hips, a little, on his own beat, and now and then shifts in his seat; the home
-    // crowd holds still while the visitors celebrate)
-    float still = away ? 1.0 : 1.0 - 0.85 * uHush;
+    // (he leans from the hips, a little, on his own beat, and now and then shifts in his seat; the home crowd
+    // holds still while the visitors celebrate, and everyone keeps stiller while a play is on)
+    float still = (away ? 1.0 : 1.0 - 0.85 * uHush) * (1.0 - 0.65 * uLive);
     float lean = p.y * 0.5;
     float shift = smoothstep(0.86, 1.0, sin(uTime * 0.19 + beat * 13.0)) * sign(habit - 0.5);
     p.x += lean * (0.07 * sin(uTime * 0.8 + beat * 5.0) + 0.16 * shift) * still;
@@ -268,7 +304,7 @@ const CROWD_COLOR = /* glsl */ `
   float reach = aWho.w;
   // (which top he has on, from his own number; and how lit he is, for what shows under it)
   vOwn = vec2(fract(own * 7.31), uDim * reach * color.r);
-  wear = mix(vec3(dot(wear, vec3(0.2126, 0.7152, 0.0722))), wear, mix(${DIM_COLOUR}, 1.0, smoothstep(0.25, 0.7, reach)));
+  wear = mix(vec3(dot(wear, vec3(0.2126, 0.7152, 0.0722))), wear, mix(${DIM_COLOUR}, 1.0, smoothstep(0.25, 0.7, reach)) * (1.0 - ${LIVE_GREY} * uLive));
   vColor = wear * (uDim * reach);`;
 /** Where he is; and how square on to the floor this point of him is (the floor is the brightest thing in the building: it lights the faces and the fronts of those looking at it). */
 const CROWD_MOVE = /* glsl */ `
@@ -360,8 +396,16 @@ export class Crowd {
   /** What the shader is told each frame (the building sets them: see Arena.update). */
   readonly u = {
     uTime: { value: 0 },
+    /** How loud the cheer is (the boards hear it; the upper deck's people stand with it a moment behind, uLag): the building's, not each fan's (see cheer). */
     uCheer: { value: 0 },
     uLag: { value: 0 },
+    /** The last two cheers: when each started (uTime), how big, and where (x, z). */
+    uRipA: { value: new Vector4(-99, 0, 0, 0) },
+    uRipB: { value: new Vector4(-99, 0, 0, 0) },
+    /** At the end of a game, how much of the winners' crowd is on its feet; how wild the crowd is when it is up; a play is on. */
+    uOvation: { value: 0 },
+    uLoud: { value: 0.8 },
+    uLive: { value: 0 },
     uAway: { value: 0 },
     uWave: { value: 0 },
     uHush: { value: 0 },
@@ -372,7 +416,6 @@ export class Crowd {
     uLeave: { value: 0 },
     uLeaveAway: { value: 0 },
     uBall: { value: new Vector3(0, 0, 0) },
-    uFrom: { value: new Vector2() },
     uDim: { value: 1 },
     /** The LED boards' light on the rows by them (a colour, as bright as they are). */
     uLed: { value: new Color(0, 0, 0) },
@@ -388,7 +431,7 @@ export class Crowd {
   private readonly towelMat: MeshBasicMaterial;
   private readonly seatMat: MeshLambertMaterial;
   /** The seats, a draw a side for the rows by the floor and one for the rest; how lit each seat is. */
-  private readonly stalls: { mesh: InstancedMesh; lit: number[] }[] = [];
+  private readonly stalls: { mesh: InstancedMesh; lit: number[]; sec: number[] }[] = [];
   /**
    * The rows by the floor's draws (the detailed people), and the rows behind's; and the same people in the
    * lighter models a slow device draws them in (see shed): the rows by the floor in the plain one and in
@@ -434,18 +477,26 @@ export class Crowd {
     const size = new Vector3();
     const c = new Color();
     const who: { seat: Seat; model: number; fine: boolean; at: Matrix4; seed: number; kind: number; tone: number; wear: string }[] = [];
+    // (the one before in the same row: the person beside him)
+    let by: { side: number; row: number; model: number; wear: number } = { side: -1, row: -1, model: -1, wear: -1 };
     for (const s of seats) {
       const full = s.kind === 'seat' ? 0.975 - 0.07 * (s.row / 17) : s.kind === 'court' ? 0.9 : 1;
       const r = [rnd(), rnd(), rnd(), rnd(), rnd(), rnd(), rnd()];
       if (r[0] > full) continue;
       const fine = s.kind === 'court' || (s.kind === 'seat' && s.row < (s.side === 3 ? CAMERA_ROWS : NEAR_ROWS));
       const child = r[2] < 0.05;
-      const model = fine ? (child ? KID : r[1] < 0.22 ? 0 : r[1] < 0.38 ? 1 : r[1] < 0.58 ? 2 : r[1] < 0.72 ? 3 : r[1] < 0.87 ? 4 : 5) : r[1] < 0.58 ? 0 : 1;
+      const next = by.side === s.side && by.row === s.row;
+      let model = fine ? (child ? KID : r[1] < 0.22 ? 0 : r[1] < 0.38 ? 1 : r[1] < 0.58 ? 2 : r[1] < 0.72 ? 3 : r[1] < 0.87 ? 4 : 5) : r[1] < 0.58 ? 0 : 1;
+      if (next && model === by.model && !child) model = fine ? (model + 1 + Math.floor(r[4] * 4)) % 6 : 1 - model;
       // (a child here and there; the women's models a little narrower)
       const tall = child ? 0.7 + r[3] * 0.1 : 0.95 + r[3] * 0.16;
       const slim = fine ? model === 2 || model === 3 : model === 1;
       const wide = tall * (slim ? 0.9 + r[4] * 0.12 : 0.94 + r[4] * 0.2);
       q.setFromAxisAngle(up, s.turn + (r[5] - 0.5) * 0.3);
+      const tone = 0.2 + 0.8 * rnd() ** 0.75;
+      let wear = Math.floor(rnd() * WEAR.length);
+      if (next && wear === by.wear) wear = (wear + 1 + Math.floor(r[5] * (WEAR.length - 2))) % WEAR.length;
+      by = { side: s.side, row: s.row, model, wear };
       who.push({
         seat: s,
         model,
@@ -453,8 +504,8 @@ export class Crowd {
         at: new Matrix4().compose(at.set(s.x, s.y + SEAT_UP * (s.kind === 'seat' ? 1 : tall), s.z), q, size.set(wide, tall, (wide + tall) / 2)),
         seed: r[6],
         kind: s.kind === 'stand' ? 3 : 0,
-        tone: 0.2 + 0.8 * rnd() ** 0.75,
-        wear: WEAR[Math.floor(rnd() * WEAR.length)],
+        tone,
+        wear: WEAR[wear],
       });
     }
     // who is for whom (from its own numbers: the crowd's sizes and colours stay as they are whoever plays)
@@ -585,7 +636,7 @@ export class Crowd {
         list.forEach((s, i) => mesh.setMatrixAt(i, m.compose(at.set(s.x, s.y, s.z), q.setFromAxisAngle(up, s.turn), size.set(1, 1, 1))));
         this.bound(mesh);
         mesh.renderOrder = -1;
-        this.stalls.push({ mesh, lit: list.map((s) => s.lit) });
+        this.stalls.push({ mesh, lit: list.map((s) => s.lit), sec: list.map(section) });
         this.main.add(mesh);
         if (!fine) continue;
         // (the same seats as the rows behind have them)
@@ -616,10 +667,10 @@ export class Crowd {
     for (const o of [...this.fine, ...this.rest, this.blur]) if (o.instanceColor) o.instanceColor.needsUpdate = true;
   }
 
-  /** The building's colour and the home side's second: the home fans' tops (most in the first, some in the second, some in white), half the towels, the seats. */
-  paint(board: string, trim: string) {
-    if (board + trim === this.board) return;
-    this.board = board + trim;
+  /** The building's colour and the home side's second: the home fans' tops (most in the first, some in the second, some in white), half the towels; the seats in `seats`, by section (bowl.ts section; the building's colour all round when not said). */
+  paint(board: string, trim: string, seats: readonly string[] = [board]) {
+    if (board + trim + seats.join() === this.board) return;
+    this.board = board + trim + seats.join();
     const c = new Color();
     // (a dark colour is worn a little lighter than it is painted: a navy shirt under the lamps is not black)
     const lift = (hex: string, shade: number) => {
@@ -633,15 +684,17 @@ export class Crowd {
     };
     for (const f of this.fans) this.wear(f.who, f.shade < 0 ? c.set(HOME_WHITE_WEAR) : f.shade > 1 ? lift(trim, f.shade - 1) : lift(board, f.shade));
     this.flush();
-    const seat = new Color(board);
-    const grey = Math.max(0.2126 * seat.r + 0.7152 * seat.g + 0.0722 * seat.b, 0.03);
-    // (a pale colour's seats would be the brightest thing in the stands: no seat is lighter than this)
-    seat.lerp(GREY.setScalar(grey), STALL_GREY).multiplyScalar(Math.min(1, STALL_MOST / grey));
+    const tones = seats.map((hex) => {
+      const seat = new Color(hex);
+      const grey = Math.max(0.2126 * seat.r + 0.7152 * seat.g + 0.0722 * seat.b, 0.03);
+      // (a pale colour's seats would be the brightest thing in the stands: no seat is lighter than this)
+      return seat.lerp(GREY.setScalar(grey), STALL_GREY).multiplyScalar(Math.min(1, STALL_MOST / grey));
+    });
     c.set(board);
     for (let i = 1; i < this.towels.count; i += 2) this.towels.setColorAt(i, c);
     if (this.towels.instanceColor) this.towels.instanceColor.needsUpdate = true;
-    for (const { mesh, lit } of this.stalls) {
-      lit.forEach((l, i) => mesh.setColorAt(i, c.copy(seat).multiplyScalar(STALL_TONE * l)));
+    for (const { mesh, lit, sec } of this.stalls) {
+      lit.forEach((l, i) => mesh.setColorAt(i, c.copy(tones[sec[i]] ?? tones[0]).multiplyScalar(STALL_TONE * l)));
       mesh.instanceColor!.needsUpdate = true;
     }
     for (const s of this.seats) s.flat.instanceColor = s.fine.instanceColor;
@@ -663,6 +716,21 @@ export class Crowd {
   dim(people: number, seats: number) {
     this.u.uDim.value = people;
     this.seatMat.color.setScalar(Math.min(1, seats));
+  }
+
+  /**
+   * A cheer goes up from (x, z), `big` (0 to 1) as it is: it takes the place of the older of the last two
+   * (a cheer still going is kept, so nobody already up sits down for the next). A bigger one coming while one
+   * is still young only makes that one bigger.
+   */
+  cheer(big: number, x: number, z: number) {
+    const { uRipA: a, uRipB: b, uTime: t } = this.u;
+    const [young, old] = a.value.x >= b.value.x ? [a.value, b.value] : [b.value, a.value];
+    if (t.value - young.x < 0.6) {
+      young.y = Math.max(young.y, big);
+      return;
+    }
+    old.set(t.value, big, x, z);
   }
 
   /** The towels are out (and how lit they are). */

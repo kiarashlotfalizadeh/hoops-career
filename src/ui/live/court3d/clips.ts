@@ -142,7 +142,11 @@ export type ClipId =
   | 'bump'
   | 'rue'
   | 'slump'
-  | 'jump';
+  | 'jump'
+  | 'hug'
+  | 'crouch'
+  | 'kneel'
+  | 'floor';
 
 /**
  * How a clip is timed: a 'loop' by the clock, a 'gait' by the stride (its keys at fractions of one,
@@ -711,6 +715,44 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
     [0.5, { hip: -0.84, lean: 0.79 }],
     [1, {}],
   ]),
+
+  // --- the end of a big one (the scene picks them: see Drive.party) ---
+  // (his arms round the man facing him, one over his shoulder and one under his arm, rocking side to side)
+  hug: clip('hug', 'loop', 1500, { hip: -0.1, lean: 0.14, wide: 0.18, nod: -0.2, lx: -0.3, ly: -0.55, lz: 0.95, rx: -0.2, ry: -0.12, rz: 0.92, lsw: -0.5, rsw: -0.3 }, [
+    [0, { tilt: 0.07, twist: 0.09, sway: 0.05 }],
+    [0.5, { tilt: -0.07, twist: -0.09, sway: -0.05, hip: -0.16 }],
+    [1, { tilt: 0.07, twist: 0.09, sway: 0.05 }],
+  ]),
+  // (down on his haunches, forearms on his knees, head hanging: it's gone)
+  crouch: clip('crouch', 'loop', 3200, { hip: -1.5, lean: 0.5, wide: 0.42, nod: -0.75, lx: -0.08, ly: -1.15, lz: 0.95, rx: -0.08, ry: -1.2, rz: 0.92, lsw: 0.2, rsw: 0.2 }, [
+    [0, {}],
+    [0.5, { hip: -1.55, nod: -0.85, lean: 0.55 }],
+    [1, {}],
+  ]),
+  // (on his knees, both fists up at the roof, head back)
+  kneel: clip(
+    'kneel',
+    'loop',
+    2200,
+    { air: 1, hip: -1.47, flu: -0.12, flf: -1.4, fru: -0.12, frf: -1.4, wide: 0.12, lean: -0.1, nod: 0.5, lx: 0.5, ly: 1.75, lz: 0.4, rx: 0.5, ry: 1.75, rz: 0.4 },
+    [
+      [0, {}],
+      [0.5, { lx: 0.55, ly: 1.5, lz: 0.5, rx: 0.55, ry: 1.5, rz: 0.5, nod: 0.55, lean: -0.14 }],
+      [1, {}],
+    ],
+  ),
+  // (sat on the floor, legs out, leaning back on his hands, looking up at it all)
+  floor: clip(
+    'floor',
+    'loop',
+    3600,
+    { air: 1, hip: -2.6, lean: -0.55, flu: -0.05, flf: 2.3, fru: 0.05, frf: 2.05, wide: 0.4, nod: 0.45, lx: 0.5, ly: -1.15, lz: -0.85, rx: 0.5, ry: -1.15, rz: -0.85 },
+    [
+      [0, {}],
+      [0.5, { lean: -0.6, nod: 0.5 }],
+      [1, {}],
+    ],
+  ),
 };
 
 /**
@@ -740,7 +782,9 @@ export type SidelineGesture =
   | 'coachWide'
   | 'coachCrouch'
   | 'coachWave'
-  | 'coachCalm';
+  | 'coachCalm'
+  | 'shake'
+  | 'dap';
 
 /** A gesture's keys, from REST: the channels it moves. */
 const gesture = (keys: [number, PoseKey][]): Clip => clip('celebrate', 'shot', 0, {}, keys);
@@ -1017,6 +1061,24 @@ export const GESTURES: Record<Gesture, Clip> = {
     [880, { lx: 0.35, ly: -1.05, lz: 1.2, rx: 0.35, ry: -1.05, rz: 1.2 }],
     [1150, {}],
   ]),
+  // (a handshake with the man facing him: his right hand out across to the middle, at the waist, shaken twice)
+  shake: gesture([
+    [0, {}],
+    [320, { rx: -0.42, ry: -0.95, rz: 1.25, nod: -0.08, lean: 0.06 }],
+    [480, { rx: -0.42, ry: -0.78, rz: 1.25, nod: -0.08, lean: 0.06 }],
+    [640, { rx: -0.42, ry: -0.98, rz: 1.25, nod: -0.06, lean: 0.06 }],
+    [800, { rx: -0.42, ry: -0.82, rz: 1.25, nod: -0.06, lean: 0.06 }],
+    [1050, { rx: -0.4, ry: -0.92, rz: 1.2 }],
+    [1350, {}],
+  ]),
+  // (a dap: hands clasped at the chest, pulled in, the other arm round his back a moment)
+  dap: gesture([
+    [0, {}],
+    [260, { rx: -0.45, ry: -0.35, rz: 1.15, lean: 0.04 }],
+    [520, { rx: -0.5, ry: -0.3, rz: 0.75, lx: -0.25, ly: -0.25, lz: 0.95, lean: 0.12, nod: -0.15 }],
+    [900, { rx: -0.5, ry: -0.32, rz: 0.72, lx: -0.28, ly: -0.22, lz: 0.98, lean: 0.12, nod: -0.15 }],
+    [1250, {}],
+  ]),
 };
 /** The arm channels a gesture takes over, and the trunk ones it adds to. */
 export const ARMS = [I.lx, I.ly, I.lz, I.rx, I.ry, I.rz, I.lsw, I.rsw];
@@ -1051,11 +1113,17 @@ function mend(poses: Float32Array[]): Float32Array[] {
   return [...now, Float32Array.from(now[0])];
 }
 
+/** An angle the short way round: within a half turn either way. */
+export const wrapped = (a: number) => a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
+
 /** The captured clips (mocap.gen.ts), if they were measured on these channels. */
 const CAPTURED: Partial<Record<ClipId, Clip>> = {};
 if (MOCAP_CHANNELS.length === N && MOCAP_CHANNELS.every((c, i) => c === CHANNELS[i]))
   for (const [id, m] of Object.entries(MOCAP)) {
     const poses = m.poses.map((p) => Float32Array.from(p));
+    // (an elbow's swing round its arm is an angle: measured, it may come round past a half turn from one key to the
+    // next, and read straight between them it would spin the elbow all the way round. It is made to go the short way)
+    for (const ch of [I.lsw, I.rsw]) for (let k = 1; k < poses.length; k++) poses[k][ch] = poses[k - 1][ch] + wrapped(poses[k][ch] - poses[k - 1][ch]);
     CAPTURED[id as ClipId] = {
       id: id as ClipId,
       kind: m.kind,
@@ -1316,11 +1384,20 @@ for (const c of [CAPTURED.stop, CAPTURED.closeout, CAPTURED.start]) for (const p
 if (CAPTURED.closeout) {
   const c = CAPTURED.closeout;
   const end = span(c)[1];
+  // (and the take's other arm, swung back as he stopped, comes forward into his stance: both hands are a
+  // defender's by the end, the stance he goes on in, not flung there after it)
+  const ready = KEYED.ready.poses[0];
   c.poses.forEach((p, k) => {
-    const w = Math.sin(Math.PI * Math.min(1, (c.at[k] / end) * 1.15)) * 0.85;
+    const u = c.at[k] / end;
+    const w = Math.sin(Math.PI * Math.min(1, u * 1.15)) * 0.85;
     p[I.rx] += (0.2 - p[I.rx]) * w;
     p[I.ry] += (1.25 - p[I.ry]) * w;
     p[I.rz] += (0.95 - p[I.rz]) * w;
+    const set = (x: number) => x * x * (3 - 2 * x);
+    const a = set(Math.max(0, Math.min(1, (u - 0.3) / 0.6)));
+    const b = set(Math.max(0, Math.min(1, (u - 0.75) / 0.25)));
+    for (const ch of [I.lx, I.ly, I.lz]) p[ch] += (ready[ch] - p[ch]) * a;
+    for (const ch of [I.rx, I.ry, I.rz]) p[ch] += (ready[ch] - p[ch]) * b;
   });
 }
 // (the take's passer keeps his hands at his chest once it has gone: a ballplayer's go out after it, thumbs down, and drop)

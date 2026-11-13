@@ -9,6 +9,7 @@ import { FRANCHISES } from '../../core/teams';
 import { keepFigures } from '../../core/format';
 import { useBack } from '../nav';
 import { reducedMotion, useIndicator } from '../motion';
+import { localDelta } from '../live/turn';
 import { jerseyKit } from '../teamColors';
 import { useTeamLook } from './TeamLogo';
 
@@ -536,8 +537,8 @@ export function Sheet({
   const onTouchMove = (e: React.TouchEvent) => {
     const s = start.current;
     if (!s) return;
-    const dx = e.touches[0].clientX - s.x;
-    const dy = e.touches[0].clientY - s.y;
+    // (as the page sees it: the live game's page may be turned a quarter round on a phone)
+    const { dx, dy } = localDelta(e.touches[0].clientX - s.x, e.touches[0].clientY - s.y);
     if (!s.locked) {
       if (Math.hypot(dx, dy) < 8) return;
       // decide once, on the first real move: only a mostly vertical, downward drag dismisses

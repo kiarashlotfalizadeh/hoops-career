@@ -1,5 +1,6 @@
 // Team colours: readable variants of a team's colours on the Hardwood paper, for identity surfaces
-// (slabs, jerseys, floors, your rows) and, for your own team, links, switches and the play button.
+// (slabs, jerseys, floors, your rows) and, for your own team, links, switches and the play button;
+// and each home team's building as the live game draws it (venueLook).
 
 const DEFAULT_ACCENT = '#2f6fde';
 /** --surface-2, the darkest paper surface team-coloured text sits on. */
@@ -256,4 +257,133 @@ export function nightFill(color: string): string {
   let fill = color;
   for (let t = 0.08; contrast(fill, INK) < 3 && t <= 1; t += 0.08) fill = mix(color, '#ffffff', t);
   return fill;
+}
+
+/**
+ * A home team's building, as the live game's courts draw it (Court.tsx paints the floor, court3d/ the
+ * stands round it): the maple's stain, how the keys, the apron and the centre circle are done, the words
+ * round the floor, the seats by section, the walls' padded tops, the concrete and the house lights. Each
+ * is picked from the team's own colours by a hash of its letters, so it is the same building every
+ * night, and two teams in the same colours (two navies) still play in different ones. No real arena's
+ * marks: shapes, colours and the team's own name.
+ */
+export interface Venue {
+  /** The bare maple, its stain: a pale blonde to a deep honey. */
+  wood: string;
+  /** The keys: painted solid, or stained wood edged in the paint. */
+  key: 'paint' | 'stain';
+  /** The keys' paint (the home team's colour tonight, or a neutral floor's ink). */
+  paint: string;
+  /** Inside the three-point lines a stain of its own (a two-tone floor), or none. */
+  arc: string | null;
+  /** The apron round the floor, its letters, and the pinstripe where it meets the court. */
+  apron: string;
+  apronInk: string;
+  pin: string;
+  /** The centre circle: filled with the paint and the mark in it, wood ringed in the paint, or the mark big across it. */
+  circle: 'paint' | 'ring' | 'big';
+  /** The words along each baseline (far end first: the end the home side attacks second), and along the sidelines ('' for none). */
+  baselines: [string, string];
+  sideline: string;
+  /** The stands' seats by section: the sides' lower rows, the ends', the rows high up (and the upper deck). */
+  seats: [string, string, string];
+  /** The walls' padded tops, the tunnels' heads, press row's cloth. */
+  rail: string;
+  /** The concourse's lit signs (the paint and the rail, lifted to read as light), and its section plates (the paint, deep). */
+  signs: [string, string];
+  plate: string;
+  /** What the steps and walls are tinted (the concrete: warm, plain or cool), and the house lights' colour. */
+  concrete: string;
+  house: string;
+  /** A number of the building's own (its partners' order on the boards). */
+  seed: number;
+}
+
+/** The maple's stains, light to dark. */
+const STAINS = ['#ebd1a6', '#e5c292', '#dcae76', '#cc9c68', '#bd8b5e'];
+/** The house lights: a warm hall, a plain one, a cool one; and the concrete each is built of. */
+const HOUSES = [
+  { house: '#ffd6a6', concrete: '#f2d9bf' },
+  { house: '#fff1dc', concrete: '#eae6df' },
+  { house: '#dde8ff', concrete: '#cdd9ea' },
+];
+/** A dark seat with no team in it: charcoal. */
+const CHARCOAL = '#2c2e33';
+
+/** A steady number from a team's letters (FNV-1a): its building's picks. */
+function hashOf(text: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
+  return h >>> 0;
+}
+
+/**
+ * The home team's building: `colors` its three, `paint` and `trim` its colour and second tonight (its
+ * kit's), `abbrev` the key its picks are made by, `name` and `region` its words round the floor.
+ */
+export function venueLook(colors: [string, string, string], paint: string, trim: string, abbrev: string, name: string, region: string): Venue {
+  const h = hashOf(abbrev.toUpperCase());
+  /** The `salt`th pick of `n`: each pick its own run of the hash. */
+  const pick = (n: number, salt: number) => (Math.imul(h ^ (salt * 0x9e3779b9), 0x85ebca6b) >>> 0) % n;
+  const wood = STAINS[pick(STAINS.length, 1)];
+  // the team's second colour, if it is one that stands apart from the first and is deep enough for white letters
+  // (the Bulls' black, the Celtics' gold no; the Pelicans' red yes): else the paint again
+  const second = colors.find((c) => lookDistance(c, paint) >= 0.16 && contrast('#ffffff', c) >= 3 && chroma(c) > 0.04) ?? null;
+  const deep = (c: string) => mix(c, '#000000', 0.18);
+  const apronPick = pick(10, 2);
+  const apron = apronPick < 4 ? paint : apronPick < 6 && second ? second : apronPick < 8 ? mix(wood, '#3a2210', 0.62) : '#1c1d20';
+  const key = pick(3, 3) === 0 ? 'stain' : 'paint';
+  const arcPick = pick(5, 4);
+  const arc = arcPick === 0 ? mix(wood, '#ffffff', 0.18) : arcPick === 1 ? mix(wood, '#4a2a10', 0.14) : null;
+  const circle = (['paint', 'paint', 'ring', 'big'] as const)[pick(4, 5)];
+  const baselines: [string, string] = pick(2, 6) ? [name, name] : [region || name, name];
+  const sideline = region && pick(3, 7) ? region : '';
+  const seatPick = pick(4, 8);
+  const alt = second ?? CHARCOAL;
+  const seats: [string, string, string] =
+    seatPick === 0 ? [paint, paint, deep(paint)] : seatPick === 1 ? [paint, alt, CHARCOAL] : seatPick === 2 ? [alt, paint, paint] : [paint, CHARCOAL, alt];
+  const { house, concrete } = HOUSES[pick(HOUSES.length, 9)];
+  const rail = pick(2, 10) && second ? second : paint;
+  return {
+    wood,
+    key,
+    paint,
+    arc,
+    apron,
+    apronInk: apron === paint || apron === second ? (contrast(trim, apron) >= 3 ? trim : '#ffffff') : '#ffffff',
+    pin: apron === paint ? (lookDistance(trim, paint) > 0.12 ? trim : '#ffffff') : paint,
+    circle,
+    baselines,
+    sideline,
+    seats,
+    rail,
+    signs: [nightFill(paint), nightFill(rail)],
+    plate: mix(paint, '#000000', 0.58),
+    concrete,
+    house,
+    seed: h,
+  };
+}
+
+/** A neutral floor's building (the Cup final): classic maple, ink keys and apron, a gold pinstripe, charcoal and slate seats, plain lights. */
+export function neutralVenue(name: string): Venue {
+  return {
+    wood: STAINS[2],
+    key: 'paint',
+    paint: INK,
+    arc: null,
+    apron: '#1c1d20',
+    apronInk: '#c9a24a',
+    pin: '#c9a24a',
+    circle: 'paint',
+    baselines: [name, name],
+    sideline: '',
+    seats: ['#3a3f48', CHARCOAL, '#4a4f58'],
+    rail: '#8a7440',
+    signs: ['#9aa0aa', '#d8b25a'],
+    plate: '#1c1d20',
+    concrete: HOUSES[1].concrete,
+    house: HOUSES[1].house,
+    seed: 0,
+  };
 }

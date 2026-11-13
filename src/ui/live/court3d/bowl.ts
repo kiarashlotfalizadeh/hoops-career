@@ -26,6 +26,7 @@ import {
 } from 'three';
 import { COURT_LEN } from '../choreo';
 import { END, HALF_W, SIDE } from '../Court';
+import type { Venue } from '../../teamColors';
 import { unshadowed } from './rig';
 
 type Keep = <T extends { dispose(): void }>(o: T) => T;
@@ -80,12 +81,17 @@ const DECK_HALF = 8.5;
 /** An aisle every this many seats; the first this many from a side's middle. */
 const AISLE_EVERY = 19;
 const AISLE_FIRST = 9;
+/** How many of an aisle's steps have someone stood on them (the top row's share: fewer by the floor). */
+const AISLE_STAND = 0.06;
 /** The row of chairs on the floor along the near side, and in the far corners past the benches. */
 const COURT_Z = 34.6;
 /** How many ft of each lit picture one turn of it covers. */
 const DECK_FT = 40;
 const SUITE_FT = 96;
 const SHOP_FT = 128;
+
+/** The lower bowl's rows from this one up are its high section (their seats in the building's third colour: Venue.seats). */
+const HIGH_ROWS = 12;
 
 /** A seat, or a place to stand: where (y is the step it is on), which way it faces, its row, its side (0 far, 1 the low end, 2 the high end, 3 near), and how much of the bowl's light gets to it. */
 export interface Seat {
@@ -100,6 +106,9 @@ export interface Seat {
   /** A seat of the stands (the crowd draws it); a chair on the floor is the benches' kind. */
   stall: boolean;
 }
+
+/** Which section a seat of the lower bowl is in, for its colour (Venue.seats): the sides' lower rows, the ends', the rows high up. */
+export const section = (s: Seat): 0 | 1 | 2 => (s.row >= HIGH_ROWS ? 2 : s.side === 1 || s.side === 2 ? 1 : 0);
 
 /**
  * One side of the bowl: the middle of its front wall, which way its seats face (about y), half its
@@ -149,6 +158,8 @@ const SIGN_GLOW = 0.8;
 /** The building's colour on its walls' padded tops and its seats' picture: this far toward grey, and this much of it (paint under a dimmed house is not a lit sign). */
 const TRIM_GREY = 0.3;
 const TRIM_TONE = 0.5;
+/** The plain building's house lights (the lit faces are painted for them: teamColors.ts HOUSES). */
+const HOUSE_PLAIN = '#fff1dc';
 /** The near side's people are between the cameras and the floor: seen from behind and against it, they are this much darker past the first rows. */
 const NEAR_LIT = 0.6;
 
@@ -354,19 +365,26 @@ function paintSuites(cv: HTMLCanvasElement) {
   }
 }
 
-/** The concourse's wall behind the walkway: counters under lit signs (bars of light, no words), doorways, plain wall with a section's number between them, people walking past against the light. */
-function paintShops(cv: HTMLCanvasElement) {
+/** The concourse's signs with no building of its own: amber, red, blue, white light. */
+const SIGNS = ['#e8b04a', '#d8574a', '#5aa0d8', '#e9e2cf'];
+
+/**
+ * The concourse's wall behind the walkway: counters under lit signs (bars of light, no words, in `signs`:
+ * the building's colours), doorways, plain wall with a section's number between them on a plate (`plate`),
+ * people walking past against the light. `seed` lays out the building's own run of them.
+ */
+function paintShops(cv: HTMLCanvasElement, signs = SIGNS, plate = '#3a332c', seed = 0) {
   const ctx = cv.getContext('2d')!;
   const { width: w, height: h } = cv;
   ctx.fillStyle = '#211c18';
   ctx.fillRect(0, 0, w, h);
-  let n = 41;
+  let n = 41 + (seed % 9973);
   const rnd = () => ((n = (n * 16807) % 2147483647) & 0xffff) / 0xffff;
   const bays = 8;
   const bw = w / bays;
   for (let b = 0; b < bays; b++) {
     const x = b * bw;
-    const kind = b % 4;
+    const kind = (b + seed) % 4;
     if (kind === 1) {
       // a doorway through to the rest of the building
       const g = ctx.createLinearGradient(0, h * 0.2, 0, h);
@@ -377,7 +395,7 @@ function paintShops(cv: HTMLCanvasElement) {
       ctx.fillStyle = '#39d27a';
       ctx.fillRect(x + bw * 0.42, h * 0.1, bw * 0.16, h * 0.07);
     } else if (kind === 3) {
-      ctx.fillStyle = '#3a332c';
+      ctx.fillStyle = plate;
       ctx.fillRect(x + bw * 0.06, h * 0.1, bw * 0.88, h * 0.9);
       ctx.fillStyle = '#d9d2c4';
       ctx.font = `700 ${Math.round(h * 0.26)}px sans-serif`;
@@ -392,7 +410,7 @@ function paintShops(cv: HTMLCanvasElement) {
       ctx.fillRect(x + bw * 0.05, h * 0.36, bw * 0.9, h * 0.4);
       ctx.fillStyle = '#17120e';
       ctx.fillRect(x + bw * 0.05, h * 0.76, bw * 0.9, h * 0.24);
-      const sign = ['#e8b04a', '#d8574a', '#5aa0d8', '#e9e2cf'][Math.floor(rnd() * 4)];
+      const sign = signs[Math.floor(rnd() * signs.length)];
       ctx.fillStyle = sign;
       ctx.fillRect(x + bw * 0.08, h * 0.1, bw * 0.84, h * 0.19);
       ctx.fillStyle = 'rgba(0,0,0,0.55)';
@@ -468,12 +486,17 @@ export class Bowl {
   /** Points up in the upper deck (cameras go off there too). */
   readonly high: number[] = [];
   private readonly deck: CanvasTexture;
+  private readonly shops: CanvasTexture;
   private readonly up = { value: 0 };
   private readonly trim: MeshLambertMaterial;
   private readonly concrete: MeshLambertMaterial;
   /** The walls' tops' colour with all its light, and how much of it the stands have now (see dim). */
   private readonly trimTone = new Color(1, 1, 1);
   private stands = 1;
+  private lightTo = 1;
+  /** The building's concrete (warm, plain or cool) and its house lights, as a tint on what is lit (the plain building's: none). */
+  private readonly concreteTone = new Color(1, 1, 1);
+  private readonly houseTone = new Color(1, 1, 1);
   private readonly apron: MeshLambertMaterial;
   private readonly glowFloor: MeshBasicMaterial;
   /** The lit pictures and how bright each is at full light. */
@@ -559,6 +582,11 @@ export class Bowl {
             concrete.quad(P(s, a, y + RISE / 2, half), P(s, b, y + RISE / 2, half), P(s, b, y + RISE / 2, d1), P(s, a, y + RISE / 2, d1), '#5a5c63', l);
             concrete.quad(P(s, a, y, half), P(s, b, y, half), P(s, b, y + RISE / 2, half), P(s, a, y + RISE / 2, half), '#8f8a72', l);
             concrete.quad(P(s, a, y + 0.07, d0), P(s, b, y + 0.07, d0), P(s, b, y + 0.07, half), P(s, a, y + 0.07, half), '#5a5c63', l);
+            // (now and then someone stood on it: on his way to his seat, or watching from there; more of them higher up)
+            if (Math.abs(Math.sin(i * 12.9898 + k * 78.233 + s.k * 37.719) * 43758.5453) % 1 < AISLE_STAND * (0.4 + i / ROWS)) {
+              const [x, , z] = P(s, u, 0, half + DEEP * 0.2);
+              this.seats.push({ x, y: y + RISE / 2, z, turn: s.turn + (((i * 7 + k) % 5) - 2) * 0.35, row: i, side: s.k, kind: 'stand', lit: l, stall: false });
+            }
             continue;
           }
           const [x, , z] = P(s, u, 0, d);
@@ -849,7 +877,8 @@ export class Bowl {
     };
     rows.customProgramCacheKey = () => 'upperRows';
     picture(suites, texture(keep, 1024, 96, paintSuites), SUITE_GLOW);
-    picture(shops, texture(keep, 1024, 96, paintShops), SHOP_GLOW);
+    this.shops = texture(keep, 1024, 96, (cv) => paintShops(cv));
+    picture(shops, this.shops, SHOP_GLOW);
     picture(doors, texture(keep, 128, 96, paintDoor, false), DOOR_GLOW);
     picture(signs, texture(keep, 64, 24, paintExit, false), SIGN_GLOW);
     // (glass: mostly what is behind it, and the building's lights on its face)
@@ -878,19 +907,35 @@ export class Bowl {
     this.fine.push(add(glow, this.glowFloor, 1));
   }
 
-  /** The building's colour: the walls' padded tops, the ground round the floor, the empty seats of the upper deck's picture, the boards' light on the ground. */
-  paint(board: string) {
-    if (board === this.board) return;
-    this.board = board;
-    const c = this.trimTone.set(board);
+  /**
+   * The building's colour: the ground round the floor, the boards' light on the ground; and its own
+   * (`venue`: the home team's building) the walls' padded tops, the empty seats of the upper deck's
+   * picture, the concrete's tone and the house lights' colour on what is lit.
+   */
+  paint(board: string, venue?: Venue) {
+    const key = venue ? `${board}|${venue.seed}|${venue.rail}|${venue.seats[2]}|${venue.concrete}|${venue.house}` : board;
+    if (key === this.board) return;
+    this.board = key;
+    const c = this.trimTone.set(venue?.rail ?? board);
     const grey = Math.max(0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b, 0.02);
     c.lerp(new Color(grey, grey, grey), TRIM_GREY).multiplyScalar(TRIM_TONE);
     this.trim.color.copy(c).multiplyScalar(this.stands);
     this.apron.color.set('#1d1e22').lerp(new Color(board), 0.12);
     this.glowFloor.color.set(board).lerp(new Color('#ffffff'), 0.35);
-    const seat = c.clone().multiplyScalar(0.6 / TRIM_TONE);
+    const seat = new Color(venue?.seats[2] ?? board);
+    const seatGrey = Math.max(0.2126 * seat.r + 0.7152 * seat.g + 0.0722 * seat.b, 0.02);
+    seat.lerp(new Color(seatGrey, seatGrey, seatGrey), TRIM_GREY).multiplyScalar(0.6);
     paintDeck(this.deck.image as HTMLCanvasElement, `#${seat.getHexString()}`);
     this.deck.needsUpdate = true;
+    // (the concourse's signs in its colours, lit, and white; its section plates in its colour, deep)
+    paintShops(this.shops.image as HTMLCanvasElement, venue ? [...venue.signs, '#e9e2cf'] : SIGNS, venue?.plate, venue?.seed);
+    this.shops.needsUpdate = true;
+    this.concreteTone.set(venue?.concrete ?? '#ffffff');
+    // (the lit faces are painted under the plain building's lights: a warm or a cool house is that much off it)
+    const plain = new Color(HOUSE_PLAIN);
+    const house = new Color(venue?.house ?? HOUSE_PLAIN);
+    this.houseTone.setRGB(house.r / plain.r, house.g / plain.g, house.b / plain.b);
+    this.dim(this.lightTo, this.stands);
   }
 
   /** How much of the upper deck is on its feet (0 to 1). */
@@ -900,9 +945,10 @@ export class Bowl {
 
   /** How much of their light the lit faces keep (1: all of it), and the steps and the walls with the people on them (`stands`). */
   dim(to: number, stands = to) {
-    for (const { mat, glow } of this.lit) mat.color.setScalar(glow * to);
+    this.lightTo = to;
+    for (const { mat, glow } of this.lit) mat.color.copy(this.houseTone).multiplyScalar(glow * to);
     this.stands = stands;
-    this.concrete.color.setScalar(stands);
+    this.concrete.color.copy(this.concreteTone).multiplyScalar(stands);
     this.trim.color.copy(this.trimTone).multiplyScalar(stands);
   }
 

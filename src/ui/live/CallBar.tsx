@@ -212,11 +212,13 @@ export function CallBar(p: CallBarProps) {
         <button type="button" className="lv-cb-btn fig" onClick={act(() => p.onSpeed(next.id))} aria-label={`Speed ${speed}×: change to ${next.label}`}>
           {speed}×
         </button>
-        <button type="button" className={`lv-cb-btn${keyPlays ? ' on' : ''}`} aria-pressed={keyPlays} onClick={act(p.onKeyPlays)}>
-          <Zap size={15} aria-hidden="true" /> Key plays
+        <button type="button" className={`lv-cb-btn${keyPlays ? ' on' : ''}`} aria-pressed={keyPlays} aria-label="Key plays" onClick={act(p.onKeyPlays)}>
+          <Zap size={15} aria-hidden="true" />
+          <span className="lv-cb-btn-t">Key plays</span>
         </button>
         <button type="button" className="lv-cb-btn end" onClick={act(p.onSkip)} aria-label="Skip ahead" aria-haspopup="dialog">
-          <FastForward size={16} aria-hidden="true" /> Skip
+          <FastForward size={16} aria-hidden="true" />
+          <span className="lv-cb-btn-t">Skip</span>
         </button>
       </div>
     );

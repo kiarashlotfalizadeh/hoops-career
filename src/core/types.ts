@@ -1432,6 +1432,11 @@ export interface Settings {
   liveStaff?: 'ask' | 'auto';
   /** Live games on a phone held upright: the court at full size ('court') or smaller, for more of the bench under it ('bench'). */
   liveView?: 'court' | 'bench';
+  /**
+   * Live games on a phone: sideways (the default: the court fills the screen, and a phone held upright
+   * has the page turned so it is turned too) or the upright layout ('upright').
+   */
+  liveTurn?: 'side' | 'upright';
   /** The court's picture: the 3D broadcast camera (the default, where the device draws WebGL) or the 2D floor from above ('flat'). */
   courtLook?: '3d' | 'flat';
   /** The 3D court's camera: the broadcast's main one (the default), the sideline's, the end zone's, the baseline's or the overhead. */

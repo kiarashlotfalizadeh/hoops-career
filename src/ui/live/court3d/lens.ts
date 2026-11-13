@@ -408,9 +408,10 @@ const FLOOR_WOOD = /* glsl */ `
   float wBare = 1.0 - smoothstep(0.05, 0.16, length(wOff));
   float wStain = wBare + (1.0 - wBare) * step(wOff.r, 0.0) * step(wOff.b, 0.0) * step(0.02, diffuseColor.r - diffuseColor.b);
   diffuseColor.rgb *= mix(1.0 - (1.0 - wWood) * 0.45, wWood, wStain);
-  // (the bare wood as a camera exposed for the men on it has it: a deep honey, not the canvas's pale one;
-  // the lines and the paint keep their own brightness, and stand off it)
-  diffuseColor.rgb *= mix(vec3(1.0), WOOD_GRADE_, wBare);
+  // (the bare wood as a camera exposed for the men on it has it: a deep honey, not the canvas's pale one, and
+  // the stained wood with it (a darker key, a two-tone arc, the apron), so a stain stays as much darker as it
+  // was painted; the lines and the paint keep their own brightness, and stand off it)
+  diffuseColor.rgb *= mix(vec3(1.0), WOOD_GRADE_, wStain);
   // the wear: where the lanes are, the coat scuffed dull in streaks by feet (and a little everywhere)
   float wLane = (1.0 - smoothstep(LANE_L_ - 3.0, LANE_L_ + 2.0, HALF_COURT - abs(vFloor.x))) * step(abs(vFloor.x), HALF_COURT) * (1.0 - smoothstep(LANE_W_ * 0.5 - 1.0, LANE_W_ * 0.5 + 3.0, abs(vFloor.z)));
   float wScuff = fCloud(vFloor.xz * vec2(0.5, 0.8));

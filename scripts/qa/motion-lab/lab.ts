@@ -2,7 +2,9 @@
 // A bench for the figures' motion (dev server only): a real game, simulated here, played through the real
 // 3D scene on a clock of its own (60 frames a second, nothing waits for the screen), measured, and filmed.
 //   lab.measure({ speed: 2 })     the whole game at a speed chip: planted feet that slide, hips that sink on a
-//                                 run, bodies inside each other, the ball inside a body
+//                                 run, bodies inside each other, the ball inside a body, pops and snapping turns
+//                                 (breaks: true holds a dead ball at each period's end and before each timeout, as
+//                                 the live page does: the men walk to their benches and back)
 //   lab.when('pull')              where in the game a man goes into that clip, or makes that gesture
 //   lab.find('dunk')              the possessions with a man doing that (act), and when
 //   lab.film({ k, pid, from, to, every, eye, fov })   a strip of moments of possession k, a camera on one man
@@ -24,6 +26,7 @@ import { Fig, type Geo } from '../../../src/ui/live/court3d/figure';
 import { BALL_R, bodyOf, HIP, J, type Drive } from '../../../src/ui/live/court3d/puppet';
 import type { Gesture } from '../../../src/ui/live/court3d/clips';
 import { CourtScene, loadModels } from '../../../src/ui/live/court3d/scene';
+import { ballIn, sunk } from '../../../src/ui/live/court3d/spacing';
 import { matchKits } from '../../../src/ui/teamColors';
 
 const q = new URLSearchParams(location.search);
@@ -34,6 +37,8 @@ const TAIL = 180;
 const FRAME = 1000 / 60;
 /** How long both fives wait round the centre circle before the opening tip (real ms). */
 const TIP_WAIT = 1600;
+/** With `breaks`: how long a period's break and a huddle before a timeout are held (real ms). */
+const BREAK_MS = 6000;
 
 // (the roll of a foot from heel to toe: the puppet says it, the body's foot bones are turned here until figure.ts reads it)
 if (q.get('toes') !== '0') {
@@ -124,14 +129,34 @@ class Clock {
   finalMs = -1;
   /** How long the fives have stood round the circle for the tip (real ms); -1: the game starts on its first play. */
   tipMs = -1;
+  /** With `breaks`: how long the dead ball has been held (real ms), -1 none; and whether the floor is empty of a play (a period's break). */
+  breakMs = -1;
+  empty = false;
   readonly stage: Stage = emptyStage();
   constructor(
     readonly speed: number,
     readonly calm = false,
+    readonly breaks = false,
   ) {}
   /** One frame on (real ms). False once the buzzer has been held this long. */
   step(real = FRAME, hold = 3000): boolean {
     const st = this.stage;
+    if (this.breakMs >= 0) {
+      // (a period's break: no play on the floor, everyone where the last one left him; a huddle before a timeout: the play held at its end)
+      this.breakMs += real;
+      if (this.empty) {
+        st.script = null;
+        st.play = null;
+      }
+      scene.frame(st, props, 0, real, this.calm, real);
+      if (this.breakMs >= BREAK_MS) {
+        this.breakMs = -1;
+        this.empty = false;
+        this.k++;
+        this.t = 0;
+      }
+      return true;
+    }
     if (this.finalMs >= 0) {
       this.finalMs += real;
       scene.frame(st, { ...props, final: winner }, 0, real, this.calm, real);
@@ -156,6 +181,12 @@ class Clock {
       if (this.k + 1 >= scripts.length) {
         this.finalMs = 0;
         return true;
+      }
+      const next = scripts[this.k + 1];
+      if (this.breaks && (next.q !== sc.q || next.frames.some((f) => f.flash?.text.startsWith('Timeout')))) {
+        this.breakMs = 0;
+        this.empty = next.q !== sc.q;
+        return this.step(real, hold);
       }
       this.k++;
       this.t = 0;
@@ -190,6 +221,27 @@ const at = (f: Fig, k: number, out: Vector3) => {
   f.pup.world(j[k * 3], j[k * 3 + 1], j[k * 3 + 2], V);
   return out.set(V.x, V.y, V.z);
 };
+/** Two shapes this far (ft) inside each other are counted (spacing.ts's shapes sit a little inside the skin). */
+const HIT = 0.1;
+/** A bone that turns this much more in one frame than in the frames either side of it has popped (radians); a heading that starts or stops turning by this much in a frame has snapped. */
+const POP = 0.15;
+const YAW_POP = 0.08;
+/** The bones a pop is looked for in (joints of the puppet's J), and their names. */
+const BONES: readonly [number, number][] = [
+  [J.hips, J.chest],
+  [J.chest, J.head],
+  [J.sl, J.sr],
+  [J.jl, J.jr],
+  [J.sl, J.el],
+  [J.el, J.hl],
+  [J.sr, J.er],
+  [J.er, J.hr],
+  [J.jl, J.kl],
+  [J.kl, J.fl],
+  [J.jr, J.kr],
+  [J.kr, J.fr],
+];
+const BONE_NAMES = ['spine', 'neck', 'shoulders', 'pelvis', 'uarmL', 'farmL', 'uarmR', 'farmR', 'thighL', 'shinL', 'thighR', 'shinR'];
 const HP = new Vector3();
 const CH = new Vector3();
 const HD = new Vector3();
@@ -197,9 +249,33 @@ const HL = new Vector3();
 const HR = new Vector3();
 
 /** The whole game at a speed chip, measured. */
-function measure({ speed = 2, calm = false, slide = 0.05 } = {}) {
-  const c = new Clock(speed, calm);
+function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only = '' } = {}) {
+  const c = new Clock(speed, calm, breaks);
   c.tipMs = 0;
+  // bodies and the ball inside each other (spacing.ts's shapes), pops (a bone that changes how fast it turns by
+  // more than POP in a frame) and snapping turns (his heading, by more than YAW_POP)
+  const ws = new Map<number, Float32Array>();
+  const bones = new Map<
+    number,
+    { d: Float32Array; th: Float32Array; yaw: number; ys: number[]; clip: string; was: string; since: number; ok: number; x: number; z: number; label: string }
+  >();
+  const steps: number[] = [];
+  const steadyWhy = new Map<string, number>();
+  const turnAt: string[] = [];
+  const yawAt: string[] = [];
+  const hit = { trunk: 0, trunkMeet: 0, limbs: 0, deep: 0, ball: 0, deepest: 0, walk: 0, live: 0, dead: 0, meet: 0 };
+  const meeting = (scene as unknown as { meeting: { i: number; j: number; w: number }[] }).meeting ?? [];
+  const trunkWhy = new Map<string, number>();
+  const trunkAt: string[] = [];
+  const hitWhy = new Map<string, number>();
+  const hitAt: string[] = [];
+  const ballWhy = new Map<string, number>();
+  const ballAt: string[] = [];
+  const pop = { n: 0, steady: 0, max: 0, yawN: 0, yawMax: 0, turnMax: 0, bones: 0 };
+  const popWhy = new Map<string, number>();
+  const popAt: string[] = [];
+  const yawWhy = new Map<string, number>();
+  const detours = (scene as unknown as { arena: { sideline: { detours: Map<number, unknown> } } }).arena.sideline.detours;
   let pf = 0;
   let slid = 0;
   let slidFt = 0;
@@ -321,12 +397,157 @@ function measure({ speed = 2, calm = false, slide = 0.05 } = {}) {
         }
       }
     }
+    // each man's joints in the scene, his bones' ways and his heading
+    for (const [pid, f] of figs) {
+      const p = f.pup;
+      let w = ws.get(pid);
+      if (!w) ws.set(pid, (w = new Float32Array(45)));
+      for (let k = 0; k < 15; k++) {
+        p.world(p.j[k * 3], p.j[k * 3 + 1], p.j[k * 3 + 2], V);
+        w[k * 3] = V.x;
+        w[k * 3 + 1] = V.y;
+        w[k * 3 + 2] = V.z;
+      }
+      let b = bones.get(pid);
+      const fresh = !b;
+      if (!b)
+        bones.set(
+          pid,
+          (b = {
+            d: new Float32Array(BONES.length * 3),
+            th: new Float32Array(BONES.length * 2),
+            yaw: p.yaw,
+            ys: [0, 0],
+            clip: p.clip,
+            was: p.clip,
+            since: 99,
+            ok: 0,
+            x: p.x,
+            z: p.z,
+            label: p.clip,
+          }),
+        );
+      if (b.clip !== p.clip) {
+        b.was = b.clip;
+        b.clip = p.clip;
+        b.since = 0;
+      } else b.since++;
+      const label = b.since < 8 ? `${b.was}>${p.clip}` : p.clip;
+      const jumped = Math.hypot(p.x - b.x, p.z - b.z) > 3;
+      b.x = p.x;
+      b.z = p.z;
+      // (frames in a row he has been followed for: a pop at t-1 is judged against t-2 and t)
+      b.ok = fresh || jumped ? 0 : b.ok + 1;
+      BONES.forEach(([from, to], i) => {
+        const dx = w[to * 3] - w[from * 3];
+        const dy = w[to * 3 + 1] - w[from * 3 + 1];
+        const dz = w[to * 3 + 2] - w[from * 3 + 2];
+        const l = Math.hypot(dx, dy, dz) || 1;
+        const k = i * 3;
+        const [nx, ny, nz] = [dx / l, dy / l, dz / l];
+        const th = Math.acos(Math.max(-1, Math.min(1, nx * b.d[k] + ny * b.d[k + 1] + nz * b.d[k + 2])));
+        if (b.ok >= 3) {
+          pop.bones++;
+          pop.max = Math.max(pop.max, th);
+          steps.push(th);
+          // (the frame before: a step bigger than both its neighbours' by POP is a pop)
+          const spike = b.th[i * 2] - Math.max(b.th[i * 2 + 1], th);
+          // (in a clip's own motion, or in the change from one clip to the next)
+          if (spike > POP && !b.label.includes('>')) {
+            pop.steady++;
+            const why = `${b.label}:${BONE_NAMES[i]}`;
+            steadyWhy.set(why, (steadyWhy.get(why) ?? 0) + 1);
+          } else if (spike > POP) {
+            pop.n++;
+            const why = `${b.label}:${BONE_NAMES[i]}`;
+            popWhy.set(why, (popWhy.get(why) ?? 0) + 1);
+            if (popAt.length < 30 && why.includes(only) && !popAt.some((x) => x.startsWith(`k${c.k} `)))
+              popAt.push(`k${c.k} t${Math.round(c.t)} p${pid} ${why} ${spike.toFixed(2)}`);
+          }
+        }
+        b.th[i * 2 + 1] = b.th[i * 2];
+        b.th[i * 2] = b.ok >= 1 ? th : 0;
+        b.d[k] = nx;
+        b.d[k + 1] = ny;
+        b.d[k + 2] = nz;
+      });
+      b.label = label;
+      // his heading: how much it turns in a frame, and how suddenly it starts or stops turning
+      const ys = Math.abs(wrap(p.yaw - b.yaw));
+      if (b.ok >= 3) {
+        pop.turnMax = Math.max(pop.turnMax, ys);
+        if (ys > 0.4 && turnAt.length < 12)
+          turnAt.push(`k${c.k} t${Math.round(c.t)} i${play?.i} p${pid} ${label} ${sc && play ? play.b.act[[...sc.oPids, ...sc.dPids].indexOf(pid)] : '-'} ${ys.toFixed(2)}`);
+        const snap = Math.abs(ys - b.ys[0]);
+        pop.yawMax = Math.max(pop.yawMax, snap);
+        if (snap > YAW_POP) {
+          pop.yawN++;
+          yawWhy.set(label, (yawWhy.get(label) ?? 0) + 1);
+          if (yawAt.length < 20 && !yawAt.some((x) => x.startsWith(`k${c.k} `)))
+            yawAt.push(
+              `k${c.k} t${Math.round(c.t)} i${play?.i} p${pid} ${label} ${sc && play ? play.b.act[[...sc.oPids, ...sc.dPids].indexOf(pid)] : '-'} ${b.ys[0].toFixed(2)}->${ys.toFixed(2)}`,
+            );
+        }
+      }
+      b.ys[0] = b.ok >= 1 ? ys : 0;
+      b.yaw = p.yaw;
+    }
+    for (const [pid, f] of figs) {
+      const p = f.pup;
+      const deep = ballIn(ball, ws.get(pid)!, p.body.s, p.body.bulk, BALL_R, !f.ball);
+      if (deep > HIT) {
+        hit.ball++;
+        const why = `${f.ball ? 'his' : 'by'} ${p.clip}`;
+        ballWhy.set(why, (ballWhy.get(why) ?? 0) + 1);
+        if (ballAt.length < 24 && sc && play)
+          ballAt.push(`k${c.k} t${Math.round(c.t)} i${play.i} p${pid} ${why} ${play.b.act[[...sc.oPids, ...sc.dPids].indexOf(pid)]} y${ball.y.toFixed(1)} ${deep.toFixed(2)}`);
+      }
+    }
+    // (who meets whom this frame: the scene's own list)
+    const met = new Set<string>();
+    if (sc) for (const m of meeting) if (m.w > 0.2) met.add(`${[...sc.oPids, ...sc.dPids][m.i]}:${[...sc.oPids, ...sc.dPids][m.j]}`);
+    for (let a = 0; a < figs.length; a++)
+      for (let b = a + 1; b < figs.length; b++) {
+        const fa = figs[a][1];
+        const fb = figs[b][1];
+        const deep = sunk(ws.get(figs[a][0])!, fa.pup.body.s, fa.pup.body.bulk, ws.get(figs[b][0])!, fb.pup.body.s, fb.pup.body.bulk, true);
+        if (deep <= HIT) continue;
+        const trunk = sunk(ws.get(figs[a][0])!, fa.pup.body.s, fa.pup.body.bulk, ws.get(figs[b][0])!, fb.pup.body.s, fb.pup.body.bulk, false);
+        const walking = detours.has(figs[a][0]) || detours.has(figs[b][0]);
+        // (two the play has meet body to body, a screen, a box-out: touching is what they are for, counted on their own)
+        const meeting = met.has(`${figs[a][0]}:${figs[b][0]}`) || met.has(`${figs[b][0]}:${figs[a][0]}`);
+        const ctx = meeting ? 'meet' : walking ? 'walk' : sc && play ? 'live' : 'dead';
+        if (meeting) {
+          if (trunk > HIT) hit.trunkMeet++;
+        } else {
+          hit.limbs++;
+          if (deep > 0.25) hit.deep++;
+          hit.deepest = Math.max(hit.deepest, deep);
+        }
+        if (trunk > HIT && !meeting) {
+          hit.trunk++;
+          const tw = `${ctx} ${[fa.pup.clip, fb.pup.clip].sort().join('+')}`;
+          trunkWhy.set(tw, (trunkWhy.get(tw) ?? 0) + 1);
+          if (trunkAt.length < 30 && !trunkAt.some((x) => x.startsWith(`k${c.k} `)))
+            trunkAt.push(
+              `k${c.k} t${Math.round(c.t)} i${play?.i} ${figs[a][0]}/${figs[b][0]} ${tw} ${sc && play ? [figs[a][0], figs[b][0]].map((q) => play.b.act[[...sc.oPids, ...sc.dPids].indexOf(q)]).join('/') : ''} ${trunk.toFixed(2)}`,
+            );
+        }
+        hit[ctx]++;
+        const why = `${ctx} ${[fa.pup.clip, fb.pup.clip].sort().join('+')}`;
+        hitWhy.set(why, (hitWhy.get(why) ?? 0) + 1);
+        if (hitAt.length < 30 && !hitAt.some((x) => x.startsWith(`k${c.k} `)))
+          hitAt.push(
+            `k${c.k} t${Math.round(c.t)} i${play?.i} ${figs[a][0]}/${figs[b][0]} ${why} ${sc && play ? [figs[a][0], figs[b][0]].map((q) => play.b.act[[...sc.oPids, ...sc.dPids].indexOf(q)]).join('/') : ''} ${deep.toFixed(2)}${trunk > HIT ? ' trunk' : ''}`,
+          );
+      }
     for (let a = 0; a < figs.length; a++)
       for (let b = a + 1; b < figs.length; b++) {
         const pa = figs[a][1].pup;
         const pb = figs[b][1].pup;
         const d = Math.hypot(pa.x - pb.x, pa.z - pb.z);
         const r = (pa.body.s + pb.body.s) / 2;
+        if (met.has(`${figs[a][0]}:${figs[b][0]}`) || met.has(`${figs[b][0]}:${figs[a][0]}`)) continue;
         if (d < 1.3 * r) pairs++;
         if (d < 0.9 * r) {
           deep++;
@@ -354,6 +575,27 @@ function measure({ speed = 2, calm = false, slide = 0.05 } = {}) {
     deeps: Object.fromEntries([...deeps].sort((x, y) => y[1] - x[1]).slice(0, 8)),
     deepAt,
     ballInBody: inBody,
+    hits: { ...hit, deepest: Math.round(hit.deepest * 100) / 100 },
+    hitWhy: Object.fromEntries([...hitWhy].sort((x, y) => y[1] - x[1]).slice(0, 16)),
+    hitAt,
+    trunkWhy: Object.fromEntries([...trunkWhy].sort((x, y) => y[1] - x[1]).slice(0, 16)),
+    trunkAt,
+    ballWhy: Object.fromEntries([...ballWhy].sort((x, y) => y[1] - x[1]).slice(0, 12)),
+    ballAt,
+    pops: {
+      ...pop,
+      per1k: Math.round((pop.n / Math.max(1, pop.bones)) * 1e6) / 1e3,
+      max: Math.round(pop.max * 100) / 100,
+      p999: Math.round((steps.sort((x, y) => x - y)[Math.floor(steps.length * 0.999)] ?? 0) * 1000) / 1000,
+      yawMax: Math.round(pop.yawMax * 1000) / 1000,
+      turnMax: Math.round(pop.turnMax * 1000) / 1000,
+    },
+    popWhy: Object.fromEntries([...popWhy].sort((x, y) => y[1] - x[1]).slice(0, 20)),
+    popAt,
+    yawWhy: Object.fromEntries([...yawWhy].sort((x, y) => y[1] - x[1]).slice(0, 12)),
+    yawAt,
+    turnAt,
+    steadyWhy: Object.fromEntries([...steadyWhy].sort((x, y) => y[1] - x[1]).slice(0, 16)),
     dunkOffDeg: Math.round((dunkOff * 180) / Math.PI),
     cases,
     headWhips: headWhip,
@@ -576,6 +818,35 @@ function pose({
   return { n, w, h };
 }
 
+/**
+ * One man through possession k (play ms `from` to `to`), frame by frame: his clip and move, how far into its blend,
+ * the pose channels named in `keys`, and joints of his (J names) in the scene.
+ */
+function track({ k = 0, pid = -1, from = 0, to = Infinity, speed = 2, keys = ['lx', 'ly', 'lz'] as string[], joints = ['hl'] as string[], lead = 2 } = {}) {
+  const c = new Clock(speed);
+  if (lead >= k) c.tipMs = 0;
+  c.k = Math.max(0, k - lead);
+  while (c.k < k && c.finalMs < 0) c.step();
+  const out: string[] = [];
+  while (c.k === k && c.finalMs < 0) {
+    c.step();
+    if (c.k !== k || c.t < from || c.t > to) continue;
+    const f = inner.figs.get(pid >= 0 ? pid : scripts[k].oPids[0]);
+    if (!f) continue;
+    const p = f.pup;
+    const raw = p as unknown as { blend: number; one: { id: string; tau: number } | null };
+    const j = joints.map((n) => {
+      const q = J[n as keyof typeof J];
+      const w = p.world(p.j[q * 3], p.j[q * 3 + 1], p.j[q * 3 + 2], V);
+      return `${n}(${w.x.toFixed(2)},${w.y.toFixed(2)},${w.z.toFixed(2)})`;
+    });
+    out.push(
+      `${Math.round(c.t)} i${c.stage.play?.i} ${p.clip}${raw.one ? `(${raw.one.id}@${Math.round(raw.one.tau)})` : ''} b${raw.blend.toFixed(2)} yaw${p.yaw.toFixed(2)} ${keys.map((n) => `${n}${p.pose[I[n as keyof typeof I]].toFixed(2)}`).join(' ')} ${j.join(' ')}`,
+    );
+  }
+  return out;
+}
+
 /** The ball through possession k (play ms `from` to `to`), every `every` frames: where it is (ft) and its biggest jump in a frame. */
 function trace({ k = 0, from = 0, to = Infinity, every = 2, speed = 2 } = {}) {
   const c = new Clock(speed);
@@ -599,6 +870,7 @@ function trace({ k = 0, from = 0, to = Infinity, every = 2, speed = 2 } = {}) {
 
 (window as unknown as { lab: unknown }).lab = {
   trace,
+  track,
   pose,
   scripts,
   measure,

@@ -24,7 +24,10 @@
 // play. They signal what the plan says happened, and the ball goes through their hands as it does in a
 // game: tossed up at the tip, taken at a whistle, bounced to the man at the line, handed to the man who
 // puts it in. The coaches pace their boxes, call out, react, crouch late in a close game and take the
-// huddle with a board in their hand; the benches lean in, get up for a big play, slump when it goes wrong.
+// huddle with a board in their hand; the benches lean in, get up for a big play (a few, each in his own time),
+// slump when it goes wrong, and put a hand up to the man coming off the floor as he gets to them. At the end the
+// kind of win shows (SceneProps.occasion): an ordinary one's bench stands and claps and the coaches meet to
+// shake hands; a late winner's, a series' or a title's bench storms the floor to where its five are.
 import {
   BoxGeometry,
   BufferAttribute,
@@ -58,6 +61,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { BASKET, COURT_LEN, toWorld, type Act, type Pt } from '../choreo';
 import { HALF_W, SIDE, type GameInfo, type Stage } from '../Court';
 import type { MatchKit } from '../../teamColors';
+import type { Occasion } from '../occasion';
 import type { Gesture } from './clips';
 import { Fig, type Geo } from './figure';
 import { merged, type Thing } from './glb';
@@ -262,6 +266,21 @@ const POSES: Record<string, Pose> = {
     ],
     { look: -0.22, turn: -0.1, curl: [0.4, 0.95] },
   ),
+  // a hand up, out to the man coming along the bench off the floor
+  greet: sitting(
+    0.16,
+    KN_Y - 0.05,
+    0.3,
+    [
+      [0.9, 2.7, 0.3],
+      [-1.12, 3.95, 0.7],
+    ],
+    [
+      [0.46, 2.24, 1.3],
+      [-1.15, 5.0, 1.2],
+    ],
+    { look: -0.1, turn: -0.35, curl: [0.2, 0.05] },
+  ),
   // it went wrong: bent over, his face in his hands
   slump: sitting(0.74, KN_Y, 0.34, both([0.56, 2.3, 1.36]), both([0.17, 3.42, 2.0]), { look: 0.25, curl: 0.15 }),
   // just off the floor: sat back getting his breath, a towel round his neck, his forearms on his thighs
@@ -349,12 +368,12 @@ const POSES: Record<string, Pose> = {
   photo0: sitting(0.3, KN_Y - 0.03, 0.4, both([0.9, 1.9, 0.4]), both([0.3, 1.7, 1.3]), { look: -0.05, shift: 0, curl: 0.6 }, 0.6),
   photo: sitting(0.2, KN_Y - 0.03, 0.4, both([0.7, 2.0, 0.85]), both([0.3, 2.9, 1.25]), { look: -0.12, shift: 0, curl: 0.6 }, 0.6),
 };
-/** The ways a man sits on a bench, and gets up from one. */
-const SITS = ['lean', 'back', 'up', 'arms', 'chin'] as const;
+/** The ways a man sits on a bench (a few with a towel round their necks), and gets up from one. */
+const SITS = ['lean', 'back', 'up', 'arms', 'chin', 'lean', 'rest'] as const;
 const UPS = ['cheer', 'clap', 'towel', 'cheer'] as const;
 /** How far up off his chair each pose is: sat (0), the two steps of getting up, on his feet (3). One changes into another a step at a time. */
 const HEIGHT: Record<string, number | undefined> = { rise1: 1, rise2: 2, stand: 3, hips: 3, cheer: 3, cheer2: 3, clap: 3, clap2: 3, towel: 3, towel2: 3 };
-for (const p of [...SITS, 'slump', 'rest']) HEIGHT[p] = 0;
+for (const p of [...SITS, 'slump', 'greet']) HEIGHT[p] = 0;
 /** A pose that is never still: the one it goes to and back from, and how fast (a second). */
 const LOOP: Record<string, [string, number] | undefined> = { clap: ['clap2', 3.4], cheer: ['cheer2', 2.3], towel: ['towel2', 1.9], wipe: ['wipe2', 1.5] };
 /** What a pose has in its hands or on its shoulders (a cast's two poses carry the same things). */
@@ -435,7 +454,7 @@ function human(look: Look, woman = false): Wear {
   const wear: Wear = {
     skin: look.skin,
     hair: shaved ? mix(look.skin, look.hair, 0.3) : look.hair,
-    brow: mix(look.hair, '#15110e', 0.3),
+    brow: mix(look.brows, '#15110e', 0.3),
     eye: '#15100d',
     iris: look.eyes,
     lip: `#${lip.getHexString()}`,
@@ -450,9 +469,9 @@ function human(look: Look, woman = false): Wear {
     : (style.piece ?? (style.name === 'crop' ? 'hairTop' : null));
   if (piece) wear[piece] = look.hair;
   if (!woman) {
-    if (look.beard === 1) wear.beard = mix(look.skin, look.hair, 0.2);
-    else if (look.beard === 2) wear.goatee = look.hair;
-    else if (look.beard >= 3) wear.beard = look.hair;
+    if (look.beard === 1) wear.beard = mix(look.skin, look.brows, 0.2);
+    else if (look.beard === 2) wear.goatee = look.brows;
+    else if (look.beard >= 3) wear.beard = look.brows;
   }
   return wear;
 }
@@ -1135,6 +1154,9 @@ export interface Around {
   /** A trip to the line. */
   line: boolean;
   final?: 0 | 1;
+  /** What kind of win it is, and where the winners gather on the floor (a bench that storms the floor runs there). */
+  occasion?: Occasion;
+  gather?: { x: number; z: number } | null;
   clutch: boolean;
   game?: GameInfo;
   /** Who is on each bench (their player ids), when the page knows. */
@@ -1176,10 +1198,12 @@ interface Sitter {
   /** How he sits when nothing is happening, and how he gets up for a play. */
   sit: string;
   react: string;
-  /** What he's doing (sat; up for a play; down about one), from when and until when (ms). */
-  mode: 'sit' | 'up' | 'down';
+  /** What he's doing (sat; up for a play; down about one; a hand up to a teammate off the floor), from when and until when (ms). */
+  mode: 'sit' | 'up' | 'down' | 'greet';
   from: number;
   until: number;
+  /** At the end of the game, he runs out onto the floor to the winners. */
+  storm: boolean;
   /** He came off the floor, and sits with a towel until then (ms). */
   spent: number;
   /** The pose he is in, the one he is on his way to and how far he has got (0..1). */
@@ -1291,6 +1315,11 @@ const STEP_MS = 250;
 const TURN_MS = 340;
 /** A man just off the floor keeps his towel this long (ms of the bodies' time). */
 const SPENT_MS = 60000;
+/** A bench that storms the floor runs this fast (ft a second), to this far round where its five are (ft). */
+const STORM_PACE = 15;
+const STORM_R = [4.2, 5.6] as const;
+/** The coaches meet in front of the table this long after the buzzer (ms), by the kind of win, and shake hands. */
+const SHAKE_AFTER: Record<Occasion, number> = { win: 300, late: 4200, playoff: 2400, clinch: 4600, title: 5600 };
 
 export class Sideline {
   readonly group = new Group();
@@ -1337,6 +1366,9 @@ export class Sideline {
   private whistle = 0;
   private late = false;
   private over = false;
+  /** When the coaches go to shake hands, after the buzzer (ms of the sideline's clock), and whether they have. */
+  private shake = Infinity;
+  private shook = false;
   private count = 0;
   /** Signals still to come: who, what, when (ms of the sideline's clock). */
   private later: { w: Walker; id: Gesture; at: number }[] = [];
@@ -1434,6 +1466,7 @@ export class Sideline {
       mode: 'sit',
       from: 0,
       until: 0,
+      storm: false,
       spent: 0,
       pose: o.sit,
       next: null,
@@ -1622,7 +1655,8 @@ export class Sideline {
       board.rotation.set(-0.5, 0, 0);
       board.visible = false;
       w.hold(board, 'hal');
-      return { w, side, spot: (side ? 1 : -1) * 21, move: 0, call: 4000, board };
+      // (the two never in step: each moves and calls out on his own clock)
+      return { w, side, spot: (side ? 1 : -1) * 21, move: side * 2300, call: 4000 + side * 2900, board };
     });
     this.walking = [...this.refs, ...this.coaches.map((c) => c.w)];
     for (const w of this.walking) w.lite(this.level >= 2);
@@ -1639,6 +1673,7 @@ export class Sideline {
     this.benchKey = key;
     const was = new Map(this.bench.map((s) => [s.id, s]));
     const next: Sitter[] = [];
+    const back: [Sitter, number][] = [];
     for (const side of [0, 1] as const) {
       const e = side ? 1 : -1;
       const kit = this.kits[side];
@@ -1682,12 +1717,21 @@ export class Sideline {
             s.px = from[0] - Math.sin(s.pyaw) * UP_OUT;
             s.pz = from[1] - Math.cos(s.pyaw) * UP_OUT;
             s.spent = this.clock + SPENT_MS;
+            back.push([s, (Math.hypot(s.x - from[0], s.z - from[1]) / BENCH_PACE) * 1000]);
           }
         }
         was.delete(id);
         next.push(s);
       });
     }
+    // (the men either side of a chair put a hand up to him as he comes along to it: about when he gets to them)
+    for (const [b, walk] of back)
+      for (const n of next)
+        if (n.side === b.side && n.kind === 'bench' && n.mode === 'sit' && n !== b && Math.abs(n.chair - b.chair) <= 2 && hash(n.id, b.id) < 0.75) {
+          n.mode = 'greet';
+          n.from = this.clock + walk - 700 + hash(n.id, b.id + 3) * 400;
+          n.until = n.from + 1500;
+        }
     // (whoever has left the bench: on the floor now, or gone from the page's list)
     for (const s of was.values()) {
       if (s.w) this.drop(s.w);
@@ -1731,9 +1775,14 @@ export class Sideline {
   /**
    * One of the ten, as the scene is about to place him (where the play has him, the way he faces): a man the
    * sideline has on a way of its own for a moment (on from the table, over toward his bench at a timeout) is
-   * put on it instead, and given back to the play when he has got to where it has him.
+   * put on it instead, and given back to the play when he has got to where it has him. `cut`: the play has put
+   * everyone on fresh spots (a new period, a skip), so nobody is on his way anywhere.
    */
-  lead(pid: number, end: { x: number; z: number; yaw: number }, quiet = false) {
+  lead(pid: number, end: { x: number; z: number; yaw: number }, quiet = false, cut = false) {
+    if (cut) {
+      this.detours.delete(pid);
+      return;
+    }
     let d = this.detours.get(pid);
     if (!d && !quiet && this.level < 2 && !this.lastAt.has(pid)) {
       // (new to the floor, and off the bench a moment ago: he runs on from the table's end, on his bench's side)
@@ -1781,16 +1830,18 @@ export class Sideline {
   /** Something happened, for `side`'s team (a foul: against it): the benches and the coaches take it their own ways. */
   private happen(what: Moment, side: 0 | 1) {
     const big = what === 'three' || what === 'dunk' || what === 'and1' || what === 'block' || what === 'buzzer';
-    const share = what === 'buzzer' ? 1 : what === 'dunk' ? 0.6 : what === 'and1' ? 0.55 : what === 'three' ? 0.45 : what === 'block' ? 0.35 : 0;
+    // (a few get up for it; as many again lean in where they sit)
+    const share = what === 'buzzer' ? 1 : what === 'dunk' ? 0.45 : what === 'and1' ? 0.4 : what === 'three' ? 0.3 : what === 'block' ? 0.25 : 0;
     this.n++;
     for (const s of this.bench) {
       if (s.kind !== 'bench' || s.walking || this.level > 2) continue;
       const r = hash(s.id, this.n);
-      if (big && s.side === side && r < share) {
+      if (big && s.side === side && r < Math.min(1, share * 2)) {
+        // (each in his own time, and for his own while: along the bench from the table, one after another)
         s.mode = 'up';
-        s.from = this.clock + hash(s.id, this.n + 50) * 380;
-        s.until = s.from + 1700 + r * 2200 + (what === 'buzzer' ? 2500 : 0);
-        s.react = UPS[Math.floor(hash(s.id, this.n + 9) * UPS.length)];
+        s.from = this.clock + hash(s.id, this.n + 50) * 650 + s.chair * 45;
+        s.until = s.from + 1500 + hash(s.id, this.n + 70) * 2600 + (what === 'buzzer' ? 2500 : 0);
+        s.react = r < share ? UPS[Math.floor(hash(s.id, this.n + 9) * UPS.length)] : 'lean';
       } else if (s.side !== side && s.mode === 'sit' && ((big && r < 0.22) || (what === 'turnover' && r > 0.9))) {
         s.mode = 'down';
         s.from = this.clock + 200 + hash(s.id, this.n + 50) * 500;
@@ -1808,9 +1859,9 @@ export class Sideline {
         if (mine && r < 0.5) c.w.cue(r < 0.25 ? 'head' : 'coachWide');
         else if (!mine && r < 0.3) c.w.cue('clap');
       } else if (mine) {
-        if (big) c.w.cue(r < 0.5 ? 'fist' : 'clap');
-        else if (r < 0.25) c.w.cue('clap');
-      } else if (big && r < 0.4) c.w.cue(r < 0.2 ? 'coachWide' : 'coachCalm');
+        if (big) this.signal(c.w, r < 0.5 ? 'fist' : 'clap', 120 + hash(c.w.id, this.n + 3) * 600);
+        else if (r < 0.25) this.signal(c.w, 'clap', 200 + hash(c.w.id, this.n + 3) * 700);
+      } else if (big && r < 0.4) this.signal(c.w, r < 0.2 ? 'coachWide' : 'coachCalm', 300 + hash(c.w.id, this.n + 3) * 700);
       c.call = Math.max(c.call, this.clock + 2500);
     }
   }
@@ -1966,18 +2017,28 @@ export class Sideline {
       this.over = true;
       this.n++;
       this.detours.clear();
+      const o = a.occasion ?? 'win';
+      // (an ordinary win: up and clapping; a playoff one: towels going round; a late winner, a series, a title: out onto the floor)
+      const storm = o === 'late' || o === 'clinch' || o === 'title';
+      const ups = o === 'win' ? (['clap', 'clap', 'clap', 'cheer'] as const) : o === 'playoff' ? (['towel', 'cheer', 'towel', 'clap'] as const) : UPS;
       for (const s of this.bench) {
         if (s.kind !== 'bench') continue;
         const won = s.side === a.final;
-        s.mode = won ? 'up' : hash(s.id, this.n) < 0.6 ? 'down' : 'sit';
-        s.from = this.clock + hash(s.id, this.n + 50) * 600;
+        s.mode = won ? 'up' : hash(s.id, this.n) < (o === 'win' ? 0.25 : 0.6) ? 'down' : 'sit';
+        s.from = this.clock + hash(s.id, this.n + 50) * (storm ? 450 : 900);
         s.until = Infinity;
-        if (won) s.react = UPS[Math.floor(hash(s.id, this.n + 9) * UPS.length)];
+        s.storm = won && storm;
+        if (won) s.react = ups[Math.floor(hash(s.id, this.n + 9) * ups.length)];
       }
-      for (const c of this.coaches) c.w.cue(c.side === a.final ? 'fist' : 'head', 3000);
+      this.shake = this.clock + SHAKE_AFTER[o];
+      for (const c of this.coaches) this.signal(c.w, c.side === a.final ? (o === 'win' ? 'clap' : 'fist') : 'head', hash(c.w.id, this.n) * 500);
     } else if (a.final === undefined && this.over) {
       this.over = false;
-      for (const s of this.bench) s.until = 0;
+      this.shook = false;
+      for (const s of this.bench) {
+        s.until = 0;
+        s.storm = false;
+      }
     }
     if (a.cut || a.replay) {
       // (another moment has the picture: the ball is wherever that moment has it)
@@ -2181,6 +2242,17 @@ export class Sideline {
         }
         continue;
       }
+      if (a.final !== undefined && this.clock > this.shake) {
+        // the end: over to the other one in front of the table, and a handshake
+        const tx = E * 1.25;
+        const tz = BOX_Z + 1.6;
+        w.go(tx, tz, -E * Math.PI * 0.5, COACH_HURRY, 'stand', a, { cut: a.cut, clear: false });
+        if (!this.shook && this.coaches.every((o) => Math.hypot(o.w.x - (o.side ? 1 : -1) * 1.25, o.w.z - tz) < 0.5)) {
+          this.shook = true;
+          for (const o of this.coaches) o.w.cue('shake');
+        }
+        continue;
+      }
       // where in his box: toward the end the ball is at, a new spot every few seconds
       if (this.clock > c.move) {
         c.spot = E * clamp(E * ball.x * 0.3 + 23 + (hash(w.id, this.n++) - 0.5) * 5, BOX[0], BOX[1]);
@@ -2247,7 +2319,18 @@ export class Sideline {
         } else if (s.mode === 'up' && on) {
           want = s.react;
           wave = 1;
-        } else if (s.mode === 'down' && on) want = 'slump';
+          if (s.storm && a.gather && this.level < 3) {
+            // out onto the floor to his five: round where they are (beside and behind them, not between them and the near
+            // side's cameras), facing them
+            const i = s.chair + (s.side ? 11 : 0);
+            const ang = Math.PI + (((i * 0.618) % 1) - 0.5) * 2.7;
+            const r = STORM_R[i % 2];
+            const x = a.gather.x + Math.sin(ang) * r;
+            const z = Math.min(a.gather.z + Math.cos(ang) * r, HALF_W - 1);
+            spot = { x, z, yaw: Math.atan2(a.gather.x - x, a.gather.z - z) };
+          }
+        } else if (s.mode === 'greet' && on) want = 'greet';
+        else if (s.mode === 'down' && on) want = 'slump';
         // (late in a close one most of them are on their feet, the rest forward on their knees)
         else if (standing) want = hash(s.id, 61) < 0.3 ? 'hips' : hash(s.id, 61) < 0.7 ? 'stand' : 'lean';
       } else if (s.kind === 'kid') {
@@ -2288,7 +2371,7 @@ export class Sideline {
             }
             const [gx, gz] = [hx + Math.sin(hyaw) * fwd, hz + Math.cos(hyaw) * fwd];
             const left = Math.hypot(gx - w.x, gz - w.z);
-            w.go(gx, gz, left < 2 ? hyaw : Math.atan2(gx - w.x, gz - w.z), BENCH_PACE, 'stand', a, {
+            w.go(gx, gz, left < 2 ? hyaw : Math.atan2(gx - w.x, gz - w.z), s.storm ? STORM_PACE : BENCH_PACE, 'stand', a, {
               look: { x: ball.x, y: 4, z: ball.z },
               clear: s.kind === 'bench' && s.spent > 0,
             });

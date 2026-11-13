@@ -6,9 +6,15 @@ import { useEffect, useRef, type CSSProperties } from 'react';
 import { ChevronRight } from 'lucide-react';
 import type { Team } from '../../core/types';
 import type { MatchKit } from '../teamColors';
+import type { Occasion } from './occasion';
 
 /** How long the frame holds before it moves on by itself. */
 const HOLD_MS = 3500;
+/**
+ * How long it holds (ms) over the 3D picture's celebration of each kind of end (court3d/scene.ts): a
+ * late winner, a playoff win, a series and a title have more to them than the handshakes of a win.
+ */
+export const FINAL_HOLD: Record<Occasion, number> = { win: HOLD_MS, late: 5500, playoff: 5000, clinch: 7000, title: 9000 };
 
 export function FinalFrame({
   teams,
@@ -16,6 +22,7 @@ export function FinalFrame({
   score,
   label,
   won,
+  hold = HOLD_MS,
   onDone,
 }: {
   /** [home, away]. */
@@ -28,6 +35,8 @@ export function FinalFrame({
   label: string;
   /** The user's result (null: not his game). */
   won: boolean | null;
+  /** How long it holds before it moves on by itself (ms). */
+  hold?: number;
   /** On to the final card: the button, or the frame by itself after a beat. */
   onDone: () => void;
 }) {
@@ -43,10 +52,10 @@ export function FinalFrame({
     latest.current();
   };
   useEffect(() => {
-    const t = setTimeout(go, HOLD_MS);
+    const t = setTimeout(go, hold);
     return () => clearTimeout(t);
-    // (the frame's one timer, from when it goes up)
-  }, []);
+    // (the frame's one timer, from when it goes up: the end it holds over doesn't change under it)
+  }, [hold]);
   const by = Math.abs(score[0] - score[1]);
   const result = won === null ? `${teams[score[0] > score[1] ? 0 : 1].abbrev} by ${by}` : `${won ? 'Won' : 'Lost'} by ${by}`;
   // away on the left, home on the right, as the scorebug has them

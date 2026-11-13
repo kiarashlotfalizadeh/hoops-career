@@ -409,6 +409,28 @@
     padding: 0 10px;
   }
 }
+/* narrower still (the strip beside a phone's scorebug, sideways, by a notch): playback is all icons */
+@container lv-cb (max-width: 315px) {
+  .lv-cb-tp {
+    gap: 4px;
+  }
+  .lv-cb-tp .lv-cb-btn-t {
+    display: none;
+  }
+  .lv-cb-tp .lv-cb-btn:not(.fig) {
+    min-width: 48px;
+    padding: 0 12px;
+  }
+}
+/* (and an offer's buttons say it all: its words would only be cut short) */
+@container lv-cb (max-width: 260px) {
+  .lv-cb-offer > .lv-cb-t {
+    display: none;
+  }
+  .lv-cb-offer > .lv-cb-btn:first-of-type {
+    margin-left: auto;
+  }
+}
 /* a wide one: room to breathe */
 @container lv-cb (min-width: 560px) {
   .lv-cb-row {

@@ -8,8 +8,12 @@
 // building from the play, the home crowd on its feet late in a close one (towels out with its side
 // defending), the end behind the basket waving at a visitor's free throw, a hush and the visitors' few up
 // for theirs, phones up and cameras going off for the big ones, seats emptying late in a blowout, and at
-// a home win all of it on its feet under confetti and streamers. The house lights go down for the open,
-// a timeout and a home win, with the roof's spots sweeping the floor (fx.ts).
+// the end as the kind of win calls for (SceneProps.occasion): an ordinary one stood and clapped, a late
+// winner, a playoff win and a series with the building going wild (towels for the playoffs), a title on its
+// feet all the while under confetti and streamers in the champions' colours. While a play is on the stands
+// sit back: stiller, a shade darker and greyer, no cameras going off, the boards a notch down; they come up
+// again at a dead ball and a big moment. The house lights go down for the open, a timeout and a home win,
+// with the roof's spots sweeping the floor (fx.ts).
 import {
   BoxGeometry,
   BufferGeometry,
@@ -44,7 +48,8 @@ import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { COURT_LEN } from '../choreo';
 import { END, FLOOR_L, FLOOR_W, HALF_W, SIDE, type GameInfo, type Stage } from '../Court';
-import type { MatchKit } from '../../teamColors';
+import type { MatchKit, Venue } from '../../teamColors';
+import type { Occasion } from '../occasion';
 import { BIG, Boards } from './boards';
 import { Bowl, DEEP, ENDX, FAR, RISE, ROOF_TOP, ROWS, TOP } from './bowl';
 import { Crowd } from './crowd';
@@ -70,8 +75,9 @@ const TOUCHES = 96;
 /** One seat in this many has a camera or a phone up when something happens. */
 const FLASH_SHARE = 0.22;
 /**
- * How many of the cameras go off (a share of their moments): now and then while a play is on, a few for
- * a late free throw, a burst for a big moment (the home side's bigger), a building of them at the buzzer.
+ * How many of the cameras go off (a share of their moments): now and then at a dead ball (never while a play
+ * is on), a few for a late free throw, a burst for a big moment (the home side's bigger), a building of them
+ * at the buzzer.
  */
 const FLASH_IDLE = 0.004;
 const FLASH_LINE = 0.05;
@@ -97,6 +103,27 @@ const TIMEOUT_SHOW_MS = 9000;
 const WIN_SHOW_MS = 60000;
 /** A home win's lights go down only this much of the way: the floor is where the party is. */
 const WIN_SHOW = 0.5;
+/**
+ * While a play is on, how much of their light the stands give up (the people, and the steps and walls), the lit
+ * faces round the bowl and the boards: the players are the brightest things in the picture.
+ */
+const LIVE_STANDS = 0.2;
+const LIVE_LIT = 0.18;
+const LIVE_LED = 0.16;
+/**
+ * The end, by the kind of win: how much of the winners' crowd is on its feet at the buzzer and a while after
+ * (ms: it eases from one to the other), how wild it is, whether the towels go round, and how many of the home
+ * fans go home early after a home win (the losers' as many as ever).
+ */
+const OVATION: Record<Occasion, { up: number; then: number; ms: number; loud: number; towels: boolean; leave: number }> = {
+  win: { up: 0.85, then: 0.3, ms: 18000, loud: 0.2, towels: false, leave: 0.3 },
+  late: { up: 1, then: 0.7, ms: 30000, loud: 1, towels: false, leave: 0.15 },
+  playoff: { up: 1, then: 0.75, ms: 30000, loud: 0.85, towels: true, leave: 0.1 },
+  clinch: { up: 1, then: 0.95, ms: 60000, loud: 1, towels: true, leave: 0 },
+  title: { up: 1, then: 1, ms: 60000, loud: 1, towels: true, leave: 0 },
+};
+/** A home crowd stunned by a late winner against it: on its feet with its hands at its face for this long (ms). */
+const STUNNED_MS = 4000;
 
 /** A pool of dark on the floor: darkest in the middle, gone by its edge. */
 const POOL = {
@@ -230,6 +257,11 @@ export class Arena {
   private readonly seatMat = new MeshStandardMaterial({ color: 0x222222, roughness: 0.75, vertexColors: true });
   private readonly team: MeshStandardMaterial;
   private board = '';
+  /** Whose building it is (the stands' seats, rails, concrete and house lights), and what was last painted. */
+  private venue: Venue | null = null;
+  private painted = '';
+  /** The house lights' colour (the banks' faces): a warm hall, a plain one or a cool one. */
+  private readonly lampTone = new Color(0xfff1dc);
   private trim = '#d8d4c8';
   private cheering = 0;
   // the visitors' fans up, the rest holding still, the towels out, the end behind a visitor's free throw up (each eased)
@@ -241,6 +273,11 @@ export class Arena {
   private leaveAway = 0;
   /** How long the game has been over (ms of the clock's real time). */
   private overMs = 0;
+  /** A play is on (eased: the stands sit back while it is). */
+  private live = 0;
+  private kits: [MatchKit, MatchKit] | null = null;
+  /** Whose colours the confetti is in (a title's champions'). */
+  private party = -1;
 
   constructor(
     keep: Keep,
@@ -397,28 +434,42 @@ export class Arena {
     this.sideline.mirrored(false);
   }
 
-  /** The building's colour (the home team's on its own floor): the pads on the baskets, the chairs, the seats, half the crowd and some of their towels, the walls' trim. */
-  paint(board: string) {
-    if (board === this.board) return;
+  /**
+   * The building's colour (the home team's on its own floor): the pads on the baskets, the chairs, half the
+   * crowd and some of their towels; and the building itself (`venue`, teamColors.ts venueLook: the home
+   * team's own, the same every night): the seats by section, the walls' padded tops, the concrete, the house
+   * lights, the partners' order on the boards.
+   */
+  paint(board: string, venue?: Venue) {
+    // (asked every frame: the same building as the last, as a rule)
+    if (board === this.board && (venue ?? null) === this.venue && this.painted) return;
+    const key = venue ? `${board}|${venue.seed}|${venue.seats.join()}|${venue.rail}|${venue.house}` : board;
     this.board = board;
-    this.boards.paint(board);
+    this.venue = venue ?? null;
+    if (key === this.painted) return;
+    this.painted = key;
+    this.boards.paint(board, venue?.seed);
     this.team.color.set(board);
     this.seatMat.color.set(board).multiplyScalar(0.75);
-    this.bowl.paint(board);
+    this.bowl.paint(board, venue);
     this.sideline.paint(board);
-    this.crowd.paint(board, this.trim);
+    this.crowd.paint(board, this.trim, venue?.seats);
     this.lights.colours(board);
+    this.lampTone.set(venue?.house ?? 0xfff1dc);
+    this.lamp.color.copy(this.lampTone);
   }
 
   /** The benches in tonight's kits; each coach in a dark suit, his tie his team's colour. The visitors' fans in theirs; the boards and the confetti in both. */
   dress(kits: [MatchKit, MatchKit]) {
+    this.kits = kits;
+    this.party = 0;
     this.boards.dress(kits);
     this.confetti.colours(kits[0].color, kits[0].trim);
     this.streamers.colours(kits[0].color, kits[0].trim);
     this.crowd.dress(kits[1].color, kits[1].trim);
     // (the home fans' second colour: on its own floor, the home side's)
     this.trim = kits[0].trim;
-    if (this.board) this.crowd.paint(this.board, this.trim);
+    if (this.board) this.crowd.paint(this.board, this.trim, this.venue?.seats);
     this.sideline.dress(kits);
   }
 
@@ -440,6 +491,8 @@ export class Arena {
       return;
     }
     this.cheering = Math.max(this.cheering, much);
+    // (it goes out across the building from the play's end of the floor)
+    this.crowd.cheer(Math.min(1, much * 1.15), this.boards.house.end * (MID - 6), 0);
   }
 
   /**
@@ -466,20 +519,38 @@ export class Arena {
    * up: towels, the end behind a visitor's free throw, the cameras, the ovation, the house lights going
    * down. `calm` keeps it still.
    */
-  update(real: number, calm: boolean, stage?: Stage, p?: { game?: GameInfo; final?: 0 | 1; clutch?: boolean; names?: (pid: number) => string; jersey?: (pid: number) => string }) {
+  update(
+    real: number,
+    calm: boolean,
+    stage?: Stage,
+    p?: { game?: GameInfo; final?: 0 | 1; occasion?: Occasion; clutch?: boolean; names?: (pid: number) => string; jersey?: (pid: number) => string },
+  ) {
     const h = this.boards.house;
     this.boards.cast(p?.names, p?.jersey);
     this.boards.hear(Math.max(this.crowd.u.uCheer.value, 0.55 * this.crowd.u.uStand.value + 0.2 * Math.abs(Math.sin(this.crowd.u.uTime.value * 1.7))));
     if (stage) h.read(stage, p?.game, p?.final, !!p?.clutch, real);
     this.boards.update(real, calm);
+    const was = this.overMs;
     this.overMs = h.final === undefined ? 0 : this.overMs + real;
     const won = h.final === 0 && !!h.game;
-    this.confetti.update(won ? this.overMs : -1, this.dimTo, calm);
-    this.streamers.update(won ? this.overMs : -1, this.dimTo, calm);
+    const o: Occasion = p?.occasion ?? 'win';
+    const end = OVATION[o];
+    // (a title brings the confetti down in the champions' colours, wherever it is won; a series won at home, streamers and a little of it)
+    const title = o === 'title' && h.final !== undefined;
+    const paper = title || (won && o === 'clinch') ? this.overMs : -1;
+    if (title && this.kits && this.party !== h.final) {
+      this.party = h.final!;
+      this.confetti.colours(this.kits[h.final!].color, this.kits[h.final!].trim);
+      this.streamers.colours(this.kits[h.final!].color, this.kits[h.final!].trim);
+    }
+    this.confetti.share(title ? 1 : 0.3);
+    this.confetti.update(paper, this.dimTo, calm);
+    this.streamers.update(paper, this.dimTo, calm);
     const u = this.crowd.u;
     if (calm) {
-      this.cheering = this.awayUp = this.hush = this.wave = this.rally = this.show = 0;
-      u.uCheer.value = u.uLag.value = u.uAway.value = u.uHush.value = u.uWave.value = u.uRally.value = u.uStand.value = u.uPhone.value = 0;
+      this.cheering = this.awayUp = this.hush = this.wave = this.rally = this.show = this.live = 0;
+      u.uCheer.value = u.uLag.value = u.uAway.value = u.uHush.value = u.uWave.value = u.uRally.value = u.uStand.value = u.uPhone.value = u.uOvation.value = u.uLive.value = 0;
+      u.uRipA.value.x = u.uRipB.value.x = -99;
       u.uBall.value.y = 0;
       this.crowd.dim(this.dimTo * (1 - MOOD_DIM * this.mood), this.dimTo * (1 - MOOD_DIM * this.mood));
       this.crowd.wave(false, 1);
@@ -494,10 +565,12 @@ export class Arena {
     const g = h.game;
     const m = h.moment;
     const fresh = (ms: number) => !!m && m.ms < ms && BIG.has(m.call);
-    // the end of the game: the winners' fans on their feet and staying there, the losers' quiet
+    // the end of the game: the winners' fans on their feet (as many and as wild as the kind of win calls for), the losers' quiet
     if (h.final !== undefined && this.overMs > 250) {
-      if (h.final === 0) this.cheering = Math.max(this.cheering, 1);
-      else {
+      if (h.final === 0) {
+        this.cheering = Math.max(this.cheering, 1);
+        if (was <= 250) this.crowd.cheer(1, h.end * (MID - 6), 0);
+      } else {
         this.awayUp = 1;
         this.hush = 1;
       }
@@ -510,16 +583,25 @@ export class Arena {
     const late = !!g && g.q >= 4 && g.clock <= 150 && Math.abs(margin) <= 9;
     const defending = h.off === 1 && !h.line;
     const tense = h.final === undefined && (h.clutch || late);
-    // a cheer starts at the play's end of the floor and goes out across the building: the far end is up a moment later
+    // a cheer starts at the play's end of the floor and goes out across the building (each fan's own: see Crowd.cheer); the upper deck's a moment later
     u.uCheer.value = ease(u.uCheer.value, Math.min(1, this.cheering * 1.6), 180);
     u.uLag.value = ease(u.uLag.value, u.uCheer.value, 480);
-    u.uFrom.value.set(h.end * (MID - 6), 0);
     u.uAway.value = ease(u.uAway.value, this.awayUp, 180);
     u.uHush.value = ease(u.uHush.value, this.hush, 400);
-    // (late in a close one most of the home crowd is on its feet and stays there, more of it with its side defending)
-    u.uStand.value = ease(u.uStand.value, tense ? TENSE[defending ? 0 : 1] : 0, 1400);
-    // towels: late in a close game with the home side defending, for a moment after a big home basket, and at a home win
-    this.wave = ease(this.wave, (defending && tense) || won || (fresh(TOWEL_MS) && m!.side === 0) ? 1 : 0, 350);
+    // (the end: as many of the winners' crowd up as the kind of win calls for, fewer as it goes on; how wild it is when it's up)
+    const ovation = won ? end.up + (end.then - end.up) * Math.min(1, this.overMs / end.ms) : 0;
+    u.uOvation.value = ease(u.uOvation.value, ovation, 500);
+    u.uLoud.value = ease(u.uLoud.value, won ? end.loud : h.clutch ? 1 : 0.8, 600);
+    // (a play on: the stands sit back; a dead ball, a big moment, the end: back up)
+    const playing = h.off !== null && !h.line && h.final === undefined && !fresh(FLASH_MS) && this.show < 0.05;
+    this.live = ease(this.live, playing ? 1 : 0, playing ? 700 : 350);
+    u.uLive.value = this.live;
+    // (late in a close one most of the home crowd is on its feet and stays there, more of it with its side defending; a
+    // late winner against it has it up with its hands at its face a moment)
+    const stunned = h.final === 1 && o === 'late' && this.overMs < STUNNED_MS;
+    u.uStand.value = ease(u.uStand.value, tense ? TENSE[defending ? 0 : 1] : stunned ? 0.75 : 0, stunned ? 300 : 1400);
+    // towels: late in a close game with the home side defending, for a moment after a big home basket, and at a home playoff win
+    this.wave = ease(this.wave, (defending && tense) || (won && end.towels) || (fresh(TOWEL_MS) && m!.side === 0) ? 1 : 0, 350);
     u.uWave.value = this.wave;
     this.rally = ease(this.rally, h.line && h.off === 1 ? 1 : 0, 300);
     u.uRally.value = this.rally;
@@ -534,7 +616,9 @@ export class Arena {
     const blown = !!g && g.q >= 4 && g.clock <= BLOWOUT_S && Math.abs(margin) >= BLOWOUT;
     const share = blown ? LEAVERS * Math.min(1, 0.35 + (BLOWOUT_S - g.clock) / BLOWOUT_S) : 0;
     const lost = h.final === undefined ? 0 : Math.min(LEAVERS_LOST, this.overMs / 30000);
-    this.leave = ease(this.leave, Math.max(blown && margin < 0 ? share : 0, h.final === 1 ? lost : 0), 4000);
+    // (and after a home win, a few of its own beating the traffic: fewer the bigger the night)
+    const home = won ? Math.min(end.leave, this.overMs / 60000) : 0;
+    this.leave = ease(this.leave, Math.max(blown && margin < 0 ? share : 0, h.final === 1 ? lost : home), 4000);
     this.leaveAway = ease(this.leaveAway, Math.max(blown && margin > 0 ? share : 0, h.final === 0 ? lost : 0), 4000);
     u.uLeave.value = this.leave;
     u.uLeaveAway.value = this.leaveAway;
@@ -547,13 +631,13 @@ export class Arena {
     if (tip && !this.tipped) this.lightsDown(OPEN_SHOW_MS, at);
     this.tipped = tip;
     if (m && m.call === 'timeout' && m.ms < real * 1.5 + 1) this.lightsDown(TIMEOUT_SHOW_MS, at);
-    if (won && this.overMs > 1200 && this.overMs - real <= 1200) this.lightsDown(WIN_SHOW_MS, at, WIN_SHOW);
+    if (won && o !== 'win' && this.overMs > 1200 && this.overMs - real <= 1200) this.lightsDown(WIN_SHOW_MS, at, WIN_SHOW);
     this.showMs += real;
     this.show = ease(this.show, this.showMs < this.showFor ? this.showTo : 0, this.showMs < this.showFor ? 320 : 700);
     const house = 1 - HOUSE_DOWN * this.show;
     this.lights.update(real, this.show, house);
-    this.lamp.color.set(0xfff1dc).multiplyScalar(1 - 0.75 * this.show);
-    this.boards.boost(1 / house);
+    this.lamp.color.copy(this.lampTone).multiplyScalar(1 - 0.75 * this.show);
+    this.boards.boost((1 / house) * (1 - LIVE_LED * this.live));
 
     this.crowd.wave(this.wave > 0.02 || this.rally > 0.02, this.dimTo);
     // (the boards' light on the rows by them: the building's colour, up for a moment with a big one)
@@ -561,19 +645,20 @@ export class Arena {
       u.uLed.value
         .set(this.board)
         .lerp(LED_WHITE, 0.35)
-        .multiplyScalar((0.2 + (fresh(FLASH_MS) ? 0.25 * (1 - m!.ms / FLASH_MS) : 0)) * this.dimTo);
+        .multiplyScalar((0.2 + (fresh(FLASH_MS) ? 0.25 * (1 - m!.ms / FLASH_MS) : 0)) * this.dimTo * (1 - LIVE_LED * this.live));
     // (sat down, the stands are a shade under the floor's light: the play is in front of them. On their feet they are in it)
     // (the steps, the seats and the walls go down with them, for a close-up and under the darker house: one bowl)
-    const stands = this.dimTo * (1 - MOOD_DIM * this.mood);
-    this.crowd.dim(stands * (SAT + (1 - SAT) * u.uCheer.value), stands);
-    this.bowl.dim(this.dimTo / house, stands);
+    const stands = this.dimTo * (1 - MOOD_DIM * this.mood) * (1 - LIVE_STANDS * this.live);
+    this.crowd.dim(stands * (SAT + (1 - SAT) * Math.max(u.uCheer.value, u.uOvation.value)), stands);
+    this.bowl.dim((this.dimTo / house) * (1 - LIVE_LIT * this.live), stands);
     this.bowl.cheer(u.uLag.value);
     // the cameras: a big moment's burst, a late free throw, the buzzer and the minutes after it, and now and then;
     // a few phones go up with them
     const burst = fresh(FLASH_MS) ? FLASH_BIG * (m!.side === 0 ? 1 : 0.5) * (1 - m!.ms / FLASH_MS) * (m!.call === 'buzzer' || m!.call === 'winner' ? 1.6 : 1) : 0;
-    const end = h.final === undefined ? 0 : FLASH_FINAL * Math.max(0.15, 1 - this.overMs / 7000);
-    const live = h.off !== null || h.final !== undefined ? FLASH_IDLE : 0;
-    const rate = Math.max(burst, end, h.line && late ? FLASH_LINE : 0, live, this.show * 0.06);
+    const over = h.final === undefined ? 0 : FLASH_FINAL * Math.max(title ? 0.4 : 0.15, 1 - this.overMs / 7000);
+    // (now and then at a dead ball, never while a play is on: a flicker in the stands pulls the eye off the floor)
+    const idle = h.final !== undefined || (h.off === null && !!g) ? FLASH_IDLE * (1 - this.live) : 0;
+    const rate = Math.max(burst, over, h.line && late ? FLASH_LINE : 0, idle, this.show * 0.06);
     u.uPhone.value = ease(u.uPhone.value, rate > 0.03 ? 1 : 0, 600);
     this.flashes.update(real, rate, this.dimTo, false, 1 / house);
   }

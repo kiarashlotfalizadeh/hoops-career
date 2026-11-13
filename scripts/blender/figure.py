@@ -275,11 +275,13 @@ def head_r(n):
     ax = abs(x)
     b3 = lambda cx, cy, cz, sx, sy, sz: math.exp(-(((ax - cx) / sx) ** 2 + ((y - cy) / sy) ** 2 + ((z - cz) / sz) ** 2))  # noqa: E731
     # the temples, a little hollow behind the brow's end; the cheekbone's arch back toward the ear; the jaw's
-    # muscle over its corner; the bump behind the ear; the back of the skull over the nape
+    # muscle over its corner, and the corner itself (a jaw has an angle under the ear, not a curve); the bump
+    # behind the ear; the back of the skull over the nape
     t -= 0.03 * b3(0.82, 0.3, 0.42, 0.2, 0.22, 0.24)
     t += 0.045 * b3(0.7, -0.1, 0.55, 0.2, 0.12, 0.26)
     t += 0.018 * b3(0.86, -0.08, 0.2, 0.16, 0.12, 0.3)
     t += 0.022 * b3(0.74, -0.42, 0.1, 0.16, 0.2, 0.22)
+    t += 0.03 * b3(0.74, -0.66, -0.1, 0.12, 0.1, 0.16)
     t += 0.02 * b3(0.7, -0.12, -0.5, 0.16, 0.14, 0.16)
     t += 0.02 * b3(0, 0.05, -0.95, 0.5, 0.25, 0.3)
     front = sstep(0.1, 0.5, z)
@@ -289,50 +291,70 @@ def head_r(n):
     apx = abs(px)
     g = lambda cx, cy, sx, sy: math.exp(-(((apx - cx) / sx) ** 2 + ((py - cy) / sy) ** 2))  # noqa: E731
     d = 0.0
-    # his forehead: two rises over the brows, flat between; the brow's ridge along the line of the eyebrow,
-    # heaviest over the inner half of the eye, joined over the nose by a lower one
-    d += 0.02 * g(0.34, 0.56, 0.26, 0.2)
+    # his forehead: two rises over the brows and a little fullness between; the brow's ridge along the line of
+    # the eyebrow, heaviest over the inner half of the eye, joined over the nose by a lower one (the glabella)
+    d += 0.02 * g(0.34, 0.56, 0.26, 0.2) + 0.016 * g(0, 0.55, 0.4, 0.25)
     yb = brow_at(apx) + 0.012
-    d += (0.056 * sstep(1.0, 0.55, apx) * (0.75 + 0.25 * sstep(0.06, 0.2, apx))) * math.exp(-(((py - yb) / (0.06 if py < yb else 0.1)) ** 2))
-    # the eye's socket: deep under the brow, deepest beside the nose; shallow toward the cheekbone
-    d -= 0.1 * g(EYE_X - 0.02, EYE_Y + 0.02, 0.2, 0.095)
-    d -= 0.025 * g(0.19, 0.1, 0.08, 0.09)
-    # (the ball of the eye in it, under its lids; the upper lid's fold over it, the lower lid's edge and the bag under it)
+    d += (0.058 * sstep(1.0, 0.55, apx) * (0.62 + 0.38 * sstep(0.06, 0.24, apx))) * math.exp(-(((py - yb) / (0.065 if py < yb else 0.11)) ** 2))
+    d += 0.008 * g(0, 0.23, 0.1, 0.07)
+    # the eye's socket: a hollow under the brow, deepest at its top beside the nose; shallow toward the cheekbone
+    # and under the eye, where the cheek comes up to the lower lid
+    d -= 0.062 * g(EYE_X - 0.02, EYE_Y + 0.04, 0.2, 0.1)
+    d -= 0.016 * g(0.25, 0.13, 0.08, 0.07)
+    # (the ball of the eye in it, filling it out to its lids: no pit with a bead at its bottom; each lid's edge
+    # has a thickness, the upper one's fold lies over it, the lower one runs into the cheek)
     ex, ey, up, lo = lids(apx, py)
-    d += 0.066 * g(EYE_X, EYE_Y, 0.125, 0.058)
-    d += 0.016 * math.exp(-(((ey - up - 0.03) / 0.022) ** 2)) * sstep(EYE_W + 0.07, EYE_W - 0.02, abs(ex))
-    d += 0.01 * math.exp(-(((ey - lo + 0.022) / 0.02) ** 2)) * sstep(EYE_W + 0.04, EYE_W - 0.03, abs(ex))
-    # his cheekbones, out under the outer corner of each eye; the front of the cheek; the hollow under the bone
-    d += 0.022 * g(0.4, -0.27, 0.13, 0.1)
-    d -= 0.03 * g(0.66, -0.47, 0.15, 0.15)
-    # (the fold from each wing of the nose down past the corner of the mouth)
-    d -= 0.016 * g(0.33, -0.43, 0.04, 0.13)
-    # the nose: its root low between the eyes, its bridge rising to the tip, cut in under it to the lip; narrow
-    # at the bridge, round at the tip; the side walls run out into the cheeks
-    d -= 0.014 * g(0, 0.12, 0.1, 0.06)
-    u = clamp((0.15 - py) / (0.15 - NOSE_TIP))
-    high = (0.018 + 0.125 * u ** 1.4) * sstep(NOSE_FOOT, NOSE_TIP - 0.004, py) * sstep(0.3, 0.14, py)
+    on_eye = sstep(EYE_W + 0.05, EYE_W - 0.03, abs(ex))
+    d += 0.074 * g(EYE_X, EYE_Y, 0.14, 0.074)
+    d += 0.01 * math.exp(-(((ey - up - 0.006) / 0.012) ** 2)) * on_eye
+    d += 0.014 * math.exp(-(((ey - up - 0.034) / 0.02) ** 2)) * sstep(EYE_W + 0.07, EYE_W - 0.02, abs(ex))
+    d += 0.008 * math.exp(-(((ey - lo + 0.008) / 0.012) ** 2)) * on_eye
+    d -= 0.01 * g(0.3, -0.07, 0.08, 0.035)
+    # his cheekbones, out and down from the outer corner of each eye; the front of the cheek under the eye, full
+    # beside the nose; the hollow under the bone
+    d += 0.026 * g(0.5, -0.19, 0.15, 0.1)
+    d += 0.024 * g(0.38, -0.27, 0.14, 0.11)
+    d -= 0.03 * g(0.65, -0.5, 0.15, 0.16)
+    # (the fold from each wing of the nose down past the corner of the mouth, the cheek full beside it)
+    fx, fy = apx - 0.215, py + 0.31
+    along = clamp((fx * 0.12 - fy * 0.3) / (0.12 ** 2 + 0.3 ** 2))
+    fold = math.hypot(fx - 0.12 * along, fy + 0.3 * along)
+    d -= 0.01 * math.exp(-((fold / 0.026) ** 2)) * sstep(1.1, 0.7, along)
+    d += 0.008 * math.exp(-(((fold - 0.07) / 0.045) ** 2)) * (1 if fx - 0.12 * along > 0 else 0) * sstep(1.2, 0.6, along)
+    # the nose: its root deep between the eyes, under the glabella; its bridge rising to the tip; the
+    # tip round; cut in under it to the lip; the side walls run out into the cheeks
+    d -= 0.022 * g(0, 0.11, 0.09, 0.05)
+    u = clamp((0.14 - py) / (0.14 - NOSE_TIP))
+    high = (0.012 + 0.105 * u ** 1.4) * sstep(NOSE_FOOT, NOSE_TIP - 0.004, py) * sstep(0.29, 0.13, py)
     wide = 0.062 + 0.035 * u * u + 0.02 * (1 - u) ** 2
-    d += high * math.exp(-((apx / wide) ** 2.4))
-    d += 0.16 * high * math.exp(-((apx / (wide * 2.4)) ** 2))
+    d += high * math.exp(-((apx / wide) ** 2.2))
+    d += 0.18 * high * math.exp(-((apx / (wide * 2.4)) ** 2))
     d += 0.03 * g(0, NOSE_TIP - 0.008, 0.075, 0.05)
-    # (its wings, each round its nostril; the crease behind the wing; the nostrils, under)
-    d += 0.07 * g(0.128, -0.297, 0.05, 0.044)
-    d -= 0.022 * g(0.215, -0.285, 0.03, 0.06)
-    d -= 0.045 * g(0.078, NOSE_FOOT + 0.004, 0.038, 0.016)
-    # the mouth: a rise for both lips, each lip's own fullness (the upper one's bow, the fuller lower one), the
-    # line between them, the groove from the nose down to the bow and its two ridges, the corners tucked in
+    # (its wings, each round its nostril, about as wide as the eyes are apart; the crease behind the wing; the nostrils, under)
+    d += 0.066 * g(0.14, -0.3, 0.052, 0.043)
+    d -= 0.022 * g(0.222, -0.288, 0.028, 0.06)
+    d -= 0.03 * g(0.085, NOSE_FOOT + 0.006, 0.036, 0.018)
+    # the mouth: it stands out on the arch of the teeth behind it, the skin over the upper lip coming down and
+    # forward from the nose to the lip's edge, which is a little ridge (the line a lip is drawn by); each lip its
+    # own fullness (the upper one's bow, the fuller lower one), the line between them, the groove from the nose
+    # down to the bow and its two ridges, the corners tucked in
+    t_ = min(1.0, apx / MOUTH_W)
+    arch = max(0.0, 1 - t_ * t_)
     across = max(0.0, 1 - (px / (MOUTH_W + 0.01)) ** 2) ** 0.7
-    d += 0.045 * g(0, -0.5, 0.36, 0.17)
-    d += across * (0.04 * math.exp(-(((py + 0.474) / 0.04) ** 2)) * (1 - 0.18 * math.exp(-((px / 0.04) ** 2))) + 0.052 * math.exp(-(((py + 0.575) / 0.046) ** 2)))
-    d -= across * 0.04 * math.exp(-(((py - MOUTH_Y) / 0.014) ** 2))
+    edge = MOUTH_Y + 0.052 * arch ** 0.6 * (1 - 0.24 * math.exp(-((t_ / 0.14) ** 2)))
+    d += 0.048 * g(0, -0.53, 0.4, 0.2)
+    d += 0.014 * sstep(-0.35, -0.46, py) * sstep(edge - 0.004, edge + 0.01, py) * math.exp(-((px / 0.3) ** 2))
+    d += across * 0.034 * math.exp(-(((py - MOUTH_Y - 0.026 * arch ** 0.6) / 0.026) ** 2))
+    d += across * 0.007 * math.exp(-(((py - edge) / 0.009) ** 2))
+    d += across * 0.052 * math.exp(-(((py - MOUTH_Y + 0.045 * arch ** 0.8) / 0.034) ** 2))
+    d -= across * 0.024 * math.exp(-(((py - MOUTH_Y) / 0.012) ** 2))
     d -= 0.016 * g(0, -0.41, 0.03, 0.055)
     d += 0.008 * g(0.055, -0.415, 0.022, 0.05)
     d -= 0.012 * g(0.285, MOUTH_Y - 0.02, 0.045, 0.045)
-    # the groove under the lower lip, and the chin: a ball in front, squarer below
-    d -= 0.03 * g(0, -0.675, 0.2, 0.04)
-    d += 0.05 * g(0, -0.88, 0.2, 0.12)
-    d += 0.012 * g(0.16, -0.96, 0.1, 0.08)
+    # the groove under the lower lip, and the chin: a ball standing out in front, squarer below
+    d -= 0.032 * g(0, -0.68, 0.22, 0.042)
+    d += 0.056 * g(0, -0.85, 0.23, 0.12)
+    d += 0.016 * g(0.17, -0.94, 0.1, 0.08)
     return t + d * front
 
 
@@ -527,11 +549,12 @@ def arm(s):
     ]
     parts = [solid([ring((0, -u, zc), rx, rz, 20, frame=f) for u, rx, rz, zc in st], 'arm')]
     # its muscles, each a mass of its own on that run (the fusing runs them together, a shallow groove between two):
-    # the deltoid, a cap over the joint that comes to a point half way down the upper arm's outside; the biceps in
-    # front and the triceps behind; the point of the elbow; the forearm's two bellies, thickest just under the elbow
+    # the deltoid, a cap over the joint that comes to a point half way down the upper arm's outside (long and
+    # flat over the arm, no ball: an arm that hangs carries it down its side); the biceps in front and the triceps
+    # behind; the point of the elbow; the forearm's two bellies, thickest just under the elbow
     # (where: out from the arm's middle, down it, forward; then its half sizes)
     for (out, u, z), r in (
-        ((0.035, 0.2, 0.0), (0.205, 0.37, 0.245)),
+        ((0.022, 0.24, 0.0), (0.188, 0.4, 0.232)),
         ((0.075, 0.42, -0.01), (0.14, 0.26, 0.17)),
         ((-0.01, 0.63, 0.078), (0.148, 0.31, 0.142)),
         ((0.015, 0.55, -0.085), (0.158, 0.35, 0.142)),
@@ -897,9 +920,11 @@ def weights(p, kind):
         loc = ARM_INV[s] @ Vector(p)
         u = -loc.y
         rho = math.hypot(loc.x, loc.z)
-        # (the top of his shoulder gives way to the arm slowly, the armpit quickly: an arm that hangs leaves no shelf over it)
+        # (the top of his shoulder gives way to the arm slowly, the armpit quickly: an arm that hangs leaves no shelf over it;
+        # on the man on the floor the front and back of his armpit give way over a longer run of skin, so an arm let down
+        # to his side folds no crease into his chest round the cap of his shoulder)
         out = max(0.0, s * loc.x / rho) if rho > 1e-6 else 0.0
-        m = 1.0 if u > 0.8 and rho < 0.6 else (1 - sstep(0.31, 0.5, rho)) * (sstep(-0.24 - 0.1 * out, 0.36 - 0.08 * out, u) if girdled else sstep(-0.24 - 0.14 * out, 0.3 + 0.4 * out, u))
+        m = 1.0 if u > 0.8 and rho < 0.6 else (1 - sstep(0.31, 0.5, rho)) * (sstep(-0.3 - 0.04 * out, 0.5 - 0.22 * out, u) if girdled else sstep(-0.24 - 0.14 * out, 0.3 + 0.4 * out, u))
         # (nothing inside the vest's armhole goes with the arm, skin or cloth: the armhole keeps its shape and what
         # comes through it its place in it, whatever the arm does; the arm takes over just outside it)
         m *= sstep(0.0, 0.11, pit(p, s))
@@ -1296,7 +1321,7 @@ def finish(built, name='figure'):
     soften(fig, lambda x, y, z: abs(x) > HEAD_W * 0.86 and abs(y - HEAD_C[1]) < 0.16 and z < HEAD_C[2] + 0.06, 0.15)
     paint(fig, face_shade)
     # (and a shoulder moves: the shade of the grooves round it as he's built would stay behind as a painted crease)
-    soften(fig, lambda x, y, z: (abs(x) - SHOULDER) ** 2 + (y - SH_Y) ** 2 + z * z < 0.62 ** 2 and y < CHEST_Y + 0.2, 0.4)
+    soften(fig, lambda x, y, z: (abs(x) - SHOULDER) ** 2 + (y - SH_Y) ** 2 + z * z < 0.62 ** 2 and y < CHEST_Y + 0.2, 0.25)
 
     # bones and weights
     tags = [0] * len(me.vertices)

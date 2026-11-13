@@ -27,7 +27,8 @@ import {
 } from 'three';
 import { BASKET, COURT_LEN, faceWorld, toWorld, type Act, type Flash, type Pt, type Script } from '../choreo';
 import { FLOOR_L, FLOOR_W, type GameInfo, type Stage } from '../Court';
-import type { MatchKit } from '../../teamColors';
+import type { MatchKit, Venue } from '../../teamColors';
+import type { Occasion } from '../occasion';
 import { Arena } from './arena';
 import {
   bouncePass,
@@ -48,7 +49,7 @@ import {
   type Spin,
 } from './ballistics';
 import { lit as ledLit } from './ballskin';
-import { DUNK_AT, isDunk } from './clips';
+import { DUNK_AT, isDunk, type ClipId, type Gesture } from './clips';
 import { blocked, clearSeat, Operator, shot as newShot, TALL, type CamKind, type View } from './cameras';
 import { BIG_WORD, Director, INTRO_MS, WIPE_MS, type BigKind } from './director';
 import { Fig, figureGeo, type Geo } from './figure';
@@ -58,9 +59,9 @@ import type { Models } from './models';
 import type { NetSim } from './net';
 import { buildProps } from './props';
 import { Rig } from './rig';
-import { BALL_R, hash, J, type Body, type V3 } from './puppet';
+import { BALL_R, hash, J, type Body, type Puppet, type V3 } from './puppet';
 import { Sideline } from './sideline';
-import { BODY_GAP, clearOf, passPath, Spacing, swerve, type PassPath } from './spacing';
+import { BODY_GAP, clearance, clearOf, passPath, reach as reachTo, Spacing, swerve, type Meet, type PassPath } from './spacing';
 
 export interface SceneProps {
   kits: [MatchKit, MatchKit];
@@ -72,15 +73,27 @@ export interface SceneProps {
   hot?: ReadonlySet<number>;
   /** The colours of the building: the boards along the far side, the warning ring. */
   board: string;
+  /** Whose building it is (teamColors.ts venueLook): its seats, rails, concrete and house lights. */
+  venue?: Venue;
   warn: string;
   /** The game is over: the side that won it (they celebrate, the others don't). */
   final?: 0 | 1;
+  /** And what kind of win it is (a late winner is mobbed, a title brings the confetti down): an ordinary win when not said. */
+  occasion?: Occasion;
   /** Clutch time: the main camera comes in a little, and the building is on its feet for less. */
   clutch?: boolean;
   /** The camera that follows the play (cameras.ts; the broadcast's main one when not said). */
   cam?: CamKind;
   /** Who is on each bench, [home, away] (player ids): they sit there as themselves. Without it the benches are made up. */
   bench?: [number[], number[]];
+}
+
+/** A round patch of the picture (CSS pixels): its middle and how far it reaches. `soft`: a word may lie on it if it can lie nowhere else. */
+export interface Disc {
+  x: number;
+  y: number;
+  r: number;
+  soft?: boolean;
 }
 
 /** What the page writes over the picture this frame (in CSS pixels). */
@@ -94,6 +107,18 @@ export interface Labels {
   replay: boolean;
   /** A wipe across the picture, how far (0..1), in the colours of the side whose play it is. */
   wipe: { at: number; color: string; trim: string } | null;
+  /**
+   * What the words must leave clear: the ball and a shot's way to the rim, the rim it goes at, and the heads and
+   * hands of the men round the ball (soft, but for a man in a contest for it). The page puts each word where it
+   * covers none of it (Court3D's paint).
+   */
+  keep: Disc[];
+  /** The ball on the picture (none off it): the lower third gives way to it. */
+  ball: Disc | null;
+  /** How big the words over the play are drawn, of their own size: less on a small picture, in a camera close to the play and in a crowd. */
+  size: number;
+  /** A crowd round the ball (one tag in it, kept close to its man). */
+  crowd: boolean;
 }
 
 const MID = COURT_LEN / 2;
@@ -128,10 +153,16 @@ const UNIT_DAMP = 0.14;
 const UNIT_SLAM = 0.07;
 /** The ball's spin gets to what it is doing in about this long (s). */
 const SPIN_S = 0.07;
+/** Where the lamps throw their own shadows, the ball's dark on the floor is where it touches: this wide (ft) and this dark as it does, gone by this high (ft). */
+const TOUCH_W = 0.62;
+const TOUCH_DARK = 0.55;
+const TOUCH_FT = 2.2;
 /** A dribbler's clips (the ball rolls forward off the floor). */
 const DRIBBLES = new Set(['dribble', 'dribbleRun', 'crossover']);
 /** Acts that go at the rim. */
 const AIMED = new Set<Act>(['layup', 'dunk', 'floater', 'jumper', 'release']);
+/** Acts in a contest for the ball: on it, at it, going up for it. Such a man's face and hands are kept clear of the words as the ball is. */
+const CONTESTS = new Set<Act>(['guard', 'trap', 'contest', 'block', 'steal', 'rebound', 'crash', 'boxout', 'tip']);
 /** The joints that stand on the floor. */
 const FEET = [J.fl, J.fr];
 /** A camera stays on at least this long (ms) before the picture cuts to another. */
@@ -191,6 +222,8 @@ const FRESH = 2.5;
 /** How soft a close-up's building goes behind its man (lens.focus), and a replay's (its cameras are wider). */
 const CLOSE_SOFT = 0.6;
 const REPLAY_SOFT = 0.4;
+/** A replay of a shot pulls its focus from the man to the rim over this long before its moment (the script's ms): the outcome is the sharp thing. */
+const PULL_MS = 450;
 /** The flash of light on a slam, and on a shot at the buzzer that drops (lens.bump; none with reduced motion). */
 const DUNK_BUMP = 0.16;
 const BUZZER_BUMP = 0.22;
@@ -220,6 +253,19 @@ const PAIR_MS = 650;
 const PAIR_GAP = 1.15;
 /** A winner with the ball at the buzzer throws it up: this fast (ft a second). */
 const TOSS = 27;
+/** An ordinary win: the two sides walk to shake hands at this pace (ft a second), each this far (ft) from the middle of the two. */
+const WALK = 4.8;
+const SHAKE_GAP = 1.25;
+/** A title: two in each other's arms stand this far (ft) from the middle of them. */
+const HUG_GAP = 0.62;
+/** A late winner's mob: where round him his teammates come to (radians, 0 toward the near side's cameras). */
+const MOB = [1.35, -1.35, 2.55, -2.55];
+/**
+ * A series won, a title: the winners come together this long (ms) after the buzzer. (The live game holds the
+ * frozen court some 3.5 s before the final card, FinalFrame: what matters most comes before that.)
+ */
+const CLINCH_GROUP = 2000;
+const TITLE_GROUP = 4600;
 /** A loose ball rolls to a stop over about this long (s), and a bounce keeps this much of its roll. */
 const ROLL_S = 0.9;
 const ROLL_KEEP = 0.7;
@@ -238,6 +284,27 @@ const NET_MS = 700;
 const TAG_OVER = 1.15;
 const PICK_MS = 7000;
 const PICK_PX = 30;
+/** The words keep this far (px) off the ball, its way and the rim (half that off a head or a hand they may lie on). */
+const KEEP_PX = 6;
+/** The rim's ring, and the net under it (how far down its middle is, how wide it is), ft. */
+const RING_R = 0.85;
+const NET_DOWN = 0.75;
+const NET_R = 0.6;
+/** A shot's way to the rim is kept clear at this many points along it. */
+const PATH_N = 6;
+/** The men within this far of the ball (ft) are in the play round it: their heads and hands are kept clear, and this many of them is a crowd (one tag in it, not two). */
+const ROUND_FT = 6;
+const CROWD = 3;
+/** A head and a hand, as kept clear (ft). */
+const HEAD_R = 0.5;
+const HAND_R = 0.35;
+/** The words are their full size on a picture this wide and this tall (CSS px), and no less than this of it on a smaller one. */
+const WORDS_W = 900;
+const WORDS_H = 520;
+const WORDS_LEAST = 0.86;
+/** And this much smaller again in a crowd, and in a camera close to the play (the sideline's, the baseline's; the main one as it pushes in). */
+const WORDS_CROWD = 0.9;
+const WORDS_CLOSE = 0.93;
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const smooth = (u: number) => u * u * (3 - 2 * u);
@@ -257,7 +324,82 @@ const SEAT = { x: 0, z: 0 };
 /** A close-up's camera stands this far off its man (ft). */
 const CLOSE_OFF = 22;
 const WAY = { x: 0, z: 0 };
+/** Where the sideline or a fallen teammate takes a man (see aside). */
+const AWAY = { x: 0, z: 0, yaw: NaN };
+/** A man on a way of his own is taken to be going this far (ft) the way he faces, for which side of a man he goes round. */
+const WAY_GO = 6;
+/** A trunk, for keeping bodies apart (spacing.ts reach): out to a man's sides past his shoulders, and to his front and back (ft, on the 6 ft 6 puppet). */
+const WIDE = 1.12;
+const DEEP = 0.48;
+/** Two who meet (see meets): how much of the coming together is the screened man's (the screener stands his ground), and a box-out's (both lean in). */
+const SCREEN_SHARE = 0.85;
+const BOX_SHARE = 0.5;
+/** Two who meet nearer than TOUCH by more than this (ft) are moved apart in the same frame. */
+const SLACK = 0.06;
+/** How far apart their trunks are held (ft, between spacing.ts shapes, which sit about this far inside his skin: so it is skin to skin), how much of what is off is taken up each frame, and the nearest and farthest their middles are ever held. */
+const TOUCH = 0.12;
+const FEEL = 0.6;
+const NEAR_MIN = 0.75;
+const NEAR_MAX = 3.2;
+/** What a lean or a sit changes of that, at most either way (ft), learnt only from two this near (ft): farther, their trunks are not what's nearest. */
+const LEAN_MOST = 0.9;
+const FEEL_FAR = 3.6;
+/** Two the plan has this far apart (ft) or less meet in full; none past MEET_FROM + MEET_SPAN. */
+const MEET_FROM = 4.5;
+const MEET_SPAN = 2;
+const NO_MEETS: Meet[] = [];
+const JA = new Float32Array(45);
+const JB = new Float32Array(45);
+const RV: V3 = { x: 0, y: 0, z: 0 };
+/** A man's joints, in the scene, into `out`. */
+function jointsOf(p: { j: Float32Array; world(x: number, y: number, z: number, out: V3): V3 }, out: Float32Array): Float32Array {
+  for (let k = 0; k < 15; k++) {
+    p.world(p.j[k * 3], p.j[k * 3 + 1], p.j[k * 3 + 2], RV);
+    out[k * 3] = RV.x;
+    out[k * 3 + 1] = RV.y;
+    out[k * 3 + 2] = RV.z;
+  }
+  return out;
+}
+/** How far two men's trunks reach toward each other along a way from the first to the second (spacing.ts reach). */
+function reaches(ux: number, uz: number, a: Puppet | undefined, b: Puppet | undefined): number {
+  const one = (p: Puppet | undefined) => {
+    const k = p ? p.body.s * Math.sqrt(p.body.bulk) : 1;
+    return reachTo(ux, uz, WIDE * k, DEEP * k, p?.placed ? p.yaw : NaN);
+  };
+  return one(a) + one(b);
+}
 const TURN: V3 = { x: 0, y: 0, z: 0 };
+
+/** When the buzzer reaches a man (ms after it): the ten take it in one after another, not all ten in one frame. */
+const heard = (pid: number) => (((pid * 131 + 17) % 10) / 9) * BUZZER_MS;
+/** Where a man is at the buzzer and after it, the way he faces, what he does (see CourtScene.party). */
+type End = { x: number; z: number; yaw: number; bump: boolean; act?: Act; clip?: ClipId };
+/**
+ * A man's part in the end of a game (see CourtScene.plan): from when (ms after the buzzer) he goes where, at
+ * what pace (ft a second), to face whom (or which way); what he does until he sets off (`first`), and once he
+ * is there (his act, a clip of his own, a gesture as he gets there, a chest bump with the man facing him);
+ * the gesture he makes as the buzzer reaches him (`hi`); and what he does after (`next`).
+ */
+interface Part {
+  at: number;
+  x: number;
+  z: number;
+  pace: number;
+  mate: number | null;
+  face?: number;
+  act: Act;
+  clip?: ClipId;
+  gest?: Gesture;
+  bump?: boolean;
+  first?: Act;
+  firstClip?: ClipId;
+  hi?: Gesture;
+  next?: Part;
+  /** (as it is played: the gesture as the buzzer reaches him made, the one at his spot made) */
+  said?: boolean;
+  cued?: boolean;
+}
 
 export class CourtScene {
   private readonly renderer: WebGLRenderer;
@@ -340,9 +482,10 @@ export class CourtScene {
   private fives: { by: Fig; ms: number; n: number; done: Set<Fig> } | null = null;
   /** A man knocked down and the teammate on his way to pull him up: where that man is on his way, how long it has been, whether he has given him his hand. */
   private helping: { down: Fig; by: Fig; x: number; z: number; ms: number; lent: boolean } | null = null;
-  // the clock their eyes move on (ms), and the buzzer's chest bumps: each winner's partner, where they meet and when
+  // the clock their eyes move on (ms), and each man's part in the end of the game (see party), and where the winners gather
   private lookMs = 0;
-  private pairs: Map<number, { mate: number; x: number; z: number; at: number }> | null = null;
+  private parts: Map<number, Part> | null = null;
+  private gather: { x: number; z: number } | null = null;
   // free throws: the frames of this script a man shoots them in
   private ftAt: number[] = [];
   private netKick = 0;
@@ -362,6 +505,9 @@ export class CourtScene {
   private shotMs = 0;
   private idleMs = 0;
   private push = 0;
+  // the camera the user last picked (null: none drawn yet), and whether his pick has the picture until the next play
+  private camPick: CamKind | null = null;
+  private chosen = false;
   // a cut-in: the one asked for (and how long ago, ms), who it's on, the move it was asked in, where its camera is and looks
   private cue: 'close' | 'house' | 'bench' | 'crowd' | null = null;
   // and what the lower third says he did
@@ -462,7 +608,6 @@ export class CourtScene {
     this.ballFrame.add(this.ballMesh);
     this.scene.add(this.ballFrame);
     this.ballShadow = props.ballShadow();
-    this.ballShadow.visible = false;
     this.scene.add(this.ballShadow);
     this.marks = new Marks(keep);
     this.scene.add(this.marks.group);
@@ -494,8 +639,6 @@ export class CourtScene {
       f.lite(this.figLite);
       f.shadow.visible = this.figLite;
     }
-    // (a blob under a man and the ball is what a device with no thrown shadows has instead of them)
-    this.ballShadow.visible = this.figLite;
   }
 
   /**
@@ -618,13 +761,13 @@ export class CourtScene {
       for (const [pid, f] of [...this.figs]) this.drop(pid, f);
       this.arena.dress(p.kits);
     }
-    this.arena.paint(p.board);
+    this.arena.paint(p.board, p.venue);
     this.arena.update(real, calm, live, p);
     const sc = stage.script;
     const play = stage.play;
     const ball = this.ball;
     const seen = new Set<number>();
-    const labels: Labels = { tags: [], flash: null, third: null, replay: false, wipe: null };
+    const labels: Labels = { tags: [], flash: null, third: null, replay: false, wipe: null, keep: [], ball: null, size: 1, crowd: false };
     // (what is eased, a turn, a step aside, arms going up, is eased on the clock: no bigger a frame at 2x or 4x)
     const ease = Math.min(own, real);
     const aside = Math.min(own, real * ASIDE_PACE);
@@ -633,10 +776,11 @@ export class CourtScene {
     const sec = own / 1000;
     this.finalMs = p.final === undefined ? 0 : this.finalMs + ease;
     // (the buzzer: the winners go up and the others' heads go down one after another, not all ten in one frame)
-    const over = (pid: number, side: 0 | 1, act: Act): Act =>
-      p.final === undefined || this.finalMs < (((pid * 131 + 17) % 10) / 9) * BUZZER_MS ? act : side === p.final ? 'celebrate' : 'rue';
+    const over = (pid: number, side: 0 | 1, act: Act): Act => (p.final === undefined || this.finalMs < heard(pid) ? act : side === p.final ? 'celebrate' : 'rue');
     /** Whose arms go to the ball this frame. */
     const hands = new Set<Fig>();
+    /** Who is in a contest for the ball this move (CONTESTS). */
+    const contest = new Set<Fig>();
     let holder: Fig | null = null;
     let free = false;
     let rimEnd = 0;
@@ -650,6 +794,9 @@ export class CourtScene {
     // (where the page's words go: found now, put on the picture once the camera is aimed)
     let tagAt: { f: Fig; pid: number } | null = null;
     let flashAt: { x: number; z: number; fl: Flash; alpha: number } | null = null;
+    // (and what they keep clear: the rim being attacked, and how far through its move a shot in the air is)
+    let goal: { x: number; z: number } | null = null;
+    let shotU = 0;
 
     const started = sc !== this.lastScript;
     if (started) {
@@ -667,6 +814,7 @@ export class CourtScene {
       const rimPt = toWorld(BASKET, sc.dir);
       const rim = { x: sx(rimPt), z: sz(rimPt) };
       rimEnd = rim.x < 0 ? 0 : 1;
+      goal = rim;
       let carried = play.carried ? (a.hold as number) : -1;
       const figs: Fig[] = [];
       // (the move the play is in: past the script's end it is still its last)
@@ -694,11 +842,11 @@ export class CourtScene {
         const said = over(pid, side, b.act[j]);
         // (out of their stance at a dead ball; on the lane at a free throw, down into one as it goes up)
         const lane = line && said === 'stand' && (b.act.includes('ft') || b.act.includes('release')) && Math.hypot(spots[j * 2] - rim.x, spots[j * 2 + 1] - rim.z) < LANE_FT;
-        const act = lane ? 'defend' : dead && (said === 'defend' || said === 'guard') ? 'stand' : said;
-        const end = this.paired(pid, side, spots[j * 2], spots[j * 2 + 1], Math.PI - faceWorld(b.face[j], sc.dir), p);
-        // (a man the sideline has on a way of its own: on from the table, over toward his bench at a timeout)
-        this.arena.sideline.lead(pid, end, this.director.onAir);
-        this.helps(f, end, own);
+        // (a man on a way of his own, to his bench or to a teammate on the floor, faces the way he goes: see aside;
+        // at the buzzer, the part the end of the game gives him: see party)
+        const way = this.ways[j];
+        const end = this.party(pid, spots[j * 2], spots[j * 2 + 1], Number.isFinite(way) ? way : Math.PI - faceWorld(b.face[j], sc.dir), p);
+        const act = end.act ?? (lane ? 'defend' : dead && (said === 'defend' || said === 'guard') ? 'stand' : said);
         const nb = sc.frames[bi + 1];
         f.pup.update(
           {
@@ -723,7 +871,9 @@ export class CourtScene {
             pass: j === carried && nb?.act[j] === 'pass' ? Math.max(0, play.dur - play.ms) : undefined,
             over: p.final !== undefined,
             bump: end.bump,
+            party: end.clip,
             who: pid,
+            touch: this.touched(j),
           },
           dt,
           own,
@@ -732,6 +882,9 @@ export class CourtScene {
         figs.push(f);
         seen.add(pid);
       });
+      figs.forEach((f, j) => CONTESTS.has(b.act[j]) && contest.add(f));
+      // (two who meet: how near they came, for how near they are drawn next frame)
+      this.feel(pids);
       // a possession that doesn't pick up where the last ended: the ball is where it starts
       const key = `${this.scriptN}:${bi}`;
       if (key !== this.moveKey) {
@@ -758,6 +911,7 @@ export class CourtScene {
         this.vy = 0;
       }
       const lu = play.dur > 0 ? clamp(play.ms / play.dur, 0, 1) : 1;
+      shotU = lu;
       // (the play's time to the bodies')
       const pace = own > 0 && dt > 0 ? dt / own : PACE;
       const was = a.hold !== undefined && a.hold >= 0 ? figs[a.hold] : null;
@@ -766,7 +920,7 @@ export class CourtScene {
       if (next) hands.add(next);
       if (carried >= 0 && over(pids[carried], figs[carried].side, 'hold') !== 'hold') {
         // (a winner with the ball throws it up in the air)
-        if (figs[carried].side === p.final) this.toss();
+        if (figs[carried].side === p.final && (p.occasion ?? 'win') !== 'win') this.toss();
         carried = -1;
         free = true;
       } else if (carried >= 0) {
@@ -935,7 +1089,9 @@ export class CourtScene {
 
       // what the page writes over the picture: the handler's name, the play's label
       const hold = play.u >= 0.5 ? b.hold : a.hold;
-      if (p.names && hold !== undefined && hold >= 0 && figs[hold]) {
+      // (not while he goes up with it, nor while it is on its way to the rim or on it: the shot is the picture)
+      const shooting = hold !== undefined && hold >= 0 && (!!b.fx || AIMED.has(b.act[hold]) || b.act[hold] === 'ft');
+      if (p.names && hold !== undefined && hold >= 0 && figs[hold] && !shooting) {
         tagAt = { f: figs[hold], pid: hold < nO ? sc.oPids[hold] : sc.dPids[hold - nO] };
       }
       const fl = (play.u > 0.35 ? b.flash : undefined) ?? (play.u <= 0.35 ? a.flash : undefined);
@@ -960,27 +1116,25 @@ export class CourtScene {
         if (was && Math.hypot(at[j * 2] - was[0], at[j * 2 + 1] - was[1]) > FRESH) cut = true;
         this.planAt.set(st.pid, [at[j * 2], at[j * 2 + 1]]);
       });
-      this.spacing.place(
-        at,
-        this.going.fill(0),
-        stage.standers.map((st) => st.pid),
-        own,
-        aside,
-        cut,
-      );
+      const who = stage.standers.map((st) => st.pid);
+      this.going.fill(0);
+      this.aside(who, at, this.going, own, cut);
+      this.touch.fill(undefined);
+      this.meeting.length = 0;
+      this.spacing.place(at, this.going, who, own, aside, cut, NO_MEETS, this.builds(who));
       const had = stage.standers.find((st) => st.pid === this.heldBy);
       for (let j = 0; j < n; j++) {
         const st = stage.standers[j];
         const f = this.fig(st.pid, st.side, p);
-        const act = over(st.pid, st.side, st.pid === this.heldBy ? 'hold' : 'stand');
-        const has = act === 'hold';
-        const end = this.paired(st.pid, st.side, at[j * 2], at[j * 2 + 1], f.pup.placed ? f.pup.yaw : Math.atan2(-at[j * 2], -at[j * 2 + 1]), p);
-        this.arena.sideline.lead(st.pid, end, this.director.onAir);
-        this.helps(f, end, own);
+        const said = over(st.pid, st.side, st.pid === this.heldBy ? 'hold' : 'stand');
+        const has = said === 'hold';
+        const way = this.ways[j];
+        const end = this.party(st.pid, at[j * 2], at[j * 2 + 1], Number.isFinite(way) ? way : f.pup.placed ? f.pup.yaw : Math.atan2(-at[j * 2], -at[j * 2 + 1]), p);
+        const act = end.act ?? said;
         // (they watch the ball, and the ball is dead: they stand at rest)
         const look = has || p.final !== undefined ? undefined : { x: ball.x, y: ball.y, z: ball.z };
         f.pup.update(
-          { x: end.x, z: end.z, yaw: end.yaw, act, ms: 0, dur: 0, ball: has, cut, look, rest: true, over: p.final !== undefined, bump: end.bump, who: st.pid },
+          { x: end.x, z: end.z, yaw: end.yaw, act, ms: 0, dur: 0, ball: has, cut, look, rest: true, over: p.final !== undefined, bump: end.bump, party: end.clip, who: st.pid },
           dt,
           own,
           ease,
@@ -993,7 +1147,7 @@ export class CourtScene {
         set(ball, holder.pup.bounced(holder.pup.carry(TMP)));
         this.give(holder, null, ease);
       } else {
-        if (had && had.side === p.final) this.toss();
+        if (had && had.side === p.final && (p.occasion ?? 'win') !== 'win') this.toss();
         this.heldBy = null;
         if (stage.ball && Math.hypot(ball.x - sx(stage.ball), ball.z - sz(stage.ball)) > 14) ball.set(sx(stage.ball), BALL_R, sz(stage.ball));
         free = true;
@@ -1047,8 +1201,9 @@ export class CourtScene {
     }
     if (p.final === undefined) {
       this.tossed = false;
-      this.pairs = null;
-    }
+      this.parts = null;
+      this.gather = null;
+    } else if (!this.parts && this.figs.size) this.parts = this.plan(p.final, p.occasion ?? 'win');
     // the people round the floor: the referees work this moment of the play, the coaches and the benches watch it
     // (while the ball is a referee's, held or on its way to or from his hands, it is where he has it and no player's hands are on it)
     const refs = this.arena.sideline.update({
@@ -1058,6 +1213,8 @@ export class CourtScene {
       held: !!holder,
       line,
       final: p.final,
+      occasion: p.occasion,
+      gather: this.gather,
       clutch: !!p.clutch,
       game: p.game,
       bench: p.bench,
@@ -1085,8 +1242,7 @@ export class CourtScene {
       if (f.ring.visible) (f.ring.material as MeshBasicMaterial).color.set(p.warn);
     }
 
-    // the ball turns as what it is doing turns it (ballistics.ts spinFor): its seams show it. Its shadow stays on the
-    // floor, tight and dark as it touches, wider and fainter the higher it is
+    // the ball turns as what it is doing turns it (ballistics.ts spinFor): its seams show it; and its dark is put on the floor under it
     const bm = this.ballFrame.position;
     const moved = bm.distanceTo(ball);
     if (sec > 0 && moved < 20) this.ballV.set((ball.x - bm.x) / sec, (ball.y - bm.y) / sec, (ball.z - bm.z) / sec);
@@ -1127,9 +1283,15 @@ export class CourtScene {
     }
     bm.copy(ball);
     const up = Math.max(0, ball.y - BALL_R);
+    // (where the lamps throw their own shadows, only a tight dark where it touches, so a bounce reads on the wood; with
+    // none thrown, a blob that follows it up, wider and fainter the higher it is)
+    const [wide, dark] = this.figLite
+      ? [0.74 + Math.min(2.2, up * 0.22), 0.62 / (1 + up * 1.1) + 0.1 / (1 + up * 0.12)]
+      : [TOUCH_W + up * 0.3, TOUCH_DARK * Math.max(0, 1 - up / TOUCH_FT) ** 2];
     this.ballShadow.position.set(ball.x, 0.035, ball.z);
-    this.ballShadow.scale.setScalar(0.74 + Math.min(2.2, up * 0.22));
-    (this.ballShadow.material as MeshBasicMaterial).opacity = 0.62 / (1 + up * 1.1) + 0.1 / (1 + up * 0.12);
+    this.ballShadow.scale.setScalar(wide);
+    (this.ballShadow.material as MeshBasicMaterial).opacity = dark;
+    this.ballShadow.visible = dark > 0.01;
     // the net takes a made shot, the rim a miss or a dunk
     this.netKick = Math.max(0, this.netKick - own / NET_MS);
     this.rimKick = Math.max(0, this.rimKick - own / 380);
@@ -1339,6 +1501,34 @@ export class CourtScene {
       const at = this.screen(A.set(f.x, 7.5, f.z));
       labels.flash = { x: at.x, y: at.y, text: f.fl.text, kind: f.fl.kind, alpha: f.alpha };
     }
+    // what the words leave clear (Labels.keep): the ball, and a shot's way to the rim; the rim being attacked, and its
+    // net; the heads and hands round the ball (those of men in a contest for it as surely as the ball). In a crowd
+    // there one tag, not two, and the words smaller
+    const keep = labels.keep;
+    labels.ball = this.disc(keep, ball.x, ball.y, ball.z, BALL_R);
+    if (this.flight && !this.landed)
+      for (let k = 1; k <= PATH_N; k++) {
+        const at = shotAt(this.flight, shotU + ((1 - shotU) * k) / PATH_N, TMP);
+        this.disc(keep, at.x, at.y, at.z, BALL_R);
+      }
+    if (goal) {
+      this.disc(keep, goal.x, RIM_H, goal.z, RING_R);
+      this.disc(keep, goal.x, RIM_H - NET_DOWN, goal.z, NET_R);
+    }
+    let round = 0;
+    for (const f of this.figs.values()) {
+      if (Math.hypot(f.pup.x - ball.x, f.pup.z - ball.z) > ROUND_FT) continue;
+      round++;
+      const j = f.pup.j;
+      for (const k of [J.head, J.hl, J.hr]) {
+        const at = f.pup.world(j[k * 3], j[k * 3 + 1], j[k * 3 + 2], TMP);
+        this.disc(keep, at.x, at.y, at.z, k === J.head ? HEAD_R * f.pup.body.s : HAND_R, !contest.has(f));
+      }
+    }
+    const crowd = (labels.crowd = round >= CROWD);
+    if (crowd) labels.tags.length = Math.min(1, labels.tags.length);
+    const closer = p.cam === 'side' || p.cam === 'low' ? 1 : this.push;
+    labels.size = clamp(Math.min(this.w / WORDS_W, this.h / WORDS_H), WORDS_LEAST, 1) * (crowd ? WORDS_CROWD : 1) * (1 - (1 - WORDS_CLOSE) * closer);
     const r = d.reel;
     labels.replay = d.onAir;
     if (r && d.wipe !== null) labels.wipe = { at: d.wipe, color: p.kits[r.side].color, trim: p.kits[r.side].trim };
@@ -1360,7 +1550,13 @@ export class CourtScene {
     if (sharp && !calm) {
       const j = sharp.pup.j;
       const c = sharp.pup.world(j[J.chest * 3], j[J.chest * 3 + 1], j[J.chest * 3 + 2], TMP);
-      this.lens.focus(this.camera.position.distanceTo(A.set(c.x, c.y, c.z)), d.onAir ? REPLAY_SOFT : CLOSE_SOFT);
+      let at = this.camera.position.distanceTo(A.set(c.x, c.y, c.z));
+      if (d.onAir && r && r.kind !== 'block') {
+        // (a shot: as the ball gets there the focus goes from him to the rim, the over-the-shoulder look's basket sharp as it drops)
+        const u = smooth(clamp((r.t - r.at + PULL_MS) / PULL_MS, 0, 1));
+        if (u > 0) at += (this.camera.position.distanceTo(A.set(r.rim.x, RIM_H, r.rim.z)) - at) * u;
+      }
+      this.lens.focus(at, d.onAir ? REPLAY_SOFT : CLOSE_SOFT);
     } else this.lens.focus(0, 0);
     // (the house lights come down for the open, the tip and a timeout, and some of the way for the clutch: rig.ts)
     this.rig.mood(this.shot === 'open' || this.shot === 'tip' || this.shot === 'house' ? 1 : p.clutch ? 0.6 : 0, calm ? 1e6 : real);
@@ -1395,8 +1591,135 @@ export class CourtScene {
     }
     const pids = [...sc.oPids, ...sc.dPids];
     pids.forEach((pid, j) => this.planAt.set(pid, [at[j * 2], at[j * 2 + 1]]));
-    return this.spacing.place(at, go, pids, own, aside, cut);
+    this.aside(pids, at, go, own, cut);
+    const meets = this.meets(play, pids, at);
+    return this.spacing.place(at, go, pids, own, aside, cut, meets, this.builds(pids));
   }
+
+  /**
+   * A man the sideline has on a way of its own (on from the table, over to his bench at a timeout and back) or
+   * who goes to pull a teammate up is drawn on that way, not on the plan's spot, and kept apart from the rest like
+   * anyone: a walk to the bench never goes through a man. The way each faces on it (NaN: as the plan has him)
+   * goes in `ways`; `cut`: everyone is put on a fresh spot, nobody is on his way anywhere.
+   */
+  private aside(pids: readonly number[], at: Float32Array, go: Float32Array, own: number, cut: boolean) {
+    if (this.ways.length !== pids.length) this.ways = new Float32Array(pids.length);
+    pids.forEach((pid, j) => {
+      const e = AWAY;
+      e.x = at[j * 2];
+      e.z = at[j * 2 + 1];
+      e.yaw = NaN;
+      this.arena.sideline.lead(pid, e, this.director.onAir, cut);
+      const f = this.figs.get(pid);
+      if (f) this.helps(f, e, own);
+      this.ways[j] = e.yaw;
+      if (e.x === at[j * 2] && e.z === at[j * 2 + 1]) return;
+      at[j * 2] = e.x;
+      at[j * 2 + 1] = e.z;
+      // (the way he is going, for which side of a man he goes round)
+      if (Number.isFinite(e.yaw)) {
+        go[j * 2] = Math.sin(e.yaw) * WAY_GO;
+        go[j * 2 + 1] = Math.cos(e.yaw) * WAY_GO;
+      }
+    });
+  }
+
+  /** Each man's trunk for keeping bodies apart (spacing.ts reach): how far out to his sides, how deep, his heading. */
+  private builds(pids: readonly number[]): Float32Array {
+    if (this.build.length !== pids.length * 3) this.build = new Float32Array(pids.length * 3);
+    pids.forEach((pid, j) => {
+      const pup = this.figs.get(pid)?.pup;
+      const k = pup ? pup.body.s * Math.sqrt(pup.body.bulk) : 1;
+      this.build[j * 3] = WIDE * k;
+      this.build[j * 3 + 1] = DEEP * k;
+      this.build[j * 3 + 2] = pup?.placed ? pup.yaw : NaN;
+    });
+    return this.build;
+  }
+
+  /**
+   * Who meets whom body to body this move (choreo.ts `meet`: a screen and the man it is set on, a box-out and the
+   * man held off), and how far into it: a screen is met as it is set and fought through as the man it frees goes
+   * by; a box-out is met as the shot goes up and held until the ball comes down. Each is drawn as near as their
+   * bodies touch (learnt from how near they came, see `feel`), and is told of the other (`touch`).
+   */
+  private meets(play: NonNullable<Stage['play']>, pids: readonly number[], at: Float32Array): Meet[] {
+    const out = this.meeting;
+    out.length = 0;
+    if (this.touch.length !== pids.length) this.touch = new Array(pids.length);
+    this.touch.fill(undefined);
+    const lu = play.dur > 0 ? clamp(play.ms / play.dur, 0, 1) : 1;
+    const { a, b } = play;
+    const key = (i: number, j: number) => `${pids[i]}:${pids[j]}`;
+    const into = new Set((b.meet ?? []).map(([i, j]) => key(i, j)));
+    const was = new Set((a.meet ?? []).map(([i, j]) => key(i, j)));
+    for (const [i, j] of [...(b.meet ?? []), ...(a.meet ?? []).filter(([i, j]) => !into.has(key(i, j)))]) {
+      if (i < 0 || j < 0 || i >= pids.length || j >= pids.length) continue;
+      const box = [a.act[i], a.act[j], b.act[i], b.act[j]].some((x) => x === 'boxout' || x === 'crash');
+      const k = key(i, j);
+      // (in: a box-out as soon as the shot is up, a screen as the screener gets set; out: a box-out as the ball comes
+      // down to whoever gets it, a screen as the man it frees gets by)
+      const dx = at[j * 2] - at[i * 2];
+      const dz = at[j * 2 + 1] - at[i * 2 + 1];
+      const d = Math.hypot(dx, dz) || 1;
+      // (and only two the plan has near each other: a man the play has left well off a screen runs round it)
+      const w =
+        (into.has(k) && was.has(k)
+          ? 1
+          : into.has(k)
+            ? smooth(clamp((lu - (box ? 0.08 : 0.55)) / (box ? 0.3 : 0.35), 0, 1))
+            : 1 - smooth(clamp((lu - (box ? 0.1 : 0.12)) / 0.45, 0, 1))) *
+        (1 - smooth(clamp((d - MEET_FROM) / MEET_SPAN, 0, 1)));
+      if (w <= 0.01) continue;
+      // (as near as their trunks reach toward each other, turned as they are, and what they lean or sit adds: see feel)
+      const pi = this.figs.get(pids[i])?.pup;
+      const pj = this.figs.get(pids[j])?.pup;
+      const near = clamp(reaches(dx / d, dz / d, pi, pj) + (this.holds.get(k) ?? 0), NEAR_MIN, NEAR_MAX);
+      out.push({ i, j, w, near, share: box ? BOX_SHARE : SCREEN_SHARE });
+      this.touch[i] = { pid: pids[j], w };
+      this.touch[j] = { pid: pids[i], w };
+    }
+    // (a pair no longer meeting starts again from their trunks next time)
+    if (!out.length && this.holds.size) this.holds.clear();
+    return out;
+  }
+
+  /**
+   * Two who meet: how near their middles would be with their bodies touching as they are this frame (how far apart
+   * they are, less the room between their trunks and heads: spacing.ts clearance), against what their trunks' reach
+   * says, for how near they are drawn next frame. As they lean, sit or turn, so does that: they touch, whatever each is doing.
+   */
+  private feel(pids: readonly number[]) {
+    for (const m of this.meeting) {
+      const a = this.figs.get(pids[m.i])?.pup;
+      const b = this.figs.get(pids[m.j])?.pup;
+      const d = a && b ? Math.hypot(a.x - b.x, a.z - b.z) : Infinity;
+      if (!a || !b || m.w < 0.5 || d > FEEL_FAR || d < 1e-3) continue;
+      const gap = clearance(jointsOf(a, JA), a.body.s, a.body.bulk, jointsOf(b, JB), b.body.s, b.body.bulk, false);
+      const k = `${pids[m.i]}:${pids[m.j]}`;
+      const was = this.holds.get(k) ?? 0;
+      const want = d - (gap - TOUCH) - reaches((b.x - a.x) / d, (b.z - a.z) / d, a, b);
+      this.holds.set(k, clamp(was + (want - was) * FEEL, -LEAN_MOST, LEAN_MOST));
+      // (and if this frame they are into each other, a lean or a sit come quicker than that: they are moved apart now, each his share)
+      const into = (TOUCH - SLACK - gap) * m.w;
+      if (into <= 0) continue;
+      const [ux, uz] = [(b.x - a.x) / d, (b.z - a.z) / d];
+      a.nudge(-ux * into * (1 - m.share), -uz * into * (1 - m.share));
+      b.nudge(ux * into * m.share, uz * into * m.share);
+    }
+  }
+  /** The man meeting him (see meets): where he is, and how far into it. */
+  private touched(j: number): { x: number; z: number; w: number } | undefined {
+    const t = this.touch[j];
+    const o = t && this.figs.get(t.pid)?.pup;
+    return t && o?.placed ? { x: o.x, z: o.z, w: t.w } : undefined;
+  }
+  /** Where each of the ten goes his own way this frame (see aside), each man's trunk (see builds), and who meets whom (see meets). */
+  private ways = new Float32Array(10);
+  private build = new Float32Array(30);
+  private readonly meeting: Meet[] = [];
+  private touch: ({ pid: number; w: number } | undefined)[] = [];
+  private readonly holds = new Map<string, number>();
 
   /**
    * What each of the ten looks at this move: a shooter the rim (from the move before he goes up); a passer the man
@@ -1576,44 +1899,170 @@ export class CourtScene {
   }
 
   /**
-   * At the buzzer: winners near each other pair off (the two nearest, then the next two), walk to meet and
-   * chest-bump. Where he goes, the way he faces, and whether he's going up. Anyone else: as he was.
+   * At the buzzer, each man's part in the end of the game (see plan):
+   * where he is, the way he faces, what he does (his act, a clip of his own, whether he goes up for a chest
+   * bump with the man facing him). Until the buzzer has reached him, and for anyone without a part: as he was.
    */
-  private paired(pid: number, side: 0 | 1, x: number, z: number, yaw: number, p: SceneProps): { x: number; z: number; yaw: number; bump: boolean } {
-    if (p.final === undefined || side !== p.final) return { x, z, yaw, bump: false };
-    if (!this.pairs) {
-      this.pairs = new Map();
-      const men = [...this.figs.entries()].filter(([, f]) => f.side === p.final);
+  private party(pid: number, x: number, z: number, yaw: number, p: SceneProps): End {
+    const none: End = { x, z, yaw, bump: false };
+    // (worked out once everyone is where the buzzer found him: see frame)
+    if (p.final === undefined || !this.parts) return none;
+    let pt = this.parts.get(pid);
+    if (!pt || this.finalMs < Math.min(heard(pid), pt.at)) return none;
+    const f = this.figs.get(pid);
+    if (pt.hi && !pt.said && f) f.pup.cue(pt.hi, null, 1200);
+    pt.said = true;
+    // (the stage he is at: each sets off from where the last left him)
+    let fx = x;
+    let fz = z;
+    while (pt.next && this.finalMs >= pt.next.at) {
+      fx = pt.x;
+      fz = pt.z;
+      pt = pt.next;
+    }
+    const go = this.finalMs - pt.at;
+    if (go < 0) return { ...none, act: pt.first, clip: pt.firstClip };
+    const d = Math.hypot(pt.x - fx, pt.z - fz);
+    const w = d < 0.05 ? 1 : Math.min(1, go / Math.max(PAIR_MS, (d / pt.pace) * 1000));
+    const e = w * w * (3 - 2 * w);
+    const nx = fx + (pt.x - fx) * e;
+    const nz = fz + (pt.z - fz) * e;
+    if (w < 1) return { x: nx, z: nz, yaw: d > 0.3 ? Math.atan2(pt.x - fx, pt.z - fz) : yaw, bump: false, act: 'stand' };
+    if (pt.gest && !pt.cued && f) f.pup.cue(pt.gest, null, 1800);
+    pt.cued = true;
+    const mate = pt.mate === null ? undefined : this.figs.get(pt.mate);
+    return { x: nx, z: nz, yaw: mate ? Math.atan2(mate.pup.x - nx, mate.pup.z - nz) : (pt.face ?? yaw), bump: !!pt.bump, act: pt.act, clip: pt.clip };
+  }
+
+  /**
+   * The end of the game, man by man, as the kind of win it is (SceneProps.occasion). The losers' heads go down
+   * (some of them right down on their haunches after a big one). An ordinary win is quiet: a clap or a fist,
+   * then both sides walk toward the middle and shake hands, man to man, a dap here and there. A late winner:
+   * the man who hit it runs a few strides toward the near side and his teammates sprint to him and mob him. A
+   * playoff win: chest bumps, fists and roars. A series won: that, then the five together in a ring, jumping.
+   * A title: two and two in each other's arms, one down on his knees, one sat on the floor taking it in, then
+   * all of them together. Where the winners gather is where a bench that storms the floor runs (sideline.ts).
+   */
+  private plan(final: 0 | 1, occasion: Occasion): Map<number, Part> {
+    const parts = new Map<number, Part>();
+    const won: [number, Fig][] = [];
+    const lost: [number, Fig][] = [];
+    for (const e of this.figs) (e[1].side === final ? won : lost).push(e);
+    const stay = (pid: number, f: Fig, act: Act, more: Partial<Part> = {}): Part => ({ at: heard(pid), x: f.pup.x, z: f.pup.z, pace: 6, mate: null, act, ...more });
+    // (the nearest two of `a` and `b` (or of `a` alone), then the next nearest two, none farther apart than `near` ft, `most` pairs)
+    const pairs = (a: [number, Fig][], b: [number, Fig][] | null, near: number, most: number): [[number, Fig], [number, Fig]][] => {
       const all: [number, number, number][] = [];
-      for (let i = 0; i < men.length; i++)
-        for (let k = i + 1; k < men.length; k++) {
-          const d = Math.hypot(men[i][1].pup.x - men[k][1].pup.x, men[i][1].pup.z - men[k][1].pup.z);
-          if (d < PAIR_NEAR) all.push([d, i, k]);
+      const other = b ?? a;
+      for (let i = 0; i < a.length; i++)
+        for (let k = b ? 0 : i + 1; k < other.length; k++) {
+          const dd = Math.hypot(a[i][1].pup.x - other[k][1].pup.x, a[i][1].pup.z - other[k][1].pup.z);
+          if (dd < near) all.push([dd, i, k]);
         }
       all.sort((u, v) => u[0] - v[0]);
-      const taken = new Set<number>();
+      const ta = new Set<number>();
+      const tb = b ? new Set<number>() : ta;
+      const out: [[number, Fig], [number, Fig]][] = [];
       for (const [, i, k] of all) {
-        if (taken.has(i) || taken.has(k) || taken.size >= 4) continue;
-        taken.add(i).add(k);
-        const [ia, fa] = men[i];
-        const [ib, fb] = men[k];
-        const mx = (fa.pup.x + fb.pup.x) / 2;
-        const mz = (fa.pup.z + fb.pup.z) / 2;
-        const d = Math.hypot(fb.pup.x - fa.pup.x, fb.pup.z - fa.pup.z) || 1;
-        const ux = (fb.pup.x - fa.pup.x) / d;
-        const uz = (fb.pup.z - fa.pup.z) / d;
-        // (after both have taken the buzzer in: see `over`)
-        const at = Math.max(((ia * 131 + 17) % 10) / 9, ((ib * 131 + 17) % 10) / 9) * BUZZER_MS + 150;
-        this.pairs.set(ia, { mate: ib, x: mx - ux * PAIR_GAP, z: mz - uz * PAIR_GAP, at });
-        this.pairs.set(ib, { mate: ia, x: mx + ux * PAIR_GAP, z: mz + uz * PAIR_GAP, at });
+        if (ta.has(i) || tb.has(k) || out.length >= most) continue;
+        ta.add(i);
+        tb.add(k);
+        out.push([a[i], other[k]]);
       }
+      return out;
+    };
+    /** Two men meeting `gap` ft either side of the middle of them (pulled toward centre court by `pull`): each one's spot, and how far apart they were. */
+    const meet = (fa: Fig, fb: Fig, gap: number, pull = 0) => {
+      const mx = ((fa.pup.x + fb.pup.x) / 2) * (1 - pull);
+      const mz = ((fa.pup.z + fb.pup.z) / 2) * (1 - pull);
+      const dd = Math.hypot(fb.pup.x - fa.pup.x, fb.pup.z - fa.pup.z) || 1;
+      const ux = (fb.pup.x - fa.pup.x) / dd;
+      const uz = (fb.pup.z - fa.pup.z) / dd;
+      return [mx - ux * gap, mz - uz * gap, mx + ux * gap, mz + uz * gap, dd] as const;
+    };
+    /** The winners together round a spot, `r` ft off it and facing it, from `at` (ms) on. */
+    const ring = (gx: number, gz: number, r: number, at: number): Part[] =>
+      won.map(([pid], i) => {
+        const a = (i / won.length) * Math.PI * 2 + 0.6;
+        const x = gx + Math.sin(a) * r;
+        const z = gz + Math.cos(a) * r;
+        return { at: at + hash(pid, 41) * 260, x, z, pace: 9, mate: null, act: 'celebrate', face: Math.atan2(gx - x, gz - z) };
+      });
+    const mid = won.reduce((m, [, f]) => ({ x: m.x + f.pup.x / won.length, z: m.z + f.pup.z / won.length }), { x: 0, z: 0 });
+    this.gather = null;
+    // (the losers: heads down, a few down on their haunches after a big one)
+    const down = occasion === 'win' ? 0 : occasion === 'playoff' ? 0.25 : 0.45;
+    for (const [pid, f] of lost) parts.set(pid, stay(pid, f, 'rue', { clip: hash(pid, 23) < down ? 'crouch' : undefined }));
+    if (occasion === 'win') {
+      for (const [pid, f] of won) parts.set(pid, stay(pid, f, 'stand', { hi: hash(pid, 29) < 0.6 ? 'clap' : 'fist' }));
+      pairs(won, lost, Infinity, 5).forEach(([[wp, wf], [lp, lf]], k) => {
+        const [wx, wz, lx, lz] = meet(wf, lf, SHAKE_GAP, 0.4);
+        const at = 900 + k * 260 + hash(wp, 5) * 250;
+        const gest = k % 3 === 1 ? 'dap' : 'shake';
+        parts.set(wp, { ...parts.get(wp)!, at, x: wx, z: wz, pace: WALK, mate: lp, act: 'stand', gest, first: 'stand' });
+        parts.set(lp, { ...parts.get(lp)!, at, x: lx, z: lz, pace: WALK, mate: wp, act: 'stand', gest, first: 'rue' });
+      });
+      return parts;
     }
-    const pr = this.pairs.get(pid);
-    const mate = pr && this.figs.get(pr.mate);
-    if (!pr || !mate || this.finalMs < pr.at) return { x, z, yaw, bump: false };
-    const w = Math.min(1, (this.finalMs - pr.at) / PAIR_MS);
-    const e = w * w * (3 - 2 * w);
-    return { x: x + (pr.x - x) * e, z: z + (pr.z - z) * e, yaw: Math.atan2(mate.pup.x - x, mate.pup.z - z), bump: w >= 1 };
+    if (occasion === 'late') {
+      // the man who hit it: the scorer of the last basket if he is one of them, or the one nearest the ball
+      const star = this.arena.boards.house.star;
+      const ball = this.ball;
+      const near = (e: [number, Fig]) => Math.hypot(e[1].pup.x - ball.x, e[1].pup.z - ball.z);
+      const hero = won.find(([pid]) => star?.side === final && star.pid === pid) ?? won.reduce((b, e) => (near(e) < near(b) ? e : b));
+      const hf = hero[1];
+      const hx = clamp(hf.pup.x * 0.85, -(MID - 5), MID - 5);
+      const hz = clamp(hf.pup.z + 7, -20, 16);
+      parts.set(hero[0], { at: 0, x: hx, z: hz, pace: 14, mate: null, act: 'celebrate', clip: 'cheer', gest: 'roar', face: 0 });
+      this.gather = { x: hx, z: hz };
+      // (round him, never between him and the near side's cameras)
+      won
+        .filter((e) => e !== hero)
+        .forEach(([pid], i) => {
+          const a = MOB[i % MOB.length];
+          const r = 2.3 + (i >= MOB.length ? 1.1 : 0);
+          const x = hx + Math.sin(a) * r;
+          const z = hz + Math.cos(a) * r;
+          parts.set(pid, { at: 120 + heard(pid) * 0.3, x, z, pace: 19, mate: null, act: 'celebrate', face: Math.atan2(hx - x, hz - z), first: 'celebrate' });
+        });
+      return parts;
+    }
+    if (occasion === 'title') {
+      // two in each other's arms, one down on his knees, one sat on the floor, the rest jumping; then all of them together
+      const paired = new Set<number>();
+      for (const [[ap, af], [bp, bf]] of pairs(won, null, 16, won.length > 4 ? 1 : 2)) {
+        const [ax, az, bx, bz] = meet(af, bf, HUG_GAP);
+        const at = Math.max(heard(ap), heard(bp)) + 200;
+        parts.set(ap, { at, x: ax, z: az, pace: 10, mate: bp, act: 'stand', clip: 'hug', first: 'celebrate' });
+        parts.set(bp, { at, x: bx, z: bz, pace: 10, mate: ap, act: 'stand', clip: 'hug', first: 'celebrate' });
+        paired.add(ap).add(bp);
+      }
+      let k = 0;
+      for (const [pid, f] of won)
+        if (!paired.has(pid))
+          parts.set(pid, stay(pid, f, k < 2 ? 'stand' : 'celebrate', { at: heard(pid) + 450, clip: (['kneel', 'floor'] as const)[k++], face: 0, first: 'celebrate' }));
+      const gx = mid.x * 0.6;
+      const gz = clamp(mid.z * 0.6, -14, 10);
+      this.gather = { x: gx, z: gz };
+      ring(gx, gz, 2.1, TITLE_GROUP).forEach((r, i) => (parts.get(won[i][0])!.next = r));
+      return parts;
+    }
+    // a playoff win (and a series won, to start with): pairs go up for chest bumps, the rest pump their fists and roar
+    for (const [pid, f] of won) parts.set(pid, stay(pid, f, 'celebrate', { gest: hash(pid, 31) < 0.6 ? 'roar' : undefined }));
+    for (const [[ap, af], [bp, bf]] of pairs(won, null, PAIR_NEAR, 2)) {
+      const [ax, az, bx, bz, dd] = meet(af, bf, PAIR_GAP);
+      const at = Math.max(heard(ap), heard(bp)) + 150;
+      const pace = Math.max(6, dd / (PAIR_MS / 1000));
+      parts.set(ap, { at, x: ax, z: az, pace, mate: bp, act: 'celebrate', bump: true });
+      parts.set(bp, { at, x: bx, z: bz, pace, mate: ap, act: 'celebrate', bump: true });
+    }
+    if (occasion === 'clinch') {
+      // (then the five together in a ring, jumping, and the bench with them)
+      const gx = mid.x * 0.7;
+      const gz = clamp(mid.z * 0.7, -14, 10);
+      this.gather = { x: gx, z: gz };
+      ring(gx, gz, 1.9, CLINCH_GROUP).forEach((r, i) => (parts.get(won[i][0])!.next = r));
+    }
+    return parts;
   }
 
   /** The ball thrown up at the buzzer (once): high, and a little off to one side. */
@@ -1737,12 +2186,22 @@ export class CourtScene {
       const j = f?.pup.j;
       const chest = f && j ? f.pup.world(j[J.chest * 3], j[J.chest * 3 + 1], j[J.chest * 3 + 2], TMP) : null;
       const head = f && j ? f.pup.world(j[J.head * 3], j[J.head * 3 + 1], j[J.head * 3 + 2], TMP2) : null;
-      d.aimReel(cam, chest, head, this.ball, aspect, real);
+      d.aimReel(cam, chest, head, this.ball, aspect, real, this.h);
       const dim = r.cam === 'tight' ? CUT_DIM : 1;
       this.arena.dim(dim, this.bench(dim, real));
       return;
     }
-    this.idleMs = live ? 0 : this.idleMs + real;
+    // the user picked another camera: it has the picture at once, whatever the director had on (the building
+    // at a dead ball, a cut-in, the winners at the buzzer), and keeps it until the next play is under way
+    if (this.camPick !== kind) {
+      if (this.camPick !== null) {
+        this.chosen = true;
+        this.cue = null;
+      }
+      this.camPick = kind;
+    }
+    if (live && this.chosen && this.shot === 'main' && this.shotMs > HOLD_MS) this.chosen = false;
+    this.idleMs = live || this.chosen ? 0 : this.idleMs + real;
     this.shotMs += real;
     this.cutGap += real;
     this.cueMs += real;
@@ -1762,8 +2221,9 @@ export class CourtScene {
     if (this.cue === 'close' && who && clearSeat(who.pup.x, who.pup.z, who.pup.yaw, this.others(who), v.n - 1, CLOSE_OFF, SEAT) >= 3) this.cue = who.side === 0 ? 'crowd' : null;
     if (live) this.introSeen = false;
     else if (this.shot === 'intro' && this.shotMs > INTRO_MS) this.introSeen = true;
-    const want: typeof this.shot =
-      final !== undefined
+    const want: typeof this.shot = this.chosen
+      ? 'main'
+      : final !== undefined
         ? 'final'
         : held && !over
           ? this.shot
@@ -1785,7 +2245,7 @@ export class CourtScene {
     // (the play starting again takes the picture back from the building at once, the buzzer and a timeout take it
     // from anything, and the tip's line-up goes straight into the first possession; every other camera has its HOLD_MS)
     const timeout = want === 'bench' && this.cue === 'house';
-    const now = want === 'final' || want === 'house' || want === 'open' || want === 'intro' || timeout || (want === 'main' && this.shot === 'wide');
+    const now = want === 'final' || want === 'house' || want === 'open' || want === 'intro' || timeout || (want === 'main' && (this.shot === 'wide' || this.chosen));
     if (want !== this.shot && (this.shotMs > HOLD_MS || now)) {
       this.shot = want;
       this.shotMs = 0;
@@ -2034,6 +2494,22 @@ export class CourtScene {
   private screen(v: Vector3): { x: number; y: number } {
     v.project(this.camera);
     return { x: (v.x * 0.5 + 0.5) * this.w, y: (-v.y * 0.5 + 0.5) * this.h };
+  }
+
+  /**
+   * A round thing of the scene (`r` ft about x, y, z) as the page has it, with the words' margin round it, put on
+   * `out` and given back; nothing if it is behind the camera or off the picture. `soft`: see Disc.
+   */
+  private disc(out: Disc[], x: number, y: number, z: number, r: number, soft = false): Disc | null {
+    const cam = this.camera;
+    const deep = -A.set(x, y, z).applyMatrix4(cam.matrixWorldInverse).z;
+    if (deep < 0.5) return null;
+    const at = this.screen(A.set(x, y, z));
+    const px = (r * this.h) / (2 * Math.tan((cam.fov * Math.PI) / 360) * deep) + (soft ? KEEP_PX / 2 : KEEP_PX);
+    if (at.x < -px || at.y < -px || at.x > this.w + px || at.y > this.h + px) return null;
+    const d: Disc = soft ? { x: at.x, y: at.y, r: px, soft } : { x: at.x, y: at.y, r: px };
+    out.push(d);
+    return d;
   }
 
   /** The scene as it is now from another camera (the scene lab's), finished as the picture is. */

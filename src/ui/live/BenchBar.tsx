@@ -17,7 +17,8 @@ const VIEWS: { id: ConsoleView; label: string; icon: typeof Activity }[] = [
 /**
  * The bench bar in the tab bar's place: the one action the moment calls for first (a timeout while
  * the game plays, Start the next period at a break, Resume in your huddle), then the console's views,
- * Now with a count of the calls waiting on you.
+ * Now with a count of the calls waiting on you. On a phone held sideways it is a rail down the right
+ * edge (live/styles/side.css), and a view opens the console's drawer.
  */
 export function BenchBar({
   view,
@@ -31,7 +32,8 @@ export function BenchBar({
   onTimeout,
   go,
 }: {
-  view: ConsoleView;
+  /** The view that's on (null: none, the console's drawer is in on a phone held sideways). */
+  view: ConsoleView | null;
   onView: (v: ConsoleView) => void;
   /** The staff's calls waiting on you. */
   calls: number;

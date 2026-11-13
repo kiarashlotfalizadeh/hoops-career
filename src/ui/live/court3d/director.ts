@@ -10,6 +10,14 @@
 // game changes. Never with reduced motion, at 4x, in key plays or a highlight, or while the game is
 // stopped (CourtView and Court3D say when it may).
 //
+// Whatever the camera, a replay never misses its outcome: the man with the ball (a block's shooter and
+// blocker), the ball's whole flight and the basket from a little before the release, the ball at and
+// through the rim after it, an and-one's contact. Each frame those points are held inside the picture,
+// clear of the lower third and the Replay bug (`hold`): the camera's own look turns and widens only as
+// much as that takes, eased, up to the widest that camera goes; a camera whose seat could not hold them
+// at the moment is passed over up front for the next. A shot from range is seen tight from behind and
+// beside the shooter (over his shoulder), the man, the flight and the rim in a line; at the rim, his face.
+//
 // The cut-aways that are not on a man on the floor (scene.ts says when): a bench and its coach, the crowd,
 // the building before the tip.
 //
@@ -18,7 +26,9 @@
 import type { PerspectiveCamera, Vector3 } from 'three';
 import { BASKET, COURT_LEN, toWorld, type Pt, type Script } from '../choreo';
 import { HALF_W, pose, SIDE, type Stage } from '../Court';
-import { clearSeat } from './cameras';
+import { planShot, shotAt, type Shot } from './ballistics';
+import { blocked, clearSeat, SEAT_X, SEAT_Z } from './cameras';
+import { DUNK_AT } from './clips';
 import type { V3 } from './puppet';
 
 const MID = COURT_LEN / 2;
@@ -65,7 +75,7 @@ export const SWAP_MS = 420;
 const BENCH_X = [20, 37.5];
 const BENCH_Z = -(HALF_W + SIDE + 2.5);
 
-/** The tight camera stands this far off its man (ft). */
+/** The tight camera stands this far off its man at the rim (ft). */
 const TIGHT_OFF = 23;
 /** The building's shot before the tip lasts this long (ms). */
 export const INTRO_MS = 3400;
@@ -95,6 +105,46 @@ const CAMS: Record<BigKind, ReelCam[]> = {
 /** The cameras at the basket: they only see a play at it (this near its rim, ft). */
 const AT_RIM: ReadonlySet<ReelCam> = new Set(['base', 'rim', 'floor']);
 const RIM_NEAR = 16;
+/** The widest each camera goes (degrees top to bottom, in a wide frame): any wider and it is not that camera's shot, so another is taken. */
+const WIDEST: Record<ReelCam, number> = { base: 50, side: 46, tight: 44, rim: 54, floor: 62, slash: 32 };
+/**
+ * What a replay's picture keeps clear of: the lower third (bottom left) and the Replay bug (top left) as
+ * court3d.css sizes them (px across and up, with a little room), and this much of each edge (a share of
+ * the half picture across, and up and down).
+ */
+const THIRD_PX = [280, 70];
+const BUG_PX = [112, 44];
+const EDGE = [0.9, 0.88];
+/** A point by the lower third's or the bug's edge is let off it gradually, over this much of the half picture: nothing jumps as it crosses. */
+const BAND = 0.25;
+/** The look the camera eases toward keeps this much more room inside the safe area (of the half picture), and off the lower third and the bug all the way across, so the easing seldom leaves anything out. */
+const ROOM = 0.1;
+/** The picture opens out for the flight and the basket this long before the ball leaves his hand (the script's ms). */
+const FLIGHT_LEAD = 400;
+/** Where along its flight the ball is held in the picture ahead of it (shares of the shot's move: the arc's top is near the middle). */
+const ARC_AT = [0.2, 0.4, 0.6, 0.8];
+/** Where a seat is tried on the run-up, from the replay's start to the release (shares of it): a man can cross the floor in it. */
+const LEAD_AT = [0, 0.35, 0.7];
+/** Room over a man's head (ft): his hands and the ball go up there; and half his shoulders' width, with a little room. */
+const HEAD_ROOM = 0.8;
+const BODY_HALF = 1.3;
+/** After a shot's moment the ball counts until it is out of the net (this low, ft), and is let go of over this much more of its drop: on the floor it says nothing. */
+const BALL_DONE = 6;
+const BALL_GO = 3;
+/** A blocked ball counts until it is this far from the blocker (ft), and is let go of over this much farther. */
+const SWAT_DONE = 8;
+const SWAT_GO = 6;
+/**
+ * Tight on a man shooting from farther out than this (ft): over his shoulder, behind and to one side of
+ * him, this far off (ft, the nearer first), this high, and this far round from straight behind (radians),
+ * looking past him at the rim.
+ */
+const SHOULDER_FROM = 11;
+const SHOULDER_OFF = [14, 19];
+const SHOULDER_Y = 7.6;
+const SHOULDER_TURN = [28, 42, 58, 72].map((d) => (d * Math.PI) / 180);
+/** Until a replay has been drawn, its picture is taken to be a phone's (the tighter safe area): width over height, and px high. */
+const SHAPE = [1.3, 288];
 
 interface Big {
   sc: Script;
@@ -133,6 +183,16 @@ export interface Reel {
   /** Where its camera stands, and the basket the play went at (the scene's feet). */
   seat: V3;
   rim: { x: number; z: number };
+  /** The tight camera stands behind him (over his shoulder: a shot from range), not in front of his face. */
+  back: boolean;
+  /** When the ball leaves his hand (the script's ms), and its flight as the scene throws it (null: a dunk or a block). */
+  rel: number;
+  flight: Shot | null;
+  /** The other man the picture holds: a block's shooter, the man who fouled on an and-one (an index into the script's men; -1: none). */
+  other: number;
+  /** Where the shot left his hands (the scene's feet; null: nobody had it), and whether it was a dunk. */
+  from: { x: number; z: number } | null;
+  dunk: boolean;
 }
 
 /** A frame of the replay for the scene to draw in place of the live one (`cut`: everyone is put on his spot, not walked there). */
@@ -154,6 +214,96 @@ function startOf(sc: Script, k: number) {
   let t = 0;
   for (let i = 1; i < k && i < sc.frames.length; i++) t += sc.frames[i].dur;
   return t;
+}
+
+/** Where a replay's picture may hold what it must show (see THIRD_PX): the lower third's right edge and top, and the bug's right edge and foot (-1..1 across and up). */
+interface Safe {
+  tr: number;
+  tt: number;
+  br: number;
+  bb: number;
+}
+/** A look: what it looks at, and the tangent of half the picture top to bottom. */
+interface Aim {
+  x: number;
+  y: number;
+  z: number;
+  tan: number;
+}
+// (hold's working numbers: each point across and up the picture before its width, and how low and how high it may sit (limits))
+const U: number[] = [];
+const V: number[] = [];
+const LO: number[] = [];
+const HI: number[] = [];
+
+/**
+ * How low and how high in the picture (-1..1) each of the `n` numbers of `pts` may sit, with `room` more to
+ * spare, into LO and HI: over the lower third and under the bug where it is across the picture from `seat`
+ * looking at `look` (`tan`: half its height), let off them over BAND past their edges. Taken from a picture
+ * already drawn, not the one being worked out, so a point near an edge never sets the width and the width
+ * the point (no picture: off them all the way across).
+ */
+function limits(seat: V3, look: V3 | null, tan: number, pts: ArrayLike<number>, n: number, aspect: number, sa: Safe, room: number) {
+  let [fx, fy, fz] = look ? [look.x - seat.x, look.y - seat.y, look.z - seat.z] : [0, 0, 0];
+  const fl = Math.hypot(fx, fy, fz) || 1;
+  [fx, fy, fz] = [fx / fl, fy / fl, fz / fl];
+  const flat = Math.hypot(fx, fz) || 1e-6;
+  const [rx, rz] = [-fz / flat, fx / flat];
+  for (let i = 0; i < n / 3; i++) {
+    const [dx, dy, dz] = [pts[i * 3] - seat.x, pts[i * 3 + 1] - seat.y, pts[i * 3 + 2] - seat.z];
+    const nx = look ? (dx * rx + dz * rz) / Math.max(1, dx * fx + dy * fy + dz * fz) / (tan * aspect) : -1;
+    LO[i] = sa.tt + room + (-EDGE[1] - sa.tt) * smooth(clamp((nx - sa.tr - room) / BAND, 0, 1));
+    HI[i] = sa.bb - room + (EDGE[1] - sa.bb) * smooth(clamp((nx - sa.br - room) / BAND, 0, 1));
+  }
+}
+
+/**
+ * The look from `seat` that holds the `n` numbers of `pts` (x, y, z each) inside the picture, each as low
+ * and as high as `limits` let it, as near the look the camera asks for (`want`, at least `tan0` wide) as
+ * that allows: it turns as little and widens as little as it must, and no wider than `most` (past that they
+ * are centred as well as they go), with `room` more to spare across. Into `out`, looking as far off as `want` is.
+ */
+function hold(seat: V3, want: V3, tan0: number, pts: ArrayLike<number>, n: number, aspect: number, most: number, out: Aim, room = 0): Aim {
+  const ex = EDGE[0] - room;
+  let [fx, fy, fz] = [want.x - seat.x, want.y - seat.y, want.z - seat.z];
+  const reach = Math.hypot(fx, fy, fz) || 1;
+  const m = n / 3;
+  let tan = tan0;
+  for (let it = 0; it < 5; it++) {
+    const fl = Math.hypot(fx, fy, fz) || 1;
+    [fx, fy, fz] = [fx / fl, fy / fl, fz / fl];
+    // (level, as three's lookAt has it: right is along the floor)
+    const flat = Math.hypot(fx, fz) || 1e-6;
+    const [rx, rz] = [-fz / flat, fx / flat];
+    const [ux, uy, uz] = [-rz * fy, rz * fx - rx * fz, rx * fy];
+    const at = (x: number, y: number, z: number, i: number) => {
+      const [dx, dy, dz] = [x - seat.x, y - seat.y, z - seat.z];
+      // (a point behind the lens counts as far off to its side: the look turns toward it)
+      const d = Math.max(1, dx * fx + dy * fy + dz * fz);
+      U[i] = (dx * rx + dz * rz) / d;
+      V[i] = (dx * ux + dy * uy + dz * uz) / d;
+    };
+    for (let i = 0; i < m; i++) at(pts[i * 3], pts[i * 3 + 1], pts[i * 3 + 2], i);
+    at(want.x, want.y, want.z, m);
+    const [wu, wv] = [U[m], V[m]];
+    let [u0, u1] = [Infinity, -Infinity];
+    for (let i = 0; i < m; i++) [u0, u1] = [Math.min(u0, U[i]), Math.max(u1, U[i])];
+    tan = Math.max(tan0, (u1 - u0) / (2 * ex * aspect));
+    for (let i = 0; i < m; i++) for (let j = 0; j < m; j++) if (V[i] > V[j]) tan = Math.max(tan, (V[i] - V[j]) / (HI[i] - LO[j]));
+    tan = Math.min(tan, most);
+    const [xa, xb] = [u1 - ex * tan * aspect, u0 + ex * tan * aspect];
+    const cu = xa <= xb ? clamp(wu, xa, xb) : (xa + xb) / 2;
+    let [ya, yb] = [-Infinity, Infinity];
+    for (let i = 0; i < m; i++) [ya, yb] = [Math.max(ya, V[i] - HI[i] * tan), Math.min(yb, V[i] - LO[i] * tan)];
+    const cv = ya <= yb ? clamp(wv, ya, yb) : (ya + yb) / 2;
+    if (it === 4) break;
+    [fx, fy, fz] = [fx + rx * cu + ux * cv, fy + uy * cv, fz + rz * cu + uz * cv];
+  }
+  out.x = seat.x + fx * reach;
+  out.y = seat.y + fy * reach;
+  out.z = seat.z + fz * reach;
+  out.tan = tan;
+  return out;
 }
 
 /** A smooth wobble, -1..1: two slow waves that never line up (a hand on a camera, not a machine). */
@@ -183,6 +333,14 @@ export class Director {
   private readonly look = { x: 0, y: 0, z: 0 };
   private fov = 30;
   private set = false;
+  // what it must show this frame, and at a few times of the replay (for choosing a seat: where each time's points end); the picture's shape and height (px) as last drawn
+  private readonly pts: number[] = [];
+  private readonly chk: number[] = [];
+  private readonly cuts: number[] = [];
+  private aspect = SHAPE[0];
+  private high = SHAPE[1];
+  private readonly sa: Safe = { tr: 0, tt: 0, br: 0, bb: 0 };
+  private readonly aim: Aim = { x: 0, y: 0, z: 0, tan: 0 };
   private readonly stage: Stage = { script: null, play: null, standers: [], ball: null };
   // the rim taking a dunk: how long ago (ms)
   private kicked = 1e9;
@@ -241,13 +399,28 @@ export class Director {
     const spot = toWorld(j < 0 ? fk.ball : j < nO ? fk.o[j] : fk.d[j - nO], sc.dir);
     const rimPt = toWorld(BASKET, sc.dir);
     const rim = { x: sx(rimPt), z: sz(rimPt) };
-    let cam = cams[this.n % cams.length];
-    if (AT_RIM.has(cam) && Math.hypot(sx(spot) - rim.x, sz(spot) - rim.z) > RIM_NEAR) cam = 'side';
-    // (a man in the corner: the near side's camera would stand past the baseline, the basket's post across its picture)
-    if (cam === 'side' && Math.abs(sx(spot) + (rim.x < 0 ? -1 : 1) * SIDE_OFF) > MID + 3) cam = 'tight';
+    // the shot: who let it go and how, and its flight as the scene will throw it (from about where his hands are)
+    const g = sc.frames[b.k - 1];
+    const shooter = g.hold ?? -1;
+    const how = shooter >= 0 ? g.act[shooter] : 'jumper';
+    const from = shooter >= 0 ? toWorld(shooter < nO ? g.o[shooter] : g.d[shooter - nO], sc.dir) : spot;
+    const flight =
+      b.kind !== 'block' && fk.fx && how !== 'dunk'
+        ? planShot({
+            from: { x: sx(from), y: how === 'layup' ? 9 : 8.6, z: sz(from) },
+            rim,
+            kind: how === 'layup' || how === 'floater' ? how : 'jumper',
+            made: fk.fx === 'make',
+            secs: fk.dur / 1000 / this.pace,
+            next: null,
+            r: [0.5, 0.5, 0.5],
+          })
+        : null;
+    // (the whistle on an and-one comes a move or two after the make)
+    const whistle = b.kind === 'and1' ? sc.frames.slice(b.k + 1, b.k + 3).find((f) => f.foul !== undefined) : undefined;
     // (the biggest are seen twice: a shot at the buzzer, and with time to spare a dunk)
     const twice = b.kind === 'winner' || b.kind === 'buzzer' || (b.kind === 'dunk' && this.speed <= 1.05);
-    this.reel = {
+    const r: Reel = {
       sc,
       t0,
       t1,
@@ -256,8 +429,8 @@ export class Director {
       kind: b.kind,
       star: b.star,
       side: b.side,
-      cam,
-      next: twice ? (cam === 'tight' ? 'slash' : 'tight') : null,
+      cam: 'slash',
+      next: null,
       swap: -1,
       k: b.k,
       x: sx(spot),
@@ -265,9 +438,21 @@ export class Director {
       slow: SLOW,
       // (a longer stretch is played a little faster)
       rate: Math.max(1, this.runs(t0, t1, b.at, SLOW) / REEL_MOST),
-      seat: this.seatFor(cam, sc, b.k, sx(spot), sz(spot), rim),
+      seat: { x: 0, y: 0, z: 0 },
       rim,
+      back: false,
+      rel: startOf(sc, b.k),
+      flight,
+      other: b.kind === 'block' ? shooter : (whistle?.foul ?? -1),
+      from: shooter >= 0 ? { x: sx(from), z: sz(from) } : null,
+      dunk: how === 'dunk',
     };
+    this.moment(r);
+    // the camera whose turn it is, if it sees this play and its seat can hold what must be seen at the moment; else the next that can
+    const turn = this.n % cams.length;
+    for (const c of [...cams.slice(turn), ...cams.slice(0, turn), 'side', 'tight', 'slash'] as ReelCam[]) if (this.take(c, r)) break;
+    r.next = twice ? (r.cam === 'tight' ? 'slash' : 'tight') : null;
+    this.reel = r;
     this.big = null;
     this.n++;
     this.phase = 'wait';
@@ -359,13 +544,13 @@ export class Director {
         r.swap += real;
         this.wipe = r.swap < SWAP_MS ? r.swap / SWAP_MS : null;
         if (r.next && r.swap >= SWAP_MS / 2) {
-          r.cam = r.next;
-          r.next = null;
           // (from the end of the move before the moment's: the ball is in a man's hands there, and leaves them as it did)
           r.t = r.t0 = Math.max(r.t0, startOf(r.sc, r.k) - 8);
+          this.moment(r);
+          if (!this.take(r.next, r)) this.take('slash', r);
+          r.next = null;
           r.slow = SLOW_2;
           r.rate = Math.max(1, this.runs(r.t0, r.t1, r.at, SLOW_2) / REEL_2_MOST);
-          r.seat = this.seatFor(r.cam, r.sc, r.k, r.x, r.z, r.rim);
           this.set = false;
           return this.frameAt(0, true);
         }
@@ -415,13 +600,125 @@ export class Director {
   }
 
   /**
+   * The replay is seen from `cam` if that camera sees this play at all (the basket's cameras only a play
+   * at it; the near side's not with the man in the corner, where it would stand past the baseline with the
+   * basket's post across its picture) and its seat can hold what must be seen at the moment (the gantry's
+   * long lens always can).
+   */
+  private take(cam: ReelCam, r: Reel): boolean {
+    if (AT_RIM.has(cam) && Math.hypot(r.x - r.rim.x, r.z - r.rim.z) > RIM_NEAR) return false;
+    if (cam === 'side' && Math.abs(r.x + (r.rim.x < 0 ? -1 : 1) * SIDE_OFF) > MID + 3) return false;
+    const seat = this.seatFor(cam, r);
+    if (cam !== 'slash' && this.need(seat) > this.widest(cam)) return false;
+    r.cam = cam;
+    r.seat = seat;
+    return true;
+  }
+
+  /** The most a camera opens out: the tangent of half its picture top to bottom. */
+  private widest(cam: ReelCam) {
+    return Math.tan((WIDEST[cam] * Math.PI) / 360 / Math.min(1, this.aspect));
+  }
+
+  /** How wide a picture from `seat` must be to hold what the replay must show, at the widest of the times `moment` tries (the tangent of half of it top to bottom). */
+  private need(seat: V3): number {
+    const sa = this.safe(this.aspect, this.high);
+    let most = 0;
+    for (let c = 0, from = 0; c < this.cuts.length; from = this.cuts[c++]) {
+      const P = this.chk.slice(from, this.cuts[c]);
+      const m = P.length / 3;
+      const mid = { x: 0, y: 0, z: 0 };
+      for (let i = 0; i < m; i++) [mid.x, mid.y, mid.z] = [mid.x + P[i * 3] / m, mid.y + P[i * 3 + 1] / m, mid.z + P[i * 3 + 2] / m];
+      limits(seat, null, 1, P, P.length, this.aspect, sa, 0);
+      most = Math.max(most, hold(seat, mid, 0, P, P.length, this.aspect, Infinity, this.aim).tan);
+    }
+    return most;
+  }
+
+  /**
+   * What a replay must show, from the script (for choosing a seat up front), a few times over (`cuts`): on
+   * the run-up, the man with the ball and the man it is on (and a block's shooter), and the basket and the
+   * flight as `must` draws them in; at the moment, the man where he let the ball go and where the moment
+   * finds him, up in the air for it, and the basket and the ball's flight to it for a shot; a block's
+   * shooter and the ball at the blocker's hand; an and-one's foul.
+   */
+  private moment(r: Reel) {
+    const P = this.chk;
+    let n = 0;
+    const put = (x: number, y: number, z: number) => {
+      P[n++] = x;
+      P[n++] = y;
+      P[n++] = z;
+    };
+    // (a man: his shoulders' width at `lo`, whichever way he is seen, and up to `hi`)
+    const man = (x: number, z: number, lo: number, hi: number) => {
+      for (const [dx, dz] of [
+        [-BODY_HALF, 0],
+        [BODY_HALF, 0],
+        [0, -BODY_HALF],
+        [0, BODY_HALF],
+      ])
+        put(x + dx, lo, z + dz);
+      put(x, hi, z);
+    };
+    this.cuts.length = 0;
+    const nO = r.sc.oPids.length;
+    const pids = [...r.sc.oPids, ...r.sc.dPids];
+    const B: V3 = { x: 0, y: 0, z: 0 };
+    for (const u of LEAD_AT) {
+      const t = r.t0 + (Math.max(r.t0, r.rel) - r.t0) * u;
+      const pl = pose(r.sc, t, false);
+      const j = pids.indexOf(r.star);
+      const s = toWorld(j < 0 ? pl.ball : j < nO ? pl.o[j] : pl.d[j - nO], r.sc.dir);
+      const men = [pl.ball, ...(r.other >= 0 ? [r.other < nO ? pl.o[r.other] : pl.d[r.other - nO]] : [])];
+      for (const p of [s, ...men.map((m) => toWorld(m, r.sc.dir))]) man(sx(p), sz(p), 3, 6.6 + HEAD_ROOM);
+      const w = r.kind === 'block' ? 0 : smooth(clamp((t - r.rel + FLIGHT_LEAD) / FLIGHT_LEAD, 0, 1));
+      const drawn = (x: number, y: number, z: number) => put(sx(s) + (x - sx(s)) * w, 4.4 + (y - 4.4) * w, sz(s) + (z - sz(s)) * w);
+      if (w > 0) {
+        drawn(r.rim.x, RIM_H + 0.6, r.rim.z);
+        if (r.flight) for (const a of ARC_AT) drawn(shotAt(r.flight, a, B).x, B.y, B.z);
+      }
+      this.cuts.push(n);
+    }
+    const up = r.dunk ? 3 : r.kind === 'block' ? 2.4 : 1.2;
+    for (const at of r.from ? [r.from, r] : [r]) man(at.x, at.z, 4.4, 6.6 + up + HEAD_ROOM);
+    if (r.kind === 'block') put(r.x, RIM_H, r.z);
+    else {
+      put(r.rim.x, RIM_H + 0.6, r.rim.z);
+      put(r.rim.x, RIM_H - 2.2, r.rim.z);
+    }
+    if (r.flight) for (const u of ARC_AT) put(shotAt(r.flight, u, B).x, B.y, B.z);
+    if (r.other >= 0) {
+      const f = r.sc.frames[Math.min(r.k + 1, r.sc.frames.length - 1)];
+      const p = toWorld(r.other < nO ? f.o[r.other] : f.d[r.other - nO], r.sc.dir);
+      man(sx(p), sz(p), 3.5, 8);
+    }
+    this.cuts.push(n);
+  }
+
+  /** The safe area of a picture this shape and this many px high: clear of the lower third and the bug (see THIRD_PX). */
+  private safe(aspect: number, high: number): Safe {
+    const wide = aspect * high;
+    const s = this.sa;
+    s.tr = -1 + (2 * THIRD_PX[0]) / wide;
+    s.tt = Math.min(-0.2, -1 + (2 * THIRD_PX[1]) / high);
+    s.br = -1 + (2 * BUG_PX[0]) / wide;
+    s.bb = Math.max(0.2, 1 - (2 * BUG_PX[1]) / high);
+    return s;
+  }
+
+  /**
    * Where a replay's camera stands: past the baseline and low, nearer the camera's side than the man
    * (and clear of the basket's post); on the near side's apron, low, up the floor of the man or (a man in
    * the corner) down it; over the board, looking down on the rim; on the floor under the basket, looking
-   * up; beside the main camera on its gantry, a long lens; or low and close on him where nobody stands between.
+   * up; beside the main camera on its gantry, a long lens; or low and close on him where nobody stands
+   * between: at the rim in front of his face, from range (or a face that can't be seen with the basket)
+   * over his shoulder.
    */
-  private seatFor(cam: ReelCam, sc: Script, k: number, x: number, z: number, rim: { x: number; z: number }): V3 {
+  private seatFor(cam: ReelCam, r: Reel): V3 {
+    const { x, z, rim } = r;
     const e = rim.x < 0 ? -1 : 1;
+    r.back = false;
     if (cam === 'base') return { x: e * (MID + 2.5), y: 3.6, z: clamp(z + 9, 13, 24) };
     if (cam === 'side') {
       const up = x + e * SIDE_OFF;
@@ -429,17 +726,47 @@ export class Director {
     }
     if (cam === 'rim') return { x: e * (MID - 4.7), y: 15.6, z: 3.6 };
     if (cam === 'floor') return { x: e * (MID + 1), y: 1.1, z: 7 };
-    if (cam === 'slash') return { x: e * 6, y: 31, z: 82 };
-    // (he went at the basket: his face is toward it, and so is the camera's first choice)
-    const f = sc.frames[k];
+    // (as high as the main camera, beside it: lower, its picture would take in the side of the platform's cut in the stands)
+    if (cam === 'slash') return { x: e * 6, y: 36, z: 81 };
+    const f = r.sc.frames[r.k];
     const others: number[] = [];
     for (const p of [...f.o, ...f.d]) {
-      const w = toWorld(p, sc.dir);
+      const w = toWorld(p, r.sc.dir);
       if (Math.hypot(sx(w) - x, sz(w) - z) > 0.5) others.push(sx(w), sz(w));
     }
-    const at = { x, z: z + TIGHT_OFF };
-    clearSeat(x, z, Math.atan2(rim.x - x, rim.z - z), others, others.length / 2, TIGHT_OFF, at);
-    return { x: at.x, y: 5.2, z: at.z };
+    // (he went at the basket: his face is toward it, and so is the camera's first choice)
+    if (Math.hypot(x - rim.x, z - rim.z) <= SHOULDER_FROM) {
+      const at = { x, z: z + TIGHT_OFF };
+      clearSeat(x, z, Math.atan2(rim.x - x, rim.z - z), others, others.length / 2, TIGHT_OFF, at);
+      const seat = { x: at.x, y: 5.2, z: at.z };
+      if (this.need(seat) <= this.widest('tight')) return seat;
+    }
+    // over his shoulder: behind him and to one side, so he hides none of the flight, the rim past him; the
+    // seat that holds it all tightest, with nobody in front of him or the rim and its back to the near side's dark
+    r.back = true;
+    const back = Math.atan2(x - rim.x, z - rim.z);
+    const most = this.widest('tight');
+    const all = [...others, x, z];
+    const seat = { x: 0, y: SHOULDER_Y, z: 0 };
+    const best = { x: x, y: SHOULDER_Y, z: z + SHOULDER_OFF[0] };
+    let low = Infinity;
+    for (const off of SHOULDER_OFF)
+      for (const turn of SHOULDER_TURN)
+        for (const way of [-1, 1]) {
+          const a = back + way * turn;
+          seat.x = clamp(x + Math.sin(a) * off, -SEAT_X, SEAT_X);
+          seat.z = clamp(z + Math.cos(a) * off, SEAT_Z[0], SEAT_Z[1]);
+          const need = this.need(seat);
+          const [lx, lz] = [(rim.x + x) / 2 - seat.x, (rim.z + z) / 2 - seat.z];
+          let cost = need / most + (need > most ? 10 : 0) + Math.max(0, lz / (Math.hypot(lx, lz) || 1)) * 1.5;
+          if (blocked(x, z, seat.x, seat.z, others, others.length / 2)) cost += 3;
+          if (blocked(rim.x, rim.z, seat.x, seat.z, all, all.length / 2)) cost += 2;
+          if (cost < low) {
+            low = cost;
+            [best.x, best.z] = [seat.x, seat.z];
+          }
+        }
+    return best;
   }
 
   /** A picture this many degrees across, as the camera's own (top to bottom) in a frame of this shape. */
@@ -487,13 +814,70 @@ export class Director {
   }
 
   /**
+   * What the replay must show this frame, into `pts` (x, y, z each; how many numbers): the man (`s`, his
+   * chest, and over his head) and the ball (after a shot's moment or a slam until it is out of the net, after a
+   * block until it is well away); for a shot
+   * the basket and the ball's flight to it, drawn out from him over FLIGHT_LEAD before the release (so
+   * nothing enters the picture's sums in one frame); the other man (a block's shooter, an and-one's foul)
+   * where the play has him.
+   */
+  private must(r: Reel, s: V3, head: V3 | null, ball: V3): number {
+    const P = this.pts;
+    let n = 0;
+    const put = (x: number, y: number, z: number) => {
+      P[n++] = x;
+      P[n++] = y;
+      P[n++] = z;
+    };
+    // (his shoulders whichever way he is seen, and over his head)
+    for (const [dx, dz] of [
+      [-BODY_HALF, 0],
+      [BODY_HALF, 0],
+      [0, -BODY_HALF],
+      [0, BODY_HALF],
+    ])
+      put(s.x + dx, s.y, s.z + dz);
+    put(head?.x ?? s.x, (head?.y ?? s.y + 2) + HEAD_ROOM, head?.z ?? s.z);
+    // (a dunk is done when the rim takes it, the bodies' DUNK_AT into the move; a block once the ball is well off his hand)
+    if (r.kind === 'block') {
+      const w = r.t < r.at ? 1 : 1 - smooth(clamp((Math.hypot(ball.x - s.x, ball.z - s.z) - SWAT_DONE) / SWAT_GO, 0, 1));
+      const top = (head?.y ?? s.y + 2) + HEAD_ROOM;
+      put(s.x + (ball.x - s.x) * w, top + (ball.y - top) * w, s.z + (ball.z - s.z) * w);
+    } else if (r.t < (r.dunk ? r.rel + DUNK_AT * this.pace : r.at)) put(ball.x, ball.y, ball.z);
+    else {
+      // (drawn in to the net as it drops to the floor)
+      const w = smooth(clamp((ball.y - BALL_DONE + BALL_GO) / BALL_GO, 0, 1));
+      put(r.rim.x + (ball.x - r.rim.x) * w, RIM_H - 2.2 + (ball.y - RIM_H + 2.2) * w, r.rim.z + (ball.z - r.rim.z) * w);
+    }
+    if (r.kind !== 'block') {
+      const w = smooth(clamp((r.t - r.rel + FLIGHT_LEAD) / FLIGHT_LEAD, 0, 1));
+      const drawn = (x: number, y: number, z: number) => put(s.x + (x - s.x) * w, s.y + (y - s.y) * w, s.z + (z - s.z) * w);
+      drawn(r.rim.x, RIM_H + 0.6, r.rim.z);
+      drawn(r.rim.x, RIM_H - 2.2, r.rim.z);
+      const B: V3 = { x: 0, y: 0, z: 0 };
+      if (r.flight) for (const u of ARC_AT) drawn(shotAt(r.flight, u, B).x, B.y, B.z);
+    }
+    const pl = this.stage.play;
+    if (r.other >= 0 && pl) {
+      const nO = r.sc.oPids.length;
+      const p = toWorld(r.other < nO ? pl.o[r.other] : pl.d[r.other - nO], r.sc.dir);
+      put(sx(p), 3.5, sz(p));
+      put(sx(p), 8, sz(p));
+    }
+    return n;
+  }
+
+  /**
    * The replay's camera: low behind the basket on the man and the rim over him, low on the near side on
    * the ball and the rim it is going at, or tight on the man (on the shoulder). `star`: his chest (null: he
-   * isn't on the floor).
+   * isn't on the floor). Whatever it frames, what the replay must show is held in the picture clear of the
+   * lower third and the bug (`hold`); `high`: the picture's height (px), which says how much of it they cover.
    */
-  aimReel(cam: PerspectiveCamera, star: V3 | null, head: V3 | null, ball: Vector3, aspect: number, real: number) {
+  aimReel(cam: PerspectiveCamera, star: V3 | null, head: V3 | null, ball: Vector3, aspect: number, real: number, high: number) {
     const r = this.reel!;
     const s = star ?? ball;
+    this.aspect = aspect;
+    this.high = high;
     let tx: number;
     let ty: number;
     let tz: number;
@@ -530,6 +914,13 @@ export class Director {
       ty = 4.5 + Math.max(0, ball.y - 9) * 0.3;
       tz = s.z + (r.rim.z - s.z) * 0.4;
       span = clamp(Math.hypot(s.x - r.rim.x, s.z - r.rim.z) * 0.5 + 11, 12, 24);
+    } else if (r.back) {
+      // (over his shoulder: past his head toward the rim, the flight between them)
+      const face = head ? head.y : s.y + 2;
+      tx = s.x + (r.rim.x - s.x) * 0.4;
+      ty = face + (RIM_H + 1.5 - face) * 0.5;
+      tz = s.z + (r.rim.z - s.z) * 0.4;
+      span = 9;
     } else {
       // (on him, from his waist to over his head; at the rim on his way up, the rim too)
       const w = r.t < r.at + 120 ? clamp(1 - (Math.hypot(s.x - r.rim.x, s.z - r.rim.z) - 4) / 8, 0, 1) * 0.35 : 0;
@@ -539,15 +930,30 @@ export class Director {
       tz = s.z + (r.rim.z - s.z) * w;
       span = 6.6 + w * 14;
     }
-    const k = this.set ? 1 - Math.exp(-real / (r.cam === 'side' ? 170 : 210)) : 1;
+    // the camera's own picture, turned and opened out only as much as holds what must be seen
+    const n = this.must(r, s, head, ball);
+    const sa = this.safe(aspect, high);
+    const most = this.widest(r.cam);
+    const T = { x: tx, y: ty, z: tz };
+    const d = Math.hypot(r.seat.x - tx, r.seat.y - ty, r.seat.z - tz);
+    const own = (clamp((2 * Math.atan(span / 2 / d) * 180) / Math.PI / Math.min(1, aspect), 9, WIDEST[r.cam]) * Math.PI) / 360;
     const L = this.look;
-    L.x += (tx - L.x) * k;
-    L.y += (ty - L.y) * k;
-    L.z += (tz - L.z) * k;
-    const d = Math.hypot(r.seat.x - L.x, r.seat.y - L.y, r.seat.z - L.z);
-    const want = clamp((2 * Math.atan(span / 2 / d) * 180) / Math.PI / Math.min(1, aspect), 9, 48);
-    this.fov = this.set ? this.fov + (want - this.fov) * (1 - Math.exp(-real / 300)) : want;
+    // (off the lower third and the bug all the way across: room for the easing to lag in)
+    limits(r.seat, null, 1, this.pts, n, aspect, sa, ROOM);
+    const A = hold(r.seat, T, Math.tan(own), this.pts, n, aspect, most, this.aim, ROOM);
+    // eased there: the look on the camera's own time, the width out quickly and back in slowly
+    const k = this.set ? 1 - Math.exp(-real / (r.cam === 'side' ? 170 : 210)) : 1;
+    L.x += (A.x - L.x) * k;
+    L.y += (A.y - L.y) * k;
+    L.z += (A.z - L.z) * k;
+    const want = (2 * Math.atan(A.tan) * 180) / Math.PI;
+    this.fov = this.set ? this.fov + (want - this.fov) * (1 - Math.exp(-real / (want > this.fov ? 90 : 300))) : want;
     this.set = true;
+    // and what the easing has left behind is held anyway, at the picture's edge
+    limits(r.seat, L, Math.tan((this.fov * Math.PI) / 360), this.pts, n, aspect, sa, 0);
+    hold(r.seat, L, Math.tan((this.fov * Math.PI) / 360), this.pts, n, aspect, most, A);
+    [L.x, L.y, L.z] = [A.x, A.y, A.z];
+    this.fov = (2 * Math.atan(A.tan) * 180) / Math.PI;
     // (the tight camera and the floor's are held by hand; the board's is bolted on; the others are on heads, an operator's hand on them)
     const hand = r.cam === 'tight' || r.cam === 'floor' ? 1 : r.cam === 'rim' ? 0 : 0.4;
     cam.fov = this.fov;

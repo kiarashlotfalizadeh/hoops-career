@@ -1,6 +1,7 @@
 // What the ball, the glass and the lights round the board are made of. The ball's leather is pebbled: a
 // tile of pebbles is painted on a canvas, and the leather's material reads it from three sides (so the
-// ball needs no map of its own), tipping the light on every pebble and dulling the dips between them. The
+// ball needs no map of its own), tipping the light on every pebble and dulling the dips between them; its
+// edge catches a little of the lamps, so it keeps its round against whatever is behind it. The
 // glass is clear but for what it mirrors: the lamps show on it however little of the pane itself does.
 import {
   CanvasTexture,
@@ -23,6 +24,13 @@ const PEBBLE_PX = 7.2;
 const TILES_FT = 2.3;
 /** How far a pebble tips the light. */
 const DEPTH = 0.9;
+/**
+ * A soft light round the ball's edge, the lamps' warm white caught at its rim (this strong, this tight to it): the
+ * ball keeps its round against the wood, a jersey or the dark crowd behind it, without glowing.
+ */
+const EDGE = 0.22;
+const EDGE_TIGHT = 2.6;
+const EDGE_TINT = '1.0, 0.9, 0.78';
 
 /** A number in 0..1 from `i`, the same every time. */
 const rnd = (i: number) => {
@@ -113,6 +121,13 @@ export function leather(fill: string, skin: Texture): MeshStandardMaterial {
         '#include <normal_fragment_maps>',
         /* glsl */ `#include <normal_fragment_maps>
         normal = normalize(normalMatrix * normalize(ballN - pebLean * ${DEPTH.toFixed(2)}));`,
+      )
+      .replace(
+        '#include <opaque_fragment>',
+        /* glsl */ `// (its edge, where the face turns away from the camera: lit a little, broken up by the pebbles)
+        float ballEdge = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), ${EDGE_TIGHT.toFixed(2)});
+        outgoingLight += vec3(${EDGE_TINT}) * ballEdge * ${EDGE.toFixed(2)};
+        #include <opaque_fragment>`,
       );
   };
   mat.customProgramCacheKey = () => 'leather';
