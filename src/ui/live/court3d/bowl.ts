@@ -50,6 +50,8 @@ export const TOP_Y = Y0 + ROWS * RISE;
 const WALL = 54;
 const FASCIA = 49;
 const SET = 24;
+/** How high a building's wall along the top of the lower bowl stands over the top row's step, where it has one (Venue.fascia). */
+const FASCIA_UP = 3.6;
 /** Up it (ft): the suites' soffit, the top of their windows, the top of the band the ribbon is on, where the glass over it ends. */
 const SOFFIT = 37.2;
 const SILL = 43.7;
@@ -62,8 +64,8 @@ const UP_DEEP = 2.7;
 const UP_RISE = 2.0;
 /** How tall a row of its people's picture stands (ft): someone on his feet with his arms up fills it. */
 const UP_TALL = 4.4;
-/** How many seats one turn of that picture is across. */
-const UP_SEATS = 21;
+/** How many seats one turn of that picture is across (two runs of twenty-one, each with an aisle: no row repeats inside 80 ft). */
+const UP_SEATS = 42;
 /** How high the walls go (the roof's deck). */
 export const ROOF_TOP = 106;
 /** A tunnel out through the stands: the rows it takes (its floor is the first's step, its roof the step after the last), half its width, and the aisles (ft along a side from its middle) that have one. */
@@ -86,7 +88,7 @@ const AISLE_STAND = 0.06;
 /** The row of chairs on the floor along the near side, and in the far corners past the benches. */
 const COURT_Z = 34.6;
 /** How many ft of each lit picture one turn of it covers. */
-const DECK_FT = 40;
+const DECK_FT = 80;
 const SUITE_FT = 96;
 const SHOP_FT = 128;
 
@@ -255,8 +257,8 @@ function paintDeck(cv: HTMLCanvasElement, seat: string) {
   const half = h / 2;
   const tone = (hex: string, k: number) => `#${new Color(hex).multiplyScalar(k).getHexString()}`;
   for (let i = 0; i < UP_SEATS; i++) {
-    // (an aisle a turn)
-    if (i === 10) continue;
+    // (an aisle every twenty-one seats)
+    if (i % 21 === 10) continue;
     const x = i * sw;
     const r = [rnd(), rnd(), rnd(), rnd(), rnd()];
     const wear = r[0] < 0.45 ? tone(seat, 1.2 + r[1] * 0.9) : FAR_WEAR[Math.floor(r[1] * FAR_WEAR.length)];
@@ -306,21 +308,28 @@ function paintDeck(cv: HTMLCanvasElement, seat: string) {
   }
 }
 
-/** The suites' front: bays of glass between piers, each lit its own way (warm and low, a screen's blue, one or two dark), people at the rail inside, a counter's lamps behind them. */
-function paintSuites(cv: HTMLCanvasElement) {
+/**
+ * The suites' front: bays of glass between piers, each lit its own way (warm and low, a screen's blue, one or
+ * two dark), people at the rail inside, a counter's lamps behind them. The building's own (Venue.suites): how
+ * many bays to a run, the frames' colour (black, steel or its own colour), and how warm the light inside is.
+ */
+function paintSuites(cv: HTMLCanvasElement, look: Venue['suites'] = { frame: '#08090a', light: 0, bays: 8 }) {
   const ctx = cv.getContext('2d')!;
   const { width: w, height: h } = cv;
-  ctx.fillStyle = '#0d0e10';
+  const pier = new Color(look.frame).multiplyScalar(0.55);
+  ctx.fillStyle = `#${pier.getHexString()}`;
   ctx.fillRect(0, 0, w, h);
-  let n = 23;
+  let n = 23 + look.bays;
   const rnd = () => ((n = (n * 16807) % 2147483647) & 0xffff) / 0xffff;
-  const bays = 8;
+  const bays = look.bays;
   const bw = w / bays;
+  // (how many of the bays are lit warm: a hall of lamps, half and half, or screens and cool white)
+  const warmth = [0.85, 0.55, 0.2][look.light];
   for (let b = 0; b < bays; b++) {
     const x = b * bw + bw * 0.04;
     const gw = bw * 0.92;
     const dark = rnd() < 0.14;
-    const warm = rnd();
+    const warm = rnd() * (0.7 / warmth);
     const g = ctx.createLinearGradient(0, h * 0.08, 0, h * 0.94);
     if (dark) {
       g.addColorStop(0, '#15171b');
@@ -358,10 +367,12 @@ function paintSuites(cv: HTMLCanvasElement) {
       }
     }
     // (the glass's posts, and the rail along its foot)
-    ctx.fillStyle = '#08090a';
-    for (let i = 1; i < 4; i++) ctx.fillRect(x + (gw * i) / 4 - 1, h * 0.08, 2, h * 0.86);
-    ctx.fillStyle = '#2a2c30';
+    ctx.fillStyle = look.frame;
+    const posts = bays > 8 ? 3 : 4;
+    for (let i = 1; i < posts; i++) ctx.fillRect(x + (gw * i) / posts - 1, h * 0.08, 2, h * 0.86);
+    ctx.fillStyle = `#${pier.clone().multiplyScalar(1.6).getHexString()}`;
     ctx.fillRect(x, h * 0.8, gw, h * 0.025);
+    ctx.fillRect(x, h * 0.06, gw, h * 0.02);
   }
 }
 
@@ -371,13 +382,35 @@ const SIGNS = ['#e8b04a', '#d8574a', '#5aa0d8', '#e9e2cf'];
 /**
  * The concourse's wall behind the walkway: counters under lit signs (bars of light, no words, in `signs`:
  * the building's colours), doorways, plain wall with a section's number between them on a plate (`plate`),
- * people walking past against the light. `seed` lays out the building's own run of them.
+ * people walking past against the light. `seed` lays out the building's own run of them; `wall` is what the
+ * wall is made of (Venue.concourse: dark, brick, pale stone, timber, or `paint` deep).
  */
-function paintShops(cv: HTMLCanvasElement, signs = SIGNS, plate = '#3a332c', seed = 0) {
+function paintShops(cv: HTMLCanvasElement, signs = SIGNS, plate = '#3a332c', seed = 0, wall: Venue['concourse'] = 'dark', paint = '#3a332c') {
   const ctx = cv.getContext('2d')!;
   const { width: w, height: h } = cv;
-  ctx.fillStyle = '#211c18';
+  ctx.fillStyle = { dark: '#211c18', brick: '#4a2519', stone: '#6a645a', timber: '#5e3d22', paint: `#${new Color(paint).multiplyScalar(0.42).getHexString()}` }[wall];
   ctx.fillRect(0, 0, w, h);
+  // (the wall's own face: courses of brick, blocks of stone, boards of timber; a painted one has a line along its foot)
+  if (wall === 'brick') {
+    ctx.fillStyle = 'rgba(20, 10, 6, 0.55)';
+    const c = h / 14;
+    for (let y = 0, row = 0; y < h; y += c, row++) {
+      ctx.fillRect(0, y, w, 1);
+      for (let x = (row % 2) * c; x < w; x += c * 2) ctx.fillRect(x, y, 1, c);
+    }
+  } else if (wall === 'stone') {
+    ctx.fillStyle = 'rgba(30, 26, 20, 0.45)';
+    for (let y = h / 3; y < h; y += h / 3) ctx.fillRect(0, y, w, 1);
+    for (let x = 0, k = 0; x < w; x += h * 0.9, k++) ctx.fillRect(x + (k % 2) * h * 0.45, 0, 1, h);
+  } else if (wall === 'timber') {
+    for (let x = 0, k = 0; x < w; x += 6, k++) {
+      ctx.fillStyle = k % 3 === 0 ? 'rgba(255, 210, 160, 0.08)' : k % 3 === 1 ? 'rgba(20, 10, 4, 0.25)' : 'rgba(0, 0, 0, 0)';
+      ctx.fillRect(x, 0, 4, h);
+    }
+  } else if (wall === 'paint') {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.fillRect(0, h * 0.92, w, h * 0.03);
+  }
   let n = 41 + (seed % 9973);
   const rnd = () => ((n = (n * 16807) % 2147483647) & 0xffff) / 0xffff;
   const bays = 8;
@@ -464,6 +497,35 @@ function paintDoor(cv: HTMLCanvasElement) {
   ctx.fillRect(0, 0, w, h);
 }
 
+/** How many ft of the wall along the top of the lower bowl one turn of its picture covers, and how much of its light it keeps (paint under a dimmed house). */
+const BAND_FT = 72;
+const BAND_TONE = 0.55;
+
+/** That wall's picture: its colour (a shade toward grey), a pinstripe top and foot, and the team's name along it twice a turn (light letters on a dark wall, dark on a light one). */
+function paintBand(cv: HTMLCanvasElement, color: string, name: string) {
+  const ctx = cv.getContext('2d')!;
+  const { width: w, height: h } = cv;
+  const c = new Color(color);
+  const grey = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+  c.lerp(new Color(grey, grey, grey), 0.25);
+  ctx.fillStyle = `#${c.getHexString()}`;
+  ctx.fillRect(0, 0, w, h);
+  const ink = grey > 0.4 ? '#1c1d20' : '#ece7dc';
+  ctx.fillStyle = ink;
+  ctx.globalAlpha = 0.7;
+  ctx.fillRect(0, h * 0.1, w, Math.max(1, h * 0.04));
+  ctx.fillRect(0, h * 0.86, w, Math.max(1, h * 0.04));
+  ctx.globalAlpha = 0.9;
+  if (name) {
+    ctx.font = `800 ${Math.round(h * 0.56)}px "Archivo Variable", "Arial Narrow", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const text = name.toUpperCase().split('').join(String.fromCharCode(8202));
+    for (const x of [0.25, 0.75]) ctx.fillText(text, w * x, h * 0.52, w * 0.36);
+  }
+  ctx.globalAlpha = 1;
+}
+
 function paintExit(cv: HTMLCanvasElement) {
   const ctx = cv.getContext('2d')!;
   ctx.fillStyle = '#0f7a3e';
@@ -485,6 +547,13 @@ export class Bowl {
   readonly ribbons: { x: number; y: number; z: number; w: number; turn: number }[] = [];
   /** Points up in the upper deck (cameras go off there too). */
   readonly high: number[] = [];
+  /** Where a ribbon of lamps runs along the wall at the top of the lower bowl, in a building that has one (the boards make it). */
+  readonly fasciaRuns: { x: number; y: number; z: number; w: number; h: number; turn: number }[] = [];
+  /** That wall (shown in a building that has one: see fascia). */
+  private readonly band: Mesh;
+  private readonly bandMat: MeshLambertMaterial;
+  private readonly bandTex: CanvasTexture;
+  private readonly suiteTex: CanvasTexture;
   private readonly deck: CanvasTexture;
   private readonly shops: CanvasTexture;
   private readonly up = { value: 0 };
@@ -492,6 +561,9 @@ export class Bowl {
   private readonly concrete: MeshLambertMaterial;
   /** The walls' tops' colour with all its light, and how much of it the stands have now (see dim). */
   private readonly trimTone = new Color(1, 1, 1);
+  /** The edges of the aisles' steps, and their colour with all its light (Venue.aisles). */
+  private readonly steps: MeshLambertMaterial;
+  private readonly stepTone = new Color(0.45, 0.44, 0.38);
   private stands = 1;
   private lightTo = 1;
   /** The building's concrete (warm, plain or cool) and its house lights, as a tint on what is lit (the plain building's: none). */
@@ -511,11 +583,13 @@ export class Bowl {
     const glass = new Soup();
     const rail = new Soup();
     const spill = new Soup();
+    const nosing = new Soup();
     const doors = new Soup();
     const signs = new Soup();
     const suites = new Soup();
     const shops = new Soup();
     const deck = new Soup();
+    const band = new Soup();
     let n = 97;
     const rnd = () => ((n = (n * 16807) % 2147483647) & 0xffff) / 0xffff;
     const WARM = '#ffb060';
@@ -576,11 +650,20 @@ export class Bowl {
           const aisle = (k >= 0 ? k : -k - 1) % AISLE_EVERY === AISLE_FIRST;
           if (inTunnel(i, u) || well(i, u)) continue;
           if (aisle) {
-            // an aisle: a half step in each row, its edge marked
+            // an aisle: a half step in each row, its edges marked (in the building's own: Venue.aisles)
             const [a, b] = [u - SEAT / 2, u + SEAT / 2];
             const half = d0 + DEEP / 2;
             concrete.quad(P(s, a, y + RISE / 2, half), P(s, b, y + RISE / 2, half), P(s, b, y + RISE / 2, d1), P(s, a, y + RISE / 2, d1), '#5a5c63', l);
-            concrete.quad(P(s, a, y, half), P(s, b, y, half), P(s, b, y + RISE / 2, half), P(s, a, y + RISE / 2, half), '#8f8a72', l);
+            nosing.quad(P(s, a, y, half), P(s, b, y, half), P(s, b, y + RISE / 2, half), P(s, a, y + RISE / 2, half), '#ffffff', l * 0.8);
+            nosing.quad(
+              P(s, a, y + RISE / 2 + 0.01, half),
+              P(s, b, y + RISE / 2 + 0.01, half),
+              P(s, b, y + RISE / 2 + 0.01, half + 0.3),
+              P(s, a, y + RISE / 2 + 0.01, half + 0.3),
+              '#ffffff',
+              l,
+            );
+            nosing.quad(P(s, a, y + 0.08, d0), P(s, b, y + 0.08, d0), P(s, b, y + 0.08, d0 + 0.3), P(s, a, y + 0.08, d0 + 0.3), '#ffffff', l);
             concrete.quad(P(s, a, y + 0.07, d0), P(s, b, y + 0.07, d0), P(s, b, y + 0.07, half), P(s, a, y + 0.07, half), '#5a5c63', l);
             // (now and then someone stood on it: on his way to his seat, or watching from there; more of them higher up)
             if (Math.abs(Math.sin(i * 12.9898 + k * 78.233 + s.k * 37.719) * 43758.5453) % 1 < AISLE_STAND * (0.4 + i / ROWS)) {
@@ -666,6 +749,15 @@ export class Bowl {
         concrete.quad(P(s, -e, TOP_Y, TOP + 0.3), P(s, e, TOP_Y, TOP + 0.3), P(s, e, TOP_Y + 1.1, TOP + 0.3), P(s, -e, TOP_Y + 1.1, TOP + 0.3), '#34363c', 0.75);
         glass.quad(P(s, -e, TOP_Y + 1.1, TOP + 0.3), P(s, e, TOP_Y + 1.1, TOP + 0.3), P(s, e, TOP_Y + 3.5, TOP + 0.3), P(s, -e, TOP_Y + 3.5, TOP + 0.3), '#ffffff');
         rail.bar(P(s, -e, TOP_Y + 3.55, TOP + 0.3), P(s, e, TOP_Y + 3.55, TOP + 0.3), 0.16, 0.16, '#8d9199');
+        // (in a building that has one, a wall in front of that glass in the rail's colour, darker at its foot, a cap
+        // along its top; a ribbon of lamps along it in some: Venue.fascia)
+        {
+          const [y0, y1, d, f] = [TOP_Y - 0.2, TOP_Y + FASCIA_UP, TOP + 0.2, e + 0.2];
+          band.quad(P(s, -f, y0, d), P(s, f, y0, d), P(s, f, y1, d), P(s, -f, y1, d), '#ffffff', [0.7, 0.7, 1, 1], [-f / BAND_FT, 0, f / BAND_FT, 1]);
+          band.quad(P(s, -f, y1, d), P(s, f, y1, d), P(s, f, y1, d + 0.45), P(s, -f, y1, d + 0.45), '#ffffff', 0.72, [0.01, 0.5, 0.02, 0.5]);
+          const mid = P(s, 0, TOP_Y + FASCIA_UP / 2, d - 0.04);
+          this.fasciaRuns.push({ x: mid[0], y: mid[1], z: mid[2], w: 2 * f, h: FASCIA_UP - 1, turn: s.turn });
+        }
         for (let u = -e + 3; u < e - 3; u += 2.3) {
           if (rnd() > 0.42) continue;
           const [x, , z] = P(s, u + (rnd() - 0.5) * 0.8, 0, TOP + 1.9 + rnd() * 0.8);
@@ -702,7 +794,7 @@ export class Bowl {
           // (a row: its people's picture stood up along the back of its step, each row's run of it begun somewhere else)
           const back = r * UP_DEEP + 1.3;
           const y = BAND + r * UP_RISE + 0.75;
-          const off = Math.floor(rnd() * 21) / 21 + r * 3;
+          const off = Math.floor(rnd() * UP_SEATS) / UP_SEATS + r * 3;
           const light = 0.95 - 0.5 * (r / (UP_ROWS - 1));
           deck.quad(
             P(s, flo - back, y, u0 + back),
@@ -858,7 +950,15 @@ export class Bowl {
     this.trim = keep(new MeshLambertMaterial({ vertexColors: true, side: DoubleSide }));
     this.trim.onBeforeCompile = unshadowed;
     add(trim, this.trim);
-    this.deck = texture(keep, 1024, 256, (cv) => paintDeck(cv, '#2a2c33'));
+    this.bandTex = texture(keep, 1024, 64, (cv) => paintBand(cv, '#3a3c42', ''));
+    this.bandMat = keep(new MeshLambertMaterial({ map: this.bandTex, vertexColors: true, side: DoubleSide }));
+    this.bandMat.onBeforeCompile = unshadowed;
+    this.band = add(band, this.bandMat);
+    this.steps = keep(new MeshLambertMaterial({ vertexColors: true, side: DoubleSide }));
+    this.steps.onBeforeCompile = unshadowed;
+    this.fine.push(add(nosing, this.steps));
+    this.band.visible = false;
+    this.deck = texture(keep, 2048, 256, (cv) => paintDeck(cv, '#2a2c33'));
     const rows = picture(deck, this.deck, DECK_GLOW).material as MeshBasicMaterial;
     rows.alphaTest = 0.5;
     // (each seat's person is drawn sat, the picture's lower half, or on his feet, its upper: the more of them the
@@ -876,7 +976,8 @@ export class Bowl {
       );
     };
     rows.customProgramCacheKey = () => 'upperRows';
-    picture(suites, texture(keep, 1024, 96, paintSuites), SUITE_GLOW);
+    this.suiteTex = texture(keep, 1024, 96, (cv) => paintSuites(cv));
+    picture(suites, this.suiteTex, SUITE_GLOW);
     this.shops = texture(keep, 1024, 96, (cv) => paintShops(cv));
     picture(shops, this.shops, SHOP_GLOW);
     picture(doors, texture(keep, 128, 96, paintDoor, false), DOOR_GLOW);
@@ -910,10 +1011,13 @@ export class Bowl {
   /**
    * The building's colour: the ground round the floor, the boards' light on the ground; and its own
    * (`venue`: the home team's building) the walls' padded tops, the empty seats of the upper deck's
-   * picture, the concrete's tone and the house lights' colour on what is lit.
+   * picture, the concrete's tone and the house lights' colour on what is lit, what its concourse's wall is
+   * made of, its suites' glass, and the wall along the top of its lower bowl if it has one.
    */
   paint(board: string, venue?: Venue) {
-    const key = venue ? `${board}|${venue.seed}|${venue.rail}|${venue.seats[2]}|${venue.concrete}|${venue.house}` : board;
+    const key = venue
+      ? `${board}|${venue.seed}|${venue.rail}|${venue.seats[2]}|${venue.concrete}|${venue.house}|${venue.fascia}|${venue.concourse}|${JSON.stringify(venue.suites)}|${venue.paint}|${venue.aisles}`
+      : board;
     if (key === this.board) return;
     this.board = key;
     const c = this.trimTone.set(venue?.rail ?? board);
@@ -928,8 +1032,17 @@ export class Bowl {
     paintDeck(this.deck.image as HTMLCanvasElement, `#${seat.getHexString()}`);
     this.deck.needsUpdate = true;
     // (the concourse's signs in its colours, lit, and white; its section plates in its colour, deep)
-    paintShops(this.shops.image as HTMLCanvasElement, venue ? [...venue.signs, '#e9e2cf'] : SIGNS, venue?.plate, venue?.seed);
+    paintShops(this.shops.image as HTMLCanvasElement, venue ? [...venue.signs, '#e9e2cf'] : SIGNS, venue?.plate, venue?.seed, venue?.concourse, venue?.paint);
     this.shops.needsUpdate = true;
+    // (its suites, and the wall along the top of its lower bowl if it has one)
+    paintSuites(this.suiteTex.image as HTMLCanvasElement, venue?.suites);
+    this.suiteTex.needsUpdate = true;
+    this.band.visible = !!venue && venue.fascia !== 'glass';
+    paintBand(this.bandTex.image as HTMLCanvasElement, venue?.rail ?? board, venue?.baselines[1] ?? '');
+    this.bandTex.needsUpdate = true;
+    const step = this.stepTone.set(venue?.aisles ?? '#8f8a72');
+    const stepGrey = Math.max(0.2126 * step.r + 0.7152 * step.g + 0.0722 * step.b, 0.02);
+    step.lerp(new Color(stepGrey, stepGrey, stepGrey), 0.2).multiplyScalar(0.62);
     this.concreteTone.set(venue?.concrete ?? '#ffffff');
     // (the lit faces are painted under the plain building's lights: a warm or a cool house is that much off it)
     const plain = new Color(HOUSE_PLAIN);
@@ -950,9 +1063,11 @@ export class Bowl {
     this.stands = stands;
     this.concrete.color.copy(this.concreteTone).multiplyScalar(stands);
     this.trim.color.copy(this.trimTone).multiplyScalar(stands);
+    this.bandMat.color.setScalar(BAND_TONE * stands);
+    this.steps.color.copy(this.stepTone).multiplyScalar(stands);
   }
 
-  /** A device that can't keep up: no glass, rails, nor light spilt on the steps and the ground. */
+  /** A device that can't keep up: no glass, rails, nor light spilt on the steps and the ground, nor the aisles' marked edges. */
   shed(level: 0 | 1 | 2) {
     for (const o of this.fine) o.visible = level < 1;
   }

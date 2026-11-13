@@ -14,6 +14,7 @@
 //   &mood=1 (the house lights down, as for the open, a timeout and the clutch: with a shot or an eye)
 //   &tip=1 (the ten lined up for the tip, the ball in the centre circle: with no eye or shot, the broadcast's opening camera)
 //   &home=BOS&vs=MIL (whose building, and who visits: abbreviations; Washington and Milwaukee by default)  &neutral=1 (the Cup final's floor)
+//   &flat=1 (no 3D: the floor as the 2D court paints it, sideways, for that building)
 import { PerspectiveCamera, type Scene, type WebGLRenderer } from 'three';
 import { FRANCHISES } from '../../../src/core/teams';
 import { courtFloor, emptyStage, paintFloor, readPaints, venueOf, type Stage } from '../../../src/ui/live/Court';
@@ -140,6 +141,20 @@ function draw() {
   const w = innerWidth;
   const h = innerHeight;
   if (!w || !h) return;
+  if (q.has('flat')) {
+    // (the 2D court's floor: as Court.tsx paints it sideways, the paint let down into the wood, on its ink)
+    const k = Math.min(w / 110, h / 64);
+    const flat = document.createElement('canvas');
+    paintFloor(flat, { wide: true, k, w, h, top: 0, ox: 0, oy: 0 }, 1, floor, paints);
+    const still = document.getElementById('still') as HTMLCanvasElement;
+    still.width = w;
+    still.height = h;
+    const ctx = still.getContext('2d')!;
+    ctx.fillStyle = paints.ink;
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(flat, Math.round((w - flat.width) / 2), Math.round((h - flat.height) / 2));
+    return;
+  }
   scene.size(w, h, Math.min(2, devicePixelRatio));
   // (a few frames so the figures settle where they stand and the crowd is where `t` and `cheer` put it)
   for (let i = 0; i < 30; i++) {

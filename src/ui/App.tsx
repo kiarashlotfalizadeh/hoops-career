@@ -1,4 +1,5 @@
 import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { HashRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
 import {
   AlertCircle,
@@ -43,6 +44,7 @@ import { Moments } from './components/Moments';
 import { DigestHost } from './today/AwaySheet';
 import { QuickSearch } from './components/QuickSearch';
 import { applyAccent } from './teamColors';
+import { useToastHost } from './toastHost';
 import { haptic } from '../native';
 import { useChanged, useIndicator } from './motion';
 import { TABS, tabFor, type TabId } from './nav';
@@ -569,9 +571,11 @@ function Toasts() {
     if (simming) setStaleTo(Math.max(0, ...useStore.getState().toasts.map((t) => t.id)));
   }
   const dismiss = (id: number) => useStore.setState((s) => ({ toasts: s.toasts.filter((x) => x.id !== id) }));
-  const shown = toasts.filter((t) => t.id > staleTo).slice(-MAX_TOASTS);
-  return (
-    <div className="toasts" role="status" aria-live="polite">
+  // on the live page, at the court's top edge, the newest only (toastHost.ts)
+  const host = useToastHost();
+  const shown = toasts.filter((t) => t.id > staleTo).slice(host ? -1 : -MAX_TOASTS);
+  const list = (
+    <div className={`toasts${host ? ' in-court' : ''}`} role="status" aria-live="polite">
       {shown.map((t) => {
         const Icon = TOAST_ICON[t.tone];
         const body = (
@@ -594,6 +598,7 @@ function Toasts() {
       })}
     </div>
   );
+  return host ? createPortal(list, host) : list;
 }
 
 const scrollPositions = new Map<string, number>();

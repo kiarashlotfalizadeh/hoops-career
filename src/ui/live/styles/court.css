@@ -422,6 +422,28 @@
     padding: 0 12px;
   }
 }
+/* narrowest (beside a small phone's scorebug, sideways): the four share what room there is, a little
+   under 44px to the eye and never off the strip; each keeps the finger's 44px under it */
+@container lv-cb (max-width: 200px) {
+  .lv-cb-tp {
+    gap: 3px;
+    padding: 0 4px;
+  }
+  .lv-cb .lv-cb-tp .lv-cb-btn {
+    flex: 0 1 40px;
+    width: auto;
+    min-width: 32px;
+    padding: 0;
+  }
+  .lv-cb .lv-cb-tp .lv-cb-btn.fig {
+    font-size: 13px;
+  }
+  .lv-cb-tp .lv-cb-btn::after {
+    content: '';
+    position: absolute;
+    inset: -4px -2px;
+  }
+}
 /* (and an offer's buttons say it all: its words would only be cut short) */
 @container lv-cb (max-width: 260px) {
   .lv-cb-offer > .lv-cb-t {
@@ -919,6 +941,51 @@
 .lv[data-tip~='court'] .lv-stage {
   outline: 2px solid var(--ink);
   outline-offset: -2px;
+}
+
+/* ------------------------------------------------------------------ the toasts while the game is on
+   (toastHost.ts) A short plate in the court's top corner, over the far stands: off the players, off the
+   console, clear of the camera's buttons on the right (the 3D court's chip too), under the Replay bug
+   while it's up and under a coach mark that's up there. The newest only. */
+.lv-toasts {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 48px;
+  z-index: 7;
+  display: flex;
+  justify-content: flex-start;
+  pointer-events: none;
+}
+.lv-stage:has(.court-cam-kind) .lv-toasts {
+  right: 164px;
+}
+.lv-stage:has(.c3d-bug.on) .lv-toasts {
+  top: 42px;
+}
+.lv-stage:has(.lv-tip.at-top) .lv-toasts {
+  top: 64px;
+}
+.lv-toasts > .toasts.in-court {
+  position: static;
+  max-width: min(440px, 100%);
+  padding: 0;
+}
+.toasts.in-court > .toast {
+  width: auto;
+  max-width: 100%;
+  min-height: 0;
+  gap: 8px;
+  padding: 7px 13px 7px 10px;
+  background: var(--lv-plate-hi);
+  box-shadow: 0 6px 18px -10px rgba(0, 0, 0, 0.6);
+  font-size: 13px;
+  line-height: 1.25;
+  animation-name: toast-drop;
+}
+.toasts.in-court .toast-ic {
+  width: 16px;
+  height: 16px;
 }
 
 /* reduced motion: everything still appears, nothing moves or breathes */

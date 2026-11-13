@@ -6,8 +6,9 @@
 // his id, never a likeness. Beyond the puppet's bones he has leaves this file turns itself: his fingers,
 // his jaw and nose, his hair's swing, a bone at each shoulder (half way from chest to arm: see `girdle`)
 // and one down each forearm (the hand's turn spread along it), his brows and his lower lip. His head is
-// one of six kinds, each man off his kind (look.ts), and his face works: his jaw comes open on his teeth
-// in the air and when he shouts, his brows come down, his eyes blink. Close up the material draws his
+// one of six kinds, each man off his kind (look.ts), his face moulded to a shape of its own (FACE_SHAPE),
+// and his face works: his jaw comes open on his teeth in the air and when he shouts, his brows come down,
+// his eyes blink. Close up the material draws his
 // eyes itself (see EYES), and his head is lit by a lamp on the camera as well as the building's, so his
 // dark skin is a face with planes and not a shape (the material's uTone, uBlink, uIris, uEye). His skin
 // has a grain close up and a warm edge where a lamp's light leaves it (PORES, SKIN_WRAP), and goes to his
@@ -35,6 +36,7 @@ import {
   RingGeometry,
   Skeleton,
   Vector2,
+  Vector4,
   SkinnedMesh,
   SRGBColorSpace,
   Vector3,
@@ -448,6 +450,8 @@ const STUFF = {
   // (where he sweats: his brow, his shoulders)
   sweat: [0.47, 1, 0],
   scalp: [0.5, 1, 0],
+  // (the crown of a shaved head: it shines)
+  dome: [0.3, 1, 0],
   hand: [0.6, 1, 0],
   lip: [0.36, 1, 0],
   eye: [0.08, 1, 0],
@@ -631,12 +635,12 @@ function hairlineAt(round: number): number {
 }
 
 /** His eyes on the plane of his face (figure.py's EYE_X, EYE_Y, EYE_W): how far out each is, how high, its half width. */
-const EYE = [0.38, 0.066, 0.138] as const;
+const EYE = [0.38, 0.066, 0.152] as const;
 /** How far up its outer corner is tipped and how high its upper lid stands open, for the middling man (look.ts's tilt and open scale them). */
 const EYE_TILT = 0.012;
 const EYE_OPEN = 0.047;
 /** His iris: its half width and half height on that plane (a circle on him), and how far over the eye's middle it sits. */
-const IRIS = [0.06, 0.043, 0.008] as const;
+const IRIS = [0.064, 0.0455, 0.008] as const;
 
 /**
  * His head's picture, a point at a time: his skin with a face on it (eyes, brows, lips, the shade of
@@ -664,11 +668,11 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
   const lipUp: Rgb = [skin[0] * (0.84 - 0.1 * dark) + 0.02, skin[1] * (0.66 + 0.02 * dark), skin[2] * (0.67 + 0.04 * dark) + 0.01];
   const lipLow: Rgb = [skin[0] * (0.88 + 0.12 * dark) + 0.02 + 0.04 * dark, skin[1] * (0.74 + 0.04 * dark), skin[2] * (0.75 + 0.06 * dark) + 0.01 + 0.02 * dark];
   // (his own face: how full his lips are, how his eyes are set: see look.ts)
-  const full = 0.82 + 0.4 * look.face.lips;
+  const full = 0.92 + 0.36 * look.face.lips;
   const tiltK = EYE_TILT * look.face.tilt;
   const openK = EYE_OPEN * look.face.open;
   // (how much of a shaven beard's shade shows: most on a lighter skin under darker hair)
-  const shadow = 0.22 * (1 - 0.6 * dark);
+  const shadow = 0.13 * (1 - 0.6 * dark);
   const style = STYLES[look.style].name;
   // where each column and row of the picture looks from the head's middle
   const cols = Array.from({ length: w }, (_v, i) => {
@@ -725,6 +729,11 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
       let fineV = -1;
       const fine = () => (fineV < 0 ? (fineV = noise(nx * 90 + nz * 61, ny * 90 + nz * 37)) : fineV);
 
+      // (how near a point under his jaw is to where his head goes into his neck: what grows on his jaw thins out before
+      // it gets there, or the edge of his head would show round his throat as a line; ft, from his head's middle and
+      // the neck's as figure.py builds them)
+      const wy = ny * 0.4;
+      const seam = wy > -0.22 ? 1 : 1 - sstep(-0.22, -0.3, wy) * (1 - sstep(-0.02, 0.2, Math.hypot((nx * 0.285) / 0.215, (nz * 0.35 + 0.08) / 0.18) - 1));
       if (nz > 0.1) {
         // his face, on its plane (figure.py's face_at)
         const fz = Math.max(nz, 0.3);
@@ -744,36 +753,37 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
         if (py > 0.25) to([skin[0] * 1.1, skin[1] * 1.08, skin[2] * 1.05], 0.34 * bump(px, py, 0, 0.52, 0.42, 0.17));
         if (py < 0.3 && py > -0.3 && apx < 0.2) to([skin[0] * 1.1, skin[1] * 1.08, skin[2] * 1.05], 0.3 * bump(px, py, 0, -0.03, 0.032, 0.16));
         if (py < -0.7) to([skin[0] * 1.06, skin[1] * 1.04, skin[2] * 1.02], 0.25 * bump(px, py, 0, -0.86, 0.14, 0.08));
-        if (py < 0.3 && py > -0.75) to([skin[0] * 1.05, skin[1] * 0.87, skin[2] * 0.84], 0.4 * bump(apx, py, 0.56, -0.24, 0.24, 0.2) + 0.4 * bump(px, py, 0, -0.25, 0.12, 0.09));
+        // (a flush is rose, not orange: it takes green out of the skin more than blue)
+        if (py < 0.3 && py > -0.75) to([skin[0] * 1.04, skin[1] * 0.86, skin[2] * 0.9], 0.32 * bump(apx, py, 0.56, -0.24, 0.24, 0.2) + 0.36 * bump(px, py, 0, -0.25, 0.12, 0.09));
         made('sweat', sstep(0.26, 0.34, py) * sstep(0.7, 0.6, py) * 0.7);
         // the hollows: round the eyes (darkest beside the nose and under the eye), under the brow, beside the nose and
         // under it, its nostrils, the fold from its wing past the mouth, under the lower lip, under the cheekbone
         if (py > -0.2 && py < 0.4 && apx < 0.9)
-          shade(0.3 * bump(apx, py, 0.37, 0.09, 0.2, 0.095) + 0.16 * bump(apx, py, 0.2, 0.07, 0.07, 0.11) + 0.12 * bump(apx, py, 0.4, -0.04, 0.14, 0.035));
+          shade(0.2 * bump(apx, py, 0.37, 0.1, 0.2, 0.09) + 0.08 * bump(apx, py, 0.21, 0.08, 0.06, 0.1) + 0.08 * bump(apx, py, 0.4, -0.05, 0.15, 0.035));
         if (py > -0.47 && py < -0.2 && apx < 0.45)
           shade(0.2 * bump(px, py, 0, -0.36, 0.14, 0.028) + 0.82 * bump(apx, py, 0.078, -0.334, 0.036, 0.015) + 0.16 * bump(apx, py, 0.215, -0.285, 0.03, 0.06));
         if (py > -0.8 && py < -0.15 && apx < 0.8)
-          shade(0.17 * bump(px, py, 0, -0.68, 0.17, 0.035) + 0.12 * bump(apx, py, 0.33, -0.43, 0.035, 0.12) + 0.07 * bump(apx, py, 0.66, -0.47, 0.15, 0.15));
+          shade(0.15 * bump(px, py, 0, -0.68, 0.17, 0.035) + 0.09 * bump(apx, py, 0.34, -0.43, 0.035, 0.12) + 0.04 * bump(apx, py, 0.66, -0.47, 0.15, 0.15));
         // (a clean-shaven man's jaw is a shade darker where his beard would be)
         if (look.beard === 0 && py < -0.3)
           to(
-            [brows[0] * 0.6 + skin[0] * 0.4, brows[1] * 0.6 + skin[1] * 0.4, brows[2] * 0.6 + skin[2] * 0.4],
-            shadow * (0.5 * sstep(-0.36, -0.42, py) * sstep(0.42, 0.3, apx) * (1 - bump(px, py, 0, -0.52, 0.3, 0.07)) + 0.5 * sstep(-0.62, -0.72, py)),
+            [brows[0] * 0.35 + skin[0] * 0.5, brows[1] * 0.35 + skin[1] * 0.5, brows[2] * 0.35 + skin[2] * 0.54],
+            shadow * seam * (0.5 * sstep(-0.36, -0.42, py) * sstep(0.42, 0.3, apx) * (1 - bump(px, py, 0, -0.52, 0.3, 0.07)) + 0.5 * sstep(-0.62, -0.72, py)),
           );
         // his mouth: the upper lip with its bow, the fuller lower one, the line between them, the paler edge round them
-        const mw = 0.262;
+        const mw = 0.286;
         const my = -0.522;
         if (apx < mw + 0.04 && py < -0.4 && py > -0.68) {
           const t = Math.min(1, apx / mw);
           const arch = Math.pow(1 - t * t, 0.6);
-          const up = my + 0.052 * full * arch * (1 - 0.24 * Math.exp(-((t / 0.14) ** 2)));
-          const low = my - 0.084 * full * Math.pow(1 - t * t, 0.8);
+          const up = my + 0.054 * full * arch * (1 - 0.24 * Math.exp(-((t / 0.14) ** 2)));
+          const low = my - 0.088 * full * Math.pow(1 - t * t, 0.8);
           const inLip = sstep(low - 0.01, low + 0.008, py) * sstep(up + 0.01, up - 0.008, py) * sstep(mw + 0.02, mw - 0.02, apx);
           // (the skin just over the upper lip's edge is a little paler: the edge reads without a line drawn round it)
           if (look.beard < 2) to([skin[0] * 1.08, skin[1] * 1.06, skin[2] * 1.04], 0.3 * sstep(0.03, 0.006, Math.abs(py - up - 0.016)) * sstep(mw, mw - 0.1, apx));
           if (inLip > 0) {
             const lower = py < my;
-            to(lower ? lipLow : lipUp, inLip * 0.82);
+            to(lower ? lipLow : lipUp, inLip * 0.86);
             // (the creases down a lip; the lower lip's shine; its under side in its own shade)
             const crease = noise(px * 70, py * 9);
             shade(0.1 * inLip * (crease - 0.5));
@@ -784,7 +794,10 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
             made('lip', inLip);
           }
           // (the line between them, deepest at the corners)
-          to([skin[0] * 0.16, skin[1] * 0.09, skin[2] * 0.09], 0.9 * sstep(0.0085, 0.003, Math.abs(py - my + 0.03 * t * t * t)) * sstep(mw + 0.02, mw - 0.03, apx));
+          to(
+            [skin[0] * 0.2, skin[1] * 0.11, skin[2] * 0.11],
+            (0.55 + 0.35 * t) * sstep(0.006 + 0.003 * t, 0.002, Math.abs(py - my + 0.03 * t * t * t)) * sstep(mw + 0.02, mw - 0.03, apx),
+          );
           shade(0.14 * bump(apx, py, mw + 0.005, my - 0.03, 0.03, 0.025));
         }
         // his eyes: the white between its lids, the iris with its dark rim and pupil, a light in it; lashes, the fold
@@ -863,10 +876,12 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
         // (his jaw and cheeks: under a line from his ear down to the corner of his mouth, as far as under his chin)
         // (the line is a man's own, never ruled: it wanders a little)
         const line = ny + 0.52 - 0.62 * (ax - 0.3) - 0.5 * (ax - 0.3) * (ax - 0.3) + 0.06 * (noise(ax * 3.5 + 3, nz * 3.5) - 0.5);
-        const under = sstep(-1.02, -0.88, ny) * sstep(-0.24, -0.05, nz) * (1 - lips);
+        const under = sstep(-1.02, -0.88, ny) * (look.beard === 1 ? sstep(-0.36, 0.0, nz) : sstep(-0.24, -0.05, nz)) * (1 - lips);
         // (and up in front of his ear it narrows to the sideburn his hair comes down to meet)
-        const burn = sstep(-0.02, 0.1, nz) * sstep(0.36, 0.18, nz) * sstep(0.32, 0.14, ny) * sstep(-0.32, -0.08, ny) * sstep(0.58, 0.8, ax);
-        const high = sstep(0.04, -0.14, ny - 0.25 * (nz + 0.1));
+        // (stubble's edges are softer still than a beard's: it is a shadow, with no line round it)
+        const stub = look.beard === 1 ? 1.8 : 1;
+        const burn = sstep(0.04 - 0.06 * stub, 0.1, nz) * sstep(0.36, 0.18, nz) * sstep(0.32, 0.14, ny) * sstep(-0.32 - 0.1 * stub, -0.08, ny) * sstep(0.58, 0.8, ax);
+        const high = sstep(0.04 * stub, -0.14 * stub, ny - 0.25 * (nz + 0.1));
         const cheek = Math.max(
           (look.beard === 1 ? sstep(0.2, -0.32, line + 0.25 * ax * ax) : sstep(0.1, -0.12, line + 0.2 * (ax - 0.5) * (ax - 0.5))) * under * high,
           burn * (look.beard === 2 || look.beard === 5 ? 0 : 1),
@@ -885,7 +900,7 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
         const shave = ground * (0.12 + 0.12 * speck);
         let on = 0;
         let deep = 0;
-        if (look.beard === 1) on = Math.max(round, cheek) * (0.15 + 0.22 * speck + 0.08 * fine2);
+        if (look.beard === 1) on = Math.max(round, cheek) * (0.5 + 0.3 * fine2 + 0.15 * speck);
         else if (look.beard === 2) {
           const m = frayed(round, 0.34);
           on = Math.max(m * (0.7 + 0.22 * strand + 0.08 * fine2), shave);
@@ -900,10 +915,18 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
           on = Math.max(m * (0.72 + 0.2 * strand + 0.08 * fine2) * (look.beard === 3 ? 0.9 : 1), shave);
           deep = (look.beard === 4 ? 0.03 + 0.045 * sstep(-0.5, -0.9, ny) : 0.011) * sstep(0.3, 0.95, all);
         }
+        on *= seam;
+        deep *= seam;
         if (on > 0) {
           // (lighter where a hair catches the light, darker between two; a touch of his skin's warmth in it)
-          const g = 0.55 + 0.6 * strand + 0.25 * (speck - 0.5) + 0.2 * (fine2 - 0.5);
-          to([brows[0] * g + 0.03 * skin[0], brows[1] * g + 0.02 * skin[1], brows[2] * g + 0.015 * skin[2]], on);
+          // (stubble is the ends of hairs under his skin, every way: a fine grain that greys and darkens it, no strands)
+          if (look.beard === 1) {
+            const g = 0.8 + 0.4 * fine2;
+            to([(skin[0] * 0.5 + brows[0] * 0.42) * g, (skin[1] * 0.52 + brows[1] * 0.42) * g, (skin[2] * 0.58 + brows[2] * 0.42) * g], on);
+          } else {
+            const g = 0.55 + 0.6 * strand + 0.25 * (speck - 0.5) + 0.2 * (fine2 - 0.5);
+            to([brows[0] * g + 0.03 * skin[0], brows[1] * g + 0.02 * skin[1], brows[2] * g + 0.015 * skin[2]], on);
+          }
           made('beard', sstep(0.15, 0.65, on));
           lift = Math.max(lift, deep);
         }
@@ -912,18 +935,27 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
       // his hair: over the hairline, as he wears it
       const round = Math.atan2(ax, nz);
       // (a man whose hairline has gone back has lost it most at his temples, a little across his forehead)
-      const line = ny - hairlineAt(round) - look.recede * (0.15 * Math.exp(-(((round - 0.78) / 0.3) ** 2)) + 0.05 * Math.exp(-((round / 0.5) ** 2)));
+      // (a line-up is squared off with a razor: straight across his forehead, a corner at each temple, down to the sideburn)
+      const lined = look.lineup ? 1 : 0;
+      const line =
+        ny -
+        hairlineAt(round) -
+        look.recede * (0.15 * Math.exp(-(((round - 0.78) / 0.3) ** 2)) + 0.05 * Math.exp(-((round / 0.5) ** 2))) +
+        lined * (0.015 + 0.075 * sstep(0.55, 0.85, round) * sstep(1.3, 1.08, round));
       if (line > -0.14) {
         // (no line drawn round his head: the hair thins out to the skin over a little way, unevenly, as a hairline
-        // does, a few short hairs ahead of it)
+        // does, a few short hairs ahead of it; but for a line-up, cut crisp)
         const wisp = noise(nx * 13 + nz * 7, ny * 13 - nz * 5);
-        const over = (soft: number) => sstep(-0.9 * soft, 1.5 * soft, line + (fine() - 0.5) * soft * 0.8 + (wisp - 0.5) * soft * 1.2);
+        const over = (soft: number) => {
+          const k = soft * (1 - 0.72 * lined);
+          return sstep(-0.9 * k, 1.5 * k, line + (fine() - 0.5) * k * 0.8 + (wisp - 0.5) * k * 1.2);
+        };
         // (how far up his sides and back: a fade is skin there and hair by the crown, never at his forehead. Each man's
         // barber takes it as high as he does, and leaves as much on top)
         const high = -0.2 + 0.55 * look.cut.sides;
         const fade = Math.max(sstep(high, high + 0.24, ny), sstep(1.15, 0.75, round) * sstep(0.3, 0.45, ny));
         const top = 0.6 + 0.8 * look.cut.top;
-        const curled = style === 'curls' || style === 'afro' || style === 'twists' || style === 'locs' || style === 'hightop';
+        const curled = style === 'curls' || style === 'afro' || style === 'twists' || style === 'locs' || style === 'hightop' || style === 'taper';
         const curl = curled ? noise(nx * 34 + nz * 23, ny * 34 + nz * 17) : 0;
         // (rows and combed hair run front to back, evenly round him)
         const across = Math.asin(Math.max(-1, Math.min(1, nx)));
@@ -933,15 +965,26 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
         switch (style) {
           case 'shaved':
             cover = 0.14 * over(0.1);
+            // (a shaved head shines a little over its crown)
+            made('dome', 0.85 * sstep(0.25, 0.65, ny) * sstep(-0.4, 0.1, nz + 0.5 * ny));
             break;
           case 'buzz':
             cover = (0.56 + 0.2 * look.cut.top + 0.12 * fine()) * over(0.06);
             break;
           case 'fade':
             cover = 0.94 * over(0.045) * (0.2 + 0.8 * fade);
-            lift = 0.02 * top * fade * over(0.05);
-            tex = 0.85 + 0.3 * fine();
+            // (more of it on top than at the sides: a head of hair, not a cap)
+            lift = (0.012 + 0.022 * top * sstep(0.2, 0.7, ny)) * fade * over(0.05);
+            tex = 0.8 + 0.3 * fine() + 0.12 * (curl - 0.5);
             break;
+          case 'taper': {
+            // (short at his temples and the nape, faded out low over his ears; on top, curls left long, standing off his head)
+            const low = Math.max(sstep(-0.12, 0.16, ny), sstep(1.2, 0.85, round) * sstep(0.25, 0.4, ny));
+            cover = over(0.035) * (0.3 + 0.7 * low);
+            lift = (0.01 + 0.042 * (0.45 + 0.55 * look.cut.top) * sstep(0.25, 0.75, ny)) * low * over(0.05) + 0.008 * (curl - 0.5) * sstep(0.3, 0.6, ny);
+            tex = 0.62 + 0.62 * curl;
+            break;
+          }
           case 'curls':
             cover = over(0.04);
             tex = 0.7 + 0.6 * curl;
@@ -1015,18 +1058,25 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
         }
         if (cover > 0) {
           to([hair[0] * tex, hair[1] * tex, hair[2] * tex], cover);
-          if (ny > 0.3) made('scalp', sstep(0.0, 0.2, cover));
+          if (ny > 0.3 && style !== 'shaved') made('scalp', sstep(0.0, 0.2, cover));
           made('hair', sstep(0.2, 0.7, cover));
         }
-      } else if (nz < 0.1 && ny > -0.5 && ax > 0.8) {
-        // (his ears: a little redder than his cheeks, their bowl in shade)
-        to([skin[0] * 1.04, skin[1] * 0.9, skin[2] * 0.87], 0.35);
+      } else if (nz < 0.25 && ny > -0.6 && ax > 0.7) {
+        // (where his ears grow from: a little redder than his cheeks, fading out round them, no patch with an edge)
+        to([skin[0] * 1.03, skin[1] * 0.92, skin[2] * 0.9], 0.3 * bump(nz, ny, -0.19, -0.07, 0.11, 0.17) * sstep(0.75, 0.9, ax));
         shade(0.22 * bump(nz, ny, -0.2, -0.06, 0.035, 0.07));
       }
       // (a headband, its edges a little soft as cloth's are: no stair of pixels down them)
-      const onBand = bandRgb && ny > 0.1 ? sstep(0.068, 0.058, Math.abs(ny - 0.34 - 0.13 * nz)) : 0;
+      // (wide or thin, worn higher or lower: each man's own way; a maker's mark on the front of some)
+      const bandW = look.cut.sides < 0.35 ? 0.04 : 0.064;
+      const onBand = bandRgb && ny > 0.1 ? sstep(bandW + 0.005, bandW - 0.005, Math.abs(ny - 0.33 - 0.04 * (look.cut.top - 0.5) - 0.13 * nz)) : 0;
       if (onBand > 0) {
         to(bandRgb!, onBand);
+        if (look.side > 0 && nz > 0.8 && Math.abs(nx) < 0.08)
+          to(
+            light(band!) > 0.5 ? [0.1, 0.1, 0.11] : [0.92, 0.92, 0.9],
+            onBand * sstep(0.06, 0.045, Math.abs(nx)) * sstep(bandW * 0.7, bandW * 0.5, Math.abs(ny - 0.33 - 0.04 * (look.cut.top - 0.5) - 0.13 * nz)),
+          );
         made('band', onBand);
         lift = lift + (Math.max(lift * 0.5, 0.012) - lift) * onBand;
       }
@@ -1597,7 +1647,7 @@ function paint(kit: MatchKit, num: string, name: string, mark: string, gear: Gea
 
   // his head: his face, his hair and beard, a point at a time round its middle
   // (a headband goes on hair that lies close, not round an afro or a high top)
-  const band = ['afro', 'hightop', 'twists', 'locs'].includes(STYLES[look.style].name) ? null : gear.band;
+  const band = ['afro', 'hightop', 'twists'].includes(STYLES[look.style].name) ? null : gear.band;
   const key = `${JSON.stringify(look)} ${band}`;
   let head = HEADS.get(key);
   if (!head) {
@@ -1830,7 +1880,45 @@ interface Told {
   uIris: { value: Color };
   uEye: { value: Vector2 };
   uMouth: { value: number };
+  /** His face's own shape (look.ts): his cheekbones, the flesh of his cheeks, his chin, his jaw's corners; then his lips, his brow, how deep his eyes are set, his nose's wings. */
+  uShape: { value: Vector4 };
+  uShape2: { value: Vector4 };
 }
+
+/** Where his head bone is as built (figure.py's HEAD_Y), ft: his face's shape is worked out round it. */
+const HEAD_REST = 6.1;
+/**
+ * His face's own shape, as a man's bones are his own: on the one head every man shares, how far (ft) a point of
+ * his face stands out or in for him (his cheekbones high and full or flat, his cheeks round or hollow under the
+ * bone, his chin forward or back, his jaw's corners square or tapering, his lips, his brow, his eyes set deep
+ * or not, his nose's wings broad or narrow), placed by the plane of his face as figure.py's head_r places it.
+ * Each is a share of uShape and uShape2 (0 the middling man): no two faces one head scaled.
+ */
+const FACE_SHAPE = /* glsl */ `
+uniform vec4 uShape;
+uniform vec4 uShape2;
+float faceG( vec2 p, vec2 c, vec2 s ) { vec2 q = ( p - c ) / s; return exp( - dot( q, q ) ); }
+float faceShape( vec3 p ) {
+  vec3 n = normalize( ( p - vec3( 0.0, ${(HEAD_REST + HEAD_MID.y).toFixed(3)}, ${HEAD_MID.z.toFixed(3)} ) ) / vec3( ${HEAD_SIZE.map((v) => v.toFixed(3)).join(', ')} ) );
+  float ax = abs( n.x );
+  // (the corner of his jaw, round under his ear)
+  vec3 q = ( vec3( ax, n.y, n.z ) - vec3( 0.74, -0.64, -0.08 ) ) / vec3( 0.15, 0.14, 0.22 );
+  float f = uShape.w * 0.05 * exp( - dot( q, q ) );
+  float front = smoothstep( 0.1, 0.5, n.z );
+  if ( front > 0.0 ) {
+    vec2 fp = vec2( ax, n.y ) / max( n.z, 0.3 ) * 0.8;
+    float k = uShape.x * 0.034 * faceG( fp, vec2( 0.54, -0.14 ), vec2( 0.16, 0.1 ) );
+    k += uShape.y * ( 0.036 * faceG( fp, vec2( 0.5, -0.43 ), vec2( 0.2, 0.17 ) ) + 0.01 * faceG( fp, vec2( 0.3, -0.62 ), vec2( 0.15, 0.15 ) ) );
+    k += uShape.z * 0.042 * faceG( fp, vec2( 0.0, -0.84 ), vec2( 0.2, 0.12 ) );
+    float lips = ( fp.y + 0.53 ) / 0.07;
+    k += uShape2.x * 0.016 * pow( max( 0.0, 1.0 - fp.x * fp.x / 0.096 ), 0.7 ) * exp( - lips * lips );
+    k += uShape2.y * 0.016 * faceG( fp, vec2( 0.36, 0.23 ), vec2( 0.26, 0.06 ) );
+    k -= uShape2.z * 0.018 * faceG( fp, vec2( 0.37, 0.1 ), vec2( 0.17, 0.09 ) );
+    k += uShape2.w * 0.022 * faceG( fp, vec2( 0.15, -0.3 ), vec2( 0.055, 0.045 ) );
+    f += k * front;
+  }
+  return f * 0.36;
+}`;
 
 /** Where his head is on the sheet (in uv): there the stuff picture's third channel is how far his hair stands off him, not a knit. */
 const HEAD_UV = [R_HEAD[0] / SHEET, 1 - (R_HEAD[1] + R_HEAD[3]) / SHEET, (R_HEAD[0] + R_HEAD[2]) / SHEET, 1 - R_HEAD[1] / SHEET].map((v) => v.toFixed(4));
@@ -1851,11 +1939,26 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
     Object.assign(sh.uniforms, told);
     // his hair stands off his head by as much as his crop says (pushed out as built, before his bones carry it)
     // (and where each point of him is as built, for his skin's grain: see PORES)
+    // (and his face is his own shape: the point moved out or in, and the way it faces turned with the slope of that)
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform sampler2D uStuff;\nvarying vec3 vRest;')
+      .replace('#include <common>', `#include <common>\nuniform sampler2D uStuff;\nvarying vec3 vRest;\n${FACE_SHAPE}`)
+      .replace(
+        '#include <beginnormal_vertex>',
+        /* glsl */ `#include <beginnormal_vertex>
+        vec3 faceOff = vec3( 0.0 );
+        if ( ${ON_HEAD('uv')} && position.y > ${(HEAD_REST - 0.45).toFixed(2)} ) {
+          float f0 = faceShape( position );
+          vec3 t1 = normalize( cross( objectNormal, abs( objectNormal.y ) < 0.95 ? vec3( 0.0, 1.0, 0.0 ) : vec3( 1.0, 0.0, 0.0 ) ) );
+          vec3 t2 = cross( objectNormal, t1 );
+          float g1 = ( faceShape( position + t1 * 0.012 ) - f0 ) / 0.012;
+          float g2 = ( faceShape( position + t2 * 0.012 ) - f0 ) / 0.012;
+          faceOff = objectNormal * f0;
+          objectNormal = normalize( objectNormal - t1 * g1 - t2 * g2 );
+        }`,
+      )
       .replace(
         '#include <begin_vertex>',
-        `#include <begin_vertex>\nvRest = position;\nif ${ON_HEAD('uv')} transformed += normal * textureLod( uStuff, uv, 0.0 ).b * ${HAIR_MAX.toFixed(3)};`,
+        `#include <begin_vertex>\nvRest = position;\ntransformed += faceOff;\nif ${ON_HEAD('uv')} transformed += normal * textureLod( uStuff, uv, 0.0 ).b * ${HAIR_MAX.toFixed(3)};`,
       );
     sh.fragmentShader = sh.fragmentShader
       .replace(
@@ -1878,7 +1981,7 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
         eyeK = max( eyeK, skinK * ( 1.0 - smoothstep( 0.1, 0.22, stuff.r ) ) );
         // (dark skin's hollows go to black under a light from above long before light skin's do: its shade is let off some)
         vec3 baked = mix( vColor.rgb, vec3( 1.0 ), 0.35 * uTone * skinK );
-        diffuseColor.rgb *= mix( vColor.rgb, pow( baked, vec3( 0.84, 1.03, 1.16 ) ), skinK );
+        diffuseColor.rgb *= mix( vColor.rgb, pow( baked, vec3( 0.9, 1.02, 1.1 ) ), skinK );
         // (his teeth, in the dark behind his lips till his mouth comes open)
         if ( vMapUv.x > ${TEETH_UV[0]} && vMapUv.x < ${TEETH_UV[1]} && vMapUv.y < ${TEETH_UV[2]} ) diffuseColor.rgb *= mix( 0.1, 1.0, smoothstep( 0.03, 0.4, uMouth ) );`,
       )
@@ -1893,7 +1996,7 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
       .replace(
         '#include <lights_fragment_end>',
         `#include <lights_fragment_end>
-        reflectedLight.indirectDiffuse *= mix( vec3( 1.0 ), vec3( 1.07, 0.98, 0.93 ), skinK );
+        reflectedLight.indirectDiffuse *= mix( vec3( 1.0 ), vec3( 1.04, 0.99, 0.96 ), skinK );
         float toward = saturate( dot( normal, normalize( vViewPosition ) ) );
         // (that light is a lamp on the camera, a little over the lens: a plane that faces it is lit and one that turns
         // down from it is not, so his brow, his nose and his jaw are shapes in it and not one flat glow)
@@ -2028,6 +2131,8 @@ export class Fig {
       uIris: { value: new Color(look.eyes) },
       uEye: { value: new Vector2(EYE_TILT * look.face.tilt, EYE_OPEN * look.face.open) },
       uMouth: { value: 0 },
+      uShape: { value: new Vector4(look.face.cheeks, look.face.full, look.face.point, look.face.flare) },
+      uShape2: { value: new Vector4((look.face.lips - 0.5) * 2, (look.face.ridge - 0.45) * 2, look.face.deep, look.face.wings) },
     };
     // (he blinks in his own time: every few seconds, never with the man beside him)
     this.blinks = [3.1 + (((seed * 7) % 11) / 11) * 2.6, ((seed * 13) % 17) / 17];

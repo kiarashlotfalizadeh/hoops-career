@@ -229,8 +229,8 @@ def bump(x, y, ax, ay, sx, sy):
 
 
 # his eyes, brows and mouth, as figure.ts paints a player's (headPainter: the numbers are its own)
-EYE_X, EYE_Y, EYE_W = 0.38, 0.066, 0.138
-MOUTH_W, MOUTH_Y = 0.275, -0.52
+EYE_X, EYE_Y, EYE_W = 0.38, 0.066, 0.152
+MOUTH_W, MOUTH_Y = 0.3, -0.52
 
 
 def lids(px, py):

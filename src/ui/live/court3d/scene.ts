@@ -50,7 +50,7 @@ import {
 } from './ballistics';
 import { lit as ledLit } from './ballskin';
 import { DUNK_AT, isDunk, type ClipId, type Gesture } from './clips';
-import { blocked, clearSeat, Operator, shot as newShot, TALL, type CamKind, type View } from './cameras';
+import { blocked, clearSeat, fenced, Operator, shot as newShot, TALL, type CamKind, type View } from './cameras';
 import { BIG_WORD, Director, INTRO_MS, WIPE_MS, type BigKind } from './director';
 import { Fig, figureGeo, type Geo } from './figure';
 import { air, arenaLight, HAZE_COLOR, HAZE_DENSITY, Lens, varnish, woodOf, type FloorKnobs } from './lens';
@@ -224,6 +224,8 @@ const CLOSE_SOFT = 0.6;
 const REPLAY_SOFT = 0.4;
 /** A replay of a shot pulls its focus from the man to the rim over this long before its moment (the script's ms): the outcome is the sharp thing. */
 const PULL_MS = 450;
+/** The focus follows what it is on over about this long (ms), never in a frame but on a cut. */
+const FOCUS_MS = 140;
 /** The flash of light on a slam, and on a shot at the buzzer that drops (lens.bump; none with reduced motion). */
 const DUNK_BUMP = 0.16;
 const BUZZER_BUMP = 0.22;
@@ -321,8 +323,12 @@ const TMP: V3 = { x: 0, y: 0, z: 0 };
 const TMP2: V3 = { x: 0, y: 0, z: 0 };
 const SIDE = { x: 0, z: 0 };
 const SEAT = { x: 0, z: 0 };
-/** A close-up's camera stands this far off its man (ft). */
+/** A close-up's camera stands this far off its man (ft), this high; his hands go up this far over his head (on the 6 ft 6 puppet). */
 const CLOSE_OFF = 22;
+const CLOSE_Y = 5.4;
+const HANDS_UP = 1.9;
+/** A close-up keeps the top of his head and his hands this far up its picture at most (of the half picture over where it looks). */
+const CLOSE_TOP = 0.82;
 const WAY = { x: 0, z: 0 };
 /** Where the sideline or a fallen teammate takes a man (see aside). */
 const AWAY = { x: 0, z: 0, yaw: NaN };
@@ -1228,13 +1234,15 @@ export class CourtScene {
     });
     if (refs) hands.clear();
 
+    // (the ten on the floor: a free hand or an arm that would go into one of them rests on him: see Puppet.arms)
+    const onFloor = [...this.figs].flatMap(([pid, f]) => (seen.has(pid) ? [f.pup] : []));
     for (const [pid, f] of [...this.figs]) {
       if (!seen.has(pid)) {
         this.drop(pid, f);
         continue;
       }
       f.ball = hands.has(f) ? ball : null;
-      f.pup.arms(hands.has(f) ? ball : null);
+      f.pup.arms(hands.has(f) ? ball : null, onFloor);
       f.place();
       const hot = !!p.hot?.has(pid);
       // (the man with the ball has the broadcast's own ring: see marks.ts)
@@ -1556,8 +1564,15 @@ export class CourtScene {
         const u = smooth(clamp((r.t - r.at + PULL_MS) / PULL_MS, 0, 1));
         if (u > 0) at += (this.camera.position.distanceTo(A.set(r.rim.x, RIM_H, r.rim.z)) - at) * u;
       }
-      this.lens.focus(at, d.onAir ? REPLAY_SOFT : CLOSE_SOFT);
-    } else this.lens.focus(0, 0);
+      // (pulled as a focus puller pulls it, over FOCUS_MS: it is set afresh only on a cut to another camera or man)
+      const key = d.onAir && r ? `${r.cam}/${r.t0}` : `close/${this.star}`;
+      this.focusAt = key === this.focusKey ? this.focusAt + (at - this.focusAt) * (1 - Math.exp(-real / FOCUS_MS)) : at;
+      this.focusKey = key;
+      this.lens.focus(this.focusAt, d.onAir ? REPLAY_SOFT : CLOSE_SOFT);
+    } else {
+      this.lens.focus(0, 0);
+      this.focusKey = '';
+    }
     // (the house lights come down for the open, the tip and a timeout, and some of the way for the clutch: rig.ts)
     this.rig.mood(this.shot === 'open' || this.shot === 'tip' || this.shot === 'house' ? 1 : p.clutch ? 0.6 : 0, calm ? 1e6 : real);
     this.lens.drama = this.rig.drama;
@@ -2214,11 +2229,20 @@ export class CourtScene {
     // he has left the floor (but a cut-in a replay comes after has the picture until the wipe has covered it)
     const held = this.shot === 'close' || this.shot === 'house' || this.shot === 'bench' || this.shot === 'crowd';
     const next = held && this.shot !== 'house' && (d.phase === 'wait' || d.phase === 'in');
-    // (a body in front of a close-up's man: the picture leaves him)
-    this.blockMs = this.shot === 'close' && who && blocked(who.pup.x, who.pup.z, this.seat.x, this.seat.z, this.others(who), v.n - 1) ? this.blockMs + real : 0;
+    // (his head, and his hands up over it: what a close-up must see past a basket's unit)
+    const face = who ? this.faceOf(who) : null;
+    // (a body in front of a close-up's man, or a basket's unit: the picture leaves him)
+    this.blockMs =
+      this.shot === 'close' &&
+      who &&
+      face &&
+      (blocked(who.pup.x, who.pup.z, this.seat.x, this.seat.z, this.others(who), v.n - 1) || fenced(this.seat.x, this.seat.y, this.seat.z, face[0], face[1], face[2]))
+        ? this.blockMs + real
+        : 0;
     const over = held && ((this.shot === 'close' && (!who || this.blockMs > BLOCK_MS)) || (!next && (this.shotMs > this.cutLen || !quiet)));
     // a close-up is taken from where its man is clear, his face to it if it can be; from nowhere, the home crowd instead, or nothing
-    if (this.cue === 'close' && who && clearSeat(who.pup.x, who.pup.z, who.pup.yaw, this.others(who), v.n - 1, CLOSE_OFF, SEAT) >= 3) this.cue = who.side === 0 ? 'crowd' : null;
+    if (this.cue === 'close' && who && face && clearSeat(who.pup.x, who.pup.z, who.pup.yaw, this.others(who), v.n - 1, CLOSE_OFF, SEAT, CLOSE_Y, face, 6) >= 3)
+      this.cue = who.side === 0 ? 'crowd' : null;
     if (live) this.introSeen = false;
     else if (this.shot === 'intro' && this.shotMs > INTRO_MS) this.introSeen = true;
     const want: typeof this.shot = this.chosen
@@ -2260,8 +2284,10 @@ export class CourtScene {
       }
       if (want === 'close' && who) {
         // (low, from where he is clear: found just above)
-        this.seat.set(SEAT.x, 5.4, SEAT.z);
-        this.look.set(who.pup.x, 5.4 * who.pup.body.s, who.pup.z);
+        this.seat.set(SEAT.x, CLOSE_Y, SEAT.z);
+        // (on his face from the first frame, however high he is: up on the rim, his head is half the picture over his waist)
+        const f = this.faceOf(who);
+        this.look.set(f[0], Math.max(4, f[1] - 0.9), f[2]);
       }
     }
     const closeUp = this.shot === 'close' && !!who;
@@ -2272,11 +2298,16 @@ export class CourtScene {
     if (this.shot === 'intro') return d.aimIntro(cam, this.shotMs, aspect);
 
     if (this.shot === 'close' && who) {
-      // low and tight on him, following him as he goes; the frame is on his face: his waist to over his head, whatever its shape
+      // low and tight on him, following him as he goes; the frame is on his face: his waist to over his head, whatever its
+      // shape, and opened out for his hands when they go up over it (a flex, a hang on the rim), out quickly and back slowly
       const j = who.pup.j;
       const c = who.pup.world(j[J.head * 3], j[J.head * 3 + 1], j[J.head * 3 + 2], TMP);
+      let top = c.y + SKULL * 1.3 * who.pup.body.s;
+      for (const k of [J.hl, J.hr]) top = Math.max(top, who.pup.world(j[k * 3], j[k * 3 + 1], j[k * 3 + 2], TMP2).y + HAND_R);
       this.look.lerp(A.set(c.x, Math.max(4, c.y - 0.9), c.z), 1 - Math.exp(-real / 160));
-      const half = (3.2 - 0.5 * Math.min(1, this.shotMs / CUT_MS)) / Math.min(1, aspect);
+      const need = Math.max(3.2 - 0.5 * Math.min(1, this.shotMs / CUT_MS), (top - this.look.y) / CLOSE_TOP);
+      this.closeHalf = this.shotMs === 0 ? need : this.closeHalf + (need - this.closeHalf) * (1 - Math.exp(-real / (need > this.closeHalf ? 110 : 420)));
+      const half = this.closeHalf / Math.min(1, aspect);
       cam.fov = clamp((2 * Math.atan(half / this.seat.distanceTo(this.look)) * 180) / Math.PI, 10, 58);
       // (it drifts round him a little as it holds, on the operator's shoulder: a camera on a man, not one on a post)
       const turn = CUT_ARC * Math.min(1, this.shotMs / CUT_MS) * (this.seat.x < this.look.x ? 1 : -1);
@@ -2420,6 +2451,19 @@ export class CourtScene {
     cam.updateProjectionMatrix();
   }
   private aimed = false;
+  // how much of him a close-up holds over and under where it looks (ft)
+  private closeHalf = 3.2;
+  // where the focus is (ft from the lens), and the shot it is on (a replay's look, a close-up's man)
+  private focusAt = 0;
+  private focusKey = '';
+  /** A man's head and a point over it where his hands go up (x, y, z each), for a close-up's line of sight past a basket's unit. */
+  private faceOf(who: Fig): Float32Array {
+    const j = who.pup.j;
+    const h = who.pup.world(j[J.head * 3], j[J.head * 3 + 1], j[J.head * 3 + 2], TMP);
+    this.face.set([h.x, h.y, h.z, h.x, h.y + HANDS_UP * who.pup.body.s, h.z]);
+    return this.face;
+  }
+  private readonly face = new Float32Array(6);
   /** Everyone on the floor but `who` (x, z each), for a close-up's line of sight. */
   private others(who: Fig): Float32Array {
     const out = this.rest;
@@ -2452,6 +2496,8 @@ export class CourtScene {
 
   /** The court has finished `sc`: a replay of its big play starts if one is due (true: hold the court until `released`). */
   replay(sc: Script | null): boolean {
+    // (its seat is chosen for this picture's shape, not the last replay's)
+    this.director.size(this.w / this.h, this.h);
     return this.director.start(sc);
   }
   /** A tap on the court: the replay goes, through its wipe. */

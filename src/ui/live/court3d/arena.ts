@@ -256,6 +256,10 @@ export class Arena {
   /** The benches: each part of the people on them (who wears which team's colours), their chairs' padding, the pads on the baskets. */
   private readonly seatMat = new MeshStandardMaterial({ color: 0x222222, roughness: 0.75, vertexColors: true });
   private readonly team: MeshStandardMaterial;
+  /** The ribbon of lamps along the top of the lower bowl, in a building that has one (Venue.fascia). */
+  private readonly fasciaLeds: Mesh;
+  /** The step a slow device is on (see shed). */
+  private level = 0;
   private board = '';
   /** Whose building it is (the stands' seats, rails, concrete and house lights), and what was last painted. */
   private venue: Venue | null = null;
@@ -372,6 +376,7 @@ export class Arena {
     this.steel = roof.build(keep, this.group);
     this.boards.banners(roof.banners);
     this.boards.build();
+    this.fasciaLeds = this.boards.fascia(this.bowl.fasciaRuns);
     this.group.add(this.boards.group);
     this.flashes = new Flashes(keep, cams);
     this.group.add(this.flashes.points);
@@ -438,22 +443,27 @@ export class Arena {
    * The building's colour (the home team's on its own floor): the pads on the baskets, the chairs, half the
    * crowd and some of their towels; and the building itself (`venue`, teamColors.ts venueLook: the home
    * team's own, the same every night): the seats by section, the walls' padded tops, the concrete, the house
-   * lights, the partners' order on the boards.
+   * lights, the partners' order on the boards and their look, the stanchions' pads, the wall or the ribbon
+   * along the top of the lower bowl, the concourse and the suites (bowl.ts), the fans' signs.
    */
   paint(board: string, venue?: Venue) {
     // (asked every frame: the same building as the last, as a rule)
     if (board === this.board && (venue ?? null) === this.venue && this.painted) return;
-    const key = venue ? `${board}|${venue.seed}|${venue.seats.join()}|${venue.rail}|${venue.house}` : board;
+    const key = venue
+      ? `${board}|${venue.seed}|${venue.seats.join()}|${venue.rail}|${venue.house}|${venue.pad}|${venue.fascia}|${venue.boards}|${venue.crowd}|${venue.aisles}`
+      : board;
     this.board = board;
     this.venue = venue ?? null;
     if (key === this.painted) return;
     this.painted = key;
-    this.boards.paint(board, venue?.seed);
-    this.team.color.set(board);
+    this.boards.paint(board, venue?.seed, venue?.boards);
+    // (the stanchions' pads: the building's colour as a rule; in its own building, what it pads them in)
+    this.team.color.set(venue?.pad ?? board);
+    this.fasciaLeds.visible = venue?.fascia === 'ribbon' && this.level < 1;
     this.seatMat.color.set(board).multiplyScalar(0.75);
     this.bowl.paint(board, venue);
     this.sideline.paint(board);
-    this.crowd.paint(board, this.trim, venue?.seats);
+    this.crowd.paint(board, this.trim, venue?.seats, venue?.seatMix, venue?.letters, venue?.crowd);
     this.lights.colours(board);
     this.lampTone.set(venue?.house ?? 0xfff1dc);
     this.lamp.color.copy(this.lampTone);
@@ -469,7 +479,7 @@ export class Arena {
     this.crowd.dress(kits[1].color, kits[1].trim);
     // (the home fans' second colour: on its own floor, the home side's)
     this.trim = kits[0].trim;
-    if (this.board) this.crowd.paint(this.board, this.trim, this.venue?.seats);
+    if (this.board) this.crowd.paint(this.board, this.trim, this.venue?.seats, this.venue?.seatMix, this.venue?.letters, this.venue?.crowd);
     this.sideline.dress(kits);
   }
 
@@ -499,10 +509,13 @@ export class Arena {
    * A device that can't keep up, by the scene's steps (Court3D's STEPS, scene.lite): the crowd in lighter
    * models at each (crowd.ts shed); from the second the roof's steel, the glass and rails, the light spilt
    * from the tunnels and the boards gone, the boards painted less often and no light show; at the third
-   * half the cameras, a third of the confetti, no streamers.
+   * half the cameras, a third of the confetti, no streamers. The ribbon along the top of the lower bowl goes
+   * from the second too (its wall stays, with the name on it), and what the fans hold from the first.
    */
   shed(lite: 0 | 1 | 2 | 3) {
     const level = lite > 2 ? 2 : lite > 1 ? 1 : 0;
+    this.level = level;
+    this.fasciaLeds.visible = this.venue?.fascia === 'ribbon' && level < 1;
     for (const o of this.steel) o.visible = level < 1;
     this.bowl.shed(level);
     this.crowd.shed(lite);

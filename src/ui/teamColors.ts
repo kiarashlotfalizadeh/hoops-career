@@ -262,10 +262,11 @@ export function nightFill(color: string): string {
 /**
  * A home team's building, as the live game's courts draw it (Court.tsx paints the floor, court3d/ the
  * stands round it): the maple's stain, how the keys, the apron and the centre circle are done, the words
- * round the floor, the seats by section, the walls' padded tops, the concrete and the house lights. Each
- * is picked from the team's own colours by a hash of its letters, so it is the same building every
- * night, and two teams in the same colours (two navies) still play in different ones. No real arena's
- * marks: shapes, colours and the team's own name.
+ * round the floor, the seats by section, the walls' padded tops, the concrete and the house lights, and
+ * what tells it from another from the broadcast's camera (its fascia, concourse, suites, aisles, crowd,
+ * pads and boards). Each is picked from the team's own colours by a hash of its letters, so it is the
+ * same building every night, and two teams in the same colours (two navies) still play in different
+ * ones. No real arena's marks: shapes, colours and the team's own name.
  */
 export interface Venue {
   /** The bare maple, its stain: a pale blonde to a deep honey. */
@@ -297,6 +298,25 @@ export interface Venue {
   house: string;
   /** A number of the building's own (its partners' order on the boards). */
   seed: number;
+  /**
+   * What makes it a place of its own from the broadcast's camera, past its colours: the top of the lower bowl
+   * right across the picture (a rail of glass, a wall in the rail's colour, or a ribbon of lamps); the
+   * concourse's wall behind the walkway (dark, brick, pale stone, timber, or the paint's deep shade); the
+   * suites' glass (its frames' colour, the light inside: 0 warm, 1 mixed, 2 cool; how many bays to a run);
+   * how the seats' colours lie (by section, mixed seat by seat, or shading from one to the next up the rows);
+   * the edges of its aisles' steps (amber, white, the rail's colour or plain concrete); how many of its crowd
+   * come in its colours; the pads on the baskets' stanchions; and the boards' own look (0 or 1).
+   */
+  fascia: 'glass' | 'wall' | 'ribbon';
+  concourse: 'dark' | 'brick' | 'stone' | 'timber' | 'paint';
+  suites: { frame: string; light: 0 | 1 | 2; bays: number };
+  seatMix: 'sections' | 'confetti' | 'fade';
+  aisles: string;
+  crowd: number;
+  pad: string;
+  boards: 0 | 1;
+  /** The letters the fans' signs carry (the team's abbreviation; none on a neutral floor). */
+  letters: string;
 }
 
 /** The maple's stains, light to dark. */
@@ -344,6 +364,15 @@ export function venueLook(colors: [string, string, string], paint: string, trim:
     seatPick === 0 ? [paint, paint, deep(paint)] : seatPick === 1 ? [paint, alt, CHARCOAL] : seatPick === 2 ? [alt, paint, paint] : [paint, CHARCOAL, alt];
   const { house, concrete } = HOUSES[pick(HOUSES.length, 9)];
   const rail = pick(2, 10) && second ? second : paint;
+  const fascia = (['glass', 'wall', 'ribbon'] as const)[pick(3, 11)];
+  const concourse = (['dark', 'brick', 'stone', 'timber', 'paint'] as const)[pick(5, 12)];
+  const framePick = pick(3, 13);
+  const suites = { frame: framePick === 0 ? '#0b0c0e' : framePick === 1 ? '#8d9199' : mix(paint, '#000000', 0.45), light: pick(3, 14) as 0 | 1 | 2, bays: [6, 8, 10][pick(3, 15)] };
+  const seatMix = (['sections', 'sections', 'confetti', 'fade'] as const)[pick(4, 16)];
+  const aisles = ['#c9a13a', '#c8c4ba', rail, '#5a5c63'][pick(4, 19)];
+  const crowd = [0.26, 0.36, 0.46, 0.6][pick(4, 20)];
+  const padPick = pick(5, 17);
+  const pad = padPick < 3 ? paint : padPick === 3 && second ? second : '#26282d';
   return {
     wood,
     key,
@@ -362,6 +391,15 @@ export function venueLook(colors: [string, string, string], paint: string, trim:
     concrete,
     house,
     seed: h,
+    fascia,
+    concourse,
+    suites,
+    seatMix,
+    aisles,
+    crowd,
+    pad,
+    boards: pick(2, 18) as 0 | 1,
+    letters: abbrev.toUpperCase(),
   };
 }
 
@@ -385,5 +423,14 @@ export function neutralVenue(name: string): Venue {
     concrete: HOUSES[1].concrete,
     house: HOUSES[1].house,
     seed: 0,
+    fascia: 'glass',
+    concourse: 'stone',
+    suites: { frame: '#8d9199', light: 1, bays: 8 },
+    seatMix: 'sections',
+    aisles: '#c8c4ba',
+    crowd: 0.2,
+    pad: '#26282d',
+    boards: 1,
+    letters: '',
   };
 }

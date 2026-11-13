@@ -268,6 +268,8 @@ interface Look {
   /** How loud the building is (0 to 1), and a count that goes up a few times a second (a noise meter's bars move on it). */
   noise: number;
   tick: number;
+  /** The building's own look for its boards (Venue.boards): the far side's and the ribbon's runs of colour done one way or the other. */
+  style: 0 | 1;
 }
 
 /** A big moment holds the boards this long (ms); a timeout a little longer. */
@@ -596,6 +598,20 @@ function strip(ctx: CanvasRenderingContext2D, w: number, h: number, show: Show, 
   switch (show.kind) {
     case 'home':
     case 'score': {
+      if (kind === 'far' && look.style === 1) {
+        // (another building's: its colour all along, white letters, a pinstripe of its second colour top and foot)
+        const field = ctx.createLinearGradient(0, 0, 0, h);
+        field.addColorStop(0, home.deep);
+        field.addColorStop(0.5, home.fill);
+        field.addColorStop(1, home.deep);
+        ctx.fillStyle = field;
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = home.trim;
+        ctx.fillRect(0, h * 0.1, w, Math.max(1, h * 0.05));
+        ctx.fillRect(0, h * 0.85, w, Math.max(1, h * 0.05));
+        for (let i = 0; i < 4; i++) if (home.abbr) write(ctx, home.abbr, (w / 4) * (i + 0.5), h / 2, h * 0.6, w * 0.08, WHITE, 'center', 0.12);
+        break;
+      }
       if (kind === 'far') {
         // behind the benches, kept quiet: the home side's letters in its colour now and then, a thin line of it top and foot
         ctx.fillStyle = home.deep;
@@ -607,6 +623,27 @@ function strip(ctx: CanvasRenderingContext2D, w: number, h: number, show: Show, 
           chevrons(ctx, cx + w * 0.06, cx + w * 0.12, pad * 2, h - pad * 2, 1, home.trim, 0.55);
           chevrons(ctx, cx - w * 0.12, cx - w * 0.06, pad * 2, h - pad * 2, -1, home.trim, 0.55);
         }
+        break;
+      }
+      if (ribbon && look.style === 1 && !game) {
+        // (another building's run: its letters spaced along a dark field between rules of its colour)
+        ctx.fillStyle = home.fill;
+        ctx.fillRect(0, 0, w, Math.max(2, h * 0.14));
+        ctx.fillRect(0, h - Math.max(2, h * 0.14), w, Math.max(2, h * 0.14));
+        for (let i = 0; i < 3; i++) {
+          write(ctx, home.abbr, (w / 3) * (i + 0.5), h / 2, h * 0.62, w * 0.18, WHITE, 'center', 0.12);
+          stripes(ctx, (w / 3) * (i + 0.82), (w / 3) * (i + 0.98), h * 0.24, h * 0.76, home.trim, h * 0.12, h * 0.16);
+        }
+        break;
+      }
+      if (ribbon && look.style === 1) {
+        // (with a game on: the score on a dark field, its colour in rules top and foot, its letters either side)
+        ctx.fillStyle = home.fill;
+        ctx.fillRect(0, 0, w, Math.max(2, h * 0.12));
+        ctx.fillRect(0, h - Math.max(2, h * 0.12), w, Math.max(2, h * 0.12));
+        write(ctx, home.abbr, w * 0.12, h / 2, h * 0.62, w * 0.2, WHITE, 'center', 0.12);
+        score(w * 0.3, w * 0.42);
+        stripes(ctx, w * 0.78, w * 0.98, h * 0.22, h * 0.78, home.trim, h * 0.14, h * 0.18);
         break;
       }
       if (ribbon) {
@@ -978,8 +1015,9 @@ export class Boards {
   private readonly keep: Keep;
   private kits: [MatchKit, MatchKit] | null = null;
   private board = '';
-  /** The first of the partners this building carries (its own: see paint). */
+  /** The first of the partners this building carries, and its boards' own look (its own: see paint). */
   private adFrom = 0;
+  private style: 0 | 1 = 0;
   private ms = 0;
   private fontsIn = false;
   private dimTo = 1;
@@ -1060,6 +1098,17 @@ export class Boards {
     this.group.add(new Mesh(this.keep(geo), mat));
   }
 
+  /**
+   * A ribbon of lamps along the wall at the top of the lower bowl (bowl.ts fasciaRuns), in a building that has
+   * one: the ribbon's own picture, as one shape. Given back hidden: the building shows it (Arena.paint).
+   */
+  fascia(list: { x: number; y: number; z: number; w: number; h: number; turn: number }[]): Mesh {
+    const m = new Mesh(this.keep(faces(list.map((r) => ({ ...r, u: [0, r.w / RIBBON_FT] as [number, number] })))), this.surface(this.ribbons, FASCIA_GLOW));
+    m.visible = false;
+    this.group.add(m);
+    return m;
+  }
+
   /** The faces asked for, made: call once, after them. */
   build() {
     const mesh = (list: Face[], mat: Material) => {
@@ -1077,11 +1126,12 @@ export class Boards {
     this.kits = kits;
     this.stale();
   }
-  /** The building's colour, and (`seed`: its own number) which of the partners it carries first. */
-  paint(board: string, seed = 0) {
-    if (board === this.board && seed % ADS.length === this.adFrom) return;
+  /** The building's colour, and (`seed`: its own number) which of the partners it carries first; `style` its boards' own look (Venue.boards). */
+  paint(board: string, seed = 0, style: 0 | 1 = 0) {
+    if (board === this.board && seed % ADS.length === this.adFrom && style === this.style) return;
     this.board = board;
     this.adFrom = seed % ADS.length;
+    this.style = style;
     this.stale();
   }
   private stale() {
@@ -1142,6 +1192,7 @@ export class Boards {
       final: h.final,
       noise: this.loud,
       tick: Math.floor(this.ms / 170),
+      style: this.style,
     };
 
     // a big moment over everything; or the end of a quarter; or each board's own turn
@@ -1349,6 +1400,8 @@ function flags(cv: HTMLCanvasElement, side: Side) {
   }
 }
 
+/** The ribbon along the top of the lower bowl at full light: under the others (it runs right across the broadcast's picture). */
+const FASCIA_GLOW = 0.75;
 /** The far side's boards at full light: under the others (the benches sit in front of them). */
 const FAR_GLOW = 0.62;
 

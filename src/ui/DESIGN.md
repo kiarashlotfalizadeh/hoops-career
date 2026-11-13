@@ -422,15 +422,19 @@ package (ink plates, white type); the console is paper and card stock like every
   the tip, an orbit round the line-up, a crane down into the chosen camera (a little operator drift,
   in a little near the rim and at the line, a dip on a dunk), a bench and its coach and then the
   building at a timeout, the building after 1.5 s with nothing to follow, cut-ins on the scorer of a
-  big basket, the man fouled or a man who made his free throw (waist up, from where nobody and no
-  basket post stands between, his face to the camera when it can be; left at once if someone walks
-  in front; a lower third with his name, the building behind him soft), now and then his bench or
+  big basket, the man fouled or a man who made his free throw (waist up, opening out for his hands
+  when they go up, from where nobody and no part of a basket's unit stands between, his face to the
+  camera when it can be; left at once if someone or the unit comes in front; a lower third with his
+  name, the building behind him soft), now and then his bench or
   the home crowd instead, and at the final buzzer the winners, their crowd, then the whole building.
   Cuts dissolve briefly. **Instant replays**: a dunk, a three, an and-one, a block or a shot at the
-  buzzer is shown again at the next dead ball, slowed round its moment, from one of six cameras in
-  turn (low past the baseline, over the backboard, the floor under the basket, low on the near side,
-  the gantry's long lens, tight on the man), between two wipes in the team's colours with a Replay
-  bug; a shot at the buzzer, and at 1x a dunk, a second time, slower and tight. The court's clock holds
+  buzzer is shown again at the next dead ball, slowed round its moment (a dunk's slam), from one of six
+  cameras in turn (low past the baseline, over the backboard, the floor under the basket, low on the
+  near side, the gantry's long lens, tight on the man), never one with the basket's arm or board in
+  front of the man, between two wipes in the team's colours with a Replay bug; a shot at the buzzer,
+  and at 1x a dunk, a second time, slower and tight. The picture keeps the play and its outcome in
+  it, opening out little and slowly, the man high enough that he isn't under empty air, its aim and
+  focus going from one thing to the next without a snap. The court's clock holds
   while it runs (CourtView keeps the possession's end until it is over), so nothing live is missed;
   a tap skips it. None at 4x, in key plays, while paused or waiting on a call, in a highlight or with
   reduced motion; at most one every 25 s (37 s above 1x). Reduced motion: no pans, cut-ins or
@@ -626,7 +630,9 @@ package (ink plates, white type); the console is paper and card stock like every
   too (`(hover: hover)` only, never something a touch needs).
 - **Toasts** (ink pills with white text) rise above the Continue bar (over a sheet: at the top, clear of its buttons), at most two
   at once, one width, an icon for their tone. A tap dismisses one or opens its link. A sim or a phase
-  change starting clears the ones before it: a toast is about the league as it was.
+  change starting clears the ones before it: a toast is about the league as it was. On the live page
+  they go to the court's top corner instead, over the far stands (the newest only, smaller: toastHost.ts),
+  never over the players or the console.
 - **Loading**: nothing for 300ms, then a spinner fades in where the screen will be (`Waiting` in
   App.tsx). Never a "Loading…" line that flashes on every lazy screen.
 - While a sim runs, the Continue bar fills from the left with your colour's edge along its foot and says

@@ -5,6 +5,14 @@
 //                                 run, bodies inside each other, the ball inside a body, pops and snapping turns
 //                                 (breaks: true holds a dead ball at each period's end and before each timeout, as
 //                                 the live page does: the men walk to their benches and back)
+//                                 and `limbs`: hands that pop (by what he was doing: in a move, after one, the ball
+//                                 taken or let go), knees that snap or kink, hips that bob, strides that change in a
+//                                 frame, an arm, a leg or a head inside another man; `worst`: the worst of each kind as
+//                                 `k t pid`, to film (`only: 'jumper'` keeps just those). A pop must stand out from both
+//                                 its neighbour frames, at the speed chip's size (see POP_RATIO); the frames the picture
+//                                 cuts on are skipped; and what pops while the plan has a man going faster than a man
+//                                 runs (FASTEST) is counted apart, as `tooFast`. Film what `worst` names from a measure
+//                                 with breaks off (the film plays the game without them), with `lead` past k
 //   lab.when('pull')              where in the game a man goes into that clip, or makes that gesture
 //   lab.find('dunk')              the possessions with a man doing that (act), and when
 //   lab.film({ k, pid, from, to, every, eye, fov })   a strip of moments of possession k, a camera on one man
@@ -26,7 +34,7 @@ import { Fig, type Geo } from '../../../src/ui/live/court3d/figure';
 import { BALL_R, bodyOf, HIP, J, type Drive } from '../../../src/ui/live/court3d/puppet';
 import type { Gesture } from '../../../src/ui/live/court3d/clips';
 import { CourtScene, loadModels } from '../../../src/ui/live/court3d/scene';
-import { ballIn, sunk } from '../../../src/ui/live/court3d/spacing';
+import { ballIn, into, PARTS, sunk } from '../../../src/ui/live/court3d/spacing';
 import { matchKits } from '../../../src/ui/teamColors';
 
 const q = new URLSearchParams(location.search);
@@ -117,6 +125,16 @@ const inner = scene as unknown as {
 };
 // (?side=0: the floor without the people round it, for when their models are being rebuilt under the lab)
 if (q.get('side') === '0') (scene as unknown as { arena: { sideline: { update: () => void } } }).arena.sideline.update = () => {};
+// (the frames the picture cuts on, into an instant replay and back: everyone is put on his spot there, and a pose
+// that jumps is not seen move. Measured frames skip them)
+const director = (scene as unknown as { director: { feed: (...a: unknown[]) => { cut: boolean } | null } }).director;
+const feed = director.feed.bind(director);
+let cutNow = false;
+director.feed = (...a: unknown[]) => {
+  const r = feed(...a);
+  if (r?.cut) cutNow = true;
+  return r;
+};
 const draw = inner.renderer.render.bind(inner.renderer);
 // (measuring draws nothing: a game takes seconds, not its length)
 let drawing = false;
@@ -242,6 +260,36 @@ const BONES: readonly [number, number][] = [
   [J.kr, J.fr],
 ];
 const BONE_NAMES = ['spine', 'neck', 'shoulders', 'pelvis', 'uarmL', 'farmL', 'uarmR', 'farmR', 'thighL', 'shinL', 'thighR', 'shinR'];
+/**
+ * A hand that moves this much farther (ft, from his own shoulder, in his own frame) in one frame than in the frames
+ * either side of it has popped; a knee whose bend does that by this much (radians) has snapped; hips that do it by
+ * this much (ft) have bobbed in a frame; feet that turn over this much quicker or slower (a share) in one frame
+ * than the last have changed stride.
+ */
+const HAND_POP = 0.25;
+const KNEE_POP = 0.15;
+const HIP_POP = 0.06;
+const CADENCE_JUMP = 0.3;
+/** A hand pop this many frames after a move (a shot, a pass, a catch, a gesture) ends is that move's arm coming back. */
+const AFTER = 24;
+/** How many of the worst of each kind are kept to film. */
+const TOP = 12;
+/**
+ * A frame's step counts as a pop only when it is also much bigger than both its neighbours (this many times the
+ * bigger), or bigger than them by twice the pop; and the pop it must beat is as many times bigger as the speed chip
+ * (a pop is a jump, the same size at any speed; a fast move steps that much farther a frame at 2x: a sprinter's
+ * planted shin turns half a radian a frame there, and filmed it reads as fast, not as a pop). `raw` counts keep the
+ * old rule, a spike at 1x's size alone.
+ */
+const POP_RATIO = 1.6;
+const popped = (step: number, before: number, after: number, least: number) => {
+  const spike = step - Math.max(before, after);
+  return spike > least && (step > POP_RATIO * Math.max(before, after) || spike > 2 * least) ? spike : 0;
+};
+/** A knee that was straightening this fast (radians a frame) and folds in the next, or the other way, has kinked. */
+const KINK = 0.4;
+/** Faster than this (ft a second, the bodies' time) is faster than a man runs. */
+const FASTEST = 32;
 const HP = new Vector3();
 const CH = new Vector3();
 const HD = new Vector3();
@@ -271,7 +319,7 @@ function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only =
   const hitAt: string[] = [];
   const ballWhy = new Map<string, number>();
   const ballAt: string[] = [];
-  const pop = { n: 0, steady: 0, max: 0, yawN: 0, yawMax: 0, turnMax: 0, bones: 0 };
+  const pop = { n: 0, steady: 0, raw: 0, tooFast: 0, max: 0, yawN: 0, yawMax: 0, turnMax: 0, bones: 0 };
   const popWhy = new Map<string, number>();
   const popAt: string[] = [];
   const yawWhy = new Map<string, number>();
@@ -303,10 +351,74 @@ function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only =
   const acts = new Map<string, number>();
   const gestures = new Map<string, number>();
   const making = new Map<number, string | null>();
+  // the worst of each kind, to film (`k t pid what`): each man once in a possession
+  const tops = new Map<string, { mag: number; at: string; key: string }[]>();
+  // (`only`: just the ones whose line says it, a clip or a move)
+  const top = (kind: string, mag: number, at: string, key: string) => {
+    if (only && !at.includes(only)) return;
+    let l = tops.get(kind);
+    if (!l) tops.set(kind, (l = []));
+    const same = l.findIndex((x) => x.key === key);
+    if (same >= 0) {
+      if (l[same].mag >= mag) return;
+      l.splice(same, 1);
+    }
+    if (l.length >= TOP && l[l.length - 1].mag >= mag) return;
+    l.push({ mag, at, key });
+    l.sort((x, y) => y.mag - x.mag);
+    if (l.length > TOP) l.pop();
+  };
+  const actOf = (pid: number) => {
+    const sc = c.stage.script;
+    const play = c.stage.play;
+    return sc && play ? play.b.act[[...sc.oPids, ...sc.dPids].indexOf(pid)] : '-';
+  };
+  // his arms and legs from frame to frame: each hand's step from his shoulder, each knee's bend, his hips, how fast his
+  // feet turn over, and what he was last doing (the move or the gesture, and how long since; the ball, taken or let go)
+  const limbs = new Map<
+    number,
+    {
+      h: Float32Array;
+      hs: Float32Array;
+      kn: Float32Array;
+      ks: Float32Array;
+      kw: Float32Array;
+      hip: number;
+      hps: Float32Array;
+      ph: number;
+      cad: number;
+      last: string;
+      since: number;
+      held: boolean;
+      grab: number;
+      label: string;
+      ok: number;
+      x: number;
+      z: number;
+    }
+  >();
+  const hand = { n: 0, raw: 0, tooFast: 0, max: 0, why: new Map<string, number>() };
+  const knee = { n: 0, raw: 0, kinks: 0, tooFast: 0, max: 0, why: new Map<string, number>() };
+  const hipPop = { n: 0, raw: 0, tooFast: 0, why: new Map<string, number>() };
+  const stride = { n: 0, why: new Map<string, number>() };
+  const inside = { arms: 0, armsMeet: 0, legs: 0, heads: 0, deepest: 0, why: new Map<string, number>() };
+  const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
+  let cuts = 0;
+  let fast = 0;
+  cutNow = false;
   for (;;) {
     if (!c.step()) break;
     frames++;
     const figs = [...inner.figs.entries()];
+    // (a frame the picture cuts on, or everyone put on fresh spots: nothing is judged across it)
+    const cut =
+      cutNow ||
+      figs.some(([pid, f]) => {
+        const w = last.get(pid);
+        return !!w && Math.hypot(f.pup.x - w.x, f.pup.z - w.z) > 2.5;
+      });
+    cutNow = false;
+    if (cut) cuts++;
     const ball = inner.ball;
     const play = c.stage.play;
     const sc = c.stage.script;
@@ -320,7 +432,7 @@ function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only =
       const was = last.get(pid);
       // (a foot is down while it isn't swinging and he isn't in the air: one put down and dragged after him counts)
       const feet = p.feet.map((ft) => [ft.x, ft.z, !ft.swing && air < 0.5] as [number, number, boolean]);
-      if (was && Math.hypot(p.x - was.x, p.z - was.z) < 3) {
+      if (was && !cut && Math.hypot(p.x - was.x, p.z - was.z) < 3) {
         let worst = 0;
         feet.forEach((ft, k) => {
           if (ft[2] && was.feet[k][2]) worst = Math.max(worst, Math.hypot(ft[0] - was.feet[k][0], ft[1] - was.feet[k][1]));
@@ -360,6 +472,11 @@ function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only =
         dunkOff = Math.max(dunkOff, off);
       }
       const sp = Math.hypot(p.vf, p.vs);
+      // (faster than a man runs: the plan has him somewhere his legs can't take him)
+      if (sp > FASTEST && !cut) {
+        fast++;
+        top('faster than a man runs', sp, `k${c.k} t${Math.round(c.t)} p${pid} ${p.clip} ${actOf(pid)}`, `${c.k}:${pid}`);
+      }
       if (sp > 9 && !p.one && (p.clip === 'jog' || p.clip === 'run' || p.clip === 'sprint')) {
         runs++;
         hips.push(p.j[J.hips * 3 + 1] / (HIP * s));
@@ -437,7 +554,7 @@ function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only =
       b.x = p.x;
       b.z = p.z;
       // (frames in a row he has been followed for: a pop at t-1 is judged against t-2 and t)
-      b.ok = fresh || jumped ? 0 : b.ok + 1;
+      b.ok = fresh || jumped || cut ? 0 : b.ok + 1;
       BONES.forEach(([from, to], i) => {
         const dx = w[to * 3] - w[from * 3];
         const dy = w[to * 3 + 1] - w[from * 3 + 1];
@@ -451,13 +568,22 @@ function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only =
           pop.max = Math.max(pop.max, th);
           steps.push(th);
           // (the frame before: a step bigger than both its neighbours' by POP is a pop)
-          const spike = b.th[i * 2] - Math.max(b.th[i * 2 + 1], th);
+          if (b.th[i * 2] - Math.max(b.th[i * 2 + 1], th) > POP) pop.raw++;
+          const spike = popped(b.th[i * 2], b.th[i * 2 + 1], th, POP * speed);
+          // (faster than a man runs, the plan's doing: counted on its own)
+          if (spike > 0 && Math.hypot(p.vf, p.vs) > FASTEST) pop.tooFast++;
+          else if (spike > 0) {
+            const part = i >= 8 ? 'legs' : i >= 4 ? 'arms' : 'trunk';
+            top(`pop ${part}`, spike, `k${c.k} t${Math.round(c.t) - Math.round(FRAME * speed * PACE)} p${pid} ${b.label}:${BONE_NAMES[i]} ${actOf(pid)}`, `${c.k}:${pid}`);
+          }
           // (in a clip's own motion, or in the change from one clip to the next)
-          if (spike > POP && !b.label.includes('>')) {
+          if (spike > 0 && Math.hypot(p.vf, p.vs) > FASTEST) {
+            // (counted above)
+          } else if (spike > 0 && !b.label.includes('>')) {
             pop.steady++;
             const why = `${b.label}:${BONE_NAMES[i]}`;
             steadyWhy.set(why, (steadyWhy.get(why) ?? 0) + 1);
-          } else if (spike > POP) {
+          } else if (spike > 0) {
             pop.n++;
             const why = `${b.label}:${BONE_NAMES[i]}`;
             popWhy.set(why, (popWhy.get(why) ?? 0) + 1);
@@ -492,6 +618,134 @@ function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only =
       b.ys[0] = b.ok >= 1 ? ys : 0;
       b.yaw = p.yaw;
     }
+    // his hands, knees, hips and stride: a frame's step bigger than both its neighbours' (judged a frame late)
+    for (const [pid, f] of figs) {
+      const p = f.pup;
+      const j = p.j;
+      const s = p.body.s;
+      let m = limbs.get(pid);
+      if (!m)
+        limbs.set(
+          pid,
+          (m = {
+            h: new Float32Array(6),
+            hs: new Float32Array(4),
+            kn: new Float32Array(2),
+            ks: new Float32Array(4),
+            kw: new Float32Array(2),
+            hip: 0,
+            hps: new Float32Array(2),
+            ph: 0,
+            cad: 0,
+            last: '',
+            since: 99,
+            held: false,
+            grab: 99,
+            label: '',
+            ok: 0,
+            x: p.x,
+            z: p.z,
+          }),
+        );
+      const jumped = Math.hypot(p.x - m.x, p.z - m.z) > 3;
+      m.x = p.x;
+      m.z = p.z;
+      m.ok = jumped || cut ? 0 : m.ok + 1;
+      // (what he is doing, for whatever pops: a move, a gesture, or how long since one ended; the ball taken or let go)
+      const doing = p.one?.id ?? p.gesturing ?? null;
+      if (doing) [m.last, m.since] = [doing, 0];
+      else m.since++;
+      if (!!f.ball !== m.held) [m.held, m.grab] = [!!f.ball, 0];
+      else m.grab++;
+      const b = bones.get(pid)!;
+      // (faster than a man runs, the plan's doing: his feet can't keep up, and what pops is put down to that)
+      const label =
+        (Math.hypot(p.vf, p.vs) > FASTEST ? 'too fast: ' : '') +
+        (doing ? `in ${doing}` : m.since < AFTER ? `after ${m.last}` : m.grab < 6 ? (m.held ? 'took it' : 'let it go') : b.since < 8 ? `${b.was}>${p.clip}` : p.clip);
+      const where = `k${c.k} t${Math.round(c.t) - Math.round(FRAME * speed * PACE)} p${pid}`;
+      // each hand from its own shoulder, in his frame
+      for (const [k, sh, ha] of [
+        [0, J.sl, J.hl],
+        [1, J.sr, J.hr],
+      ] as const) {
+        const x = j[ha * 3] - j[sh * 3];
+        const y = j[ha * 3 + 1] - j[sh * 3 + 1];
+        const z = j[ha * 3 + 2] - j[sh * 3 + 2];
+        const st = Math.hypot(x - m.h[k * 3], y - m.h[k * 3 + 1], z - m.h[k * 3 + 2]);
+        if (m.ok >= 3) {
+          if (m.hs[k * 2] - Math.max(m.hs[k * 2 + 1], st) > HAND_POP) hand.raw++;
+          const spike = popped(m.hs[k * 2], m.hs[k * 2 + 1], st, HAND_POP * speed);
+          if (spike > 0 && m.label.startsWith('too fast')) hand.tooFast++;
+          else if (spike > 0) {
+            hand.n++;
+            hand.max = Math.max(hand.max, spike);
+            bump(hand.why, m.label);
+            top('hand', spike, `${where} ${m.label} ${k ? 'R' : 'L'} ${actOf(pid)}`, `${c.k}:${pid}`);
+          }
+        }
+        m.hs[k * 2 + 1] = m.hs[k * 2];
+        m.hs[k * 2] = m.ok >= 1 ? st : 0;
+        [m.h[k * 3], m.h[k * 3 + 1], m.h[k * 3 + 2]] = [x, y, z];
+      }
+      // each knee's bend
+      for (const [k, hj, kj, fj] of [
+        [0, J.jl, J.kl, J.fl],
+        [1, J.jr, J.kr, J.fr],
+      ] as const) {
+        const ax = j[hj * 3] - j[kj * 3];
+        const ay = j[hj * 3 + 1] - j[kj * 3 + 1];
+        const az = j[hj * 3 + 2] - j[kj * 3 + 2];
+        const bx = j[fj * 3] - j[kj * 3];
+        const by = j[fj * 3 + 1] - j[kj * 3 + 1];
+        const bz = j[fj * 3 + 2] - j[kj * 3 + 2];
+        const bend = Math.acos(Math.max(-1, Math.min(1, (ax * bx + ay * by + az * bz) / (Math.hypot(ax, ay, az) * Math.hypot(bx, by, bz) || 1))));
+        const st = Math.abs(bend - m.kn[k]);
+        const w = bend - m.kn[k];
+        if (m.ok >= 3) {
+          if (m.ks[k * 2] - Math.max(m.ks[k * 2 + 1], st) > KNEE_POP) knee.raw++;
+          // (a pop, or a kink: straightening and then folding, or folding and then straightening, both fast)
+          const kink = m.kw[k] * w < 0 && Math.abs(w - m.kw[k]) > KINK * speed ? Math.abs(w - m.kw[k]) : 0;
+          if (kink) knee.kinks++;
+          const spike = Math.max(popped(m.ks[k * 2], m.ks[k * 2 + 1], st, KNEE_POP * speed), kink);
+          if (spike > 0 && m.label.startsWith('too fast')) knee.tooFast++;
+          else if (spike > 0) {
+            knee.n++;
+            knee.max = Math.max(knee.max, spike);
+            bump(knee.why, m.label);
+            top('knee', spike, `${where} ${m.label} ${k ? 'R' : 'L'} ${actOf(pid)}`, `${c.k}:${pid}`);
+          }
+        }
+        m.ks[k * 2 + 1] = m.ks[k * 2];
+        m.ks[k * 2] = m.ok >= 1 ? st : 0;
+        m.kw[k] = m.ok >= 1 ? w : 0;
+        m.kn[k] = bend;
+      }
+      // his hips, up and down
+      const hy = j[J.hips * 3 + 1];
+      const hst = Math.abs(hy - m.hip);
+      if (m.ok >= 3 && m.hps[0] - Math.max(m.hps[1], hst) > HIP_POP * s && p.pose[I.air] < 0.3) hipPop.raw++;
+      const bob = popped(m.hps[0], m.hps[1], hst, HIP_POP * s * speed);
+      if (m.ok >= 3 && bob > 0 && p.pose[I.air] < 0.3 && m.label.startsWith('too fast')) hipPop.tooFast++;
+      else if (m.ok >= 3 && bob > 0 && p.pose[I.air] < 0.3) {
+        hipPop.n++;
+        bump(hipPop.why, m.label);
+        top('hips', bob, `${where} ${m.label} ${actOf(pid)}`, `${c.k}:${pid}`);
+      }
+      m.hps[1] = m.hps[0];
+      m.hps[0] = m.ok >= 1 ? hst : 0;
+      m.hip = hy;
+      // how fast his feet turn over (strides a ms): a change of gait keeps it, give or take
+      const ph = (p as unknown as { phase: number }).phase;
+      const cad = (ph - m.ph) / (FRAME * speed);
+      if (m.ok >= 3 && cad > 0 && m.cad > 0 && Math.abs(cad - m.cad) > CADENCE_JUMP * Math.max(cad, m.cad)) {
+        stride.n++;
+        bump(stride.why, label);
+        top('stride', Math.abs(cad - m.cad) / Math.max(cad, m.cad), `${where} ${label} ${actOf(pid)}`, `${c.k}:${pid}`);
+      }
+      m.cad = m.ok >= 1 ? cad : 0;
+      m.ph = ph;
+      m.label = label;
+    }
     for (const [pid, f] of figs) {
       const p = f.pup;
       const deep = ballIn(ball, ws.get(pid)!, p.body.s, p.body.bulk, BALL_R, !f.ball);
@@ -517,6 +771,33 @@ function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only =
         // (two the play has meet body to body, a screen, a box-out: touching is what they are for, counted on their own)
         const meeting = met.has(`${figs[a][0]}:${figs[b][0]}`) || met.has(`${figs[b][0]}:${figs[a][0]}`);
         const ctx = meeting ? 'meet' : walking ? 'walk' : sc && play ? 'live' : 'dead';
+        // an arm or a leg of one inside the other's trunk or head (a hand on him is not in him), and a head in a head
+        {
+          const [wa, wb] = [ws.get(figs[a][0])!, ws.get(figs[b][0])!];
+          const [A, B] = [fa.pup.body, fb.pup.body];
+          const arm = Math.max(into(wa, A.s, A.bulk, wb, B.s, B.bulk, PARTS.arms), into(wb, B.s, B.bulk, wa, A.s, A.bulk, PARTS.arms));
+          const leg = Math.max(into(wa, A.s, A.bulk, wb, B.s, B.bulk, PARTS.legs, PARTS.trunk), into(wb, B.s, B.bulk, wa, A.s, A.bulk, PARTS.legs, PARTS.trunk));
+          const head = into(wa, A.s, A.bulk, wb, B.s, B.bulk, PARTS.head, PARTS.head);
+          const pair = `${[fa.pup.clip, fb.pup.clip].sort().join('+')}`;
+          const where = `k${c.k} t${Math.round(c.t)} ${figs[a][0]}/${figs[b][0]} ${ctx} ${pair} ${actOf(figs[a][0])}/${actOf(figs[b][0])}`;
+          if (arm > HIT) {
+            if (meeting) inside.armsMeet++;
+            else inside.arms++;
+            bump(inside.why, `arm ${ctx} ${pair}`);
+            top(meeting ? 'arm in body (meet)' : 'arm in body', arm, where, `${c.k}:${figs[a][0]}:${figs[b][0]}`);
+          }
+          if (leg > HIT) {
+            inside.legs++;
+            bump(inside.why, `leg ${ctx} ${pair}`);
+            top('leg in body', leg, where, `${c.k}:${figs[a][0]}:${figs[b][0]}`);
+          }
+          if (head > HIT) {
+            inside.heads++;
+            bump(inside.why, `head ${ctx} ${pair}`);
+            top('head in head', head, where, `${c.k}:${figs[a][0]}:${figs[b][0]}`);
+          }
+          inside.deepest = Math.max(inside.deepest, arm, leg, head);
+        }
         if (meeting) {
           if (trunk > HIT) hit.trunkMeet++;
         } else {
@@ -563,6 +844,8 @@ function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only =
     speed,
     possessions: scripts.length,
     frames,
+    cuts,
+    fastPct: pct(fast, pf),
     slidePct: pct(slid, pf),
     slideMeanFt: Math.round((slidFt / Math.max(1, slid)) * 1000) / 1000,
     slides: Object.fromEntries([...slides].sort((x, y) => y[1] - x[1]).slice(0, 14)),
@@ -603,6 +886,28 @@ function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only =
     whipAt: Object.fromEntries([...whipAt].sort((x, y) => y[1] - x[1]).slice(0, 14)),
     headTravel: Math.round((heads / Math.max(1, pf)) * 1000) / 1000,
     statuePct: pct(still, standing),
+    // (hands that pop, knees that snap, hips that bob, strides that change in a frame, and limbs and heads inside another man)
+    limbs: {
+      hand: {
+        n: hand.n,
+        raw: hand.raw,
+        tooFast: hand.tooFast,
+        max: Math.round(hand.max * 100) / 100,
+        why: Object.fromEntries([...hand.why].sort((x, y) => y[1] - x[1]).slice(0, 16)),
+      },
+      knee: {
+        n: knee.n,
+        raw: knee.raw,
+        kinks: knee.kinks,
+        tooFast: knee.tooFast,
+        max: Math.round(knee.max * 100) / 100,
+        why: Object.fromEntries([...knee.why].sort((x, y) => y[1] - x[1]).slice(0, 16)),
+      },
+      hips: { n: hipPop.n, raw: hipPop.raw, tooFast: hipPop.tooFast, why: Object.fromEntries([...hipPop.why].sort((x, y) => y[1] - x[1]).slice(0, 10)) },
+      stride: { n: stride.n, why: Object.fromEntries([...stride.why].sort((x, y) => y[1] - x[1]).slice(0, 12)) },
+      inside: { ...inside, deepest: Math.round(inside.deepest * 100) / 100, why: Object.fromEntries([...inside.why].sort((x, y) => y[1] - x[1]).slice(0, 16)) },
+    },
+    worst: Object.fromEntries([...tops].map(([k, l]) => [k, l.map((x) => `${x.at} ${x.mag.toFixed(2)}`)])),
     gestures: Object.fromEntries(gestures),
     clips: Object.fromEntries([...acts].sort((x, y) => y[1] - x[1])),
   };

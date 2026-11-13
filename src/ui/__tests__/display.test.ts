@@ -183,13 +183,18 @@ describe('display helpers', () => {
         const v = venueLook(f.colors, kit.color, kit.trim, f.abbrev, f.name, f.region);
         expect(venueLook(f.colors, kit.color, kit.trim, f.abbrev, f.name, f.region), f.abbrev).toEqual(v);
         expect(contrast(v.apronInk, v.apron), `${f.abbrev} letters on the apron`).toBeGreaterThanOrEqual(3);
-        return { f, v, picks: [v.wood, v.key, v.arc, v.apron === v.paint, v.circle, v.seats.join(), v.house] };
+        return { f, v, picks: [v.wood, v.key, v.arc, v.apron === v.paint, v.circle, v.seats.join(), v.house, v.fascia, v.concourse, v.suites.bays, v.seatMix] };
       });
       for (const a of venues)
         for (const b of venues)
           if (a.f !== b.f && lookDistance(a.v.paint, b.v.paint) < 0.12)
             expect(a.picks.filter((p, i) => p !== b.picks[i]).length, `${a.f.abbrev} and ${b.f.abbrev}`).toBeGreaterThanOrEqual(2);
       expect(new Set(venues.map((x) => x.v.wood)).size, 'stains').toBeGreaterThanOrEqual(4);
+      // (from the broadcast's camera, past its colours: every kind of fascia and concourse is some building's, and few share the same shell)
+      expect(new Set(venues.map((x) => x.v.fascia))).toEqual(new Set(['glass', 'wall', 'ribbon']));
+      expect(new Set(venues.map((x) => x.v.concourse))).toEqual(new Set(['dark', 'brick', 'stone', 'timber', 'paint']));
+      expect(new Set(venues.map(({ v }) => `${v.fascia}|${v.concourse}|${v.suites.bays}|${v.seatMix}`)).size, 'shells').toBeGreaterThanOrEqual(22);
+      expect(new Set(venues.map((x) => x.v.crowd)).size, 'crowds').toBeGreaterThanOrEqual(3);
       expect(contrast(neutralVenue('NBA Cup').apronInk, neutralVenue('NBA Cup').apron)).toBeGreaterThanOrEqual(3);
       // the break's chart: a dozen shots at the rim are eased apart into marks that read as a dozen, none far from where it was
       const pile = spread(

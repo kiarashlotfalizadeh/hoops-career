@@ -4,7 +4,7 @@
 //   /scripts/qa/figure-lab/?move=run&live=1        one figure, moving
 //   &yaw=40 (degrees round him)  &zoom=1.4  &from=0&to=1200 (ms)  &n=8  &h=78&w=215 (his build)
 //   &seed=1 (the first man's own things: his look, sleeves, shoes; the next is seed+1)  &light=1 (the home kit)  &num=23&name=Brunson&mark=NYK
-//   &style=4 &beard=3 &tone=6 (everyone's hair, beard or skin: see look.ts)  &styles=1 (each man the next style)  &tones=1 (each the next skin)
+//   &style=4 &beard=3 &tone=6 (everyone's hair, beard or skin: see look.ts)  &styles=1 (each man the next style; &styles=9: from the ninth)  &tones=1 (each the next skin)
 //   &eye=3,5.5,6&at=0,5,0&fov=28 (a camera of one's own, ft: for a close look at a shoulder, a shoe)
 //   &arms=up|shoot|fwd|hip|out|across|back|down (both arms put there, whatever the move has them do; arms=all, or a list of them: each man the next)
 //   faces: ?move=idle&n=6&gap=1.5&camY=6.4&lookY=6.25&zoom=3.6&yaw=12&from=100&to=100  (&beard=0..5: none, stubble, goatee, beard, full, strap)
@@ -128,7 +128,7 @@ const kit = {
 const gap = num('gap', 5);
 const figs = Array.from({ length: n }, (_, i) => {
   const look = lookOf(num('seed', 1) + i);
-  if (q.has('styles')) look.style = i % STYLES.length;
+  if (q.has('styles')) look.style = (i + Math.max(0, num('styles', 1) - 1)) % STYLES.length;
   if (q.has('style')) look.style = num('style', 0) % STYLES.length;
   if (q.has('beard')) look.beard = num('beard', 0) % BEARDS.length;
   if (q.has('tones')) look.tone = i % SKINS.length;

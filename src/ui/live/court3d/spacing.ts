@@ -341,6 +341,43 @@ export const SHAPES: readonly (readonly [number, number, number, boolean])[] = [
   [13, 14, 0.15, true],
 ];
 
+/** Which of SHAPES are his trunk, his head, his arms and his legs. */
+export const PARTS = { trunk: [0, 1, 2], head: [3], arms: [4, 5, 6, 7], legs: [8, 9, 10, 11] } as const;
+const TRUNK_HEAD = [...PARTS.trunk, ...PARTS.head];
+
+/** How thick one of SHAPES is on a man (ft): his trunk and his thighs wider by the root of his bulk. */
+const thick = (k: number, s: number, bulk: number) => {
+  const [p, , r, limb] = SHAPES[k];
+  return r * s * (limb && p !== 9 && p !== 12 ? 1 : Math.sqrt(bulk));
+};
+
+/**
+ * How far `a`'s shapes in `from` (indices into SHAPES: see PARTS) go into `b`'s in `to` (ft, 0 if they don't):
+ * an arm into another man's trunk or head, a head into a head. Joints as for `clearance`.
+ */
+export function into(
+  a: ArrayLike<number>,
+  sa: number,
+  ba: number,
+  b: ArrayLike<number>,
+  sb: number,
+  bb: number,
+  from: readonly number[],
+  to: readonly number[] = TRUNK_HEAD,
+): number {
+  if (Math.hypot(a[0] - b[0], a[2] - b[2]) > 4.5 * Math.max(sa, sb)) return 0;
+  let deep = 0;
+  for (const k of from) {
+    const [p, q] = SHAPES[k];
+    const ra = thick(k, sa, ba);
+    for (const m of to) {
+      const [u, v] = SHAPES[m];
+      deep = Math.max(deep, ra + thick(m, sb, bb) - between(a, p, q, b, u, v));
+    }
+  }
+  return deep;
+}
+
 /** The nearest two points of two segments come within this (ft): the closest distance between them. */
 function between(j: ArrayLike<number>, a: number, b: number, k: ArrayLike<number>, c: number, d: number): number {
   const px = j[a * 3];
@@ -415,8 +452,11 @@ export function ballIn(ball: P3, j: ArrayLike<number>, s: number, bulk: number, 
  * A ball in the air is never drawn inside a body: if it is nearer than `r` (ft) to the line of his trunk
  * (`a` to `b`), it is moved out to `r`, the way it already is from him. `soft`: it starts to give way that
  * far (ft) before it gets to him, a little at first, so it bends round him and never jumps. Says whether it moved.
+ * `near`: a way across the floor (a unit, x and z) it is kept to the near side of: one past the line's middle is put
+ * out on the near side, not the far one, so a hand reaching into a man is drawn back off him and never flicks
+ * through him as it crosses his middle.
  */
-export function clearOf(ball: P3, a: P3, b: P3, r: number, soft = 0): boolean {
+export function clearOf(ball: P3, a: P3, b: P3, r: number, soft = 0, near?: { x: number; z: number }): boolean {
   const ux = b.x - a.x;
   const uy = b.y - a.y;
   const uz = b.z - a.z;
@@ -430,7 +470,14 @@ export function clearOf(ball: P3, a: P3, b: P3, r: number, soft = 0): boolean {
   // (out along the floor: a ball pushed up or down a man's chest would climb him)
   const flat = Math.hypot(dx, dz);
   const reach = Math.sqrt(Math.max(0, want * want - dy * dy));
-  if (flat < 1e-3) ball.x += reach;
+  if (near) {
+    // (its way out from the line, turned back to the near side if it is past the middle)
+    let [ox, oz] = flat < 1e-3 ? [near.x, near.z] : [dx / flat, dz / flat];
+    const back = ox * near.x + oz * near.z;
+    if (back < 0) [ox, oz] = [ox - 2 * back * near.x, oz - 2 * back * near.z];
+    ball.x += ox * reach - dx;
+    ball.z += oz * reach - dz;
+  } else if (flat < 1e-3) ball.x += reach;
   else {
     ball.x += (dx / flat) * (reach - flat);
     ball.z += (dz / flat) * (reach - flat);

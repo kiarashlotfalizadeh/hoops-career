@@ -145,6 +145,56 @@
     font-size: 17px;
   }
 }
+/* the smallest phones (an SE's 568px): a size down again, so playback's four buttons stay whole on the
+   strip beside it, three-figure scores included */
+@container lv-side (max-width: 640px) {
+  .lv-lb.slim > .lv-lb-leave {
+    width: 30px;
+  }
+  .lv-lb.slim .lv-lb-ab {
+    font-size: 14px;
+  }
+  .lv-lb.slim .lv-lb-who {
+    gap: 3px;
+  }
+  .lv-lb.slim .lv-lb-meta {
+    font-size: 11px;
+  }
+  .lv-lb.slim .lv-lb-id {
+    padding: 4px 3px 6px 5px;
+  }
+  .lv-lb.slim .lv-lb-side.home .lv-lb-id {
+    padding: 4px 5px 6px 3px;
+  }
+  .lv-lb.slim .lv-lb-pts {
+    min-width: 34px;
+    padding: 2px 2px 3px;
+  }
+  .lv-lb.slim .lv-lb-score {
+    font-size: 26px;
+  }
+  .lv-lb.slim .lv-lb-score.wide {
+    font-size: 21px;
+  }
+  .lv-lb.slim .lv-lb-bonus {
+    padding: 0 2px;
+    font-size: 10px;
+  }
+  .lv-lb.slim .lv-lb-mid {
+    gap: 2px 3px;
+    padding: 3px;
+  }
+  .lv-lb.slim .lv-lb-plate {
+    min-width: 46px;
+    padding: 4px 3px;
+    font-size: 16px;
+  }
+  .lv-lb.slim .lv-lb-shot {
+    min-width: 26px;
+    padding: 4px 2px;
+    font-size: 16px;
+  }
+}
 
 /* ------------------------------------------------------------------ the rail */
 .lv.side .lv-bar {

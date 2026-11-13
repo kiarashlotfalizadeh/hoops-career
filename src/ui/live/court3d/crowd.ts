@@ -1,10 +1,15 @@
 // The people in the stands. Each is one of a few spectators Blender made (scripts/blender/arena.py: five
 // for the rows by the floor, two plainer ones for the rows behind, one of some 140 triangles and a trunk
 // and a head for a slow device and the floor's mirror), his own size, build, skin, hair and clothes,
-// drawn in a handful of instanced draws a side (a side nobody is looking at is not drawn at all). What
+// drawn in a handful of instanced draws a side (a side nobody is looking at is not drawn at all). People
+// come in parties (side by side, often dressed alike, a child with them now and then) and empty seats in
+// runs; each sits a little off the middle of his seat, back or forward in it, leant his own way. What
 // he wears is more than a colour where the camera is near enough to tell: the fragment shader draws a
-// face on him and, by his own number, a jacket open over a shirt, a replica top, hoops, a check; no two side
-// by side in the same colour or the same model. Nothing is moved from here frame by frame: the shader sits
+// face on him (a beard on some, glasses on some) and what he has on (TOP: a jacket open over a shirt, a
+// replica jersey with its number, hoops, a check, a hoodie, sleeves of another colour, a cap), in its
+// second colour; no two side by side in the same colour or the same model. How many wear the home side's
+// colours is the building's own (Venue.crowd). A few hold something: a phone in the lap, a phone up when
+// there is something to film, a sign or a foam finger. Nothing is moved from here frame by frame: the shader sits
 // each one in his seat his own way (forward on his knees, sat back, arms folded, chin on a fist, head down
 // over a phone), shifts him about (less while a play is on, and greyer and a shade darker: the floor is the
 // brightest thing in the building), turns his head to the ball's end, holds a phone up in a few hands, stands
@@ -15,8 +20,10 @@
 // where nobody is in one.
 import {
   BufferGeometry,
+  CanvasTexture,
   Color,
   DoubleSide,
+  Euler,
   Float32BufferAttribute,
   Group,
   InstancedBufferAttribute,
@@ -26,10 +33,11 @@ import {
   MeshLambertMaterial,
   PlaneGeometry,
   Quaternion,
+  SRGBColorSpace,
   Vector3,
   Vector4,
 } from 'three';
-import { section, type Seat } from './bowl';
+import { ROWS, section, type Seat } from './bowl';
 import { unshadowed } from './rig';
 
 type Keep = <T extends { dispose(): void }>(o: T) => T;
@@ -52,7 +60,7 @@ const NEAR_ROWS = 5;
 const CAMERA_ROWS = 8;
 /** How far a spectator's hips are over his step (FAN_FOOT in arena.py). */
 export const SEAT_UP = 1.3;
-/** What the crowd wears when it isn't a team's colours: darks, denim, greys, a few colours, a few light. */
+/** What the crowd wears when it isn't a team's colours: darks, denim, greys, heather, cream, some colours, a few bright. */
 const WEAR = [
   '#1c1d21',
   '#24262b',
@@ -74,9 +82,47 @@ const WEAR = [
   '#633a3a',
   '#39503f',
   '#8a5a3c',
+  '#6f7277',
+  '#857f72',
+  '#56739a',
+  '#875a64',
+  '#7e6a2c',
+  '#2f5c5e',
+  '#7a2c2a',
+  '#2a4380',
+  '#4f5334',
 ];
-/** How many of the seats' people wear the home colour, and of those how many its white. */
-const HOME_SHARE = 0.3;
+/** A second colour on what someone wears (a stripe, a sleeve, a cap, a jersey's trim): mostly white, black or grey. */
+const SECOND = ['#a29e96', '#18191c', '#18191c', '#2a2c31', '#5c5f66', '#45484f'];
+/**
+ * What someone has on, by number (the crowd's shader draws each: CROWD_COLOR, CROWD_FACE): a plain top, a
+ * jacket or a hood open over a shirt, a replica jersey over a tee (trim and a number in its second colour),
+ * hoops, a check, a top with panels down its sides, a hoodie, a jacket with sleeves of another colour. A cap
+ * on top is CAP more, a beard BEARD more, glasses GLASSES more.
+ */
+const TOP = { plain: 0, open: 1, jersey: 2, hoops: 3, check: 4, panels: 5, hoodie: 6, sleeves: 7 } as const;
+const CAP = 8;
+const BEARD = 16;
+const GLASSES = 32;
+/** People come in parties, seats side by side (a few alone), and empty seats in runs (a party that didn't come): how many in one. */
+const PARTY = [1, 2, 2, 2, 3, 3, 3, 4, 4, 5];
+const GAP = [1, 1, 2, 2, 3, 4];
+/** How many of a party are a side's fans when it is one; how many of the parties that are wear its jersey, all of them. */
+const PARTY_FANS = 0.8;
+const PARTY_KIT = 0.2;
+/** How far someone sits off the middle of his seat (ft along the row, and back or forward), and how far he leans to one side (radians). */
+const OFF_SEAT = 0.3;
+const OFF_BACK = 0.22;
+const OFF_LEAN = 0.09;
+/**
+ * How many of the parties in the seats are the home side's (PARTY_FANS of each in its colours) in a building
+ * that doesn't say (Venue.crowd), the most any does, and those who bring a towel in all of them; and of those
+ * in its colours how many in its white.
+ */
+const HOME_SHARE = 0.38;
+const HOME_MOST = 0.6;
+const HOME_LEAST = 0.26;
+const HOME_TOWELS = 0.3;
 const HOME_WHITE = 0.16;
 const HOME_TRIM = 0.16;
 /** The white a fan wears: off-white, well under a kit's on the floor (a stand full of pure white dots pulls the eye off the play). */
@@ -213,12 +259,12 @@ const FAN_MOVE = /* glsl */ `
       // and upright), hands together in his lap, arms folded, chin on a fist, a phone in both hands at his lap,
       // or (a few) one hand up with a phone when there is something to film
       vec3 sat = habit < 0.16 ? vec3(0.7, 1.55, 0.72)
-        : habit < 0.45 ? vec3(0.3, 1.15, 0.0)
+        : habit < 0.45 ? vec3(0.26, 1.02, 0.32)
         : habit < 0.6 ? vec3(0.22, 1.42, 0.8)
         : habit < 0.74 ? (part < 2.5 ? vec3(0.24, 1.78, 2.0) : vec3(0.18, 1.62, 1.8))
-        : habit < 0.84 ? (part < 2.5 ? vec3(0.3, 1.15, 0.0) : vec3(0.95, 2.55, 0.42))
+        : habit < 0.84 ? (part < 2.5 ? vec3(0.26, 1.02, 0.32) : vec3(0.95, 2.55, 0.42))
         : habit < 0.92 ? vec3(0.55, 1.95, 0.72)
-        : vec3(0.3, 1.15, 0.0);
+        : vec3(0.26, 1.02, 0.32);
       sat = mix(sat, vec3(1.0, 1.35, 0.25), habit > 0.92 && part < 2.5 ? uPhone : 0.0);
       // on his feet with nothing to cheer: arms down, or both hands up at his face (not on his way out)
       vec3 stood = habit < (kind > 2.5 ? 0.1 : 0.35) && gone < 0.01 ? vec3(0.95, 2.25, 0.5) : vec3(0.06, 0.2, 0.0);
@@ -266,11 +312,13 @@ const FAN_MOVE = /* glsl */ `
   }`;
 const CROWD_HEAD = /* glsl */ `
   attribute vec4 aWho;
+  attribute vec4 aLook;
   attribute float aPart;
   uniform float uDim;
   varying vec2 vBounce;
   varying vec4 vFace;
-  varying vec2 vOwn;
+  varying vec4 vOwn;
+  varying vec4 vLook;
   ${FAN_MOVE}`;
 const CROWD_COLOR = /* glsl */ `
   float tone = aWho.z;
@@ -280,18 +328,33 @@ const CROWD_COLOR = /* glsl */ `
   // (a quarter over a part's number is skin or an end: his neck, hair on a head, a bare arm or a hand, a shoe; a half is a cap)
   float over = fract(aPart);
   bool tip = over > 0.1 && over < 0.4;
+  // (what he has on: TOP, a cap on it CAP more, a beard BEARD more, glasses GLASSES more; and its second colour, aLook.rgb)
+  float code = aLook.w;
+  float glasses = step(${GLASSES - 0.5}, code);
+  code -= ${GLASSES}.0 * glasses;
+  float beard = step(${BEARD - 0.5}, code);
+  code -= ${BEARD}.0 * beard;
+  float capped = step(${CAP - 0.5}, code);
+  float top = code - ${CAP}.0 * capped;
+  // (the tee under a jersey: white, grey or black, the one CROWD_FACE draws past its armholes)
+  float teeK = fract(fract(own * 7.31) * 37.0);
+  vec3 tee = teeK < 0.4 ? vec3(0.36, 0.35, 0.33) : teeK < 0.75 ? vec3(0.2, 0.2, 0.21) : vec3(0.03);
   vec3 wear = vColor;
   if (aPart > 3.5) {
     // his legs: trousers darker than his top (black, denim, khaki), shoes dark, on a few pale
     vec3 legs = own < 0.3 ? vec3(0.016) : mix(vec3(0.02, 0.028, 0.055), vec3(0.11, 0.095, 0.07), fract(own * 3.0));
     wear = color * (tip ? mix(vec3(0.014), vec3(0.3), step(0.74, fract(own * 11.0))) : legs);
   } else if (aPart > 1.5) {
+    // an arm: a sleeve of his top, or of the tee under a jersey (bare from mid upper arm), or of the other colour
     if (tip) wear = color * skin;
+    else if (abs(top - ${TOP.jersey}.0) < 0.5) wear = color * (position.y > 0.95 ? tee : skin);
+    else if (abs(top - ${TOP.sleeves}.0) < 0.5) wear = color * aLook.rgb;
   } else if (aPart > 0.5) {
-    // a head: a face, and hair (dark, brown, on the fair a few light, a few grey)
+    // a head: a face, and hair (dark, brown, on the fair a few light, a few grey); under a cap, its colour
     float dye = fract(own * 13.0);
     vec3 hair = dye < 0.5 ? vec3(0.012) : dye < 0.8 || tone < 0.5 ? vec3(0.06, 0.035, 0.02) : dye < 0.93 ? vec3(0.28, 0.21, 0.11) : vec3(0.3, 0.3, 0.31);
-    wear = over > 0.4 ? vColor * 0.85 : color * (tip ? hair : skin);
+    wear = over > 0.4 ? (capped > 0.5 ? color * aLook.rgb : vColor * 0.85) : color * (tip ? hair : skin);
+    if (capped > 0.5 && position.y > 2.44 && over < 0.4) wear = color * aLook.rgb;
   } else if (tip) {
     // (his neck, above his collar)
     wear = color * skin;
@@ -302,10 +365,12 @@ const CROWD_COLOR = /* glsl */ `
   // (and where on his trunk a point of his top is: 2)
   vFace = aPart > 0.5 && aPart < 1.5 && over < 0.1 ? vec4(position, 1.0) : aPart < 0.5 && over < 0.1 ? vec4(position, 2.0) : vec4(0.0);
   float reach = aWho.w;
-  // (which top he has on, from his own number; and how lit he is, for what shows under it)
-  vOwn = vec2(fract(own * 7.31), uDim * reach * color.r);
-  wear = mix(vec3(dot(wear, vec3(0.2126, 0.7152, 0.0722))), wear, mix(${DIM_COLOUR}, 1.0, smoothstep(0.25, 0.7, reach)) * (1.0 - ${LIVE_GREY} * uLive));
-  vColor = wear * (uDim * reach);`;
+  // (his own number, for the shirt under his top and his jersey's number; and how lit he is, for what shows on it)
+  vOwn = vec4(fract(own * 7.31), uDim * reach * color.r, beard, glasses);
+  float hue = mix(${DIM_COLOUR}, 1.0, smoothstep(0.25, 0.7, reach)) * (1.0 - ${LIVE_GREY} * uLive);
+  wear = mix(vec3(dot(wear, vec3(0.2126, 0.7152, 0.0722))), wear, hue);
+  vColor = wear * (uDim * reach);
+  vLook = vec4(mix(vec3(dot(aLook.rgb, vec3(0.2126, 0.7152, 0.0722))), aLook.rgb, hue) * vOwn.y, top);`;
 /** Where he is; and how square on to the floor this point of him is (the floor is the brightest thing in the building: it lights the faces and the fronts of those looking at it). */
 const CROWD_MOVE = /* glsl */ `
   float gone = smoothstep(0.45, 1.0, fanGone(aWho));
@@ -318,12 +383,14 @@ const CROWD_MOVE = /* glsl */ `
   vBounce.y = smoothstep(9.0, 2.2, instanceMatrix[3].y) * (0.3 + 0.7 * vBounce.x);`;
 /**
  * A face: the dark of his eyes under a brow and the line of his mouth, drawn where the model's head has
- * them (arena.py fan: eyes at 2.3 ft over his hips, mouth at 2.03), and gone before they are too small to
- * hold: then the shade of his eye sockets is what is left, and a far row's faces are a tone, as they are
- * from across a building. And his top (a point of his trunk: vFace.w 2), by his own number: a jacket or a
- * hood open in a V over a shirt with a zip under it, a replica top (dark panels down its sides, a band
- * across the chest), hoops, a check; everyone's has a band at the neck. Gone, as the face is, where a
- * stripe would be finer than a dot.
+ * them (arena.py fan: eyes at 2.3 ft over his hips, mouth at 2.03), on some a beard's shadow round the jaw
+ * or glasses (vOwn.zw), and gone before they are too small to hold: then the shade of his eye sockets is
+ * what is left, and a far row's faces are a tone, as they are from across a building. And his top (a point
+ * of his trunk: vFace.w 2), as TOP says (vLook.w; its second colour vLook.rgb): a jacket or a hood open in a
+ * V over a shirt with a zip under it, a replica jersey (trim round its neck and its armholes, the tee under
+ * it past them, a number on its front and a bigger one on its back), hoops, a check, panels down its sides,
+ * a hoodie's pocket and strings, a jacket's collar and hem in the colour of its sleeves; everyone's has a
+ * band at the neck. Gone, as the face is, where a stripe would be finer than a dot.
  */
 const CROWD_FACE = /* glsl */ `
   if (vFace.w > 0.95 && vFace.w < 1.05 && vFace.z > 0.15) {
@@ -335,30 +402,98 @@ const CROWD_FACE = /* glsl */ `
     float mouth = 1.0 - smoothstep(0.6, 1.2, length((vFace.xy - vec2(0.0, 2.035)) / vec2(0.09, 0.015)));
     float socket = 1.0 - smoothstep(0.4, 1.3, length((f - vec2(0.115, 2.33)) / vec2(0.11, 0.07)));
     float far = (1.0 - seen) * (1.0 - smoothstep(0.03, 0.1, fine));
-    diffuseColor.rgb *= 1.0 - max(eye * 0.82, max(brow * 0.5, mouth * 0.5)) * seen - 0.3 * socket * far;
+    // (a beard's shadow round his jaw and over his lip; glasses: a rim round each eye and a bridge between)
+    float jaw = 0.0;
+    float rim = 0.0;
+    if (vOwn.z + vOwn.w > 0.5) {
+      jaw = vOwn.z * smoothstep(2.12, 2.07, vFace.y) * smoothstep(1.86, 1.93, vFace.y) * (1.0 - mouth);
+      float ring = abs(length((f - vec2(0.115, 2.315)) / vec2(0.082, 0.052)) - 1.0);
+      rim = vOwn.w * max(1.0 - smoothstep(0.05, 0.15, ring), (1.0 - smoothstep(0.03, 0.04, f.x)) * (1.0 - smoothstep(0.005, 0.012, abs(f.y - 2.325))));
+    }
+    diffuseColor.rgb *= 1.0 - max(max(eye * 0.82, rim * 0.6), max(brow * 0.5, max(mouth * 0.5, jaw * 0.34))) * seen - 0.3 * socket * far;
   } else if (vFace.w > 1.9) {
     vec3 q = vFace.xyz;
-    float seen = 1.0 - smoothstep(0.02, 0.07, fwidth(q.y));
+    float fine = fwidth(q.y);
+    float seen = 1.0 - smoothstep(0.02, 0.07, fine);
     float front = smoothstep(0.02, 0.1, q.z);
-    float k = vOwn.x;
+    float back = smoothstep(-0.06, -0.14, q.z);
+    float top = vLook.w;
+    float ax = abs(q.x);
     float dark = 0.16 * smoothstep(1.6, 1.66, q.y);
+    // (how much of the tee under it shows, and how much is in its second colour)
     float under = 0.0;
-    if (k < 0.24) {
-      under = 0.8 * front * smoothstep(0.0, 0.025, (q.y - 1.3) * 0.3 - abs(q.x));
-      dark = max(dark, 0.5 * front * (1.0 - smoothstep(0.01, 0.028, abs(q.x))) * step(q.y, 1.32));
-    } else if (k < 0.42) {
-      dark = max(dark, 0.34 * smoothstep(0.34, 0.39, abs(q.x)));
-      under = 0.3 * front * (1.0 - smoothstep(0.04, 0.055, abs(q.y - 1.2))) * (1.0 - smoothstep(0.3, 0.34, abs(q.x)));
-    } else if (k < 0.54) {
-      dark = max(dark, 0.3 * smoothstep(-0.3, 0.3, sin(q.y * 23.0)));
-    } else if (k < 0.64) {
+    float trim = 0.0;
+    if (top < 1.5) {
+      // plain, the band at its neck; or a jacket or a hood open in a V over a shirt, a zip down the middle
+      if (top > 0.5) {
+        under = 0.8 * front * smoothstep(0.0, 0.025, (q.y - 1.3) * 0.3 - ax);
+        dark = max(dark, 0.5 * front * (1.0 - smoothstep(0.01, 0.028, ax)) * step(q.y, 1.32));
+      }
+    } else if (top < 2.5) {
+      // a replica jersey: a deep V and armholes edged in its second colour, the tee past them, a number front and back
+      float v = (q.y - 1.47) * 0.85;
+      under = front * smoothstep(0.0, 0.015, v - ax - 0.03);
+      trim = front * (1.0 - smoothstep(0.012, 0.03, abs(v - ax))) * step(1.47, q.y);
+      float hole = 0.5 - 0.09 * smoothstep(1.2, 1.62, q.y);
+      under = max(under, smoothstep(hole, hole + 0.02, ax) * step(1.02, q.y));
+      trim = max(trim, (1.0 - smoothstep(0.012, 0.03, abs(ax - hole))) * step(1.02, q.y));
+      // (two figures from his own number: a little one on his chest, a big one on his back)
+      float tall = mix(0.26, 0.42, back);
+      vec2 n = vec2(q.x, q.y - mix(1.04, 0.92, back)) / tall;
+      int num = int(vOwn.x * 99.0) % 50;
+      int tens = num / 10;
+      float cell = 0.58;
+      vec2 at = tens > 0 ? vec2((abs(n.x) - 0.04) / cell, n.y) : vec2(n.x / cell + 0.5, n.y);
+      int fig = tens > 0 ? (n.x < 0.0 ? tens : num - tens * 10) : num;
+      if (tens > 0 && n.x < 0.0) at.x = 1.0 - at.x;
+      trim = max(trim, (front + back) * crowdFigure(at, fig) * (1.0 - smoothstep(0.012, 0.03, fine)));
+    } else if (top < 3.5) {
+      // hoops
+      trim = 0.55 * smoothstep(-0.3, 0.3, sin(q.y * 23.0));
+    } else if (top < 4.5) {
+      // a check
       dark = max(dark, 0.26 * step(0.0, sin(q.x * 27.0) * sin(q.y * 27.0)));
-      dark = max(dark, 0.4 * front * (1.0 - smoothstep(0.008, 0.022, abs(q.x))));
+      dark = max(dark, 0.4 * front * (1.0 - smoothstep(0.008, 0.022, ax)));
+    } else if (top < 5.5) {
+      // panels down its sides, a band across the chest
+      trim = 0.8 * smoothstep(0.34, 0.39, ax);
+      under = 0.3 * front * (1.0 - smoothstep(0.04, 0.055, abs(q.y - 1.2))) * (1.0 - smoothstep(0.3, 0.34, ax));
+    } else if (top < 6.5) {
+      // a hoodie: its pocket across the front, the strings at its neck, the hood bunched behind
+      float side = 0.3 - (q.y - 0.42) * 0.22;
+      float pocket = front * step(0.42, q.y) * step(q.y, 0.84) * step(ax, side);
+      dark = max(dark, 0.3 * pocket * (1.0 - smoothstep(0.0, 0.03, min(0.84 - q.y, side - ax))));
+      under = 0.35 * front * (1.0 - smoothstep(0.006, 0.014, abs(ax - 0.07))) * step(1.46, q.y) * step(q.y, 1.66);
+      dark = max(dark, 0.3 * smoothstep(1.56, 1.66, q.y) * (1.0 - front));
+    } else {
+      // a jacket with sleeves of another colour: its collar and its hem that colour too, a zip down the middle
+      trim = max(smoothstep(1.6, 1.64, q.y), 1.0 - smoothstep(0.1, 0.14, q.y));
+      dark = max(dark, 0.4 * front * (1.0 - smoothstep(0.008, 0.022, ax)) * step(0.14, q.y));
     }
-    // (what shows in the V, or the band's colour: a white shirt, a grey one, a black one)
-    float tee = fract(k * 37.0);
-    vec3 shirt = (tee < 0.5 ? vec3(0.4, 0.39, 0.37) : tee < 0.8 ? vec3(0.2, 0.2, 0.21) : vec3(0.03)) * vOwn.y;
-    diffuseColor.rgb = mix(diffuseColor.rgb * (1.0 - dark * seen), shirt, under * seen);
+    // (what shows past it: a white tee, a grey one, a black one)
+    float tee = fract(vOwn.x * 37.0);
+    vec3 shirt = (tee < 0.4 ? vec3(0.36, 0.35, 0.33) : tee < 0.75 ? vec3(0.2, 0.2, 0.21) : vec3(0.03)) * vOwn.y;
+    diffuseColor.rgb = mix(mix(diffuseColor.rgb * (1.0 - dark * seen), shirt, under * seen), vLook.rgb, trim * seen);
+  }`;
+/** One figure of a jersey's number (0 to 9) as seven bars, at `p` in a box a unit tall and wide (0 to 1 each way): whether a bar is there. */
+const CROWD_FIGURE = /* glsl */ `
+  float crowdFigure(vec2 p, int fig) {
+    if (p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0) return 0.0;
+    int bars = fig == 0 ? 63 : fig == 1 ? 6 : fig == 2 ? 91 : fig == 3 ? 79 : fig == 4 ? 102 : fig == 5 ? 109 : fig == 6 ? 125 : fig == 7 ? 7 : fig == 8 ? 127 : 111;
+    float t = 0.2;
+    float across = step(t * 0.4, p.x) * step(p.x, 1.0 - t * 0.4);
+    float right = step(1.0 - t, p.x);
+    float left = step(p.x, t);
+    float high = step(0.5, p.y);
+    float on = 0.0;
+    if ((bars & 1) != 0) on = max(on, across * step(1.0 - t, p.y));
+    if ((bars & 64) != 0) on = max(on, across * step(abs(p.y - 0.5), t * 0.5));
+    if ((bars & 8) != 0) on = max(on, across * step(p.y, t));
+    if ((bars & 2) != 0) on = max(on, right * high);
+    if ((bars & 4) != 0) on = max(on, right * (1.0 - high));
+    if ((bars & 16) != 0) on = max(on, left * (1.0 - high));
+    if ((bars & 32) != 0) on = max(on, left * high);
+    return on;
   }`;
 /** How much of his own colour he shows whatever the lamps do (a crowd is never the black a lamp's falloff alone would leave it), and how much more the floor's light adds. */
 const FILL = '0.12';
@@ -383,6 +518,155 @@ const TOWEL_MOVE = /* glsl */ `
   // (it curls across, and ripples down its length)
   cloth.z += (position.x * position.x * 0.5 + sin(ph * 1.7 + t * 4.5) * 0.16) * t;
   vec3 transformed = mix(hand, cloth, smoothstep(0.05, 0.4, on));`;
+
+/** What someone has in his hands (see PROP_MOVE), and how many of the home fans by the floor bring a sign, and a foam finger. */
+const PROP = { phone: 0, sign: 1, finger: 2, phoneUp: 3 } as const;
+const SIGN_SHARE = 0.2;
+const FINGER_SHARE = 0.045;
+/** The pictures of what they hold, on one canvas (px): four signs along the top, the finger and the phone under them. */
+const ATLAS = [1024, 512];
+const CELLS: [number, number, number, number][] = [
+  [0, 0, 256, 147],
+  [256, 0, 256, 147],
+  [512, 0, 256, 147],
+  [768, 0, 256, 147],
+  [0, 200, 128, 298],
+  [160, 200, 64, 118],
+];
+/** A cell of the atlas as uv: its bottom left corner, its width and height (the canvas's top is v 1). */
+const cell = (i: number) => {
+  const [x, y, w, h] = CELLS[i];
+  return [x / ATLAS[0], 1 - (y + h) / ATLAS[1], w / ATLAS[0], h / ATLAS[1]];
+};
+/**
+ * Where what he holds is, as his hands go (the fan's frame, FAN_MOVE `fanAt`): a phone in both hands in his lap,
+ * its screen up at his face; a sign between his hands while he is on his feet, over his head when his arms go up; a foam finger on his hand, pointing on along his forearm; a phone held up in one hand, its screen
+ * toward him, while there is something to film (uPhone). Nothing once he has left. A card a unit square about
+ * its middle: position x across it, y up it.
+ */
+const PROP_MOVE = /* glsl */ `
+  float kind = aProp;
+  vKind = kind;
+  vec3 hr = fanAt(vec3(${TOWEL_HAND.join(', ')}), 2.25, aWho, instanceMatrix);
+  vec3 hl = fanAt(vec3(${-TOWEL_HAND[0]}, ${TOWEL_HAND[1]}, 0.0), 3.25, aWho, instanceMatrix);
+  float here = 1.0 - step(0.01, fanGone(aWho));
+  vec3 mid = (hr + hl) * 0.5;
+  vec3 across = vec3(-1.0, 0.0, 0.0);
+  vec3 rise = vec3(0.0, 1.0, 0.0);
+  vec2 size = vec2(0.24, 0.44);
+  if (kind < 0.5) {
+    mid += vec3(0.0, 0.08, 0.05);
+    rise = normalize(vec3(0.0, 0.6, 0.8));
+  } else if (kind < 1.5) {
+    mid += vec3(0.0, 0.34, 0.12);
+    across = normalize(hr - hl + vec3(0.8, 0.0, 0.0));
+    rise = normalize(vec3(0.0, 1.0, 0.12));
+    size = vec2(2.0, 1.15);
+    // (out only while he is on his feet: down by his seat the rest of the time)
+    here *= smoothstep(0.25, 0.7, fanUp(aWho.x, aWho.y, instanceMatrix).x);
+  } else if (kind < 2.5) {
+    vec3 elbow = fanAt(vec3(${TOWEL_HAND[0]}, 0.5, 0.0), 2.0, aWho, instanceMatrix);
+    rise = normalize(hr - elbow);
+    across = normalize(cross(rise, vec3(0.0, 0.0, 1.0)));
+    size = vec2(0.62, 1.45);
+    mid = hr + rise * 0.5;
+  } else {
+    mid = hr + vec3(0.0, 0.3, 0.05);
+    size = vec2(0.26, 0.48);
+    here *= smoothstep(0.2, 0.7, uPhone);
+  }
+  vec3 transformed = mid + (across * position.x * size.x + rise * position.y * size.y) * here;`;
+/** Its back: a phone's is black, a sign's plain card; a foam finger is the same both sides. */
+const PROP_BACK = /* glsl */ `if (!gl_FrontFacing) diffuseColor.rgb = vKind < 0.5 || vKind > 2.5 ? vec3(0.025) : vKind < 1.5 ? vec3(0.5, 0.49, 0.46) : diffuseColor.rgb;`;
+
+/** The signs (the building's colour and its letters on them), the foam finger and the phone, painted onto the atlas. */
+function paintHeld(cv: HTMLCanvasElement, board: string, letters: string) {
+  cv.width = ATLAS[0];
+  cv.height = ATLAS[1];
+  const ctx = cv.getContext('2d')!;
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  const ink = `#${new Color(board).getHexString()}`;
+  const say = (text: string, x: number, y: number, px: number, most: number, color: string, tilt = 0) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(tilt);
+    ctx.font = `900 ${px}px "Archivo Variable", "Arial Narrow", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const w = ctx.measureText(text).width;
+    if (w > most) ctx.scale(most / w, 1);
+    ctx.fillStyle = color;
+    ctx.fillText(text, 0, 0);
+    ctx.restore();
+  };
+  // the signs: card, a marker's words on it (DEFENSE; the letters on the building's colour; LET'S GO over them; #1 FAN on yellow)
+  const signs: [string, string, (x: number, y: number, w: number, h: number) => void][] = [
+    ['#efece4', ink, (x, y, w, h) => say('DEFENSE', x + w / 2, y + h / 2, h * 0.5, w * 0.86, ink, -0.04)],
+    [ink, '#ffffff', (x, y, w, h) => say(letters || "LET'S GO", x + w / 2, y + h / 2 + 4, h * 0.72, w * 0.84, '#f4f1ea', 0.03)],
+    [
+      '#efece4',
+      ink,
+      (x, y, w, h) => {
+        say("LET'S GO", x + w / 2, y + h * 0.3, h * 0.3, w * 0.8, '#1a1a1a', -0.02);
+        say(letters || 'WOOO!', x + w / 2, y + h * 0.68, h * 0.46, w * 0.84, ink, -0.02);
+      },
+    ],
+    ['#f0cf48', '#1a1a1a', (x, y, w, h) => say('#1 FAN', x + w / 2, y + h / 2, h * 0.52, w * 0.84, '#1a1a1a', 0.05)],
+  ];
+  signs.forEach(([fill, edge, words], i) => {
+    const [x, y, w, h] = CELLS[i];
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.roundRect(x + 4, y + 4, w - 8, h - 8, 6);
+    ctx.fill();
+    ctx.strokeStyle = edge;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    words(x, y, w, h);
+  });
+  // the foam finger: a mitt with its first finger up, #1 on it, in the building's colour
+  {
+    const [x, y, w, h] = CELLS[4];
+    ctx.fillStyle = ink;
+    ctx.beginPath();
+    ctx.roundRect(x + w * 0.34, y + 4, w * 0.36, h * 0.6, w * 0.18);
+    ctx.roundRect(x + 6, y + h * 0.42, w - 12, h * 0.56, w * 0.24);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    say('#1', x + w / 2, y + h * 0.7, h * 0.2, w * 0.8, '#ffffff');
+  }
+  // the phone: a black body round a lit screen
+  {
+    const [x, y, w, h] = CELLS[5];
+    ctx.fillStyle = '#0c0d10';
+    ctx.beginPath();
+    ctx.roundRect(x + 2, y + 2, w - 4, h - 4, 8);
+    ctx.fill();
+    const g = ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, '#d6e6ff');
+    g.addColorStop(0.6, '#8fb4e8');
+    g.addColorStop(1, '#5a7cb8');
+    ctx.fillStyle = g;
+    ctx.fillRect(x + 6, y + 8, w - 12, h - 16);
+  }
+}
+
+/** Someone in the stands as the crowd is made (see the constructor): his seat, model, place, numbers, colour, party, what he has on and its second colour. */
+interface Fan {
+  seat: Seat;
+  model: number;
+  fine: boolean;
+  at: Matrix4;
+  seed: number;
+  kind: number;
+  tone: number;
+  wear: string;
+  party: number;
+  look: number;
+  second: string;
+}
 
 /** One of the crowd: which draw he is in and where in it, and where he is in the mirror's. */
 interface Person {
@@ -425,13 +709,17 @@ export class Crowd {
   private readonly blur: InstancedMesh;
   private readonly people: Person[] = [];
   /** Who wears the home colour (and how deep a shade of it, or its white), and who the visitors'. */
-  private readonly fans: { who: number; shade: number }[] = [];
+  private readonly fans: { who: number; shade: number; rank: number; home: number; own: number; wear: string; second: string }[] = [];
   private readonly visitors: { who: number; shade: number }[] = [];
   private readonly towels: InstancedMesh;
   private readonly towelMat: MeshBasicMaterial;
+  /** What a few hold (phones, signs, foam fingers: see PROP_MOVE), and the picture of it all (see paintHeld). */
+  private readonly held: InstancedMesh;
+  private readonly propMat: MeshBasicMaterial;
+  private readonly atlas: CanvasTexture;
   private readonly seatMat: MeshLambertMaterial;
-  /** The seats, a draw a side for the rows by the floor and one for the rest; how lit each seat is. */
-  private readonly stalls: { mesh: InstancedMesh; lit: number[]; sec: number[] }[] = [];
+  /** The seats, a draw a side for the rows by the floor and one for the rest; how lit each seat is, its section, its row, a number of its own. */
+  private readonly stalls: { mesh: InstancedMesh; lit: number[]; sec: number[]; row: number[]; own: number[] }[] = [];
   /**
    * The rows by the floor's draws (the detailed people), and the rows behind's; and the same people in the
    * lighter models a slow device draws them in (see shed): the rows by the floor in the plain one and in
@@ -460,7 +748,7 @@ export class Crowd {
         .replace('#include <color_vertex>', `#include <color_vertex>${CROWD_COLOR}`)
         .replace('#include <begin_vertex>', `#include <begin_vertex>${CROWD_MOVE}`);
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying vec2 vBounce;\nvarying vec4 vFace;\nvarying vec2 vOwn;\nuniform vec3 uLed;')
+        .replace('#include <common>', `#include <common>\nvarying vec2 vBounce;\nvarying vec4 vFace;\nvarying vec4 vOwn;\nvarying vec4 vLook;\nuniform vec3 uLed;${CROWD_FIGURE}`)
         .replace('#include <color_fragment>', `#include <color_fragment>${CROWD_FACE}`)
         .replace(
           '#include <emissivemap_fragment>',
@@ -469,59 +757,142 @@ export class Crowd {
     };
     mat.customProgramCacheKey = () => 'crowd';
 
-    // who sits where: the seat's person (a few seats empty, more of them higher up), his model, size and build
+    // who sits where: the seat's person (seats empty in runs, more of them higher up), the party he came with,
+    // his model, size and build, and how he sits in his seat
     const m = new Matrix4();
     const q = new Quaternion();
     const up = new Vector3(0, 1, 0);
+    const turn = new Euler(0, 0, 0, 'YXZ');
     const at = new Vector3();
     const size = new Vector3();
     const c = new Color();
-    const who: { seat: Seat; model: number; fine: boolean; at: Matrix4; seed: number; kind: number; tone: number; wear: string }[] = [];
+    const who: Fan[] = [];
     // (the one before in the same row: the person beside him)
     let by: { side: number; row: number; model: number; wear: number } = { side: -1, row: -1, model: -1, wear: -1 };
+    let row = '';
+    let gap = 0;
+    let party = { id: -1, left: 0 };
     for (const s of seats) {
       const full = s.kind === 'seat' ? 0.975 - 0.07 * (s.row / 17) : s.kind === 'court' ? 0.9 : 1;
       const r = [rnd(), rnd(), rnd(), rnd(), rnd(), rnd(), rnd()];
-      if (r[0] > full) continue;
+      const here = `${s.side}|${s.row}|${s.kind}`;
+      if (here !== row) {
+        row = here;
+        gap = 0;
+        party.left = 0;
+      }
+      if (s.kind === 'seat') {
+        // (a run of empty seats: begun this much less often than a seat is empty, a run being as long as that on average)
+        if (gap > 0) {
+          gap--;
+          continue;
+        }
+        if (r[0] < (1 - full) / 2.2) {
+          gap = GAP[Math.floor(rnd() * GAP.length)] - 1;
+          continue;
+        }
+      } else if (r[0] > full) continue;
+      const lead = party.left <= 0;
+      if (lead) party = { id: party.id + 1, left: PARTY[Math.floor(rnd() * PARTY.length)] };
+      party.left--;
       const fine = s.kind === 'court' || (s.kind === 'seat' && s.row < (s.side === 3 ? CAMERA_ROWS : NEAR_ROWS));
-      const child = r[2] < 0.05;
+      // (a child with the grown-ups of his party now and then)
+      const child = !lead && r[2] < 0.13;
       const next = by.side === s.side && by.row === s.row;
       let model = fine ? (child ? KID : r[1] < 0.22 ? 0 : r[1] < 0.38 ? 1 : r[1] < 0.58 ? 2 : r[1] < 0.72 ? 3 : r[1] < 0.87 ? 4 : 5) : r[1] < 0.58 ? 0 : 1;
       if (next && model === by.model && !child) model = fine ? (model + 1 + Math.floor(r[4] * 4)) % 6 : 1 - model;
-      // (a child here and there; the women's models a little narrower)
-      const tall = child ? 0.7 + r[3] * 0.1 : 0.95 + r[3] * 0.16;
+      // (the women's models a little narrower; a few big men, a few broad ones)
+      const big = rnd();
+      const tall = child ? 0.68 + r[3] * 0.12 : 0.92 + r[3] * 0.2 + (big > 0.94 ? 0.07 : 0);
       const slim = fine ? model === 2 || model === 3 : model === 1;
-      const wide = tall * (slim ? 0.9 + r[4] * 0.12 : 0.94 + r[4] * 0.2);
-      q.setFromAxisAngle(up, s.turn + (r[5] - 0.5) * 0.3);
+      const wide = tall * (slim ? 0.86 + r[4] * 0.14 : 0.92 + r[4] * 0.22) * (big < 0.1 && !slim ? 1.12 : 1);
+      // (off the middle of his seat, back or forward in it, leant a little to one side; turned his own way, a few well round)
+      const along = (rnd() - 0.5) * OFF_SEAT * (s.kind === 'seat' ? 1 : 2);
+      const deep = (rnd() - 0.5) * OFF_BACK;
+      const yaw = s.turn + (r[5] - 0.5) * (rnd() < 0.12 ? 0.8 : 0.3);
+      q.setFromEuler(turn.set(0, yaw, (rnd() - 0.5) * OFF_LEAN));
       const tone = 0.2 + 0.8 * rnd() ** 0.75;
       let wear = Math.floor(rnd() * WEAR.length);
       if (next && wear === by.wear) wear = (wear + 1 + Math.floor(r[5] * (WEAR.length - 2))) % WEAR.length;
       by = { side: s.side, row: s.row, model, wear };
+      // (a beard on some of the men, glasses on some of everyone)
+      const man = !child && (fine ? model === 0 || model === 1 || model === 4 || model === 5 : model === 0);
+      const face = (man && rnd() < 0.3 ? BEARD : 0) + (!child && rnd() < 0.12 ? GLASSES : 0);
+      at.set(s.x + Math.cos(yaw) * along + Math.sin(yaw) * deep, s.y + SEAT_UP * (s.kind === 'seat' ? 1 : tall), s.z - Math.sin(yaw) * along + Math.cos(yaw) * deep);
       who.push({
         seat: s,
         model,
         fine,
-        at: new Matrix4().compose(at.set(s.x, s.y + SEAT_UP * (s.kind === 'seat' ? 1 : tall), s.z), q, size.set(wide, tall, (wide + tall) / 2)),
+        at: new Matrix4().compose(at, q, size.set(wide, tall, (wide + tall) / 2)),
         seed: r[6],
         kind: s.kind === 'stand' ? 3 : 0,
         tone,
         wear: WEAR[wear],
+        party: party.id,
+        look: face,
+        second: SECOND[Math.floor(rnd() * SECOND.length)],
       });
     }
-    // who is for whom (from its own numbers: the crowd's sizes and colours stay as they are whoever plays)
+    // who is for whom, and what he has on (from its own numbers: the crowd's sizes and colours stay as they are whoever plays)
     let k = 29;
     const pick = () => ((k = (k * 16807) % 2147483647) & 0xffff) / 0xffff;
+    const parties = new Map<number, { rank: number; kit: boolean }>();
     who.forEach((w, i) => {
       const s = w.seat;
-      const p = [pick(), pick(), pick(), pick()];
+      const p = [pick(), pick(), pick(), pick(), pick(), pick(), pick()];
+      // (a party's number: under the building's share it is the home side's (see paint); and some that are wear its jersey, all of them)
+      let pt = parties.get(w.party);
+      if (!pt) parties.set(w.party, (pt = { rank: p[4], kit: p[5] < PARTY_KIT }));
+      const style = p[6];
+      const cap = pick();
+      // everyone else: a jacket over a shirt (most in the jacket's model), a hoodie (most in the hood's), panels, hoops, a check, other sleeves, someone's jersey, plain
+      const own =
+        ((w.fine && w.model === 5 && style < 0.7) || style < 0.2
+          ? TOP.open
+          : (w.fine && w.model === 4 && style < 0.8) || style < 0.32
+            ? TOP.hoodie
+            : style < 0.38
+              ? TOP.panels
+              : style < 0.48
+                ? TOP.hoops
+                : style < 0.55
+                  ? TOP.check
+                  : style < 0.62
+                    ? TOP.sleeves
+                    : style < 0.68
+                      ? TOP.jersey
+                      : TOP.plain) + (cap < 0.09 ? CAP : 0);
       // the visitors' fans: a block of them on the far side, and a few here and there
       const block = s.kind === 'seat' && s.side === 0 && s.x > VISITORS[0] && s.x < VISITORS[1] && s.row >= VISITORS[2] && s.row <= VISITORS[3];
       if ((block && p[0] < 0.85) || p[0] < 0.015) {
         if (w.kind === 0) w.kind = 2;
         this.visitors.push({ who: i, shade: p[1] < 0.2 ? -1 : 0.6 + 0.4 * p[2] });
-      } else if (p[1] < HOME_SHARE) {
-        this.fans.push({ who: i, shade: p[2] < HOME_WHITE ? -1 : (p[2] < HOME_WHITE + HOME_TRIM ? 1 : 0) + 0.6 + 0.4 * p[3] });
-        if (w.kind === 0 && p[3] < 0.45) w.kind = 1;
+        w.look += (style < 0.42 ? TOP.jersey : style < 0.56 ? TOP.hoodie : style < 0.66 ? TOP.sleeves : TOP.plain) + (cap < 0.12 ? CAP : 0);
+      } else if (pt.rank < HOME_MOST && p[1] < PARTY_FANS) {
+        const shade = p[2] < HOME_WHITE ? -1 : (p[2] < HOME_WHITE + HOME_TRIM ? 1 : 0) + 0.6 + 0.4 * p[3];
+        // (the towels: with those of the home side's in every building)
+        if (w.kind === 0 && pt.rank < HOME_TOWELS && p[3] < 0.55) w.kind = 1;
+        const top = pt.kit
+          ? TOP.jersey
+          : shade < 0
+            ? style < 0.4
+              ? TOP.jersey
+              : style < 0.55
+                ? TOP.sleeves
+                : TOP.plain
+            : style < 0.3
+              ? TOP.jersey
+              : style < 0.47
+                ? TOP.hoodie
+                : style < 0.59
+                  ? TOP.sleeves
+                  : style < 0.7
+                    ? TOP.open
+                    : TOP.plain;
+        this.fans.push({ who: i, shade, rank: pt.rank, home: w.look + top + (cap < 0.16 ? CAP : 0), own: w.look + own, wear: w.wear, second: w.second });
+        w.look += own;
+      } else {
+        w.look += own;
       }
     });
 
@@ -534,8 +905,10 @@ export class Crowd {
       return g;
     };
     const numbers = (list: number[]) => new InstancedBufferAttribute(Float32Array.from(list.flatMap((i) => [who[i].seed, who[i].kind, who[i].tone, who[i].seat.lit])), 4);
+    // (what he has on and its second colour: a side's fans' are painted in theirs, see paint and dress)
+    const looks = (list: number[]) => new InstancedBufferAttribute(Float32Array.from(list.flatMap((i) => [...c.set(who[i].second).toArray(), who[i].look])), 4);
     const everyone = who.map((_, i) => i);
-    this.blur = new InstancedMesh(share(models.far, { aWho: numbers(everyone) }), mat, who.length);
+    this.blur = new InstancedMesh(share(models.far, { aWho: numbers(everyone), aLook: looks(everyone) }), mat, who.length);
     who.forEach((w, i) => {
       this.blur.setMatrixAt(i, w.at);
       this.blur.setColorAt(i, c.set(w.wear));
@@ -551,7 +924,8 @@ export class Crowd {
           const list = everyone.filter((i) => who[i].seat.side === side && who[i].fine === fine && who[i].model === model).sort((a, b) => who[a].seed - who[b].seed);
           if (!list.length) return;
           const aWho = numbers(list);
-          const mesh = keep(new InstancedMesh(share(geo, { aWho }), mat, list.length));
+          const aLook = looks(list);
+          const mesh = keep(new InstancedMesh(share(geo, { aWho, aLook }), mat, list.length));
           list.forEach((i, slot) => {
             mesh.setMatrixAt(slot, who[i].at);
             mesh.setColorAt(slot, c.set(who[i].wear));
@@ -564,7 +938,7 @@ export class Crowd {
           this.main.add(mesh);
           // (the same people in a lighter model, for a device that can't keep up: see shed)
           const lighter = (geo: BufferGeometry, into: InstancedMesh[]) => {
-            const m = keep(new InstancedMesh(share(geo, { aWho }), mat, list.length));
+            const m = keep(new InstancedMesh(share(geo, { aWho, aLook }), mat, list.length));
             m.instanceMatrix = mesh.instanceMatrix;
             m.instanceColor = mesh.instanceColor;
             m.boundingSphere = mesh.boundingSphere;
@@ -609,6 +983,52 @@ export class Crowd {
     keep(this.towels);
     this.main.add(this.towels);
 
+    // what a few in the seats have in their hands (see PROP_MOVE): a phone in the lap of those looking down at
+    // one, a phone for those who hold one up, a sign or a foam finger with a few of the home fans (of those in
+    // its colours in every building)
+    const held: { i: number; kind: number }[] = [];
+    let h = 53;
+    const hand = () => ((h = (h * 16807) % 2147483647) & 0xffff) / 0xffff;
+    const home = new Set(this.fans.filter((f) => f.rank < HOME_LEAST).map((f) => f.who));
+    who.forEach((w, i) => {
+      const r = hand();
+      if (w.kind === 3) return;
+      // (how he sits: the shader's own number, FAN_MOVE `habit`)
+      const habit = Math.fround(Math.fround(w.seed) * Math.fround(17.31)) % 1;
+      if (habit > 0.84) held.push({ i, kind: habit > 0.92 ? PROP.phoneUp : PROP.phone });
+      else if (home.has(i) && w.kind === 0 && habit < 0.6 && r < SIGN_SHARE) held.push({ i, kind: PROP.sign });
+      else if (home.has(i) && w.kind === 0 && r > 1 - FINGER_SHARE) held.push({ i, kind: PROP.finger });
+    });
+    const card = keep(new PlaneGeometry(1, 1));
+    card.setAttribute('aWho', numbers(held.map((p) => p.i)));
+    card.setAttribute('aProp', new InstancedBufferAttribute(Float32Array.from(held.map((p) => p.kind)), 1));
+    // (where on the atlas its picture is: one of the four signs, the finger, the phone)
+    card.setAttribute('aCell', new InstancedBufferAttribute(Float32Array.from(held.flatMap((p, k) => cell(p.kind === PROP.sign ? k % 4 : p.kind === PROP.finger ? 4 : 5))), 4));
+    this.atlas = keep(new CanvasTexture(document.createElement('canvas')));
+    this.atlas.colorSpace = SRGBColorSpace;
+    this.atlas.anisotropy = 4;
+    this.propMat = keep(new MeshBasicMaterial({ color: 0xffffff, side: DoubleSide, map: this.atlas, alphaTest: 0.5 }));
+    this.propMat.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, this.u);
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', `#include <common>\nattribute vec4 aWho;\nattribute float aProp;\nattribute vec4 aCell;\nvarying float vKind;${FAN_MOVE}`)
+        .replace('#include <uv_vertex>', '#include <uv_vertex>\n  vMapUv = aCell.xy + uv * aCell.zw;')
+        .replace('#include <begin_vertex>', PROP_MOVE);
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying float vKind;')
+        .replace('#include <map_fragment>', `#include <map_fragment>\n  ${PROP_BACK}`);
+    };
+    this.propMat.customProgramCacheKey = () => 'held';
+    this.held = new InstancedMesh(card, this.propMat, Math.max(1, held.length));
+    this.held.count = held.length;
+    held.forEach((p, slot) => {
+      this.held.setMatrixAt(slot, who[p.i].at);
+      this.held.setColorAt(slot, c.setScalar(p.kind === PROP.phone || p.kind === PROP.phoneUp ? 1.25 : 1));
+    });
+    this.held.frustumCulled = false;
+    keep(this.held);
+    this.main.add(this.held);
+
     // the seats: the model in the rows by the floor, a back and a pan behind (two faces: nobody is near enough for more)
     const seatMat = (this.seatMat = keep(new MeshLambertMaterial({ color: 0xffffff, vertexColors: true, side: DoubleSide })));
     const far = keep(new BufferGeometry());
@@ -636,7 +1056,7 @@ export class Crowd {
         list.forEach((s, i) => mesh.setMatrixAt(i, m.compose(at.set(s.x, s.y, s.z), q.setFromAxisAngle(up, s.turn), size.set(1, 1, 1))));
         this.bound(mesh);
         mesh.renderOrder = -1;
-        this.stalls.push({ mesh, lit: list.map((s) => s.lit), sec: list.map(section) });
+        this.stalls.push({ mesh, lit: list.map((s) => s.lit), sec: list.map(section), row: list.map((s) => s.row), own: list.map(() => rnd()) });
         this.main.add(mesh);
         if (!fine) continue;
         // (the same seats as the rows behind have them)
@@ -657,32 +1077,69 @@ export class Crowd {
     mesh.boundingSphere!.radius += 5;
   }
 
-  private wear(i: number, c: Color) {
+  /** Someone's top in colour `c`, and (`second`) the second colour on it: a jersey's trim and number, a sleeve, a cap; `look` what he has on (TOP and the rest), if it changes. */
+  private wear(i: number, c: Color, second?: Color, look?: number) {
     const p = this.people[i];
     p.mesh.setColorAt(p.slot, c);
     this.blur.setColorAt(p.all, c);
+    if (!second) return;
+    for (const [mesh, slot] of [
+      [p.mesh, p.slot],
+      [this.blur, p.all],
+    ] as const) {
+      const a = mesh.geometry.getAttribute('aLook') as InstancedBufferAttribute;
+      a.setXYZ(slot, second.r, second.g, second.b);
+      if (look !== undefined) a.setW(slot, look);
+    }
   }
 
   private flush() {
-    for (const o of [...this.fine, ...this.rest, this.blur]) if (o.instanceColor) o.instanceColor.needsUpdate = true;
+    for (const o of [...this.fine, ...this.rest, this.blur]) {
+      if (o.instanceColor) o.instanceColor.needsUpdate = true;
+      o.geometry.getAttribute('aLook').needsUpdate = true;
+    }
   }
 
-  /** The building's colour and the home side's second: the home fans' tops (most in the first, some in the second, some in white), half the towels; the seats in `seats`, by section (bowl.ts section; the building's colour all round when not said). */
-  paint(board: string, trim: string, seats: readonly string[] = [board]) {
-    if (board + trim + seats.join() === this.board) return;
-    this.board = board + trim + seats.join();
+  /**
+   * The building's colour and the home side's second: the home fans' tops (most in the first, some in the
+   * second, some in white) with the other on them, half the towels, the signs and foam fingers (with its
+   * `letters`); the seats in `seats`, by section (bowl.ts section; the building's colour all round when not
+   * said), or (`mix`, Venue.seatMix) mixed seat by seat, or shading from the first to the last up the rows.
+   * `share` is how many of the parties are the home side's (Venue.crowd): the rest of those who might have
+   * been wear their own.
+   */
+  paint(board: string, trim: string, seats: readonly string[] = [board], mix: 'sections' | 'confetti' | 'fade' = 'sections', letters = '', share = HOME_SHARE) {
+    const key = `${board}|${trim}|${seats.join()}|${mix}|${letters}|${share}`;
+    if (key === this.board) return;
+    this.board = key;
     const c = new Color();
+    const d = new Color();
     // (a dark colour is worn a little lighter than it is painted: a navy shirt under the lamps is not black)
-    const lift = (hex: string, shade: number) => {
-      c.set(hex);
-      const light = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
-      return c
+    const lift = (to: Color, hex: string, shade: number) => {
+      to.set(hex);
+      const light = 0.2126 * to.r + 0.7152 * to.g + 0.0722 * to.b;
+      return to
         .multiplyScalar(light < 0.06 ? (0.06 / Math.max(light, 0.008)) ** 0.6 : 1)
         .lerp(WHITE, light < 0.06 ? 0.05 : 0)
         .lerp(GREY.setScalar(Math.max(light, 0.03)), WORN * (light > 0.12 ? 1.5 : 1))
         .multiplyScalar(shade * (light > 0.12 ? 0.74 : 1));
     };
-    for (const f of this.fans) this.wear(f.who, f.shade < 0 ? c.set(HOME_WHITE_WEAR) : f.shade > 1 ? lift(trim, f.shade - 1) : lift(board, f.shade));
+    // (the other colour on a fan's top: the second on the first, the first on the second or on the white; white on the first where the two are too alike)
+    const alike =
+      d
+        .set(board)
+        .sub(c.set(trim))
+        .toArray()
+        .reduce((n, v) => n + v * v, 0) < 0.02;
+    for (const f of this.fans) {
+      if (f.rank >= share) {
+        this.wear(f.who, c.set(f.wear), d.set(f.second), f.own);
+        continue;
+      }
+      const first = f.shade >= 0 && f.shade <= 1;
+      const other = first ? (alike ? d.set(HOME_WHITE_WEAR) : lift(d, trim, 1)) : lift(d, board, 1);
+      this.wear(f.who, f.shade < 0 ? c.set(HOME_WHITE_WEAR) : f.shade > 1 ? lift(c, trim, f.shade - 1) : lift(c, board, f.shade), other, f.home);
+    }
     this.flush();
     const tones = seats.map((hex) => {
       const seat = new Color(hex);
@@ -693,22 +1150,35 @@ export class Crowd {
     c.set(board);
     for (let i = 1; i < this.towels.count; i += 2) this.towels.setColorAt(i, c);
     if (this.towels.instanceColor) this.towels.instanceColor.needsUpdate = true;
-    for (const { mesh, lit, sec } of this.stalls) {
-      lit.forEach((l, i) => mesh.setColorAt(i, c.copy(tones[sec[i]] ?? tones[0]).multiplyScalar(STALL_TONE * l)));
+    // (a seat's colour: its section's; or, mixed, one of the three by its own number; or, shading, the last more often the higher its row)
+    const tone = (sec: number, row: number, own: number) =>
+      mix === 'confetti' ? (own < 0.5 ? 0 : own < 0.8 ? 1 : 2) : mix === 'fade' ? (own < (row / (ROWS - 1)) ** 1.3 ? 2 : row > 2 && own > 0.9 ? 1 : 0) : sec;
+    for (const { mesh, lit, sec, row, own } of this.stalls) {
+      lit.forEach((l, i) => mesh.setColorAt(i, c.copy(tones[tone(sec[i], row[i], own[i])] ?? tones[0]).multiplyScalar(STALL_TONE * l)));
       mesh.instanceColor!.needsUpdate = true;
     }
     for (const s of this.seats) s.flat.instanceColor = s.fine.instanceColor;
+    paintHeld(this.atlas.image as HTMLCanvasElement, board, letters);
+    this.atlas.needsUpdate = true;
   }
 
-  /** The visitors' fans in the visitors' colour (a few in its second). */
+  /** The visitors' fans in the visitors' colour (a few in its second), the other on each. */
   dress(fill: string, trim: string) {
     const c = new Color();
+    const d = new Color();
     // (cloth, as the home side's: a shade toward grey)
-    const cloth = (hex: string, k: number) => {
-      c.set(hex);
-      return c.lerp(GREY.setScalar(Math.max(0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b, 0.03)), WORN * 0.7).multiplyScalar(k);
+    const cloth = (to: Color, hex: string, k: number) => {
+      to.set(hex);
+      return to.lerp(GREY.setScalar(Math.max(0.2126 * to.r + 0.7152 * to.g + 0.0722 * to.b, 0.03)), WORN * 0.7).multiplyScalar(k);
     };
-    for (const f of this.visitors) this.wear(f.who, f.shade < 0 ? cloth(trim, 0.8) : cloth(fill, f.shade));
+    const alike =
+      d
+        .set(fill)
+        .sub(c.set(trim))
+        .toArray()
+        .reduce((n, v) => n + v * v, 0) < 0.02;
+    for (const f of this.visitors)
+      this.wear(f.who, f.shade < 0 ? cloth(c, trim, 0.8) : cloth(c, fill, f.shade), f.shade < 0 ? cloth(d, fill, 0.9) : alike ? d.set(HOME_WHITE_WEAR) : cloth(d, trim, 0.9));
     this.flush();
   }
 
@@ -716,6 +1186,7 @@ export class Crowd {
   dim(people: number, seats: number) {
     this.u.uDim.value = people;
     this.seatMat.color.setScalar(Math.min(1, seats));
+    this.propMat.color.setScalar(people);
   }
 
   /**
@@ -749,10 +1220,12 @@ export class Crowd {
    * A device that can't keep up, by the scene's steps: the rows by the floor in the plain model (1); the
    * rows behind in the lightest one and every seat two faces (2); the rows by the floor in the lightest
    * and the rows behind a trunk and a head each (3: a quarter of a million triangles for the whole house).
+   * What the fans hold goes from the first.
    */
   shed(level: 0 | 1 | 2 | 3) {
     this.level = level;
     for (const o of this.fine) o.visible = level < 1;
+    this.held.visible = level < 1;
     for (const o of this.plain) o.visible = level === 1 || level === 2;
     for (const o of this.least) o.visible = level > 2;
     for (const o of this.rest) o.visible = level < 2;

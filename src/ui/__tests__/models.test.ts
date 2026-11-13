@@ -342,6 +342,16 @@ describe("the 3D court's models", () => {
         if (a !== b && a.style === b.style && a.beard === b.beard && Math.abs(a.tone - b.tone) <= 1 && a.hair === b.hair) alike++;
       }
       expect(alike / 3000, 'two men who look alike').toBeLessThan(0.03);
+      // (and no two faces one head scaled: each man's face has a shape of its own, spread over the league; a line-up
+      // only on hair cut short)
+      for (const k of ['cheeks', 'full', 'point', 'flare', 'deep', 'wings'] as const) {
+        const v = looks.map((l) => l.face[k]);
+        expect(Math.min(...v)).toBeGreaterThanOrEqual(-1);
+        expect(Math.max(...v)).toBeLessThanOrEqual(1);
+        expect(Math.max(...v) - Math.min(...v), `every face alike in its ${k}`).toBeGreaterThan(1.2);
+      }
+      expect(looks.some((l) => l.lineup)).toBe(true);
+      expect(looks.filter((l) => l.lineup).map((l) => STYLES[l.style].name)).not.toEqual(expect.arrayContaining(['afro', 'locs', 'twists', 'shaved', 'tied']));
     }
 
     // the people round the floor: three bodies, each one skin on the player's own bones, with a face, a jaw and a fuller

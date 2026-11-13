@@ -68,6 +68,7 @@ import { breakStory, crowdLevel, currentRun, isClutch, RUN_MIN } from '../live/a
 import { Crowd, clutchSlowAlways, setClutchSlowAlways } from '../live/Atmos';
 import { COACH_MARKS, CoachMark, coachMarksSeen, markCoachMarksSeen } from '../live/CoachMarks';
 import { lockSideways, unlockSideways, useLiveShape } from '../live/turn';
+import { setToastHost } from '../toastHost';
 import '../live/live.css';
 
 /** How long the turned page says to turn the phone (ms). */
@@ -676,6 +677,8 @@ export default function Live() {
         {/* the building: the home crowd's glow around the floor (a neutral floor's crowd has no side) */}
         {!s.intro && !stop && !frozen && <Crowd level={crowd} color={neutral ? 'var(--accent)' : kits[0].color} clutch={clutch} />}
         {tipUp && <CoachMark step={tip} onNext={nextTip} />}
+        {/* the toasts' place while the game is on: the court's top edge, over the far stands (toastHost.ts) */}
+        <div className="lv-toasts" ref={setToastHost} />
         {/* a phone: the way to the other layout, in the court's corner; turned, a word to turn the phone */}
         {(shape === 'turned' || shape === 'upright') && !frozen && !s.intro && (
           <button

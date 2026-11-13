@@ -15,6 +15,9 @@
 // gets there as a hand does: he eases in and settles (a spring with no bounce in it), widens at once and
 // tightens slowly, and is never asked to jump (a man who leaves the play is let go of gradually, not
 // dropped). Reduced motion: no pans at all, each half of the floor its own still picture and a cut between.
+//
+// And where a close camera (a cut-in, a replay's) may stand: where nobody is in front of its man (`blocked`,
+// `clearSeat`) and no part of a basket's unit, its arm, its board's frame and pads, its shot clock (`fenced`).
 import { BASKET, COURT_LEN } from '../choreo';
 
 export type CamKind = 'tv' | 'side' | 'end' | 'low' | 'top';
@@ -285,6 +288,86 @@ export const SEAT_X = MID + 8.5;
 export const SEAT_Z = [-9, 33];
 
 /**
+ * The basket's unit as something that hides what is behind it (scripts/blender/arena.py hoop(), a little
+ * fuller), in feet behind its rim along the floor (b), up (y) and across (z, the same either side): boxes
+ * [b0, b1, y0, y1, z0, z1] for the base on the floor, the board's mount, the board's frame and pads round its
+ * glass (the glass itself is seen through), the plate under the rim and the shot clock over the board; each a
+ * few inches fuller than it is, so a line that grazes it counts.
+ */
+const UNIT: readonly (readonly number[])[] = [
+  [8.3, 14.5, 0, 3.7, 0, 2.05],
+  [1.15, 2.35, 9.5, 11.6, 0, 0.75],
+  [1.05, 1.8, 9.15, 9.95, 0, 3.3],
+  [1.05, 1.8, 12.55, 13.25, 0, 3.3],
+  [1.05, 1.8, 9.95, 12.55, 2.55, 3.3],
+  [1.0, 1.5, 9.45, 10.2, 0, 0.5],
+  [1.2, 2.05, 12.8, 15.15, 0, 1.3],
+];
+/** The arm from the base up to the board: from here (b, y), this far along it (ft) this way (b, y), this thick each side of its line (ft, its pad under it), this wide. */
+const ARM = { b: 10.75, y: 2.14, long: 11.7, db: -0.7497, dy: 0.6638, t: [-0.45, 1.4], z: 0.8 };
+/** And the steel braces from it to the board's corners: each from (b, y, z) to (b, y, z), this thick (ft). */
+const BRACES: readonly (readonly number[])[] = [
+  [6.72, 7.25, 0.32, 1.43, 12.82, 1.9],
+  [4.78, 8.23, 0.44, 1.43, 10.9, 2.82],
+];
+const BRACE_R = 0.3;
+
+/** How far apart two lines are at their nearest: (a0..a1) and (c0..c1), x, y, z each. */
+function apart(a: readonly number[], c: readonly number[]): number {
+  const u = [a[3] - a[0], a[4] - a[1], a[5] - a[2]];
+  const v = [c[3] - c[0], c[4] - c[1], c[5] - c[2]];
+  const w = [a[0] - c[0], a[1] - c[1], a[2] - c[2]];
+  const dot = (p: number[], q: number[]) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+  const [uu, uv, vv, uw, vw] = [dot(u, u), dot(u, v), dot(v, v), dot(u, w), dot(v, w)];
+  const den = uu * vv - uv * uv;
+  let s = den > 1e-9 ? clamp((uv * vw - vv * uw) / den, 0, 1) : 0;
+  const t = clamp((uv * s + vw) / (vv || 1), 0, 1);
+  s = clamp((uv * t - uw) / (uu || 1), 0, 1);
+  return Math.hypot(w[0] + u[0] * s - v[0] * t, w[1] + u[1] * s - v[1] * t, w[2] + u[2] * s - v[2] * t);
+}
+
+/** The line (p0..p1, three numbers each, in some box's own frame) crosses the box (lo, hi: three numbers each). */
+function through(p0: readonly number[], p1: readonly number[], lo: readonly number[], hi: readonly number[]): boolean {
+  let [a, b] = [0, 1];
+  for (let i = 0; i < 3; i++) {
+    const d = p1[i] - p0[i];
+    if (Math.abs(d) < 1e-9) {
+      if (p0[i] < lo[i] || p0[i] > hi[i]) return false;
+      continue;
+    }
+    let [t0, t1] = [(lo[i] - p0[i]) / d, (hi[i] - p0[i]) / d];
+    if (t0 > t1) [t0, t1] = [t1, t0];
+    [a, b] = [Math.max(a, t0), Math.min(b, t1)];
+    if (a > b) return false;
+  }
+  return true;
+}
+
+/**
+ * The basket's unit at either end stands between a camera at (cx, cy, cz) and a point (px, py, pz): its base,
+ * its arm, its board's frame, pads and braces, its shot clock (UNIT). The glass is seen through.
+ */
+export function fenced(cx: number, cy: number, cz: number, px: number, py: number, pz: number): boolean {
+  for (const e of [-1, 1]) {
+    // (in the unit's own frame: behind its rim, up, across)
+    const [b0, b1] = [e * cx - RIM_X, e * px - RIM_X];
+    if (b0 < 0 && b1 < 0) continue;
+    const p0 = [b0, cy, cz];
+    const p1 = [b1, py, pz];
+    for (const k of UNIT)
+      for (const s of [-1, 1]) {
+        const [z0, z1] = s < 0 ? [-k[5], -k[4]] : [k[4], k[5]];
+        if (through(p0, p1, [k[0], k[2], z0], [k[1], k[3], z1])) return true;
+      }
+    // (the arm, in its own frame: along it, out from its line, across)
+    const arm = (b: number, y: number, z: number) => [(b - ARM.b) * ARM.db + (y - ARM.y) * ARM.dy, (b - ARM.b) * ARM.dy - (y - ARM.y) * ARM.db, z];
+    if (through(arm(b0, cy, cz), arm(b1, py, pz), [0, ARM.t[0], -ARM.z], [ARM.long, ARM.t[1], ARM.z])) return true;
+    for (const k of BRACES) for (const s of [-1, 1]) if (apart([b0, cy, cz, b1, py, pz], [k[0], k[1], s * k[2], k[3], k[4], s * k[5]]) < BRACE_R) return true;
+  }
+  return false;
+}
+
+/**
  * How much of a man at (x, z) a body at (ox, oz) hides from a camera at (cx, cz): 0 none, more the more
  * of him and the nearer the lens it stands (a body there takes the picture).
  */
@@ -300,9 +383,22 @@ function hides(x: number, z: number, cx: number, cz: number, ox: number, oz: num
 /**
  * Where a close-up's camera stands for a man at (x, z) facing `yaw`, `off` ft from him: in front of his
  * face if it can, with nobody of `others` (x, z each, `n` of them) and no basket's post between, and the
- * stands behind him rather than the near side's dark. Into `out` (x, z); what the place costs (under 3: nobody in the way).
+ * stands behind him rather than the near side's dark. Standing `high` ft up, it must see `see` (x, y, z each,
+ * `m` numbers: his head and his hands, the rim) with no part of a basket's unit in front of them (`fenced`).
+ * Into `out` (x, z); what the place costs (under 3: nobody and nothing in the way).
  */
-export function clearSeat(x: number, z: number, yaw: number, others: ArrayLike<number>, n: number, off: number, out: { x: number; z: number }): number {
+export function clearSeat(
+  x: number,
+  z: number,
+  yaw: number,
+  others: ArrayLike<number>,
+  n: number,
+  off: number,
+  out: { x: number; z: number },
+  high = 0,
+  see: ArrayLike<number> = [],
+  m = 0,
+): number {
   let best = Infinity;
   for (let k = 0; k < 16; k++) {
     const a = (k * Math.PI) / 8;
@@ -315,6 +411,11 @@ export function clearSeat(x: number, z: number, yaw: number, others: ArrayLike<n
     if (cz < z) cost += (z - cz) / (far || 1);
     for (let i = 0; i < n; i++) cost += 3 * hides(x, z, cx, cz, others[i * 2], others[i * 2 + 1]);
     for (const e of [-1, 1]) for (let px = MID + POST[0]; px <= MID + POST[1]; px += 2.5) if (hides(x, z, cx, cz, e * px, 0) || Math.hypot(cx - e * px, cz) < POST_R) cost += 6;
+    for (let i = 0; i < m; i += 3)
+      if (fenced(cx, high, cz, see[i], see[i + 1], see[i + 2])) {
+        cost += 6;
+        break;
+      }
     if (cost < best) {
       best = cost;
       out.x = cx;
