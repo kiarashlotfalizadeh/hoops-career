@@ -323,6 +323,10 @@ const ARM_R = 0.15;
 const FINGERS_R = 0.1;
 /** An arm drawn back off another man comes to it over about this long (ms), and lets go over the same. */
 const PULL_MS = 70;
+/** His elbow and forearm looked at again, and the hand drawn back off a man, up to this many times a frame. */
+const ARM_PASSES = 3;
+/** The first joint of each of SHAPES's arm bones (a shoulder, an elbow): a hand rests on a man's arm, not in it. */
+const ARM_SHAPE = new Set([3, 4, 6, 7]);
 /**
  * A free hand keeps out of the ball's way when the ball isn't his: out of where it is and where it will be DODGE_S
  * seconds on (the bodies' time), by DODGE_GAP ft more than the ball and a hand. A contest comes up beside the shot, a
@@ -671,6 +675,8 @@ const RUNNING_LEAP = 4;
  * out EURO_WIDE ft to either side, the way his hips go.
  */
 const STEP_QUICK = 1.1;
+/** Off one foot, the foot he goes up off stays down once it is down this long (ms, his own) before he leaves the floor. */
+const TAKE_HOLD = 160;
 const STEP_SLOW = 0.7;
 const EURO_WIDE = 0.55;
 /** Up off one foot, the other knee drives up (its foot KNEE_UP ft higher and KNEE_FWD ft farther forward than the move has it), easing back over KNEE_HOLD ms of the move after he leaves the floor. */
@@ -2057,7 +2063,8 @@ export class Puppet {
 
   /**
    * Moved a little across the floor after `update` (a man he is leaning on was nearer than their bodies allow, or
-   * had a leg in his): his feet go with him and his legs are solved again. Read after `update`, before `arms`.
+   * had a leg in his): his feet go with him and his legs are solved again. After `update`; after `arms` too (his arms
+   * go with him).
    */
   nudge(dx: number, dz: number) {
     this.x += dx;
@@ -2071,7 +2078,11 @@ export class Puppet {
         f.x += dx;
         f.z += dz;
       }
+    // (his head as it was: moved there off a man by `arms` if this comes after them; the same place otherwise)
+    const h = J.head * 3;
+    const [hx, hy, hz] = [this.j[h], this.j[h + 1], this.j[h + 2]];
     this.solve(this.vf, this.vs);
+    [this.j[h], this.j[h + 1], this.j[h + 2]] = [hx, hy, hz];
   }
 
   /** How many of the bodies' ms the last frame took (what a thing eased on his own clock, his wrists, goes by). */
@@ -2938,7 +2949,10 @@ export class Puppet {
       return k !== this.pivotK && (o > turnOut + FOOT_STEP || o < -turnIn - FOOT_STEP);
     };
     // (a foot he keeps down whatever: his pivot, or both as he loads a jump, once there is no time left to step one)
-    const kept = (k: number) => this.pose[I.air] < 0.5 && (k === this.pivotK || (this.loading && !this.gathering));
+    // (and off one foot, the foot he goes up off, once it is down in the last TAKE_HOLD ms before he leaves the floor: it
+    // is the one he leaves it off, never lifted early into a hop off neither)
+    const kept = (k: number) =>
+      this.pose[I.air] < 0.5 && (k === this.pivotK || (this.loading && !this.gathering) || (k === this.lockK && this.lockMs >= 0 && this.lockMs < TAKE_HOLD));
     // (how fast his hips are going up, ft a second on the 6 ft 6 puppet: see TAKE_RATE)
     const rise = dt > 0 && !Number.isNaN(this.hipWas) ? ((this.pose[I.hip] - this.hipWas) * 1000) / dt : 0;
     this.hipWas = this.pose[I.hip];
@@ -3617,7 +3631,7 @@ export class Puppet {
    * (spacing.ts's shapes, and `r` ft of his own round it): put on the nearest, resting on him, on the side toward himself (a hand
    * reaching into a man is drawn back off him, never flicked through him). Says how far it was moved (ft).
    */
-  private rest(at: V3, r: number, near: readonly Puppet[]): number {
+  private rest(at: V3, r: number, near: readonly Puppet[], arms = false): number {
     const w = this.world(at.x, at.y, at.z, WP);
     const x0 = w.x;
     const y0 = w.y;
@@ -3629,7 +3643,8 @@ export class Puppet {
       MINE.x = (this.x - o.x) / d;
       MINE.z = (this.z - o.z) / d;
       for (const [p, q, t, limb] of SHAPES) {
-        if (limb && p !== J.jl && p !== J.jr) continue;
+        // (his thighs; and, for a hand, his arms too: a contest's hand goes by the shooter's forearm, not through it)
+        if (limb && p !== J.jl && p !== J.jr && !(arms && ARM_SHAPE.has(p))) continue;
         o.world(oj[p * 3], oj[p * 3 + 1], oj[p * 3 + 2], SA);
         o.world(oj[q * 3], oj[q * 3 + 1], oj[q * 3 + 2], SB);
         clearOf(w, SA, SB, t * o.body.s * Math.sqrt(o.body.bulk) + r, 0, MINE);
@@ -4069,7 +4084,7 @@ export class Puppet {
         HAND.x = x + H[pu];
         HAND.y = y + H[pu + 1];
         HAND.z = z + H[pu + 2];
-        this.rest(HAND, HAND_R * s, near);
+        this.rest(HAND, HAND_R * s, near, true);
         if (dodging) this.dodge(HAND, HAND_R * s, loose!, DODGE_S);
         [x, y, z] = [HAND.x, HAND.y, HAND.z];
       }
@@ -4095,7 +4110,7 @@ export class Puppet {
         HAND.x = x;
         HAND.y = y;
         HAND.z = z;
-        if (this.rest(HAND, HAND_R * s, near) > 0) [x, y, z] = [HAND.x, HAND.y, HAND.z];
+        if (this.rest(HAND, HAND_R * s, near, true) > 0) [x, y, z] = [HAND.x, HAND.y, HAND.z];
       }
       j[ha * 3] = x;
       j[ha * 3 + 1] = Math.max(0.2 * s, y);
@@ -4106,32 +4121,41 @@ export class Puppet {
       reach(j, side > 0 ? J.sl : J.sr, el, ha, UARM * s, FARM * s, pole.x, pole.y, pole.z);
       // (his elbow or his forearm in the ball's way: the hand is moved off it as far as they must go, and the arm solved again)
       if (this.clearArm(side, el, ha, dodging ? loose : null)) reach(j, side > 0 ? J.sl : J.sr, el, ha, UARM * s, FARM * s, pole.x, pole.y, pole.z);
-      // (where the hand is now, for its way on next frame: see round)
-      const sw = side > 0 ? 0 : 3;
-      for (let a = 0; a < 3; a++) this.swung[sw + a] = j[ha * 3 + a] - j[k + a];
-      // (his elbow or his forearm in another man: next frame the hand is drawn back off him by as much, eased; else
-      // what it was drawn back lets go)
+      // (his elbow or his forearm in another man: the hand is drawn back off him by as much this frame, and the arm
+      // solved again (an arm is never seen in a man for a frame); kept drawn back next frame, and let go of eased)
       let dx = 0;
       let dy = 0;
       let dz = 0;
       if (free)
-        for (const u of [0, 0.5]) {
-          HAND.x = j[el * 3] + (j[ha * 3] - j[el * 3]) * u;
-          HAND.y = j[el * 3 + 1] + (j[ha * 3 + 1] - j[el * 3 + 1]) * u;
-          HAND.z = j[el * 3 + 2] + (j[ha * 3 + 2] - j[el * 3 + 2]) * u;
-          const [x0, y0, z0] = [HAND.x, HAND.y, HAND.z];
-          if (this.rest(HAND, ARM_R * s, near) > 0) {
-            // (moving the hand moves the middle of the forearm half as far)
-            const m = u > 0 ? 2 : 1;
-            dx += (HAND.x - x0) * m;
-            dy += (HAND.y - y0) * m;
-            dz += (HAND.z - z0) * m;
+        for (let pass = 0; pass < ARM_PASSES; pass++) {
+          let px = 0;
+          let py = 0;
+          let pz = 0;
+          for (const u of [0, 0.5]) {
+            HAND.x = j[el * 3] + (j[ha * 3] - j[el * 3]) * u;
+            HAND.y = j[el * 3 + 1] + (j[ha * 3 + 1] - j[el * 3 + 1]) * u;
+            HAND.z = j[el * 3 + 2] + (j[ha * 3 + 2] - j[el * 3 + 2]) * u;
+            const [x0, y0, z0] = [HAND.x, HAND.y, HAND.z];
+            if (this.rest(HAND, ARM_R * s, near) > 0) {
+              // (moving the hand moves the middle of the forearm half as far)
+              const m = u > 0 ? 2 : 1;
+              const [mx, my, mz] = [(HAND.x - x0) * m, (HAND.y - y0) * m, (HAND.z - z0) * m];
+              if (Math.hypot(mx, my, mz) > Math.hypot(px, py, pz)) [px, py, pz] = [mx, my, mz];
+            }
           }
+          if (!px && !py && !pz) break;
+          j[ha * 3] += px;
+          j[ha * 3 + 1] = Math.max(0.2 * s, j[ha * 3 + 1] + py);
+          j[ha * 3 + 2] += pz;
+          reach(j, side > 0 ? J.sl : J.sr, el, ha, UARM * s, FARM * s, pole.x, pole.y, pole.z);
+          [dx, dy, dz] = [dx + px, dy + py, dz + pz];
         }
       const ke = 1 - Math.exp(-this.ownMs / PULL_MS);
-      H[pu] += dx * ke - (dx ? 0 : H[pu] * ke);
-      H[pu + 1] += dy * ke - (dy ? 0 : H[pu + 1] * ke);
-      H[pu + 2] += dz * ke - (dz ? 0 : H[pu + 2] * ke);
+      if (dx || dy || dz) [H[pu], H[pu + 1], H[pu + 2]] = [H[pu] + dx, H[pu + 1] + dy, H[pu + 2] + dz];
+      else [H[pu], H[pu + 1], H[pu + 2]] = [H[pu] * (1 - ke), H[pu + 1] * (1 - ke), H[pu + 2] * (1 - ke)];
+      // (where the hand is now, for its way on next frame: see round)
+      const sw = side > 0 ? 0 : 3;
+      for (let a = 0; a < 3; a++) this.swung[sw + a] = j[ha * 3 + a] - j[k + a];
     }
     this.gripped = true;
   }

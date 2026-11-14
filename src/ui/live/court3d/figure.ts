@@ -3501,12 +3501,13 @@ export class Fig {
     // (and each has a face of his own: a wider or a longer head, his jaw, his nose)
     const hs = Math.sqrt(s) * 1.06;
     const face = look.face;
-    scale(B.head, hs * face.wide, hs * face.long, hs);
-    scale(B.jaw, hs * face.wide * face.jaw, hs * face.long * face.chin, hs);
-    scale(B.nose, hs * face.wide * face.nose, hs * face.long, hs * face.bridge);
-    scale(B.hair, hs * face.wide, hs * face.long, hs);
-    scale(B.brow, hs * face.wide, hs * face.long, hs);
-    scale(B.lip, hs * face.wide, hs * face.long, hs);
+    const hd = hs * face.depth;
+    scale(B.head, hs * face.wide, hs * face.long, hd);
+    scale(B.jaw, hs * face.wide * face.jaw, hs * face.long * face.chin, hd);
+    scale(B.nose, hs * face.wide * face.nose, hs * face.long, hd * face.bridge);
+    scale(B.hair, hs * face.wide, hs * face.long, hd);
+    scale(B.brow, hs * face.wide, hs * face.long, hd);
+    scale(B.lip, hs * face.wide, hs * face.long, hd);
     for (const k of [B.ual, B.uar]) scale(k, thick * arm, s, thick * arm);
     for (const k of [B.fal, B.far]) scale(k, thick * arm * low, s, thick * arm * low);
     for (const k of [B.thl, B.thr, B.hemL, B.hemR]) scale(k, thick * leg, s, thick * leg);

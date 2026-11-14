@@ -41,7 +41,7 @@ export interface Look {
   /** His lips' own colour, -1..1: paler and pinker than his skin would have them, to browner and darker. */
   lip: number;
   /**
-   * His face's shape: how wide and how long his head is, his jaw's width and length, his nose's width and
+   * His face's shape: how wide, how long and how deep his head is, his jaw's width and length, his nose's width and
    * how far it stands out (each about 1); then how heavy his brow's ridge is and how full his lips are
    * (0..1), how far his eyes' outer corners are tipped up and how wide open he holds them (about 1), and
    * which kind of head it is (an index into FACES). Then what shapes the face itself, each about 0 (-1..1): how
@@ -51,6 +51,7 @@ export interface Look {
   face: {
     wide: number;
     long: number;
+    depth: number;
     jaw: number;
     chin: number;
     nose: number;
@@ -111,8 +112,14 @@ export const FACES = [
   { name: 'square', wide: 1.02, long: 1.0, jaw: 1.11, chin: 1.03, ridge: 0.6, nose: 1.0, lips: 0.4, cheeks: 0.1, full: -0.1, point: 0.5, flare: 0.9, deep: 0.3 },
   { name: 'narrow', wide: 0.95, long: 1.0, jaw: 0.94, chin: 1.0, ridge: 0.3, nose: 0.92, lips: 0.5, cheeks: 0.55, full: -0.45, point: 0.1, flare: -0.4, deep: 0.4 },
   { name: 'heavy', wide: 1.01, long: 0.99, jaw: 1.04, chin: 1.0, ridge: 1.0, nose: 1.07, lips: 0.5, cheeks: 0.0, full: 0.3, point: 0.2, flare: 0.6, deep: 0.8 },
-  { name: 'soft', wide: 1.0, long: 0.975, jaw: 0.94, chin: 0.9, ridge: 0.1, nose: 0.97, lips: 0.75, cheeks: -0.5, full: 0.8, point: -0.5, flare: -0.4, deep: -0.6 },
+  { name: 'soft', wide: 1.0, long: 0.975, jaw: 0.94, chin: 0.9, ridge: 0.1, nose: 0.97, lips: 0.75, cheeks: -0.5, full: 0.5, point: -0.5, flare: -0.4, deep: -0.6 },
+  { name: 'oval', wide: 0.975, long: 1.05, jaw: 0.9, chin: 1.08, ridge: 0.25, nose: 0.96, lips: 0.5, cheeks: 0.35, full: -0.5, point: 0.6, flare: -0.6, deep: 0.1 },
+  { name: 'angular', wide: 1.0, long: 1.04, jaw: 1.06, chin: 1.08, ridge: 0.75, nose: 1.02, lips: 0.35, cheeks: 0.8, full: -0.7, point: 0.7, flare: 0.7, deep: 0.6 },
+  { name: 'round', wide: 1.07, long: 0.95, jaw: 0.97, chin: 0.92, ridge: 0.2, nose: 1.03, lips: 0.6, cheeks: -0.2, full: 0.2, point: -0.6, flare: 0.1, deep: -0.3 },
 ] as const;
+/** Every man's jaw a little narrower than the sculpt's, and his cheeks a little leaner: the sculpt reads puffy up close. */
+const JAW_SLIM = 0.95;
+const LEAN = 0.25;
 
 /** Hair's natural colours, darkest first. */
 const BLACK = '#17130f';
@@ -216,10 +223,12 @@ export function lookOf(pid: number): Look {
     sweat: span(37, 0.55, 1.45),
     lip: span(38, -1, 1),
     face: {
-      wide: kind.wide + span(8, -0.03, 0.03),
-      long: kind.long + span(9, -0.03, 0.03),
-      jaw: kind.jaw + span(10, -0.04, 0.04),
-      chin: kind.chin + span(11, -0.04, 0.05),
+      wide: kind.wide + span(8, -0.05, 0.05),
+      long: kind.long + span(9, -0.05, 0.05),
+      jaw: (kind.jaw + span(10, -0.07, 0.07)) * JAW_SLIM,
+      chin: kind.chin + span(11, -0.06, 0.07),
+      // (how deep his head is front to back: a flatter face or a longer skull)
+      depth: span(39, 0.94, 1.06),
       // (a broader nose and fuller lips go with a darker tone, loosely)
       nose: kind.nose * span(12, 0.9, 1.08) + tone * 0.022,
       bridge: span(13, 0.86, 1.14),
@@ -227,10 +236,10 @@ export function lookOf(pid: number): Look {
       lips: Math.min(1, Math.max(0, kind.lips + span(16, -0.25, 0.25) + (tone - 3.5) * 0.04)),
       // (most men's outer corners a little higher than the inner ones, a few's level, a few's a good deal higher)
       tilt: span(17, 0.1, 1.4),
-      open: span(18, 0.86, 1.08),
+      open: span(18, 0.98, 1.22),
       kind: kinds,
       cheeks: off(kind.cheeks, 28),
-      full: off(kind.full, 29),
+      full: off(kind.full - LEAN, 29),
       point: off(kind.point, 30),
       flare: off(kind.flare, 31),
       deep: off(kind.deep, 32),

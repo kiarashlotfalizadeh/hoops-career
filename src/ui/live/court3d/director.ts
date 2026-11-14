@@ -28,8 +28,8 @@
 // on its way to him is for the look to come to, eased, not something the picture is held to. Only what the
 // easing still leaves out is held at the picture's edge at once.
 //
-// The cut-aways that are not on a man on the floor (scene.ts says when): a bench and its coach, the crowd,
-// the building before the tip.
+// The cut-aways that are not on a man on the floor (scene.ts says when): a bench and its coach, the building
+// before the tip.
 //
 // And the operator's hand on the other cameras: a main camera that is never quite still, a close-up held
 // on the shoulder, a bump when the rim takes a dunk.
@@ -1055,16 +1055,6 @@ export class Director {
     cam.fov = this.across(aspect < 1.5 ? 36 : 44, aspect) * (1 - 0.07 * u);
     cam.position.set(e * (BENCH_X[0] - 15 + u) + this.hand(0, 0.08), 5.6 + this.hand(1, 0.06), BENCH_Z + 17 + this.hand(2, 0.08));
     cam.lookAt(e * (BENCH_X[0] + 6.5), 3.4, BENCH_Z - 0.6);
-    cam.updateProjectionMatrix();
-  }
-
-  /** The crowd: from over the floor at the far side's seats on `side`'s half, panning along them a little over `ms`. */
-  aimCrowd(cam: PerspectiveCamera, side: 0 | 1, ms: number, aspect: number) {
-    const e = side ? 1 : -1;
-    const u = Math.min(1, ms / 2400);
-    cam.fov = this.across(aspect < 1.5 ? 40 : 50, aspect);
-    cam.position.set(e * 4 + this.hand(0, 0.08), 12 + this.hand(1, 0.06), 4);
-    cam.lookAt(e * (16 + 5 * u), 13, -60);
     cam.updateProjectionMatrix();
   }
 

@@ -189,8 +189,7 @@ const SEAT_AHEAD = 0.8;
 const CLOSE_LEAST = 450;
 /** A teammate this near him (ft) may come over to him (a hand after a free throw, a hug after a big one): his seat is chosen as if he were this far off him (ft). */
 const MATE_NEAR = [16, 3];
-/** The final buzzer's picture goes from the winners to the crowd after this long (ms), and to the whole building after this. */
-const FINAL_CROWD = 5200;
+/** The final buzzer's picture stays on the winners this long (ms), then goes to the whole building. */
 const FINAL_WIDE = 8600;
 /** And goes this far round him while it holds (radians). */
 const CUT_ARC = 0.1;
@@ -206,8 +205,7 @@ const NOWHERE = 1e4;
 const TIP_OFF = 38;
 const TIP_FROM = -0.45;
 const TIP_TURN = 0.07;
-/** The final buzzer's camera comes in on the winners over this long (ms), from this far off them (ft). */
-const FINAL_MS = 5000;
+/** The final buzzer's camera comes in on the winners (over FINAL_WIDE) from this far off them (ft). */
 const FINAL_OFF = 31;
 /** A camera on a man's shoulder moves this much (ft) as it holds; the main camera's operator lets the frame wander this much. */
 const HAND = 0.1;
@@ -223,7 +221,7 @@ const TRUNK = 0.5;
 /** And out of heads: a head's (on the 6 ft 6 puppet), and how far off a body the ball starts to give way (ft). */
 const SKULL = 0.42;
 const GIVE = 0.4;
-/** The ball gives way to a body over this long (ms), not in a frame: it bends round a man, it doesn't hop off him. */
+/** What the ball has given way to a body is let go of over this long (ms) once he is out of its way (see give). */
 const BEND_MS = 80;
 /** A loose ball is moved off a body at this speed at most, ft a second: it rolls off him, it doesn't jump. */
 const BALL_PUSH = 14;
@@ -403,6 +401,16 @@ const SEAT = { x: 0, z: 0 };
 /** A close-up's camera stands this far off its man (ft), this high; his hands go up this far over his head (on the 6 ft 6 puppet). */
 const CLOSE_OFF = 22;
 const CLOSE_Y = 5.4;
+/**
+ * Where the low seat is crowded (a dunk is nearly always in traffic): the close-up is taken from higher and farther,
+ * over the bodies round him (ft off him, ft up), and opened out to this much of him over where it looks (ft, the half
+ * picture), never the stands instead.
+ */
+const HIGH_OFF = 30;
+const HIGH_Y = 13;
+const HIGH_HALF = 5.2;
+/** A close-up's half picture over where it looks (ft) from the low seat. */
+const LOW_HALF = 3.2;
 const HANDS_UP = 1.9;
 /** A close-up keeps the top of his head and his hands this far up its picture at most (of the half picture over where it looks). */
 const CLOSE_TOP = 0.82;
@@ -618,7 +626,7 @@ export class CourtScene {
   private netKick = 0;
   private rimKick = 0;
   // the camera on now, how long it has been (ms), how long there has been nothing to follow, how far it has pushed in
-  private shot: 'main' | 'wide' | 'close' | 'house' | 'tip' | 'open' | 'final' | 'bench' | 'crowd' | 'intro' = 'main';
+  private shot: 'main' | 'wide' | 'close' | 'house' | 'tip' | 'open' | 'final' | 'bench' | 'intro' = 'main';
   // how long the cut-away on now has (ms), whose bench or crowd it is, whether a timeout's building comes after it,
   // how long a body has been in front of a close-up's man (ms)
   private cutLen = CUT_MS;
@@ -636,7 +644,7 @@ export class CourtScene {
   private camPick: CamKind | null = null;
   private chosen = false;
   // a cut-in: the one asked for (and how long ago, ms), who it's on, the move it was asked in, where its camera is and looks
-  private cue: 'close' | 'house' | 'bench' | 'crowd' | null = null;
+  private cue: 'close' | 'house' | 'bench' | null = null;
   // and what the lower third says he did
   private cueWord = '';
   private cueMs = 0;
@@ -913,7 +921,7 @@ export class CourtScene {
     // live one (director.ts); on the frame it cuts in, and the one it cuts back, everyone starts afresh
     if (calm) this.director.end();
     // (a cut-in on the scorer has the picture until the wipe comes over it at its end)
-    const reel = this.director.feed(stage, dt, own, real, (this.shot === 'close' || this.shot === 'bench' || this.shot === 'crowd') && this.shotMs < this.cutLen - WIPE_MS / 2);
+    const reel = this.director.feed(stage, dt, own, real, (this.shot === 'close' || this.shot === 'bench') && this.shotMs < this.cutLen - WIPE_MS / 2);
     if (reel) {
       stage = reel.stage;
       dt = reel.dt;
@@ -1456,13 +1464,22 @@ export class CourtScene {
     const stakes = p.clutch ? 1 : score && quarter >= 3 && Math.abs(score[0] - score[1]) >= BLOWOUT ? -1 : 0;
     const wear = clamp((quarter - 1) / 3, 0, 1) * 0.75 + (quarter >= 4 && play && play.clock <= LATE_S ? 0.25 : 0);
     for (const [pid, f] of order) {
+      if (!seen.has(pid)) continue;
+      f.ball = hands.has(f) ? ball : null;
+      f.pup.arms(hands.has(f) ? ball : null, onFloor, hands.has(f) || pid === taking ? null : LOOSE);
+      if (f === has && hands.has(f)) this.inHands(f);
+    }
+    // (and again with their arms where they are drawn this frame: an arm, a trunk or a leg still in a man moves them
+    // apart now, not next frame; a man with the ball in his hands stays where it is)
+    this.unclash(
+      order.filter(([pid]) => seen.has(pid)).map(([pid]) => pid),
+      hands,
+    );
+    for (const [pid, f] of order) {
       if (!seen.has(pid)) {
         this.drop(pid, f);
         continue;
       }
-      f.ball = hands.has(f) ? ball : null;
-      f.pup.arms(hands.has(f) ? ball : null, onFloor, hands.has(f) || pid === taking ? null : LOOSE);
-      if (f === has && hands.has(f)) this.inHands(f);
       // (his face on the possession's clock: kept as it goes, and the one he had then in a replay)
       f.when(sc && play ? sc : null, this.scriptAt, this.director.onAir);
       f.stakes = stakes;
@@ -1617,7 +1634,7 @@ export class CourtScene {
       const news = fl !== this.flashed && !stale ? fl : null;
       const made = play.b.fx === 'make' && this.netKick > this.kicked && !stale;
       if (made) this.scorer = pids[play.a.hold ?? -1] ?? null;
-      let cue: 'close' | 'house' | 'bench' | 'crowd' | null = null;
+      let cue: 'close' | 'house' | 'bench' | null = null;
       let on: number | null = null;
       let word = '';
       let whose: 0 | 1 = 0;
@@ -1625,13 +1642,12 @@ export class CourtScene {
         cue = 'close';
         on = this.scorer;
         word = sc.moment ? BIG_WORD[sc.moment] : this.slammed ? BIG_WORD.dunk : BIG_WORD.three;
-        // (not always his face: now and then his bench on its feet, or, for the home side, the crowd)
+        // (not always his face: now and then his bench on its feet. Never the crowd full-screen in place of the scorer)
         const side = on === null ? undefined : this.figs.get(on)?.side;
         const r = hash(this.scriptN, 21);
         if (side !== undefined && !sc.moment) {
           whose = side;
           if (r < 0.2 && d.benchClear(side, this.view.men, this.view.n)) cue = 'bench';
-          else if (r < 0.36 && side === 0) cue = 'crowd';
         }
       } else if (made && line && hash(this.scriptN, 22) < 0.6) {
         // (a free throw down: the man at the line, now and then)
@@ -2131,13 +2147,18 @@ export class CourtScene {
    * one is in the other, they are moved apart now along the line between them, the lighter the more (a man hanging on
    * the ring stays where he is), until they touch at most. An arm of one in the other's trunk or head moves them too.
    */
-  private unclash(pids: readonly number[]) {
+  private unclash(pids: readonly number[], pinned?: ReadonlySet<Fig>) {
     for (let i = 0; i < pids.length; i++) {
       const a = this.figs.get(pids[i])?.pup;
       if (!a?.placed) continue;
       for (let k = i + 1; k < pids.length; k++) {
-        const b = this.figs.get(pids[k])?.pup;
+        const fb = this.figs.get(pids[k]);
+        const b = fb?.pup;
         if (!b?.placed) continue;
+        const fa = this.figs.get(pids[i])!;
+        const pa = !!pinned?.has(fa);
+        const pb = !!pinned?.has(fb!);
+        if (pa && pb) continue;
         if (this.meeting.some((m) => m.w >= 0.5 && ((pids[m.i] === pids[i] && pids[m.j] === pids[k]) || (pids[m.i] === pids[k] && pids[m.j] === pids[i])))) continue;
         const d = Math.hypot(b.x - a.x, b.z - a.z);
         if (d > CLASH_FAR * Math.max(a.body.s, b.body.s)) continue;
@@ -2145,7 +2166,7 @@ export class CourtScene {
         // (the lighter man gives more of the room; one on the ring none of it)
         const ma = a.body.s * a.body.s * a.body.bulk;
         const mb = b.body.s * b.body.s * b.body.bulk;
-        const share = a.onRim ? 1 : b.onRim ? 0 : ma / (ma + mb);
+        const share = a.onRim || pa ? 1 : b.onRim || pb ? 0 : ma / (ma + mb);
         for (let pass = 0; pass < CLASH_PASSES; pass++) {
           const [ja, jb] = [jointsOf(a, JA), jointsOf(b, JB)];
           const gap = clearance(ja, a.body.s, a.body.bulk, jb, b.body.s, b.body.bulk, false);
@@ -2725,9 +2746,12 @@ export class CourtScene {
     const px = ball.x;
     const pz = ball.z;
     if (on) this.clear(a, b);
-    const k = 1 - Math.exp(-ease / BEND_MS);
-    this.bend.x += (ball.x - px - this.bend.x) * k;
-    this.bend.z += (ball.z - pz - this.bend.z) * k;
+    // (more give than it has: taken at once, so a man stepping into its way is never passed through (GIVE has it bend
+    // round him before it gets to him); less: let go of eased, so it doesn't snap back onto its line)
+    const [tx, tz] = [ball.x - px, ball.z - pz];
+    const k = tx * tx + tz * tz > this.bend.x * this.bend.x + this.bend.z * this.bend.z + 1e-6 ? 1 : 1 - Math.exp(-ease / BEND_MS);
+    this.bend.x += (tx - this.bend.x) * k;
+    this.bend.z += (tz - this.bend.z) * k;
     ball.x = px + this.bend.x;
     ball.z = pz + this.bend.z;
   }
@@ -2846,7 +2870,7 @@ export class CourtScene {
     const tip = !live && stage.standers.length === 10 && !!stage.ball && Math.abs(stage.ball.y - MID) < 0.01 && Math.abs(stage.ball.x) < 0.01;
     // a cut-in, or the building at a timeout, is over when it has had its time, when the play goes on, or when
     // he has left the floor (but a cut-in a replay comes after has the picture until the wipe has covered it)
-    const held = this.shot === 'close' || this.shot === 'house' || this.shot === 'bench' || this.shot === 'crowd';
+    const held = this.shot === 'close' || this.shot === 'house' || this.shot === 'bench';
     const next = held && this.shot !== 'house' && (d.phase === 'wait' || d.phase === 'in');
     // (his head, and his hands up over it: what a close-up must see past a basket's unit)
     const face = who ? this.faceOf(who) : null;
@@ -2856,21 +2880,38 @@ export class CourtScene {
     if (this.shot === 'close' && who && face) {
       const o = this.others(who, CROWD_AHEAD);
       const p = cam.position;
-      crowded = this.shotMs > CLOSE_LEAST && this.crowds(p.x, p.y, p.z, this.look, Math.tan((cam.fov * Math.PI) / 360), aspect, o, this.restN);
+      crowded = this.shotMs > CLOSE_LEAST && this.closeBase === LOW_HALF && this.crowds(p.x, p.y, p.z, this.look, Math.tan((cam.fov * Math.PI) / 360), aspect, o, this.restN);
       this.blockMs =
-        blocked(who.pup.x, who.pup.z, this.seat.x, this.seat.z, o, this.restN / 2) || fenced(this.seat.x, this.seat.y, this.seat.z, face[0], face[1], face[2])
+        (this.closeBase === LOW_HALF && blocked(who.pup.x, who.pup.z, this.seat.x, this.seat.z, o, this.restN / 2)) ||
+        fenced(this.seat.x, this.seat.y, this.seat.z, face[0], face[1], face[2])
           ? this.blockMs + real
           : 0;
     } else this.blockMs = 0;
     const over = held && ((this.shot === 'close' && (!who || this.blockMs > BLOCK_MS || crowded)) || (!next && (this.shotMs > this.cutLen || !quiet)));
     // a close-up is taken from where its man is clear (and stays clear: where everyone is going), his face to it if it
-    // can be, and not into a picture about to be crowded; from nowhere, the home crowd instead, or nothing
+    // can be, and not into a picture about to be crowded; crowded low, from higher and farther over the bodies round
+    // him (HIGH_*); from nowhere, nothing (the main camera stays on the play)
     if (this.cue === 'close' && who && face) {
-      const clear = clearSeat(who.pup.x, who.pup.z, who.pup.yaw, this.others(who, SEAT_AHEAD, true), this.restN, CLOSE_OFF, SEAT, CLOSE_Y, face, 6) < 3;
       const at = A.set(face[0], Math.max(4, face[1] - 0.9), face[2]);
-      const o = this.others(who, CROWD_AHEAD);
-      const tan = 3.2 / Math.min(1, aspect) / Math.hypot(SEAT.x - at.x, CLOSE_Y - at.y, SEAT.z - at.z);
-      if (!clear || this.crowds(SEAT.x, CLOSE_Y, SEAT.z, at, tan, aspect, o, this.restN)) this.cue = who.side === 0 ? 'crowd' : null;
+      const tries: [number, number, number][] = [
+        [CLOSE_OFF, CLOSE_Y, LOW_HALF],
+        [HIGH_OFF, HIGH_Y, HIGH_HALF],
+      ];
+      let took = false;
+      for (const [off, y, half] of tries) {
+        // (others() fills one buffer: where they are going for the seat, then where they are for the picture. From up
+        // high the men round him are under the lens's line to his face: only the baskets' units and his facing count)
+        const high = y > CLOSE_Y;
+        const clear = clearSeat(who.pup.x, who.pup.z, who.pup.yaw, this.others(who, SEAT_AHEAD, true), high ? 0 : this.restN, off, SEAT, y, face, 6) < 3;
+        if (!clear) continue;
+        // (from up high, a body in front of him is under the picture: the low seat's clutter test is for the low seat)
+        const tan = half / Math.min(1, aspect) / Math.hypot(SEAT.x - at.x, y - at.y, SEAT.z - at.z);
+        if (high || !this.crowds(SEAT.x, y, SEAT.z, at, tan, aspect, this.others(who, CROWD_AHEAD), this.restN)) {
+          [this.cueY, this.cueHalf, took] = [y, half, true];
+          break;
+        }
+      }
+      if (!took) this.cue = null;
     }
     if (live) this.introSeen = false;
     else if (this.shot === 'intro' && this.shotMs > INTRO_MS) this.introSeen = true;
@@ -2912,7 +2953,7 @@ export class CourtScene {
       this.shotMs = 0;
       this.blockMs = 0;
       this.op.reset();
-      if (want === 'close' || want === 'house' || want === 'bench' || want === 'crowd') {
+      if (want === 'close' || want === 'house' || want === 'bench') {
         this.after = timeout;
         this.cutLen = want === 'close' ? CUT_MS : want === 'house' ? HOUSE_MS : timeout ? HUDDLE_MS : AWAY_MS;
         this.cutSide = this.cueSide;
@@ -2921,17 +2962,17 @@ export class CourtScene {
       }
       if (want === 'close' && who) {
         // (low, from where he is clear: found just above)
-        this.seat.set(SEAT.x, CLOSE_Y, SEAT.z);
+        this.seat.set(SEAT.x, this.cueY, SEAT.z);
+        this.closeBase = this.cueHalf;
         // (on his face from the first frame, however high he is: up on the rim, his head is half the picture over his waist)
         const f = this.faceOf(who);
         this.look.set(f[0], Math.max(4, f[1] - 0.9), f[2]);
       }
     }
     const closeUp = this.shot === 'close' && !!who;
-    const away = this.shot === 'bench' || this.shot === 'crowd';
+    const away = this.shot === 'bench';
     this.arena.dim(closeUp ? CUT_DIM : 1, closeUp ? CUT_DIM : away ? this.bench(1, real * 4) : this.bench(live ? BENCH_DIM : 1, real));
     if (this.shot === 'bench') return d.aimBench(cam, this.cutSide, this.shotMs, aspect);
-    if (this.shot === 'crowd') return d.aimCrowd(cam, this.cutSide, this.shotMs, aspect);
     if (this.shot === 'intro') return d.aimIntro(cam, this.shotMs, aspect);
 
     if (this.shot === 'close' && who) {
@@ -2942,7 +2983,7 @@ export class CourtScene {
       let top = c.y + SKULL * 1.3 * who.pup.body.s;
       for (const k of [J.hl, J.hr]) top = Math.max(top, who.pup.world(j[k * 3], j[k * 3 + 1], j[k * 3 + 2], TMP2).y + HAND_R);
       this.look.lerp(A.set(c.x, Math.max(4, c.y - 0.9), c.z), 1 - Math.exp(-real / 160));
-      const need = Math.max(3.2 - 0.5 * Math.min(1, this.shotMs / CUT_MS), (top - this.look.y) / CLOSE_TOP);
+      const need = Math.max(this.closeBase - 0.5 * Math.min(1, this.shotMs / CUT_MS), (top - this.look.y) / CLOSE_TOP);
       this.closeHalf = this.shotMs === 0 ? need : this.closeHalf + (need - this.closeHalf) * (1 - Math.exp(-real / (need > this.closeHalf ? 110 : 420)));
       const half = this.closeHalf / Math.min(1, aspect);
       cam.fov = clamp((2 * Math.atan(half / this.seat.distanceTo(this.look)) * 180) / Math.PI, 10, 58);
@@ -2977,11 +3018,11 @@ export class CourtScene {
         cz /= n;
         for (const f of this.figs.values()) if (f.side === final) spread = Math.max(spread, Math.hypot(f.pup.x - cx, f.pup.z - cz));
       }
-      // (the winners first; then the crowd, if it is theirs; then the whole building)
-      const beat = this.shotMs > FINAL_WIDE ? 2 : this.shotMs > FINAL_CROWD && final === 0 ? 1 : 0;
+      // (the winners, as they take it in and their bench comes on to them; then the whole building. Never the crowd
+      // full-screen: it is the picture's least finished part, and the winners are the story)
+      const beat = this.shotMs > FINAL_WIDE ? 2 : 0;
       if (beat !== this.finalBeat) this.camCut = true;
       this.finalBeat = beat;
-      if (beat === 1) return d.aimCrowd(cam, cx < 0 ? 0 : 1, this.shotMs - FINAL_CROWD, aspect);
       if (beat === 2) {
         const u = Math.min(1, (this.shotMs - FINAL_WIDE) / 16000);
         cam.fov = fov(tall ? 50 : 58);
@@ -3009,7 +3050,7 @@ export class CourtScene {
         }
       }
       this.look.lerp(A.set(cx, 4.4, cz), this.shotMs === 0 ? 1 : 1 - Math.exp(-real / 600));
-      const u = Math.min(1, this.shotMs / FINAL_MS);
+      const u = smooth(Math.min(1, this.shotMs / FINAL_WIDE));
       const a = this.finalA + 0.22 * u * (this.finalA > 0 || (this.finalA === 0 && this.look.x < 0) ? 1 : -1);
       const far = FINAL_OFF - 7 * u;
       cam.fov = fov(clamp((2 * Math.atan((spread + 6) / far) * 180) / Math.PI, 22, 64));
@@ -3089,7 +3130,11 @@ export class CourtScene {
   }
   private aimed = false;
   // how much of him a close-up holds over and under where it looks (ft)
-  private closeHalf = 3.2;
+  private closeHalf = LOW_HALF;
+  /** The close-up's base half picture (LOW_HALF, or HIGH_HALF from the high seat), and the seat a cue was found clear from. */
+  private closeBase = LOW_HALF;
+  private cueY = CLOSE_Y;
+  private cueHalf = LOW_HALF;
   // where the focus is (ft from the lens: sharp from the one to the other), and the shot it is on (a replay's look, a close-up's man)
   private focusAt = 0;
   private focusTo = 0;

@@ -122,6 +122,9 @@ export const FLOOR_L = COURT_LEN + 2 * END;
 const WIDE = 1.4;
 /** Upright, the window keeps the ball this far (ft) from its trailing edge: the rest of the view is ahead of it, toward the basket. */
 const TRAIL = 8;
+/** Panning, the window keeps this much floor (ft) behind the basket under attack, and the ball at least this far in from its edge. */
+const RIM_ROOM = 6;
+const BALL_ROOM = 3;
 /** A player is a disc this many feet across the middle (choreo.ts keeps them at least two of these apart). */
 const BODY = 1.45;
 /** Nothing written on the court is smaller than this (px). */
@@ -329,7 +332,9 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
         if (play && sc) {
           // most of the window ahead of the ball, toward the basket it's headed for
           // (so a set plays out with the window pinned to the baseline, and a break carries it up the floor)
-          const local = clamp(play.ball.y - (len - TRAIL), -END, COURT_LEN + END - len);
+          // (and the basket it attacks kept in the window, its backboard and the baseline with it, as long as the ball
+          // can be too: a long floor in a desktop's column showed the rim at the window's edge as the ball came up)
+          const local = clamp(Math.max(Math.min(play.ball.y - (len - TRAIL), BASKET.y - RIM_ROOM), play.ball.y - len + BALL_ROOM), -END, COURT_LEN + END - len);
           want = sc.dir === 1 ? local : COURT_LEN - local - len;
         } else if (p.idle?.kind === 'chart') want = lo;
         else if (p.idle?.kind === 'tip' || !ballAt) want = COURT_LEN / 2 - len / 2;
