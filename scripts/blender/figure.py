@@ -72,11 +72,14 @@ BONES = ['pelvis', 'chest', 'head', 'ual', 'fal', 'hal', 'uar', 'far', 'har', 't
 LEAVES = {'kn1l': 'hal', 'kn2l': 'kn1l', 'kn1r': 'har', 'kn2r': 'kn1r', 'jaw': 'head', 'nose': 'head', 'hair': 'head'}
 # (and, on the player only, one his brows hang on, that figure.ts lowers when he strains or shouts; one for his lower lip and
 # teeth, which open with his jaw but are never made wider or longer with it, so his lips meet whatever his jaw's shape; one at each shoulder that figure.ts turns half way from his chest to his upper arm: the
-# cap of the shoulder and the armpit go with it, so an arm raised overhead or hung at his side keeps its shoulder;
+# cap of the shoulder goes with it (and his armpit with one of its own: see AXILLA), so an arm raised overhead or hung at his side keeps its shoulder;
 # and one down each forearm that takes part of the hand's turn about it, so a wrist turns over the length of the
 # forearm, as the two bones in it do, and not in a twist of skin at the wrist.
 # The people round the floor, people.py, are seen from far off and keep the bones above.)
 GIRDLE = {'cll': 'chest', 'clr': 'chest', 'fwl': 'fal', 'fwr': 'far', 'brow': 'head', 'lip': 'head'}
+# (and, under each shoulder's, one his armpit hangs on: figure.ts turns it as the shoulder's, but about the hollow of the
+# armpit, not the joint, so an arm raised overhead stretches the skin under it up from his side, not out from it in a shelf)
+AXILLA = {'axl': 'chest', 'axr': 'chest'}
 # (and each finger a hand of its own: LEAVES' kn1 and kn2 are his middle finger's knuckle and middle joint, and these his
 # index, ring and little fingers' and his thumb's (its root, down in the heel of his hand, and its middle knuckle), on
 # everyone: a hand closes into a fist, points, spreads over the ball, its thumb round it)
@@ -86,7 +89,7 @@ girdled = False
 
 
 def leaves():
-    return {**LEAVES, **FINGER_LEAVES, **GIRDLE} if girdled else {**LEAVES, **FINGER_LEAVES}
+    return {**LEAVES, **FINGER_LEAVES, **GIRDLE, **AXILLA} if girdled else {**LEAVES, **FINGER_LEAVES}
 SKIN, HAIR, JERSEY, TRIM_M, CLOTH, SHOE, WHITE = 'skin', 'hair', 'jersey', 'trim', 'cloth', 'shoe', 'white'
 # hair that is a shape of its own (a man wears one of them or none: figure.ts leaves the others out)
 BUN, TAIL, TWISTS, LOCS, BRAIDS, AFRO, HIGHTOP, CURLS = 'bun', 'tail', 'twists', 'locs', 'braids', 'afro', 'hightop', 'curls'
@@ -737,7 +740,7 @@ def arm(s):
     ):
         parts.append(transform(ellipsoid((s * out, -u, z), r, 16, 12, 'muscle'), f))
     # the palm (its back to the outside, thumb edge forward), the heel of the thumb
-    palm = ellipsoid((0.0, -(ARM + 0.215), 0.012), (0.066, 0.25, 0.17), 20, 14, 'palm')
+    palm = palm_form(s)
     heel = ellipsoid((-s * 0.03, -(ARM + 0.14), 0.09), (0.06, 0.13, 0.085), 12, 8, 'heel')
     # (the shoulder runs into the chest and the back: no ball on a stick)
     # (over the top of the joint only: under it his armpit is a hollow, or an arm raised overhead would carry a lump up with it)
@@ -770,13 +773,56 @@ FINGERS = (('ix', 0.122, 0.3, 0.039, 0.1), ('kn', 0.041, 0.335, 0.04, 0.025), ('
 # joint of its own (the thumb's whole length turns there, across the palm or out from it), deep in the heel of the
 # hand, so the heel's ball of muscle goes with it part of the way (see weights)
 THUMB = (((0.025, 0.06, 0.09), 0.05), ((0.075, 0.22, 0.175), 0.047), ((0.105, 0.33, 0.2), 0.043), ((0.125, 0.42, 0.205), 0.04))
-# how many sides a finger has round
-DIGIT_SIDES = 6
+# how many sides a finger has round, and how deep it is (palm to back) for how wide
+DIGIT_SIDES = 8
+DIGIT_DEEP = 0.86
 # how much of the heel of the hand over the thumb's long bone goes with the thumb, at most
 THENAR = 0.6
 
 
-def tube(f, pts, s, name):
+def palm_form(s, seg=20, rings=14):
+    """
+    The palm and the back of the hand (the arm's frame, before it is put on him), as an ellipsoid would be laid out but
+    squared off: a flat back, a little higher over the knuckles; a palm with fleshy pads at its heel and under the
+    fingers and a hollow in its middle; narrow at the wrist and wide across the knuckles; its end at them, the little
+    finger's side shorter than the index's (as the knuckles are: see fingers), not a dome over the fingers' roots.
+    """
+    verts, faces = [], []
+
+    def at(nx, ny, nz):
+        # (squared off: each way of the ball's point taken to a power under one)
+        bx, by, bz = (math.copysign(abs(v) ** e, v) for v, e in ((nx, 0.8), (ny, 0.5), (nz, 0.55)))
+        t = (1 - by) / 2
+        z = 0.012 + bz * (0.112 + 0.046 * sstep(0.0, 0.7, t))
+        # (where its end is: a little past each finger's knuckle)
+        y = -(ARM - 0.03) - t * (0.475 - abs(z - 0.02) * 0.25)
+        back = bx * s > 0
+        if back:
+            # the back: flat, the knuckles' row standing up under the skin
+            th = 0.05 - 0.008 * t + 0.011 * math.exp(-(((t - 0.92) / 0.07) ** 2)) * sum(math.exp(-(((z - fz) / 0.03) ** 2)) for _, fz, _, _, _ in FINGERS)
+        else:
+            # the palm: thick at its heel and under the fingers, hollow in its middle, the edge under the little finger fleshy
+            th = 0.062 - 0.016 * math.exp(-(((t - 0.55) / 0.2) ** 2)) * math.exp(-(((z - 0.01) / 0.09) ** 2)) + 0.012 * math.exp(-(((t - 0.4) / 0.25) ** 2)) * sstep(-0.03, -0.12, z)
+        return (bx * th, y, z)
+
+    for i in range(1, rings):
+        a0 = math.pi * i / rings
+        for k in range(seg):
+            a = 2 * math.pi * k / seg
+            verts.append(at(math.sin(a0) * math.cos(a), math.cos(a0), math.sin(a0) * math.sin(a)))
+    top, bot = len(verts), len(verts) + 1
+    verts += [at(0, 1, 0), at(0, -1, 0)]
+    for i in range(rings - 2):
+        for k in range(seg):
+            a, b = i * seg + k, i * seg + (k + 1) % seg
+            faces.append((a, b, b + seg, a + seg))
+    for k in range(seg):
+        faces.append((top, (k + 1) % seg, k))
+        faces.append((bot, (rings - 2) * seg + k, (rings - 2) * seg + (k + 1) % seg))
+    return mesh_obj('palm', verts, faces)
+
+
+def tube(f, pts, s, name, sides=DIGIT_SIDES):
     """A finger (or a thumb) along its line: `pts` are (where, which way, how thick) in the arm's frame, then a rounded tip."""
     last, dl, rl = pts[-1]
     pts = [*pts, (last + dl * rl * 0.75, dl, rl * 0.55)]
@@ -784,13 +830,13 @@ def tube(f, pts, s, name):
     for at, dr, rad in pts:
         e1 = dr.cross(Vector((0, 0, 1))).normalized()
         e2 = dr.cross(e1).normalized()
-        rings.append([tuple(f @ (at + (e1 * math.cos(a) * rad * 0.92 + e2 * math.sin(a) * rad))) for a in (2 * math.pi * k / DIGIT_SIDES for k in range(DIGIT_SIDES))])
+        rings.append([tuple(f @ (at + (e1 * math.cos(a) * rad * DIGIT_DEEP + e2 * math.sin(a) * rad))) for a in (2 * math.pi * k / sides for k in range(sides))])
     o = solid(rings, name)
     set_material(o, material(SKIN))
     return tag(o, HAND_L if s > 0 else HAND_R)
 
 
-def digit(f, base, way, lens, curl, r, s, name):
+def digit(f, base, way, lens, curl, r, s, name, sides=DIGIT_SIDES):
     """A finger from `base` (the arm's frame): three bones, each bent a little more toward the palm. Its line and joints go in DIGITS."""
     p = Vector(base)
     d = Vector(way).normalized()
@@ -802,10 +848,10 @@ def digit(f, base, way, lens, curl, r, s, name):
     # (its knuckle a little way into its first bone, where it comes out of the palm; its middle joint the end of that bone)
     first = pts[1][1]
     DIGITS.setdefault(s, {})[name] = ([q for q, _, _ in pts], (pts[0][0] + first * 0.03, first), (pts[1][0], pts[2][1]))
-    return tube(f, pts, s, 'finger')
+    return tube(f, pts, s, 'finger', sides)
 
 
-def thumb(f, s):
+def thumb(f, s, sides=DIGIT_SIDES):
     """The thumb, relaxed along the side of the hand (THUMB). Its line and joints go in DIGITS."""
     at = [Vector((-s * px, -(ARM + u), z)) for (px, u, z), _ in THUMB]
     pts = []
@@ -813,17 +859,18 @@ def thumb(f, s):
         d = (at[min(k + 1, len(at) - 1)] - at[max(0, k - 1) if k == len(at) - 1 else k]).normalized()
         pts.append((p, d, r))
     DIGITS.setdefault(s, {})['th'] = (at, (at[0], pts[0][1]), (at[1], pts[1][1]))
-    return tube(f, pts, s, 'thumb')
+    return tube(f, pts, s, 'thumb', sides)
 
 
-def fingers(s):
+def fingers(s, sides=DIGIT_SIDES):
+    """A hand's fingers and thumb, `sides` round (fewer for a man in a suit, whose hands the cameras come to less)."""
     f = arm_frame(s)
     out = []
     for name, z, ln, r, splay in FINGERS:
         knuckle = -(ARM + KNUCKLE) + abs(z - 0.02) * 0.22
         # (built nearly straight: figure.ts curls them at the knuckles and the middle joints)
-        out.append(digit(f, (-s * 0.008, knuckle + 0.03, z), (-s * 0.04, -1, splay), (0.03 + ln * 0.44, ln * 0.31, ln * 0.25), (0.05, 0.08, 0.2), r, s, name))
-    out.append(thumb(f, s))
+        out.append(digit(f, (-s * 0.008, knuckle + 0.03, z), (-s * 0.04, -1, splay), (0.03 + ln * 0.44, ln * 0.31, ln * 0.25), (0.05, 0.08, 0.2), r, s, name, sides))
+    out.append(thumb(f, s, sides))
     return out
 
 
@@ -1146,7 +1193,13 @@ def weights(p, kind):
             # (his chest gives way to the shoulder's own bone, and that to the arm: two gentle turns, not one sharp one)
             mine = sstep(0.45, 1.0, m)
             both = sstep(0.0, 0.55, m)
-            w['cll' if s > 0 else 'clr'] = both - mine
+            # (but not under the joint: the shoulder's bone turned half way would carry his armpit out to his side, a
+            # shelf of skin under an arm raised overhead. The skin under it nearest his chest has a bone of its own,
+            # which figure.ts turns about the hollow of his armpit, so it stays on his side and stretches up to the arm)
+            under = max(0.0, -s * loc.x / rho) if rho > 1e-6 else 0.0
+            pitw = (both - mine) * sstep(0.1, 0.55, under) * (1 - sstep(0.3, 0.7, m))
+            w['cll' if s > 0 else 'clr'] = both - mine - pitw
+            w['axl' if s > 0 else 'axr'] = pitw
             tw = sstep(UARM + 0.3, ARM - 0.08, u)
             w[ua], w[fa], w[ha] = mine * (1 - e), mine * e * (1 - h) * (1 - tw), mine * e * (h - tb)
             w['fwl' if s > 0 else 'fwr'] = mine * e * (1 - h) * tw
@@ -1293,6 +1346,7 @@ def rig(mesh):
             rest[d + '1' + sfx.lower()] = f @ Matrix.Translation(j1)
             rest[d + '2' + sfx.lower()] = f @ Matrix.Translation(j2)
         rest['cl' + sfx.lower()] = f
+        rest['ax' + sfx.lower()] = f
         rest['fw' + sfx.lower()] = rest[fa]
     for name, at in (('jaw', JAW_AT), ('nose', NOSE_AT), ('hair', SWING_AT), ('brow', BROW_AT), ('lip', JAW_AT)):
         rest[name] = Matrix.Translation((HEAD_C[0] + at[0] * HEAD_W, HEAD_C[1] + at[1] * HEAD_H, HEAD_C[2] + at[2] * HEAD_D))
@@ -1322,9 +1376,28 @@ def fused():
     return hi
 
 
+# a hand is swollen this much (within this far of its middle, ft) while the skin is thinned: thinning goes by size, so
+# it keeps more of the triangles than its size would give it (the knuckles' row, the hollow of the palm, the heel of
+# the thumb are a few hundredths of a foot; at the body's own share a palm is a smooth pad)
+HAND_SWELL = 1.7
+HAND_REACH = 0.32
+
+
 def thin_body(hi, tris):
-    """The skin, thinned (his head is a skin of its own: see head)."""
-    return thin(hi, tris)
+    """The skin, thinned (his head is a skin of its own: see head), his hands at more than their share (HAND_SWELL)."""
+    at = []
+    for s in (1, -1):
+        c = arm_frame(s) @ Vector((0.0, -(ARM + 0.2), 0.01))
+        # (where this hand's middle is once the other is swollen: pushed off it as everything past its reach is)
+        for o in at:
+            d = c - o
+            c = o + d * ((d.length + HAND_REACH * (HAND_SWELL - 1)) / d.length)
+        swell(hi, c, HAND_REACH, HAND_SWELL)
+        at.append(c)
+    hi = thin(hi, tris)
+    for c in reversed(at):
+        swell(hi, c, HAND_REACH, HAND_SWELL, back=True)
+    return hi
 
 
 def shorts_form(legs=None, folds=0.022):

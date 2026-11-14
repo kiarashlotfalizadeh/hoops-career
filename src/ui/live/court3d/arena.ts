@@ -48,7 +48,7 @@ import {
 } from 'three';
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { COURT_LEN } from '../choreo';
+import { COURT_LEN, toWorld } from '../choreo';
 import { END, FLOOR_L, FLOOR_W, HALF_W, SIDE, type GameInfo, type Stage } from '../Court';
 import type { MatchKit, Roofing, Venue } from '../../teamColors';
 import type { Occasion } from '../occasion';
@@ -127,6 +127,16 @@ const OVATION: Record<Occasion, { up: number; then: number; ms: number; loud: nu
 };
 /** A home crowd stunned by a late winner against it: on its feet with its hands at its face for this long (ms). */
 const STUNNED_MS = 4000;
+/**
+ * How fast the ball goes up the floor (ft/s, eased) for a break: the keen in the end it is going to come up off their
+ * seats and phones go up. A jump of more than the other (a new play's ball) is not a break.
+ */
+const RUSH_FT = 17;
+const RUSH_JUMP = 80;
+/** How far out of the court (ft from the middle of the floor, across it) the ball is before the chairs on the floor react to the man with it. */
+const NEAR_Z = 21;
+/** How big a groan is: a free throw missed, a shot missed, one missed late in a close one; the visitors' block or steal, and a big basket of theirs. */
+const GROAN = { line: 0.3, miss: 0.45, late: 0.95, stop: 0.6, basket: 0.7 };
 
 /** A pool of dark on the floor: darkest in the middle, gone by its edge. */
 const POOL = {
@@ -174,7 +184,7 @@ const SHEEN = {
     uSize: { value: null },
     tFloor: { value: null },
     uWood: { value: null },
-    strength: { value: 0.62 },
+    strength: { value: 0.74 },
   },
   vertexShader: /* glsl */ `
     uniform mat4 textureMatrix;
@@ -229,10 +239,11 @@ const SHEEN = {
       c += (lit(uv + r * vec2(-0.6, 0.55), lod) + lit(uv - r * vec2(-0.6, 0.55), lod)) * 0.12;
       c += (lit(uv + r * vec2(0.15, 0.95), lod) + lit(uv - r * vec2(0.15, 0.95), lod)) * 0.1;
       c = sqrt(c);
-      // (a clear coat mirrors as glass does: a twenty-fifth of what is over it from above, most of it looked along)
+      // (a clear coat mirrors as glass does: a twentieth of what is over it from above, most of it looked along;
+      // from the broadcast's seat, some 30 degrees down, that is the men standing faintly in the wood)
       float graze = pow(1.0 - clamp(normalize(vView).y, 0.0, 1.0), 5.0);
       // (and fainter the higher what it shows: a varnish is not a mirror, the roof is a blur in it)
-      gl_FragColor = vec4(c, strength * coat * (0.04 + 0.96 * graze) / (1.0 + high * 0.03));
+      gl_FragColor = vec4(c, strength * coat * (0.06 + 0.94 * graze) / (1.0 + high * 0.03));
     }`,
 };
 
@@ -272,6 +283,8 @@ export class Arena {
   private roofKey = '';
   private readonly roofKit: RoofKit;
   private readonly rigs: { wide: number; g: Matrix4 }[] = [];
+  /** The banners (boards.ts banners), hung where the building hangs them (see roofed). */
+  private flags: Mesh | null = null;
   /** The scoreboards, one of each kind (props.ts BOARD_KINDS): the building's own is shown. */
   private readonly scoreboards = new Map<BoardKind, Object3D>();
   /** The benches: each part of the people on them (who wears which team's colours), their chairs' padding, the pads on the baskets. */
@@ -287,8 +300,9 @@ export class Arena {
   /** Whose building it is (the stands' seats, rails, concrete and house lights), and what was last painted. */
   private venue: Venue | null = null;
   private painted = '';
-  /** The house lights' colour (the banks' faces): a warm hall, a plain one or a cool one. */
+  /** The house lights' colour (the banks' faces): a warm hall, a plain one or a cool one; and a ceiling's glow under them (see paint). */
   private readonly lampTone = new Color(0xfff1dc);
+  private readonly ceilingGlow = new Color(CEILING_GLOW);
   private trim = '#d8d4c8';
   private cheering = 0;
   // the visitors' fans up, the rest holding still, the towels out, the end behind a visitor's free throw up (each eased)
@@ -305,6 +319,11 @@ export class Arena {
   private kits: [MatchKit, MatchKit] | null = null;
   /** Whose colours the confetti is in (a title's champions'). */
   private party = -1;
+  /** The ball's last spot on the floor and how fast it is going up it (ft/s, eased); a break on (eased); a man with it by the chairs on the floor (eased). */
+  private lastBall: { x: number; y: number } | null = null;
+  private pace = 0;
+  private rush = 0;
+  private near = 0;
 
   constructor(
     keep: Keep,
@@ -411,8 +430,8 @@ export class Arena {
       this.scoreboards.set(kind, board);
       this.group.add(board);
     }
+    this.flags = this.boards.banners(BANNERS);
     const roof = this.roofed(ROOFING)!;
-    this.boards.banners(BANNERS);
     this.boards.build();
     this.fasciaLeds = this.boards.fascia(this.bowl.fasciaRuns);
     this.group.add(this.boards.group);
@@ -507,6 +526,11 @@ export class Arena {
     this.lights.colours(board);
     this.lampTone.set(venue?.house ?? 0xfff1dc);
     this.lamp.color.copy(this.lampTone);
+    // (a ceiling in the house lights' colour, and a breath of the building's own in its glow)
+    const tone = new Color(0xffffff).lerp(this.lampTone, 0.5);
+    (this.roofKit.ceiling.material as MeshLambertMaterial).color.set(CEILING_TONE).multiply(tone);
+    this.ceilingGlow.set(CEILING_GLOW).multiply(tone).lerp(tone.set(board), CEILING_TINT);
+    (this.roofKit.ceiling.material as MeshLambertMaterial).emissive.copy(this.ceilingGlow);
   }
 
   /**
@@ -533,6 +557,12 @@ export class Arena {
     (deck.material as MeshLambertMaterial).emissive.set(open ? 0x000000 : DECK_GLOW);
     ceiling.position.set(0, CEILING_Y, 14);
     ceiling.visible = look.kind === 'ceiling';
+    // (the banners: in a row over the far side, or turned to hang over the high end, facing down the floor)
+    if (this.flags) {
+      const end = look.rafters === 'end';
+      this.flags.rotation.y = end ? -Math.PI / 2 : 0;
+      this.flags.position.set(end ? RAFTERS_END + BANNERS[0].z : 0, 0, 0);
+    }
     for (const [kind, board] of this.scoreboards) {
       board.visible = kind === look.board;
       board.scale.setScalar(look.size);
@@ -624,6 +654,8 @@ export class Arena {
     if (this.boards.house.off === 1) {
       this.awayUp = Math.max(this.awayUp, much >= 0.2 ? 1 : 0.5);
       this.hush = Math.max(this.hush, much >= 0.2 ? 1 : 0.3);
+      // (a big one of theirs: a groan goes round the rest)
+      if (much >= 0.2) this.crowd.groan(GROAN.basket, this.boards.house.end * (MID - 6), 0);
       return;
     }
     this.cheering = Math.max(this.cheering, much);
@@ -687,9 +719,22 @@ export class Arena {
     this.streamers.update(paper, this.dimTo, calm);
     const u = this.crowd.u;
     if (calm) {
-      this.cheering = this.awayUp = this.hush = this.wave = this.rally = this.show = this.live = 0;
-      u.uCheer.value = u.uLag.value = u.uAway.value = u.uHush.value = u.uWave.value = u.uRally.value = u.uStand.value = u.uPhone.value = u.uOvation.value = u.uLive.value = 0;
-      u.uRipA.value.x = u.uRipB.value.x = -99;
+      this.cheering = this.awayUp = this.hush = this.wave = this.rally = this.show = this.live = this.rush = this.near = this.pace = 0;
+      this.lastBall = null;
+      u.uCheer.value =
+        u.uLag.value =
+        u.uAway.value =
+        u.uHush.value =
+        u.uWave.value =
+        u.uRally.value =
+        u.uStand.value =
+        u.uPhone.value =
+        u.uOvation.value =
+        u.uLive.value =
+        u.uLine.value =
+          0;
+      u.uRush.value.x = u.uNear.value.z = 0;
+      u.uRipA.value.x = u.uRipB.value.x = u.uGroan.value.x = -99;
       u.uBall.value.y = 0;
       this.crowd.dim(this.dimTo * (1 - MOOD_DIM * this.mood), this.dimTo * (1 - MOOD_DIM * this.mood));
       this.crowd.wave(false, 1);
@@ -745,8 +790,31 @@ export class Arena {
     this.rally = ease(this.rally, h.line && h.off === 1 ? 1 : 0, 300);
     u.uRally.value = this.rally;
     u.uEnd.value = h.end;
-    // heads follow the ball (the ball's end of the floor, when the stage has none)
-    const ball = stage?.ball;
+    // (a man at the line: those sat lean in and keep still for it)
+    u.uLine.value = ease(u.uLine.value, h.line && h.final === undefined ? 1 : 0, 600);
+    // a groan from the home crowd as it goes out from the play: a shot of its side's missed (bigger late in a close one,
+    // smaller at the line), the visitors' block or steal
+    const just = (ms: number) => ms < 1;
+    if (h.final === undefined && h.miss?.side === 0 && just(h.miss.ms))
+      this.crowd.groan(h.miss.line ? GROAN.line : late || h.clutch ? GROAN.late : GROAN.miss, h.end * (MID - 6), 0);
+    if (m && m.side === 1 && (m.call === 'block' || m.call === 'steal') && just(m.ms)) this.crowd.groan(GROAN.stop, h.end * (MID - 6), 0);
+    // heads follow the ball (the play's, on the floor; between plays the stage's; its end of the floor, when there is none)
+    const sc = stage?.script;
+    const ball = stage?.play && sc ? toWorld(stage.play.ball, sc.dir) : stage?.ball;
+    // a break: the ball going up the floor fast with a play on (the keen at the end it goes to up off their seats, phones up)
+    if (ball && this.lastBall && real > 0) {
+      const v = ((ball.y - this.lastBall.y) / real) * 1000;
+      if (Math.abs(v) < RUSH_JUMP) this.pace = ease(this.pace, v, 350);
+    }
+    this.lastBall = ball ? { x: ball.x, y: ball.y } : null;
+    const breaking = playing && !h.line && Math.abs(this.pace) > RUSH_FT;
+    this.rush = ease(this.rush, breaking ? 1 : 0, breaking ? 300 : 1100);
+    u.uRush.value.set(this.rush, breaking ? Math.sign(this.pace) : u.uRush.value.y);
+    // (the ball out by the chairs on the floor: those sat there sit back from the man with it, hands up)
+    const by = !!ball && Math.abs(ball.x) > NEAR_Z;
+    this.near = ease(this.near, by ? 1 : 0, by ? 200 : 900);
+    if (ball) u.uNear.value.set(ball.y - MID, -ball.x, this.near);
+    else u.uNear.value.z = this.near;
     const look = u.uBall.value;
     look.x = ease(look.x, ball ? ball.y - MID : h.end * 30, 500);
     look.z = ease(look.z, ball ? -ball.x : 0, 500);
@@ -776,6 +844,7 @@ export class Arena {
     const house = 1 - HOUSE_DOWN * this.show;
     this.lights.update(real, this.show, house);
     this.lamp.color.copy(this.lampTone).multiplyScalar(1 - 0.75 * this.show);
+    (this.roofKit.ceiling.material as MeshLambertMaterial).emissive.copy(this.ceilingGlow).multiplyScalar(1 - 0.6 * this.show);
     this.boards.boost((1 / house) * (1 - LIVE_LED * this.live));
 
     this.crowd.wave(this.wave > 0.02 || this.rally > 0.02, this.dimTo);
@@ -798,7 +867,7 @@ export class Arena {
     // (now and then at a dead ball, never while a play is on: a flicker in the stands pulls the eye off the floor)
     const idle = h.final !== undefined || (h.off === null && !!g) ? FLASH_IDLE * (1 - this.live) : 0;
     const rate = Math.max(burst, over, h.line && late ? FLASH_LINE : 0, idle, this.show * 0.06);
-    u.uPhone.value = ease(u.uPhone.value, rate > 0.03 ? 1 : 0, 600);
+    u.uPhone.value = ease(u.uPhone.value, rate > 0.03 || this.rush > 0.5 ? 1 : 0, 600);
     this.flashes.update(real, rate, this.dimTo, false, 1 / house);
   }
 
@@ -961,11 +1030,15 @@ class Roof {
         this.bar(v(sx * kx, top, sz * kz), v(sx * (ax - 0.8), top + 1.2, sz * (az - 0.8)), 0.16);
         this.bar(v(sx * ax, top + 2, sz * az), v(sx * ax, this.under(sx * ax, sz * az), sz * az), 0.14);
       }
-    // the banners' batten, and its hangers
+    // the banners' batten, and its hangers (over the far side, or turned over the high end: see Arena.roofed)
     const batten = BANNERS[0].y + BANNERS[0].h / 2 + 0.3;
     const bz = BANNERS[0].z - 0.3;
-    this.bar(v(-60, batten, bz), v(60, batten, bz), 0.3);
-    for (const x of [-40, 40]) this.bar(v(x, batten, bz), v(x, this.under(x, bz), bz), 0.12);
+    const hang: (a: number, y: number, b: number) => Vector3 = look.rafters === 'end' ? (a, y) => v(RAFTERS_END + 0.3, y, a) : (a, y, b) => v(a, y, b);
+    this.bar(hang(-60, batten, bz), hang(60, batten, bz), 0.3);
+    for (const x of [-40, 40]) {
+      const at = hang(x, batten, bz);
+      this.bar(at, at.clone().setY(this.under(at.x, at.z)), 0.12);
+    }
   }
 
   /** A bar from a to b, `t` thick (in the steel's grey, or its own). */
@@ -1167,8 +1240,10 @@ const LIGHT = new Vector3(1.5, 0.55, 1.5);
 const CEILING_LIGHT = new Vector3(2.6, 0.2, 2.6);
 /** A building with a ceiling: how high it hangs (under the trusses, over the banners), its panels' tone and their glow, and its rings of lights round the scoreboard (ft across, ft along, how many). */
 const CEILING_Y = 99.5;
-const CEILING_TONE = 0x8c8e93;
-const CEILING_GLOW = 0x4a4c52;
+const CEILING_TONE = 0xa4a6ab;
+const CEILING_GLOW = 0x64666c;
+/** How much of the building's colour a ceiling's glow takes. */
+const CEILING_TINT = 0.05;
 const CEILING_RINGS: readonly (readonly [number, number, number])[] = [
   [30, 24, 16],
   [56, 44, 26],
@@ -1190,6 +1265,8 @@ const SPOTS = 16;
 const BOARD_Y = 62;
 const BOARD_CABLES = 12;
 /** A building with nothing said of its roof (before one is painted): deep trusses, catwalks along the sides, the big scoreboard. */
-const ROOFING: Roofing = { kind: 'trusses', catwalk: 'sides', board: 'four', size: 1 };
-/** The banners: in front of the far side's truss (or under the ceiling), facing the floor. */
+const ROOFING: Roofing = { kind: 'trusses', catwalk: 'sides', board: 'four', size: 1, rafters: 'far' };
+/** The banners: in front of the far side's truss (or under the ceiling), facing the floor; or, turned, this far out over the high end (Roofing.rafters). */
+const RAFTERS_END = 74;
+/** The banners' places (over the far side). */
 const BANNERS = Array.from({ length: 6 }, (_, i) => ({ x: (i - 2.5) * 19, y: ROOF_Y - 5.4 - 11, z: -70 + 2.4, w: 10, h: 22 }));

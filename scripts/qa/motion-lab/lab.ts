@@ -19,7 +19,8 @@
 //                                 its neighbour frames, at the speed chip's size (see POP_RATIO); the frames the picture
 //                                 cuts on are skipped; and what pops while the plan has a man going faster than a man
 //                                 runs (FASTEST) is counted apart, as `tooFast`. Film what `worst` names from a measure
-//                                 with breaks off (the film plays the game without them), with `lead` past k
+//                                 with breaks off (the film plays the game without them), with `lead` past k. `final: true, hold: 8000`:
+//                                 only the end of the game, the buzzer held 8 s (with ?occasion, a celebration)
 //   lab.gait({ speed: 2, only })  his legs against his travel: how fast men go (ft a second, the bodies' time), each step's
 //                                 length × cadence against how far he went, by speed; feet that slide or skip; starts, stops
 //                                 and an even run (lean, hips, steps against an even run's); how much of a cut's turn is
@@ -43,7 +44,7 @@
 //                                 a slide's lead and trail steps and clicked feet, a box-out's base, feet thrown in a frame
 //   lab.footTrace({ k, pid, from, to })   one man's footwork frame by frame: his move, the plan's speed, how he is set
 //                                 (pivot, load, hop, the foot timed to a jump), how far off the plan's spot, each foot
-//   ?seed=n&home=n&away=n picks the game. ?side=0: nobody round the floor.
+//   ?seed=n&home=n&away=n picks the game. ?side=0: nobody round the floor. ?occasion=late|playoff|clinch|title: the kind of win at the buzzer.
 import { Mesh, MeshStandardMaterial, PerspectiveCamera, Quaternion, SphereGeometry, Vector3, type Bone, type Camera, type Scene, type WebGLRenderer } from 'three';
 import { createLeague, defaultSettings } from '../../../src/core/league/create';
 import { teamPlayers } from '../../../src/core/league/helpers';
@@ -59,6 +60,7 @@ import type { Gesture } from '../../../src/ui/live/court3d/clips';
 import { CourtScene, loadModels } from '../../../src/ui/live/court3d/scene';
 import { ballIn, clearance, into, PARTS, SHAPES, sunk } from '../../../src/ui/live/court3d/spacing';
 import { matchKits } from '../../../src/ui/teamColors';
+import type { Occasion } from '../../../src/ui/live/occasion';
 
 const q = new URLSearchParams(location.search);
 const num = (k: string, d: number) => (q.has(k) ? Number(q.get(k)) : d);
@@ -132,6 +134,7 @@ const props = {
   names: nameOf,
   board: kits[0].color,
   warn: paints.warn,
+  occasion: (q.get('occasion') ?? undefined) as Occasion | undefined,
 };
 const inner = scene as unknown as {
   renderer: WebGLRenderer;
@@ -359,7 +362,7 @@ const footSlid = (a: readonly (number | boolean)[], b: readonly (number | boolea
 };
 
 /** The whole game at a speed chip, measured. */
-function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only = '' } = {}) {
+function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only = '', hold = 3000, final = false } = {}) {
   const c = new Clock(speed, calm, breaks);
   c.tipMs = 0;
   [knocked.n, knocked.hard, knocked.at] = [0, 0, []];
@@ -629,7 +632,9 @@ function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only =
   let fast = 0;
   cutNow = false;
   for (;;) {
-    if (!c.step()) break;
+    if (!c.step(FRAME, hold)) break;
+    // (`final`: only the end of the game, from the buzzer on, held `hold` ms: see ?occasion)
+    if (final && c.finalMs < 0) continue;
     frames++;
     const figs = [...inner.figs.entries()];
     // (a frame the picture cuts on, or everyone put on fresh spots: nothing is judged across it)

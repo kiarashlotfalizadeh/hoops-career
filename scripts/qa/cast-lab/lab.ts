@@ -9,7 +9,7 @@
 //       possession k; `tip`: the line-up for this long (ms) first; `final`: the buzzer held this long (ms) after;
 //       `only: 'replay'`: the replays' own frames alone ('close': the live cut-ins'); `scale`: each cell drawn at this much of its size;
 //       `turn`: whose turn among the replay's cameras it is (director.ts CAMS: the same camera run after run)
-//   lab.watch({ k, n, cam, speed, calm, audit, makeup })   the same, not drawn: how long each camera had the picture (ms), the
+//   lab.watch({ k, n, cam, speed, calm, audit, makeup, flip })   the same, not drawn: how long each camera had the picture (ms), the
 //       cuts (and where each camera but the main one came on), the replays, and the most the main camera's aim
 //       moved in a frame (degrees); `audit`: what the main picture is made of (the stands, the basket's unit, a body by
 //       the lens) and the play by its edges (see watch); `makeup: false`: the edges alone, quicker
@@ -1123,10 +1123,30 @@ function reels({ w: cw = 1440, h: ch = 900, cam = 'tv' as CamKind, k = 0, n = 1e
  * them), the ball by the picture's edge (`edge`: in its outer EDGE_AT across or near its top or foot), the ball
  * going toward the side it is already near (`ahead`), a man by the ball off the picture or at its side (`men`), and the
  * basket the ball is near off it (`rim`), or its board cut by the picture's edge (`board`: shares of the frames with the
- * ball this near it).
+ * ball this near it); the ball off the picture (`lost`), frames with the unit over LOTS / 1.5 of it (`unitBig`), and the
+ * ball or the head or waist of the man with it behind a body in the foreground or the unit (`covered`, and by which). `flip` (ms): the device turned that often (the picture's width and height swapped), and in the
+ * second after each turn (`turned`) the ball off the picture or by its edge and a man by it off the picture, as above.
  */
-function watch({ k = 0, n = 20, cam = 'tv' as CamKind, speed = 1, calm = false, replays = true, tip = 0, final = 0, w: cw = 800, h: ch = 474, audit = false, makeup = true } = {}) {
+function watch({
+  k = 0,
+  n = 20,
+  cam = 'tv' as CamKind,
+  speed = 1,
+  calm = false,
+  replays = true,
+  tip = 0,
+  final = 0,
+  w: cw = 800,
+  h: ch = 474,
+  audit = false,
+  makeup = true,
+  flip = 0,
+} = {}) {
   scene.size(cw, ch, 1);
+  let size = [cw, ch];
+  let flipAt = flip;
+  let turnedAt = -Infinity;
+  const T = { frames: 0, lost: 0, edge: 0, men: 0 };
   const on: Record<string, number> = {};
   let cuts = 0;
   let reels = 0;
@@ -1141,11 +1161,33 @@ function watch({ k = 0, n = 20, cam = 'tv' as CamKind, speed = 1, calm = false, 
   if (audit) inner.lens.render = () => {};
   const parts = supports().flat();
   const P = new Vector3();
-  const A = { frames: 0, stands: [] as number[], unit: 0, fg: 0, edge: 0, ahead: 0, men: 0, rimN: 0, rim: 0, board: 0 };
+  const A = {
+    frames: 0,
+    stands: [] as number[],
+    unit: 0,
+    unitBig: 0,
+    fg: 0,
+    covered: 0,
+    coveredBy: {} as Record<string, number>,
+    lost: 0,
+    edge: 0,
+    ahead: 0,
+    men: 0,
+    rimN: 0,
+    rim: 0,
+    board: 0,
+  };
   let bx = 0;
   run({ k, n, cam, speed, calm, replays, tip, final }, (_l, at) => {
     on[at.shot] = (on[at.shot] ?? 0) + FRAME;
     real = at.real;
+    // (the device turned: the next frame is drawn at the other shape)
+    if (flip && real >= flipAt) {
+      flipAt += flip;
+      size = [size[1], size[0]];
+      scene.size(size[0], size[1], 1);
+      turnedAt = real;
+    }
     if (at.shot !== was) {
       cuts++;
       if (at.shot !== 'main' && log.length < 80) log.push(`k${at.k}@${Math.round(at.t)} ${at.shot}`);
@@ -1163,13 +1205,32 @@ function watch({ k = 0, n = 20, cam = 'tv' as CamKind, speed = 1, calm = false, 
       A.frames++;
       // (not `makeup`: the edges alone, much quicker)
       if (makeup) {
-        const L = survey(c, c.position.distanceTo(b), new Set(), [], parts);
+        // (and the ball and the man with it, his head and his waist: a body in front of them or the basket's unit, `covered`)
+        let has: Fig | undefined;
+        for (const f of inner.figs.values()) if (!has || Math.hypot(f.pup.x - b.x, f.pup.z - b.z) < Math.hypot(has.pup.x - b.x, has.pup.z - b.z)) has = f;
+        const keep: { what: string; p: { x: number; y: number; z: number } }[] = [{ what: 'ball', p: { x: b.x, y: b.y, z: b.z } }];
+        if (has && Math.hypot(has.pup.x - b.x, has.pup.z - b.z) < 4) {
+          const j = has.pup.j;
+          keep.push({ what: 'head', p: has.pup.world(j[J.head * 3], j[J.head * 3 + 1], j[J.head * 3 + 2], { x: 0, y: 0, z: 0 }) });
+          keep.push({ what: 'waist', p: { x: has.pup.x, y: 3.4, z: has.pup.z } });
+        }
+        const L = survey(c, c.position.distanceTo(b), new Set(has ? [has] : []), keep, parts);
         A.stands.push(1 - L.floor);
         A.unit += L.unit;
         A.fg += L.fg;
+        if (L.unit > LOTS / 1.5) A.unitBig++;
+        if (L.cover) {
+          A.covered++;
+          const by = L.cover.split('/')[1] ?? '';
+          const key = by === 'ref' || by === 'body' ? by : 'unit';
+          A.coveredBy[key] = (A.coveredBy[key] ?? 0) + 1;
+        }
       }
       const v = P.set(b.x, b.y, b.z).project(c);
-      if (Math.abs(v.x) > 1 - 2 * EDGE_AT || v.y > 0.85 || v.y < -0.9) A.edge++;
+      const edge = Math.abs(v.x) > 1 - 2 * EDGE_AT || v.y > 0.85 || v.y < -0.9;
+      const lost = Math.abs(v.x) > 1 || Math.abs(v.y) > 1;
+      if (edge) A.edge++;
+      if (lost) A.lost++;
       if (was === 'main' && Math.abs(v.x) > 0.6 && Math.sign(v.x) === Math.sign(v.x - bx) && Math.abs(v.x - bx) > 0.002) A.ahead++;
       bx = v.x;
       let off = false;
@@ -1181,6 +1242,12 @@ function watch({ k = 0, n = 20, cam = 'tv' as CamKind, speed = 1, calm = false, 
         }
       }
       if (off) A.men++;
+      if (real - turnedAt < 1000) {
+        T.frames++;
+        T.lost += lost ? 1 : 0;
+        T.edge += edge ? 1 : 0;
+        T.men += off ? 1 : 0;
+      }
       if (sc) {
         const rx = (sc.dir === 1 ? -1 : 1) * (COURT_LEN / 2 - 5.25);
         if (Math.hypot(b.x - rx, b.z) < 22) {
@@ -1216,12 +1283,17 @@ function watch({ k = 0, n = 20, cam = 'tv' as CamKind, speed = 1, calm = false, 
         frames: A.frames,
         stands: { med: pct(st[Math.floor(st.length / 2)] ?? 0, 1), most: pct(st[st.length - 1] ?? 0, 1) },
         unit: pct(A.unit, A.frames),
+        unitBig: pct(A.unitBig, A.frames),
         fg: pct(A.fg, A.frames),
+        covered: pct(A.covered, A.frames),
+        coveredBy: Object.fromEntries(Object.entries(A.coveredBy).map(([key, x]) => [key, pct(x, A.frames)])),
+        lost: pct(A.lost, A.frames),
         edge: pct(A.edge, A.frames),
         ahead: pct(A.ahead, A.frames),
         men: pct(A.men, A.frames),
         rim: pct(A.rim, A.rimN),
         board: pct(A.board, A.rimN),
+        turned: flip ? { frames: T.frames, lost: pct(T.lost, T.frames), edge: pct(T.edge, T.frames), men: pct(T.men, T.frames) } : undefined,
       }
     : undefined;
   return { real: Math.round(real), cuts, reels, worstTurnDeg: Math.round(worst * 100) / 100, on, log: audit ? undefined : log, view };

@@ -187,12 +187,15 @@ const BALL_FAR = 2.5;
 const ARC_FROM = 1.5;
 const ARC = 0.9;
 /**
- * Sliding sideways, the feet keep this much of the floor between them: the trailing one never crosses the leading one.
+ * Sliding sideways, the feet keep this much of the floor between them: the trailing one never crosses the leading one
+ * (a swinging foot eased out to its own side over about SIDE_MS ms, and back in over SIDE_BACK_MS).
  * A slide's step covers no more than SLIDE_REACH ft of his way (on the 6 ft 6 puppet), each foot down no more than
  * SLIDE_DOWN of its stride: the lead foot out and down, the other pushed off and closed, not a long stride that lets
  * him pass over the foot ahead of him.
  */
 const FEET_GAP = 0.7;
+const SIDE_MS = 25;
+const SIDE_BACK_MS = 80;
 const SLIDE_REACH = 1.2;
 const SLIDE_DOWN = 0.4;
 /** One way of standing eases into another over this long (ms): hands go to the hips, they aren't thrown there. */
@@ -465,6 +468,11 @@ const SINK_OUT = 90;
 /** A stride's shape (how long a foot is down, how high it goes) follows his speed over about this long (ms). */
 const STRIDE_MS = 90;
 /**
+ * How fast his feet turn over follows what it's to be over about CADENCE_MS: a step isn't hurried or held up in a
+ * frame. Driving off from a stand (see DRIVE_RATE), his quicker steps come at once.
+ */
+const CADENCE_MS = 70;
+/**
  * A runner's steps a second for his speed (ft a second, on a 6 ft 6 man): RUN_RATE at RUN_FROM, rising RUN_RISE
  * each ft a second, and faster still near a sprint (RUN_TOP each ft a second past SPRINT_FROM, squared), so his
  * step grows to about 7 ft and no farther: past that he goes faster by turning his feet over faster, as a man does.
@@ -576,8 +584,13 @@ const LAND_LATE_UP = 0.6;
  */
 const AIR_FEET_MS = 45;
 const AIR_CLEAR = 0.25;
-/** And no faster than this (ft a second, on the 6 ft 6 puppet, in his own frame): a foot tucked under him, not thrown there. */
+/**
+ * And no faster than this (ft a second, on the 6 ft 6 puppet, in his own frame): a foot tucked under him, not thrown
+ * there; getting up to it over his first AIR_FEET_RAMP ms off the floor, so a foot that was still on it a frame ago
+ * isn't moving at full speed the frame it leaves it.
+ */
 const AIR_FEET_FAST = 22;
+const AIR_FEET_RAMP = 90;
 /**
  * Body to body (Drive.touch) he holds his ground with short quick steps: a foot this far (ft, on the 6 ft 6 puppet)
  * from where it should be under him is stepped back under him at CONTACT_RATE steps a second, lifted no higher than
@@ -1012,6 +1025,8 @@ interface Foot {
   /** Where its swing started on the floor (the scene's x, z): a step round his pivot goes round it from there. */
   wx: number;
   wz: number;
+  /** How far out to its own side a slide's step is put (ft, eased): see FEET_GAP. */
+  side: number;
 }
 
 /**
@@ -1059,8 +1074,8 @@ export class Puppet {
   /** The move he's in the middle of (a shot, a catch), and where in it (ms around its moment). */
   one: { id: ClipId; tau: number } | null = null;
   readonly feet: [Foot, Foot] = [
-    { x: 0, z: 0, up: 0, swing: false, fx: 0, fz: 0, p0: 0, early: 0, pitch: 0, wide: 0, yaw: 0, turn: 0, heel: 0, lift: 0, wx: 0, wz: 0 },
-    { x: 0, z: 0, up: 0, swing: false, fx: 0, fz: 0, p0: 0, early: 0, pitch: 0, wide: 0, yaw: 0, turn: 0, heel: 0, lift: 0, wx: 0, wz: 0 },
+    { x: 0, z: 0, up: 0, swing: false, fx: 0, fz: 0, p0: 0, early: 0, pitch: 0, wide: 0, yaw: 0, turn: 0, heel: 0, lift: 0, wx: 0, wz: 0, side: 0 },
+    { x: 0, z: 0, up: 0, swing: false, fx: 0, fz: 0, p0: 0, early: 0, pitch: 0, wide: 0, yaw: 0, turn: 0, heel: 0, lift: 0, wx: 0, wz: 0, side: 0 },
   ];
   /** His cloth and hair, a beat behind him (see Trail): a loose thing and a heavier one. */
   readonly trail: Trail = { x: 0, y: 0, z: 0 };
@@ -1091,6 +1106,9 @@ export class Puppet {
   /** He came down from a jump this frame: his stride starts again from both feet down (see step). And how far in the air the foot he comes down on last still is (see LAND_LATE_MS). */
   private landed = false;
   private lateAir = 0;
+  /** How long he has been off the floor (ms, his own; see AIR_FEET_RAMP), and how far his feet have gone with him going up (see AIR_FEET_MS). */
+  private airMs = 0;
+  private airFeet = 0;
   /** His hips as the pose had them last frame (ft, on the 6 ft 6 puppet): how fast they rise (see TAKE_RATE). */
   private hipWas = 0;
   private flew = false;
@@ -1199,6 +1217,8 @@ export class Puppet {
   private offK = 0;
   /** He was going last frame (see step: setting off sideways), and how far out in front each foot goes under him (see ahead). */
   private wasGoing = false;
+  /** How fast his feet turn over (steps a second), eased (see CADENCE_MS). */
+  private cadE = 0;
   private readonly fore = new Float32Array(2);
   /** How far he is sat into his stance on his pivot (0..1, eased: see PIVOT_SIT). */
   private sat = 0;
@@ -2572,7 +2592,8 @@ export class Puppet {
    */
   private stand(d: Drive, own: number): ClipId {
     const rest = !!d.rest;
-    const fresh = !STANDING.has(this.clip) || rest !== this.resting;
+    // (and a breather taken as the buzzer went is over with it: see below)
+    const fresh = !STANDING.has(this.clip) || rest !== this.resting || (!!d.over && this.idle === 'knees');
     this.standMs -= own;
     if (!fresh && this.standMs > 0) return this.idle;
     this.resting = rest;
@@ -2584,8 +2605,9 @@ export class Puppet {
       // (a hand on his hip is for the far side of the floor: near the ball he is ready for it)
       if (this.idle === 'spot3' && !(d.look && Math.hypot(d.look.x - this.x, d.look.z - this.z) > WEAK_SIDE)) this.idle = r < 0.9 ? 'spot' : 'spot2';
     }
-    // (late in a close one a dead ball is a chance to get his breath: hands on his knees)
-    else if (fresh && (tired > 0.5 || (!!d.tired && r < 0.4))) this.idle = 'knees';
+    // (late in a close one a dead ball is a chance to get his breath: hands on his knees. Not once it is over: he is
+    // shaking a hand or holding a teammate, and two bent over face to face put their heads together)
+    else if (fresh && !d.over && (tired > 0.5 || (!!d.tired && r < 0.4))) this.idle = 'knees';
     else if (tired > 0.3) this.idle = r < 0.6 ? 'hips' : 'shift';
     else this.idle = r < 0.3 ? 'hips' : r < 0.65 ? 'shift' : r < 0.85 ? 'idle' : 'idle3';
     this.standMs = this.idle === 'knees' ? 1600 + r * 1200 : 2600 + r * 3200;
@@ -2957,6 +2979,11 @@ export class Puppet {
     if (!going && this.giveT < LAND_STILL && !this.feet.some((f) => f.swing)) cadence = 0;
     // (stepping into a load on the move, his steps are gather steps: quick, so each is down before he goes up)
     if (going && this.gathering) cadence = Math.max(cadence, LOAD_RATE);
+    // (from one rate to the next over a few frames; from a stand, stood again, driving off, round his pivot or into his
+    // load, at once: see CADENCE_MS)
+    if (cadence > 0 && this.cadE > 0 && !(quick > 0 && cadence > this.cadE) && this.pivotK < 0 && !this.gathering)
+      cadence = this.cadE += (cadence - this.cadE) * (1 - Math.exp(-dt / CADENCE_MS));
+    else this.cadE = cadence;
     // (off one foot, his last steps are timed to the jump: the foot he goes up off is down at the end of its time on the
     // floor as he leaves it, the other on its way through, his knee driving: whichever comes, for a running leap)
     if (going && this.lockK !== -1 && this.lockMs > dt) {
@@ -3111,18 +3138,15 @@ export class Puppet {
         toes = going ? 0.95 - 1.25 * smooth(clamp((u - 0.2) / 0.55, 0, 1)) + 0.15 * clamp((u - 0.85) / 0.15, 0, 1) : 0.4 * Math.sin(Math.PI * u);
         // (the foot he plants for a cut comes down flat: his weight goes straight onto it)
         if (f.wide && u > 0.6) toes = Math.max(toes, 0);
-        if (sideways) {
-          // (a slide: it comes down on its own side of the other foot)
-          const o = this.feet[1 - k];
-          const lat = ((f.x - o.x) * sx + (f.z - o.z) * sz) * (k ? 1 : -1);
-          // (eased out to it over a frame or two: never thrown across in one)
-          const gap = FEET_GAP * s;
-          if (lat < gap) {
-            const by = Math.min(gap - lat, Math.max(0.3 * s, (gap - lat) * (1 - Math.exp(-dt / 30)))) * (k ? 1 : -1);
-            f.x += sx * by;
-            f.z += sz * by;
-          }
-        }
+        // (a slide, or going any way in his slide's stance: it comes down on its own side of the other foot, eased out
+        // to it over a frame or two, never thrown across in one; and out of his slide back in, slower, not pulled back
+        // in a frame as it lands)
+        const o = this.feet[1 - k];
+        const lat = ((f.x - o.x) * sx + (f.z - o.z) * sz) * (k ? 1 : -1);
+        const need = sideways || this.clip === 'shuffle' ? Math.max(0, FEET_GAP * s - lat) : 0;
+        f.side += (need - f.side) * (1 - Math.exp(-dt / (need > f.side ? SIDE_MS : SIDE_BACK_MS)));
+        f.x += sx * f.side * (k ? 1 : -1);
+        f.z += sz * f.side * (k ? 1 : -1);
         // (no faster than a foot is swung: a stride caught late in its turn as he sets off from a stand is not thrown
         // down the floor in a frame; it is put down short, and the next one makes it up)
         const moved = Math.hypot(f.x - x0, f.z - z0);
@@ -3138,6 +3162,7 @@ export class Puppet {
         f.heel = 0;
       } else {
         f.up = Math.max(0, f.up - dt * 0.006 * s);
+        f.side = 0;
         // (down: flat until it is behind him, then the heel comes up as he goes over it)
         if (going && ahead) toes = 0.75 * clamp((-((f.x - this.x) * this.vx + (f.z - this.z) * this.vz) / vl - 0.35 * s) / (0.9 * s), 0, 1);
         // (going up off the floor: his heels come up as his hips drive up out of his crouch, and as they rise past where
@@ -3204,9 +3229,14 @@ export class Puppet {
     // (off one foot he comes down on that one first, and the other after it: see LAND_LATE_MS)
     const id = this.one?.id;
     const first = id && ONE_FOOT.has(id) ? this.offK : -1;
-    if (dt > 0) this.lateAir = first >= 0 ? Math.max(air, this.lateAir - dt / LAND_LATE_MS) : air;
+    // (going up for a jump, his feet go from his stride's to the move's over AIR_FEET_MS, not in the frame his hips
+    // leave the floor; a runner's stride, and coming down, as they are)
+    if (dt > 0) this.airFeet = air > this.airFeet && air > 0.3 ? this.airFeet + (air - this.airFeet) * (1 - Math.exp(-dt / AIR_FEET_MS)) : air;
+    const airF = this.airFeet;
+    if (dt > 0) this.lateAir = first >= 0 ? Math.max(airF, this.lateAir - dt / LAND_LATE_MS) : airF;
+    if (dt > 0) this.airMs = air > 0.5 ? this.airMs + dt : 0;
     this.feet.forEach((f, k) => {
-      const airK = k === 1 - first ? Math.max(air, this.lateAir) : air;
+      const airK = k === 1 - first ? Math.max(airF, this.lateAir) : airF;
       const ax = (k ? -1 : 1) * w;
       const au = jump + P[k ? I.fru : I.flu] * s;
       const af = P[k ? I.frf : I.flf] * s;
@@ -3221,7 +3251,7 @@ export class Puppet {
         // where he comes down. They get there as a foot is swung, never in a frame)
         const e = 1 - Math.exp(-dt / AIR_FEET_MS);
         const go = Math.hypot(ax - lx, af - lz) * e;
-        const most = (AIR_FEET_FAST * s * dt) / 1000;
+        const most = (AIR_FEET_FAST * s * dt * Math.min(1, this.airMs / AIR_FEET_RAMP)) / 1000;
         const k2 = go > most ? (e * most) / go : e;
         lx += (ax - lx) * k2;
         lz += (af - lz) * k2;
@@ -3235,7 +3265,7 @@ export class Puppet {
       }
       // (and however it hangs from him, its toes are never through the floor, nor along it once he is off it)
       const low = (ANKLE * Math.cos(th) + Math.abs(pz * Math.sin(th))) * s;
-      const y = Math.max(low + AIR_CLEAR * s * Math.min(1, 2 * airK), (f.up + low) * (1 - airK) + (ANKLE * s + au + LAND_LATE_UP * s * (airK - air)) * airK);
+      const y = Math.max(low + AIR_CLEAR * s * Math.min(1, 2 * airK), (f.up + low) * (1 - airK) + (ANKLE * s + au + LAND_LATE_UP * s * Math.max(0, airK - air)) * airK);
       fl[k * 3] = lx;
       fl[k * 3 + 1] = y;
       fl[k * 3 + 2] = lz;

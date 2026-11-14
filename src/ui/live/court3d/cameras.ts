@@ -115,7 +115,7 @@ interface Rig {
 
 const RIGS: Record<CamKind, Rig> = {
   tv: { reach: [27, 54], rim: [36, 58], cover: [50, 112], coverTall: [40, 104], pad: [0.07, 0.16, 0.1], sky: 0.45, ball: 0.5, follow: 0.5, zoom: 1.3 },
-  side: { reach: [17, 36], rim: [17, 30], cover: [36, 80], coverTall: [29, 70], pad: [0.12, 0.2, 0.2], sky: 0.3, ball: 0.7, follow: 0.42, zoom: 1.1 },
+  side: { reach: [17, 36], rim: [23, 34], cover: [36, 80], coverTall: [29, 70], pad: [0.12, 0.2, 0.2], sky: 0.3, ball: 0.7, follow: 0.42, zoom: 1.1 },
   end: { reach: [60, 110], rim: [80, 120], cover: [56, 70], coverTall: [50, 62], pad: [0.08, 0.14, 0.08], sky: 0.2, ball: 0.3, follow: 0.7, zoom: 1.6 },
   low: { reach: [15, 34], rim: [24, 38], cover: [20, 60], coverTall: [16, 50], pad: [0.16, 0.22, 0.1], sky: 0.4, ball: 0.7, follow: 0.4, zoom: 1.1 },
   top: { reach: [27, 54], rim: [36, 58], cover: [52, 100], coverTall: [42, 96], pad: [0.08, 0.06, 0.06], sky: 0, ball: 0, follow: 0.6, zoom: 1.4 },
@@ -263,7 +263,8 @@ export function fit(
   // (how much of the floor it holds across, where it looks: between the rig's least, less a little at the basket and late, and its most)
   const least = (lo * thin * (1 - 0.1 * squeeze)) / 2 / depth / aspect;
   const most = hi / 2 / depth / aspect;
-  const tanV = clamp(Math.max(halfY, halfX / aspect), least, Math.max(least, most));
+  // (the most only ever lets go of men out to the sides: what it holds up and down, the ball's flight, a head, is never cut)
+  const tanV = Math.max(least, halfY, Math.min(halfX / aspect, Math.max(least, most)));
   // the spare room: across, toward the ball; up and down, over the play or under it
   const spareX = Math.max(0, tanV * aspect - halfX);
   const spareY = Math.max(0, tanV - halfY);
@@ -580,6 +581,82 @@ const LEAD_MOST = 13;
 const JUMP = 70;
 /** Reduced motion: the ball is this far into the other half (ft) before the picture cuts to it. */
 const CALM_OVER = 5;
+/**
+ * The picture's shape changed by more than this share (the device turned, the window was resized): he is there at
+ * once, not on his way (the frame is laid out again, it is not a pan; eased, the men would be off the new picture's
+ * sides for a second, and a game paused at the time would keep that picture).
+ */
+const RESHAPE = 0.02;
+
+/**
+ * The floor's camera keeps its picture's side this far (a share of the half picture across) clear of a basket's arm,
+ * and the ball no farther out than this toward it (it has room to go on into), the rim and its board's corners this.
+ */
+const ARM_CLEAR = 0.04;
+const KEEP_IN = [0.5, 0.72];
+/** And turns at most this far (radians) to do it. */
+const ARM_TURN = 0.6;
+// (the arm and its base as points, x, y, z each, and where they are in the picture: see clearArm)
+const ARM_PTS: number[] = [];
+
+/**
+ * The floor's camera stands beside a basket's post: the play out on the floor (a ball brought up, men spread
+ * wide) is a wide picture with the padded arm and base up its side. The picture turns away from them (`s`, in
+ * place) as far as the ball, and the rim while the ball is near it, can go and stay inside it: what is behind the
+ * arm is not seen anyway, and the picture is the play's, not the steel's.
+ */
+function clearArm(s: Shot, aspect: number, b: { x: number; y: number; z: number }, end: -1 | 1) {
+  let n = 0;
+  for (let i = 0; i <= 4; i++) {
+    const t = (ARM.long * i) / 4;
+    ARM_PTS[n++] = end * (RIM_X + ARM.b + ARM.db * t);
+    ARM_PTS[n++] = ARM.y + ARM.dy * t;
+    ARM_PTS[n++] = 0;
+  }
+  for (const k of [UNIT[0][0], UNIT[0][1]]) [ARM_PTS[n++], ARM_PTS[n++], ARM_PTS[n++]] = [end * (RIM_X + k), UNIT[0][3], 0];
+  // (which side of the picture the unit is on, and the nearest of it to the middle; and the farthest toward it of the
+  // ball and, with the ball near it, the rim and its board's top corners, which stay in)
+  const [fx, fz] = [s.lx - s.px, s.lz - s.pz];
+  const T = TURNED;
+  Object.assign(T, s);
+  const rim = Math.hypot(end * RIM_X - b.x, b.z) < RIGS.low.rim[0] + 8;
+  const at = (yaw: number, side: number) => {
+    T.lx = s.px + fx * Math.cos(yaw) - fz * Math.sin(yaw);
+    T.lz = s.pz + fx * Math.sin(yaw) + fz * Math.cos(yaw);
+    let [near, keep] = [Infinity, -Infinity];
+    for (let i = 0; i < n; i += 3) {
+      const p = seen(T, aspect, ARM_PTS[i], ARM_PTS[i + 1], ARM_PTS[i + 2]);
+      if (p.d > 0 && Math.abs(p.y) < 1.2 && Math.abs(p.x) < Math.abs(near)) near = p.x;
+    }
+    const k = (x: number, y: number, z: number, most: number) => {
+      const p = seen(T, aspect, x, y, z);
+      if (p.d > 0) keep = Math.max(keep, side * p.x - most);
+    };
+    k(b.x, b.y, b.z, KEEP_IN[0]);
+    k(b.x, 0, b.z, KEEP_IN[0]);
+    if (rim) for (const z of [-BOARD_HALF, 0, BOARD_HALF]) k(end * (RIM_X + 1.25), z ? BOARD_TOP - 0.7 : 10, z, KEEP_IN[1]);
+    return [near, keep];
+  };
+  const [near] = at(0, 1);
+  if (!Number.isFinite(near) || Math.abs(near) >= 1 + ARM_CLEAR) return;
+  const side = Math.sign(near);
+  // (the way to turn that moves the unit out of the picture's side)
+  const way = Math.abs(at(0.01, side)[0]) > Math.abs(near) ? 1 : -1;
+  // the least turn that clears it, and no more than keeps the ball (and the rim) in: halving the step each time
+  let [lo, hi] = [0, ARM_TURN];
+  if (at(way * hi, side)[1] <= 0 && side * at(way * hi, side)[0] < 1 + ARM_CLEAR) lo = hi;
+  else
+    for (let i = 0; i < 12; i++) {
+      const mid = (lo + hi) / 2;
+      const [x, keep] = at(way * mid, side);
+      if (keep <= 0 && side * x < 1 + ARM_CLEAR) lo = mid;
+      else hi = mid;
+    }
+  if (lo <= 0) return;
+  if (at(way * lo, side)[1] > 0) return;
+  [s.lx, s.lz] = [T.lx, T.lz];
+}
+const TURNED = shot();
 
 /** The operator on the camera the user chose: he is shown the play each frame and says where the camera is. */
 export class Operator {
@@ -595,6 +672,7 @@ export class Operator {
   private half: -1 | 1 = -1;
   private ballX = 0;
   private vx = 0;
+  private aspect = 0;
   private readonly pts: number[] = [];
   private readonly want = shot();
 
@@ -605,14 +683,15 @@ export class Operator {
 
   /**
    * One frame, `real` ms after the last: the picture, into `out`. True when it cut (a new camera, the play
-   * somewhere else altogether, the floor's camera changing ends, a new still with reduced motion).
+   * somewhere else altogether, the floor's camera changing ends, a new still with reduced motion, a new shape: RESHAPE).
    */
   aim(kind: CamKind, v: View, real: number, calm: boolean, out: Shot): boolean {
     const rig = RIGS[kind];
     const sec = real / 1000;
     const b = v.ball;
-    let cut = !(calm ? this.still : this.on) || kind !== this.kind;
+    let cut = !(calm ? this.still : this.on) || kind !== this.kind || Math.abs(v.aspect / (this.aspect || v.aspect) - 1) > RESHAPE;
     this.kind = kind;
+    this.aspect = v.aspect;
     // (the floor's camera is at the end being attacked, the end zone's at the other, and they stay where they were while nothing is)
     const end = v.end || this.end || (b.x < 0 ? -1 : 1);
     if ((kind === 'low' || kind === 'end') && end !== this.end && this.end) cut = true;
@@ -639,6 +718,7 @@ export class Operator {
     this.px.v = cut ? 0 : this.px.v;
     const n = gather(kind, v, Math.abs(lead) > 1.5 ? lead : 0, this.pts);
     fit(kind, this.px.x, w.py, w.pz, this.pts, n, v.aspect, b.x, b.z, clamp(v.near + v.tight * 0.8, 0, 1.6) - 3 * clamp((Math.abs(this.vx) - 8) / 22, 0, 1), w);
+    if (kind === 'low') clearArm(w, v.aspect, b, end);
     if (!cut && Math.hypot(w.lx - this.lx.x, w.lz - this.lz.x) > JUMP) cut = true;
     if (cut) {
       [this.lx.x, this.ly.x, this.lz.x, this.fov.x] = [w.lx, w.ly, w.lz, w.fov];

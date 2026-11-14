@@ -41,6 +41,8 @@
 .lv-stage {
   position: relative;
   overflow: hidden;
+  /* (what sits over the court fits its width: court.css) */
+  container: lv-stage / inline-size;
   /* (the letterbox around a floor that doesn't fill its box is the building, in ink) */
   background: var(--ink);
 }

@@ -1,8 +1,9 @@
 /* Held sideways, or on a desktop: the broadcast on the left (the scorebug, the call bar, the whole
    court), the bench on the right (the bench bar over the console). Last, so it overrides the
    partials above. The court is the hero: the page grows until the whole floor fills the height left
-   under the scorebug and the call bar, the bench keeps a column beside it, and whatever height the
-   floor can't use is the building around it, in ink (never a band of blank paper under the court). */
+   under the scorebug and the call bar, the bench keeps a column beside it, and where the page can't
+   grow that far (a screen not wide enough for its height) the picture still takes the whole column:
+   the 2D floor fills its height and pans with the ball (Court.tsx), never a band of ink under it. */
 @media (orientation: landscape) and (min-width: 600px) {
   :root {
     --lq-h: 54px;
@@ -33,14 +34,15 @@
   }
   .lv .lv-stage {
     grid-area: stage;
-    /* the whole of the column under the call bar: the floor straight under the call of the play,
-       the building below it */
+    /* the whole of the column under the call bar, straight under the call of the play */
     align-self: stretch;
     min-height: 0;
-    display: grid;
-    align-content: start;
+    display: block;
     margin: 0;
-    --court-h: auto;
+    --court-h: 100%;
+  }
+  .lv .lv-stage .court-view {
+    height: 100%;
   }
   /* the bench bar heads the console: a strip of card stock of its own */
   .lv .lv-bar {
@@ -59,21 +61,20 @@
     padding-bottom: calc(8px + var(--safe-b));
   }
 }
-/* A small, squarer screen (a small tablet held sideways, a small window): the whole floor would leave a third of the
-   column to the building, so while the game plays the court takes the column's whole height and
-   shows the window on the floor that follows the ball, as a phone held sideways does. A stop keeps
-   the whole floor (the shot chart, the players where they stood), in the middle of the column. */
+/* A small, squarer screen (a small tablet held sideways, a small window): the column is too square
+   for the floor sideways, so while the game plays it shows the upright window that follows the ball,
+   as a phone held upright does. A stop keeps the whole floor (the shot chart, the players where they
+   stood), in the middle of the column. */
 @media (orientation: landscape) and (min-width: 600px) and (max-width: 1099px) and (max-aspect-ratio: 3/2) {
-  .lv:not(.stopped, .at-final) .lv-stage {
-    display: block;
-    --court-h: 100%;
-  }
-  .lv:not(.stopped, .at-final) .lv-stage .court-view {
-    height: 100%;
-  }
   .lv.stopped .lv-stage,
   .lv.at-final .lv-stage {
+    display: grid;
     align-content: center;
+    --court-h: auto;
+  }
+  .lv.stopped .lv-stage .court-view,
+  .lv.at-final .lv-stage .court-view {
+    height: auto;
   }
 }
 /* A phone held sideways: the court takes the whole height on the left with the call bar under it;

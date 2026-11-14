@@ -878,12 +878,13 @@
 }
 
 /* ------------------------------------------------------------------ the first live game's coach marks
-   A card of paper along the court's edge (the top for what's above it, the foot for what's below),
-   never its middle; the part of the screen it names wears a ring while it's up. */
+   A card of paper in the court's corner (the top for what's above it, the foot for what's below), never
+   its middle and never the whole edge: a wide court keeps most of its sideline in view; the part of the
+   screen it names wears a ring while it's up. */
 .lv .lv-tip {
   position: absolute;
   left: 8px;
-  right: 8px;
+  width: min(calc(100% - 16px), 420px);
   z-index: 6;
   min-height: 44px;
   display: flex;
@@ -902,6 +903,33 @@
 }
 .lv-tip.at-foot {
   bottom: 8px;
+}
+/* (sideways the court runs to the glass's foot: the card, the way to turn and the lower third sit over
+   the home bar's inset, not under it) */
+.lv.side .lv-tip.at-foot,
+.lv.side .lv-turn,
+.lv.side .c3d-third {
+  bottom: calc(8px + var(--safe-b));
+}
+/* a card at the top keeps clear of the camera's buttons in the other corner; on a narrow court there is
+   no room beside them, and the card takes the edge for the few seconds it's up */
+@container lv-stage (min-width: 521px) {
+  .lv-stage:has(.court-cam-kind) .lv-tip.at-top {
+    max-width: calc(100% - 176px);
+  }
+  .lv-stage:not(:has(.court-cam-kind)) .lv-tip.at-top {
+    max-width: calc(100% - 56px);
+  }
+}
+@container lv-stage (max-width: 520px) {
+  .lv .lv-tip {
+    width: auto;
+    right: 8px;
+  }
+}
+/* a card at the foot has the corner: a replay's lower third waits for it */
+.lv-stage:has(.lv-tip.at-foot) .c3d-third {
+  visibility: hidden;
 }
 .lv-tip:focus-visible {
   outline: 2px solid var(--ink);
@@ -943,6 +971,11 @@
   outline-offset: -2px;
 }
 
+/* the starting lineups have the court to themselves: the camera's buttons come in with the tip */
+.lv-stage:has(.lv-intro) .court-cam {
+  visibility: hidden;
+}
+
 /* ------------------------------------------------------------------ the toasts while the game is on
    (toastHost.ts) A short plate in the court's top corner, over the far stands: off the players, off the
    console, clear of the camera's buttons on the right (the 3D court's chip too), under the Replay bug
@@ -965,6 +998,17 @@
 }
 .lv-stage:has(.lv-tip.at-top) .lv-toasts {
   top: 64px;
+}
+/* a narrow court (a phone upright) has no room beside the 3D camera's chips: the toast goes under them,
+   the court's width, so it stays one or two lines rather than a tall column of words */
+@container lv-stage (max-width: 520px) {
+  .lv-stage:has(.court-cam-kind) .lv-toasts {
+    top: 48px;
+    right: 8px;
+  }
+  .lv-stage:has(.lv-tip.at-top) .lv-toasts {
+    top: 88px;
+  }
 }
 .lv-toasts > .toasts.in-court {
   position: static;

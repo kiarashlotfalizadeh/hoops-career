@@ -15,6 +15,8 @@
 //   &cue=point&cueAt=100 (a gesture, asked that far in: his hands as it has them; a list, or all: each man the next)
 //   &arms=up|shoot|fwd|hip|out|across|back|down (both arms put there, whatever the move has them do; arms=all, or a list of them: each man the next)
 //   faces: ?move=idle&n=6&gap=1.5&camY=6.4&lookY=6.25&zoom=3.6&yaw=12&from=100&to=100  (&beard=0..5: none, stubble, goatee, beard, full, strap)
+//   one face up close, round him with &yaw (&at is the face's time there, not a camera): ?move=idle&n=1&camY=5.85&lookY=5.82&lookZ=0.55&zoom=6&fov=10
+//   (&lookZ: how far in front of him the camera looks and turns round, ft; &fov: how wide it sees, degrees)
 //   &kind=0..5 (everyone's head the kind's own, as look.ts's FACES has it: long, broad, square, narrow, heavy, soft)  &kinds=1 (each the next kind)
 //   &face=1 (his jaw open and his brows down, as in a roar)  &face=joy|shout|miss|stung|disbelief|stunned|wince|glare|exhale|blow (what a moment gives him: see Fig.feel, at its height)
 //   &gest=protest|call|talk|... (a gesture, his talk with it)  &at=520 (how far into it, ms of his own time)
@@ -232,10 +234,10 @@ const figs = Array.from({ length: n }, (_, i) => {
 settleHeads();
 const yaw = (num('yaw', 30) * Math.PI) / 180;
 const zoom = num('zoom', 1);
-const cam = new PerspectiveCamera(28, innerWidth / innerHeight, 1, 400);
+const cam = new PerspectiveCamera(num('fov', 28), innerWidth / innerHeight, 1, 400);
 const dist = (n * gap * 0.62 + 16) / zoom;
-cam.position.set(Math.sin(yaw) * dist, num('camY', 5.5), Math.cos(yaw) * dist);
-cam.lookAt(0, num('lookY', 3.8), 0);
+cam.position.set(Math.sin(yaw) * dist, num('camY', 5.5), num('lookZ', 0) + Math.cos(yaw) * dist);
+cam.lookAt(0, num('lookY', 3.8), num('lookZ', 0));
 // (a camera of one's own: where it is and what it looks at, ft, and how wide it sees)
 if (q.has('eye')) {
   const [eye, at] = [q.get('eye')!, q.get('at') ?? '0,4,0'].map((v) => v.split(',').map(Number));
@@ -329,6 +331,8 @@ function step(k: (typeof figs)[number], dt: number) {
   const b = d.ball ? k.f.pup.carry({ x: 0, y: 0, z: 0 }) : null;
   k.f.pup.arms(b);
   if (ARMS) reach(k.f, (ARMS === 'all' ? Object.keys(REACH) : ARMS.split(','))[figs.indexOf(k) % (ARMS === 'all' ? Object.keys(REACH).length : ARMS.split(',').length)]);
+  // (where the ball is, as the scene tells a man who has it: his hands lie on it)
+  k.f.ball = b;
   k.f.place();
   const offX = k.x - k.f.pup.x;
   const offZ = -k.f.pup.z;

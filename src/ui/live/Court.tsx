@@ -5,7 +5,9 @@
 // Two views of the same floor, picked by the shape the layout gives the canvas:
 // - upright (a phone held upright): a window on the floor that pans with the ball, so the players
 //   stay big; a set plays out at one end and a break carries the camera to the other;
-// - sideways (wide: a tablet, a desktop, or the compact court at a break): the whole floor at once.
+// - sideways (wide: a tablet, a desktop, or the compact court at a break): the whole floor at once,
+//   or, in a box not quite as long as the floor's shape (a desktop's column), the floor across its
+//   whole height, panning along its length with the ball, so no band of the building is left over.
 //
 // With no possession to draw the court is never empty: the fives line up for the tip, the players
 // stand where the last play left them (a huddle, a stop), or the floor shows the shot chart (a break).
@@ -116,8 +118,8 @@ export const END = 3.4;
 /** The whole floor in feet, apron included. */
 export const FLOOR_W = 2 * HALF_W + 2 * SIDE;
 export const FLOOR_L = COURT_LEN + 2 * END;
-/** A canvas at least this much wider than tall shows the whole floor sideways. */
-const WIDE = 1.6;
+/** A canvas at least this much wider than tall shows the floor sideways (any squarer: the upright window). */
+const WIDE = 1.4;
 /** Upright, the window keeps the ball this far (ft) from its trailing edge: the rest of the view is ahead of it, toward the basket. */
 const TRAIL = 8;
 /** A player is a disc this many feet across the middle (choreo.ts keeps them at least two of these apart). */
@@ -209,11 +211,22 @@ export interface View {
   k: number;
   w: number;
   h: number;
-  /** Upright: the court y at the top edge of the window. Sideways: the margins that center the floor. */
+  /** Upright: the court y at the top edge of the window. Sideways: the margins that center the floor (or, panning, put the window's part of it in view). */
   top: number;
   ox: number;
   oy: number;
 }
+/**
+ * How the floor fits a canvas of w × h: sideways (`wide`) or the upright window, and its scale. Sideways
+ * in a box shorter than the floor's shape it fills the height and pans (`pan`), unless the whole floor
+ * is asked for (the break's shot chart).
+ */
+export function courtFit(w: number, h: number, whole = false): { wide: boolean; pan: boolean; k: number } {
+  const wide = w >= h * WIDE;
+  const pan = wide && !whole && w < (FLOOR_L * h) / FLOOR_W;
+  return { wide, pan, k: !wide ? w / FLOOR_W : pan ? h / FLOOR_W : Math.min(w / FLOOR_L, h / FLOOR_W) };
+}
+
 const project = (v: View, p: Pt): Pt =>
   v.wide ? { x: v.ox + (p.y + END) * v.k, y: v.oy + (HALF_W + SIDE - p.x) * v.k } : { x: (p.x + HALF_W + SIDE) * v.k, y: (p.y - v.top) * v.k };
 
@@ -253,8 +266,9 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
     const calmQ = window.matchMedia?.('(prefers-reduced-motion: reduce)');
     let drawn = '';
     let lastScript: Script | null | undefined;
-    // the window's top edge (upright), and where the ball and the players were last drawn (on the court itself)
+    // the window's top edge (upright) or left edge (sideways, panning), and where the ball and the players were last drawn (on the court itself)
     let cam: number | null = null;
+    let camMode = '';
     let ballAt: Pt | null = null;
     let standers: Stander[] = [];
 
@@ -277,10 +291,11 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
       const cut = sc !== lastScript;
       lastScript = sc;
 
-      // the view: the whole floor sideways when the canvas is wide, a window on it upright
-      const wide = w >= h * WIDE;
-      const k = wide ? Math.min(w / FLOOR_L, h / FLOOR_W) : w / FLOOR_W;
-      const view: View = { wide, k, w, h, top: 0, ox: wide ? (w - FLOOR_L * k) / 2 : 0, oy: wide ? (h - FLOOR_W * k) / 2 : 0 };
+      // the view: the floor sideways when the canvas is wide, a window on it upright. Sideways in a box
+      // shorter than the floor's shape, the floor fills the height and pans with the ball (the break's
+      // shot chart keeps the whole floor)
+      const { wide, pan, k } = courtFit(w, h, !sc && p.idle?.kind === 'chart');
+      const view: View = { wide, k, w, h, top: 0, ox: wide ? (w - FLOOR_L * k) / 2 : 0, oy: wide && !pan ? (h - FLOOR_W * k) / 2 : 0 };
       const play = sc ? pose(sc, s.t, calm) : null;
       // where everyone is, for the 3D court and for the floor between possessions
       if (sc && play) {
@@ -302,10 +317,12 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
         drawn = '';
         return;
       }
-      // (the view just turned upright: the window finds the play again)
-      if (wide) cam = null;
-      if (!wide) {
-        const len = h / k;
+      // (the view just turned: the window finds the play again)
+      const mode = !wide ? 'up' : pan ? 'pan' : 'whole';
+      if (mode !== camMode) cam = null;
+      camMode = mode;
+      if (mode !== 'whole') {
+        const len = (pan ? w : h) / k;
         const lo = -END;
         const hi = Math.max(lo, COURT_LEN + END - len);
         let want: number;
@@ -324,7 +341,8 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
           cam === null || calm || (cut && sc && (!ballAt || Math.hypot(ballAt.x - toWorld(sc.frames[0].ball, sc.dir).x, ballAt.y - toWorld(sc.frames[0].ball, sc.dir).y) > 10));
         cam = jump ? want : cam! + (want - cam!) * (1 - Math.exp((-dt * Math.max(1, p.speed)) / 170));
         if (Math.abs(want - cam) < 0.02) cam = want;
-        view.top = cam;
+        if (pan) view.ox = -(cam + END) * k;
+        else view.top = cam;
       }
 
       const fl = p.floor;
@@ -332,10 +350,10 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
         floorWas = fl;
         floorId = fl ? JSON.stringify(fl) : '';
       }
-      const key = `${canvas.width}x${canvas.height}|${wide}|${fontsIn}|${floorId}`;
+      const key = `${canvas.width}x${canvas.height}|${mode}|${fontsIn}|${floorId}`;
       // paused, finished or waiting for the next possession: nothing moved, so skip the redraw (battery)
       const idleKey = sc ? '' : `${p.idle?.kind ?? 'hold'}|${p.idle?.kind === 'chart' ? p.idle.shots.length : p.idle?.kind === 'tip' ? p.idle.fives.join('/') : standers.length}`;
-      const sig = `${key}|${s.t}|${s.done}|${view.top}|${idleKey}|${p.clutch}|${p.hot?.size ?? 0}`;
+      const sig = `${key}|${s.t}|${s.done}|${view.top}|${view.ox}|${idleKey}|${p.clutch}|${p.hot?.size ?? 0}`;
       if (sig === drawn && !cut) return;
       drawn = sig;
       if (!canvas.width || !canvas.height) {

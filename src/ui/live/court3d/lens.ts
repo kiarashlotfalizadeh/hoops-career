@@ -1269,6 +1269,22 @@ export class Lens {
     return Math.max(0, Math.min(1, off)) * this.focusAmt;
   }
 
+  /**
+   * Has three make every program `scene` draws with into this lens's picture (hidden things too), off the
+   * page's thread where the browser can (KHR_parallel_shader_compile): done when they are all made.
+   */
+  compile(scene: Scene, camera: Camera): Promise<unknown> {
+    const r = this.renderer;
+    const was = r.getRenderTarget();
+    // (a program is the picture's it draws into: the finished one's target, or the screen, a step down)
+    r.setRenderTarget(this.post ? this.scene : null);
+    try {
+      return r.compileAsync(scene, camera);
+    } finally {
+      r.setRenderTarget(was);
+    }
+  }
+
   /** One picture of `scene` from `camera`; `ms` since the last (a bump dies away on it). */
   render(scene: Object3D, camera: Camera, ms = 16) {
     const r = this.renderer;

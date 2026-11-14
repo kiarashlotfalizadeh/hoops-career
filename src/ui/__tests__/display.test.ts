@@ -206,8 +206,10 @@ describe('display helpers', () => {
         expect(new Set(venues.map(({ v }) => v.court[key])).size, key).toBe(key === 'laying' ? 2 : key === 'words' ? 4 : 3);
       expect(new Set(venues.map(({ v }) => [v.court.laying, v.court.lane, v.court.centre, v.court.words, v.court.border].join())).size, 'floors').toBeGreaterThanOrEqual(25);
       for (const { f, v } of venues) expect(lookDistance(v.court.trim, v.paint), `${f.abbrev} trim`).toBeGreaterThan(0.12);
-      // (and over the floor: every roof, catwalk and scoreboard is some building's, and few share all of it)
-      for (const key of ['kind', 'catwalk', 'board', 'size'] as const) expect(new Set(venues.map(({ v }) => v.roof[key])).size, key).toBe(key === 'board' ? 4 : 3);
+      // (and over the floor: every roof, catwalk, scoreboard and place for the banners is some building's, and few share all of it)
+      for (const key of ['kind', 'catwalk', 'board', 'size', 'rafters'] as const)
+        expect(new Set(venues.map(({ v }) => v.roof[key])).size, key).toBe(key === 'board' ? 4 : key === 'rafters' ? 2 : 3);
+      expect(venues.filter(({ v }) => v.roof.rafters === 'end').length, 'banners over an end').toBeGreaterThanOrEqual(8);
       expect(new Set(venues.map(({ v }) => JSON.stringify(v.roof))).size, 'roofs').toBeGreaterThanOrEqual(20);
       // the break's chart: a dozen shots at the rim are eased apart into marks that read as a dozen, none far from where it was
       const pile = spread(

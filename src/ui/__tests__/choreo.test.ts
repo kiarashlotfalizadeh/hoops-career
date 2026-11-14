@@ -3,14 +3,14 @@
 // and the captions call the play.
 import { PerspectiveCamera, Scene, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { FLOOR_L, FLOOR_W, pose, type Stage } from '../live/Court';
+import { courtFit, FLOOR_L, FLOOR_W, pose, type Stage } from '../live/Court';
 import { attackDir, BASKET, buildScript, captionAt, COURT_LEN, faceWorld, standing, toWorld, type Frame, type Pt, type Script, type Standing } from '../live/choreo';
 import { Director, REPLAY_GAP, type BigKind } from '../live/court3d/director';
 import { ballIn, into, PARTS, Spacing, sunk } from '../live/court3d/spacing';
 import { blocked, CAM_KINDS, camKind, clearSeat, clutter, fenced, Operator, seen, shot, type View } from '../live/court3d/cameras';
 import { captured, CHANNELS, CLIPS, DUNK_AT, DUNKS, GESTURES, I, mirror, N, PASSES, sample, span } from '../live/court3d/clips';
 import { occasionOf } from '../live/occasion';
-import { figureGeo } from '../live/court3d/figure';
+import { figureGeo, follow, handOf } from '../live/court3d/figure';
 import { readGlb } from '../live/court3d/glb';
 import arenaGlb from '../live/court3d/models/arena.glb?inline';
 import figureGlb from '../live/court3d/models/figure.glb?inline';
@@ -72,6 +72,25 @@ const scores = (s: ReturnType<typeof buildScript>) => s.frames.filter((f) => f.s
 
 describe('live court choreography', () => {
   it('spaces the players, draws actions, sets and defenses, keeps the score, flashes timeouts and captions the play', () => {
+    // the 2D floor fits its box: a phone's upright window across the width; a desktop's column (shorter
+    // than the floor's shape) filled top to bottom, panning, but the whole floor for the break's chart;
+    // a box longer than the floor, the whole floor across its height
+    {
+      const up = courtFit(390, 388);
+      expect(up.wide).toBe(false);
+      expect(FLOOR_W * up.k).toBeCloseTo(390);
+      const desk = courtFit(1013, 679);
+      expect(desk.pan).toBe(true);
+      expect(FLOOR_W * desk.k).toBeCloseTo(679);
+      expect(FLOOR_L * desk.k).toBeGreaterThan(1013);
+      const chart = courtFit(1013, 679, true);
+      expect(chart.pan).toBe(false);
+      expect(FLOOR_L * chart.k).toBeCloseTo(1013);
+      const side = courtFit(780, 338);
+      expect(side.pan).toBe(false);
+      expect(FLOOR_W * side.k).toBeCloseTo(338);
+    }
+
     // free throws lined up on separate lane spots
     {
       const s = buildScript(
@@ -612,6 +631,11 @@ describe('live court choreography', () => {
       // a miss at the buzzer is no moment
       const miss = buildScript({ ...log([{ k: 'shot', pid: 1, x: 0, y: 25, zone: 'ab3', made: false, v: 3 }]), clockEnd: 0 }, info);
       expect(miss.moment).toBeUndefined();
+      // (but the building hears it miss, whose shot it was, and not at the line: the home crowd groans for its own)
+      const heard = new House();
+      for (let i = 1; i <= miss.frames.length; i++) heard.read({ script: miss, play: { i, clock: 0 } as never, standers: [], ball: null }, undefined, undefined, false, 16);
+      expect(heard.miss).toMatchObject({ side: miss.off, line: false });
+      expect(heard.moment).toBeNull();
     }
 
     // every player named on a real game, and never a caption left empty
@@ -697,7 +721,7 @@ describe('live court choreography', () => {
     {
       const glb = (file: string) => readGlb(Uint8Array.from(atob(file.slice(file.indexOf(',') + 1)), (ch) => ch.charCodeAt(0)).buffer);
       const geo = figureGeo((o) => o, glb(figureGlb));
-      expect([...geo.order].sort((x, y) => x - y)).toEqual(Array.from({ length: 47 }, (_, i) => i));
+      expect([...geo.order].sort((x, y) => x - y)).toEqual(Array.from({ length: 49 }, (_, i) => i));
       expect(geo.wears).toEqual(expect.arrayContaining(['skin', 'hair', 'jersey', 'trim', 'cloth', 'shoe', 'white']));
       const w = geo.body.getAttribute('skinWeight');
       for (let i = 0; i < w.count; i += 37) expect(w.getX(i) + w.getY(i) + w.getZ(i) + w.getW(i)).toBeCloseTo(1, 3);
@@ -723,6 +747,29 @@ describe('live court choreography', () => {
         expect(Math.max(...lip[1])).toBeLessThan(0.8);
         expect(Math.max(...lip[2])).toBeLessThan(0.05);
       }
+      // (his face goes from one look to the next as a muscle does: from still it gathers speed, then slows into the new
+      // look and never past it, at 60 frames a second or at 10, and turned round half way it carries on smoothly)
+      {
+        const run = (fps: number, from: number[] = [0, 0], till = 0.6) => {
+          const at: [number, number] = [from[0], from[1]];
+          const out = [at[0]];
+          for (let t = 0; t < till; t += 1 / fps) out.push(follow(at[0], at[1], 1, 20, 1 / fps, at)[0]);
+          return out;
+        };
+        const quick = run(60);
+        const steps = quick.slice(1).map((v, i) => v - quick[i]);
+        expect(steps[0]).toBeLessThan(steps[1]);
+        expect(steps[0]).toBeLessThan(0.5 * (1 - Math.exp(-10 / 60)));
+        expect(steps.every((d) => d >= 0)).toBe(true);
+        expect(Math.max(...quick)).toBeLessThanOrEqual(1);
+        expect(quick.at(-1)).toBeGreaterThan(0.99);
+        const slow = run(10);
+        expect(Math.max(...slow)).toBeLessThanOrEqual(1);
+        expect(slow[3]).toBeCloseTo(quick[18], 5);
+        const back = run(60, [0.6, -3], 0.1);
+        expect(back[1]).toBeLessThan(back[0]);
+        expect(back[1]).toBeGreaterThan(back[0] - 0.06);
+      }
       // (and a man told to look at a thing has it, where it is and how far off, for his eyes to find; one behind him, not)
       {
         const m = new Puppet(bodyOf(78, 215));
@@ -738,6 +785,38 @@ describe('live court choreography', () => {
       const tall = geo.body.boundingBox!.max.y - geo.body.boundingBox!.min.y;
       expect(tall).toBeGreaterThan(6.5);
       expect(tall).toBeLessThan(6.9);
+      // (his palm, as built: squared off at his knuckles, not a dome over his fingers' roots, and no thicker than a
+      // hand is through its middle; the hand's own points in the hand's own frame, down it from his wrist)
+      {
+        const pos = geo.body.getAttribute('position');
+        const on = geo.body.getAttribute('skinIndex');
+        const hand = geo.order.indexOf(5);
+        const p = new Vector3();
+        let [down, thick, n] = [0, 0, 0];
+        for (let v = 0; v < pos.count; v++) {
+          if ([0, 1, 2, 3].reduce((t, c) => t + (on.getComponent(v, c) === hand ? w.getComponent(v, c) : 0), 0) < 0.95) continue;
+          p.fromBufferAttribute(pos, v).applyMatrix4(geo.inverse[hand]);
+          n++;
+          down = Math.max(down, -p.y);
+          if (-p.y > 0.15 && -p.y < 0.3 && Math.abs(p.z) < 0.05) thick = Math.max(thick, Math.abs(p.x));
+        }
+        expect(n, 'a palm has the triangles to keep its shape').toBeGreaterThan(130);
+        expect(down).toBeLessThan(0.45);
+        expect(thick).toBeLessThan(0.06);
+      }
+      // (a hand let hang, as the players' and the sideline's men's are: each finger a little more curled than the one
+      // before it and more at its middle joint than at its knuckle, the thumb in toward the palm; shut all the way a
+      // fist, open all the way flat)
+      {
+        const loose = handOf(0.3);
+        for (let d = 0; d < 4; d++) {
+          if (d > 0) expect(loose[d]).toBeGreaterThan(loose[d - 1]);
+          expect(loose[4 + d]).toBeGreaterThan(loose[d]);
+        }
+        expect(loose[9]).toBeGreaterThan(0.1);
+        expect(Math.min(...handOf(1).slice(0, 8))).toBeGreaterThan(1.4);
+        expect(Math.max(...handOf(0).slice(0, 8))).toBeLessThan(0.1);
+      }
       expect([...glb(peopleGlb).keys()].sort()).toEqual(['bench', 'benchFar', 'official', 'officialFar', 'staff', 'staffFar']);
       expect([...glb(arenaGlb).keys()].sort()).toEqual([
         'ball',
@@ -1462,6 +1541,9 @@ describe('live court choreography', () => {
       const boxer = new Puppet(bodyOf(78, 215));
       let skid = 0;
       let shuffled = 0;
+      // (and his feet turn over at a rate that changes over a few frames, not in one: see CADENCE_MS)
+      const phaseOf = () => (boxer as unknown as { phase: number }).phase;
+      let [phWas, rateWas, hurried] = [phaseOf(), 0, 0];
       for (let t = 0; t < 1600; t += 16) {
         const z = -Math.max(0, t - 300) * 0.0012;
         const up = boxer.feet.map((f) => f.swing);
@@ -1472,8 +1554,12 @@ describe('live court choreography', () => {
           if (!f.swing) skid = Math.max(skid, Math.hypot(f.x - before[k][0], f.z - before[k][1]));
           if (f.swing && !up[k]) shuffled++;
         });
+        const rate = phaseOf() - phWas;
+        if (rate > 0 && rateWas > 0) hurried = Math.max(hurried, Math.abs(rate - rateWas) / Math.max(rate, rateWas));
+        [phWas, rateWas] = [phaseOf(), rate];
       }
       expect(skid).toBeLessThan(0.001);
+      expect(hurried).toBeLessThan(0.3);
       expect(shuffled).toBeGreaterThan(3);
       const jumper = new Puppet(bodyOf(78, 215));
       let heelUp = 0;
@@ -1694,7 +1780,7 @@ describe('live court choreography', () => {
           };
           inside(20, 4, 2);
           inside(20, 7, 0);
-          if (kind !== 'low' && kind !== 'side') inside(47 - 5.25, 10, 0);
+          if (kind !== 'low') inside(47 - 5.25, 10, 0);
           if (kind === 'tv' || kind === 'end' || kind === 'top')
             for (let i = 0; i < 10; i++) {
               inside(set[i * 2], 0, set[i * 2 + 1]);
@@ -1729,6 +1815,13 @@ describe('live court choreography', () => {
           expect(calm).toEqual(still);
           expect(op.aim(kind, view(aspect, -9), 16, true, calm)).toBe(true);
           expect(calm).not.toEqual(still);
+          // the device turned (the picture another shape): laid out again at once, as a fresh operator has it, not panned to
+          const turned = 1 / aspect + 0.6;
+          const again = shot();
+          expect(op.aim(kind, view(turned, 20), 16, false, again)).toBe(true);
+          const fresh = shot();
+          new Operator().aim(kind, view(turned, 20), 16, false, fresh);
+          for (const k of ['lx', 'ly', 'lz', 'fov'] as const) expect(again[k]).toBeCloseTo(fresh[k], 5);
         }
       // a close-up's camera: in front of his face when nobody is there, round a man who is, never behind the basket's post
       const seat = { x: 0, z: 0 };
@@ -2010,6 +2103,17 @@ describe('live court choreography', () => {
           expect(Math.max(Math.abs(p.x), Math.abs(p.y))).toBeLessThan(1);
         }
       }
+      // and with the ball out on the floor, across from it, in a phone's wide picture, it turns from the basket's padded
+      // arm and base beside it rather than holding them up its side (they were half the picture's side): the ball stays in it
+      const op = new Operator();
+      const s = shot();
+      for (let i = 0; i < 300; i++) op.aim('low', { ball: { x: rimX - 20, y: 4, z: -12 }, men: set, n: 10, end: 1, aspect: 2.3, near: 0, tight: 0 }, 16, false, s);
+      expect(Math.abs(seen(s, 2.3, rimX - 20, 4, -12).x)).toBeLessThan(0.5);
+      for (const [b, y] of [
+        [10.75, 2.2],
+        [11.4, 3.7],
+      ])
+        expect(Math.abs(seen(s, 2.3, rimX + b, y, 0).x), `arm at ${b}`).toBeGreaterThan(1.5);
     }
     // the ball's flight: every shot starts in the hand, a make ends under the net and a miss never goes down through the
     // ring, whichever way it ends; a jumper spins back; the rim rings and comes to rest

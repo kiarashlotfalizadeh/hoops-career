@@ -312,8 +312,8 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
   const screen = keep(new MeshBasicMaterial({ color: 0x2b3038 }));
   // (the clocks' faces: the caller puts the clocks on them)
   const clock = keep(new MeshBasicMaterial({ color: 0x2b3038 }));
-  // (the rim's orange enamel: it takes the lamps)
-  const iron = keep(new MeshStandardMaterial({ color: '#e4501a', roughness: 0.36, vertexColors: true }));
+  // (the rim's orange enamel: a hard gloss coat, so it takes the lamps as a line along the tube, not a smudge)
+  const iron = keep(new MeshStandardMaterial({ color: '#e4501a', roughness: 0.26, vertexColors: true }));
   const cord = keep(new MeshStandardMaterial({ color: 0xf4f4f0, roughness: 0.9, vertexColors: true }));
   braided(cord, 'cord');
   // (the live net's knots: a small round of cord where two cross, in its shade)

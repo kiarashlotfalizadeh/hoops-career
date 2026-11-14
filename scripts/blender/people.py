@@ -326,7 +326,7 @@ def face():
 #: and where it shows all its colour: between them it thins out to his skin over a wide edge (figure.ts's beards do the
 #: same), never a line round it. BEARD_EDGE is in radians round and up his head (a tenth is about a third of an inch).
 BEARD_CUT = 0.14
-BEARD_FULL = 0.7
+BEARD_FULL = 0.97
 BEARD_EDGE = 0.14
 
 
@@ -344,9 +344,11 @@ def beards():
     goat = lambda a, e: goat_w(a, e) - BEARD_CUT  # noqa: E731
     strap_w = thinned(lambda a, e: whiskers(round_him(a, e))[2])
     strap = lambda a, e: strap_w(a, e) - BEARD_CUT  # noqa: E731
-    thin = lambda w: (lambda a, e: sstep(BEARD_CUT, BEARD_FULL, w(a, e)))  # noqa: E731
-    # (it lies closer at its edge than in its middle)
-    deep = lambda f, most: (lambda a, e: 0.004 + most * sstep(0.0, 0.35, f(a, e)))  # noqa: E731
+    # (its colour comes in over the whole of that slope, a cell or three of the grid wide, slowest at its edge: one cell
+    # from nothing to all of it is a plate's edge again, however soft its colour)
+    thin = lambda w: (lambda a, e: sstep(BEARD_CUT, BEARD_FULL, w(a, e)) ** 1.4)  # noqa: E731
+    # (it lies closer at its edge than in its middle, its edge all but on his skin: no step up onto it)
+    deep = lambda f, most: (lambda a, e: 0.0015 + most * sstep(0.0, 0.6, f(a, e)))  # noqa: E731
     return [
         patch('beard', BEARD, round_him, full, (-1.9, 1.9, 44), (-1.5, 0.2, 22), deep(full, 0.012), fade=thin(full_w)),
         patch('goatee', GOATEE, round_him, goat, (-0.75, 0.75, 30), (-1.4, -0.3, 26), deep(goat, 0.01), fade=thin(goat_w)),
@@ -658,9 +660,9 @@ def dress_staff(hi):
     bpy.data.objects.remove(mid)
     for o in (shirt, collar, jacket, tie):
         tag(o, BY_PLACE)
-    built = [body, shirt, collar, jacket, *flaps, *buttons, tie, trousers(2400, LEGS), *head_bits()]
+    built = [body, shirt, collar, jacket, *flaps, *buttons, tie, trousers(2300, LEGS), *head_bits()]
     for s in (1, -1):
-        built += [far(o, 1.4) for o in fingers(s)]
+        built += [far(o, 1.4) for o in fingers(s, 6)]
     return built + dark_shoes()
 
 

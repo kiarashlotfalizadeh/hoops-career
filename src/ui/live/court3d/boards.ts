@@ -66,6 +66,8 @@ export class House {
   end: -1 | 1 = -1;
   /** Seconds on the shot clock; null when it is off. */
   shot: number | null = null;
+  /** The last shot that missed: whose it was, how long ago (ms of the clock's real time), and whether it was a free throw. */
+  miss: { side: 0 | 1; ms: number; line: boolean } | null = null;
   private script: Script | null = null;
   private seen = 0;
   private score: [number, number] | null = null;
@@ -82,6 +84,7 @@ export class House {
     this.final = final;
     this.clutch = clutch;
     if (this.moment) this.moment.ms += real;
+    if (this.miss) this.miss.ms += real;
     const sc = stage.script;
     const play = stage.play;
     if (!sc || !play) {
@@ -137,6 +140,7 @@ export class House {
     } else if (text === 'And one!') call('andOne', sc.off);
     else if (f.flash?.kind === 'block') call('block', def);
     else if (text === 'Steal') call('steal', def);
+    else if (f.fx === 'miss') this.miss = { side: sc.off, ms: 0, line: this.clock.line };
     else if (text.startsWith('Timeout')) {
       const ab = this.game?.abbrevs;
       call('timeout', ab && text === `Timeout ${ab[0]}` ? 0 : ab && text === `Timeout ${ab[1]}` ? 1 : null);
@@ -1087,8 +1091,8 @@ export class Boards {
    * its own picture (see flags), so a building hangs as many as it has and its own. No years, no titles: the game knows
    * of none.
    */
-  banners(list: { x: number; y: number; z: number; w: number; h: number }[]) {
-    if (!list.length) return;
+  banners(list: { x: number; y: number; z: number; w: number; h: number }[]): Mesh | null {
+    if (!list.length) return null;
     const cv = document.createElement('canvas');
     cv.width = list.length * FLAG_PX[0];
     cv.height = FLAG_PX[1];
@@ -1098,7 +1102,9 @@ export class Boards {
     this.flags = { cv, tex };
     const geo = faces(list.map((b, i) => ({ ...b, turn: 0, u: [i / list.length, (i + 1) / list.length] as [number, number] })));
     const mat = this.keep(new MeshLambertMaterial({ map: tex, side: DoubleSide, alphaTest: 0.5 }));
-    this.group.add(new Mesh(this.keep(geo), mat));
+    const m = new Mesh(this.keep(geo), mat);
+    this.group.add(m);
+    return m;
   }
 
   /**

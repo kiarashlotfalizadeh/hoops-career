@@ -63,7 +63,7 @@ import { HALF_W, SIDE, type GameInfo, type Stage } from '../Court';
 import type { MatchKit } from '../../teamColors';
 import type { Occasion } from '../occasion';
 import type { Gesture } from './clips';
-import { DIGIT_NAMES, DIGITS as HAND_DIGITS, Fig, THUMB_HINGE, type Geo } from './figure';
+import { digitTurns, DIGIT_NAMES, DIGITS as HAND_DIGITS, Fig, handOf, type Geo } from './figure';
 import { merged, type Thing } from './glb';
 import { lookOf, STYLES, type Look } from './look';
 import type { Props } from './props';
@@ -134,6 +134,32 @@ function limb(a: Vector3, mid: Vector3, end: Vector3, bend: number): [Matrix4, M
   return [one(a, up), one(mid, low)];
 }
 
+/**
+ * A sitter's hand on his thigh: how near the top of it his wrist has to be for his hand to lie on it (ft from the
+ * thigh's line: on it all the way from LAY_ON, not at all from LAY_OFF), how far in toward his other knee its fingers
+ * point, and how far his wrist bends to lay it there at most (radians). A hand let hang is bent this far toward its palm.
+ */
+const LAY_ON = 0.5;
+const LAY_OFF = 0.72;
+const LAY_IN = 0.35;
+const LAY_MOST = 1.15;
+const HANG_FLEX = 0.3;
+const X_AXIS = new Vector3(1, 0, 0);
+const Q1 = new Quaternion();
+const Q2 = new Quaternion();
+
+/** Where on a thigh's line (hip to knee) a wrist over it is nearest, and how much its hand lies on it (0 none); null under or beside it. */
+function thighUnder(hip: Vector3, kn: Vector3, wrist: Vector3): { at: Vector3; w: number } | null {
+  const d = kn.clone().sub(hip);
+  const u = Math.max(0, Math.min(1, wrist.clone().sub(hip).dot(d) / d.lengthSq()));
+  const at = hip.clone().addScaledVector(d, u);
+  // (over it: a wrist down beside his thigh or under it lies on nothing)
+  if (wrist.y < at.y + 0.1 || u < 0.25) return null;
+  const far = wrist.distanceTo(at);
+  const w = Math.max(0, Math.min(1, (LAY_OFF - far) / (LAY_OFF - LAY_ON)));
+  return { at, w: w * w * (3 - 2 * w) };
+}
+
 /** Every bone's place for a pose (the body's own frame: x to his left, y up from where his ankles' floor is, z the way he faces). */
 function bonesOf(p: Pose): Map<string, Matrix4> {
   const rot = new Matrix4().makeRotationX(p.lean);
@@ -162,33 +188,47 @@ function bonesOf(p: Pose): Map<string, Matrix4> {
     const [ua, fa] = limb(sho, el, ha, -1);
     out.set(`ua${sfx}`, ua);
     out.set(`fa${sfx}`, fa);
-    const hand = fa.clone().setPosition(ha);
-    out.set(`ha${sfx}`, hand);
-    // his fingers, turned at the knuckles and at their middle joints as figure.ts turns a player's (each a little more
-    // than the one before it), and his thumb: along the hand, in across the fingers as they close
+    // his hand: on his thigh where it is down by it (its palm on the top of his thigh, its fingers on toward his knee
+    // and a little in, over it), else let go at the wrist as a player's hangs (bent a little toward the palm), unless
+    // it is shut
     const c = typeof p.curl === 'number' ? p.curl : (p.curl?.[i] ?? 0.3);
+    const hand = fa.clone().setPosition(ha);
+    const hip = hips.clone().add(new Vector3(s * HIP_W, 0, 0));
+    const kn = toward(hip, p.knees?.[i] ?? hip.clone().add(new Vector3(0, -THIGH, 0)), THIGH);
+    const on = p.knees ? thighUnder(hip, kn, ha) : null;
+    if (on && on.w > 0) {
+      const t = kn.clone().sub(hip).normalize();
+      const n = on.at.sub(ha).normalize();
+      const fingers = t.addScaledVector(X_AXIS, -s * LAY_IN);
+      fingers.addScaledVector(n, -fingers.dot(n)).normalize();
+      const x = n.clone().multiplyScalar(-s);
+      const y = fingers.negate();
+      const lay = new Quaternion().setFromRotationMatrix(new Matrix4().makeBasis(x, y, x.clone().cross(y)));
+      const was = new Quaternion().setFromRotationMatrix(fa);
+      const bend = was.angleTo(lay);
+      was.slerp(lay, on.w * Math.min(1, LAY_MOST / Math.max(bend, 1e-6)));
+      hand.makeRotationFromQuaternion(was).setPosition(ha);
+    } else if (c < 0.7) hand.multiply(new Matrix4().makeRotationZ(-s * HANG_FLEX));
+    out.set(`ha${sfx}`, hand);
+    // his fingers and thumb, as a player's are turned (figure.ts): let hang, each a little more curled than the one
+    // before it and the thumb by the index, closed round something, or shut
+    const shape = handOf(c);
     HAND_DIGITS.forEach(([j1, j2], d) => {
       const name = DIGIT_NAMES[d];
-      const thumb = d === 4;
+      digitTurns(shape, 0, d, s > 0, Q1, Q2);
       const k1 = hand
         .clone()
         .multiply(new Matrix4().makeTranslation(-s * j1[0], -j1[1], j1[2]))
-        .multiply(
-          thumb
-            ? new Matrix4().makeRotationZ(-s * (0.1 + 0.35 * c)).multiply(new Matrix4().makeRotationX(0.55 * c))
-            : new Matrix4().makeRotationZ(-s * (0.12 + (0.8 + 0.1 * d) * c)),
-        );
+        .multiply(new Matrix4().makeRotationFromQuaternion(Q1));
       out.set(`${name}1${sfx}`, k1);
       out.set(
         `${name}2${sfx}`,
         k1
           .clone()
           .multiply(new Matrix4().makeTranslation(-s * (j2[0] - j1[0]), -(j2[1] - j1[1]), j2[2] - j1[2]))
-          .multiply(thumb ? new Matrix4().makeRotationAxis(THUMB_HINGE[i], 0.2 + 0.5 * c) : new Matrix4().makeRotationZ(-s * (0.24 + (0.9 + 0.1 * d) * c))),
+          .multiply(new Matrix4().makeRotationFromQuaternion(Q2)),
       );
     });
-    const hip = hips.clone().add(new Vector3(s * HIP_W, 0, 0));
-    const kn = toward(hip, p.knees?.[i] ?? hip.clone().add(new Vector3(0, -THIGH, 0)), THIGH);
     const an = toward(kn, p.ankles?.[i] ?? kn.clone().add(new Vector3(0, -SHIN, 0)), SHIN);
     const [th, sh] = limb(hip, kn, an, 1);
     out.set(`th${sfx}`, th);
@@ -245,8 +285,8 @@ function rising(hipY: number, hipZ: number, lean: number, elbows: [P3, P3], hand
 const POSES: Record<string, Pose> = {
   // on a bench: forward on his knees, sat back, upright with his hands on his thighs, arms folded, chin on a fist
   lean: sitting(0.5, KN_Y, 0.3, both([0.68, 2.42, 1.1]), both([0.22, 1.95, 1.75]), { look: -0.3, curl: 0.5 }),
-  back: sitting(-0.14, KN_Y - 0.13, 0.36, both([1.0, 2.62, 0.0]), both([0.66, 2.2, 1.0]), { look: 0.1 }),
-  up: sitting(0.1, KN_Y - 0.06, 0.26, both([0.9, 2.7, 0.3]), both([0.46, 2.24, 1.3]), { curl: 0.2 }),
+  back: sitting(-0.14, KN_Y - 0.13, 0.36, both([1.0, 2.62, 0.0]), both([0.66, 2.08, 1.0]), { look: 0.1 }),
+  up: sitting(0.1, KN_Y - 0.06, 0.26, both([0.9, 2.7, 0.3]), both([0.5, 2.1, 1.3]), { curl: 0.2 }),
   arms: sitting(
     -0.04,
     KN_Y - 0.1,
@@ -367,7 +407,7 @@ const POSES: Record<string, Pose> = {
     0.52,
   ),
   // staff: an assistant watching, his hands on his thighs; at the table, his hands on the desk; security, his hands together in front of him
-  watch: sitting(0.18, KN_Y - 0.04, 0.32, both([0.95, 2.66, 0.45]), both([0.5, 2.22, 1.25]), { look: 0.02 }),
+  watch: sitting(0.18, KN_Y - 0.04, 0.32, both([0.95, 2.66, 0.45]), both([0.54, 2.1, 1.25]), { look: 0.02 }),
   desk: sitting(0.16, KN_Y - 0.06, 0.24, both([0.84, 2.78, 0.62]), both([0.4, 2.86, 1.5]), { look: -0.02, curl: 0.15 }),
   guard: standing(0.0, both([0.98, 4.1, 0.12]), both([0.1, 3.5, 0.6]), { curl: 0.6 }),
   // a photographer, sat low on his box: the camera in his lap, and at his eye (his hands are put on it: see `props`)
@@ -2102,6 +2142,15 @@ export class Sideline {
     const rim = sc ? sx(toWorld(BASKET, sc.dir)) : 0;
     const e = rim < 0 ? -1 : 1;
     this.deadMs = live ? 0 : this.deadMs + a.own;
+    // (a bench man's walker made ahead, one a frame while the ball is dead: made the moment he stands, it stalls
+    // that frame by up to a fifth of a second; made here, hidden, it is ready when he gets up)
+    if (!live && this.level < 2 && !a.calm && this.bodyOf) {
+      const s = this.bench.find((b) => b.kind === 'bench' && b.body === 'bench' && !b.w);
+      if (s) {
+        s.w = this.walker(this.suits.benchFar, this.bodyOf(s.id), this.kits[s.side ?? 0], s.id, lookOf(s.id), s.wear, this.benchMat);
+        s.w.show(false);
+      }
+    }
     const tip = !live && a.stage.standers.length === 10 && !!a.stage.ball && Math.abs(a.stage.ball.y - MID) < 0.01 && Math.abs(a.stage.ball.x) < 0.01;
     const g = a.game;
     this.late = a.clutch || (!!g && g.q >= 4 && g.clock <= LATE_S && Math.abs(g.score[0] - g.score[1]) <= LATE_BY);

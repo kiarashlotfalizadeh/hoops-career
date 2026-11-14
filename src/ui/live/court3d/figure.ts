@@ -54,7 +54,7 @@ import type { MatchKit } from '../../teamColors';
 import { CLIPS, I, type ClipId, type Gesture } from './clips';
 import { merged, type Thing } from './glb';
 import { lookOf, SKINS, STYLES, type Look } from './look';
-import { ANKLE, J, Puppet, THIGH, type Body } from './puppet';
+import { ANKLE, BALL_R, J, Puppet, THIGH, type Body } from './puppet';
 
 /** The grey the figures were before each had a skin of his own (look.ts): what the benches still wear until they take theirs from there. */
 export const FIGURE = '#7b7d88';
@@ -119,10 +119,15 @@ const B = {
   pk2r: 44,
   th1r: 45,
   th2r: 46,
+  // (and one under each shoulder's, his armpit's: see `axilla`)
+  axl: 47,
+  axr: 48,
 } as const;
-const BONES = 47;
+const BONES = 49;
 /** How far out from his sides his arms are as built (figure.py's ARM_OUT). */
 const ARM_OUT = (38 * Math.PI) / 180;
+/** Where his armpit's bone turns about (see `axilla`): in from the shoulder's joint and down from it, ft on the 6 ft 6 body. */
+const AXILLA = [0.1, 0.3] as const;
 /**
  * Each hand's fingers and thumb as figure.py builds them (its DIGITS): the bones at a digit's two joints (a finger's
  * knuckle and middle joint, the thumb's root down in the heel of the hand and its middle knuckle), each from the wrist:
@@ -479,8 +484,8 @@ function sheetUv(geo: BufferGeometry, wears: string[], order: number[], inverse:
     // (his head is all his head bone's, with his jaw and nose; his neck, which shares it with his chest, is his trunk's skin)
     if (weight(v, [B.head, B.jaw, B.nose, B.brow, B.lip]) >= 0.995) return Pic.Head;
     // (his fingers and thumb are the ends of his arms' strips)
-    if (weight(v, ARM_BONES[0]) + 0.5 * weight(v, [B.cll]) >= 0.5) return Pic.ArmL;
-    if (weight(v, ARM_BONES[1]) + 0.5 * weight(v, [B.clr]) >= 0.5) return Pic.ArmR;
+    if (weight(v, ARM_BONES[0]) + 0.5 * weight(v, [B.cll, B.axl]) >= 0.5) return Pic.ArmL;
+    if (weight(v, ARM_BONES[1]) + 0.5 * weight(v, [B.clr, B.axr]) >= 0.5) return Pic.ArmR;
     if (weight(v, [B.thl, B.shl, B.ftl, B.hemL]) >= 0.5) return Pic.LegL;
     if (weight(v, [B.thr, B.shr, B.ftr, B.hemR]) >= 0.5) return Pic.LegR;
     return Pic.Skin;
@@ -784,16 +789,16 @@ const SPREAD_K = [1, 0.15, -0.55, -1.1] as const;
 const SHAPE_MS = 65;
 const shape = (knuckles: readonly number[], middles: readonly number[], spread: number, palm: number, out: number, bend: number): Shape =>
   Float32Array.from([...knuckles, ...middles, spread, palm, out, bend]);
-/** Let hang: loose, each finger a little more curled than the one before it, the thumb along the side of the hand. */
-const LOOSE = shape([0.32, 0.42, 0.52, 0.62], [0.45, 0.6, 0.72, 0.82], 0.04, 0.1, 0, 0.25);
+/** Let hang: loose, each finger a little more curled than the one before it and drawn in by the next (not fanned out), the thumb in a little toward the palm by the index, a little bent. */
+const LOOSE = shape([0.32, 0.42, 0.52, 0.62], [0.45, 0.6, 0.72, 0.82], -0.06, 0.3, 0.2, 0.3);
 /** On the ball's side (two hands on it): spread over the leather and laid along it, the thumb wide behind it. */
-const BALL = shape([0.34, 0.34, 0.38, 0.42], [0.42, 0.42, 0.46, 0.5], 0.2, 0.1, 0.65, 0.1);
+const BALL = shape([0.6, 0.6, 0.62, 0.65], [0.6, 0.6, 0.62, 0.65], 0.2, 0.1, 0.65, 0.1);
 /** On top of a dribble: spread, on it with the pads of his fingers more than his palm. */
-const TOP = shape([0.3, 0.3, 0.34, 0.38], [0.32, 0.32, 0.36, 0.4], 0.28, 0.05, 0.5, 0.1);
+const TOP = shape([0.28, 0.26, 0.3, 0.34], [0.26, 0.24, 0.28, 0.32], 0.3, 0.05, 0.5, 0.1);
 /** The shooting hand under the ball: as wide as it goes, the ball on the pads of his fingers, the thumb out. */
-const SHOOT = shape([0.12, 0.12, 0.16, 0.2], [0.2, 0.2, 0.24, 0.28], 0.36, 0.05, 0.85, 0.05);
+const SHOOT = shape([0.64, 0.62, 0.56, 0.52], [0.56, 0.54, 0.5, 0.46], 0.36, 0.55, 0.6, 0.35);
 /** The guide hand on the ball's side as he shoots: flat on it, fingers up, there to steady it and come off it. */
-const GUIDE = shape([0.14, 0.14, 0.18, 0.22], [0.18, 0.18, 0.22, 0.26], 0.2, 0.05, 0.55, 0.05);
+const GUIDE = shape([0.4, 0.4, 0.44, 0.52], [0.36, 0.36, 0.4, 0.46], 0.2, 0.05, 0.55, 0.05);
 /** Shut: the fingers in to the palm, the thumb across them. */
 const FIST = shape([1.45, 1.5, 1.5, 1.45], [1.7, 1.75, 1.75, 1.7], -0.04, 0.05, -0.45, 0.75);
 /** The first finger out and the others shut on the thumb; two of them out; three. */
@@ -891,8 +896,52 @@ const CLIP_HANDS: Partial<Record<ClipId, Shape | readonly [Shape, Shape]>> = {
 const CATCH_UP = 1.1;
 /** A hand on the ball's side lies with its fingers this far up from its forearm's line (a hold: his thumbs behind it). */
 const SIDE_UP = 0.4;
+/** ...and is put this much nearer the ball than the puppet has its wrist (ft), so its palm is on the leather and not in it. */
+const SIDE_IN = 0.03;
+/**
+ * A hand over the ball or under it: how deep its palm is from the bone's line (ft, the 6 ft 6 body: figure.py's
+ * palm_form); how far it is tipped onto the ball at most (the cosine of it: the ball on the heel of his fingers, not
+ * on them); how far a wrist too near the ball has its hand put out at most; and how far the puppet puts a wrist from
+ * the ball's middle (its PALM) as the scene has not said where the ball is.
+ */
+const PALM_DEEP = 0.055;
+const TIP_MOST = 0.8;
+const PUT_OUT = 0.05;
+const HOLD_FAR = 0.51;
 /** Where the thumb's middle knuckle bends about, in the thumb's own frame (toward his palm, across the fingers); the left hand's, then the right's. */
 export const THUMB_HINGE = [new Vector3(0.8, 0, -0.6).normalize(), new Vector3(0.8, 0, 0.6).normalize()] as const;
+/**
+ * How a digit of a hand in this shape (`st` from `o`) is turned: its first bone off the hand's (`q1`: a finger spread at
+ * its knuckle and curled there; the thumb turned toward the palm at its root and out from the hand), and its second off
+ * its first (`q2`: a finger curled at its middle joint, the thumb bent at its middle knuckle). Index, middle, ring,
+ * little finger, thumb (d 0..4). The sideline's men are turned by it too.
+ */
+export function digitTurns(st: ArrayLike<number>, o: number, d: number, left: boolean, q1: Quaternion, q2: Quaternion) {
+  const way = left ? -1 : 1;
+  if (d < 4) {
+    q1.setFromAxisAngle(XA, -SPREAD_K[d] * st[o + SPREAD]).multiply(DQ.setFromAxisAngle(ZA, way * st[o + d]));
+    q2.setFromAxisAngle(ZA, way * st[o + 4 + d]);
+  } else {
+    q1.setFromAxisAngle(ZA, way * st[o + THUMB_PALM]).multiply(DQ.setFromAxisAngle(XA, -st[o + THUMB_OUT]));
+    q2.setFromAxisAngle(THUMB_HINGE[left ? 0 : 1], st[o + THUMB_BEND]);
+  }
+}
+const DQ = new Quaternion();
+const F1 = new Quaternion();
+const F2 = new Quaternion();
+/**
+ * A hand shut this far (0 flat, 1 a fist) as a man at rest holds it: flat, let hang (LOOSE: each finger a little more
+ * curled than the one before it, the thumb by the index), closed round something, shut. For the sideline's men.
+ */
+export function handOf(shut: number, out: Float32Array = new Float32Array(SHAPE_N)): Float32Array {
+  const steps = [FLAT, LOOSE, GRAB, FIST] as const;
+  const at = [0, 0.3, 0.7, 1] as const;
+  let k = 0;
+  while (k < 2 && shut > at[k + 1]) k++;
+  const u = Math.max(0, Math.min(1, (shut - at[k]) / (at[k + 1] - at[k])));
+  for (let i = 0; i < SHAPE_N; i++) out[i] = steps[k][i] + (steps[k + 1][i] - steps[k][i]) * u;
+  return out;
+}
 /**
  * A dribble's wrist (radians toward the palm, as the hand is over the ball): cocked back (DRIB_CATCH) as the ball comes up
  * into it and gives with it, bent over it as it pushes it down (DRIB_PUSH), on through after it as it goes (DRIB_AFTER),
@@ -1016,7 +1065,7 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
   const lipOwn: Rgb = look.lip < 0 ? [1.05, 0.92, 0.94] : [0.8, 0.72, 0.7];
   const own = (c: Rgb): Rgb => [0, 1, 2].map((i) => c[i] * (1 + (lipOwn[i] - 1) * Math.abs(look.lip))) as Rgb;
   const lipUp = own([skin[0] * (0.84 - 0.1 * dark) + 0.02, skin[1] * (0.66 + 0.02 * dark), skin[2] * (0.67 + 0.04 * dark) + 0.01]);
-  const lipLow = own([skin[0] * (0.88 + 0.12 * dark) + 0.02 + 0.04 * dark, skin[1] * (0.74 + 0.04 * dark), skin[2] * (0.75 + 0.06 * dark) + 0.01 + 0.02 * dark]);
+  const lipLow = own([skin[0] * (0.88 + 0.12 * dark) + 0.02 + 0.04 * dark, skin[1] * (0.78 + 0.03 * dark), skin[2] * (0.78 + 0.05 * dark) + 0.01 + 0.02 * dark]);
   // (his own face: how full his lips are, how his eyes are set: see look.ts)
   const full = 0.92 + 0.36 * look.face.lips;
   const tiltK = EYE_TILT * look.face.tilt;
@@ -1138,15 +1187,16 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
           if (look.beard === 0) to([skin[0] * 1.08, skin[1] * 1.06, skin[2] * 1.04], 0.3 * sstep(0.03, 0.006, Math.abs(py - up - 0.016)) * sstep(mw, mw - 0.1, apx));
           if (inLip > 0) {
             const lower = py < my;
-            to(lower ? lipLow : lipUp, inLip * 0.86);
+            to(lower ? lipLow : lipUp, inLip * (lower ? 0.86 : 0.92));
             // (the creases down a lip; the lower lip's shine; its under side in its own shade)
             const crease = noise(px * 70, py * 9);
             shade(0.1 * inLip * (crease - 0.5));
             if (lower) {
               to([1, 0.94, 0.9], 0.2 * inLip * bump(px, py, 0.01, my - 0.04 * full, 0.1, 0.014));
               shade(0.2 * inLip * sstep(my - 0.05 * full, low, py));
-            } else shade(0.2 * inLip * sstep(up - 0.03, my, py));
-            made('lip', inLip);
+            } else shade(inLip * (0.1 + 0.16 * sstep(up - 0.03, my, py)));
+            // (the upper lip faces down, out of the light, and is drier: only the lower one has a lip's shine all over)
+            made(lower ? 'lip' : 'face', inLip);
             // (wet along where they meet, and most over the fullness of his lower one: they shine)
             made('wetLip', inLip * Math.max(sstep(0.03, 0.008, Math.abs(py - my)), lower ? 0.8 * bump(px, py, 0, my - 0.04 * full, 0.16, 0.03) : 0));
           }
@@ -1225,8 +1275,13 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
         const front = sstep(0.2, 0.36, nz);
         // (round the mouth: over the lip, down beside it, the chin; never on the lips)
         // (right up to their edges: a clean ring round his mouth is a mask's edge, not a shave)
-        const lips = front * sstep(0.31, 0.27, apx) * sstep(-0.63, -0.605, py) * sstep(-0.455, -0.472, py);
-        const tache = front * sstep(-0.33, -0.4, py) * sstep(-0.55, -0.47, py) * sstep(0.4, 0.28, apx) * (1 - 0.65 * bump(px, py, 0, -0.39, 0.035, 0.04));
+        // (his lips' own outline, as the mouth below paints them: a lens to its corners, never a box round it)
+        const lt = Math.min(1, apx / 0.286);
+        const lipUpY = -0.522 + 0.054 * full * Math.pow(1 - lt * lt, 0.6) * (1 - 0.24 * Math.exp(-((lt / 0.14) ** 2)));
+        const lipLowY = -0.522 - 0.088 * full * Math.pow(1 - lt * lt, 0.8);
+        const lips = front * sstep(0.315, 0.29, apx) * sstep(lipLowY - 0.012, lipLowY + 0.002, py) * sstep(lipUpY + 0.004, lipUpY - 0.006, py);
+        // (a moustache comes down to the edge of his upper lip, its hairs' ends over it: no strip of bare skin between)
+        const tache = front * sstep(-0.33, -0.4, py) * sstep(lipUpY - 0.012, lipUpY + 0.02, py) * sstep(0.4, 0.28, apx) * (1 - 0.65 * bump(px, py, 0, -0.39, 0.035, 0.04));
         const bars = front * sstep(0.18, 0.28, apx) * sstep(0.45, 0.32, apx) * sstep(-0.44, -0.56, py) * sstep(-1.05, -0.8, py);
         const chin = sstep(-0.61, -0.73, py) * sstep(0.47, 0.3, apx) * front * sstep(-1.35, -1.05, py);
         // (the tuft under the lower lip)
@@ -1291,7 +1346,9 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
           deep = (look.beard === 4 ? 0.03 + 0.045 * sstep(-0.5, -0.9, ny) : 0.011) * sstep(0.2, 1, all) ** 1.5;
         }
         on *= seam;
-        deep *= seam;
+        // (and close to his lips it lies flat on him, its hairs over their edge: a beard stood off his face right up to
+        // them would be a wall round his mouth, the picture stretched down it)
+        deep *= seam * (1 - front * sstep(0.36, 0.3, apx) * sstep(lipLowY - 0.07, lipLowY - 0.006, py) * sstep(lipUpY + 0.07, lipUpY + 0.006, py));
         if (on > 0) {
           // (lighter where a hair catches the light, darker between two; a touch of his skin's warmth in it)
           // (stubble is the ends of hairs under his skin, every way: a fine grain that greys and darkens it, no strands)
@@ -2241,8 +2298,10 @@ const EYES = (() => {
         float lid = mix( up, low - 0.004, uBlink );
         float inX = 1.0 - smoothstep( w - ax, w + ax, abs( ex ) );
         // (shut, his lid covers the picture's own lashes too, along the top of the eye)
-        float top = up + 0.016 * smoothstep( 0.0, 0.4, uBlink );
-        float gap = inX * smoothstep( low - aa, low + aa, ey ) * ( 1.0 - smoothstep( top - aa, top + aa, ey ) );
+        // (and over the shade of the fold above it, going into it softly: a lid, not a lens laid over the eye)
+        float top = up + 0.026 * smoothstep( 0.0, 0.4, uBlink );
+        float soft = max( aa, 0.009 * smoothstep( 0.0, 0.4, uBlink ) );
+        float gap = inX * smoothstep( low - aa, low + aa, ey ) * ( 1.0 - smoothstep( top - soft, top + aa, ey ) );
         float under = 1.0 - smoothstep( lid - aa, lid + aa, ey );
         float lidShade = 0.36 + 0.64 * smoothstep( lid, lid - 0.055, ey );
         // the ball as a ball (in iris radii from its middle, a circle on him): the round of the eye, and over the iris the
@@ -2285,7 +2344,9 @@ const EYES = (() => {
         // (the pink of its inner corner)
         eye = mix( eye, ${rgb([0.62, 0.38, 0.35])} * lidShade, 0.75 * smoothstep( - w + 0.045, - w + 0.012, ex ) );
         // his lid over it as far as it is down, in his own skin
-        vec3 over = uSkin * mix( 0.62, 0.82, smoothstep( lid, top, ey ) );
+        // (as his upper lid is painted round it, a little darker and redder than his cheek, and only just shaded along
+        // the line of his lashes, where it folds: shut, it is his skin over his eye, not a plate laid on it)
+        vec3 over = uSkin * vec3( 0.8, 0.67, 0.65 ) * mix( 0.8, 1.0, smoothstep( lid, mix( lid, top, 0.5 ) + 0.006, ey ) );
         vec3 drawn = mix( over, eye, under );
         diffuseColor.rgb = mix( diffuseColor.rgb, drawn, gap * show );
         // the rim of his lower lid (its waterline), a wet pink band along the foot of the ball, its own thickness; the
@@ -2594,6 +2655,12 @@ const TEETH_EDGES = [5.905, 5.909] as const;
  * just apart and with his jaw wide open; and how much of it gets past lips just apart at all.
  */
 const MOUTH_LIGHT = [0.03, 0.052] as const;
+/**
+ * His cheeks close round his back teeth: past this far out from the middle of his mouth (ft), each foot further out
+ * counts as this many further in, so the teeth at the corners of a grin go into the dark beside them (no lone canine
+ * standing lit at a corner, seen from the side) while his front ones take the light.
+ */
+const MOUTH_CORNER = [0.03, 2.5] as const;
 const MOUTH_SHUT = 0.05;
 /** His tongue's papillae, this many to the foot of him as built (a millimetre or so apart), and how deep (ft). */
 const PAPILLAE = 300;
@@ -2702,7 +2769,7 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
         if ( vMapUv.y < ${INSIDES_UV[2]} && vMapUv.x > ${INSIDES_UV[0]} && vMapUv.x < ${INSIDES_UV[1]} ) {
           mouthK = 1.0;
           mouthPart = floor( ( vMapUv.x - ${INSIDES_UV[0]} ) / ${INSIDES_UV[3]} );
-          float deep = max( 0.0, ${TEETH_FRONT.toFixed(3)} - vRest.z );
+          float deep = max( 0.0, ${TEETH_FRONT.toFixed(3)} - vRest.z ) + ${MOUTH_CORNER[1].toFixed(2)} * max( 0.0, abs( vRest.x ) - ${MOUTH_CORNER[0].toFixed(3)} );
           mouthLit = exp( - deep / mix( ${MOUTH_LIGHT[0]}, ${MOUTH_LIGHT[1]}, uMouth ) ) * mix( ${MOUTH_SHUT}, 1.0, smoothstep( 0.03, 0.45, uMouth ) );
           mouthLit *= 1.0 - 0.45 * smoothstep( 0.012, 0.04, abs( vRest.y - ${MOUTH_MID.toFixed(3)} ) );
           // (and his jaw's under his upper teeth and his palate: little of a light from above gets down to it)
@@ -3002,6 +3069,26 @@ const CHANNELS = 18;
  */
 const CH_RATE = [14, 12, 10, 9, 10, 9, 12, 10, 14, 18, 24, 2.5, 14, 7, 14, 8, 8, 5] as const;
 const TALK_QUICK = 1.8;
+/**
+ * A channel goes to what is asked of it as a muscle does, not as a switch: it gathers speed, then slows into it, and
+ * never past it (critically damped, its speed kept from frame to frame), so one look goes over into the next with no
+ * jerk where it starts. SPRING_K: how much quicker its spring is than the channel's rate, so it is as far there as the
+ * rate says in about the same time.
+ */
+const SPRING_K = 2;
+/**
+ * Where a channel at `x` going at `v` (a second) is `dt` s on, sprung toward `goal` at `w` (a second); into `out` (its
+ * place, then its speed). Worked out exactly, so a long frame never throws it past.
+ */
+export function follow(x: number, v: number, goal: number, w: number, dt: number, out: [number, number]): [number, number] {
+  const y = x - goal;
+  const e = Math.exp(-w * dt);
+  const k = (v + w * y) * dt;
+  out[0] = goal + (y + k) * e;
+  out[1] = (v - w * k) * e;
+  return out;
+}
+const FOLLOWED: [number, number] = [0, 0];
 const TALKS = new Uint8Array(CHANNELS);
 for (const c of [F.jaw, F.part, F.press, F.round, F.stretch]) TALKS[c] = 1;
 /** A face, from what it has of each channel. */
@@ -3251,8 +3338,9 @@ export class Fig {
    * face at half speed, a lab that runs faster than the wall plays it as the game had it, and a game held still holds it.
    */
   private clock = 0;
-  /** His face as it is now, a channel each (see F), and what is asked of it this frame. */
+  /** His face as it is now, a channel each (see F), how fast each is going (a second: see follow), and what is asked of it this frame. */
   private readonly mien = new Float32Array(CHANNELS);
+  private readonly mienV = new Float32Array(CHANNELS);
   private readonly want = new Float32Array(CHANNELS);
   /** What a moment gave him (see feel): which feeling and his way of showing it (null: none), how strongly, when (s), how long it holds (s), and what it turns into (null: nothing). */
   private feelKind: Feel = 'joy';
@@ -3261,6 +3349,11 @@ export class Fig {
   private feelAt = 0;
   private feelHold = 0;
   private feelThen: Feel | null = null;
+  /** The face a moment gave him before the one showing now took its place, going off as it would have (see start): its face (null: none), how much of it was showing, from when (s), over how long (s). */
+  private fadeFace: Float32Array | null = null;
+  private fadeK = 0;
+  private fadeAt = 0;
+  private fadeLen = 0;
   /** His eyes: where they look now (radians from where his head faces: across, up) and how far in, the spot they're on and when the next comes (s), how fast his head is turning (eased) and where it faced a frame ago; and his own run of numbers for the spots. */
   private readonly eye = [0, 0];
   private verge = eyeIn(EYE_IDLE);
@@ -3485,6 +3578,26 @@ export class Fig {
     // (as thick as his arm is where it meets it; an arm let down draws the cap in over it a little, as its muscle lies flat)
     b.scale.copy(this.bones[arm].scale);
     b.scale.x *= 1 - 0.1 * sstep(0, 0.18, lowered);
+    this.axilla(side, joint, QB);
+  }
+
+  /**
+   * His armpit's own bone, under the shoulder's: turned as that one is (`swing`, in the chest's frame), but about the
+   * hollow of his armpit (AXILLA), not the joint. The skin under the joint stays on his side as the arm goes up and
+   * stretches from it to the arm (turned about the joint, it would swing out from his side, a shelf under an arm
+   * raised overhead); an arm at his side, forward or across him turns it little, and it goes as the shoulder's.
+   */
+  private axilla(side: 1 | -1, joint: Vector3, swing: Quaternion) {
+    const chest = this.bones[B.chest].quaternion;
+    const b = this.bones[side > 0 ? B.axl : B.axr];
+    b.quaternion
+      .copy(chest)
+      .multiply(swing)
+      .multiply(Q.setFromAxisAngle(ZA, side * ARM_OUT));
+    const { s } = this.pup.body;
+    W3.set(-side * AXILLA[0] * s, -AXILLA[1] * s, 0);
+    b.position.copy(joint).add(W3.sub(E.copy(W3).applyQuaternion(swing)).applyQuaternion(chest));
+    b.scale.copy(this.bones[side > 0 ? B.cll : B.clr].scale);
   }
 
   /**
@@ -3507,14 +3620,13 @@ export class Fig {
         .set(way * j1[0] * s, -j1[1] * s, j1[2] * s)
         .applyQuaternion(hand.quaternion)
         .add(hand.position);
-      b1.quaternion.copy(hand.quaternion);
-      if (d < 4) b1.quaternion.multiply(Q.setFromAxisAngle(XA, -SPREAD_K[d] * st[o + SPREAD])).multiply(Q.setFromAxisAngle(ZA, way * st[o + d]));
-      else b1.quaternion.multiply(Q.setFromAxisAngle(ZA, way * st[o + THUMB_PALM])).multiply(Q.setFromAxisAngle(XA, -st[o + THUMB_OUT]));
+      digitTurns(st, o, d, left, F1, F2);
+      b1.quaternion.copy(hand.quaternion).multiply(F1);
       b2.position
         .set(way * (j2[0] - j1[0]) * s, -(j2[1] - j1[1]) * s, (j2[2] - j1[2]) * s)
         .applyQuaternion(b1.quaternion)
         .add(b1.position);
-      b2.quaternion.copy(b1.quaternion).multiply(d < 4 ? Q.setFromAxisAngle(ZA, way * st[o + 4 + d]) : Q.setFromAxisAngle(THUMB_HINGE[left ? 0 : 1], st[o + THUMB_BEND]));
+      b2.quaternion.copy(b1.quaternion).multiply(F2);
     }
   }
 
@@ -3667,13 +3779,15 @@ export class Fig {
         const ball = this.ball;
         // (toward the ball itself where the scene has said where it is, in his own frame; a dribble's hand with the ball
         // off it, down at the floor: it waits over it, it isn't wrung round after it)
+        let far = HOLD_FAR * s;
         if (drib && grip < 0.5) W3.set(0, -1, 0);
-        else if (ball)
+        else if (ball) {
           W3.set(ball.x - p.x, ball.y, ball.z - p.z)
             .applyAxisAngle(UP, -p.yaw)
-            .sub(this.bones[h].position)
-            .normalize();
-        else if (hold === 'top') W3.set(0, -1, 0);
+            .sub(this.bones[h].position);
+          far = W3.length();
+          W3.normalize();
+        } else if (hold === 'top') W3.set(0, -1, 0);
         else if (hold === 'under' && !left) W3.set(p.up.x + p.front.x, p.up.y + p.front.y, p.up.z + p.front.z).normalize();
         else W3.set(p.left.x, p.left.y, p.left.z).multiplyScalar(way);
         const fore = E.set(0, -1, 0).applyQuaternion(this.bones[f].quaternion);
@@ -3686,15 +3800,27 @@ export class Fig {
           if (W3.lengthSq() < 0.04) W3.set(p.left.x, p.left.y, p.left.z).multiplyScalar(way);
           W3.normalize();
         } else {
-          // (over it or under it: its palm to the ball's middle, its fingers on along the forearm as far as that lets them)
+          // (over it or under it: its fingers on along the forearm as far as that lets them, and the hand tipped onto
+          // the ball about its wrist until its palm lies on the leather, not the wrist on it with the palm and fingers
+          // going off it in a flat plane: the ball's middle a palm's depth and the ball's size out from the palm, a
+          // little way on from the wrist toward the fingers. A wrist nearer the ball than that has its hand put out)
           fore.addScaledVector(W3, -fore.dot(W3));
           if (fore.lengthSq() < 0.04) fore.set(p.front.x, p.front.y, p.front.z).addScaledVector(W3, -(p.front.x * W3.x + p.front.y * W3.y + p.front.z * W3.z));
+          fore.normalize();
+          const lie = BALL_R + PALM_DEEP * s;
+          const back = Math.max(TIP_MOST, Math.min(1, lie / Math.max(far, 1e-3)));
+          const tip = Math.sqrt(1 - back * back);
+          if (far < lie) this.bones[h].position.addScaledVector(W3, -Math.min(PUT_OUT * s, lie - far) * grip);
+          D.copy(W3).multiplyScalar(back).addScaledVector(fore, -tip);
+          fore.multiplyScalar(back).addScaledVector(W3, tip);
+          W3.copy(D);
         }
         Yv.copy(fore).normalize().multiplyScalar(-1);
         X.copy(W3).multiplyScalar(way);
         this.bones[h].quaternion.slerp(Q.setFromRotationMatrix(MAT.makeBasis(X, Yv, Z.crossVectors(X, Yv))), holds);
-        // (the puppet's hand is its wrist, a palm's depth off the ball: the palm itself goes on to the leather)
-        this.bones[h].position.addScaledVector(W3, 0.06 * s * grip);
+        // (the puppet's hand on the ball's side is its wrist, out a little past a palm's depth off the ball: the palm
+        // itself goes on to the leather; over it or under it, tipped onto it, the palm is on it already)
+        if (up > 0) this.bones[h].position.addScaledVector(W3, SIDE_IN * s * grip);
         // (a dribble's wrist: cocked back as the ball comes up into it, over it as it pushes it down, on after it as
         // it goes, and back for the next: see DRIB_CATCH)
         if (drib && p.push >= 0) {
@@ -3828,6 +3954,14 @@ export class Fig {
   private start(kind: Feel, w: Way, k: number, at: number, hold: number) {
     const r = this.eyeRng;
     const run = FEELS[kind];
+    // (what was showing isn't taken off his face in a frame: it goes off over its own fall as the new one comes on)
+    const was = this.feelWay ? this.shows(this.clock) * this.feelK : 0;
+    if (this.feelWay && was > 0.02) {
+      this.fadeFace = this.feelWay.face;
+      this.fadeK = was;
+      this.fadeAt = this.clock;
+      this.fadeLen = FEELS[this.feelKind].fall;
+    }
     this.feelKind = kind;
     this.feelWay = w;
     this.feelK = k;
@@ -3957,6 +4091,12 @@ export class Fig {
         this.start(this.feelThen, next.ways[Math.floor(r() * next.ways.length) % next.ways.length], this.feelK, t, next.hold * (0.8 + 0.4 * r()));
       } else if (s > run.rise + this.feelHold + run.fall) this.feelWay = null;
     }
+    if (this.fadeFace) {
+      const k = this.fadeK * (1 - sstep(0, this.fadeLen, t - this.fadeAt));
+      const f = this.fadeFace;
+      if (k > 0) for (let c = 0; c < CHANNELS; c++) want[c] = Math.max(want[c], f[c] * k);
+      else this.fadeFace = null;
+    }
     // (a smile takes the press and the grimace out of his mouth, lips pressed aren't apart, and an open jaw can't
     // press them; wide eyes aren't narrowed, nor heavy; cheeks blown out hold his lips together, and lips rounded
     // aren't stretched or smiling)
@@ -3971,7 +4111,13 @@ export class Fig {
     want[F.stretch] *= 1 - want[F.round];
     want[F.smile] *= 1 - 0.7 * want[F.round];
     const m = this.mien;
-    for (let c = 0; c < CHANNELS; c++) m[c] += (want[c] - m[c]) * (1 - Math.exp(-dt * CH_RATE[c] * (talk > 0 && TALKS[c] ? TALK_QUICK : 1)));
+    const vel = this.mienV;
+    for (let c = 0; c < CHANNELS; c++) {
+      follow(m[c], vel[c], want[c], SPRING_K * CH_RATE[c] * (talk > 0 && TALKS[c] ? TALK_QUICK : 1), dt, FOLLOWED);
+      // (never below nothing: a shape the other way is another shape)
+      m[c] = Math.max(0, FOLLOWED[0]);
+      vel[c] = m[c] > 0 ? FOLLOWED[1] : Math.max(0, FOLLOWED[1]);
+    }
 
     // his eyes: on the thing he looks at (the puppet's), from where they are in his head as it is turned now, or
     // glancing at something else for a moment (see peek); with nothing to look at, or a thing behind him, they are

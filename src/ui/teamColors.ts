@@ -331,13 +331,14 @@ export interface Venue {
  * ceiling with rings of lights let into it, or a dark open roof on arched ribs), where its catwalks run (along the
  * sides, a ring round the scoreboard, or across over the ends), and its scoreboard (a big four-sided one, a small
  * one in a halo of ribbon, a slim one of four flat panels, or a long one with screens on its ends) and how big (1
- * its usual size).
+ * its usual size); and where its banners hang (in a row over the far side, or over the high end).
  */
 export interface Roofing {
   kind: 'trusses' | 'ceiling' | 'open';
   catwalk: 'sides' | 'ring' | 'ends';
   board: 'four' | 'halo' | 'slim' | 'long';
   size: number;
+  rafters: 'far' | 'end';
 }
 
 /**
@@ -492,6 +493,7 @@ export function venueLook(colors: [string, string, string], paint: string, trim:
       catwalk: (['sides', 'ring', 'ends'] as const)[deal(3, 41)],
       board: (['four', 'halo', 'slim', 'long'] as const)[deal(4, 42)],
       size: [0.9, 1, 1.12][deal(3, 43)],
+      rafters: (['far', 'end'] as const)[deal(2, 44)],
     },
   };
 }
@@ -527,6 +529,6 @@ export function neutralVenue(name: string): Venue {
     boards: 1,
     letters: '',
     court: { laying: 'strips', lane: 'pin', centre: 'mark', words: 'wide', border: 'double', trim: '#c9a24a' },
-    roof: { kind: 'trusses', catwalk: 'sides', board: 'four', size: 1 },
+    roof: { kind: 'trusses', catwalk: 'sides', board: 'four', size: 1, rafters: 'far' },
   };
 }

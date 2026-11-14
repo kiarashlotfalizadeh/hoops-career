@@ -427,6 +427,12 @@ const LEG_GRAZE = 0.04;
 /** Two who meet and are into each other are moved apart, and looked at again, up to this many times a frame. */
 const LEG_PASSES = 3;
 const LEGS_TRUNK = [...PARTS.legs, ...PARTS.trunk];
+/** Two who don't meet are looked at for bodies into each other (see unclash) only this near (ft, on the 6 ft 6 puppet). */
+const CLASH_FAR = 4.5;
+/** An arm may graze another man's trunk or head this far (ft, into spacing.ts's shapes), no farther: a hand on him is not in him. */
+const ARM_GRAZE = 0.06;
+/** Looked at again up to this many times a frame: a man moved over his planted feet goes only part of the way. */
+const CLASH_PASSES = 5;
 const NEAR_MIN = 0.75;
 const NEAR_MAX = 3.2;
 /** What a lean or a sit changes of that, at most either way (ft), learnt only from two this near (ft): farther, their trunks are not what's nearest. */
@@ -763,6 +769,21 @@ export class CourtScene {
   }
 
   /**
+   * The programs step `level` draws with are made (done when they are), without taking the step: Court3D
+   * takes it after. A step changes how every material in the building is drawn (its shadows, the picture
+   * it draws into, the plain kits), and taken cold each of them was made on the page's thread on the
+   * next frame: a third of a second, and on a phone stepping back up from where it started, seconds.
+   * At the step it is on, it makes what hasn't been drawn yet (a cut-in's things, the confetti).
+   */
+  prepare(level: Lite): Promise<unknown> {
+    const was = this.level;
+    if (level !== was) this.lite(level);
+    const done = this.lens.compile(this.scene, this.camera);
+    if (level !== was) this.lite(was);
+    return done;
+  }
+
+  /**
    * What comes back up off the floor is the floor's colour (kept warm: it is mostly wood), and the
    * building's light is drawn again round it.
    */
@@ -824,7 +845,28 @@ export class CourtScene {
     const px = this.renderer.getDrawingBufferSize(this.px);
     this.lens.size(px.x, px.y);
     this.arena.mirror(px.x, px.y, this.level < 1);
+    // (a new shape: the cameras lay their picture out again at once, and that is not a cut to dissolve: cameras.ts RESHAPE)
+    if (Math.abs(w / h / this.camera.aspect - 1) > 1e-3) this.reshaped = true;
     this.camera.aspect = w / h;
+  }
+  private reshaped = false;
+
+  /**
+   * The part of the picture that is seen, across (shares of its width, `a` to `b`): the rest is under a panel laid over
+   * the court (the console's drawer at a timeout, a break, a tab opened). The cameras frame the play in that part, as
+   * a picture of that shape, its middle there (the lens shifted, not turned); a new part is laid out at once, as a new
+   * shape is. True when it changed.
+   */
+  seenPart(a: number, b: number): boolean {
+    if (Math.abs(a - this.span[0]) < 1e-3 && Math.abs(b - this.span[1]) < 1e-3) return false;
+    this.span = [a, b];
+    this.reshaped = true;
+    return true;
+  }
+  private span: [number, number] = [0, 1];
+  /** The shape the cameras frame for: the part of the picture that is seen (see seenPart). */
+  private get shape() {
+    return (this.w * (this.span[1] - this.span[0])) / this.h;
   }
 
   /** The figures wear their plain material (no cloth's sheen or knit): a device that can't keep up (see lite). */
@@ -1304,6 +1346,7 @@ export class CourtScene {
         seen.add(st.pid);
         if (has) holder = f;
       }
+      this.unclash(who);
       if (holder) {
         hands.add(holder);
         set(ball, holder.pup.bounced(holder.pup.carry(TMP)));
@@ -1642,6 +1685,13 @@ export class CourtScene {
     this.was.dir.copy(cam.quaternion);
     this.was.fov = cam.fov;
     this.aim(stage, real, calm, line, near, quiet, !!p.clutch, p.cam ?? 'tv', p.final);
+    // (the lens shifted to the middle of the part that is seen: see seenPart)
+    const mid = this.span[0] + this.span[1] - 1;
+    const offset = mid ? -mid * Math.tan((cam.fov * Math.PI) / 360) * cam.aspect * cam.getFilmWidth() : 0;
+    if (offset !== cam.filmOffset) {
+      cam.filmOffset = offset;
+      cam.updateProjectionMatrix();
+    }
     if (this.cutHook && !calm && !reel && !d.onAir && (this.shot !== shotWas || this.camCut) && this.shot !== 'open' && real > 0) {
       const now = { pos: cam.position.clone(), dir: cam.quaternion.clone(), fov: cam.fov };
       cam.position.copy(this.was.pos);
@@ -2069,6 +2119,53 @@ export class CourtScene {
         if (deep <= 0) break;
         a.nudge(-ux * deep * (1 - m.share), -uz * deep * (1 - m.share));
         b.nudge(ux * deep * m.share, uz * deep * m.share);
+      }
+    }
+    this.unclash(pids);
+  }
+
+  /**
+   * Two who don't meet (see meets) as their poses have them this frame: a putback's lean, a rebounder's reach up,
+   * a layup's gather into the man under the rim, a chest bump or a hug at the buzzer. The plan keeps their middles
+   * apart (spacing.ts), not what a body does over its feet: if their trunks or heads are into each other, or a leg of
+   * one is in the other, they are moved apart now along the line between them, the lighter the more (a man hanging on
+   * the ring stays where he is), until they touch at most. An arm of one in the other's trunk or head moves them too.
+   */
+  private unclash(pids: readonly number[]) {
+    for (let i = 0; i < pids.length; i++) {
+      const a = this.figs.get(pids[i])?.pup;
+      if (!a?.placed) continue;
+      for (let k = i + 1; k < pids.length; k++) {
+        const b = this.figs.get(pids[k])?.pup;
+        if (!b?.placed) continue;
+        if (this.meeting.some((m) => m.w >= 0.5 && ((pids[m.i] === pids[i] && pids[m.j] === pids[k]) || (pids[m.i] === pids[k] && pids[m.j] === pids[i])))) continue;
+        const d = Math.hypot(b.x - a.x, b.z - a.z);
+        if (d > CLASH_FAR * Math.max(a.body.s, b.body.s)) continue;
+        const [ux, uz] = d < 1e-3 ? [0, 1] : [(b.x - a.x) / d, (b.z - a.z) / d];
+        // (the lighter man gives more of the room; one on the ring none of it)
+        const ma = a.body.s * a.body.s * a.body.bulk;
+        const mb = b.body.s * b.body.s * b.body.bulk;
+        const share = a.onRim ? 1 : b.onRim ? 0 : ma / (ma + mb);
+        for (let pass = 0; pass < CLASH_PASSES; pass++) {
+          const [ja, jb] = [jointsOf(a, JA), jointsOf(b, JB)];
+          const gap = clearance(ja, a.body.s, a.body.bulk, jb, b.body.s, b.body.bulk, false);
+          const legs = Math.max(
+            into(ja, a.body.s, a.body.bulk, jb, b.body.s, b.body.bulk, PARTS.legs, LEGS_TRUNK),
+            into(jb, b.body.s, b.body.bulk, ja, a.body.s, a.body.bulk, PARTS.legs, LEGS_TRUNK),
+          );
+          // (an arm of one in the other's trunk or head too: an elbow in a mob, a forearm through a man under the rim. Two in
+          // each other's arms are as near as that by design)
+          const arms =
+            a.clip === 'hug' && b.clip === 'hug'
+              ? 0
+              : Math.max(into(ja, a.body.s, a.body.bulk, jb, b.body.s, b.body.bulk, PARTS.arms), into(jb, b.body.s, b.body.bulk, ja, a.body.s, a.body.bulk, PARTS.arms));
+          const deep = Math.max(-gap, legs - LEG_GRAZE, arms - ARM_GRAZE);
+          if (deep <= 0) break;
+          // (a little past touching, so the next look finds them clear and stops)
+          const go = deep + SLACK / 2;
+          a.nudge(-ux * go * (1 - share), -uz * go * (1 - share));
+          b.nudge(ux * go * share, uz * go * share);
+        }
       }
     }
   }
@@ -2684,7 +2781,7 @@ export class CourtScene {
    */
   private aim(stage: Stage, real: number, calm: boolean, line: boolean, near: number, quiet: boolean, clutch: boolean, kind: CamKind, final?: 0 | 1) {
     const cam = this.camera;
-    const aspect = this.w / this.h;
+    const aspect = this.shape;
     const fov = (across: number) => (2 * Math.atan(Math.tan((across * Math.PI) / 360) / aspect) * 180) / Math.PI;
     const live = !!(stage.script && stage.play);
     // what the camera that follows the play is shown: the ball, the men, the end being attacked
@@ -2700,6 +2797,8 @@ export class CourtScene {
     v.end = live ? (stage.script!.dir === 1 ? -1 : 1) : 0;
     v.aspect = aspect;
     this.camCut = false;
+    const reshaped = this.reshaped;
+    this.reshaped = false;
     if (calm) {
       // (no pans: each half of the floor is a still picture, and the picture cuts between them)
       const s = this.pic;
@@ -2959,7 +3058,7 @@ export class CourtScene {
     const s = this.pic;
     // (a cut of his own, a new camera or the floor's changing ends, dissolves as any cut does; not his first picture after another shot's)
     const first = this.shotMs === 0 || !this.aimed;
-    this.camCut = this.op.aim(kind, v, real, false, s) && !first;
+    this.camCut = this.op.aim(kind, v, real, false, s) && !first && !reshaped;
     this.aimed = true;
     // (a hand on it: the gantry's and the end zone's are on heads and only their frame wanders; the others are carried,
     // and the rim taking a dunk is felt in all of them)
@@ -3064,7 +3163,7 @@ export class CourtScene {
   /** The court has finished `sc`: a replay of its big play starts if one is due (true: hold the court until `released`). */
   replay(sc: Script | null): boolean {
     // (its seat is chosen for this picture's shape, not the last replay's)
-    this.director.size(this.w / this.h, this.h);
+    this.director.size(this.shape, this.h);
     // (and clear of the referees, as clear as of the ten)
     const refs = this.arena.sideline.officials.flatMap((r) => [r.fig.pup.x, r.fig.pup.z]);
     return this.director.start(sc, refs);

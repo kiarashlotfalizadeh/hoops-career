@@ -74,6 +74,8 @@ const LITE_MS = 22;
 const STRETCH = 60;
 const STRETCH_MS = 1500;
 const STRETCH_LEAST = 8;
+/** A frame counts as no slower than this (ms) toward its stretch's average: a device is slow every frame, not once. */
+const HITCH_MS = 50;
 /**
  * What a device that can't keep up gives up, in order, the least missed first: the picture's finish (its
  * glow and grade, drawn straight to the screen), a little sharpness, the thrown shadows, the floor's mirror
@@ -117,6 +119,33 @@ const REST_SLOTS = 3600;
 /** A cut between two cameras is this short a dissolve (ms): it doesn't jump, and it isn't a mix. */
 const DISSOLVE_MS = 150;
 
+/** A panel over the court covers this much of its height at least, and leaves this much of its width at least, or it is not framed round. */
+const COVER_TALL = 0.6;
+const SEEN_LEAST = 0.35;
+
+/**
+ * The part of the court's picture (`w` by `h`, its own dots) not under the console's drawer (`.lv-con`, laid over it
+ * at a stop or a tab), across: shares of its width, from and to. The page may stand turned (side.css: a quarter turn
+ * clockwise), its width then down the screen.
+ */
+function seenPart(canvas: HTMLCanvasElement, w: number, h: number): [number, number] {
+  const panel = canvas.closest('.page')?.querySelector('.lv-con');
+  if (!panel) return [0, 1];
+  const c = canvas.getBoundingClientRect();
+  const p = panel.getBoundingClientRect();
+  const turned = w !== h && Math.abs(c.width - h) < 2 && Math.abs(c.height - w) < 2;
+  // (along the picture's width and across it, on the screen)
+  const [c0, c1, d0, d1] = turned ? [c.top, c.bottom, c.left, c.right] : [c.left, c.right, c.top, c.bottom];
+  const [p0, p1, q0, q1] = turned ? [p.top, p.bottom, p.left, p.right] : [p.left, p.right, p.top, p.bottom];
+  const across = (Math.min(d1, q1) - Math.max(d0, q0)) / (d1 - d0);
+  if (p1 - p0 < 1 || across < COVER_TALL) return [0, 1];
+  const [a, b] = [(p0 - c0) / (c1 - c0), (p1 - c0) / (c1 - c0)];
+  if (b <= 0 || a >= 1 || getComputedStyle(panel).visibility === 'hidden') return [0, 1];
+  // (the wider of what is left either side of it)
+  const [lo, hi] = a > 1 - b ? [0, a] : [b, 1];
+  return hi - lo < SEEN_LEAST ? [0, 1] : [Math.max(0, lo), Math.min(1, hi)];
+}
+
 export default function Court3D(props: Court3DProps) {
   const glRef = useRef<HTMLCanvasElement>(null);
   const cutRef = useRef<HTMLCanvasElement>(null);
@@ -154,6 +183,9 @@ export default function Court3D(props: Court3DProps) {
     let camWas = live.current.cam;
     let frames = 0;
     let spent = 0;
+    let counted = 0;
+    // a step on its way: its programs are being made (see step)
+    let stepping = false;
     let told = false;
     let shown = false;
     let still = 0;
@@ -203,6 +235,7 @@ export default function Court3D(props: Court3DProps) {
       scene?.dispose();
       scene = new Scene!(canvas, paints.ball, paints.ballSeam, models!);
       scene.lite(STEPS[level][1]);
+      stepping = false;
       sized = floorKey = '';
       shown = false;
       // (the dev server's QA scripts look at the broadcast through this, as at the store through __hc)
@@ -228,6 +261,19 @@ export default function Court3D(props: Court3DProps) {
     };
     canvas.addEventListener('webglcontextlost', lost);
     canvas.addEventListener('webglcontextrestored', back);
+
+    // a step is taken once the programs it draws with are made (CourtScene.prepare), off the page's thread: taken
+    // cold, every material in the building was made on it in one frame, a stall of a third of a second to seconds
+    const step = (to: number) => {
+      const s = scene!;
+      stepping = true;
+      void s.prepare(STEPS[to][1]).then(() => {
+        if (dead || s !== scene) return;
+        stepping = false;
+        level = to;
+        s.lite(STEPS[to][1]);
+      });
+    };
 
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
@@ -262,6 +308,9 @@ export default function Court3D(props: Court3DProps) {
         scene.size(w, h, ratio);
         dirty = true;
       }
+      // (the console's drawer laid over the court at a stop or a tab: the cameras frame the part of it still seen)
+      const part = seenPart(canvas, w, h);
+      if (scene.seenPart(part[0], part[1])) dirty = true;
       // (a camera picked while the game is stopped is drawn at once: the chip's name and the picture never disagree)
       if (p.cam !== camWas) {
         camWas = p.cam;
@@ -327,18 +376,23 @@ export default function Court3D(props: Court3DProps) {
       if (!shown) {
         shown = true;
         p.onReady();
+        // (what this picture hasn't drawn yet, a cut-in's things, the confetti, is made now, not when it is first seen)
+        void scene.prepare(STEPS[level][1]);
       }
       // too slow: the picture gives up a step, and with none left the page is told (it offers the 2D court)
-      if (dt > 0 && real > 0) {
+      if (dt > 0 && real > 0 && !stepping) {
         frames++;
+        // (one hitch, a model or a picture first drawn, counts as a slow frame and no more: a stretch of sixty
+        // with a 300 ms one in it averaged over LITE_MS, and the picture gave up a step for a moment it never saw)
         spent += real;
+        counted += Math.min(real, HITCH_MS);
         if (frames >= STRETCH || (spent >= STRETCH_MS && frames >= STRETCH_LEAST)) {
-          const avg = spent / frames;
-          frames = spent = 0;
+          const avg = counted / frames;
+          frames = spent = counted = 0;
           const last = STEPS.length - 1;
           if (avg > LITE_MS && level < last) {
             fast = 0;
-            scene.lite(STEPS[++level][1]);
+            step(level + 1);
           } else if (avg > SLOW_MS && level === last) {
             if (!told) {
               told = true;
@@ -349,7 +403,7 @@ export default function Court3D(props: Court3DProps) {
             if (++fast >= FAST_RUN) {
               fast = 0;
               backs++;
-              scene.lite(STEPS[--level][1]);
+              step(level - 1);
             }
           } else fast = 0;
         }
