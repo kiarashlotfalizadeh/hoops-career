@@ -8,7 +8,7 @@ import { merged, placed, readGlb, type Thing } from '../live/court3d/glb';
 import { lookOf, STYLES } from '../live/court3d/look';
 import { PARTS, POSE_NAMES, posed } from '../live/court3d/sideline';
 
-/** The bones the puppet drives, then the leaves only the figure turns: his fingers' joints, his jaw, his nose (court3d/figure.ts keeps the same names in its `B`; it is not exported). */
+/** The bones the puppet drives, then the leaves only the figure turns: each finger's and thumb's two joints, his jaw, his nose (court3d/figure.ts keeps the same names in its `B`; it is not exported). */
 const BONES = [
   'pelvis',
   'chest',
@@ -32,6 +32,7 @@ const BONES = [
   'kn2l',
   'kn1r',
   'kn2r',
+  ...['ix', 'rg', 'pk', 'th'].flatMap((d) => [1, 2].flatMap((k) => [`${d}${k}l`, `${d}${k}r`])),
   'jaw',
   'nose',
   'hair',
@@ -43,7 +44,7 @@ const HAIR_PIECES = ['bun', 'tail', 'twists', 'locs', 'braids', 'afro', 'hightop
 /** The materials the app has a look for (court3d/figure.ts `wear`, court3d/arena.ts `dress`, court3d/props.ts: none of them exports its list). */
 const PLAYER = ['skin', 'hair', 'jersey', 'trim', 'cloth', 'shoe', 'white', 'collar', 'high'];
 /** And the parts of his head that are his alone (figure.py's mouth and ears: court3d/figure.ts gives each its place on his sheet). */
-const PLAYER_HEAD = ['ear', 'mouth', 'teeth'];
+const PLAYER_HEAD = ['ear', 'mouth', 'teeth', 'gum', 'tongue'];
 const ARENA = ['pad', 'steel', 'team', 'edge', 'glass', 'clock', 'led', 'iron', 'cord', 'seat', 'dark', 'board', 'screen', 'ribbon', 'leather', 'seam', 'glassEdge'];
 const FAN = ['fan'];
 const PROPS = ['ball', 'chair', 'hoop', 'net', 'rim', 'scoreboard', 'table', 'stall'];
@@ -305,11 +306,11 @@ describe("the 3D court's models", () => {
       // (the vest's picture, his number, goes on by its uv; as one shape every part has one)
       expect(fig.parts.find((p) => p.material === 'jersey')!.geo.getAttribute('uv')).toBeTruthy();
       expect(merged(fig).geo.getAttribute('uv').count).toBe(fig.parts.reduce((n, p) => n + p.geo.getAttribute('position').count, 0));
-      // (with every piece of hair in the file; a man is drawn with one of them at most, and with no more than 27,000 triangles: his face has a thousand of them more than it had)
-      expect(triangles(fig)).toBeLessThanOrEqual(34_000);
+      // (with every piece of hair in the file; a man is drawn with one of them at most, and with no more than 28,500 triangles: his face has a thousand of them more than it had, and his mouth's insides some 1,300, his teeth each a crown of its own)
+      expect(triangles(fig)).toBeLessThanOrEqual(35_000);
       const size = (m: string) => fig.parts.filter((p) => p.material === m).reduce((n, p) => n + p.geo.index!.count / 3, 0);
       const pieces = HAIR_PIECES.reduce((n, m) => n + size(m), 0);
-      expect(triangles(fig) - pieces + Math.max(...HAIR_PIECES.map(size))).toBeLessThanOrEqual(27_000);
+      expect(triangles(fig) - pieces + Math.max(...HAIR_PIECES.map(size))).toBeLessThanOrEqual(28_500);
       // as the app dresses him: one shape for one material, every point of him somewhere on his sheet, and no
       // triangle stretched across it (one across two of its pictures, or a picture's seam, would show the others in between)
       const geo = figureGeo((o) => o, figure);
@@ -361,7 +362,19 @@ describe("the 3D court's models", () => {
         expect(Math.max(...v) - Math.min(...v), `every face alike in its ${k}`).toBeGreaterThan(1.2);
       }
       expect(looks.some((l) => l.lineup)).toBe(true);
+      // (and how much of what he feels shows, and how a basket of his shows: every way, over a league)
+      expect(Math.min(...looks.map((l) => l.temper))).toBeGreaterThanOrEqual(0.15);
+      expect(Math.max(...looks.map((l) => l.temper))).toBeLessThanOrEqual(1);
+      expect(looks.filter((l) => l.grin > 0.5).length / looks.length).toBeGreaterThan(0.4);
+      expect(looks.filter((l) => l.grin > 0.5).length / looks.length).toBeLessThan(0.6);
       expect(looks.filter((l) => l.lineup).map((l) => STYLES[l.style].name)).not.toEqual(expect.arrayContaining(['afro', 'locs', 'twists', 'shaved', 'tied']));
+      // (and how lived-in his face is, mostly not much: a league is young; how readily he sweats; his lips' own colour)
+      expect(Math.min(...looks.map((l) => l.age))).toBeGreaterThanOrEqual(0);
+      expect(Math.max(...looks.map((l) => l.age))).toBeLessThanOrEqual(1);
+      expect(looks.filter((l) => l.age > 0.5).length / looks.length).toBeLessThan(0.4);
+      expect(looks.filter((l) => l.age > 0.8).length).toBeGreaterThan(0);
+      expect(Math.max(...looks.map((l) => l.sweat)) / Math.min(...looks.map((l) => l.sweat))).toBeGreaterThan(2);
+      expect(Math.max(...looks.map((l) => l.lip)) - Math.min(...looks.map((l) => l.lip))).toBeGreaterThan(1.8);
     }
 
     // the people round the floor: three bodies, each one skin on the player's own bones, with a face, a jaw and a fuller

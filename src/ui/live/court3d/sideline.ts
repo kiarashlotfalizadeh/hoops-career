@@ -63,7 +63,7 @@ import { HALF_W, SIDE, type GameInfo, type Stage } from '../Court';
 import type { MatchKit } from '../../teamColors';
 import type { Occasion } from '../occasion';
 import type { Gesture } from './clips';
-import { Fig, type Geo } from './figure';
+import { DIGIT_NAMES, DIGITS as HAND_DIGITS, Fig, THUMB_HINGE, type Geo } from './figure';
 import { merged, type Thing } from './glb';
 import { lookOf, STYLES, type Look } from './look';
 import type { Props } from './props';
@@ -88,9 +88,6 @@ const AN_Y = KN_Y - SHIN;
 const FLOOR = AN_Y - ANKLE;
 const SEAT = 1.5;
 const SIT_BACK = 0.3;
-/** Where the fingers' two joints are down the hand from the wrist, ft (figure.py's KNUCKLE and MIDDLE). */
-const KNUCKLE = 0.4;
-const MIDDLE = 0.545;
 /** What a warm-up is darkened toward: the bench is not five more men in the play. */
 const WARMUP = new Color('#26272c');
 
@@ -167,20 +164,29 @@ function bonesOf(p: Pose): Map<string, Matrix4> {
     out.set(`fa${sfx}`, fa);
     const hand = fa.clone().setPosition(ha);
     out.set(`ha${sfx}`, hand);
-    // his fingers, turned at the knuckles and at their middle joints as figure.ts turns a player's
+    // his fingers, turned at the knuckles and at their middle joints as figure.ts turns a player's (each a little more
+    // than the one before it), and his thumb: along the hand, in across the fingers as they close
     const c = typeof p.curl === 'number' ? p.curl : (p.curl?.[i] ?? 0.3);
-    const k1 = hand
-      .clone()
-      .multiply(new Matrix4().makeTranslation(0, -KNUCKLE, 0))
-      .multiply(new Matrix4().makeRotationZ(-s * (0.12 + 0.9 * c)));
-    out.set(`kn1${sfx}`, k1);
-    out.set(
-      `kn2${sfx}`,
-      k1
+    HAND_DIGITS.forEach(([j1, j2], d) => {
+      const name = DIGIT_NAMES[d];
+      const thumb = d === 4;
+      const k1 = hand
         .clone()
-        .multiply(new Matrix4().makeTranslation(0, -(MIDDLE - KNUCKLE), 0))
-        .multiply(new Matrix4().makeRotationZ(-s * (0.24 + 1.0 * c))),
-    );
+        .multiply(new Matrix4().makeTranslation(-s * j1[0], -j1[1], j1[2]))
+        .multiply(
+          thumb
+            ? new Matrix4().makeRotationZ(-s * (0.1 + 0.35 * c)).multiply(new Matrix4().makeRotationX(0.55 * c))
+            : new Matrix4().makeRotationZ(-s * (0.12 + (0.8 + 0.1 * d) * c)),
+        );
+      out.set(`${name}1${sfx}`, k1);
+      out.set(
+        `${name}2${sfx}`,
+        k1
+          .clone()
+          .multiply(new Matrix4().makeTranslation(-s * (j2[0] - j1[0]), -(j2[1] - j1[1]), j2[2] - j1[2]))
+          .multiply(thumb ? new Matrix4().makeRotationAxis(THUMB_HINGE[i], 0.2 + 0.5 * c) : new Matrix4().makeRotationZ(-s * (0.24 + (0.9 + 0.1 * d) * c))),
+      );
+    });
     const hip = hips.clone().add(new Vector3(s * HIP_W, 0, 0));
     const kn = toward(hip, p.knees?.[i] ?? hip.clone().add(new Vector3(0, -THIGH, 0)), THIGH);
     const an = toward(kn, p.ankles?.[i] ?? kn.clone().add(new Vector3(0, -SHIN, 0)), SHIN);
@@ -956,7 +962,7 @@ function bones(kit: Kit, body: Body, look: Look, id: number, dress: MatchKit): {
     size(['jaw'], hs * f.wide * f.jaw, hs * f.long * f.chin, hs);
     size(['nose'], hs * f.wide * f.nose, hs * f.long, hs * f.bridge);
     size(['ual', 'fal', 'uar', 'far', 'thl', 'shl', 'thr', 'shr', 'hemL', 'hemR'], thick, s, thick);
-    size(['hal', 'har', 'ftl', 'ftr', 'kn1l', 'kn2l', 'kn1r', 'kn2r'], s, s, s);
+    size(['hal', 'har', 'ftl', 'ftr', ...DIGIT_NAMES.flatMap((d) => [1, 2].flatMap((k) => [`${d}${k}l`, `${d}${k}r`]))], s, s, s);
     // (stood up once, here: what `place` needs and isn't given shows now, not in the middle of a game)
     fig.pup.update({ x: 0, z: 0, yaw: 0, act: 'stand', ms: 0, dur: 0, ball: false, cut: true, who: id }, 0, 0, 0);
     fig.pup.arms(null);
@@ -1836,6 +1842,13 @@ export class Sideline {
     return this.refs;
   }
 
+  /** The coach taking `side`'s huddle while there is one (his players look at him), or null. */
+  huddler(side: 0 | 1): Fig | null {
+    if (this.clock >= this.huddle) return null;
+    for (const c of this.coaches) if (c.side === side) return c.w.fig;
+    return null;
+  }
+
   /**
    * One of the ten, as the scene is about to place him (where the play has him, the way he faces): a man the
    * sideline has on a way of its own for a moment (on from the table, over toward his bench at a timeout) is
@@ -1912,20 +1925,30 @@ export class Sideline {
         s.until = s.from + 2200 + r * 3000;
       }
     }
+    // (and it shows on the coaches' faces: figure.ts Fig.feel, each his own way)
     for (const c of this.coaches) {
       const r = hash(c.w.id, this.n);
       const mine = c.side === side;
+      const face = c.w.fig;
       if (what === 'foul') {
         // (the whistle went against his team)
         if (mine && r < 0.6) c.w.cue(r < 0.3 ? 'protest' : 'coachWide');
+        if (mine && r < 0.85) face.feel('disbelief', 0.75);
+        else if (mine) face.nod('shake', 0.8, 0.2);
       } else if (what === 'timeout') continue;
       else if (what === 'turnover') {
         if (mine && r < 0.5) c.w.cue(r < 0.25 ? 'head' : 'coachWide');
         else if (!mine && r < 0.3) c.w.cue('clap');
+        face.feel(mine ? 'stung' : 'joy', mine ? 0.65 : 0.35);
       } else if (mine) {
         if (big) this.signal(c.w, r < 0.5 ? 'fist' : 'clap', 120 + hash(c.w.id, this.n + 3) * 600);
         else if (r < 0.25) this.signal(c.w, 'clap', 200 + hash(c.w.id, this.n + 3) * 700);
-      } else if (big && r < 0.4) this.signal(c.w, r < 0.2 ? 'coachWide' : 'coachCalm', 300 + hash(c.w.id, this.n + 3) * 700);
+        if (big || r < 0.4) face.feel(big && r < 0.35 ? 'shout' : 'joy', big ? 0.85 : 0.4, 0.1);
+      } else if (big) {
+        if (r < 0.4) this.signal(c.w, r < 0.2 ? 'coachWide' : 'coachCalm', 300 + hash(c.w.id, this.n + 3) * 700);
+        if (r < 0.6) face.feel('stung', 0.55, 0.2);
+        else face.nod('shake', 0.7, 0.3);
+      }
       c.call = Math.max(c.call, this.clock + 2500);
     }
   }
@@ -2101,6 +2124,11 @@ export class Sideline {
       }
       this.shake = this.clock + SHAKE_AFTER[o];
       for (const c of this.coaches) this.signal(c.w, c.side === a.final ? (o === 'win' ? 'clap' : 'fist') : 'head', hash(c.w.id, this.n) * 500);
+      // (and their faces: the winner's glad of it, a roar for a big one; the other's a breath let out, or stung)
+      for (const c of this.coaches) {
+        const r = hash(c.w.id, this.n + 4);
+        c.w.fig.feel(c.side === a.final ? (storm && r < 0.6 ? 'shout' : 'joy') : r < 0.5 ? 'exhale' : 'stung', 0.9, r * 0.5);
+      }
     } else if (a.final === undefined && this.over) {
       this.over = false;
       this.shook = false;
@@ -2445,6 +2473,8 @@ export class Sideline {
             const w = s.w;
             if (!s.walking) {
               s.walking = true;
+              // (out onto the floor to his five at the end: glad of it, or roaring)
+              if (s.storm) w.fig.feel(hash(s.id, 77) < 0.5 ? 'shout' : 'joy', 1, hash(s.id, 78) * 0.4);
               w.put(s.px + Math.sin(s.pyaw) * fwd, s.pz + Math.cos(s.pyaw) * fwd);
               w.pup.yaw = s.pyaw;
             }

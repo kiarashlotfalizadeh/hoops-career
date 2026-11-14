@@ -7,12 +7,17 @@
 // his jaw and nose, his hair's swing, a bone at each shoulder (half way from chest to arm: see `girdle`)
 // and one down each forearm (the hand's turn spread along it), his brows and his lower lip. His head is
 // one of six kinds, each man off his kind (look.ts), his face moulded to a shape of its own (FACE_SHAPE),
-// and his face works: his jaw comes open on his teeth in the air and when he shouts, his brows come down,
-// his eyes blink. Close up the material draws his
+// and his face works (see Fig.face): his eyes are on what he looks at, his lids blink and narrow and
+// widen, his jaw comes open on his teeth and his mouth takes a shape of its own (FACE_MOVE: a grin, a
+// grimace, lips pressed, a snarl, lips rounded, cheeks blown out, one side more than the other), his brows
+// come down or go up, one or both; he talks a syllable at a time, nods and shakes his head; and the game's
+// moments show on it (Fig.feel), on his body's own clock, kept for a replay to show (Fig.when). Close up the material draws his
 // eyes itself (see EYES), and his head is lit by a lamp on the camera as well as the building's, so his
 // dark skin is a face with planes and not a shape (the material's uTone, uBlink, uIris, uEye). His skin
 // has a grain close up and a warm edge where a lamp's light leaves it (PORES, SKIN_WRAP), and goes to his
-// hair and his beard over a little way, as their picture does, never in a step.
+// hair and his beard over a little way, as their picture does, never in a step. His face makes lines as it
+// moves (CREASE_DEEP), and the game shows on his skin: he sweats and flushes as he goes (Fig.skin). Behind his
+// lips are teeth, gums and a tongue, each built (figure.py's mouth), in the dark of his mouth (MOUTH_LIGHT).
 //
 // Everything he wears is one picture (his sheet, see `Sheet`): his vest with its number and name, the
 // shorts with their side panels and the team's mark, his head (his face, his hair and beard),
@@ -26,7 +31,9 @@ import {
   CircleGeometry,
   Color,
   DoubleSide,
+  Euler,
   Group,
+  Matrix3,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
@@ -44,7 +51,7 @@ import {
   BufferGeometry,
 } from 'three';
 import type { MatchKit } from '../../teamColors';
-import { CLIPS, I } from './clips';
+import { CLIPS, I, type ClipId, type Gesture } from './clips';
 import { merged, type Thing } from './glb';
 import { lookOf, SKINS, STYLES, type Look } from './look';
 import { ANKLE, J, Puppet, THIGH, type Body } from './puppet';
@@ -95,13 +102,83 @@ const B = {
   brow: 29,
   // (and one for his lower lip and teeth: it opens with his jaw, and keeps his head's size, so his lips meet whatever his jaw's shape)
   lip: 30,
+  // (and each hand's other fingers and its thumb, two joints each: kn1 and kn2 above are its middle finger's. See DIGITS)
+  ix1l: 31,
+  ix2l: 32,
+  rg1l: 33,
+  rg2l: 34,
+  pk1l: 35,
+  pk2l: 36,
+  th1l: 37,
+  th2l: 38,
+  ix1r: 39,
+  ix2r: 40,
+  rg1r: 41,
+  rg2r: 42,
+  pk1r: 43,
+  pk2r: 44,
+  th1r: 45,
+  th2r: 46,
 } as const;
-const BONES = 31;
+const BONES = 47;
 /** How far out from his sides his arms are as built (figure.py's ARM_OUT). */
 const ARM_OUT = (38 * Math.PI) / 180;
-/** Where the fingers' two joints are down the hand from the wrist, ft (figure.py's KNUCKLE and MIDDLE). */
-const KNUCKLE = 0.4;
-const MIDDLE = 0.545;
+/**
+ * Each hand's fingers and thumb as figure.py builds them (its DIGITS): the bones at a digit's two joints (a finger's
+ * knuckle and middle joint, the thumb's root down in the heel of the hand and its middle knuckle), each from the wrist:
+ * toward the palm, down the hand, forward (toward the thumb's side), ft on the 6 ft 6 body. Index, middle, ring,
+ * little finger, thumb; their bones' places in B, the left hand's then the right's.
+ */
+export const DIGITS: readonly (readonly [readonly [number, number, number], readonly [number, number, number]])[] = [
+  [
+    [0.011, 0.377, 0.125],
+    [0.0225, 0.508, 0.138],
+  ],
+  [
+    [0.011, 0.395, 0.042],
+    [0.024, 0.542, 0.045],
+  ],
+  [
+    [0.011, 0.387, -0.042],
+    [0.023, 0.522, -0.048],
+  ],
+  [
+    [0.011, 0.37, -0.12],
+    [0.02, 0.478, -0.134],
+  ],
+  [
+    [0.025, 0.06, 0.09],
+    [0.075, 0.22, 0.175],
+  ],
+];
+/** The model's names for them (each joint's bone is the name, 1 or 2, then l or r). */
+export const DIGIT_NAMES = ['ix', 'kn', 'rg', 'pk', 'th'] as const;
+/** Each hand's bone, its forearm's and the puppet's joint at its wrist: the left's, then the right's. */
+const HANDS_AT = [
+  [B.hal, B.fal, J.hl],
+  [B.har, B.far, J.hr],
+] as const;
+const DIGIT_BONES: readonly (readonly (readonly [number, number])[])[] = [
+  [
+    [B.ix1l, B.ix2l],
+    [B.kn1l, B.kn2l],
+    [B.rg1l, B.rg2l],
+    [B.pk1l, B.pk2l],
+    [B.th1l, B.th2l],
+  ],
+  [
+    [B.ix1r, B.ix2r],
+    [B.kn1r, B.kn2r],
+    [B.rg1r, B.rg2r],
+    [B.pk1r, B.pk2r],
+    [B.th1r, B.th2r],
+  ],
+];
+/** Each arm's bones, shoulder to fingertips (the left's, then the right's). */
+const ARM_BONES = [
+  [B.ual, B.fal, B.fwl, B.hal, ...DIGIT_BONES[0].flat()],
+  [B.uar, B.far, B.fwr, B.har, ...DIGIT_BONES[1].flat()],
+];
 /** Where his jaw, his nose and his brows are scaled about, from the head bone (figure.py's JAW_AT, NOSE_AT and BROW_AT). */
 const JAW_AT = new Vector3(0, 0.045 - 0.5 * 0.42, 0.05 + 0.25 * 0.37);
 const NOSE_AT = new Vector3(0, 0.045 - 0.2 * 0.42, 0.05 + 0.8 * 0.37);
@@ -150,6 +227,8 @@ const R_HAIR: Rect = [832, 992, 192, 32];
 const WRAP = 0.06;
 /** The vest's picture is the model's own uv: round him from his left side, and up it in 2 ft from 3.6 ft; it reaches this high (in those units). */
 const VEST_TOP = 1.1;
+/** His hand's skin (a little rougher and paler) comes in over his wrist, from the first of these down his arm's strip to the second (ft). */
+const HAND_FROM = [2.04, 2.22] as const;
 /** How far down an arm and a leg its strip reaches, ft (shoulder to fingertips, hip to sole, on the 6 ft 6 body). */
 const ARM_LEN = 2.75;
 const LEG_LEN = 3.5;
@@ -392,15 +471,16 @@ function sheetUv(geo: BufferGeometry, wears: string[], order: number[], inverse:
     if (w === 'shoe') return Pic.Shoe;
     if (w === 'collar' || w === 'high') return Pic.Collar;
     if (w === 'ear') return Pic.Ear;
-    if (w === 'mouth') return Pic.Mouth;
-    if (w === 'teeth') return Pic.Teeth;
+    if (w === 'mouth' || w === 'tongue') return Pic.Mouth;
+    if (w === 'teeth' || w === 'gum') return Pic.Teeth;
     if (PIECES.includes(w)) return Pic.Hair;
     // (the white below the ankle is a sole; above it, a sock: the bottom of its leg's strip)
     if (w === 'white') return L.copy(P).applyMatrix4(foot).y < -0.06 ? Pic.Sole : P.x > 0 ? Pic.LegL : Pic.LegR;
     // (his head is all his head bone's, with his jaw and nose; his neck, which shares it with his chest, is his trunk's skin)
     if (weight(v, [B.head, B.jaw, B.nose, B.brow, B.lip]) >= 0.995) return Pic.Head;
-    if (weight(v, [B.ual, B.fal, B.hal]) + 0.5 * weight(v, [B.cll]) >= 0.5) return Pic.ArmL;
-    if (weight(v, [B.uar, B.far, B.har]) + 0.5 * weight(v, [B.clr]) >= 0.5) return Pic.ArmR;
+    // (his fingers and thumb are the ends of his arms' strips)
+    if (weight(v, ARM_BONES[0]) + 0.5 * weight(v, [B.cll]) >= 0.5) return Pic.ArmL;
+    if (weight(v, ARM_BONES[1]) + 0.5 * weight(v, [B.clr]) >= 0.5) return Pic.ArmR;
     if (weight(v, [B.thl, B.shl, B.ftl, B.hemL]) >= 0.5) return Pic.LegL;
     if (weight(v, [B.thr, B.shr, B.ftr, B.hemR]) >= 0.5) return Pic.LegR;
     return Pic.Skin;
@@ -431,6 +511,10 @@ function sheetUv(geo: BufferGeometry, wears: string[], order: number[], inverse:
         // (the hair's picture laid over him again and again, each time the other way round so it has no edge: combed
         // hair, in the left half of it, runs down a lock; a head of curls, in the right, is tufts every way)
         return TUFTED.includes(wear[v]) ? [0.52 + 0.46 * fold(P.x * 2.3 + P.y * 0.9), fold(P.z * 6.4 + P.y * 3.7)] : [0.02 + 0.46 * fold(P.y * 1.7), fold(P.x * 7.3 + P.z * 5.9)];
+      case Pic.Mouth:
+      case Pic.Teeth:
+        // (the dark of his mouth and his teeth are the first half of their pictures across; his tongue and his gum the second)
+        return [wear[v] === 'tongue' || wear[v] === 'gum' ? 0.75 : 0.25, 0.5];
       case Pic.ArmL:
       case Pic.ArmR:
         return [-L.copy(P).applyMatrix4(inv[k === Pic.ArmL ? B.ual : B.uar]).y / ARM_LEN, 0.5];
@@ -520,6 +604,7 @@ const STUFF = {
   dome: [0.42, 1, 0],
   hand: [0.68, 1, 0],
   lip: [0.4, 1, 0],
+  wetLip: [0.22, 1, 0],
   eye: [0.08, 1, 0],
   // (hair is a mass of fine strands, not a shell: little of a sheen, and that broken)
   hair: [0.84, 0.16, 0],
@@ -537,8 +622,10 @@ const STUFF = {
   // (a headband: terry too, but on his head its second channel says how much of his skin a point is, and it is none)
   band: [0.95, 0.3, 0],
   leather: [0.4, 0, 0],
-  // (behind his lips: wet teeth, and the dark)
-  tooth: [0.25, 0, 0],
+  // (behind his lips: wet teeth, wetter gums and tongue (its papillae break its shine up a little), and the dark)
+  tooth: [0.2, 0, 0],
+  gum: [0.26, 0, 0],
+  tongue: [0.34, 0, 0],
   gullet: [0.9, 0, 0],
   mesh: [0.7, 0.2, 0.6],
   lace: [0.8, 0.3, 0.3],
@@ -651,6 +738,172 @@ const FLICK = 1.1;
 const FLICK_IN = 60;
 const FLICK_HOLD = 300;
 const FLICK_OUT = 260;
+/**
+ * A hand with nothing in it is never held dead straight off its forearm: let hang, it falls a little toward the palm
+ * (WRIST_LOOSE radians), turned a little palm-back (WRIST_PRON, a turn of the forearm and wrist: past the palm facing
+ * his thigh); a defender's (DEFENDS) is turned to show its palm the way he faces, as far as a forearm turns, and is
+ * bent back a little (WRIST_SHOW). As far as a forearm turns either way from the palm facing in (radians, PRON_MOST palm
+ * down or back, SUP_MOST palm up or forward), and how far a wrist bends (FLEX_MOST toward the palm, EXT_MOST back).
+ * What he is doing changes it over about WRIST_MS (his own ms): a wrist is turned, never snapped.
+ */
+const WRIST_LOOSE = 0.3;
+const WRIST_PRON = 0.25;
+const WRIST_SHOW = -0.2;
+const PRON_MOST = 1.35;
+const SUP_MOST = 1.35;
+const FLEX_MOST = 1.15;
+const EXT_MOST = 0.8;
+const WRIST_MS = 90;
+const DEFENDS = new Set<string>(['stance', 'ready', 'shuffle', 'closeout', 'contest', 'block', 'steal']);
+/**
+ * A pass let go of: both hands snap through it, turned thumbs down (PASS_PRON) and bent toward the palm (PASS_SNAP),
+ * in over PASS_SNAP_IN ms from the release, held to PASS_SNAP_HOLD and let go of over PASS_SNAP_OUT.
+ */
+const PASSED = new Set<string>(['pass', 'passOne', 'passOver']);
+const PASS_PRON = 1.1;
+const PASS_SNAP = 0.45;
+const PASS_SNAP_IN = 70;
+const PASS_SNAP_HOLD = 200;
+const PASS_SNAP_OUT = 220;
+
+/**
+ * A hand's shape: how far each finger is curled at its knuckle and at its middle joint (index, middle, ring, little:
+ * radians toward the palm), how far they are spread (the index that far toward the thumb, the others by SPREAD_K), and
+ * the thumb: turned toward the palm at its root, out from the hand there (less than none: in across the fingers), and
+ * bent at its middle knuckle. What he is doing picks one for each hand (see Fig.shapeOf), a hand on the ball another
+ * by how it holds it, and his hand goes from one to the next over about SHAPE_MS of his own time: a fist is made, not
+ * snapped shut.
+ */
+type Shape = Float32Array;
+const SHAPE_N = 12;
+const SPREAD = 8;
+const THUMB_PALM = 9;
+const THUMB_OUT = 10;
+const THUMB_BEND = 11;
+const SPREAD_K = [1, 0.15, -0.55, -1.1] as const;
+const SHAPE_MS = 65;
+const shape = (knuckles: readonly number[], middles: readonly number[], spread: number, palm: number, out: number, bend: number): Shape =>
+  Float32Array.from([...knuckles, ...middles, spread, palm, out, bend]);
+/** Let hang: loose, each finger a little more curled than the one before it, the thumb along the side of the hand. */
+const LOOSE = shape([0.32, 0.42, 0.52, 0.62], [0.45, 0.6, 0.72, 0.82], 0.04, 0.1, 0, 0.25);
+/** On the ball's side (two hands on it): spread over the leather and laid along it, the thumb wide behind it. */
+const BALL = shape([0.34, 0.34, 0.38, 0.42], [0.42, 0.42, 0.46, 0.5], 0.2, 0.1, 0.65, 0.1);
+/** On top of a dribble: spread, on it with the pads of his fingers more than his palm. */
+const TOP = shape([0.3, 0.3, 0.34, 0.38], [0.32, 0.32, 0.36, 0.4], 0.28, 0.05, 0.5, 0.1);
+/** The shooting hand under the ball: as wide as it goes, the ball on the pads of his fingers, the thumb out. */
+const SHOOT = shape([0.12, 0.12, 0.16, 0.2], [0.2, 0.2, 0.24, 0.28], 0.36, 0.05, 0.85, 0.05);
+/** The guide hand on the ball's side as he shoots: flat on it, fingers up, there to steady it and come off it. */
+const GUIDE = shape([0.14, 0.14, 0.18, 0.22], [0.18, 0.18, 0.22, 0.26], 0.2, 0.05, 0.55, 0.05);
+/** Shut: the fingers in to the palm, the thumb across them. */
+const FIST = shape([1.45, 1.5, 1.5, 1.45], [1.7, 1.75, 1.75, 1.7], -0.04, 0.05, -0.45, 0.75);
+/** The first finger out and the others shut on the thumb; two of them out; three. */
+const POINT = shape([0.04, 1.5, 1.5, 1.45], [0.04, 1.75, 1.75, 1.7], 0, 0.05, -0.45, 0.7);
+const TWO = shape([0.04, 0.04, 1.5, 1.45], [0.04, 0.04, 1.75, 1.7], 0.16, 0.05, -0.45, 0.7);
+const THREE = shape([0.04, 0.04, 0.06, 1.45], [0.04, 0.04, 0.06, 1.7], 0.16, 0.05, -0.45, 0.7);
+/** Open, the palm shown: the fingers straight and apart, the thumb out. */
+const OPEN = shape([0.06, 0.06, 0.08, 0.1], [0.08, 0.08, 0.1, 0.12], 0.22, 0, 0.6, 0.05);
+/** Flat: the fingers straight and together, the thumb along them (a referee's arm out, a T). */
+const FLAT = shape([0.04, 0.04, 0.05, 0.06], [0.04, 0.04, 0.05, 0.06], -0.03, 0.05, 0.05, 0.05);
+/** A defender's: open and apart and a little bent, ready to take a swipe or get a hand on a pass. */
+const ACTIVE = shape([0.22, 0.27, 0.32, 0.38], [0.3, 0.35, 0.4, 0.45], 0.26, 0.1, 0.45, 0.15);
+/** Closed round something (a board, his shorts, the rim, another man's hand). */
+const GRAB = shape([1.05, 1.1, 1.15, 1.2], [1.15, 1.2, 1.25, 1.3], 0, 0.15, -0.2, 0.5);
+/** Out for a pass: open, apart, the thumbs wide (toward each other, with his palms to it: see CATCH_UP). */
+const CATCH = shape([0.15, 0.15, 0.2, 0.25], [0.2, 0.2, 0.24, 0.3], 0.3, 0.1, 0.65, 0.1);
+/** The shooting hand after the release: dropped over toward the rim, its fingers down at it. */
+const GOOSE = shape([0.18, 0.2, 0.26, 0.32], [0.25, 0.28, 0.34, 0.42], 0.1, 0.1, 0.1, 0.2);
+/** Cupped (round his mouth, on his knee); half shut, the thumb up (a handshake). */
+const CUP = shape([0.25, 0.25, 0.3, 0.35], [0.3, 0.3, 0.35, 0.4], -0.02, 0.15, 0.1, 0.15);
+const SHAKE = shape([0.75, 0.8, 0.85, 0.9], [0.7, 0.75, 0.8, 0.85], 0, 0.15, 0.25, 0.2);
+/** How a gesture turns a hand's palm (see Fig.place): as it is, to the way he faces, up, down. */
+const PALM_AS = 0;
+const PALM_FRONT = 1;
+const PALM_UP = 2;
+const PALM_DOWN = 3;
+/** Each gesture's hands (his left's shape, his right's; null: as his move has it) and how it turns its palms. */
+const GESTURE_HANDS: Record<Gesture, readonly [Shape | null, Shape | null, number]> = {
+  flex: [FIST, FIST, PALM_AS],
+  roar: [FIST, FIST, PALM_AS],
+  point: [null, POINT, PALM_FRONT],
+  fist: [null, FIST, PALM_AS],
+  five: [null, OPEN, PALM_FRONT],
+  handUp: [null, OPEN, PALM_FRONT],
+  protest: [OPEN, OPEN, PALM_UP],
+  clap: [FLAT, FLAT, PALM_AS],
+  wag: [null, POINT, PALM_FRONT],
+  head: [OPEN, OPEN, PALM_AS],
+  wipe: [null, LOOSE, PALM_AS],
+  tug: [GRAB, GRAB, PALM_AS],
+  call: [POINT, null, PALM_AS],
+  ask: [null, OPEN, PALM_FRONT],
+  talk: [OPEN, null, PALM_UP],
+  direct: [null, POINT, PALM_AS],
+  refFoul: [null, FIST, PALM_AS],
+  refThree: [THREE, null, PALM_FRONT],
+  refGood: [OPEN, OPEN, PALM_FRONT],
+  refPointL: [FLAT, null, PALM_DOWN],
+  refPointR: [null, FLAT, PALM_DOWN],
+  refTimeout: [FLAT, FLAT, PALM_AS],
+  refCount: [null, FLAT, PALM_DOWN],
+  refToss: [OPEN, OPEN, PALM_UP],
+  refTwo: [null, TWO, PALM_FRONT],
+  refHand: [null, OPEN, PALM_UP],
+  refBounce: [OPEN, OPEN, PALM_AS],
+  coachBoard: [GRAB, POINT, PALM_AS],
+  coachShout: [CUP, CUP, PALM_AS],
+  coachPoint: [null, POINT, PALM_AS],
+  coachWide: [OPEN, OPEN, PALM_UP],
+  coachCrouch: [GRAB, GRAB, PALM_AS],
+  coachWave: [null, OPEN, PALM_AS],
+  coachCalm: [OPEN, OPEN, PALM_DOWN],
+  shake: [null, SHAKE, PALM_AS],
+  dap: [null, GRAB, PALM_AS],
+};
+/** The hands of a move (both, or his left's and his right's) where it has them other than loose. */
+const CLIP_HANDS: Partial<Record<ClipId, Shape | readonly [Shape, Shape]>> = {
+  stance: ACTIVE,
+  ready: ACTIVE,
+  shuffle: ACTIVE,
+  closeout: ACTIVE,
+  steal: ACTIVE,
+  crash: ACTIVE,
+  contest: OPEN,
+  block: OPEN,
+  tip: OPEN,
+  rebound: OPEN,
+  boxout: OPEN,
+  postUp: OPEN,
+  hug: OPEN,
+  floor: OPEN,
+  stumble: OPEN,
+  rue: OPEN,
+  bump: OPEN,
+  celebrate: FIST,
+  cheer: FIST,
+  kneel: FIST,
+  screen: GRAB,
+  pull: GRAB,
+  hips: FLAT,
+  knees: CUP,
+  slump: CUP,
+};
+/** Reaching for a pass, his hands' fingers point this far up from his forearms' line (eased in by his hold on it): palms to the ball, thumbs in. */
+const CATCH_UP = 1.1;
+/** A hand on the ball's side lies with its fingers this far up from its forearm's line (a hold: his thumbs behind it). */
+const SIDE_UP = 0.4;
+/** Where the thumb's middle knuckle bends about, in the thumb's own frame (toward his palm, across the fingers); the left hand's, then the right's. */
+export const THUMB_HINGE = [new Vector3(0.8, 0, -0.6).normalize(), new Vector3(0.8, 0, 0.6).normalize()] as const;
+/**
+ * A dribble's wrist (radians toward the palm, as the hand is over the ball): cocked back (DRIB_CATCH) as the ball comes up
+ * into it and gives with it, bent over it as it pushes it down (DRIB_PUSH), on through after it as it goes (DRIB_AFTER),
+ * and back for the next as it comes up (DRIB_WAIT).
+ */
+const DRIB_CATCH = -0.2;
+const DRIB_PUSH = 0.45;
+const DRIB_AFTER = 0.6;
+const DRIB_WAIT = -0.1;
+/** The hand over a dribble in the air is turned this far of the way to lie on it (the rest as a free hand hangs): a wrist after a ball off it is not wrung round. */
+const DRIB_HOLDS = 0.75;
 /** 0 below a, 1 above b, eased between (a over b: the other way). */
 function sstep(a: number, b: number, v: number): number {
   const q = clamp01((v - a) / (b - a));
@@ -721,6 +974,20 @@ const EYE_TILT = 0.012;
 const EYE_OPEN = 0.037;
 /** His iris: its half width and half height on that plane (a circle on him), and how far over the eye's middle it sits. */
 const IRIS = [0.064, 0.0455, 0.008] as const;
+/**
+ * His eye as a ball, in iris radii (a real eye's: a ball 12 mm round, an iris 6 mm): the ball's radius, the cornea's (the
+ * clear dome over the iris, rounder than the ball), how far the cornea's middle is out from the ball's along his gaze (so
+ * it meets the ball round the iris's rim and stands a little proud of it), and how deep the iris is under the cornea's
+ * face (what is seen of it through the cornea shifts by that as the camera goes round him).
+ */
+const EYE_BALL = [2.5, 1.3, 1.46, 0.3] as const;
+/**
+ * The light in his eye: the camera's lamp (the one his face is lit by: see stuffMaterial) seen in his cornea, a spot this
+ * wide (how near the cornea's face must be to facing half way between lamp and lens: a cosine) and this bright; and the
+ * shine of the tears along his lower lid.
+ */
+const CATCH_LIGHT = [0.9978, 2.2] as const;
+const TEAR_SHINE = 0.07;
 
 /**
  * His head's picture, a point at a time: his skin with a face on it (eyes, brows, lips, the shade of
@@ -745,8 +1012,11 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
   // (lips are the skin's colour, redder; darker skin's are browner than they are red, the upper one darker than
   // the lower, which is pinker)
   const dark = look.tone / (SKINS.length - 1);
-  const lipUp: Rgb = [skin[0] * (0.84 - 0.1 * dark) + 0.02, skin[1] * (0.66 + 0.02 * dark), skin[2] * (0.67 + 0.04 * dark) + 0.01];
-  const lipLow: Rgb = [skin[0] * (0.88 + 0.12 * dark) + 0.02 + 0.04 * dark, skin[1] * (0.74 + 0.04 * dark), skin[2] * (0.75 + 0.06 * dark) + 0.01 + 0.02 * dark];
+  // (and each man's own: paler and pinker, or browner and darker: Look.lip)
+  const lipOwn: Rgb = look.lip < 0 ? [1.05, 0.92, 0.94] : [0.8, 0.72, 0.7];
+  const own = (c: Rgb): Rgb => [0, 1, 2].map((i) => c[i] * (1 + (lipOwn[i] - 1) * Math.abs(look.lip))) as Rgb;
+  const lipUp = own([skin[0] * (0.84 - 0.1 * dark) + 0.02, skin[1] * (0.66 + 0.02 * dark), skin[2] * (0.67 + 0.04 * dark) + 0.01]);
+  const lipLow = own([skin[0] * (0.88 + 0.12 * dark) + 0.02 + 0.04 * dark, skin[1] * (0.74 + 0.04 * dark), skin[2] * (0.75 + 0.06 * dark) + 0.01 + 0.02 * dark]);
   // (his own face: how full his lips are, how his eyes are set: see look.ts)
   const full = 0.92 + 0.36 * look.face.lips;
   const tiltK = EYE_TILT * look.face.tilt;
@@ -877,6 +1147,8 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
               shade(0.2 * inLip * sstep(my - 0.05 * full, low, py));
             } else shade(0.2 * inLip * sstep(up - 0.03, my, py));
             made('lip', inLip);
+            // (wet along where they meet, and most over the fullness of his lower one: they shine)
+            made('wetLip', inLip * Math.max(sstep(0.03, 0.008, Math.abs(py - my)), lower ? 0.8 * bump(px, py, 0, my - 0.04 * full, 0.16, 0.03) : 0));
           }
           // (the line between them, deepest at the corners)
           to(
@@ -1604,9 +1876,15 @@ function paint(kit: MatchKit, num: string, name: string, mark: string, gear: Gea
 
   // plain patches
   sh.fill(R_SKIN, look.skin, 'skin');
-  // (what is behind his lips is in his head's shade already: its colours are lighter than they will look)
-  sh.fill(R_MOUTH, '#3a1210', 'gullet');
-  sh.fill(R_TEETH, '#f4efe4', 'tooth');
+  // what is behind his lips, each the first half or the second of its picture across (see sheetUv): the dark at the back
+  // of his mouth, his tongue; his teeth (never a white: ivory, yellower the older he is), his gums (pink, and browner on
+  // darker skin, as gums are). Each lighter than it will look: his mouth's own shade is put on it as it is drawn
+  const darker = look.tone / (SKINS.length - 1);
+  const half = (r: Rect, k: 0 | 1): Rect => [r[0] + (k * r[2]) / 2, r[1], r[2] / 2, r[3]];
+  sh.fill(half(R_MOUTH, 0), '#3a1210', 'gullet');
+  sh.fill(half(R_MOUTH, 1), mix('#c46a6c', '#8a4a48', 0.5 * darker), 'tongue');
+  sh.fill(half(R_TEETH, 0), mix('#ece4d2', '#dccaa0', 0.75 * look.age), 'tooth');
+  sh.fill(half(R_TEETH, 1), mix('#cc6e74', '#74403a', 0.75 * darker), 'gum');
   sh.fill(R_TRIM, ring, 'rib');
   // (his locks: the hair's colour, a little lighter and darker along them)
   sh.both(R_HAIR, (ctx, pick) => {
@@ -1795,7 +2073,17 @@ function paint(kit: MatchKit, num: string, name: string, mark: string, gear: Gea
     if (arm) {
       // (his shoulder shines with sweat; his hand, from the wrist on, is a little rougher and its palm paler)
       span(0, 0.55, look.skin, 'sweat');
-      span(2.12, len, mix(look.skin, '#e8c0a8', 0.12), 'hand');
+      // (from over his wrist, not at a line round it: his skin is the same skin on both sides of it)
+      const hand = mix(look.skin, '#e8c0a8', 0.1);
+      sh.both(rect, (ctx, pick) => {
+        const [a, b] = [(HAND_FROM[0] / len) * rect[2], (HAND_FROM[1] / len) * rect[2]];
+        const g = ctx.createLinearGradient(a, 0, b, 0);
+        g.addColorStop(0, pick(look.skin, 'hand'));
+        g.addColorStop(1, pick(hand, 'hand'));
+        ctx.fillStyle = g;
+        ctx.fillRect(a, 0, b - a, rect[3]);
+      });
+      span(HAND_FROM[1], len, hand, 'hand');
       if (gear.sleeve?.arm === side) span(0.28, 2.08, gear.sleeve.color, 'sleeve');
       if (gear.wrist?.arms.includes(side)) span(1.86, 2.1, gear.wrist.color, 'terry');
       if (gear.armband?.arm === side) span(0.62, 0.72, gear.armband.color, 'terry');
@@ -1869,6 +2157,8 @@ const WRAP_SKIN = '0.75';
 /** How much light of its own his head has (a share of its colour), for the lightest skin; the darkest has this many times that again (see uTone). */
 const FACE_FILL = '0.32';
 const FACE_FILL_DARK = '3.2';
+/** How much of a lamp behind him comes through his ears and the wings of his nose toward the camera (a share of its light on his skin's colour). */
+const THROUGH = '2.4';
 /**
  * Light that goes into skin comes out of it a little way on, redder: past the line where a lamp stops falling on
  * him his skin keeps a warm edge of it, as no cloth does (a soft terminator, not a hard one). `skinWrap` is how
@@ -1876,12 +2166,17 @@ const FACE_FILL_DARK = '3.2';
  */
 const SKIN_WRAP = /* glsl */ `
 float skinWrap = 0.0;
+float skinThin = 0.0;
 void RE_Direct_Skin( const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight ) {
   RE_Direct_Physical( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );
   float nl = dot( geometryNormal, directLight.direction );
   float wrap = saturate( ( nl + ${WRAP_SKIN} ) / ( 1.0 + ${WRAP_SKIN} ) );
   float past = max( wrap * wrap - saturate( nl ), 0.0 );
   reflectedLight.directDiffuse += skinWrap * past * directLight.color * BRDF_Lambert( material.diffuseColor ) * vec3( 1.0, 0.4, 0.26 );
+  // (and where he is thin, a lamp behind him shines through him toward the camera, red: his ears, the edges of his nose)
+  // (most at its thin edges, seen edge on)
+  float through = pow( saturate( dot( geometryViewDir, - directLight.direction ) ), 3.0 ) * saturate( 0.25 - nl ) * ( 0.5 + 0.5 * ( 1.0 - abs( dot( geometryNormal, geometryViewDir ) ) ) );
+  reflectedLight.directDiffuse += skinThin * through * ${THROUGH} * directLight.color * material.diffuseColor * vec3( 1.0, 0.24, 0.14 );
 }
 #undef RE_Direct
 #define RE_Direct RE_Direct_Skin`;
@@ -1896,8 +2191,10 @@ function faceUv(px: number, py: number): [number, number] {
 /**
  * His eyes, drawn where his head's picture is lit: close up a picture has too few points for an eye (a dozen across
  * its iris), so there the material draws it itself, as headPainter does but as sharp as the screen: the white in the
- * shade of its lid, the iris with its fibres and dark rim, the pupil, the light in it, the lashes; and his blink, the
- * upper lid down over the ball to the lower one. Far off the picture's own eye is left to show (but for a blink).
+ * shade of its lid (and his blood in it as he tires), the iris under its cornea with its fibres, the dark ring round it
+ * and the pupil, the wet rim of his lower lid, the lashes; and his blink, the upper lid down over the ball to the lower
+ * one. The ball is lit as the ball it is (eyeN, EYE_BALL): its shine and the light in it (CATCH_LIGHT) are where the lamps
+ * put them on its round, as his gaze and the camera have it. Far off the picture's own eye is left to show (but for a blink).
  * (A point of the sheet is taken back to the plane of his face the way it was put there: headU and headV undone.)
  */
 const EYES = (() => {
@@ -1929,51 +2226,84 @@ const EYES = (() => {
       float ax = clamp( fwidth( fp.x ), 0.0008, 0.05 );
       // (how close: all of it once an eye is a dozen pixels high, none of it under five)
       float near = 1.0 - smoothstep( 0.007, 0.018, aa );
-      float show = max( near, step( 0.001, uBlink ) );
+      float show = max( near, step( 0.001, uBlink + abs( uLid.x ) + abs( uLid.y ) ) );
       if ( show > 0.0 ) {
         float t = min( 1.0, abs( ex ) / w );
         float k = 1.0 - t * t;
         float tilt = uEye.x * ex / w;
-        // (his lids go with his eyes: the upper one follows them down, and up a little; the lower one a little down)
-        float up = tilt + uEye.y * pow( k, 0.55 ) + ( 0.6 * min( uGaze.y, 0.0 ) + 0.3 * max( uGaze.y, 0.0 ) ) * k;
-        float low = tilt - 0.037 * pow( k, 0.8 ) + 0.25 * min( uGaze.y, 0.0 ) * k;
+        // (his lids go with his eyes: the upper one rides on the top of his iris, down with it and nearly as far up; the
+        // lower one a little down with it and up a little with it)
+        // (and with his face: the upper one up as he stares, down as he narrows his eyes or tires; the lower one up as
+        // he narrows them or his cheeks come up under them: see uLid)
+        float up = tilt + uEye.y * pow( k, 0.55 ) + ( 0.85 * min( uGaze.y, 0.0 ) + 0.7 * max( uGaze.y, 0.0 ) + uLid.x ) * pow( k, 0.55 );
+        float low = tilt - 0.037 * pow( k, 0.8 ) + ( 0.3 * min( uGaze.y, 0.0 ) + 0.12 * max( uGaze.y, 0.0 ) + uLid.y ) * pow( k, 0.8 );
+        up = max( up, low + 0.002 );
         float lid = mix( up, low - 0.004, uBlink );
         float inX = 1.0 - smoothstep( w - ax, w + ax, abs( ex ) );
         // (shut, his lid covers the picture's own lashes too, along the top of the eye)
         float top = up + 0.016 * smoothstep( 0.0, 0.4, uBlink );
         float gap = inX * smoothstep( low - aa, low + aa, ey ) * ( 1.0 - smoothstep( top - aa, top + aa, ey ) );
         float under = 1.0 - smoothstep( lid - aa, lid + aa, ey );
-        // the ball: its white (never as white as a picture of one: it is wet, and in the shade of his lid and his brow),
-        // in the lid's shade at the top, greyer and redder toward the corners
         float lidShade = 0.36 + 0.64 * smoothstep( lid, lid - 0.055, ey );
-        vec3 eye = ${rgb([0.6, 0.57, 0.53])} * lidShade * vec3( 1.0, 1.0 - 0.22 * t * t, 1.0 - 0.3 * t * t );
-        // (where he looks: both irises over the same way, each in a little toward his nose)
+        // the ball as a ball (in iris radii from its middle, a circle on him): the round of the eye, and over the iris the
+        // cornea standing out of it, turned with his gaze; what the lamps make of it is worked out on its round, not on his
+        // lids' skin (see eyeN: its shine, the light in it)
         vec2 ic0 = vec2( side * uGaze.x - uGaze.z, uGaze.y );
-        vec2 ip = vec2( ( ex - ic0.x ) / ${f(IRIS[0])}, ( ey - ${f(IRIS[2])} - ic0.y ) / ${f(IRIS[1])} );
+        vec2 bp = vec2( ex / ${f(IRIS[0])}, ( ey - ${f(IRIS[2])} ) / ${f(IRIS[1])} );
+        vec2 gz = vec2( ic0.x / ${f(IRIS[0])}, ic0.y / ${f(IRIS[1])} ) / ${f(EYE_BALL[0])};
+        vec3 cc = vec3( gz, sqrt( max( 0.0, 1.0 - dot( gz, gz ) ) ) ) * ${f(EYE_BALL[2])};
+        vec2 cp = bp - cc.xy;
+        float hE = sqrt( max( ${f(0.06 * EYE_BALL[0] ** 2)}, ${f(EYE_BALL[0] ** 2)} - dot( bp, bp ) ) );
+        float hC = cc.z + sqrt( max( 0.0, ${f(EYE_BALL[1] ** 2)} - dot( cp, cp ) ) );
+        vec3 nb = normalize( mix( vec3( bp, hE ) / ${f(EYE_BALL[0])}, vec3( cp, hC - cc.z ) / ${f(EYE_BALL[1])}, smoothstep( -0.12, 0.12, hC - hE ) ) );
+        eyeN = normalize( mat3( viewMatrix ) * ( uHead * vec3( side * nb.x, nb.y, nb.z ) ) );
+        // the iris: behind the cornea, so as the camera goes round him it shifts against the lids (each eye's outward is
+        // his own side); its own colour all through, a little lighter in a ring round the pupil, darker to its rim and then
+        // the dark ring round it (the limbus) going softly into the white; and the light the cornea gathers onto its far
+        // side, under a lamp above: its lower half the brighter. No glow
+        vec3 vh = ( normalize( vViewPosition ) * mat3( viewMatrix ) ) * uHead;
+        vec2 ip = bp - gz * ${f(EYE_BALL[0])} - vec2( side * vh.x, vh.y ) / max( vh.z, 0.35 ) * ${f(EYE_BALL[3])};
         float r = length( ip );
         float ar = aa / ${f(IRIS[1])};
         float ang = atan( ip.y, ip.x );
-        float fibre = 0.86 + 0.14 * sin( ang * 26.0 + 3.0 * sin( ang * 7.0 ) );
-        // (an iris is its own colour all through, a little lighter in a ring round the pupil and dark at its rim: no glow)
-        vec3 ic = uIris * ( 0.95 + 0.4 * smoothstep( 0.44, 0.6, r ) * ( 1.0 - smoothstep( 0.62, 0.9, r ) ) - 0.6 * smoothstep( 0.78, 1.0, r ) ) * fibre * lidShade;
-        eye = mix( eye, max( ic, vec3( 0.0 ) ), 1.0 - smoothstep( 1.0 - ar, 1.0 + ar, r ) );
+        float fineI = 1.0 - smoothstep( 0.0012, 0.004, aa );
+        float fibre = 0.86 + 0.14 * sin( ang * 26.0 + 3.0 * sin( ang * 7.0 ) ) + fineI * 0.12 * ( noise3( vec3( ang * 14.0, r * 9.0, side ) ) - 0.5 );
+        vec3 ic = uIris * ( 0.95 + 0.4 * smoothstep( 0.44, 0.6, r ) * ( 1.0 - smoothstep( 0.62, 0.9, r ) ) - 0.45 * smoothstep( 0.78, 1.0, r ) ) * fibre;
+        ic *= 1.0 + 0.6 * smoothstep( 0.1, 0.8, - ip.y ) * ( 1.0 - smoothstep( 0.7, 0.95, r ) );
+        // the white: never as white as a picture of one (it is wet, and in the shade of his lid and his brow), greyer and
+        // redder toward the corners; and as he tires, his blood in it: fine vessels run in from the corners, and a flush
+        float tired = uWorn.z;
+        vec3 eye = ${rgb([0.6, 0.57, 0.53])} * vec3( 1.0, 1.0 - ( 0.22 + 0.12 * tired ) * t * t, 1.0 - ( 0.3 + 0.12 * tired ) * t * t );
+        float vein = 1.0 - abs( 2.0 * noise3( vec3( atan( bp.y, bp.x ) * 7.0 + 1.2 * noise3( vec3( bp * 2.5, side ) ), length( bp ) * 1.4, side * 3.0 ) ) - 1.0 );
+        vein = fineI * smoothstep( 0.9, 0.985, vein ) * smoothstep( 0.3, 0.9, t );
+        eye = mix( eye, ${rgb([0.66, 0.2, 0.18])}, ( 0.2 + 0.65 * tired ) * vein );
+        eye *= lidShade;
+        float limbus = smoothstep( 0.86, 1.0, r ) * ( 1.0 - smoothstep( 1.0, 1.14 + ar, r ) );
+        eye = mix( eye, ic * lidShade, 1.0 - smoothstep( 1.0 - ar, 1.0 + ar, r ) );
+        eye = mix( eye, ${rgb([0.09, 0.075, 0.07])} * lidShade, 0.7 * limbus );
         eye = mix( eye, vec3( 0.002 ), 1.0 - smoothstep( 0.45 - ar, 0.45 + ar, r ) );
-        // (the light in it: up and to one side, the same side in both; on the round of the eye, so it moves less than the iris)
-        float cl = length( vec2( ( ex - side * 0.02 - 0.5 * ic0.x ) / ${f(IRIS[0])}, ( ey - ${f(IRIS[2] + 0.017)} - 0.5 * ic0.y ) / ${f(IRIS[1])} ) );
-        eye = mix( eye, vec3( 1.0 ), 0.85 * ( 1.0 - smoothstep( 0.11 - ar, 0.11 + ar, cl ) ) );
-        // (the wet edge of his lower lid along the bottom of it, and the pink of its inner corner)
-        float wet = inX * ( 1.0 - smoothstep( low + 0.004, low + 0.012 + aa, ey ) );
-        eye = mix( eye, uSkin * vec3( 1.3, 0.95, 0.9 ) + vec3( 0.04, 0.025, 0.025 ), 0.5 * wet );
+        // (the pink of its inner corner)
         eye = mix( eye, ${rgb([0.62, 0.38, 0.35])} * lidShade, 0.75 * smoothstep( - w + 0.045, - w + 0.012, ex ) );
-        // (and a fainter one across from it, the floor's)
-        float cl2 = length( vec2( ( ex + side * 0.022 - 0.5 * ic0.x ) / ${f(IRIS[0])}, ( ey - ${f(IRIS[2] - 0.014)} - 0.5 * ic0.y ) / ${f(IRIS[1])} ) );
-        eye = mix( eye, vec3( 0.6, 0.5, 0.4 ), 0.3 * ( 1.0 - smoothstep( 0.1, 0.3, cl2 ) ) );
-        // his lid over it as far as it is down, in his own skin; lashes along its edge
+        // his lid over it as far as it is down, in his own skin
         vec3 over = uSkin * mix( 0.62, 0.82, smoothstep( lid, top, ey ) );
         vec3 drawn = mix( over, eye, under );
         diffuseColor.rgb = mix( diffuseColor.rgb, drawn, gap * show );
-        float lash = inX * ( 1.0 - smoothstep( 0.006, 0.006 + 2.0 * aa, abs( ey - lid - 0.003 ) ) ) * ( 0.7 + 0.3 * smoothstep( - w, w, ex ) );
-        diffuseColor.rgb = mix( diffuseColor.rgb, ${rgb([0.07, 0.05, 0.045])}, 0.92 * lash * show );
+        // the rim of his lower lid (its waterline), a wet pink band along the foot of the ball, its own thickness; the
+        // tears along its edge catch the light (eyeTear)
+        float rim = inX * smoothstep( low - 0.008 - aa, low - 0.005, ey ) * ( 1.0 - smoothstep( low - aa, low + aa, ey ) );
+        diffuseColor.rgb = mix( diffuseColor.rgb, uSkin * vec3( 1.0, 0.62, 0.62 ) * 0.72, 0.7 * rim * show * ( 1.0 - uBlink ) );
+        eyeTear = inX * exp( - pow( ( ey - low - 0.001 ) / max( 0.0011, aa ), 2.0 ) ) * show * ( 1.0 - uBlink ) * fineI * ( 1.0 - t * t );
+        // lashes: along the upper lid's edge, a run of hairs curling up off it (longer and heavier toward the outer corner,
+        // each its own up close, a dark line further off), and a sparse thinner row under the lower lid's rim
+        float lt = smoothstep( - w, w, ex );
+        float above = ey - lid;
+        float lashLen = 0.007 + 0.008 * lt;
+        float strand = smoothstep( 0.3, 0.75, noise3( vec3( ( ex - above * ( 0.6 * lt - 0.2 ) ) * 520.0, side * 7.0, 0.0 ) ) );
+        float lash = inX * smoothstep( -0.0025 - aa, -0.0005, above ) * pow( 1.0 - smoothstep( 0.0, lashLen + aa, above ), 1.5 ) * mix( 0.9, 0.4 + 0.6 * strand, fineI ) * ( 0.75 + 0.25 * lt );
+        float below = low - 0.0075 - ey;
+        float lash2 = inX * smoothstep( -0.001, 0.0005, below ) * ( 1.0 - smoothstep( 0.0, 0.004 + aa, below ) ) * mix( 0.2, 0.4 * strand, fineI ) * ( 0.2 + 0.8 * lt );
+        diffuseColor.rgb = mix( diffuseColor.rgb, ${rgb([0.07, 0.05, 0.045])}, 0.94 * max( lash, lash2 ) * show );
+        eyeWet = gap * under * show;
         shut = max( shut, gap * ( 1.0 - under ) );
         eyeK = max( eyeK, gap * under * show );
       }
@@ -1993,14 +2323,165 @@ interface Told {
   uEye: { value: Vector2 };
   /** Where his eyes look, on the plane of his face: across (to his left), up, and how far each comes in toward his nose. */
   uGaze: { value: Vector3 };
+  /** How far his lids stand from where they are set, on the plane of his face (up): the upper one's, the lower one's. */
+  uLid: { value: Vector2 };
   uMouth: { value: number };
+  /** His face as it moves (see FACE_MOVE): a smile, a grimace, lips pressed, a snarl; then lips apart, his cheeks up. */
+  uMove: { value: Vector4 };
+  uMove2: { value: Vector4 };
+  /** And more of it: lips rounded, cheeks blown out, lips stretched wide; and how one-sided his mouth is (its sign the side). */
+  uMove3: { value: Vector4 };
   /** His face's own shape (look.ts): his cheekbones, the flesh of his cheeks, his chin, his jaw's corners; then his lips, his brow, how deep his eyes are set, his nose's wings. */
   uShape: { value: Vector4 };
   uShape2: { value: Vector4 };
+  /** How his head is turned in the world (from as built): his eyes' round is lit as it faces (see EYES). */
+  uHead: { value: Matrix3 };
+  /** What the game has done to his skin (see Fig.skin): how wet it is with sweat, how flushed he is, how tired his eyes are; and how lived-in his face is (Look.age). */
+  uWorn: { value: Vector4 };
+  /** The lines his face makes as it moves (see CREASE_DEEP): his brows raised, drawn down, his eyes narrowed, shut tight. */
+  uCrease: { value: Vector4 };
 }
+
+/**
+ * The lines his face makes as it moves, how deep each is at the most (ft: a fraction of a millimetre to most of one),
+ * times as much again as his years make it (CREASE_AGE: the youngest face's share, the most lived-in's: Look.age); and how
+ * dark the deepest is down in it (CREASE_SHADE: a share of his skin's colour taken off). Each is the
+ * hollow of a fold and the skin bunched beside it, as a bump on his skin's light, and the shade down in it: lines across
+ * his forehead with his brows raised; the two between his brows as he frowns (and one across the root of his nose for a
+ * hard frown); crow's-feet out from his eyes' outer corners and a fold under each lower lid with the skin bunched over it,
+ * as he narrows his eyes or his cheeks come up; the fold from each wing of his nose round his mouth, deeper as he grins or
+ * snarls, his cheek full beside it; his chin dimpled and the fold under his lower lip as he presses his lips; short lines
+ * across his nose as he snarls or shuts his eyes tight. None at rest: a man's face at rest is smooth.
+ */
+const CREASE_DEEP = { brow: 0.0013, frown: 0.0018, crow: 0.0012, lid: 0.0009, fold: 0.0028, chin: 0.0016, nose: 0.0008 } as const;
+const CREASE_AGE = [0.7, 1.8] as const;
+const CREASE_SHADE = '0.22';
+/**
+ * His sweat (see Fig.skin): how much smoother it makes his skin's shine at the most (a share of its roughness), and the
+ * beads of it where it gathers (his forehead, his temples, his nose, over his lip): this far apart (ft, a couple of
+ * millimetres), how high (a share of a bead's width), and how smooth a bead's shine is. His hair is darker wet, by this
+ * much at the most.
+ */
+const WET_SHINE = 0.5;
+const BEAD_CELL = 0.0065;
+const BEAD_HIGH = 0.35;
+const BEAD_ROUGH = 0.1;
+const WET_HAIR = 0.28;
+/** His brows' hairs close up (see stuffMaterial): how many along his brow and up it to a unit of the plane of his face, and how far a hair stands off his skin (ft). */
+const BROW_HAIRS = ['420.0', '30.0', '0.0002'] as const;
+/** A flush, at its reddest (what it does to his skin's colour), and how much less of it shows on the darkest skin (a share). */
+const FLUSH_TO = 'vec3( 1.04, 0.84, 0.85 )';
+const FLUSH_DARK = 0.55;
+
+/** What the game does to his skin and his face's lines, in his material (see CREASE_DEEP, WET_SHINE): the workings. */
+const WORN_PARS = /* glsl */ `
+float valley( float d, float w ) { return exp( - d * d / ( w * w ) ); }
+// (his face's lines at a place on the plane of his face: how high his skin stands there (ft), and how much of a hollow's shade)
+vec2 creases( vec2 fp ) {
+  float apx = abs( fp.x );
+  float age = mix( ${CREASE_AGE[0].toFixed(2)}, ${CREASE_AGE[1].toFixed(2)}, uWorn.w );
+  float h = 0.0;
+  float dark = 0.0;
+  float raise = uCrease.x * age;
+  if ( raise > 0.0 && fp.y > 0.28 && apx < 0.66 ) {
+    float arch = 0.035 * sin( clamp( ( apx - 0.05 ) / 0.5, 0.0, 1.0 ) * 3.14159 );
+    float across = 1.0 - smoothstep( 0.4, 0.62, apx );
+    for ( int i = 0; i < 4; i ++ ) {
+      float fi = float( i );
+      float on = smoothstep( 0.22, 0.55, noise3( vec3( apx * 7.0 + fi * 3.7, fi * 1.3, 0.5 ) ) ) * across;
+      float v = valley( fp.y - 0.355 - 0.066 * fi - arch * ( 1.0 - 0.2 * fi ), 0.0095 ) * on;
+      h -= ${CREASE_DEEP.brow} * raise * v;
+      dark = max( dark, raise * v );
+    }
+  }
+  float frown = uCrease.y * age;
+  if ( frown > 0.0 && apx < 0.24 && fp.y > 0.06 && fp.y < 0.4 ) {
+    float along = smoothstep( 0.11, 0.16, fp.y ) * ( 1.0 - smoothstep( 0.2, 0.3, fp.y ) );
+    float v = valley( apx - 0.05 - 0.12 * ( fp.y - 0.14 ), 0.011 * ( 1.2 - along * 0.4 ) ) * along;
+    float v2 = valley( fp.y - 0.15, 0.008 ) * ( 1.0 - smoothstep( 0.04, 0.09, apx ) ) * smoothstep( 0.4, 0.9, uCrease.y );
+    h += frown * ( - ${CREASE_DEEP.frown} * v - 0.5 * ${CREASE_DEEP.frown} * v2 + 0.4 * ${CREASE_DEEP.frown} * valley( apx, 0.03 ) * along );
+    dark = max( dark, frown * max( v, 0.6 * v2 ) );
+  }
+  float crow = max( uCrease.z, max( 0.8 * uMove2.y, uCrease.w ) ) * age;
+  if ( crow > 0.0 && apx > 0.42 && apx < 0.78 && fp.y > -0.12 && fp.y < 0.26 ) {
+    vec2 q = vec2( apx - 0.525, fp.y - 0.075 );
+    float r = length( q );
+    float a = atan( q.y, q.x );
+    float v = 0.0;
+    for ( int i = 0; i < 4; i ++ ) {
+      float fi = float( i );
+      v = max( v, valley( ( a + 0.65 - 0.42 * fi - 0.06 * sin( r * 40.0 + fi * 2.0 ) ) * r, 0.0068 ) * ( 0.6 + 0.4 * sin( fi * 2.3 + 1.0 ) ) );
+    }
+    v *= smoothstep( 0.025, 0.05, r ) * ( 1.0 - smoothstep( 0.1, 0.17, r ) );
+    h -= ${CREASE_DEEP.crow} * crow * v;
+    dark = max( dark, crow * v );
+  }
+  float bunch = max( uCrease.z, uMove2.y ) * age;
+  if ( bunch > 0.0 && apx > 0.18 && apx < 0.62 && fp.y > -0.1 && fp.y < 0.06 ) {
+    float t = clamp( abs( apx - 0.38 ) / 0.152, 0.0, 1.0 );
+    float yl = 0.032 - 0.037 * pow( 1.0 - t * t, 0.8 ) - 0.006 * t;
+    float along = 1.0 - smoothstep( 0.12, 0.2, abs( apx - 0.4 ) );
+    float v = valley( fp.y - yl, 0.006 ) * along;
+    h += bunch * ${CREASE_DEEP.lid} * ( 1.3 * valley( fp.y - yl - 0.016, 0.012 ) * along - v );
+    dark = max( dark, 0.8 * bunch * v );
+  }
+  float grin = max( max( uMove.x, uMove.w ), 0.7 * uMove2.y ) * ( 0.75 + 0.25 * age );
+  if ( grin > 0.0 && apx > 0.12 && apx < 0.62 && fp.y < -0.18 && fp.y > -0.82 ) {
+    vec2 f = vec2( apx - 0.225, fp.y + 0.31 );
+    vec2 dir = vec2( 0.4706, -0.8824 );
+    float along = clamp( dot( f, dir ) / 0.4, 0.0, 1.0 );
+    vec2 off = f - dir * along * 0.4;
+    // (it bows out round the corner of his mouth on its way down)
+    float d = dot( off, vec2( 0.8824, 0.4706 ) ) - 0.05 * along * along;
+    float v = valley( d, 0.014 ) * smoothstep( 0.0, 0.08, along ) * ( 1.0 - smoothstep( 0.7, 1.0, along ) );
+    float cheek = valley( d - 0.04, 0.03 ) * smoothstep( 0.0, 0.1, along ) * ( 1.0 - smoothstep( 0.6, 1.0, along ) );
+    h += grin * ${CREASE_DEEP.fold} * ( 0.6 * cheek - v );
+    dark = max( dark, grin * v );
+  }
+  float chin = max( uMove.z, 0.6 * uMove.y );
+  if ( chin > 0.0 && apx < 0.32 && fp.y < -0.6 && fp.y > -1.0 ) {
+    float ball = valley( apx, 0.15 ) * valley( fp.y + 0.84, 0.09 );
+    float pits = noise3( vec3( fp * 70.0, 1.0 ) ) + 0.5 * noise3( vec3( fp * 150.0, 2.0 ) );
+    float v = valley( fp.y + 0.69, 0.012 ) * ( 1.0 - smoothstep( 0.15, 0.25, apx ) );
+    h += chin * ${CREASE_DEEP.chin} * ( ball * ( pits - 0.75 ) - v );
+    dark = max( dark, chin * ( 0.6 * v + 0.45 * ball * smoothstep( 0.65, 0.3, pits ) ) );
+  }
+  float nose = max( uMove.w, uCrease.w );
+  if ( nose > 0.0 && apx > 0.04 && apx < 0.22 && fp.y > -0.06 && fp.y < 0.24 ) {
+    float v = 0.0;
+    for ( int i = 0; i < 3; i ++ ) v = max( v, valley( fp.y - 0.03 - 0.05 * float( i ) - 0.7 * ( apx - 0.11 ), 0.006 ) );
+    v *= smoothstep( 0.05, 0.08, apx ) * ( 1.0 - smoothstep( 0.15, 0.21, apx ) );
+    h -= ${CREASE_DEEP.nose} * nose * v;
+    dark = max( dark, 0.7 * nose * v );
+  }
+  return vec2( h, min( 1.0, dark ) );
+}
+// (the beads of his sweat about a place (in beads' widths): how high one stands there (in those widths), and how much of
+// one it is; only so many of them as he is wet)
+float beads( vec2 q, float wet, out float on ) {
+  vec2 cell = floor( q );
+  float h = 0.0;
+  on = 0.0;
+  for ( int j = -1; j <= 1; j ++ )
+    for ( int i = -1; i <= 1; i ++ ) {
+      vec2 c = cell + vec2( float( i ), float( j ) );
+      vec3 r = vec3( grain3( vec3( c, 3.0 ) ), grain3( vec3( c, 7.0 ) ), grain3( vec3( c, 11.0 ) ) );
+      if ( r.z > wet ) continue;
+      float rad = 0.2 + 0.28 * fract( r.x * 7.3 + r.y * 3.1 );
+      float d = length( q - c - 0.5 - ( r.xy - 0.5 ) * 0.6 ) / rad;
+      if ( d < 1.0 ) {
+        h = max( h, sqrt( 1.0 - d * d ) * rad );
+        on = max( on, smoothstep( 1.0, 0.75, d ) );
+      }
+    }
+  return h;
+}`;
 
 /** Where his head bone is as built (figure.py's HEAD_Y), ft: his face's shape is worked out round it. */
 const HEAD_REST = 6.1;
+/** His head's middle as built, and its half sizes (ft), as a shader has them. */
+const HEAD_C = `vec3( 0.0, ${(HEAD_REST + HEAD_MID.y).toFixed(3)}, ${HEAD_MID.z.toFixed(3)} )`;
+const HEAD_S = `vec3( ${HEAD_SIZE.map((v) => v.toFixed(3)).join(', ')} )`;
 /**
  * His face's own shape, as a man's bones are his own: on the one head every man shares, how far (ft) a point of
  * his face stands out or in for him (his cheekbones high and full or flat, his cheeks round or hollow under the
@@ -2034,11 +2515,93 @@ float faceShape( vec3 p ) {
   return f * 0.36;
 }`;
 
+/** The line of his mouth on the plane of his face (figure.py's MOUTH_Y), and how far out from its middle his lips part (figure.py's SLIT): past that they meet, at its corners. */
+const MOUTH_Y = -0.522;
+const SLIT = 0.275;
+/**
+ * His face as it moves, on the one head (each a share of uMove and uMove2: see Fig.face): how far (ft, as built) a
+ * point of his face goes for a smile (the corners of his mouth up, out and back round his teeth), his cheeks coming
+ * up (forward and up under his eyes, bunching his lower lids), a grimace (the corners down and out), lips pressed
+ * (each drawn in toward the line between them, and back), a snarl (his upper lip up off his teeth, his nose's wings
+ * with it) and lips apart (the upper a little up, the lower further down). His lips part along the line the model
+ * splits them on: a point is his upper lip's or his lower one's by which side of it it was built (`up`, worked out
+ * once for the point: the two edges of the split are a hair apart), and nothing parts past the split's ends.
+ * Then (uMove3) his lips rounded (drawn in from the corners and pushed forward, as for "oo" or to blow), his cheeks
+ * blown out, his lips stretched wide and flat ("ee", or a man straining); and one side of his mouth taken further
+ * than the other (a smirk, a sneer: uMove3.w, its sign the side, eased across the middle of his lips so the two
+ * halves never part company there).
+ */
+const FACE_MOVE = /* glsl */ `
+uniform vec4 uMove;
+uniform vec4 uMove2;
+uniform vec4 uMove3;
+float lipUp( vec3 p ) {
+  vec3 n = normalize( ( p - ${HEAD_C} ) / ${HEAD_S} );
+  return smoothstep( -0.0006, 0.0006, n.y / max( n.z, 0.3 ) * 0.8 - ${MOUTH_Y.toFixed(3)} );
+}
+vec3 faceMove( vec3 p, float up ) {
+  vec3 n = normalize( ( p - ${HEAD_C} ) / ${HEAD_S} );
+  float front = smoothstep( 0.15, 0.5, n.z );
+  if ( front <= 0.0 ) return vec3( 0.0 );
+  vec2 fp = n.xy / max( n.z, 0.3 ) * 0.8;
+  float side = fp.x < 0.0 ? -1.0 : 1.0;
+  float ax = abs( fp.x );
+  float my = fp.y - ${MOUTH_Y.toFixed(3)};
+  // (how far a point goes with the corners of his mouth: none of the way in its middle, most at the corners, less
+  // and less past them and up and down from its line)
+  float outward = smoothstep( 0.02, 0.3, ax ) * exp( - pow( max( ax - 0.29, 0.0 ) / 0.17, 2.0 ) ) * exp( - my * my / 0.02 );
+  float corner = faceG( vec2( ax, my ), vec2( 0.29, 0.0 ), vec2( 0.12, 0.11 ) );
+  float cheek = faceG( vec2( ax, fp.y ), vec2( 0.44, -0.2 ), vec2( 0.18, 0.15 ) );
+  // (his lips about the line between them, and how much of them parts: none at the split's ends)
+  float lips = exp( - my * my / 0.009 ) * smoothstep( 0.36, 0.22, ax );
+  float slit = sqrt( max( 0.0, 1.0 - pow( ax / ${SLIT.toFixed(3)}, 2.0 ) ) ) * exp( - my * my / 0.012 );
+  // (one side more, the other less: none of it in the very middle)
+  float lop = clamp( 1.0 + uMove3.w * clamp( fp.x / 0.08, -1.0, 1.0 ), 0.0, 2.0 );
+  vec3 d = uMove.x * lop * ( vec3( side * 0.02, 0.026, 0.0 ) * outward - vec3( 0.0, 0.0, 0.014 ) * corner );
+  d += uMove2.y * lop * cheek * vec3( side * 0.002, 0.012, 0.008 );
+  d += uMove.y * lop * ( vec3( side * 0.018, -0.026, 0.0 ) * outward - vec3( 0.0, 0.0, 0.004 ) * corner );
+  d += uMove.z * ( lips * vec3( - side * 0.005 * smoothstep( 0.1, 0.3, ax ), -0.4 * my, -0.01 ) + faceG( vec2( ax, fp.y ), vec2( 0.0, -0.8 ), vec2( 0.2, 0.1 ) ) * vec3( 0.0, 0.006, 0.004 ) );
+  d.y += uMove.w * lop * ( 0.02 * up * slit * exp( - pow( ( ax - 0.08 ) / 0.2, 2.0 ) ) + 0.006 * faceG( vec2( ax, fp.y ), vec2( 0.15, -0.3 ), vec2( 0.08, 0.07 ) ) );
+  d.y += uMove2.x * slit * ( 0.006 * up - 0.013 * ( 1.0 - up ) );
+  // (rounded: in from the corners toward the middle, and forward, the middle a little open)
+  d += uMove3.x * ( lips * vec3( - side * 0.022 * smoothstep( 0.04, 0.3, ax ), 0.0, 0.02 ) + corner * vec3( - side * 0.014, 0.0, 0.006 ) );
+  d.y += uMove3.x * slit * ( 0.004 * up - 0.006 * ( 1.0 - up ) );
+  // (blown out: his cheeks forward and out between his cheekbones and his jaw, his lips a little forward on the air)
+  d += uMove3.y * ( faceG( vec2( ax, fp.y ), vec2( 0.4, -0.46 ), vec2( 0.18, 0.17 ) ) * vec3( side * 0.03, -0.002, 0.022 ) + lips * vec3( 0.0, 0.0, 0.005 ) );
+  // (stretched: the corners straight out and a little back, his lips drawn thin over his teeth)
+  d += uMove3.z * ( vec3( side * 0.022, -0.003, 0.0 ) * outward - vec3( 0.0, 0.0, 0.008 ) * corner + lips * vec3( 0.0, -0.15 * my, -0.002 ) );
+  return d * front;
+}`;
+
 /** Where his head is on the sheet (in uv): there the stuff picture's third channel is how far his hair stands off him, not a knit. */
 const HEAD_UV = [R_HEAD[0] / SHEET, 1 - (R_HEAD[1] + R_HEAD[3]) / SHEET, (R_HEAD[0] + R_HEAD[2]) / SHEET, 1 - R_HEAD[1] / SHEET].map((v) => v.toFixed(4));
 const ON_HEAD = (uv: string) => `( ${uv}.x > ${HEAD_UV[0]} && ${uv}.y > ${HEAD_UV[1]} && ${uv}.y < ${HEAD_UV[3]} )`;
-/** Where his teeth are on the sheet (in uv). */
-const TEETH_UV = [R_TEETH[0] / SHEET, (R_TEETH[0] + R_TEETH[2]) / SHEET, 1 - R_TEETH[1] / SHEET].map((v) => v.toFixed(4));
+/**
+ * Where his mouth's insides are on the sheet (in uv): from the dark of it across to his gums (R_MOUTH and R_TEETH, side by
+ * side, each two halves: see sheetUv), under this; and a quarter of that across: which part a point is (the back of his
+ * mouth, his tongue, his teeth, his gums).
+ */
+const INSIDES_UV = [R_MOUTH[0] / SHEET, (R_TEETH[0] + R_TEETH[2]) / SHEET, 1 - R_MOUTH[1] / SHEET, R_MOUTH[2] / 2 / SHEET].map((v) => v.toFixed(5));
+/**
+ * His mouth as built (figure.py's mouth): the line of it at its middle (ft up), how far forward his upper teeth's front
+ * faces are there, and how high their edges are and his lower teeth's.
+ */
+const MOUTH_MID = 5.912;
+const TEETH_FRONT = 0.343;
+const TEETH_EDGES = [5.905, 5.909] as const;
+/**
+ * How far into his mouth the light gets (ft behind his front teeth: a share of it is left each time), with his lips
+ * just apart and with his jaw wide open; and how much of it gets past lips just apart at all.
+ */
+const MOUTH_LIGHT = [0.03, 0.052] as const;
+const MOUTH_SHUT = 0.05;
+/** His tongue's papillae, this many to the foot of him as built (a millimetre or so apart), and how deep (ft). */
+const PAPILLAE = 300;
+const PAPILLAE_DEEP = 0.00025;
+/** Above his ears' strip on the sheet (in uv): his head's own picture. */
+const INSIDE_V = (1 - (R_EAR[1] - 2) / SHEET).toFixed(4);
+/** The dark inside his mouth, as the material draws the inside of his head (linear). */
+const MOUTH_DARK = 'vec3( 0.022, 0.006, 0.005 )';
 
 /**
  * His material, from his sheet and its stuff picture. `plain` (a device that can't keep up) is a
@@ -2055,7 +2618,7 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
     // (and where each point of him is as built, for his skin's grain: see PORES)
     // (and his face is his own shape: the point moved out or in, and the way it faces turned with the slope of that)
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', `#include <common>\nuniform sampler2D uStuff;\nvarying vec3 vRest;\n${FACE_SHAPE}`)
+      .replace('#include <common>', `#include <common>\nuniform sampler2D uStuff;\nvarying vec3 vRest;\n${FACE_SHAPE}\n${FACE_MOVE}`)
       .replace(
         '#include <beginnormal_vertex>',
         /* glsl */ `#include <beginnormal_vertex>
@@ -2067,7 +2630,18 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
           float g1 = ( faceShape( position + t1 * 0.012 ) - f0 ) / 0.012;
           float g2 = ( faceShape( position + t2 * 0.012 ) - f0 ) / 0.012;
           faceOff = objectNormal * f0;
-          objectNormal = normalize( objectNormal - t1 * g1 - t2 * g2 );
+          vec3 turned = objectNormal - t1 * g1 - t2 * g2;
+          // (and as it moves, when it does: the point carried, and the way it faces worked out again from the moved
+          // surface's two ways along it there)
+          if ( dot( uMove, uMove ) + dot( uMove2, uMove2 ) + dot( uMove3, uMove3 ) > 0.0 ) {
+            float up = lipUp( position );
+            vec3 m0 = faceMove( position, up );
+            vec3 m1 = faceMove( position + t1 * 0.004, up ) - m0;
+            vec3 m2 = faceMove( position + t2 * 0.004, up ) - m0;
+            faceOff += m0;
+            turned = cross( ( t1 + objectNormal * g1 ) * 0.004 + m1, ( t2 + objectNormal * g2 ) * 0.004 + m2 );
+          }
+          objectNormal = normalize( turned );
         }`,
       )
       .replace(
@@ -2085,7 +2659,7 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
     sh.fragmentShader = sh.fragmentShader
       .replace(
         '#include <common>',
-        `#include <common>\n${STUFF_PARS}\nuniform float uTone;\nuniform vec3 uSkin;\nuniform float uBlink;\nuniform vec3 uIris;\nuniform vec2 uEye;\nuniform vec3 uGaze;\nuniform float uMouth;\nvarying vec3 vRest;${fuzz ? '\nvarying float vFuzz;' : ''}`,
+        `#include <common>\n${STUFF_PARS}\nuniform float uTone;\nuniform vec3 uSkin;\nuniform float uBlink;\nuniform vec3 uIris;\nuniform vec2 uEye;\nuniform vec3 uGaze;\nuniform vec2 uLid;\nuniform float uMouth;\nuniform mat3 uHead;\nuniform vec4 uWorn;\nuniform vec4 uCrease;\nuniform vec4 uMove;\nuniform vec4 uMove2;\nvarying vec3 vRest;${fuzz ? '\nvarying float vFuzz;' : ''}\n${WORN_PARS}`,
       )
       .replace('#include <lights_physical_pars_fragment>', `#include <lights_physical_pars_fragment>\n${SKIN_WRAP}`)
       // (skin's hollows are warm, not grey: the shade baked into him takes less of its red than of its blue)
@@ -2112,20 +2686,120 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
         }
         float shut = 0.0;
         float eyeK = 0.0;
+        vec3 eyeN = vec3( 0.0, 0.0, 1.0 );
+        float eyeWet = 0.0;
+        float eyeTear = 0.0;
         ${EYES}
         // (an eye drawn by the picture, far off: the whites take none of his face's own light, or they glow)
         eyeK = max( eyeK, skinK * ( 1.0 - smoothstep( 0.1, 0.22, stuff.r ) ) );
-        // (dark skin's hollows go to black under a light from above long before light skin's do: its shade is let off some)
-        vec3 baked = mix( vColor.rgb, vec3( 1.0 ), 0.35 * uTone * skinK );
-        diffuseColor.rgb *= mix( vColor.rgb, pow( baked, vec3( 0.9, 1.02, 1.1 ) ), skinK );
-        // (his teeth, in the dark behind his lips till his mouth comes open)
-        if ( vMapUv.x > ${TEETH_UV[0]} && vMapUv.x < ${TEETH_UV[1]} && vMapUv.y < ${TEETH_UV[2]} ) diffuseColor.rgb *= mix( 0.1, 1.0, smoothstep( 0.03, 0.4, uMouth ) );`,
+        // his mouth's insides (figure.py's mouth): the back of it, his tongue, his teeth, his gums. No light of the
+        // building's gets far in past his lips: the further back a point is, the less of it (and the more of it the wider
+        // his mouth is open), and lips just apart let little in at all; his teeth's edges, where the enamel is thin, are
+        // greyer and a little blue, the dark behind them showing through; each part's roots, under his lips, in their shade
+        float mouthK = 0.0;
+        float mouthLit = 1.0;
+        float mouthPart = -1.0;
+        if ( vMapUv.y < ${INSIDES_UV[2]} && vMapUv.x > ${INSIDES_UV[0]} && vMapUv.x < ${INSIDES_UV[1]} ) {
+          mouthK = 1.0;
+          mouthPart = floor( ( vMapUv.x - ${INSIDES_UV[0]} ) / ${INSIDES_UV[3]} );
+          float deep = max( 0.0, ${TEETH_FRONT.toFixed(3)} - vRest.z );
+          mouthLit = exp( - deep / mix( ${MOUTH_LIGHT[0]}, ${MOUTH_LIGHT[1]}, uMouth ) ) * mix( ${MOUTH_SHUT}, 1.0, smoothstep( 0.03, 0.45, uMouth ) );
+          mouthLit *= 1.0 - 0.45 * smoothstep( 0.012, 0.04, abs( vRest.y - ${MOUTH_MID.toFixed(3)} ) );
+          // (and his jaw's under his upper teeth and his palate: little of a light from above gets down to it)
+          mouthLit *= 1.0 - 0.3 * smoothstep( 0.0, 0.004, ${TEETH_EDGES[0].toFixed(3)} - vRest.y );
+          // (a tooth's edge, and toward its root, where the dentin shows through it, a little yellower)
+          if ( mouthPart == 2.0 ) {
+            float edge = 1.0 - smoothstep( 0.0012, 0.0055, min( abs( vRest.y - ${TEETH_EDGES[0].toFixed(3)} ), abs( vRest.y - ${TEETH_EDGES[1].toFixed(3)} ) ) );
+            diffuseColor.rgb *= mix( vec3( 1.0 ), vec3( 0.68, 0.71, 0.78 ), 0.6 * edge ) * mix( vec3( 1.0 ), vec3( 1.0, 0.94, 0.84 ), smoothstep( 0.012, 0.03, min( abs( vRest.y - ${TEETH_EDGES[0].toFixed(3)} ), abs( vRest.y - ${TEETH_EDGES[1].toFixed(3)} ) ) ) );
+          }
+        } else {
+          // (dark skin's hollows go to black under a light from above long before light skin's do: its shade is let off some)
+          vec3 baked = mix( vColor.rgb, vec3( 1.0 ), 0.35 * uTone * skinK );
+          diffuseColor.rgb *= mix( vColor.rgb, pow( baked, vec3( 0.9, 1.02, 1.1 ) ), skinK );
+        }
+        diffuseColor.rgb *= mouthLit;
+        // what the game does to his skin, and the lines his face makes (see CREASE_DEEP, WET_SHINE, Fig.skin): worked out on
+        // the plane of his face as figure.py's head_r has it, each only as near as it can be seen; and where light gets
+        // through him (his ears, the wings and the tip of his nose)
+        float creaseH = 0.0;
+        float beadH = 0.0;
+        float beadK = 0.0;
+        float wetK = 0.0;
+        float hairWet = 0.0;
+        {
+          vec3 hn = normalize( ( vRest - ${HEAD_C} ) / ${HEAD_S} );
+          vec2 fp = hn.xy / max( hn.z, 0.3 ) * 0.8;
+          float apx = abs( fp.x );
+          float onHead = ${ON_HEAD('vMapUv')} ? 1.0 : 0.0;
+          float ear = vMapUv.y < ${INSIDE_V} ? onHead : 0.0;
+          float faceK = onHead * ( 1.0 - ear ) * smoothstep( 0.1, 0.5, hn.z ) * skinK;
+          float fine = 1.0 - smoothstep( 0.004, 0.012, fwidth( fp.y ) );
+          if ( faceK * fine > 0.0 && dot( uCrease, uCrease ) + dot( uMove, uMove ) + uMove2.y > 0.0 ) {
+            vec2 cd = creases( fp );
+            creaseH = cd.x * faceK * fine;
+            diffuseColor.rgb *= 1.0 - ${CREASE_SHADE} * cd.y * faceK * fine;
+          }
+          // (his brows close up: the picture has a few points to a hair; here they are hairs, each its own, upright beside
+          // his nose and laid over toward the tail (as headPainter lays them), as fine as the screen; as much of them as
+          // the picture is darker than his skin, about the line of his brow)
+          float bq = ( apx - 0.15 ) / 0.52;
+          float fineB = 1.0 - smoothstep( 0.0015, 0.004, fwidth( fp.y ) );
+          if ( faceK * fineB > 0.0 && bq > -0.12 && bq < 1.1 && fp.y > 0.1 && fp.y < 0.38 ) {
+            float yb = 0.2 + 0.07 * sin( clamp( bq * 1.15, 0.0, 1.0 ) * 1.9478 ) - 0.035 * smoothstep( 0.7, 1.0, bq );
+            // (each hair a line through the brow's own line at its lean: told apart by where it crosses that line)
+            float lean = mix( 1.25, 0.4, smoothstep( 0.0, 0.6, bq ) );
+            float root = ( apx - ( fp.y - yb ) / tan( lean ) ) * ${BROW_HAIRS[0]};
+            float hair = smoothstep( 0.3, 0.7, noise3( vec3( root, ( fp.y - yb ) * ${BROW_HAIRS[1]}, 5.0 ) ) );
+            fineB *= 1.0 - smoothstep( 0.25, 0.5, fwidth( root ) );
+            float onB = smoothstep( 0.3, 0.7, 1.0 - dot( diffuseColor.rgb, vec3( 0.3, 0.59, 0.11 ) ) / max( 0.01, dot( uSkin, vec3( 0.3, 0.59, 0.11 ) ) ) );
+            onB *= faceK * fineB * ( 1.0 - smoothstep( 0.05, 0.08, abs( fp.y - yb ) ) );
+            diffuseColor.rgb *= mix( 1.0, 0.6 + 0.8 * hair, onB );
+            creaseH += ${BROW_HAIRS[2]} * hair * onB;
+          }
+          if ( uWorn.x > 0.0 ) {
+            // (his sweat: on all his skin, most where it gathers on his face, in beads there close up; his hair darker wet)
+            float gather = min( 1.0, smoothstep( 0.24, 0.34, fp.y ) + valley( apx - 0.68, 0.12 ) * valley( fp.y - 0.25, 0.2 ) + valley( apx, 0.1 ) * valley( fp.y + 0.05, 0.22 ) + valley( apx, 0.2 ) * valley( fp.y + 0.41, 0.045 ) );
+            wetK = uWorn.x * skinK * ( onHead > 0.0 ? mix( 0.55, 1.0, gather * faceK ) : 0.75 );
+            vec2 bq = vec2( fp.x * 0.375, fp.y * 0.525 ) / ${BEAD_CELL};
+            // (beads only on bare skin, never up into his hair or on a headband; more here than there: sweat gathers
+            // unevenly; and only once a bead is a few pixels across, or they are a grain that crawls)
+            float near = faceK * smoothstep( 0.6, 0.95, skinK ) * gather * ( 1.0 - smoothstep( 0.12, 0.3, length( fwidth( bq ) ) ) );
+            if ( near > 0.0 ) {
+              float on;
+              float many = 0.55 * smoothstep( 0.15, 1.0, uWorn.x ) * ( 0.45 + 0.9 * noise3( vec3( fp * 5.0, 9.0 ) ) );
+              beadH = beads( bq, many, on ) * ${(BEAD_CELL * BEAD_HIGH).toFixed(6)} * near;
+              beadK = on * near;
+            }
+            hairWet = uWorn.x * onHead * ( 1.0 - skinK ) * ( 1.0 - ear );
+            diffuseColor.rgb *= 1.0 - ${WET_HAIR} * hairWet;
+          }
+          float flush = uWorn.y * ( 1.0 - ${FLUSH_DARK} * uTone );
+          if ( flush > 0.0 ) {
+            float where = onHead > 0.0 ? ear * 0.9 + faceK * min( 1.0, 0.25 + valley( apx - 0.5, 0.2 ) * valley( fp.y + 0.22, 0.18 ) + 0.6 * valley( apx, 0.1 ) * valley( fp.y + 0.22, 0.12 ) + 0.35 * smoothstep( 0.3, 0.5, fp.y ) ) : skinK * ( 0.3 + 0.5 * smoothstep( 5.3, 5.8, vRest.y ) );
+            diffuseColor.rgb *= mix( vec3( 1.0 ), ${FLUSH_TO}, where * flush );
+          }
+          skinThin = max( ear * skinK, faceK * ( 0.6 * valley( apx - 0.15, 0.05 ) * valley( fp.y + 0.3, 0.05 ) + 0.4 * valley( apx, 0.06 ) * valley( fp.y + 0.26, 0.05 ) ) );
+        }
+        // (the inside of his head and neck, seen through his open mouth past his teeth, is the dark of his mouth, not the
+        // back of his skin, nor the top of his neck where it goes up inside his head; but for his ears, whose strip is
+        // along the foot of his head's picture, and his hair's fuzz)
+        float inside = ${fuzz ? '0.0' : `vRest.y > ${(HEAD_REST - 0.6).toFixed(2)} && ( ${ON_HEAD('vMapUv')} ? ! gl_FrontFacing && vMapUv.y > ${INSIDE_V} : skinK > 0.5 && ( ! gl_FrontFacing || length( ( vRest - ${HEAD_C} ) / ${HEAD_S} ) < 0.92 ) ) ? 1.0 : 0.0`};
+        // (but the inside of his lips, along the line of his mouth, is their own wet red, going into the dark)
+        float lipIn = 0.0;
+        if ( inside > 0.0 ) {
+          lipIn = ${ON_HEAD('vMapUv')} ? ( 1.0 - smoothstep( 0.012, 0.04, abs( vRest.y - ${MOUTH_MID.toFixed(3)} ) ) ) * smoothstep( 0.3, 0.345, vRest.z ) : 0.0;
+          diffuseColor.rgb = mix( ${MOUTH_DARK}, uSkin * vec3( 0.62, 0.3, 0.3 ) * smoothstep( 0.29, 0.35, vRest.z ), lipIn );
+          skinK = 0.0;
+          skinWrap = 0.0;
+        }`,
       )
       // (dark skin is read by the light that glances off it more than by the little it gives back: it has more of a shine;
       // and no skin is one shine all over: a little more here, a little less there)
       .replace(
         '#include <roughnessmap_fragment>',
-        'float roughnessFactor = mix( stuff.r, 0.55, shut ) * ( 1.0 - 0.2 * uTone * skinK ) * ( skinK > 0.0 ? 1.0 + skinK * ( 0.16 * ( noise3( vRest * 38.0 ) - 0.5 ) + 0.22 * ( noise3( vRest * 7.0 ) - 0.5 ) ) : 1.0 );',
+        // (and his sweat smooths it, his wet hair's too, and a bead of it is water)
+        `float roughnessFactor = mix( stuff.r, 0.55, shut ) * ( 1.0 - 0.2 * uTone * skinK ) * ( skinK > 0.0 ? 1.0 + skinK * ( 0.16 * ( noise3( vRest * 38.0 ) - 0.5 ) + 0.22 * ( noise3( vRest * 7.0 ) - 0.5 ) ) : 1.0 );
+        roughnessFactor = mix( roughnessFactor * ( 1.0 - ${WET_SHINE} * wetK - 0.3 * hairWet ), ${BEAD_ROUGH}, beadK );`,
       )
       // (and what light comes to it off the building is warmer on it than on cloth: a little of it has been through him)
       // (his head has a little light of its own, most where it faces the camera: under the arena's top light a face is read by it)
@@ -2140,9 +2814,32 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
         // (the darker his skin, the more of that light it needs to be a face and not a shape; and the rest of his skin has some too)
         if ${ON_HEAD('vMapUv')} reflectedLight.indirectDiffuse += diffuseColor.rgb * ${FACE_FILL} * ( 1.0 + ${FACE_FILL_DARK} * uTone ) * ( 0.14 + 0.86 * lamp * lamp ) * ( 1.0 - 0.75 * eyeK );
         else reflectedLight.indirectDiffuse += diffuseColor.rgb * 0.7 * uTone * skinK * ( 0.3 + 0.7 * toward );
+        // (the light in his eye: that lamp, a spot on his cornea where it faces half way between the lamp and the lens, so
+        // it stays put as the camera holds and moves over his iris as his eyes turn; and the shine of his tears along his
+        // lower lid)
+        if ( eyeWet + eyeTear > 0.0 ) {
+          vec3 eyeV = normalize( vViewPosition );
+          float c = dot( eyeN, normalize( eyeV + normalize( eyeV + ( viewMatrix * vec4( 0.0, 0.55, 0.0, 0.0 ) ).xyz ) ) );
+          float fw = max( fwidth( c ), 0.0002 );
+          reflectedLight.directSpecular += vec3( 1.0, 0.98, 0.95 ) * ( ${CATCH_LIGHT[1].toFixed(2)} * eyeWet * smoothstep( ${CATCH_LIGHT[0]} - fw, ${CATCH_LIGHT[0]} + fw, c ) + ${TEAR_SHINE} * eyeTear * ( 0.3 + 0.7 * lamp ) );
+        }
         // (and a rim of light along the edges that face up: the top light catching the round of a brow, a cheek, a shoulder)
         float rim = pow( 1.0 - toward, 3.0 ) * saturate( 0.35 + 0.65 * dot( normal, normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz ) ) );
-        reflectedLight.indirectSpecular += vec3( 1.0, 0.93, 0.86 ) * rim * skinK * ( 0.04 + 0.1 * uTone ) * ( ${ON_HEAD('vMapUv')} ? 1.0 : 0.45 );`,
+        reflectedLight.indirectSpecular += vec3( 1.0, 0.93, 0.86 ) * rim * skinK * ( 0.04 + 0.1 * uTone ) * ( ${ON_HEAD('vMapUv')} ? 1.0 : 0.45 );
+        // (no light gets in there to speak of; but what does falls on his lips' insides, and they are wet)
+        if ( inside > 0.0 ) {
+          reflectedLight.directDiffuse *= mix( 0.25, 0.8, lipIn );
+          reflectedLight.directSpecular *= 0.6 * lipIn;
+          reflectedLight.indirectSpecular *= 0.4 * lipIn;
+          reflectedLight.indirectDiffuse *= mix( 0.5, 0.9, lipIn );
+        }
+        // (his teeth and the rest of his mouth's insides are in the camera's lamp too, as far as its light gets in; their
+        // shine is wet, and as dark as the rest of them back there)
+        if ( mouthK > 0.0 ) {
+          reflectedLight.indirectDiffuse += diffuseColor.rgb * ${FACE_FILL} * ( 0.14 + 0.86 * lamp * lamp );
+          reflectedLight.directSpecular *= mouthLit;
+          reflectedLight.indirectSpecular *= mouthLit * mouthLit;
+        }`,
       );
     if (plain) return;
     sh.fragmentShader = sh.fragmentShader
@@ -2179,6 +2876,18 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
             float h = ${PORES_DEEP} * ( hills * noise3( pp * 0.37 ) - pores * 0.6 * smoothstep( 0.7, 0.92, noise3( pp ) ) ) + ${TUFTS_DEEP} * tufts * noise3( tp );
             normal = knitNormal( - vViewPosition, normal, vec2( dFdx( h ), dFdy( h ) ), faceDirection );
           }
+          // (the lines his face makes, and the beads of his sweat)
+          float wornH = creaseH + beadH;
+          vec2 wornD = vec2( dFdx( wornH ), dFdy( wornH ) );
+          if ( dot( wornD, wornD ) > 0.0 ) normal = knitNormal( - vViewPosition, normal, wornD, faceDirection );
+          // (his eye is lit as the ball it is, not as his lids' skin over where it is: see EYES)
+          if ( eyeWet > 0.0 ) normal = normalize( mix( normal, eyeN, eyeWet ) );
+          // (and his tongue's papillae, which break its wet shine up)
+          if ( mouthPart == 1.0 ) {
+            vec3 qp = vRest * ${PAPILLAE.toFixed(1)};
+            float h = ${PAPILLAE_DEEP} * ( 1.0 - smoothstep( 0.3, 0.7, length( fwidth( qp ) ) ) ) * noise3( qp );
+            normal = knitNormal( - vViewPosition, normal, vec2( dFdx( h ), dFdy( h ) ), faceDirection );
+          }
         }`,
       )
       .replace(
@@ -2199,6 +2908,8 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
 const NECK_BEND = 0.24;
 /** How far his jaw swings open at the most, radians. */
 const JAW_SWING = 0.28;
+/** How far his brows go up at the most (ft, on the 6 ft 6 head): a man who can't believe it, or is stunned. */
+const BROW_UP = 0.034;
 /**
  * His eyes' own life (on the plane of his face: see uGaze). How far an iris goes across and up for a turn of the eye
  * (an eye's radius, some 12 mm, in that plane's units); how far ahead of his head his eyes get as it
@@ -2221,20 +2932,268 @@ const eyeIn = (far: number) => EYE_TURN[0] * Math.sin(Math.atan(EYE_HALF / Math.
 const EYE_LEAD = 0.1;
 const FIXES = [0.35, 2.4] as const;
 const FIX_SPREAD = [0.24, 0.1] as const;
-/** What a gesture does to his face: how far his jaw opens (0..1), how far his brows come down, and whether he is talking (his jaw works). */
-const FACE_OF: Record<string, readonly [number, number, number] | undefined> = {
-  roar: [1, 1, 0],
-  flex: [0.6, 0.9, 0],
-  fist: [0.45, 0.6, 0],
-  protest: [0.6, 0.8, 1],
-  call: [0.5, 0.3, 1],
-  ask: [0.45, 0.2, 1],
-  point: [0.3, 0.2, 1],
-  wag: [0.2, 0.5, 0],
-  head: [0, 0.6, 0],
-  five: [0.2, 0, 0],
-  clap: [0.25, 0.1, 1],
+/** On a thing, the spots his eyes rest on about it are this near it (radians: across, up). */
+const FIX_ON = [0.035, 0.022] as const;
+/** Where his eyes turn about, half way between them (from the head bone, ft, as built): what he looks at is found from there. */
+const EYES_AT = new Vector3(0, 0.076, 0.34);
+/** The farthest his eyes turn in his head (radians): across, up, down. Past that his head has to bring them round. */
+const EYE_REACH = [0.5, 0.36, -0.45] as const;
+/**
+ * A jump bigger than this (radians) in where the thing he looks at is, from his head, is a new thing: his eyes go to
+ * it in one flick (a saccade), this quick (a rate a second: there in some forty thousandths of a second), and he may
+ * blink as they do (BLINK_SHIFT). Between flicks they're carried with the thing as it, and his head, moves: they stay on it.
+ */
+const SACCADE = 0.25;
+const SACCADE_RATE = 55;
+/**
+ * The moves he keeps his eyes on the rim through and doesn't blink in: a shot until it's away (ms into it), his
+ * routine at the line; and those of them he sets himself for, his lips pressed (not a run at the rim: up there his
+ * mouth is open).
+ */
+const SHOTS = new Set<string>(['jumper', 'freeThrow', 'ftRoutine', 'layup', 'floater', 'hook', 'putback', 'dunk', 'dunk1', 'dunkHang']);
+const SET_SHOTS = new Set<string>(['jumper', 'freeThrow', 'ftRoutine', 'floater', 'hook']);
+const SHOT_STILL = 900;
+/**
+ * His blink (s): how long his lids take to come down, stay down and go up again (quicker down than up); how often one
+ * is a half blink, and how often two come together; the chance he blinks as his eyes go to a new thing or his head
+ * whips round (faster than this, radians a second).
+ */
+const BLINK = [0.06, 0.03, 0.12] as const;
+const BLINK_HALF = 0.12;
+const BLINK_TWICE = 0.1;
+const BLINK_SHIFT = 0.35;
+const BLINK_WHIP = 3.5;
+/** A knock at least this hard (Puppet.hit's power: see Fig.jolt) shuts his eyes a beat, as a blink does. */
+const BLINK_KNOCK = 0.2;
+
+/**
+ * What his face is doing, a channel each (0..1): his jaw open; his brows down and drawn together; his brows up; a
+ * smile; a grimace (the corners of his mouth down and out); his lips pressed; a snarl (his upper lip up off his
+ * teeth); his lips apart; his eyes narrowed; his eyes wide; his eyes shut tight; his lids heavy; his lips rounded;
+ * his cheeks blown out; his lips stretched wide; one side of his mouth further than the other (a smirk, a sneer: on
+ * the side Fig.lopSide says); one brow up (Fig.cockSide's); his head thrown back.
+ */
+const F = {
+  jaw: 0,
+  frown: 1,
+  raise: 2,
+  smile: 3,
+  grim: 4,
+  press: 5,
+  snarl: 6,
+  part: 7,
+  squint: 8,
+  wide: 9,
+  shut: 10,
+  heavy: 11,
+  round: 12,
+  puff: 13,
+  stretch: 14,
+  lop: 15,
+  cock: 16,
+  back: 17,
+} as const;
+type Ch = keyof typeof F;
+const CHANNELS = 18;
+/**
+ * How quickly each comes to what is asked of it (a rate a second): a face is quick, the lids quickest; a tired man's
+ * lids come down slowly, cheeks fill over a breath, and a head thrown back goes back over a beat. Talking, his mouth's
+ * own (TALKS) come TALK_QUICK times quicker still: a syllable is over in a tenth of a second or two.
+ */
+const CH_RATE = [14, 12, 10, 9, 10, 9, 12, 10, 14, 18, 24, 2.5, 14, 7, 14, 8, 8, 5] as const;
+const TALK_QUICK = 1.8;
+const TALKS = new Uint8Array(CHANNELS);
+for (const c of [F.jaw, F.part, F.press, F.round, F.stretch]) TALKS[c] = 1;
+/** A face, from what it has of each channel. */
+function faceOf(o: Partial<Record<Ch, number>>): Float32Array {
+  const v = new Float32Array(CHANNELS);
+  for (const k of Object.keys(o) as Ch[]) v[F[k]] = o[k] ?? 0;
+  return v;
+}
+/**
+ * What a gesture does to his face, and how loud he is as he makes it (0: he isn't talking; his mouth goes through the
+ * shapes of speech: see VISEMES); `for`: the face only so long into it (s), a referee's whistle in his mouth.
+ */
+const FACE_OF: Record<string, { face: Float32Array; talk: number; for?: number } | undefined> = {
+  roar: { face: faceOf({ jaw: 1, frown: 1, snarl: 0.8, squint: 0.8 }), talk: 0 },
+  flex: { face: faceOf({ jaw: 0.6, frown: 0.9, snarl: 0.6, squint: 0.7 }), talk: 0 },
+  fist: { face: faceOf({ jaw: 0.45, frown: 0.6, snarl: 0.4, squint: 0.5 }), talk: 0 },
+  protest: { face: faceOf({ frown: 0.35, raise: 0.7, wide: 0.3 }), talk: 1 },
+  call: { face: faceOf({ frown: 0.3, wide: 0.15 }), talk: 0.85 },
+  ask: { face: faceOf({ raise: 0.5 }), talk: 0.7 },
+  point: { face: faceOf({ frown: 0.2, smile: 0.4 }), talk: 0.5 },
+  wag: { face: faceOf({ jaw: 0.15, frown: 0.5, press: 0.3, smile: 0.3, lop: 0.8 }), talk: 0 },
+  head: { face: faceOf({ frown: 0.6, press: 0.6, grim: 0.3 }), talk: 0 },
+  five: { face: faceOf({ jaw: 0.2, smile: 0.8, part: 0.4, squint: 0.4 }), talk: 0 },
+  clap: { face: faceOf({ frown: 0.1, smile: 0.5 }), talk: 0.6 },
+  handUp: { face: faceOf({ raise: 0.45, press: 0.3 }), talk: 0 },
+  wipe: { face: faceOf({ grim: 0.3, squint: 0.4, part: 0.3 }), talk: 0 },
+  tug: { face: faceOf({ press: 0.4 }), talk: 0 },
+  talk: { face: faceOf({ raise: 0.1 }), talk: 0.45 },
+  direct: { face: faceOf({ frown: 0.15 }), talk: 0.55 },
+  coachShout: { face: faceOf({ frown: 0.6, squint: 0.3 }), talk: 1 },
+  coachPoint: { face: faceOf({ frown: 0.3 }), talk: 0.7 },
+  coachWave: { face: faceOf({ raise: 0.2 }), talk: 0.6 },
+  coachBoard: { face: faceOf({ frown: 0.15 }), talk: 0.5 },
+  coachCalm: { face: faceOf({ raise: 0.15 }), talk: 0.35 },
+  coachWide: { face: faceOf({ raise: 0.85, wide: 0.4 }), talk: 0.8 },
+  refFoul: { face: faceOf({ round: 0.9, puff: 0.55, frown: 0.3 }), talk: 0, for: 0.55 },
+  refTimeout: { face: faceOf({ round: 0.85, puff: 0.45 }), talk: 0, for: 0.45 },
 };
+/**
+ * His mouth as he talks, a syllable at a time (not his jaw on a swing): open ("ah"), wide ("ee"), rounded ("oo"),
+ * shut ("m", "b"), and between words just apart (QUIET). How likely each of the first four is (added up), how long a
+ * syllable is held (s, the least and the most), how many syllables to a word, and how long the beat between words
+ * (s). A loud man's shapes are bigger (each a share of them, from the least for the quietest).
+ */
+const VISEMES = [
+  faceOf({ jaw: 0.8, part: 0.9 }),
+  faceOf({ jaw: 0.3, stretch: 0.85, part: 0.8 }),
+  faceOf({ jaw: 0.42, round: 1, part: 0.55 }),
+  faceOf({ press: 0.5 }),
+  faceOf({ jaw: 0.06, part: 0.3 }),
+];
+const QUIET = 4;
+const VISEME_ODDS = [0.36, 0.58, 0.75, 1] as const;
+const SYLLABLE = [0.075, 0.19] as const;
+const WORD = [2, 6] as const;
+const WORD_GAP = [0.14, 0.42] as const;
+const LOUD_LEAST = 0.4;
+/**
+ * His head's own moves, over where he looks (radians about his neck: see Fig.nod): a nod (down and back up, a beat or
+ * two), a shake (side to side, two or three times, quick), a beat (one small dip on a word said hard). Each: how far,
+ * how long a swing takes (s), how many swings.
+ */
+const HEAD_MOVES = { nod: [0.14, 0.38, 2], shake: [0.16, 0.27, 3], beat: [0.045, 0.22, 1] } as const;
+export type HeadMove = keyof typeof HEAD_MOVES;
+/** How far back his head goes thrown back (radians: his chin up), and how far it tips to one side with one brow up. */
+const HEAD_BACK = 0.36;
+const HEAD_TIP = 0.09;
+/** How far one brow goes up past the other (radians of his brows' bone about the line of his nose). */
+const BROW_COCK = 0.18;
+
+/** What a moment of the game may give a man (see Fig.feel). */
+export type Feel = 'joy' | 'shout' | 'miss' | 'stung' | 'disbelief' | 'stunned' | 'wince' | 'glare' | 'exhale' | 'blow';
+/** A way of showing a feeling: his face, and a move of his head with it (so long after it comes on, s). */
+interface Way {
+  face: Float32Array;
+  head?: HeadMove;
+  at: number;
+}
+const way = (o: Partial<Record<Ch, number>>, head?: HeadMove, at = 0.15): Way => ({ face: faceOf(o), head, at });
+/**
+ * Each feeling: the ways a man may show it (one picked each time, by the roll, or for joy by his own way: see
+ * Look.grin), how long it takes to come on, how long it holds and how long it goes off over (s), and what it may turn
+ * into once it has held (how likely: always, if not said). Joy is a grin, a shout, or (a cool man, a lesser basket) a
+ * smirk out of one side of his mouth; a miss a grimace with his eyes shut a beat, his lips pressed and a shake of his
+ * head, an "aw", or his head thrown back with his eyes shut, and now and then a breath let out after it; stung (the
+ * ball taken from him) a scowl, maybe a shake; disbelief (a whistle on him) his brows up and his mouth open, or one
+ * brow up and a twist of his mouth, a shake; stunned (his shot sent back) wide eyes, then stung; a wince (a knock) his
+ * eyes shut and his teeth bared; a glare (at the man who fouled him) his brows down and his eyes narrowed on him, or
+ * a sneer; an exhale his cheeks blown out, then the breath let go through round lips.
+ */
+const FEELS: Record<Feel, { ways: Way[]; rise: number; hold: number; fall: number; then?: Feel; odds?: number }> = {
+  joy: {
+    ways: [
+      way({ smile: 1, part: 0.55, squint: 0.55, jaw: 0.1, raise: 0.15 }),
+      way({ jaw: 0.75, snarl: 0.55, frown: 0.6, squint: 0.7, smile: 0.3 }),
+      way({ smile: 0.6, lop: 1, squint: 0.3, cock: 0.5, part: 0.15 }, 'nod', 0.25),
+    ],
+    rise: 0.18,
+    hold: 1.5,
+    fall: 0.7,
+  },
+  shout: { ways: [way({ jaw: 1, snarl: 0.8, frown: 0.9, squint: 0.8 })], rise: 0.12, hold: 1.1, fall: 0.6 },
+  miss: {
+    ways: [
+      way({ grim: 0.9, shut: 0.8, frown: 0.7, press: 0.35, part: 0.2 }),
+      way({ press: 0.9, frown: 0.55, grim: 0.35, squint: 0.3 }, 'shake', 0.2),
+      way({ jaw: 0.3, raise: 0.4, grim: 0.45, frown: 0.25, round: 0.35 }),
+      way({ back: 1, shut: 0.85, grim: 0.5, frown: 0.45, part: 0.35, stretch: 0.3 }),
+    ],
+    rise: 0.12,
+    hold: 0.55,
+    fall: 0.6,
+    then: 'exhale',
+    odds: 0.35,
+  },
+  stung: {
+    ways: [way({ frown: 0.85, press: 0.7, grim: 0.45, squint: 0.3 }), way({ jaw: 0.35, frown: 0.6, grim: 0.6, part: 0.3, squint: 0.2 }, 'shake', 0.3)],
+    rise: 0.15,
+    hold: 1.3,
+    fall: 0.8,
+  },
+  disbelief: {
+    ways: [
+      way({ raise: 1, jaw: 0.5, wide: 0.75, grim: 0.25 }, 'shake', 0.35),
+      way({ raise: 0.8, frown: 0.25, jaw: 0.35, smile: 0.12, wide: 0.5 }),
+      way({ cock: 1, raise: 0.35, lop: 0.8, smile: 0.25, grim: 0.25, jaw: 0.12 }, 'shake', 0.45),
+    ],
+    rise: 0.15,
+    hold: 1.6,
+    fall: 0.8,
+  },
+  stunned: { ways: [way({ wide: 1, raise: 0.75, jaw: 0.3 })], rise: 0.06, hold: 0.45, fall: 0.3, then: 'stung' },
+  wince: { ways: [way({ shut: 0.85, grim: 0.8, part: 0.45, frown: 0.8, squint: 1, stretch: 0.3 })], rise: 0.04, hold: 0.22, fall: 0.35 },
+  glare: {
+    ways: [way({ frown: 1, squint: 0.8, press: 0.6, snarl: 0.15 }), way({ frown: 0.85, squint: 0.6, lop: 0.9, snarl: 0.45, press: 0.25 })],
+    rise: 0.2,
+    hold: 1.1,
+    fall: 0.7,
+  },
+  exhale: { ways: [way({ puff: 1, press: 0.35, raise: 0.12 }), way({ puff: 0.8, round: 0.3, heavy: 0.4 })], rise: 0.22, hold: 0.3, fall: 0.12, then: 'blow' },
+  blow: { ways: [way({ round: 0.8, part: 0.65, jaw: 0.16, puff: 0.2, heavy: 0.35 })], rise: 0.08, hold: 0.3, fall: 0.5 },
+};
+/** A feeling comes on a beat after the moment (s: the least, and up to this much more): not every man in one frame. */
+const REACT_AFTER = [0.03, 0.2] as const;
+/** His face as he guards a man (his jaw set, his eyes narrowed on him), and as he shoots (lips pressed): each a share of it, by the man (see Look.temper). */
+const SET = faceOf({ press: 0.3, frown: 0.4, squint: 0.35 });
+const FOCUS = faceOf({ press: 0.5, frown: 0.25, squint: 0.2 });
+/**
+ * The game as it is for him (Fig.stakes, -1..1). Close and late, as he plays his jaw is set harder and his eyes are
+ * wider (CLUTCH, at the most), his guarding face is fuller and every feeling a little bigger and held a little longer
+ * (STAKES_K, STAKES_HOLD at the most); in a blowout all of it as much less: looser.
+ */
+const CLUTCH = faceOf({ press: 0.45, frown: 0.3, wide: 0.28 });
+const STAKES_K = 0.25;
+const STAKES_HOLD = 0.3;
+/** The clips he guards a man in, and those he rests in (his lids heavy once he's spent). */
+const GUARDING = new Set<string>(['stance', 'ready', 'shuffle', 'closeout', 'contest', 'boxout']);
+const RESTING = new Set<string>(['idle', 'idle2', 'idle3', 'shift', 'hips', 'knees', 'spot', 'spot2', 'spot3']);
+/** Spent, he breathes through his mouth: from how spent (the puppet's effort) it starts to come open, and how far at the most (his jaw, his lips). */
+const PANT = [0.25, 0.3, 0.25] as const;
+/** Late in the game (Fig.wear) he looks this spent at the least, a share of the puppet's effort: his breath and his lids show the minutes. */
+const WEAR_SPENT = 0.55;
+/**
+ * His face as it was, kept on the possession's own clock (the script's ms) for an instant replay to show (see
+ * Fig.when): a sample at most every TAPE_STEP ms of it, the last TAPE_N of them (some twenty seconds of play at 1x).
+ * Each (TAPE_K numbers) is the script's ms; his face's channels; his blink; where his eyes were (across, up, how far
+ * in); his head's own move (its nod, turn and tip: see HEAD_MOVES); the sides a one-sided mouth and a raised brow were
+ * on. A moment up to TAPE_OVER ms past the last of it is that last face; outside it, his face is his own as it is now.
+ */
+const TAPE_N = 1200;
+const TAPE_STEP = 8;
+const TAPE_OVER = 250;
+const T_BLINK = 1 + CHANNELS;
+const T_EYE = T_BLINK + 1;
+const T_HEAD = T_EYE + 3;
+const T_SIDE = T_HEAD + 3;
+const TAPE_K = T_SIDE + 2;
+
+/**
+ * His sweat and his flush (see Fig.skin), a rate a second of his body's clock each: how quickly he gets wet going (by how
+ * hard he goes: the puppet's effort), how quickly it dries off him stood at a dead ball, and on the bench (a man back on
+ * the floor comes back as wet as he left it, less that: see WORN); how quickly his face flushes and how quickly it goes.
+ * How tired his eyes look follows how spent he is and how long he has been at it, slowly.
+ */
+const WET_UP = 0.0022;
+const WET_DOWN = 0.0012;
+const BENCH_DRY = 0.003;
+const FLUSH_RATE = [0.03, 0.015] as const;
+const TIRED_RATE = 0.02;
+/** What the men who have left the floor had on their skin (wet, flushed, tired) and when they left (s, the wall's clock), by seed: the most kept. */
+const WORN = new Map<number, { wet: number; flush: number; tired: number; at: number }>();
+const WORN_KEPT = 40;
 
 const A = new Vector3();
 const C = new Vector3();
@@ -2248,6 +3207,7 @@ const MAT = new Matrix4();
 const Q = new Quaternion();
 const QA = new Quaternion();
 const QB = new Quaternion();
+const EU = new Euler();
 const UP = new Vector3(0, 1, 0);
 const XA = new Vector3(1, 0, 0);
 const ZA = new Vector3(0, 0, 1);
@@ -2261,6 +3221,10 @@ export class Fig {
   private readonly bones: Bone[] = [];
   /** Each limb's hinge (the line its elbow or knee folds about), kept for when it's straight. */
   private readonly hinge = [new Vector3(1, 0, 0), new Vector3(1, 0, 0), new Vector3(1, 0, 0), new Vector3(1, 0, 0)];
+  /** Each free hand's wrist as it is now (see WRIST_LOOSE): how far it is bent toward the palm, and turned palm-back (the left's, then the right's). */
+  private readonly wrists = new Float32Array([WRIST_LOOSE, WRIST_PRON, WRIST_LOOSE, WRIST_PRON]);
+  /** Each hand's shape as it is now (see Shape: the left's, then the right's), eased toward what he is doing. */
+  private readonly digits = Float32Array.from([...LOOSE, ...LOOSE]);
   readonly shadow: Mesh;
   readonly ring: Mesh;
   private readonly own: { dispose(): void }[] = [];
@@ -2272,19 +3236,79 @@ export class Fig {
   private readonly mats: [MeshStandardMaterial, MeshStandardMaterial | null];
   private readonly textures: [CanvasTexture, CanvasTexture];
   private readonly told: Told;
-  /** His blink: how many seconds between two, and where in that he started. */
-  private readonly blinks: [number, number];
-  /** His face as it is now: how far his jaw is open and his brows are down (0..1), and when that was last moved on. */
-  private jawOpen = 0;
-  private frown = 0;
-  private faceAt = 0;
-  /** His eyes: where they look now (radians from where his head faces: across, up), the spot they're on and when the next comes (s), how fast his head is turning (eased) and where it faced a frame ago; and his own run of numbers for the spots. */
+  /** Whose figure this is (his seed): what the game did to his skin goes with him off the floor and back (see WORN). */
+  private readonly who: number;
+  /** His blink: his own time between two (s), and a number of his own that sets him apart from the next man. */
+  private readonly blinkGap: number;
+  private readonly phase: number;
+  /** The blink going (when it started, s, and how far it shuts), whether another follows it, and when the next comes (s). */
+  private blinkAt = -1;
+  private blinkK = 1;
+  private blinkTwice = false;
+  private blinkNext = 0;
+  /**
+   * His face's own clock (s): his body's time, a frame at a time (Puppet.frameMs), so a replay at half speed plays his
+   * face at half speed, a lab that runs faster than the wall plays it as the game had it, and a game held still holds it.
+   */
+  private clock = 0;
+  /** His face as it is now, a channel each (see F), and what is asked of it this frame. */
+  private readonly mien = new Float32Array(CHANNELS);
+  private readonly want = new Float32Array(CHANNELS);
+  /** What a moment gave him (see feel): which feeling and his way of showing it (null: none), how strongly, when (s), how long it holds (s), and what it turns into (null: nothing). */
+  private feelKind: Feel = 'joy';
+  private feelWay: Way | null = null;
+  private feelK = 0;
+  private feelAt = 0;
+  private feelHold = 0;
+  private feelThen: Feel | null = null;
+  /** His eyes: where they look now (radians from where his head faces: across, up) and how far in, the spot they're on and when the next comes (s), how fast his head is turning (eased) and where it faced a frame ago; and his own run of numbers for the spots. */
   private readonly eye = [0, 0];
+  private verge = eyeIn(EYE_IDLE);
   private readonly fix = [0, 0];
   private fixAt = 0;
   private headRate = 0;
   private headWas = Number.NaN;
   private readonly eyeRng: () => number;
+  /** Where the thing he looks at was a frame ago (radians from where his head faced), whether he had one, and whether his head was whipping round. */
+  private readonly goal = [0, 0];
+  private onIt = false;
+  private whipped = false;
+  /** Where a point is from his eyes (see sight): across, up (radians), how far (ft). */
+  private readonly sighted = [0, 0, 0];
+  /** A glance of his eyes alone, his head staying where it is (see peek): at what, and until when (s). */
+  private readonly peekAt = { x: 0, y: 0, z: 0 };
+  private peekTill = -1;
+  /** His talking (see VISEMES): the shape his mouth is in, until when (s), and how many syllables are left of the word. */
+  private vis = QUIET;
+  private visTill = 0;
+  private sylLeft = 0;
+  /** The gesture he was making a frame ago, and when he started it (s). */
+  private gestWas: string | null = null;
+  private gestAt = 0;
+  /** His head's own move (see nod): which, when it starts (s), how big; and what all his head's own moves come to (place lays it over where he looks). */
+  private moveKind: HeadMove = 'nod';
+  private moveAt = -1e9;
+  private moveK = 0;
+  private readonly tilt = new Quaternion();
+  /** The sides a one-sided mouth and one raised brow are on now (1: his left, -1: his right), and the side he favours. */
+  private lopSide = 1;
+  private cockSide = 1;
+  private readonly favours: 1 | -1;
+  /** Where in the game his face is this frame (see when): the possession, the script's ms, and whether a replay has the picture. */
+  private of: object | null = null;
+  private ms = 0;
+  private replaying = false;
+  /** His face as it was (see TAPE_N): the samples (made the first time one is kept), whose possession, how many, where the next goes; and this frame's face, a sample's worth. */
+  private tape: Float32Array | null = null;
+  private tapeOf: object | null = null;
+  private tapeN = 0;
+  private tapeHead = 0;
+  private readonly row = new Float32Array(TAPE_K);
+  /** This frame's face's channels, on the row. */
+  private readonly shown = this.row.subarray(1, 1 + CHANNELS);
+  /** What the game is to him now (-1 a blowout, 0 nothing much, 1 close and late) and how far into it he is (0 fresh, 1 the last minutes of the fourth): the scene says (see CLUTCH, WEAR_SPENT). */
+  stakes = 0;
+  wear = 0;
 
   /** Where the ball is while he has a hand on it (the scene's point; null: his hands lie on it as his move's grip has them). */
   ball: { x: number; y: number; z: number } | null = null;
@@ -2311,13 +3335,31 @@ export class Fig {
       uIris: { value: new Color(look.eyes) },
       uEye: { value: new Vector2(EYE_TILT * look.face.tilt, EYE_OPEN * look.face.open) },
       uGaze: { value: new Vector3(0, 0, eyeIn(EYE_IDLE)) },
+      uLid: { value: new Vector2() },
       uMouth: { value: 0 },
+      uMove: { value: new Vector4() },
+      uMove2: { value: new Vector4() },
+      uMove3: { value: new Vector4() },
       uShape: { value: new Vector4(look.face.cheeks, look.face.full, look.face.point, look.face.flare) },
       uShape2: { value: new Vector4((look.face.lips - 0.5) * 2, (look.face.ridge - 0.45) * 2, look.face.deep, look.face.wings) },
+      uHead: { value: new Matrix3() },
+      uWorn: { value: new Vector4(0, 0, 0, look.age) },
+      uCrease: { value: new Vector4() },
     };
+    // (back on the floor, he is as wet as he was when he left it, less what the bench dried off him)
+    this.who = seed;
+    const was = WORN.get(seed);
+    if (was) {
+      const off = Math.exp(-Math.max(0, performance.now() / 1000 - was.at) * BENCH_DRY);
+      this.told.uWorn.value.set(was.wet * off, was.flush * off * off, was.tired * off, look.age);
+    }
     // (he blinks in his own time: every few seconds, never with the man beside him)
-    this.blinks = [3.1 + (((seed * 7) % 11) / 11) * 2.6, ((seed * 13) % 17) / 17];
+    this.blinkGap = 3.1 + (((seed * 7) % 11) / 11) * 2.6;
+    this.phase = ((seed * 13) % 17) / 17;
     this.eyeRng = rng(seed * 31 + 7);
+    this.blinkNext = this.phase * this.blinkGap;
+    // (and a side he favours for a one-sided look: his smirk is his own)
+    this.favours = ((seed * 5) % 7) / 7 < 0.5 ? 1 : -1;
     const mat = stuffMaterial(map, stuff, this.told);
     const fuzzMat = stuffMaterial(map, stuff, this.told, false, true);
     this.own.push(map, stuff, mat, fuzzMat);
@@ -2377,6 +3419,7 @@ export class Fig {
     for (const k of [B.thl, B.thr, B.hemL, B.hemR]) scale(k, thick * leg, s, thick * leg);
     for (const k of [B.shl, B.shr]) scale(k, thick * leg * low, s, thick * leg * low);
     for (const k of [B.hal, B.har, B.ftl, B.ftr]) scale(k, s, s, s);
+    for (const hand of DIGIT_BONES) for (const [k1, k2] of hand) for (const k of [k1, k2]) scale(k, s, s, s);
     const mesh = new SkinnedMesh(geo.wearing(STYLES[look.style].piece, gear.shoe.high), mat);
     this.mesh = mesh;
     const bones = new Skeleton(
@@ -2444,6 +3487,37 @@ export class Fig {
     b.scale.x *= 1 - 0.1 * sstep(0, 0.18, lowered);
   }
 
+  /**
+   * A hand's fingers and thumb as its shape is now (see Shape), each bone at its joint (DIGITS) off the hand's: a finger
+   * spread at its knuckle and curled there and at its middle joint; the thumb turned toward the palm at its root and out
+   * from the hand (or in across it), and bent at its middle knuckle.
+   */
+  private fingers(left: boolean) {
+    const { s } = this.pup.body;
+    const way = left ? -1 : 1;
+    const hand = this.bones[left ? B.hal : B.har];
+    const st = this.digits;
+    const o = left ? 0 : SHAPE_N;
+    const bones = DIGIT_BONES[left ? 0 : 1];
+    for (let d = 0; d < 5; d++) {
+      const [j1, j2] = DIGITS[d];
+      const b1 = this.bones[bones[d][0]];
+      const b2 = this.bones[bones[d][1]];
+      b1.position
+        .set(way * j1[0] * s, -j1[1] * s, j1[2] * s)
+        .applyQuaternion(hand.quaternion)
+        .add(hand.position);
+      b1.quaternion.copy(hand.quaternion);
+      if (d < 4) b1.quaternion.multiply(Q.setFromAxisAngle(XA, -SPREAD_K[d] * st[o + SPREAD])).multiply(Q.setFromAxisAngle(ZA, way * st[o + d]));
+      else b1.quaternion.multiply(Q.setFromAxisAngle(ZA, way * st[o + THUMB_PALM])).multiply(Q.setFromAxisAngle(XA, -st[o + THUMB_OUT]));
+      b2.position
+        .set(way * (j2[0] - j1[0]) * s, -(j2[1] - j1[1]) * s, (j2[2] - j1[2]) * s)
+        .applyQuaternion(b1.quaternion)
+        .add(b1.position);
+      b2.quaternion.copy(b1.quaternion).multiply(d < 4 ? Q.setFromAxisAngle(ZA, way * st[o + 4 + d]) : Q.setFromAxisAngle(THUMB_HINGE[left ? 0 : 1], st[o + THUMB_BEND]));
+    }
+  }
+
   /** The skin onto the puppet's joints. */
   place() {
     const p = this.pup;
@@ -2475,7 +3549,9 @@ export class Fig {
     head.quaternion
       .copy(this.bones[B.chest].quaternion)
       .multiply(Q.setFromAxisAngle(UP, P[I.turn]))
-      .multiply(Q.setFromAxisAngle(XA, -P[I.nod] * 0.8));
+      .multiply(Q.setFromAxisAngle(XA, -P[I.nod] * 0.8))
+      // (and what his face does with his head: a nod, a shake, thrown back, tipped: see face, a frame ago)
+      .multiply(this.tilt);
     // (his jaw and his nose go with his head: only their size is their own)
     for (const [k, from] of [
       [B.jaw, JAW_AT],
@@ -2488,58 +3564,8 @@ export class Fig {
       b.position.copy(A.copy(from).multiply(head.scale).applyQuaternion(head.quaternion)).add(head.position);
       b.quaternion.copy(head.quaternion);
     }
-    // (a blink: his lids down and up again in a seventh of a second)
-    const since = (performance.now() / 1000 / this.blinks[0] + this.blinks[1]) % 1;
-    this.told.uBlink.value = Math.max(0, 1 - Math.abs(since * this.blinks[0] - 0.07) / 0.07);
-    // his face works with the rest of him: in the air, at the top of his effort, his mouth comes open and his brows
-    // come down; a roar or a flex bares his teeth; a man protesting, calling or asking is talking. (Eased, on the
-    // wall's clock: a face is quick, and a replay at half speed loses nothing by it.)
-    const now = performance.now();
-    const dt = Math.min(0.1, Math.max(0, (now - this.faceAt) / 1000));
-    this.faceAt = now;
-    // his eyes: they get to what he turns to before his head does and hold on it as his head comes round (as far ahead
-    // of it as it is turning), they take a share of a look up or down, and they never stop: they rest on a spot about
-    // the thing he watches, then flick to another in a few hundredths of a second
-    const heading = p.yaw + P[I.twist] + P[I.turn];
-    if (Number.isNaN(this.headWas)) this.headWas = heading;
-    const turned = Math.atan2(Math.sin(heading - this.headWas), Math.cos(heading - this.headWas));
-    this.headWas = heading;
-    if (dt > 0) this.headRate += (turned / dt - this.headRate) * (1 - Math.exp(-dt * 12));
-    if (now / 1000 > this.fixAt) {
-      this.fix[0] = (this.eyeRng() - 0.5) * FIX_SPREAD[0];
-      this.fix[1] = (this.eyeRng() - 0.5) * FIX_SPREAD[1];
-      this.fixAt = now / 1000 + FIXES[0] + (FIXES[1] - FIXES[0]) * this.eyeRng() ** 2;
-    }
-    const flick = 1 - Math.exp(-dt * 45);
-    this.eye[0] += (Math.max(-0.35, Math.min(0.35, this.headRate * EYE_LEAD)) + this.fix[0] - this.eye[0]) * flick;
-    this.eye[1] += (Math.max(-0.2, Math.min(0.25, 0.2 * P[I.nod])) + this.fix[1] - this.eye[1]) * flick;
-    // (and they turn in on the thing as far as it is near: quickly, as eyes do, but never in a frame)
-    const verge = this.told.uGaze.value.z;
-    const on = Number.isFinite(p.lookFar) ? p.lookFar : EYE_IDLE;
-    this.told.uGaze.value.set(EYE_TURN[0] * Math.sin(this.eye[0]), EYE_TURN[1] * Math.sin(this.eye[1]), verge + (eyeIn(on) - verge) * (1 - Math.exp(-dt * 10)));
-    const air = Math.min(1, Math.max(0, P[I.air]));
-    const [open, frown, talks] = FACE_OF[p.gesturing ?? ''] ?? [0, 0, 0];
-    const talk = talks ? 0.5 + 0.5 * Math.sin(now * 0.021 + this.blinks[1] * 40) * Math.sin(now * 0.0083) : 1;
-    const ease = 1 - Math.exp(-dt * 14);
-    this.jawOpen += (Math.max(0.3 * air, open * talk) - this.jawOpen) * ease;
-    this.frown += (Math.max(0.6 * air, frown) - this.frown) * ease;
-    this.told.uMouth.value = this.jawOpen;
-    // (his jaw swings about its hinge by his ear, not about where it is scaled from)
-    const jaw = this.bones[B.jaw];
-    Q.setFromAxisAngle(XA, JAW_SWING * this.jawOpen);
-    jaw.position.copy(A.copy(JAW_AT).sub(JAW_HINGE).applyQuaternion(Q).add(JAW_HINGE).multiply(head.scale).applyQuaternion(head.quaternion)).add(head.position);
-    jaw.quaternion.multiply(Q);
-    this.bones[B.lip].position.copy(jaw.position);
-    this.bones[B.lip].quaternion.copy(jaw.quaternion);
-    // (his brows: down, a little forward and drawn together; a heavier brow sits further forward all the time)
-    const brow = this.bones[B.brow];
-    const hs = head.scale.z;
-    brow.position.add(
-      A.set(0, -0.016 * this.frown, 0.006 * this.frown + 0.012 * (this.look.face.ridge - 0.45))
-        .multiplyScalar(hs)
-        .applyQuaternion(head.quaternion),
-    );
-    brow.scale.x = head.scale.x * (1 - 0.07 * this.frown);
+    this.face(head);
+    this.skin(head);
     // hair that hangs swings a beat behind him, as far as the puppet says the heavier of his loose things lags (in
     // his own frame, ft: behind him on a run, so its ends go back; to the side he came from on a slide)
     const lag = p.trailSlow;
@@ -2575,23 +3601,74 @@ export class Fig {
     this.girdle(B.clr, B.uar, -1, at(J.sr, A), at(J.er, C));
     limb(2, J.jl, J.kl, J.fl, B.thl, 1);
     limb(3, J.jr, J.kr, J.fr, B.thr, 1);
-    // hands go with their forearms; feet point the way he faces, toes down once they leave the floor
-    for (const [h, f, k] of [
-      [B.hal, B.fal, J.hl],
-      [B.har, B.far, J.hr],
-    ] as const) {
+    // hands go with their forearms, at the wrist as they hang, hold or let go (feet: below, each its own way on the floor)
+    for (const [h, f, k] of HANDS_AT) {
       this.bones[h].position.copy(at(k, A));
       this.bones[h].quaternion.copy(this.bones[f].quaternion);
       const left = h === B.hal;
       const grip = Math.min(1, Math.max(0, P[left ? I.gl : I.gr]));
       const way = left ? -1 : 1;
-      if (grip > 0.02) {
+      const one = p.one;
+      // (the hand over a dribble keeps over it, the ball in the air or not: its palm down to it, its fingers spread)
+      const drib = p.overBall === -way;
+      const holds = drib ? Math.max(grip, DRIB_HOLDS) : grip;
+      // what his hand is doing with nothing in it (see Shape): a gesture's, his move's, a pass or a shot let go of, out
+      // for a pass; how a gesture turns its palm
+      const gest = p.gesturing;
+      const gh = gest ? GESTURE_HANDS[gest] : null;
+      let free = gh?.[left ? 0 : 1] ?? null;
+      const palm = free && gh ? gh[2] : PALM_AS;
+      if (!free) {
+        const c = CLIP_HANDS[p.clip];
+        free = !c ? LOOSE : c instanceof Float32Array ? c : c[left ? 0 : 1];
+        if (p.overBall && !drib) free = OPEN;
+        if (one && one.tau > 0 && PASSED.has(one.id)) free = OPEN;
+        if (one && one.tau > 0 && FLICKED.has(one.id)) free = left ? OPEN : GOOSE;
+        if (one?.id === 'catch' && one.tau < 0) free = CATCH;
+        if (p.onRim) free = GRAB;
+      }
+      // a hand off the ball has a wrist: let hang, loose and a little bent toward the palm; a defender's turned to show
+      // its palm (and a gesture's, as it turns it); a pass let go of snaps through, thumbs down; a shot let go of drops
+      // over toward the rim (FLICK), its palm turned down to it. Turned about the forearm's own line, then bent toward
+      // the palm (the bone's own z)
+      const wi = left ? 0 : 2;
+      const defends = DEFENDS.has(p.clip);
+      let flex = defends || palm !== PALM_AS ? WRIST_SHOW : WRIST_LOOSE;
+      // (how far the palm would turn to face the way he faces: from facing in, about the forearm)
+      const fore0 = this.bones[f].quaternion;
+      W3.set(p.front.x, p.front.y, p.front.z).applyQuaternion(Q.copy(fore0).invert());
+      const toFront = Math.max(-SUP_MOST, Math.min(PRON_MOST, way * Math.atan2(-way * W3.z, way * W3.x)));
+      let pron = palm === PALM_UP ? -SUP_MOST : palm === PALM_DOWN ? PRON_MOST * 0.85 : defends || palm === PALM_FRONT ? toFront : WRIST_PRON;
+      const ease = 1 - Math.exp(-p.frameMs / WRIST_MS);
+      this.wrists[wi] += (flex - this.wrists[wi]) * ease;
+      this.wrists[wi + 1] += (pron - this.wrists[wi + 1]) * ease;
+      flex = this.wrists[wi];
+      pron = this.wrists[wi + 1];
+      // (a pass let go of, and the shooting hand after a shot: from the release, on the move's own clock)
+      if (one && one.tau > 0 && PASSED.has(one.id)) {
+        const u = clamp01(one.tau / PASS_SNAP_IN) * (1 - clamp01((one.tau - PASS_SNAP_HOLD) / PASS_SNAP_OUT));
+        const e = u * u * (3 - 2 * u);
+        flex += (PASS_SNAP - flex) * e;
+        pron += (PASS_PRON - pron) * e;
+      }
+      if (!left && one && FLICKED.has(one.id) && one.tau > 0) {
+        const u = clamp01(one.tau / FLICK_IN) * (1 - clamp01((one.tau - FLICK_HOLD) / FLICK_OUT));
+        const e = u * u * (3 - 2 * u);
+        flex += (FLICK - flex) * e;
+        pron += (toFront - pron) * e;
+      }
+      flex = Math.max(-EXT_MOST, Math.min(FLEX_MOST, flex));
+      this.bones[h].quaternion.multiply(Q.setFromAxisAngle(UP, way * pron)).multiply(Q.setFromAxisAngle(ZA, way * flex));
+      const hold = CLIPS[p.clip].grip;
+      if (holds > 0.02) {
         // a hand on the ball lies on it: its palm toward the ball (beside it, under it or over it, as the
-        // puppet holds it), its fingers on along the forearm as far as that lets them
-        const hold = CLIPS[p.clip].grip;
+        // puppet holds it), its fingers on along the forearm as far as that lets them (up from it on the ball's side,
+        // and out for a pass: his thumbs behind it)
         const ball = this.ball;
-        // (toward the ball itself where the scene has said where it is, in his own frame)
-        if (ball)
+        // (toward the ball itself where the scene has said where it is, in his own frame; a dribble's hand with the ball
+        // off it, down at the floor: it waits over it, it isn't wrung round after it)
+        if (drib && grip < 0.5) W3.set(0, -1, 0);
+        else if (ball)
           W3.set(ball.x - p.x, ball.y, ball.z - p.z)
             .applyAxisAngle(UP, -p.yaw)
             .sub(this.bones[h].position)
@@ -2600,20 +3677,38 @@ export class Fig {
         else if (hold === 'under' && !left) W3.set(p.up.x + p.front.x, p.up.y + p.front.y, p.up.z + p.front.z).normalize();
         else W3.set(p.left.x, p.left.y, p.left.z).multiplyScalar(way);
         const fore = E.set(0, -1, 0).applyQuaternion(this.bones[f].quaternion);
-        fore.addScaledVector(W3, -fore.dot(W3));
-        if (fore.lengthSq() < 0.04) fore.set(p.front.x, p.front.y, p.front.z).addScaledVector(W3, -(p.front.x * W3.x + p.front.y * W3.y + p.front.z * W3.z));
+        const up = one?.id === 'catch' && one.tau < 0 ? CATCH_UP : hold === 'side' && !drib ? SIDE_UP : 0;
+        if (up > 0) {
+          // (on its side, and out for a pass: its fingers up the ball from his forearm's line, and its palm square to them
+          // toward the ball's middle: the wrist is down the ball from the palm, see the puppet's SIDE_GRIP)
+          fore.addScaledVector(D.set(p.up.x, p.up.y, p.up.z), up).normalize();
+          W3.addScaledVector(fore, -W3.dot(fore));
+          if (W3.lengthSq() < 0.04) W3.set(p.left.x, p.left.y, p.left.z).multiplyScalar(way);
+          W3.normalize();
+        } else {
+          // (over it or under it: its palm to the ball's middle, its fingers on along the forearm as far as that lets them)
+          fore.addScaledVector(W3, -fore.dot(W3));
+          if (fore.lengthSq() < 0.04) fore.set(p.front.x, p.front.y, p.front.z).addScaledVector(W3, -(p.front.x * W3.x + p.front.y * W3.y + p.front.z * W3.z));
+        }
         Yv.copy(fore).normalize().multiplyScalar(-1);
         X.copy(W3).multiplyScalar(way);
-        this.bones[h].quaternion.slerp(Q.setFromRotationMatrix(MAT.makeBasis(X, Yv, Z.crossVectors(X, Yv))), grip);
+        this.bones[h].quaternion.slerp(Q.setFromRotationMatrix(MAT.makeBasis(X, Yv, Z.crossVectors(X, Yv))), holds);
         // (the puppet's hand is its wrist, a palm's depth off the ball: the palm itself goes on to the leather)
         this.bones[h].position.addScaledVector(W3, 0.06 * s * grip);
-      }
-      // a shot let go of: the shooting hand's wrist snaps down after the ball, its fingers over toward the rim, held
-      // there as he comes down and let go of (FLICK); the hand that guided it stays up as it was
-      const one = p.one;
-      if (!left && one && FLICKED.has(one.id) && one.tau > 0) {
-        const k = clamp01(one.tau / FLICK_IN) * (1 - clamp01((one.tau - FLICK_HOLD) / FLICK_OUT)) * (1 - grip);
-        if (k > 0) this.bones[h].quaternion.multiply(Q.setFromAxisAngle(XA, FLICK * k * k * (3 - 2 * k)));
+        // (a dribble's wrist: cocked back as the ball comes up into it, over it as it pushes it down, on after it as
+        // it goes, and back for the next: see DRIB_CATCH)
+        if (drib && p.push >= 0) {
+          const u = p.push;
+          const bend =
+            u < 1
+              ? DRIB_CATCH + (DRIB_PUSH - DRIB_CATCH) * sstep(0, 1, u)
+              : u < 1.3
+                ? DRIB_PUSH + (DRIB_AFTER - DRIB_PUSH) * sstep(1, 1.3, u)
+                : u < 1.8
+                  ? DRIB_AFTER + (DRIB_WAIT - DRIB_AFTER) * sstep(1.3, 1.8, u)
+                  : DRIB_WAIT + (DRIB_CATCH - DRIB_WAIT) * sstep(1.8, 2, u);
+          this.bones[h].quaternion.multiply(Q.setFromAxisAngle(ZA, way * bend));
+        }
       }
       // his forearm turns with his hand: the part of the hand's turn that is about the forearm's own line, most of it
       // (the rest is the wrist's)
@@ -2626,33 +3721,23 @@ export class Fig {
       fw.position.copy(fore.position);
       fw.quaternion.copy(fore.quaternion).multiply(QB.identity().slerp(QA, 0.7));
       fw.scale.copy(fore.scale);
-      // his fingers: a hand with nothing in it is loose, its fingers together and curled as they fall; one on the ball
-      // opens, its fingers spread over the leather and laid along it
-      let from = this.bones[h];
-      const spread = s * (0.92 + 0.24 * grip);
-      for (const [bone, down, curl] of [
-        [left ? B.kn1l : B.kn1r, KNUCKLE, 0.46 - 0.2 * grip],
-        [left ? B.kn2l : B.kn2r, MIDDLE - KNUCKLE, 0.66 - 0.3 * grip],
-      ] as const) {
-        const b = this.bones[bone];
-        b.position.copy(C.set(0, -down * s, 0).applyQuaternion(from.quaternion)).add(from.position);
-        b.quaternion.copy(from.quaternion).multiply(Q.setFromAxisAngle(ZA, way * curl));
-        // (across the hand is the bone's own z: wider there, the fingers stand apart)
-        b.scale.set(s, s, spread);
-        from = b;
-      }
+      // his fingers and thumb: the hand's shape eased toward what it is doing (see Shape), a hand on the ball's by how it holds it
+      const on = hold === 'top' ? TOP : hold === 'under' ? (left ? GUIDE : SHOOT) : BALL;
+      const st = this.digits;
+      const o = left ? 0 : SHAPE_N;
+      const se = 1 - Math.exp(-p.frameMs / SHAPE_MS);
+      for (let i = 0; i < SHAPE_N; i++) st[o + i] += (free[i] + (on[i] - free[i]) * holds - st[o + i]) * se;
+      this.fingers(left);
     }
-    // (on the floor a foot rolls as the puppet says, heel to toe, where the puppet says it at all)
+    // (each foot points where the puppet has it on the floor, which isn't always the way he faces: a planted foot keeps
+    // its own heading as his body turns over it; and rolls as the puppet says, heel to toe)
     for (const [f, k, n] of [
       [B.ftl, J.fl, 0],
       [B.ftr, J.fr, 1],
     ] as const) {
-      at(k, A);
-      const lift = Math.max(0, A.y / s - ANKLE);
-      this.bones[f].position.copy(A);
-      const pitch = (p.feet[n] as { pitch?: number }).pitch;
-      const roll = P[I.air] > 0.5 || pitch === undefined ? Math.min(0.95, lift * 0.75) : pitch;
-      this.bones[f].quaternion.setFromAxisAngle(XA, Math.max(-0.4, Math.min(1.1, roll)));
+      const foot = p.feet[n];
+      this.bones[f].position.copy(at(k, A));
+      this.bones[f].quaternion.setFromAxisAngle(UP, foot.turn).multiply(Q.setFromAxisAngle(XA, Math.max(-0.4, Math.min(1.1, foot.pitch))));
     }
 
     // cloth: each leg of the shorts hangs from its thigh, and trails as far as the puppet says his loose things do
@@ -2688,5 +3773,453 @@ export class Fig {
   dispose() {
     this.gone = true;
     for (const o of this.own) o.dispose();
+    const w = this.told.uWorn.value;
+    WORN.delete(this.who);
+    if (WORN.size >= WORN_KEPT) WORN.delete(WORN.keys().next().value!);
+    WORN.set(this.who, { wet: w.x, flush: w.y, tired: w.z, at: performance.now() / 1000 });
+  }
+
+  /**
+   * Where in the game his face is this frame (the scene says, before place): the possession `of` and how far into it
+   * (the script's ms). Live, his face is kept on that clock as it goes (see TAPE_N); `replay`: an instant replay has
+   * the picture at that moment, and his face is the one he had then (what the moment gave him, his eyes, his blinks,
+   * his head's own moves, his talk), not the one he has now. Nothing new comes to his face while a replay has it.
+   */
+  when(of: object | null, ms: number, replay = false) {
+    this.of = of;
+    this.ms = ms;
+    this.replaying = replay;
+  }
+
+  /**
+   * A moment of the game that shows on his face (see FEELS): a basket of his ('joy'; a 'shout' for a big one), a miss,
+   * the ball taken from him or thrown away ('stung'), a whistle on him ('disbelief'), his shot sent back ('stunned'),
+   * a hard knock ('wince'), the man who fouled him ('glare'), a breath let out ('exhale'). `power` (0..1): how big a
+   * moment it is for him; how much of it shows is his own (Look.temper), and the game's (stakes). It comes on a beat
+   * after (REACT_AFTER, and `after` s more), each man in his own time. One already showing more than this would is not
+   * cut short by it.
+   */
+  feel(kind: Feel, power = 1, after = 0) {
+    if (this.replaying) return;
+    const r = this.eyeRng;
+    const t = this.clock;
+    const k = Math.min(1, clamp01(power) * (0.45 + 0.65 * this.look.temper) * (0.85 + 0.25 * r()) * (1 + STAKES_K * this.stakes));
+    const now = this.feelWay ? this.shows(t) * this.feelK : 0;
+    if (now > k) return;
+    const run = FEELS[kind];
+    // (his way of showing it: a man who grins grins (a cool one smirks at a lesser basket), but a big one makes a
+    // shouter of most men; any other, by the roll)
+    const roll = r();
+    const w =
+      kind === 'joy'
+        ? roll < this.look.grin * (1.25 - 0.6 * power)
+          ? power < 0.8 && r() < 0.6 * (1 - this.look.temper)
+            ? 2
+            : 0
+          : 1
+        : Math.floor(roll * run.ways.length) % run.ways.length;
+    // (a knock's wince is as long as it was hard; anything else a little longer or shorter, by the man and the game)
+    const hold = run.hold * (kind === 'wince' ? 0.5 + power : (0.8 + 0.4 * r()) * (1 + STAKES_HOLD * this.stakes));
+    // (a beat after the moment, each man in his own time; at once from a face already showing something)
+    this.start(kind, run.ways[w], k, t + (now > 0.05 ? 0 : after + REACT_AFTER[0] + REACT_AFTER[1] * r()), hold);
+  }
+
+  /** A feeling on his face from `at` (s): its way, how strongly, how long it holds; what it turns into, if anything, and his head's move with it. */
+  private start(kind: Feel, w: Way, k: number, at: number, hold: number) {
+    const r = this.eyeRng;
+    const run = FEELS[kind];
+    this.feelKind = kind;
+    this.feelWay = w;
+    this.feelK = k;
+    this.feelAt = at;
+    this.feelHold = hold;
+    this.feelThen = run.then && r() < (run.odds ?? 1) ? run.then : null;
+    // (a one-sided look on the side he favours, mostly; never moved over while one is still showing)
+    if (this.mien[F.lop] < 0.05) this.lopSide = r() < 0.75 ? this.favours : -this.favours;
+    if (this.mien[F.cock] < 0.05) this.cockSide = r() < 0.75 ? this.favours : -this.favours;
+    if (w.head) this.move(w.head, k, at + w.at);
+  }
+
+  /** How much of what a moment gave him shows at `t` (s), over its run: on, held, off. */
+  private shows(t: number): number {
+    const run = FEELS[this.feelKind];
+    const s = t - this.feelAt;
+    return sstep(0, run.rise, s) * (1 - sstep(run.rise + this.feelHold, run.rise + this.feelHold + run.fall, s));
+  }
+
+  /** A move of his head (see HEAD_MOVES): a nod on a five, a shake at a bad call. `k` (0..1): how big; `after`: so long from now (s). */
+  nod(kind: HeadMove, k = 1, after = 0) {
+    if (this.replaying) return;
+    this.move(kind, k, this.clock + after);
+  }
+
+  /** A move of his head from `at` (s); one already going is let finish first (never cut off in the middle of a swing), and a beat on a word isn't made over one. */
+  private move(kind: HeadMove, k: number, at: number) {
+    const was = HEAD_MOVES[this.moveKind];
+    const end = this.moveAt + was[1] * was[2];
+    if (end > this.clock && this.moveAt <= this.clock) {
+      if (kind === 'beat') return;
+      at = Math.max(at, end);
+    }
+    this.moveKind = kind;
+    this.moveAt = at;
+    this.moveK = (0.6 + 0.4 * clamp01(k)) * (0.85 + 0.3 * this.eyeRng());
+  }
+
+  /** A glance of his eyes alone at a point (the scene's), for `ms` of his own time: his head stays on what it is on. One he would have to turn his head for isn't made. */
+  peek(x: number, y: number, z: number, ms: number) {
+    if (this.replaying) return;
+    this.peekAt.x = x;
+    this.peekAt.y = y;
+    this.peekAt.z = z;
+    this.peekTill = this.clock + ms / 1000;
+  }
+
+  /** A knock (Puppet.hit's power): a hard enough one shuts his eyes a beat (a wince is the scene's: see feel). */
+  jolt(power: number) {
+    if (this.replaying || power < BLINK_KNOCK || this.clock - this.blinkAt < 0.3) return;
+    this.blinkNext = this.clock;
+  }
+
+  /**
+   * His face, as the rest of him has it now (place has just put his head): his eyes on what he looks at, his lids and
+   * his blink, his jaw, his mouth's shape, his brows, his head's own moves. On his own clock (see clock); in a replay,
+   * the face he had at its moment if it was kept (see when).
+   */
+  private face(head: Bone) {
+    const step = Math.max(0, this.pup.frameMs) / 1000;
+    this.clock += step;
+    if (!(this.replaying && this.played(this.ms))) this.live(head, Math.min(0.1, step));
+    this.show(head);
+    if (!this.replaying) this.keep();
+  }
+
+  /**
+   * His face as he lives it, into this frame's row. What is asked of each channel is the most any of these asks: the
+   * moment (in the air, at the top of his effort, his mouth comes open and his brows down), his own face as he guards
+   * a man or shoots (harder in a close one, looser in a blowout), his breath once he's spent (sooner late in the game),
+   * a gesture's face (a roar bares his teeth; a man protesting, calling or asking is talking: VISEMES), and what a
+   * moment of the game gave him (see feel); then each eases to it.
+   */
+  private live(head: Bone, dt: number) {
+    const p = this.pup;
+    const P = p.pose;
+    const t = this.clock;
+    const one = p.one;
+    const shooting = one !== null && SHOTS.has(one.id) && one.tau < SHOT_STILL;
+    const look = this.look;
+    const want = this.want;
+    const r = this.eyeRng;
+    const air = clamp01(P[I.air]);
+    want.fill(0);
+    want[F.jaw] = 0.3 * air;
+    want[F.frown] = 0.6 * air;
+    want[F.squint] = 0.4 * air;
+    const stakes = this.stakes;
+    const resting = RESTING.has(p.clip);
+    const own = shooting ? (SET_SHOTS.has(one.id) ? FOCUS : null) : GUARDING.has(p.clip) ? SET : null;
+    if (own) for (let c = 0; c < CHANNELS; c++) want[c] = Math.max(want[c], own[c] * (0.5 + 0.5 * look.temper) * (1 + 0.35 * stakes));
+    if (stakes > 0 && !resting) for (let c = 0; c < CHANNELS; c++) want[c] = Math.max(want[c], CLUTCH[c] * stakes);
+    const spent = sstep(PANT[0], 1, Math.max(p.effort, WEAR_SPENT * this.wear));
+    if (spent > 0) {
+      const breath = 0.5 + 0.5 * Math.sin(p.breath * Math.PI * 2);
+      want[F.jaw] = Math.max(want[F.jaw], spent * PANT[1] * (0.5 + 0.5 * breath));
+      want[F.part] = Math.max(want[F.part], spent * PANT[2]);
+      if (resting) want[F.heavy] = 0.7 * spent;
+    }
+    // a gesture's face, and his talk as he makes it: a word at a time, from the start of it
+    const gest = p.gesturing;
+    if (gest !== this.gestWas) {
+      this.gestWas = gest;
+      this.gestAt = t;
+      this.vis = QUIET;
+      this.visTill = t;
+      this.sylLeft = 0;
+    }
+    const g = FACE_OF[gest ?? ''];
+    const talk = g ? g.talk : 0;
+    if (g && (g.for === undefined || t - this.gestAt < g.for)) for (let c = 0; c < CHANNELS; c++) want[c] = Math.max(want[c], g.face[c]);
+    if (talk > 0) {
+      this.talk(talk, t);
+      const v = VISEMES[this.vis];
+      const loud = LOUD_LEAST + (1 - LOUD_LEAST) * talk;
+      for (let c = 0; c < CHANNELS; c++) want[c] = Math.max(want[c], v[c] * loud);
+    }
+    if (this.feelWay) {
+      const run = FEELS[this.feelKind];
+      const s = t - this.feelAt;
+      const k = this.shows(t) * this.feelK;
+      const f = this.feelWay.face;
+      for (let c = 0; c < CHANNELS; c++) want[c] = Math.max(want[c], f[c] * k);
+      // (held: it goes off, or turns into what it turns into)
+      if (this.feelThen && s > run.rise + this.feelHold) {
+        const next = FEELS[this.feelThen];
+        this.start(this.feelThen, next.ways[Math.floor(r() * next.ways.length) % next.ways.length], this.feelK, t, next.hold * (0.8 + 0.4 * r()));
+      } else if (s > run.rise + this.feelHold + run.fall) this.feelWay = null;
+    }
+    // (a smile takes the press and the grimace out of his mouth, lips pressed aren't apart, and an open jaw can't
+    // press them; wide eyes aren't narrowed, nor heavy; cheeks blown out hold his lips together, and lips rounded
+    // aren't stretched or smiling)
+    want[F.press] *= 1 - want[F.smile];
+    want[F.grim] *= 1 - want[F.smile];
+    want[F.part] *= 1 - want[F.press];
+    want[F.press] *= 1 - want[F.jaw];
+    want[F.squint] *= 1 - want[F.wide];
+    want[F.heavy] *= clamp01(1 - 2 * Math.max(want[F.wide], want[F.shut]));
+    want[F.part] *= 1 - 0.8 * want[F.puff];
+    want[F.jaw] *= 1 - want[F.puff];
+    want[F.stretch] *= 1 - want[F.round];
+    want[F.smile] *= 1 - 0.7 * want[F.round];
+    const m = this.mien;
+    for (let c = 0; c < CHANNELS; c++) m[c] += (want[c] - m[c]) * (1 - Math.exp(-dt * CH_RATE[c] * (talk > 0 && TALKS[c] ? TALK_QUICK : 1)));
+
+    // his eyes: on the thing he looks at (the puppet's), from where they are in his head as it is turned now, or
+    // glancing at something else for a moment (see peek); with nothing to look at, or a thing behind him, they are
+    // where his head is going, ahead of it as it turns. They flick to a new thing quicker than his head comes round,
+    // and are carried with it while his head comes after (they stay on it, through a nod or a shake too); about it
+    // they rest on one spot then another, but never as he shoots
+    const heading = p.yaw + P[I.twist] + P[I.turn];
+    if (Number.isNaN(this.headWas)) this.headWas = heading;
+    const turned = Math.atan2(Math.sin(heading - this.headWas), Math.cos(heading - this.headWas));
+    this.headWas = heading;
+    if (dt > 0) this.headRate += (turned / dt - this.headRate) * (1 - Math.exp(-dt * 12));
+    let gx = 0;
+    let gy = 0;
+    let on = false;
+    let far = p.lookFar;
+    const aim = this.sighted;
+    if (t < this.peekTill) {
+      const pk = this.peekAt;
+      this.sight(head, pk.x, pk.y, pk.z);
+      if (Math.abs(aim[0]) < EYE_REACH[0] && aim[1] < EYE_REACH[1] && aim[1] > EYE_REACH[2]) {
+        gx = aim[0];
+        gy = aim[1];
+        far = aim[2];
+        on = true;
+      } else this.peekTill = -1;
+    }
+    if (!on && Number.isFinite(p.lookFar)) {
+      this.sight(head, p.seen.x, p.seen.y, p.seen.z);
+      gx = aim[0];
+      gy = aim[1];
+      on = Math.abs(gx) < 1.4;
+    }
+    if (!on) {
+      gx = Math.max(-0.35, Math.min(0.35, this.headRate * EYE_LEAD));
+      gy = Math.max(-0.2, Math.min(0.25, 0.2 * P[I.nod]));
+    }
+    gx = Math.max(-EYE_REACH[0], Math.min(EYE_REACH[0], gx));
+    gy = Math.max(EYE_REACH[2], Math.min(EYE_REACH[1], gy));
+    const fresh = on !== this.onIt || Math.hypot(gx - this.goal[0], gy - this.goal[1]) > SACCADE;
+    if (on && !fresh) {
+      this.eye[0] += gx - this.goal[0];
+      this.eye[1] += gy - this.goal[1];
+    }
+    const whip = Math.abs(this.headRate) > BLINK_WHIP;
+    if (((fresh && on) || (whip && !this.whipped)) && !shooting && t - this.blinkAt > 1 && r() < BLINK_SHIFT) this.blinkNext = t;
+    this.whipped = whip;
+    this.goal[0] = gx;
+    this.goal[1] = gy;
+    this.onIt = on;
+    if (fresh || t > this.fixAt) {
+      const spread = on ? FIX_ON : FIX_SPREAD;
+      this.fix[0] = fresh && on ? 0 : (r() - 0.5) * spread[0];
+      this.fix[1] = fresh && on ? 0 : (r() - 0.5) * spread[1];
+      this.fixAt = t + FIXES[0] + (FIXES[1] - FIXES[0]) * r() ** 2;
+    }
+    const flick = 1 - Math.exp(-dt * SACCADE_RATE);
+    this.eye[0] += (gx + (shooting ? 0 : this.fix[0]) - this.eye[0]) * flick;
+    this.eye[1] += (gy + (shooting ? 0 : this.fix[1]) - this.eye[1]) * flick;
+    this.eye[0] = Math.max(-EYE_REACH[0], Math.min(EYE_REACH[0], this.eye[0]));
+    this.eye[1] = Math.max(EYE_REACH[2], Math.min(EYE_REACH[1], this.eye[1]));
+    // (and they turn in on the thing as far as it is near: quickly, as eyes do, but never in a frame)
+    this.verge += (eyeIn(on ? far : EYE_IDLE) - this.verge) * (1 - Math.exp(-dt * 10));
+
+    // his blink: in his own time, sooner the harder he's going; now and then a half one, or two together; as his eyes
+    // go to a new thing or his head whips round (above), or a knock jolts him (see jolt); never as he shoots, nor with
+    // his eyes already shut tight
+    if (shooting || m[F.shut] > 0.5) this.blinkNext = Math.max(this.blinkNext, t + 0.25);
+    if (t >= this.blinkNext) {
+      this.blinkAt = t;
+      this.blinkK = r() < BLINK_HALF ? 0.45 + 0.25 * r() : 1;
+      this.blinkTwice = r() < BLINK_TWICE;
+      this.blinkNext = t + (this.blinkGap * (0.5 + 1.2 * r())) / (1 + 0.8 * p.effort);
+    }
+    let since = t - this.blinkAt;
+    const span = BLINK[0] + BLINK[1] + BLINK[2];
+    if (this.blinkTwice && since > span + 0.05) {
+      this.blinkAt = t;
+      this.blinkTwice = false;
+      since = 0;
+    }
+    const lid = since < BLINK[0] ? sstep(0, BLINK[0], since) : 1 - sstep(BLINK[0] + BLINK[1], span, since);
+
+    // his head's own moves: a nod, a shake, a beat on a word (in and out over the first and last of it); thrown back;
+    // tipped a little to the side of a raised brow
+    let nod = 0;
+    let shake = 0;
+    const mv = HEAD_MOVES[this.moveKind];
+    const into = t - this.moveAt;
+    const long = mv[1] * mv[2];
+    if (into > 0 && into < long) {
+      const u = into / long;
+      const env = this.moveK * mv[0] * sstep(0, 0.15, u) * (1 - sstep(0.75, 1, u));
+      const ph = (into / mv[1]) * Math.PI * 2;
+      if (this.moveKind === 'shake') shake = env * Math.sin(ph);
+      else nod = env * 0.5 * (1 - Math.cos(ph));
+    }
+
+    const row = this.row;
+    row[0] = this.ms;
+    for (let c = 0; c < CHANNELS; c++) row[1 + c] = m[c];
+    row[T_BLINK] = since >= 0 && since < span ? lid * this.blinkK : 0;
+    row[T_EYE] = this.eye[0];
+    row[T_EYE + 1] = this.eye[1];
+    row[T_EYE + 2] = this.verge;
+    row[T_HEAD] = nod - HEAD_BACK * m[F.back];
+    row[T_HEAD + 1] = shake;
+    row[T_HEAD + 2] = HEAD_TIP * m[F.cock] * this.cockSide;
+    row[T_SIDE] = this.lopSide;
+    row[T_SIDE + 1] = this.cockSide;
+  }
+
+  /** Where a point (the scene's) is from his eyes, as his head is turned now: across and up (radians) and how far (ft), into `sighted`. */
+  private sight(head: Bone, x: number, y: number, z: number) {
+    const p = this.pup;
+    const eyes = E.copy(EYES_AT).multiply(head.scale).applyQuaternion(head.quaternion).add(head.position);
+    W3.set(x - p.x, y, z - p.z)
+      .applyAxisAngle(UP, -p.yaw)
+      .sub(eyes)
+      .applyQuaternion(Q.copy(head.quaternion).invert());
+    this.sighted[0] = Math.atan2(W3.x, W3.z);
+    this.sighted[1] = Math.atan2(W3.y, Math.hypot(W3.x, W3.z));
+    this.sighted[2] = W3.length();
+  }
+
+  /**
+   * His mouth as he talks (see VISEMES): a word's syllables one after another, no two the same in a row, then a beat
+   * with his mouth just apart, then the next word (a hard one with his head: a beat).
+   */
+  private talk(loud: number, t: number) {
+    if (t < this.visTill) return;
+    const r = this.eyeRng;
+    if (this.sylLeft <= 0 && this.vis !== QUIET) {
+      this.vis = QUIET;
+      this.visTill = t + WORD_GAP[0] + (WORD_GAP[1] - WORD_GAP[0]) * r();
+      return;
+    }
+    if (this.sylLeft <= 0) {
+      this.sylLeft = WORD[0] + Math.floor(r() * (WORD[1] - WORD[0] + 1));
+      if (r() < 0.4 * loud) this.move('beat', loud, t);
+    }
+    this.sylLeft--;
+    const u = r();
+    let v = 0;
+    while (v < 3 && u > VISEME_ODDS[v]) v++;
+    if (v === this.vis) v = (v + 1 + Math.floor(r() * 3)) % 4;
+    this.vis = v;
+    this.visTill = t + SYLLABLE[0] + (SYLLABLE[1] - SYLLABLE[0]) * r();
+  }
+
+  /**
+   * What a frame's face (the row: see TAPE_K) makes of his lids, his mouth, his jaw, his brows and his head (see EYES,
+   * FACE_MOVE). His lids: the upper one up as he stares, down as he narrows his eyes, smiles or tires; the lower one
+   * up as he narrows them or his cheeks come up under them; shut tight, they are shut as in a blink.
+   */
+  private show(head: Bone) {
+    const row = this.row;
+    const m = this.shown;
+    const told = this.told;
+    told.uGaze.value.set(EYE_TURN[0] * Math.sin(row[T_EYE]), EYE_TURN[1] * Math.sin(row[T_EYE + 1]), row[T_EYE + 2]);
+    told.uBlink.value = Math.max(row[T_BLINK], m[F.shut]);
+    told.uLid.value.set(0.02 * m[F.wide] - 0.011 * m[F.squint] - 0.014 * m[F.heavy] - 0.004 * m[F.smile], 0.013 * m[F.squint] + 0.008 * m[F.smile] - 0.003 * m[F.wide]);
+    told.uMove.value.set(m[F.smile], m[F.grim], m[F.press], m[F.snarl]);
+    told.uMove2.value.set(m[F.part], Math.max(m[F.smile], 0.5 * m[F.squint], 0.6 * m[F.snarl]), 0, 0);
+    told.uMove3.value.set(m[F.round], m[F.puff], m[F.stretch], m[F.lop] * row[T_SIDE]);
+    // (his teeth are in the dark behind his lips till they come apart: a little behind lips just apart, most in a grin)
+    told.uMouth.value = Math.max(m[F.jaw], 0.5 * m[F.part] * (1 + m[F.smile] + 0.5 * m[F.stretch]), 0.9 * m[F.snarl]);
+    // (his jaw swings about its hinge by his ear, not about where it is scaled from)
+    const jaw = this.bones[B.jaw];
+    Q.setFromAxisAngle(XA, JAW_SWING * m[F.jaw]);
+    jaw.position.copy(A.copy(JAW_AT).sub(JAW_HINGE).applyQuaternion(Q).add(JAW_HINGE).multiply(head.scale).applyQuaternion(head.quaternion)).add(head.position);
+    jaw.quaternion.multiply(Q);
+    this.bones[B.lip].position.copy(jaw.position);
+    this.bones[B.lip].quaternion.copy(jaw.quaternion);
+    // (his brows: down, a little forward and drawn together, or up and a little apart, or one up and the other not;
+    // a heavier brow sits further forward all the time)
+    const brow = this.bones[B.brow];
+    const hs = head.scale.z;
+    const cock = m[F.cock];
+    brow.position.add(
+      A.set(0, -0.024 * m[F.frown] + BROW_UP * (m[F.raise] + 0.5 * cock), 0.006 * m[F.frown] + 0.012 * (this.look.face.ridge - 0.45))
+        .multiplyScalar(hs)
+        .applyQuaternion(head.quaternion),
+    );
+    if (cock > 0.001) brow.quaternion.multiply(Q.setFromAxisAngle(ZA, BROW_COCK * cock * row[T_SIDE + 1]));
+    brow.scale.x = head.scale.x * (1 - 0.08 * m[F.frown] + 0.025 * m[F.raise]);
+    // (and his head's own moves, for place to lay over where he looks next frame)
+    this.tilt.setFromEuler(EU.set(row[T_HEAD], row[T_HEAD + 1], row[T_HEAD + 2], 'YXZ'));
+  }
+
+  /** This frame's face onto the tape (see TAPE_N), at most every TAPE_STEP ms of the possession; a new possession, or one gone back, starts it again. */
+  private keep() {
+    const of = this.of;
+    if (!of) return;
+    const tape = (this.tape ??= new Float32Array(TAPE_N * TAPE_K));
+    const last = this.tapeN > 0 ? tape[((this.tapeHead + TAPE_N - 1) % TAPE_N) * TAPE_K] : -Infinity;
+    if (of !== this.tapeOf || this.ms < last - 1) {
+      this.tapeOf = of;
+      this.tapeN = 0;
+      this.tapeHead = 0;
+    } else if (this.ms - last < TAPE_STEP) return;
+    tape.set(this.row, this.tapeHead * TAPE_K);
+    this.tapeHead = (this.tapeHead + 1) % TAPE_N;
+    this.tapeN = Math.min(TAPE_N, this.tapeN + 1);
+  }
+
+  /** The `j`th of the samples kept, oldest first: where it starts on the tape. */
+  private slot(j: number): number {
+    return ((this.tapeHead - this.tapeN + j + 2 * TAPE_N) % TAPE_N) * TAPE_K;
+  }
+
+  /** His face at `ms` of the possession, as it was kept (eased between the two samples about it), into this frame's row; false if it wasn't. */
+  private played(ms: number): boolean {
+    const tape = this.tape;
+    const n = this.tapeN;
+    if (!tape || this.tapeOf !== this.of || n < 2 || ms < tape[this.slot(0)] || ms > tape[this.slot(n - 1)] + TAPE_OVER) return false;
+    let lo = 0;
+    let hi = n - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (tape[this.slot(mid)] <= ms) lo = mid;
+      else hi = mid - 1;
+    }
+    const a = this.slot(lo);
+    const b = this.slot(Math.min(n - 1, lo + 1));
+    const u = tape[b] > tape[a] ? clamp01((ms - tape[a]) / (tape[b] - tape[a])) : 0;
+    for (let k = 0; k < TAPE_K; k++) this.row[k] = tape[a + k] + (tape[b + k] - tape[a + k]) * u;
+    return true;
+  }
+
+  /**
+   * What the game does to his skin, once his face is set (see face): going hard he gets wet with sweat (the harder, the
+   * quicker; some men more than others: Look.sweat) and his face flushes; stood at a dead ball both ease off, slowly; his
+   * eyes tire as he is spent and has been at it a while. And the lines his face makes as it moves (CREASE_DEEP: his brows,
+   * his eyes), from his face as it is now; and his head's turn in the world, for his eyes' round. On his body's clock.
+   */
+  private skin(head: Bone) {
+    const p = this.pup;
+    const dt = Math.min(0.1, p.frameMs / 1000);
+    const told = this.told;
+    const w = told.uWorn.value;
+    const going = p.effort;
+    const sweat = this.look.sweat;
+    w.x = RESTING.has(p.clip) && going < 0.15 ? w.x * Math.exp(-dt * WET_DOWN) : w.x + (1 - w.x) * (1 - Math.exp(-dt * WET_UP * sweat * (0.25 + going)));
+    const flush = clamp01(sweat * (0.35 * w.x + 0.5 * going));
+    w.y += (flush - w.y) * (1 - Math.exp(-dt * FLUSH_RATE[flush > w.y ? 0 : 1]));
+    w.z += (clamp01(0.35 * going + 0.7 * w.x * w.x) - w.z) * (1 - Math.exp(-dt * TIRED_RATE));
+    const m = this.mien;
+    told.uCrease.value.set(m[F.raise], m[F.frown], m[F.squint], m[F.shut]);
+    told.uHead.value.setFromMatrix4(MAT.makeRotationFromQuaternion(Q.copy(this.group.quaternion).multiply(head.quaternion)));
   }
 }

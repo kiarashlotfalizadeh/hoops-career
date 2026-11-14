@@ -2,14 +2,22 @@
 // A bench for the 3D figures (dev server only): one move, seen as a strip of moments or running live.
 //   /scripts/qa/figure-lab/?move=jumper            eight moments of it, left to right
 //   /scripts/qa/figure-lab/?move=run&live=1        one figure, moving
+//   footwork: ?move=turn (his stance turned round: a pivot, then steps), ?move=boxout (giving ground, the man behind him), ?move=rebound
+//   with the ball, on the game's clock (the play's time half his own, as the 3D court plays it): ?move=pivot (held, the man on him,
+//   turned round and back on his pivot), drive (at the rim off the dribble: a layup), pullup (a jumper off a dribble at a run),
+//   cns (a catch and shoot), closeout (a defender running at a man, into his stance), beaten (in his stance, his man going by)
+//   &who=n (whose way of doing it: a layup's side and euro, a jumper's step-back go by it)  &turn=90 (degrees: the move turned round
+//   on the floor, so a camera in front of the row sees it side on)
 //   &yaw=40 (degrees round him)  &zoom=1.4  &from=0&to=1200 (ms)  &n=8  &h=78&w=215 (his build)
 //   &seed=1 (the first man's own things: his look, sleeves, shoes; the next is seed+1)  &light=1 (the home kit)  &num=23&name=Brunson&mark=NYK
 //   &style=4 &beard=3 &tone=6 (everyone's hair, beard or skin: see look.ts)  &styles=1 (each man the next style; &styles=9: from the ninth)  &tones=1 (each the next skin)
 //   &eye=3,5.5,6&at=0,5,0&fov=28 (a camera of one's own, ft: for a close look at a shoulder, a shoe)
+//   &cue=point&cueAt=100 (a gesture, asked that far in: his hands as it has them; a list, or all: each man the next)
 //   &arms=up|shoot|fwd|hip|out|across|back|down (both arms put there, whatever the move has them do; arms=all, or a list of them: each man the next)
 //   faces: ?move=idle&n=6&gap=1.5&camY=6.4&lookY=6.25&zoom=3.6&yaw=12&from=100&to=100  (&beard=0..5: none, stubble, goatee, beard, full, strap)
 //   &kind=0..5 (everyone's head the kind's own, as look.ts's FACES has it: long, broad, square, narrow, heavy, soft)  &kinds=1 (each the next kind)
-//   &face=1 (his jaw open and his brows down, as in a roar)
+//   &face=1 (his jaw open and his brows down, as in a roar)  &face=joy|shout|miss|stung|disbelief|stunned|wince|glare|exhale|blow (what a moment gives him: see Fig.feel, at its height)
+//   &gest=protest|call|talk|... (a gesture, his talk with it)  &at=520 (how far into it, ms of his own time)
 import {
   AmbientLight,
   DirectionalLight,
@@ -22,10 +30,12 @@ import {
   PlaneGeometry,
   Scene,
   SphereGeometry,
+  Vector3,
   WebGLRenderer,
 } from 'three';
 import type { Act } from '../../../src/ui/live/choreo';
-import { Fig, figureGeo, settleHeads } from '../../../src/ui/live/court3d/figure';
+import { GESTURES, type Gesture } from '../../../src/ui/live/court3d/clips';
+import { Fig, figureGeo, settleHeads, type Feel } from '../../../src/ui/live/court3d/figure';
 import { BEARDS, FACES, lookOf, SKINS, STYLES } from '../../../src/ui/live/court3d/look';
 import { loadModels } from '../../../src/ui/live/court3d/models';
 import { BALL_R, bodyOf, FARM, J, UARM, type Drive } from '../../../src/ui/live/court3d/puppet';
@@ -85,6 +95,53 @@ function drive(t: number): Drive {
       return t < 500 ? still('hold', true) : { ...still('pass'), ms: t - 500, ball: false };
     case 'hold':
       return still('hold', true);
+    // footwork: in his stance he turns three-quarters of the way round (a pivot, then steps); a box-out with the man
+    // behind him, giving ground a step at a time; a rebound gone up for off two feet
+    case 'turn':
+      return { ...still('defend'), yaw: t < 300 ? 0 : Math.min(2.4, ((t - 300) * 3.2) / 1000) };
+    case 'boxout': {
+      const z = -Math.max(0, t - 300) * 0.0012;
+      return { ...still('boxout'), z, touch: { x: 0, z: z - 2.3, w: 1 } };
+    }
+    case 'rebound':
+      return t < 400 ? still('boxout') : { ...still('rebound'), ms: t - 400, dur: 650 };
+    // (these on the game's clock: t is the play's ms, a speed is ft a play's second, twice the body's)
+    case 'pivot': {
+      const yaw = t < 300 ? 0 : t < 800 ? Math.min(2.6, ((t - 300) * 7) / 1000) : Math.max(0.6, 2.6 - ((t - 800) * 5) / 1000);
+      return { ...still('hold', true), yaw, press: { x: Math.sin(yaw) * 3, z: Math.cos(yaw) * 3 } };
+    }
+    case 'drive': {
+      // (28 ft a play's second is a body's 14: easing off a little into the last of it)
+      const z = (u: number) => (u < 600 ? (28 * u) / 1000 : 16.8 + 22 * ((u - 600) / 1000) - 8 * ((u - 600) / 1000) ** 2);
+      const rim = { x: 0, z: z(900) + 2.5 };
+      if (t < 600) return { ...going('dribble', 28, true), z: z(t) };
+      if (t < 900) return { x: 0, z: z(t), yaw: 0, act: 'layup', ms: t - 600, dur: 300, ball: true, aim: rim };
+      return { x: 0, z: z(900), yaw: 0, act: t < 1800 ? 'release' : 'stand', ms: t - 900, dur: 900, ball: false, aim: rim };
+    }
+    case 'pullup': {
+      // (a dribble at a run, eased to a stop at his spot, and up from it)
+      const z = (u: number) => (u < 300 ? (28 * u) / 1000 : 8.4 + 28 * 0.3 * (1 - (1 - Math.min(1, (u - 300) / 600)) ** 2));
+      const rim = { x: 0, z: 30 };
+      if (t < 900) return { x: 0, z: z(t), yaw: 0, act: 'dribble', ms: t, dur: 900, ball: true };
+      if (t < 1200) return { x: 0, z: z(900), yaw: 0, act: 'jumper', ms: t - 900, dur: 300, ball: true, aim: rim };
+      return { x: 0, z: z(900), yaw: 0, act: t < 2100 ? 'release' : 'stand', ms: t - 1200, dur: 900, ball: false, aim: rim };
+    }
+    case 'cns': {
+      const rim = { x: 0, z: 24 };
+      if (t < 360) return { x: 0, z: 0, yaw: 0, act: 'catch', ms: t, dur: 360, ball: false };
+      if (t < 660) return { x: 0, z: 0, yaw: 0, act: 'jumper', ms: t - 360, dur: 300, ball: true, aim: rim };
+      return { x: 0, z: 0, yaw: 0, act: t < 1560 ? 'release' : 'stand', ms: t - 660, dur: 900, ball: false, aim: rim };
+    }
+    case 'closeout': {
+      // (30 ft a play's second, slowing to his man over the last of it)
+      const u = Math.min(1, t / 700);
+      return { x: 0, z: 10.5 * (1 - (1 - u) ** 2), yaw: 0, act: 'defend', ms: t, dur: 1400, ball: false };
+    }
+    case 'beaten': {
+      // (in his stance, then his man goes by him to his right: faster than he slides)
+      const go = Math.max(0, t - 300);
+      return { x: -(30 * go) / 1000, z: 0, yaw: 0, act: 'guard', ms: t, dur: 4000, ball: false };
+    }
     default:
       return still(move as Act);
   }
@@ -250,11 +307,25 @@ function reach(f: Fig, pose: string) {
   }
 }
 
+/** `&cue=point&cueAt=100`: a gesture asked of each of them that far in (ms); `&cue=all`: each the next one. */
+const CUES = q.get('cue') === 'all' ? Object.keys(GESTURES) : (q.get('cue')?.split(',') ?? []);
+const cued = new Set<number>();
+
 /** One figure a step on, then put where its lane is (it runs on the spot). */
+const PLAY = new Set(['pivot', 'drive', 'pullup', 'cns', 'closeout', 'beaten']).has(move) ? 0.5 : 1;
+const TURN = (num('turn', 0) * Math.PI) / 180;
+const turned = <T extends { x: number; z: number } | undefined>(p: T): T =>
+  p && ({ ...p, x: p.x * Math.cos(TURN) + p.z * Math.sin(TURN), z: -p.x * Math.sin(TURN) + p.z * Math.cos(TURN) } as T);
 function step(k: (typeof figs)[number], dt: number) {
-  k.t += dt;
-  const d = drive(k.t);
-  k.f.pup.update(d, dt, dt);
+  k.t += dt * PLAY;
+  const i = figs.indexOf(k);
+  if (CUES.length && !cued.has(i) && k.t >= num('cueAt', 100)) {
+    k.f.pup.cue(CUES[i % CUES.length] as Gesture);
+    cued.add(i);
+  }
+  const d0 = drive(k.t);
+  const d = { ...d0, ...turned({ x: d0.x, z: d0.z }), yaw: d0.yaw + TURN, aim: turned(d0.aim), press: turned(d0.press), touch: turned(d0.touch), who: num('who', 0) };
+  k.f.pup.update(d, dt * PLAY, dt);
   const b = d.ball ? k.f.pup.carry({ x: 0, y: 0, z: 0 }) : null;
   k.f.pup.arms(b);
   if (ARMS) reach(k.f, (ARMS === 'all' ? Object.keys(REACH) : ARMS.split(','))[figs.indexOf(k) % (ARMS === 'all' ? Object.keys(REACH).length : ARMS.split(',').length)]);
@@ -281,19 +352,39 @@ if (live) {
   const to = num('to', 1700);
   figs.forEach((k, i) => {
     const end = from + ((to - from) * i) / Math.max(1, n - 1);
-    while (k.t < end) step(k, Math.min(16, end - k.t));
+    while (k.t < end - 1e-6) step(k, Math.min(16, (end - k.t) / PLAY));
   });
+  // (a camera on one of the first man's joints, wherever the move has taken it: &focus=hr&off=1.2,0.3,1.6, ft from it)
+  const focus = q.get('focus') as keyof typeof J | null;
+  if (focus && focus in J) {
+    const j = figs[0].f.pup.j;
+    const k = J[focus];
+    const at = figs[0].f.group.localToWorld(new Vector3(j[k * 3], j[k * 3 + 1], j[k * 3 + 2]));
+    const [dx, dy, dz] = (q.get('off') ?? '1.2,0.3,1.6').split(',').map(Number);
+    cam.position.set(at.x + dx, at.y + dy, at.z + dz);
+    cam.fov = num('fov', 24);
+    cam.updateProjectionMatrix();
+    cam.lookAt(at);
+  }
   renderer.render(scene, cam);
 }
-if (q.has('face') && !live) {
-  // (his face at the top of a shout: held there, then he is put again and drawn)
+if ((q.has('face') || q.has('gest')) && !live) {
+  // (his face so far into a moment (&at ms, of his own time: about its height by default), or into a gesture (&gest=protest,
+  // his talk with it): his body's clock run on to it a tick at a time, which is the clock his face runs on, and drawn)
+  const kind = (q.get('face') === '1' ? 'shout' : q.get('face')) as Feel | null;
+  const gest = q.get('gest') as Gesture | null;
   for (const k of figs) {
-    Object.assign(k.f as unknown as Record<string, number>, { jawOpen: 1, frown: 1, faceAt: performance.now() + 1e7 });
-    const [x, z] = [k.f.group.position.x, k.f.group.position.z];
-    k.f.place();
-    k.f.group.position.x = x;
-    k.f.group.position.z = z;
+    if (kind) k.f.feel(kind, 1);
+    if (gest) k.f.pup.cue(gest, null, 1000);
   }
+  for (let ms = 0; ms < num('at', 520); ms += 16)
+    for (const k of figs) {
+      const [x, z] = [k.f.group.position.x, k.f.group.position.z];
+      k.f.pup.update(drive(k.t), 0, 16);
+      k.f.place();
+      k.f.group.position.x = x;
+      k.f.group.position.z = z;
+    }
   renderer.render(scene, cam);
 }
 // (a window that changes shape, or had none yet when this ran, is drawn again)

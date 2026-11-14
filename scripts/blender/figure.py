@@ -16,8 +16,8 @@
 # Fingers, ears and basketball shoes (shoe_fine: sole, upper, collar, tongue, laces; high or low) are built by hand and joined on, and so is hair that stands off a
 # head (a bun, a tail, twists, locks, braids: the app draws a man with one of them or none). Each
 # point follows the bones near it (weights are a function of where the point is), and the shade of
-# every hollow is baked in. Beyond the puppet's bones he has leaves the app turns itself: his
-# fingers' two joints on each hand, his jaw and nose, whose sizes make one face unlike another (and
+# every hollow is baked in. Beyond the puppet's bones he has leaves the app turns itself: two
+# joints of each finger and of his thumb on each hand, his jaw and nose, whose sizes make one face unlike another (and
 # his jaw comes open), and on the floor his brows and his lower lip.
 #
 # He stands with his arms out from his sides (they can't be fused hanging against the trunk); the
@@ -77,21 +77,26 @@ LEAVES = {'kn1l': 'hal', 'kn2l': 'kn1l', 'kn1r': 'har', 'kn2r': 'kn1r', 'jaw': '
 # forearm, as the two bones in it do, and not in a twist of skin at the wrist.
 # The people round the floor, people.py, are seen from far off and keep the bones above.)
 GIRDLE = {'cll': 'chest', 'clr': 'chest', 'fwl': 'fal', 'fwr': 'far', 'brow': 'head', 'lip': 'head'}
+# (and each finger a hand of its own: LEAVES' kn1 and kn2 are his middle finger's knuckle and middle joint, and these his
+# index, ring and little fingers' and his thumb's (its root, down in the heel of his hand, and its middle knuckle), on
+# everyone: a hand closes into a fist, points, spreads over the ball, its thumb round it)
+DIGIT_BONES = {'ix': 'index', 'kn': 'middle', 'rg': 'ring', 'pk': 'little', 'th': 'thumb'}
+FINGER_LEAVES = {f'{d}{k}{sfx}': (f'{d}1{sfx}' if k == 2 else f'ha{sfx}') for d in DIGIT_BONES if d != 'kn' for k in (1, 2) for sfx in 'lr'}
 girdled = False
 
 
 def leaves():
-    return {**LEAVES, **GIRDLE} if girdled else LEAVES
+    return {**LEAVES, **FINGER_LEAVES, **GIRDLE} if girdled else {**LEAVES, **FINGER_LEAVES}
 SKIN, HAIR, JERSEY, TRIM_M, CLOTH, SHOE, WHITE = 'skin', 'hair', 'jersey', 'trim', 'cloth', 'shoe', 'white'
 # hair that is a shape of its own (a man wears one of them or none: figure.ts leaves the others out)
 BUN, TAIL, TWISTS, LOCS, BRAIDS, AFRO, HIGHTOP, CURLS = 'bun', 'tail', 'twists', 'locs', 'braids', 'afro', 'hightop', 'curls'
 # what a hand-built part hangs on (anything else: by where each point is)
 BY_PLACE, SHORTS, HAND_L, HAND_R, ON_HEAD, FOOT_L, FOOT_R, FACE, SWINGS, ON_JAW = range(10)
 RIGID = {ON_HEAD: 'head', FOOT_L: 'ftl', FOOT_R: 'ftr', ON_JAW: 'lip'}
-# what is behind his lips (see mouth)
-MOUTH, TEETH, EAR = 'mouth', 'teeth', 'ear'
-# the fingers' knuckles and middle joints, down the arm from the wrist
-KNUCKLE, MIDDLE = 0.4, 0.545
+# what is behind his lips (see mouth): the dark at the back of it, his teeth, his gums, his tongue; and his ears
+MOUTH, TEETH, GUM, TONGUE, EAR = 'mouth', 'teeth', 'gum', 'tongue', 'ear'
+# where the knuckles are down the arm from the wrist (the middle finger's; the others' a little nearer: see fingers)
+KNUCKLE = 0.4
 # where his jaw and his nose are scaled about, from the head's middle (in its half sizes: his jaw's from the height
 # of the line of his mouth, so a longer chin never parts his lips), and where his brows hang from
 JAW_AT, NOSE_AT, BROW_AT = (0, -0.5, 0.25), (0, -0.2, 0.8), (0, 0.24, 0.8)
@@ -222,6 +227,8 @@ def face_at(n):
 EYE_X, EYE_Y, EYE_W = 0.38, 0.066, 0.152
 MOUTH_Y, MOUTH_W = -0.522, 0.3
 NOSE_TIP, NOSE_FOOT = -0.262, -0.34
+# how far out his lips part (figure.ts's SLIT): nearly to the corners of his mouth, where the two lips meet
+SLIT = MOUTH_W - 0.025
 
 
 def lids(px, py):
@@ -427,7 +434,7 @@ def head(q=1.0, slit=False):
         def on_line(v):
             p = G(v.co)
             d = [(p[i] - c[i]) / size[i] for i in range(3)]
-            return d[2] > 0.3 and abs(d[1] / d[2] * 0.8 - MOUTH_Y) < 2e-4 and abs(d[0] / d[2] * 0.8) < MOUTH_W - 0.07
+            return d[2] > 0.3 and abs(d[1] / d[2] * 0.8 - MOUTH_Y) < 2e-4 and abs(d[0] / d[2] * 0.8) < SLIT
 
         def plane_y(p):
             d = [(p[i] - c[i]) / size[i] for i in range(3)]
@@ -451,34 +458,186 @@ def head(q=1.0, slit=False):
     return tag(o, FACE)
 
 
+# his teeth: how many feet a millimetre of a real man's tooth is on him (his head is a little over a real one, and so
+# are they); how far back from the skin of his lips at the middle of his mouth his upper teeth's front faces are (ft:
+# past the most his lips are ever drawn in, pressed and thin, so no tooth shows through a lip), how much further back
+# his lower ones' are (they close behind the upper ones), and how far under the line of his mouth the upper ones' edges
+# are and the lower ones' (his upper teeth come down over the edges of his lower ones)
+TOOTH_MM = 0.0034
+TEETH_BACK, LOWER_BACK = 0.021, 0.009
+UPPER_EDGE, LOWER_EDGE = 0.007, 0.003
+# each crown, from the middle of his mouth round to his second premolar above and his first below (the rest are too far
+# back, behind his cheeks and his lower lip, to be seen):
+# its width along the arch, how tall it stands out of his gum and how thick it is at the gum (mm); how thick its edge
+# is (a share of that: an incisor's is a blade, a premolar's a table); how far its corners stand back from a cusp's
+# point (mm); how far its edge is from his front teeth's toward his gum (mm); how far it leans back toward his gum (a
+# share of its height). His upper row, then his lower: a real man's numbers.
+UPPER_TEETH = [(8.6, 10.5, 7.0, 0.2, 0.0, 0.0, 0.26), (6.6, 9.0, 6.0, 0.2, 0.0, 0.7, 0.24), (7.6, 10.0, 8.0, 0.35, 1.6, -0.2, 0.18), (7.0, 8.5, 9.0, 0.7, 1.2, 0.5, 0.08), (6.6, 7.8, 9.0, 0.75, 0.9, 1.0, 0.05)]
+LOWER_TEETH = [(5.4, 9.0, 6.0, 0.22, 0.0, 0.0, 0.18), (5.9, 9.5, 6.2, 0.22, 0.0, 0.0, 0.18), (6.9, 11.0, 7.5, 0.35, 1.4, 0.3, 0.12), (7.0, 8.5, 7.6, 0.7, 1.0, 0.6, 0.05)]
+# how far down between two teeth his gum comes (mm: the papilla), at his front teeth and at the back
+PAPILLA = (3.4, 2.2)
+
+
+def arch(front, k2, k4):
+    """
+    A row's arch (ft, as built): the line of its teeth's front faces from the middle of his mouth round toward his
+    cheek, a U that goes back the faster the further out it is; as a table of (how far along it, across, forward).
+    """
+    out, s, was = [], 0.0, None
+    for i in range(481):
+        x = 0.12 * i / 480
+        z = front - k2 * x * x - k4 * x ** 4
+        if was:
+            s += math.hypot(x - was[0], z - was[1])
+        out.append((s, x, z))
+        was = (x, z)
+    return out
+
+
+def along(table, s):
+    """The point of an arch that far along it from the middle (across, forward), and the way along it there."""
+    i = next((k for k in range(1, len(table)) if table[k][0] >= s), len(table) - 1)
+    (s0, x0, z0), (s1, x1, z1) = table[i - 1], table[i]
+    t = (s - s0) / max(1e-9, s1 - s0)
+    ln = math.hypot(x1 - x0, z1 - z0)
+    return x0 + (x1 - x0) * t, z0 + (z1 - z0) * t, (x1 - x0) / ln, (z1 - z0) / ln
+
+
 def mouth():
     """
-    What is behind his lips when his jaw comes open: the dark of his mouth, his upper teeth (his
-    head's) and his lower ones (his jaw's), each a short band round the front of it. Shut, his lips
-    are in front of all of it.
+    What is behind his lips when his jaw comes open: his teeth, each a crown of its own round the arch of his jaw
+    (upper and lower, his head's and his jaw's), his gums round their roots, coming down between them; his tongue
+    lying in his lower jaw, its tip behind his lower teeth; and the dark at the back of his mouth. Shut, his lips are
+    in front of all of it.
     """
+    lip = on_head((0, MOUTH_Y / 0.8, 1.0))
+    mid_y, front = lip[1], lip[2] - TEETH_BACK
+    upper = arch(front, 9.2, 400)
+    lower = arch(front - LOWER_BACK, 10.0, 450)
 
-    def band(name, mat, kind, deep, ys, half, cols=8):
+    def row(table, specs, edge_y, way, seg=8):
+        """
+        A row of crowns along an arch, each side of the middle; `way` 1 is up from their edges to his gum (his upper
+        teeth), -1 down. Each crown is rings round it from its edge to its root (a blade's edge thin, its root thick,
+        a cusp's point lower than its corners), leaning back toward his gum, its front face on the arch. Says the
+        crowns, and where his gum's edge runs over them (see gum).
+        """
+        verts, faces, line = [], [], []
+        s = 0.0
+        for n, (w, h, d, edge, cusp, rise, lean) in enumerate(specs):
+            w, h, d, cusp, rise = (v * TOOTH_MM for v in (w, h, d, cusp, rise))
+            # (two teeth touch a hair apart, so the line between them reads)
+            x, z, tx, tz = along(table, s + w / 2)
+            for side in (1, -1):
+                base = len(verts)
+                for v in (0.0, 0.12, 0.55, 1.0):
+                    dv = d * (edge + (1 - edge) * v ** 0.6)
+                    wv = (w - 0.00035) * (0.95 - 0.18 * v) * (0.86 if v == 0 else 1)
+                    for k in range(seg):
+                        a = 2 * math.pi * (k + 0.5) / seg
+                        u = math.copysign(abs(math.cos(a)) ** 0.8, math.cos(a))
+                        q = math.copysign(abs(math.sin(a)) ** 0.8, math.sin(a))
+                        across, out = u * wv / 2, q * dv / 2 - dv / 2 - lean * h * v
+                        y = edge_y + way * (rise + cusp * abs(u) ** 1.5 * (1 - v) + v * h)
+                        # (out from the arch is in front of him: the way along it turned a quarter)
+                        verts.append((side * (x + tx * across - tz * out), y, z + tz * across + tx * out))
+                # (its biting face: a blade's edge, or a cusp's table with a hollow in its middle)
+                out = -d * edge / 2
+                verts.append((side * (x - tz * out), edge_y + way * (rise + cusp * (1.4 if edge > 0.5 else 0.3)), z + tx * out))
+                for i in range(3):
+                    for k in range(seg):
+                        a, b = base + i * seg + k, base + i * seg + (k + 1) % seg
+                        faces.append((a, b, b + seg, a + seg))
+                # (its root is in his gum: left open)
+                for k in range(seg):
+                    faces.append((base + 4 * seg, base + (k + 1) % seg, base + k))
+            # (his gum's edge over this tooth: down between it and the last, up round its root)
+            line.append((s, w, edge_y + way * (rise + h), lean, h, PAPILLA[0 if n < 2 else 1] * TOOTH_MM))
+            s += w
+        return verts, faces, line, s
+
+    def gum(table, line, end, way, name, kind):
+        """
+        His gum along a row: its edge scalloped round each crown's root and down to a point between two (the papilla),
+        standing a little proud of the teeth there, then on up (or down, his lower one) and back under his lip.
+        """
+        cols = []
+        for s, w, root, lean, h, pap in line:
+            for f in (0.0, 1 / 3, 2 / 3):
+                edge = root - way * ((pap + 0.0003) * math.cos(math.pi * f) ** 2 - 0.0003)
+                cols.append((s + f * w, edge, root, lean, h))
+        s, w, root, lean, h, pap = line[-1]
+        cols.append((end, root - way * pap, root, lean, h))
+        cols = [(-c[0], *c[1:]) for c in reversed(cols[1:])] + cols
+        # (how far past the root each row of it is, and how far it stands out from the tooth's face there)
+        rows = [(0.0, 0.0012), (0.006, 0.0028), (0.022, -0.005)]
         verts, faces = [], []
-        for py in ys:
-            for j in range(cols + 1):
-                px = half * (2 * j / cols - 1)
-                # (set back from his lips, further toward the corners, as the arch of his teeth is)
-                verts.append(tuple(on_head((px / 0.8, py / 0.8, 1.0), -deep - 0.05 * (px / half) ** 2 * (0.4 + half))))
-        for i in range(len(ys) - 1):
-            for j in range(cols):
-                a = i * (cols + 1) + j
-                faces.append((a, a + 1, a + cols + 2, a + cols + 1))
+        for past, proud in rows:
+            for s, edge, root, lean, h in cols:
+                x, z, tx, tz = along(table, abs(s))
+                # (the tooth's face leans back toward the root: the gum's edge is on it where it crosses it)
+                y = edge if past == 0 else root + way * past
+                out = proud - lean * h * min(1.15, abs(y - root + way * h) / h)
+                verts.append((math.copysign(x - tz * out, s), y, z + tx * out))
+        n = len(cols)
+        for i in range(len(rows) - 1):
+            for k in range(n - 1):
+                a = i * n + k
+                faces.append((a, a + 1, a + n + 1, a + n) if way > 0 else (a, a + n, a + n + 1, a + 1))
         o = mesh_obj(name, verts, faces)
-        fix_normals(o)
-        set_material(o, material(mat))
+        set_material(o, material(GUM))
         return tag(o, kind)
 
-    return [
-        band('gullet', MOUTH, ON_HEAD, 0.05, (-0.4, -0.52, -0.64, -0.78), 0.3, 6),
-        band('upper teeth', TEETH, ON_HEAD, 0.02, (-0.485, -0.565), 0.2),
-        band('lower teeth', TEETH, ON_JAW, 0.03, (-0.545, -0.62), 0.18),
-    ]
+    out = []
+    for table, specs, edge_y, way, kind, name in (
+        (upper, UPPER_TEETH, mid_y - UPPER_EDGE, 1, ON_HEAD, 'upper'),
+        (lower, LOWER_TEETH, mid_y - LOWER_EDGE, -1, ON_JAW, 'lower'),
+    ):
+        verts, faces, line, end = row(table, specs, edge_y, way)
+        o = mesh_obj(f'{name} teeth', verts, faces)
+        fix_normals(o)
+        set_material(o, material(TEETH))
+        out.append(tag(o, kind))
+        out.append(gum(table, line, end, way, f'{name} gum', kind))
+
+    # his tongue: low in his lower jaw, its tip just behind and under the edges of his lower teeth, its back rising a
+    # little and then down into his throat; a groove down its middle, its sides falling away to the floor of his mouth
+    tip = front - LOWER_BACK - 0.017
+    verts, faces = [], []
+    zs = [tip - 0.2 * (i / 7) ** 1.15 for i in range(8)]
+    for z in zs:
+        back = tip - z
+        # (its tip round, not a point: broad from its very end)
+        half = 0.058 * (0.4 + 0.6 * math.sqrt(clamp(back / 0.05))) * (1 - 0.15 * sstep(0.12, 0.2, back))
+        top = mid_y - LOWER_EDGE - 0.01 + 0.005 * sstep(0.0, 0.08, back) - 0.035 * sstep(0.12, 0.2, back)
+        for j in range(9):
+            u = 2 * j / 8 - 1
+            # (its tip rounded off and down at its end, and its groove from a little way back from it to where it goes down)
+            groove = 0.0022 * math.exp(-((u * half / 0.012) ** 2)) * sstep(0.0, 0.04, back) * sstep(0.17, 0.1, back)
+            end = sstep(0.03, 0.0, back)
+            verts.append((u * half, top - groove - 0.022 * abs(u) ** 2.5 - 0.004 * end, z - 0.016 * u * u * end))
+    for i in range(len(zs) - 1):
+        for j in range(8):
+            a = i * 9 + j
+            faces.append((a, a + 1, a + 10, a + 9))
+    tongue = mesh_obj('tongue', verts, faces)
+    set_material(tongue, material(TONGUE))
+    out.append(tag(tongue, ON_JAW))
+
+    # and the back of his mouth, behind his tongue: what an open mouth shows past everything else is dark
+    verts, faces = [], []
+    for y in (mid_y + 0.075, mid_y + 0.02, mid_y - 0.04, mid_y - 0.1):
+        for j in range(7):
+            x = 0.1 * (2 * j / 6 - 1)
+            verts.append((x, y, front - 0.24 + 4.0 * x * x))
+    for i in range(3):
+        for j in range(6):
+            a = i * 7 + j
+            faces.append((a, a + 1, a + 8, a + 7))
+    back = mesh_obj('gullet', verts, faces)
+    set_material(back, material(MOUTH))
+    out.append(tag(back, ON_HEAD))
+    return out
 
 
 def ears(mat=SKIN):
@@ -600,9 +759,39 @@ def girdle(s):
     return out
 
 
-def digit(f, base, way, lens, curl, r, s, name='finger'):
-    """A finger from `base` (the arm's frame): three bones, each bent a little more toward the palm."""
+# each hand's fingers and thumb as built, in the arm's own frame (see arm_frame), by side: each one's line, its two
+# joints (a finger's knuckle and middle joint, the thumb's root and middle knuckle) and how thick it is there. A
+# point of a finger goes with the one whose line it is on (see hand_weights); figure.ts turns each at its joints.
+DIGITS = {}
+# where along the knuckles each finger is (forward, toward the thumb's side), how long, how thick, how much it splays
+FINGERS = (('ix', 0.122, 0.3, 0.039, 0.1), ('kn', 0.041, 0.335, 0.04, 0.025), ('rg', -0.04, 0.31, 0.038, -0.05), ('pk', -0.116, 0.25, 0.034, -0.13))
+# the thumb, relaxed (how it's built): its root down in the heel of the hand, its middle knuckle, its last joint, its
+# tip; each (toward the palm, down the hand from the wrist, forward), ft, and how thick it is there. Its root is a
+# joint of its own (the thumb's whole length turns there, across the palm or out from it), deep in the heel of the
+# hand, so the heel's ball of muscle goes with it part of the way (see weights)
+THUMB = (((0.025, 0.06, 0.09), 0.05), ((0.075, 0.22, 0.175), 0.047), ((0.105, 0.33, 0.2), 0.043), ((0.125, 0.42, 0.205), 0.04))
+# how many sides a finger has round
+DIGIT_SIDES = 6
+# how much of the heel of the hand over the thumb's long bone goes with the thumb, at most
+THENAR = 0.6
+
+
+def tube(f, pts, s, name):
+    """A finger (or a thumb) along its line: `pts` are (where, which way, how thick) in the arm's frame, then a rounded tip."""
+    last, dl, rl = pts[-1]
+    pts = [*pts, (last + dl * rl * 0.75, dl, rl * 0.55)]
     rings = []
+    for at, dr, rad in pts:
+        e1 = dr.cross(Vector((0, 0, 1))).normalized()
+        e2 = dr.cross(e1).normalized()
+        rings.append([tuple(f @ (at + (e1 * math.cos(a) * rad * 0.92 + e2 * math.sin(a) * rad))) for a in (2 * math.pi * k / DIGIT_SIDES for k in range(DIGIT_SIDES))])
+    o = solid(rings, name)
+    set_material(o, material(SKIN))
+    return tag(o, HAND_L if s > 0 else HAND_R)
+
+
+def digit(f, base, way, lens, curl, r, s, name):
+    """A finger from `base` (the arm's frame): three bones, each bent a little more toward the palm. Its line and joints go in DIGITS."""
     p = Vector(base)
     d = Vector(way).normalized()
     pts = [(p.copy(), d.copy(), r)]
@@ -610,26 +799,31 @@ def digit(f, base, way, lens, curl, r, s, name='finger'):
         d = (Matrix.Rotation(-s * c, 3, 'Z') @ d).normalized()
         p = p + d * ln
         pts.append((p.copy(), d.copy(), r * (1 - 0.1 * (n + 1))))
-    last, dl, rl = pts[-1]
-    pts.append((last + dl * rl * 0.75, dl, rl * 0.55))
-    for at, dr, rad in pts:
-        e1 = dr.cross(Vector((0, 0, 1))).normalized()
-        e2 = dr.cross(e1).normalized()
-        rings.append([tuple(f @ (at + (e1 * math.cos(a) * rad * 0.92 + e2 * math.sin(a) * rad))) for a in (2 * math.pi * k / 6 for k in range(6))])
-    o = solid(rings, name)
-    set_material(o, material(SKIN))
-    return tag(o, HAND_L if s > 0 else HAND_R)
+    # (its knuckle a little way into its first bone, where it comes out of the palm; its middle joint the end of that bone)
+    first = pts[1][1]
+    DIGITS.setdefault(s, {})[name] = ([q for q, _, _ in pts], (pts[0][0] + first * 0.03, first), (pts[1][0], pts[2][1]))
+    return tube(f, pts, s, 'finger')
+
+
+def thumb(f, s):
+    """The thumb, relaxed along the side of the hand (THUMB). Its line and joints go in DIGITS."""
+    at = [Vector((-s * px, -(ARM + u), z)) for (px, u, z), _ in THUMB]
+    pts = []
+    for k, (p, (_, r)) in enumerate(zip(at, THUMB)):
+        d = (at[min(k + 1, len(at) - 1)] - at[max(0, k - 1) if k == len(at) - 1 else k]).normalized()
+        pts.append((p, d, r))
+    DIGITS.setdefault(s, {})['th'] = (at, (at[0], pts[0][1]), (at[1], pts[1][1]))
+    return tube(f, pts, s, 'thumb')
 
 
 def fingers(s):
     f = arm_frame(s)
     out = []
-    # (where along the knuckles, how long, how thick, how much it splays)
-    for z, ln, r, splay in ((0.122, 0.3, 0.039, 0.1), (0.041, 0.335, 0.04, 0.025), (-0.04, 0.31, 0.038, -0.05), (-0.116, 0.25, 0.034, -0.13)):
+    for name, z, ln, r, splay in FINGERS:
         knuckle = -(ARM + KNUCKLE) + abs(z - 0.02) * 0.22
         # (built nearly straight: figure.ts curls them at the knuckles and the middle joints)
-        out.append(digit(f, (-s * 0.008, knuckle + 0.03, z), (-s * 0.04, -1, splay), (0.03 + ln * 0.44, ln * 0.31, ln * 0.25), (0.05, 0.08, 0.2), r, s))
-    out.append(digit(f, (-s * 0.03, -(ARM + 0.1), 0.125), (-s * 0.16, -0.88, 0.42), (0.13, 0.11, 0.08), (0.06, 0.14, 0.14), 0.046, s, 'thumb'))
+        out.append(digit(f, (-s * 0.008, knuckle + 0.03, z), (-s * 0.04, -1, splay), (0.03 + ln * 0.44, ln * 0.31, ln * 0.25), (0.05, 0.08, 0.2), r, s, name))
+    out.append(thumb(f, s))
     return out
 
 
@@ -946,18 +1140,22 @@ def weights(p, kind):
             continue
         e = sstep(UARM - 0.24, UARM + 0.24, u)
         h = sstep(ARM - 0.1, ARM + 0.1, u)
+        # (the ball of muscle at the heel of his hand, over the thumb's long bone, goes part of the way with the thumb: see THUMB)
+        tb = thenar(loc, s) * h
         if girdled:
             # (his chest gives way to the shoulder's own bone, and that to the arm: two gentle turns, not one sharp one)
             mine = sstep(0.45, 1.0, m)
             both = sstep(0.0, 0.55, m)
             w['cll' if s > 0 else 'clr'] = both - mine
             tw = sstep(UARM + 0.3, ARM - 0.08, u)
-            w[ua], w[fa], w[ha] = mine * (1 - e), mine * e * (1 - h) * (1 - tw), mine * e * h
+            w[ua], w[fa], w[ha] = mine * (1 - e), mine * e * (1 - h) * (1 - tw), mine * e * (h - tb)
             w['fwl' if s > 0 else 'fwr'] = mine * e * (1 - h) * tw
             arms += both
         else:
-            w[ua], w[fa], w[ha] = m * (1 - e), m * e * (1 - h), m * e * h
+            mine = m
+            w[ua], w[fa], w[ha] = m * (1 - e), m * e * (1 - h), m * e * (h - tb)
             arms += m
+        w['th1' + ('l' if s > 0 else 'r')] = mine * e * tb
     rest = max(0.0, 1 - arms)
     legs = sstep(HIP + 0.14, HIP - 0.4, y)
     if legs > 0 and rest > 0:
@@ -980,15 +1178,36 @@ def weights(p, kind):
     return {k: v / tot for v, k in top}
 
 
+def thenar(loc, s):
+    """How much of a point of the hand (the arm's frame) is over the thumb's long bone, root to middle knuckle (0..THENAR)."""
+    (a, _), (b, _) = THUMB[0], THUMB[1]
+    a = Vector((-s * a[0], -(ARM + a[1]), a[2]))
+    b = Vector((-s * b[0], -(ARM + b[1]), b[2]))
+    ab = b - a
+    t = (loc - a).dot(ab) / ab.length_squared
+    off = (a + ab * clamp(t) - loc).length
+    return THENAR * (1 - sstep(0.07, 0.14, off)) * sstep(0.05, 0.4, t) * sstep(1.15, 0.95, t)
+
+
+def near_line(q, pts):
+    """How far a point is from a line through these points."""
+    best = 1e9
+    for a, b in zip(pts, pts[1:]):
+        ab = b - a
+        t = clamp((q - a).dot(ab) / max(1e-9, ab.length_squared))
+        best = min(best, (a + ab * t - q).length)
+    return best
+
+
 def hand_weights(p, kind):
-    """A finger's points: with the hand as far as the knuckles, then with each of its two joints."""
+    """A finger's or a thumb's points (the one whose line they are nearest): with the hand as far as its first joint, then with each of its two."""
     s, sfx = (1, 'l') if kind == HAND_L else (-1, 'r')
     loc = ARM_INV[s] @ Vector(p)
-    u = -loc.y - ARM
-    # (the thumb, forward of the palm, goes with the hand)
-    k1 = sstep(KNUCKLE - 0.035, KNUCKLE + 0.035, u) * sstep(0.2, 0.17, loc.z)
-    k2 = sstep(MIDDLE - 0.03, MIDDLE + 0.03, u)
-    w = {'ha' + sfx: 1 - k1, 'kn1' + sfx: k1 * (1 - k2), 'kn2' + sfx: k1 * k2}
+    name, (_, (j1, d1), (j2, d2)) = min(DIGITS[s].items(), key=lambda kv: near_line(loc, kv[1][0]))
+    # (a thumb's root is deep in the heel of the hand: its first share of the way up it stays with the hand, and goes over to its bone softly)
+    k1 = sstep(0.0, 0.07, (loc - j1).dot(d1)) if name == 'th' else sstep(-0.035, 0.035, (loc - j1).dot(d1))
+    k2 = sstep(-0.03, 0.03, (loc - j2).dot(d2))
+    w = {'ha' + sfx: 1 - k1, f'{name}1{sfx}': k1 * (1 - k2), f'{name}2{sfx}': k1 * k2}
     return {k: v for k, v in w.items() if v > 0.004}
 
 
@@ -1013,8 +1232,15 @@ def face_weights(p):
     nose = sstep(0.1, 0.4, n[2]) * math.exp(-((px / 0.2) ** 2 + ((py + 0.25) / 0.17) ** 2)) * 0.9
     # (round the sides, by how far under the line from his ear to the corner of his mouth; in front, by the line of his mouth)
     side = sstep(-0.15, -0.6, n[1] / max(0.35, math.hypot(n[0], n[2]))) * sstep(-0.5, 0.0, n[2])
-    soft = 0.001 + 0.02 * sstep(MOUTH_W - 0.09, MOUTH_W - 0.05, apx) + 0.5 * sstep(MOUTH_W - 0.06, MOUTH_W + 0.4, apx)
-    lip = sstep(MOUTH_Y + soft, MOUTH_Y - soft, py)
+    # (under the line his lower lip goes with his jaw: all of it in the middle of his mouth, less and less toward its
+    # corners, where the two lips meet: an open mouth is an oval, its lower lip a curve, not a box with his lips
+    # stretched down its sides; the skin under it more and more of it down to his chin)
+    edge = max(0.0, 1 - (apx / (MOUTH_W - 0.01)) ** 2) ** 0.5
+    under = edge + (1 - edge) * sstep(0.0, 0.22, MOUTH_Y - py) if py < MOUTH_Y else 0.0
+    # (out past the corners his cheeks go from one to the other over their width)
+    soft = 0.001 + 0.5 * sstep(MOUTH_W - 0.06, MOUTH_W + 0.4, apx)
+    out = sstep(SLIT - 0.02, MOUTH_W + 0.02, apx)
+    lip = under * (1 - out) + sstep(MOUTH_Y + soft, MOUTH_Y - soft, py) * out
     k = sstep(0.25, 0.5, n[2]) * sstep(MOUTH_W + 0.55, MOUTH_W + 0.1, apx)
     jaw = (side * (1 - k) + lip * k) * (1 - nose)
     brow = lower = 0.0
@@ -1062,8 +1288,10 @@ def rig(mesh):
         rest[sh] = Matrix.Translation((s * HIP_W, KN_Y, 0))
         rest[ft] = Matrix.Translation((s * HIP_W, AN_Y, 0))
         rest['hem' + sfx] = Matrix.Translation((s * HIP_W, KN_Y + 0.7, 0))
-        rest['kn1' + sfx.lower()] = f @ Matrix.Translation((0, -(ARM + KNUCKLE), 0))
-        rest['kn2' + sfx.lower()] = f @ Matrix.Translation((0, -(ARM + MIDDLE), 0))
+        # (each finger's and the thumb's two bones at its joints, turned as the hand is)
+        for d, (_, (j1, _), (j2, _)) in DIGITS[s].items():
+            rest[d + '1' + sfx.lower()] = f @ Matrix.Translation(j1)
+            rest[d + '2' + sfx.lower()] = f @ Matrix.Translation(j2)
         rest['cl' + sfx.lower()] = f
         rest['fw' + sfx.lower()] = rest[fa]
     for name, at in (('jaw', JAW_AT), ('nose', NOSE_AT), ('hair', SWING_AT), ('brow', BROW_AT), ('lip', JAW_AT)):
@@ -1390,6 +1618,8 @@ def materials():
     material(EAR, (0.3, 0.31, 0.35), 0.52)
     material(MOUTH, (0.05, 0.015, 0.015), 0.8, shade=False)
     material(TEETH, (0.8, 0.78, 0.72), 0.4, shade=False)
+    material(GUM, (0.62, 0.27, 0.27), 0.35, shade=False)
+    material(TONGUE, (0.58, 0.26, 0.26), 0.45, shade=False)
 
 
 def on_head(n, out=0.0):

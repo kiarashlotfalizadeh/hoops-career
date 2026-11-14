@@ -329,8 +329,19 @@ const CRASH_FROM = 21;
 const CRASH = 4.5;
 const CRASH_TO = 6.5;
 const GET_BACK = 3.5;
+/** A rebound comes off the rim the way of the man who gets it: he steps in this far (ft) toward it, and takes it no nearer the rim than REB_NEAR, no farther than REB_FAR. */
+const REB_STEP = 2.5;
+const REB_NEAR = 4;
+const REB_FAR = 15;
 /** A man catching a pass at his spot steps to it, this far (ft). */
 const MEET = 1.3;
+/**
+ * A jump shot goes up from where he stands: a shooter farther than SHOT_SET ft from the spot he shoots from gets
+ * there first, in a move of SHOT_GO ms or as long as his legs need (see paced): on the dribble, or, catching and
+ * shooting, before the pass is thrown to him there.
+ */
+const SHOT_SET = 2;
+const SHOT_GO = 320;
 /** The opening tip: the ball is in the air this long before the jumpers get a hand to it, and the tap takes this long to come down (ms). */
 const TIP_UP = 280;
 const TIP_TAP = 210;
@@ -1042,7 +1053,18 @@ export function buildScript(
       case 'pass': {
         const to = st.pid2!;
         const was = st.pid ?? holder;
-        if (was !== to) meet(to, was);
+        // (a catch and shoot: the ball is thrown to him at the spot he shoots from, and one from somewhere else gets
+        // there first)
+        const next = steps[at + 1];
+        const spot = next?.k === 'shot' && next.pid === to && shotAct(next) === 'jumper' ? { x: next.x ?? 0, y: next.y ?? 10 } : undefined;
+        if (spot && was !== to && o.has(to)) {
+          const far = dist(o.get(to)!, spot) > SHOT_SET;
+          moveTo(to, spot);
+          if (far) {
+            follow();
+            snap(SHOT_GO);
+          }
+        } else if (was !== to) meet(to, was);
         give(to);
         follow();
         if (was !== to) {
@@ -1055,6 +1077,14 @@ export function buildScript(
       case 'shot': {
         const pid = st.pid!;
         const target = { x: st.x ?? 0, y: st.y ?? 10 };
+        // (a jumper goes up from where he stands: a man away from his spot gets there on the dribble first)
+        const from = o.get(pid);
+        if (shotAct(st) === 'jumper' && from && dist(from, target) > SHOT_SET) {
+          moveTo(pid, target);
+          give(pid);
+          follow();
+          snap(SHOT_GO);
+        }
         moveTo(pid, target);
         give(pid);
         follow();
@@ -1167,7 +1197,14 @@ export function buildScript(
       case 'reb': {
         // no pid: a team rebound (out of bounds, or the ball loose after a free throw)
         const pid = st.pid;
-        const pt = { x: (Math.random() - 0.5) * 8, y: 7 + Math.random() * 4 };
+        let pt = { x: (Math.random() - 0.5) * 8, y: 7 + Math.random() * 4 };
+        // (it comes off the rim his way: he steps in toward it and goes up for it, he doesn't run the lane to it)
+        const from = pid === undefined ? undefined : (o.get(pid) ?? d.get(pid));
+        if (from) {
+          const r = clamp(dist(from, BASKET) - REB_STEP, REB_NEAR, REB_FAR) + (Math.random() - 0.5) * 1.5;
+          const a = Math.atan2(from.y - BASKET.y, from.x - BASKET.x) + (Math.random() - 0.5) * 0.3;
+          pt = { x: BASKET.x + Math.cos(a) * r, y: Math.max(BASKET.y + 1, BASKET.y + Math.sin(a) * r) };
+        }
         const offensive = pid !== undefined && o.has(pid);
         if (offensive) {
           moveTo(pid, pt);

@@ -168,14 +168,35 @@ export interface Clip {
   dense?: boolean;
 }
 
+/** Each hand's grip on the ball, and its channels. */
+const HANDS: [Channel, Channel[]][] = [
+  ['gl', ['lx', 'ly', 'lz']],
+  ['gr', ['rx', 'ry', 'rz']],
+];
+
 function clip(id: ClipId, kind: Clip['kind'], dur: number, base: PoseKey, keys: [number, PoseKey][], extra: Partial<Pick<Clip, 'grip' | 'fn'>> = {}): Clip {
   const start = { ...REST, ...base };
+  // (a hand on the ball in a key that doesn't say where it is has it where the next key to say so puts it: on the ball it
+  // is the ball's, and letting go of it, it goes on from there toward that, never down by his side and back up again)
+  const own = keys.map(([at, key], i): [number, PoseKey] => {
+    if (kind === 'loop') return [at, key];
+    const out = { ...key };
+    for (const [g, chans] of HANDS) {
+      if ((key[g] ?? start[g]) <= 0) continue;
+      for (const c of chans) {
+        if (key[c] !== undefined || base[c] !== undefined) continue;
+        const next = keys.slice(i + 1).find(([, k]) => k[c] !== undefined);
+        if (next) out[c] = next[1][c];
+      }
+    }
+    return [at, out];
+  });
   return {
     id,
     kind,
     dur,
-    at: keys.map((k) => k[0]),
-    poses: keys.map(([, key]) => Float32Array.from(CHANNELS, (c) => key[c] ?? start[c])),
+    at: own.map((k) => k[0]),
+    poses: own.map(([, key]) => Float32Array.from(CHANNELS, (c) => key[c] ?? start[c])),
     grip: 'side',
     ...extra,
   };
@@ -188,7 +209,8 @@ export const REST_POSE = Float32Array.from(CHANNELS, (c) => REST[c]);
 const HOLD: PoseKey = { bx: 0.15, by: 4.25, bz: 0.9, gl: 1, gr: 1, lx: 0.1, ly: -1, lz: 0.9, rx: 0.1, ry: -1, rz: 0.9, hip: -0.12, lean: 0.08 };
 /** A man who has just caught it and could shoot, pass or go: knees bent, the ball in both hands on his right hip. */
 const THREAT: PoseKey = { bx: 0.62, by: 3.65, bz: 0.55, gl: 1, gr: 1, hip: -0.3, lean: 0.17, wide: 0.22, twist: -0.14, lx: 0.1, ly: -1, lz: 0.9, rx: 0.1, ry: -1, rz: 0.9 };
-const GUARD_ARM: PoseKey = { lx: 0.85, ly: -0.95, lz: 0.75 };
+/** A dribbler's other arm: up in front of him, its forearm across, a bar between the man on him and the ball. */
+const GUARD_ARM: PoseKey = { lx: 0.62, ly: -0.62, lz: 1.0 };
 const DRIBBLE: PoseKey = { ...GUARD_ARM, bx: 0.95, bz: 0.8, rx: 0.4, ry: -2.0, rz: 0.75, hip: -0.28, lean: 0.17, wide: 0.15 };
 /** Hands on his hips, elbows out (the arms are solved down to his waist and fold outward). */
 const ON_HIPS: PoseKey = { lx: -0.2, ly: -1.36, lz: -0.06, rx: -0.2, ry: -1.36, rz: -0.06 };
@@ -360,13 +382,15 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
   // (two hands over his head: back behind it, then thrown from there)
   passOver: clip('passOver', 'shot', 0, {}, [
     // (the ball already on its way up in front of his face: from over his head (an inbound) it doesn't dip to his chest first)
-    [-230, { bx: 0, by: 6.2, bz: 0.6, gl: 1, gr: 1, hip: -0.08, lean: 0.04 }],
-    [-100, { bx: 0, by: 7.5, bz: -0.15, gl: 1, gr: 1, lean: -0.1, surge: -0.1, hip: -0.06, nod: 0.1 }],
-    [0, { bx: 0, by: 7.45, bz: 0.75, gl: 1, gr: 1, lean: 0.1, surge: 0.14, hip: -0.1 }],
-    [55, { gl: 0, gr: 0, lx: 0.15, ly: 1.25, lz: 1.6, rx: 0.15, ry: 1.25, rz: 1.6, lean: 0.2, surge: 0.22, hip: -0.12 }],
-    [170, { gl: 0, gr: 0, lx: 0.2, ly: 0.6, lz: 1.5, rx: 0.2, ry: 0.6, rz: 1.5, lean: 0.16, surge: 0.16 }],
+    // (his elbows up and forward over it, not out to his sides: swung round their arms, forward, as it goes back behind his head)
+    [-230, { bx: 0, by: 6.2, bz: 0.6, gl: 1, gr: 1, hip: -0.08, lean: 0.04, lsw: -0.5, rsw: 0.5 }],
+    [-100, { bx: 0, by: 6.75, bz: -0.55, gl: 1, gr: 1, lean: -0.1, surge: -0.1, hip: -0.06, nod: 0.1, lsw: -1.3, rsw: 1.3 }],
+    [0, { bx: 0, by: 7.45, bz: 0.75, gl: 1, gr: 1, lean: 0.1, surge: 0.14, hip: -0.1, lsw: -1.0, rsw: 1.0 }],
+    // (thrown: his arms on out after it, all but straight, up toward where it went)
+    [55, { gl: 0, gr: 0, lx: 0.15, ly: 1.2, lz: 1.65, rx: 0.15, ry: 1.2, rz: 1.65, lean: 0.2, surge: 0.22, hip: -0.12, lsw: -0.4, rsw: 0.4 }],
+    [170, { gl: 0, gr: 0, lx: 0.16, ly: 0.75, lz: 1.92, rx: 0.16, ry: 0.75, rz: 1.92, lean: 0.16, surge: 0.16 }],
     // (the follow-through let go of: the arms come down in front of him, still reaching, and fall the rest of the way after)
-    [280, { gl: 0, gr: 0, lx: 0.3, ly: -0.35, lz: 1.5, rx: 0.3, ry: -0.35, rz: 1.5, lean: 0.1, surge: 0.08 }],
+    [280, { gl: 0, gr: 0, lx: 0.3, ly: -0.2, lz: 1.6, rx: 0.3, ry: -0.2, rz: 1.6, lean: 0.1, surge: 0.08 }],
     [360, { gl: 0, gr: 0, lx: 0.3, ly: -1.15, lz: 1.05, rx: 0.3, ry: -1.15, rz: 1.05 }],
   ]),
   // (he shows his hands where he wants it, reaches for it, and gives with it as it comes in)
@@ -374,20 +398,27 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
     [-420, { lx: 0.3, ly: -0.95, lz: 1.0, rx: 0.3, ry: -0.95, rz: 1.0, hip: -0.1 }],
     [-230, { lx: 0.2, ly: -0.7, lz: 1.35, rx: 0.2, ry: -0.7, rz: 1.35, hip: -0.14, lean: 0.07 }],
     [-70, { lx: 0.1, ly: -0.5, lz: 1.65, rx: 0.1, ry: -0.5, rz: 1.65, gl: 0.5, gr: 0.5, hip: -0.2, lean: 0.14, surge: 0.3 }],
-    [0, { gl: 1, gr: 1, lz: 1.45, rz: 1.45, hip: -0.2, lean: 0.1, surge: 0.26 }],
+    [0, { gl: 1, gr: 1, lx: 0.1, ly: -0.55, lz: 1.45, rx: 0.1, ry: -0.55, rz: 1.45, hip: -0.2, lean: 0.1, surge: 0.26 }],
     [90, { gl: 1, gr: 1, lx: 0.1, ly: -0.9, lz: 0.95, rx: 0.1, ry: -0.9, rz: 0.95, by: 4.3, bz: 0.95, hip: -0.24, lean: 0.03 }],
     // (he has it: down into a triple threat, the ball on his hip away from the man, his eyes up)
     [230, { ...THREAT }],
     [420, { ...THREAT, hip: -0.36, by: 3.5 }],
   ]),
   // (out of bounds with it after a basket: the ball over his head, a look one way and a pump, before he throws it in)
-  inbound: clip('inbound', 'loop', 1500, { bx: 0, by: 7.35, bz: 0.1, gl: 1, gr: 1, hip: -0.05, lean: 0.02, wide: 0.1 }, [
-    [0, { twist: 0.14 }],
-    [0.3, { twist: -0.16, sway: -0.05 }],
-    [0.5, { twist: -0.12, bz: 0.55, by: 7.2, lean: 0.1, surge: 0.08 }],
-    [0.68, { twist: 0.05, bz: 0, by: 7.4, lean: -0.03 }],
-    [1, { twist: 0.14 }],
-  ]),
+  // (his hands up on it, where it is, whether the referee has let go of it yet or not: never down by his sides)
+  inbound: clip(
+    'inbound',
+    'loop',
+    1500,
+    { bx: 0, by: 7.35, bz: 0.1, gl: 1, gr: 1, lx: -0.25, ly: 1.95, lz: 0.25, rx: -0.25, ry: 1.95, rz: 0.25, hip: -0.05, lean: 0.02, wide: 0.1 },
+    [
+      [0, { twist: 0.14 }],
+      [0.3, { twist: -0.16, sway: -0.05 }],
+      [0.5, { twist: -0.12, bz: 0.55, by: 7.2, lean: 0.1, surge: 0.08 }],
+      [0.68, { twist: 0.05, bz: 0, by: 7.4, lean: -0.03 }],
+      [1, { twist: 0.14 }],
+    ],
+  ),
 
   // --- shots (0: the release) ---
   jumper: clip(
@@ -1097,7 +1128,7 @@ export const FOLLOW: PoseKey = { rx: 0.08, ry: 1.92, rz: 0.85, lx: 0.38, ly: 0.5
 export const PASS_FOLLOW: Partial<Record<ClipId, PoseKey>> = {
   pass: { lx: 0.12, ly: -0.5, lz: 1.85, rx: 0.12, ry: -0.5, rz: 1.85 },
   passOne: { rx: 0.15, ry: -0.6, rz: 1.85 },
-  passOver: { lx: 0.2, ly: 0.35, lz: 1.65, rx: 0.2, ry: 0.35, rz: 1.65 },
+  passOver: { lx: 0.16, ly: 0.75, lz: 1.92, rx: 0.16, ry: 0.75, rz: 1.92 },
 };
 
 /** A captured stance shorter than this (ms) is a snatch of a man shifting his weight: looped at its own speed it twitches, so it's played over this long. */

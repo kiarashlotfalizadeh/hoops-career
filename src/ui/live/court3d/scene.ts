@@ -276,6 +276,37 @@ const SPLIT_MS = 800;
 /** After a big basket, for this long (the bodies' ms), a teammate who comes within FIVE_NEAR (ft) of the scorer slaps his hand. */
 const FIVE_MS = 3600;
 const FIVE_NEAR = 4.6;
+/** After a basket, the chance each of the scorer's teammates on the floor shows he's glad of it (a big one, any other). */
+const GLAD = [0.6, 0.25] as const;
+/**
+ * A knock this hard by how fast the two came into each other (not the jolt every screen and box-out gives as it is
+ * met: see knocks) makes a man wince; any knock at all shuts his eyes a beat, as hard as it is (Fig.jolt).
+ */
+const WINCE_FROM = 0.5;
+/**
+ * Where a man looks for a while after something happens, over where the play would have him look (see glance; the
+ * bodies' ms): two slapping hands at each other; the scorer's glad teammates at him; the man a whistle is on at the
+ * referee who blew it; the man it was for at the referee, then (LOOK_FOULED: after, for, then for) at the man who
+ * fouled him; a man calling a screen at the teammate he calls it to; an and-one's scorer at the man who fouled him.
+ */
+const LOOK_FIVE = 1100;
+const LOOK_GLAD = 900;
+const LOOK_REF = 1600;
+const LOOK_FOULED = [450, 1000, 1300] as const;
+const LOOK_CALL = 800;
+const LOOK_AND1 = 1300;
+/** A defender off the ball glances at whichever of the ball and his man his head isn't on (his eyes alone: Fig.peek), this long (ms), once in this long, this often. */
+const PEEK_LONG = 320;
+const PEEK_EVERY = 1400;
+const PEEK_ODDS = 0.45;
+/** With the shot clock this low (s) and more than a second left, the man with the ball glances up at it over the rim, once a possession. */
+const CLOCK_GLANCE = 6;
+/** A game this many points apart (from the third on) is a blowout: the faces are looser (Fig.stakes). */
+const BLOWOUT = 18;
+/** In a huddle each man nods to what his coach says now and then: a chance once in this long (ms). */
+const HUDDLE_NOD = [1700, 0.3] as const;
+/** A man this near his coach at a timeout (ft) is in the huddle, or nearly: he looks at him. */
+const HUDDLE_NEAR = 16;
 /** A fallen man's teammate comes to pull him up from this near (ft), at this pace (ft a second), stops this far from him, gives him his hand this long into the fall (the play's ms) and is done with it by then; never longer than this (the bodies' ms). */
 const HELP_FROM = 14;
 const HELP_PACE = 9;
@@ -451,7 +482,7 @@ const TURN: V3 = { x: 0, y: 0, z: 0 };
 /** When the buzzer reaches a man (ms after it): the ten take it in one after another, not all ten in one frame. */
 const heard = (pid: number) => (((pid * 131 + 17) % 10) / 9) * BUZZER_MS;
 /** Where a man is at the buzzer and after it, the way he faces, what he does (see CourtScene.party). */
-type End = { x: number; z: number; yaw: number; bump: boolean; act?: Act; clip?: ClipId };
+type End = { x: number; z: number; yaw: number; bump: boolean; act?: Act; clip?: ClipId; mate?: Fig };
 /**
  * A man's part in the end of a game (see CourtScene.plan): from when (ms after the buzzer) he goes where, at
  * what pace (ft a second), to face whom (or which way); what he does until he sets off (`first`), and once he
@@ -560,8 +591,16 @@ export class CourtScene {
   // the players' reactions: the move last looked at, the basket last counted and its scorer, the teammates coming to him
   private reactKey = '';
   private madeKey = '';
+  private missKey = '';
   private shooter: Fig | null = null;
   private fives: { by: Fig; ms: number; n: number; done: Set<Fig> } | null = null;
+  /** Where the possession is this frame (the script's ms, the live one's or a replay's): the faces are kept on it (Fig.when), and the glances. */
+  private scriptAt = 0;
+  /** Where a man looks for a while (see glance): whose, from and until (the script's ms), at whom (his head) or at what. */
+  private glances: { pid: number; from: number; until: number; at: Fig | null; x: number; y: number; z: number }[] = [];
+  /** The possession the man with the ball last glanced at the shot clock in, and each man's last chance at a nod in a huddle. */
+  private clockSeen = -1;
+  private readonly huddleBeat = new Map<number, number>();
   /** A man knocked down and the teammate on his way to pull him up: where that man is on his way, how long it has been, whether he has given him his hand. */
   private helping: { down: Fig; by: Fig; x: number; z: number; ms: number; lent: boolean } | null = null;
   // the clock their eyes move on (ms), and each man's part in the end of the game (see party), and where the winners gather
@@ -889,6 +928,13 @@ export class CourtScene {
       this.scriptN++;
       this.ftAt = [];
       sc?.frames.forEach((f, k) => f.act.includes('ft') && this.ftAt.push(k));
+      this.glances.length = 0;
+    }
+    // (how far into the possession it is, on its own clock: what the faces are kept on, and played back from in a replay)
+    if (sc && play) {
+      let at = play.ms;
+      for (let k = 1; k < play.i && k < sc.frames.length; k++) at += sc.frames[k].dur;
+      this.scriptAt = at;
     }
 
     if (sc && play) {
@@ -924,6 +970,8 @@ export class CourtScene {
       pids.forEach((pid, j) => {
         const side = (j < nO ? sc.off : 1 - sc.off) as 0 | 1;
         const f = this.fig(pid, side, p);
+        // (his face on the possession's clock before anything this frame comes to it: see Fig.when)
+        f.when(sc, this.scriptAt, this.director.onAir);
         const said = over(pid, side, b.act[j]);
         // (out of their stance at a dead ball; on the lane at a free throw, down into one as it goes up)
         const lane = line && said === 'stand' && (b.act.includes('ft') || b.act.includes('release')) && Math.hypot(spots[j * 2] - rim.x, spots[j * 2 + 1] - rim.z) < LANE_FT;
@@ -947,7 +995,8 @@ export class CourtScene {
             ball: (j === carried || (b.hold === j && a.hold !== j && said === 'hold' && (nb?.act[j] === 'inbound' || (nb?.act[j] === 'ft' && !this.refBall)))) && said === b.act[j],
             aim: AIMED.has(act) ? rim : undefined,
             cut,
-            look: looks[j],
+            // (at the buzzer, a man with a teammate to go up with or hold looks him in the eye)
+            look: end.mate ? headOf(end.mate) : looks[j],
             rest: dead || p.final !== undefined,
             tired: late,
             // (holding it at the line: how long until it goes up)
@@ -1237,13 +1286,15 @@ export class CourtScene {
       for (let j = 0; j < n; j++) {
         const st = stage.standers[j];
         const f = this.fig(st.pid, st.side, p);
+        f.when(null, 0, this.director.onAir);
         const said = over(st.pid, st.side, st.pid === this.heldBy ? 'hold' : 'stand');
         const has = said === 'hold';
         const way = this.ways[j];
         const end = this.party(st.pid, at[j * 2], at[j * 2 + 1], Number.isFinite(way) ? way : f.pup.placed ? f.pup.yaw : Math.atan2(-at[j * 2], -at[j * 2 + 1]), p);
         const act = end.act ?? said;
-        // (they watch the ball, and the ball is dead: they stand at rest)
-        const look = has || p.final !== undefined ? undefined : { x: ball.x, y: ball.y, z: ball.z };
+        // (they watch the ball, and the ball is dead: they stand at rest; at the buzzer, a man with a teammate to go up
+        // with or hold looks him in the eye)
+        const look = end.mate ? headOf(end.mate) : has || p.final !== undefined ? undefined : { x: ball.x, y: ball.y, z: ball.z };
         f.pup.update(
           { x: end.x, z: end.z, yaw: end.yaw, act, ms: 0, dur: 0, ball: has, cut, look, rest: true, over: p.final !== undefined, bump: end.bump, party: end.clip, who: st.pid },
           dt,
@@ -1356,6 +1407,11 @@ export class CourtScene {
     // (the man a referee is giving it to takes it: his hands don't keep out of its way)
     const taking = this.arena.sideline.handing;
     this.flying = passing && !holder;
+    // (what the game is to the men's faces: close and late, a blowout, or neither; and how late in it they are)
+    const score = p.game?.score;
+    const quarter = sc?.q ?? p.game?.q ?? 1;
+    const stakes = p.clutch ? 1 : score && quarter >= 3 && Math.abs(score[0] - score[1]) >= BLOWOUT ? -1 : 0;
+    const wear = clamp((quarter - 1) / 3, 0, 1) * 0.75 + (quarter >= 4 && play && play.clock <= LATE_S ? 0.25 : 0);
     for (const [pid, f] of order) {
       if (!seen.has(pid)) {
         this.drop(pid, f);
@@ -1364,6 +1420,10 @@ export class CourtScene {
       f.ball = hands.has(f) ? ball : null;
       f.pup.arms(hands.has(f) ? ball : null, onFloor, hands.has(f) || pid === taking ? null : LOOSE);
       if (f === has && hands.has(f)) this.inHands(f);
+      // (his face on the possession's clock: kept as it goes, and the one he had then in a replay)
+      f.when(sc && play ? sc : null, this.scriptAt, this.director.onAir);
+      f.stakes = stakes;
+      f.wear = wear;
       f.place();
       const hot = !!p.hot?.has(pid);
       // (the man with the ball has the broadcast's own ring: see marks.ts)
@@ -1847,7 +1907,8 @@ export class CourtScene {
         const close = ((va[0] - vb[0]) * dx + (va[1] - vb[1]) * dz) / d;
         // (a screen or a box-out as they first come together jolts them, if they come together at all: two set side by
         // side and leaning in aren't knocked)
-        let power = clamp((close - KNOCK_MIN) / KNOCK_HARD, 0, 1);
+        const hard = clamp((close - KNOCK_MIN) / KNOCK_HARD, 0, 1);
+        let power = hard;
         if (met && power > 0) power = Math.max(power, KNOCK_MEET);
         // (as they come together: two who stay on each other, leaning and shoving, aren't knocked again unless one
         // drives into the other hard)
@@ -1864,6 +1925,11 @@ export class CourtScene {
         ] as const) {
           const k = clamp(2 * share, 0.5, 1.3) * power;
           P.hit((sign * dx) / d, (sign * dz) / d, k);
+          // (his eyes shut a beat with it; a hard one, by how hard they came together, and he winces)
+          const fig = this.figs.get(pids[P === A ? a : b]);
+          fig?.jolt(k);
+          const raw = clamp(2 * share, 0.5, 1.3) * hard;
+          if (raw >= WINCE_FROM) fig?.feel('wince', raw);
           if (P.floored >= 0) continue;
           let g = this.gives.get(pids[P === A ? a : b]);
           if (!g) this.gives.set(pids[P === A ? a : b], (g = new Float32Array(4)));
@@ -2029,8 +2095,11 @@ export class CourtScene {
 
   /**
    * What each of the ten looks at this move: a shooter the rim (from the move before he goes up); a passer the man
-   * he's throwing to (from the move before it leaves); the man with the ball up the floor and round his teammates;
-   * a defender off the ball his own man every so often; everyone else the ball. Nobody at the buzzer.
+   * he's throwing to (from the move before it leaves); the man with the ball up the floor and round his teammates (and
+   * up at the shot clock once, late in it); a defender off the ball his own man every so often, and his eyes on the
+   * other of the two now and then; at a timeout, his coach; everyone else the ball. Over that, for a while, whoever
+   * something that happened has him look at (see glance), unless he's shooting, passing or has the ball in play.
+   * Nobody at the buzzer.
    */
   private looks(sc: NonNullable<Stage['script']>, play: NonNullable<Stage['play']>, bi: number, dead: boolean): (V3 | undefined)[] {
     const nO = sc.oPids.length;
@@ -2046,10 +2115,13 @@ export class CourtScene {
     };
     const has = b.hold !== undefined && b.hold >= 0 ? b.hold : -1;
     const out: (V3 | undefined)[] = pids.map(() => undefined);
+    const shot = this.arena.boards.house.shot;
     pids.forEach((pid, j) => {
       const act = b.act[j];
       if (act === 'celebrate' || act === 'rue') return;
       const next = nb?.act[j];
+      const f = this.figs.get(pid);
+      const busy = AIMED.has(act) || act === 'ft' || act === 'pass' || (j === has && !dead);
       if (AIMED.has(act) || act === 'ft' || (j === has && next !== undefined && (AIMED.has(next) || next === 'ft'))) out[j] = rim;
       else if (act === 'pass' && has >= 0 && has !== j) out[j] = spot(has);
       else if (j === has && next === 'pass' && nb!.hold !== undefined && nb!.hold >= 0 && nb!.hold !== j) out[j] = spot(nb!.hold);
@@ -2058,7 +2130,12 @@ export class CourtScene {
         const r = hash(pid, Math.floor((this.lookMs + pid * 389) / SCAN_MS));
         const mates = pids.map((_, k) => k).filter((k) => k !== j && k < nO === j < nO);
         out[j] = r < 0.45 || !mates.length ? rim : spot(mates[Math.floor(((r - 0.45) / 0.55) * mates.length)]);
-      } else if (j >= nO && act === 'defend' && !dead && hash(pid, Math.floor((this.lookMs + pid * 613) / SPLIT_MS)) < 0.4) {
+        // (the shot clock running down: a glance up at it, over the rim he's going at)
+        if (!dead && shot !== null && shot <= CLOCK_GLANCE && shot > 1 && this.clockSeen !== this.scriptN && f) {
+          this.clockSeen = this.scriptN;
+          f.peek(rim.x + Math.sign(rim.x) * 1.6, RIM_H + 4.2, rim.z, 450);
+        }
+      } else if (j >= nO && act === 'defend' && !dead) {
         // (his own man: the nearest of theirs without the ball)
         let man = -1;
         let near = Infinity;
@@ -2069,17 +2146,63 @@ export class CourtScene {
           const d = Math.hypot(o.x - me.x, o.z - me.z);
           if (d < near) [near, man] = [d, k];
         }
-        out[j] = man >= 0 ? spot(man) : ball;
+        const onMan = man >= 0 && hash(pid, Math.floor((this.lookMs + pid * 613) / SPLIT_MS)) < 0.4;
+        out[j] = onMan ? spot(man) : ball;
+        // (his head on the one, his eyes go to the other now and then: a defender sees both)
+        const beat = this.lookMs + pid * 211;
+        if (f && man >= 0 && beat % PEEK_EVERY < PEEK_LONG && hash(pid, Math.floor(beat / PEEK_EVERY) + 7) < PEEK_ODDS) {
+          const o = onMan ? ball : spot(man);
+          f.peek(o.x, o.y, o.z, 60);
+        }
       } else out[j] = ball;
+      // a timeout: at his coach, as he gets to the huddle and in it (and he nods to what he's told now and then)
+      const coach = dead ? this.arena.sideline.huddler((j < nO ? sc.off : 1 - sc.off) as 0 | 1) : null;
+      if (coach && f && Math.hypot(coach.pup.x - f.pup.x, coach.pup.z - f.pup.z) < HUDDLE_NEAR) {
+        out[j] = headOf(coach);
+        const n = Math.floor((this.lookMs + pid * 97) / HUDDLE_NOD[0]);
+        if (this.huddleBeat.get(pid) !== n) {
+          this.huddleBeat.set(pid, n);
+          if (hash(pid, n) < HUDDLE_NOD[1]) f.nod('nod', 0.5);
+        }
+      }
+      const g = busy ? null : this.glanced(pid);
+      if (g) out[j] = g;
     });
     return out;
   }
 
+  /** Where `pid` is to look for a while now, if something that happened has him look somewhere (see glance). */
+  private glanced(pid: number): V3 | null {
+    for (let k = this.glances.length - 1; k >= 0; k--) {
+      const g = this.glances[k];
+      if (g.pid !== pid || this.scriptAt < g.from || this.scriptAt >= g.until) continue;
+      return g.at ? headOf(g.at) : { x: g.x, y: g.y, z: g.z };
+    }
+    return null;
+  }
+
+  /**
+   * Something that happened has `f` look at a man (his head) or a point for `ms` (the bodies' ms), `after` ms from now:
+   * kept on the possession's clock, so a replay has him look where he looked. Nothing new comes of a replay.
+   */
+  private glance(f: Fig | null | undefined, at: Fig | V3 | null | undefined, ms: number, after = 0) {
+    if (!f || !at || at === f || this.director.onAir) return;
+    let pid = -1;
+    for (const [k, o] of this.figs) if (o === f) pid = k;
+    if (pid < 0) return;
+    const from = this.scriptAt + after * PACE;
+    const man = at instanceof Fig ? at : null;
+    const pt = man ? null : (at as V3);
+    this.glances.push({ pid, from, until: from + ms * PACE, at: man, x: pt?.x ?? 0, y: pt?.y ?? 0, z: pt?.z ?? 0 });
+  }
+
   /**
    * The players' reactions, all of them the plan's own moments: the scorer of a dunk or a three flexes, points
-   * or pumps a fist once he's down, and his teammates slap his hand as they pass him on the way back; the man
-   * a whistle was on raises his hand or asks what for, an and-one's scorer roars, a blocker wags a finger, a
-   * man stripped of it asks for the foul.
+   * or pumps a fist once he's down, his teammates look over glad of it and slap his hand as they pass him on the
+   * way back (looking each other in the eye), and the man who was on him takes it; the man a whistle was on raises
+   * his hand or asks what for, looking for the referee; the man it was for looks at the referee, then hard at the man
+   * who fouled him; an and-one's scorer roars at him; a blocker wags a finger; a man stripped of it asks for the
+   * foul; a man calling a screen looks at the teammate he's calling it to; a free throw down, a breath let out.
    */
   private react(sc: NonNullable<Stage['script']>, play: NonNullable<Stage['play']>, figs: Fig[], holder: Fig | null, line: boolean, lu: number, own: number) {
     const { a, b } = play;
@@ -2087,11 +2210,13 @@ export class CourtScene {
     const first = key !== this.reactKey;
     this.reactKey = key;
     const r = (n: number) => hash(this.scriptN, n);
+    const nO = sc.oPids.length;
     // a basket, once, when it's down (the slam, or the ball through the net)
-    // (a free throw down: the men of his own who step in from the lane slap his hand, see choreo.ts)
+    // (a free throw down: a breath let out, or a little grin; the men of his own who step in from the lane slap his hand, see choreo.ts)
     if (b.fx === 'make' && line && this.madeKey !== key && lu >= 0.9 && a.hold !== undefined && figs[a.hold]) {
       this.madeKey = key;
       this.fives = { by: figs[a.hold], ms: 0, n: 0, done: new Set() };
+      figs[a.hold].feel(r(31) < 0.45 ? 'exhale' : 'joy', 0.45);
     }
     if (b.fx === 'make' && !line && this.madeKey !== key && (this.slammed || lu >= 0.86)) {
       this.madeKey = key;
@@ -2102,19 +2227,83 @@ export class CourtScene {
         const k = Math.floor(r(1) * 3);
         if (big && !sc.moment) by.pup.cue(this.slammed ? (['flex', 'roar', 'fist'] as const)[k] : (['point', 'fist', 'flex'] as const)[k], null, 2600);
         if (big || r(2) < 0.3) this.fives = { by, ms: 0, n: 0, done: new Set() };
+        // (his face: a grin or a shout, bigger for a big one; and some of his teammates are glad of it too, each his
+        // own way and in his own time, and look over at him; on a big one, one may clap it up)
+        by.feel('joy', big ? 1 : 0.55);
+        let guard: Fig | null = null;
+        let near = Infinity;
+        for (const [i, f] of figs.entries()) {
+          if (f === by) continue;
+          if (f.side !== by.side) {
+            const d = Math.hypot(f.pup.x - by.pup.x, f.pup.z - by.pup.z);
+            if (d < near) [near, guard] = [d, f];
+            continue;
+          }
+          if (r(40 + i) >= GLAD[big ? 0 : 1]) continue;
+          f.feel('joy', big ? 0.6 : 0.35, 0.1 + 0.4 * r(60 + i));
+          this.glance(f, by, LOOK_GLAD, 150 + 300 * r(70 + i));
+          if (big && r(80 + i) < 0.3) f.pup.cue('clap', null, 900);
+        }
+        // (the man who was on him takes it: a scowl, or a shake of his head, or nothing at all; on a big one another of
+        // theirs may shake his)
+        if (guard) {
+          if (r(90) < 0.5) guard.feel('stung', big ? 0.7 : 0.45, 0.15);
+          else if (r(90) < 0.8) guard.nod('shake', big ? 1 : 0.6, 0.35);
+        }
+        if (big) for (const [i, f] of figs.entries()) if (f.side !== by.side && f !== guard && r(100 + i) < 0.12) f.nod('shake', 0.6, 0.4 + 0.5 * r(110 + i));
       }
+    }
+    // a miss, once it's off the rim: the shooter's face (a grimace, his lips pressed, an "aw", his head back, and now
+    // and then a breath let out after it); one sent back stuns him instead (below)
+    if (b.fx === 'miss' && b.swat === undefined && this.missKey !== key && lu >= 0.86 && a.hold !== undefined && a.hold >= 0 && figs[a.hold]) {
+      this.missKey = key;
+      figs[a.hold].feel('miss', line ? 0.6 : 0.85);
     }
     if (first) {
       const fl = b.flash;
-      if (fl?.text === 'And one!' && this.shooter) this.shooter.pup.cue(r(3) < 0.5 ? 'roar' : 'flex');
-      if ((fl?.kind === 'foul' || fl?.text === 'And one!') && b.foul !== undefined && figs[b.foul]) figs[b.foul].pup.cue(r(4) < 0.55 ? 'handUp' : 'protest', null, 1500);
-      if (a.swat !== undefined && figs[a.swat] && r(5) < 0.6) figs[a.swat].pup.cue('wag');
-      // a screen coming: the man guarding the screener calls it. An open man with nobody near asks for the ball (one a move)
-      const nO = sc.oPids.length;
+      const whistle = fl?.kind === 'foul' || fl?.text === 'And one!';
+      const fouler = whistle && b.foul !== undefined ? figs[b.foul] : undefined;
+      const ref = whistle ? this.official() : null;
+      if (fl?.text === 'And one!' && this.shooter) {
+        this.shooter.pup.cue(r(3) < 0.5 ? 'roar' : 'flex');
+        // (he roars it at the man who fouled him)
+        this.shooter.feel('shout');
+        this.glance(this.shooter, fouler, LOOK_AND1, 150);
+      }
+      if (fouler) {
+        fouler.pup.cue(r(4) < 0.55 ? 'handUp' : 'protest', null, 1500);
+        // (the man the whistle is on can't believe it, and looks for the referee who blew it)
+        fouler.feel('disbelief', 0.6 + 0.4 * r(9));
+        this.glance(fouler, ref, LOOK_REF, 120);
+      }
+      // (the man it was for looks at the referee, then hard at the man who fouled him; if he's going down, he winces)
+      const fouled = fl?.kind === 'foul' && a.hold !== undefined && a.hold >= 0 && a.hold !== b.foul ? figs[a.hold] : undefined;
+      const down = !!fouled && r(8) < 0.3;
+      if (fouled) {
+        this.glance(fouled, ref, LOOK_FOULED[1], LOOK_FOULED[0]);
+        this.glance(fouled, fouler, LOOK_FOULED[2], LOOK_FOULED[0] + LOOK_FOULED[1]);
+        if (down) fouled.feel('wince', 0.85);
+        else fouled.feel('glare', 0.55 + 0.35 * r(12), (LOOK_FOULED[0] + LOOK_FOULED[1]) / 1000 - 0.1);
+      }
+      // (a blocker wags a finger, or shouts it; his own are glad of it)
+      const blocker = a.swat !== undefined ? figs[a.swat] : undefined;
+      if (blocker) {
+        if (r(5) < 0.6) blocker.pup.cue('wag');
+        blocker.feel(r(13) < 0.5 ? 'shout' : 'joy', 0.8);
+        for (const [i, f] of figs.entries()) if (f !== blocker && f.side === blocker.side && r(130 + i) < 0.3) f.feel('joy', 0.45, 0.15 + 0.4 * r(140 + i));
+      }
+      // (his shot sent back: the shooter is stunned, then stung)
+      const sent = a.swat !== undefined ? a.act.indexOf('release') : -1;
+      if (sent >= 0) figs[sent]?.feel('stunned');
+      // a screen coming: the man guarding the screener calls it, to the man guarding the ball. An open man with nobody
+      // near asks for the ball (one a move)
       let asked = false;
+      const onBall = holder ? figs.indexOf(holder) : -1;
       for (let j = 0; j < nO; j++) {
-        if (b.act[j] === 'screen' && a.act[j] !== 'screen') figs[nO + j]?.pup.cue('call', null, 600);
-        else if (!asked && b.act[j] === 'stand' && !b.act.includes('inbound') && figs[j] && figs[j] !== holder && holder && holder.side === figs[j].side && r(20 + j) < 0.35) {
+        if (b.act[j] === 'screen' && a.act[j] !== 'screen') {
+          figs[nO + j]?.pup.cue('call', null, 600);
+          if (onBall >= 0 && onBall < nO) this.glance(figs[nO + j], figs[nO + onBall], LOOK_CALL);
+        } else if (!asked && b.act[j] === 'stand' && !b.act.includes('inbound') && figs[j] && figs[j] !== holder && holder && holder.side === figs[j].side && r(20 + j) < 0.35) {
           const open = figs.every((f) => f.side === figs[j].side || Math.hypot(f.pup.x - figs[j].pup.x, f.pup.z - figs[j].pup.z) > OPEN_FT);
           if (open) {
             figs[j].pup.cue('ask', null, 500);
@@ -2123,16 +2312,18 @@ export class CourtScene {
         }
       }
       // (fouled hard with the ball: now and then he goes down, and gets up)
-      if (fl?.kind === 'foul' && a.hold !== undefined && a.hold >= 0 && figs[a.hold] && figs[a.hold] !== figs[b.foul ?? -1] && r(8) < 0.3) {
-        const down = figs[a.hold];
-        down.pup.stumble();
+      if (fouled && down) {
+        fouled.pup.stumble();
         // (the nearest of his own comes over to pull him up)
         const by = figs
-          .filter((f) => f.side === down.side && f !== down)
-          .sort((x, y) => Math.hypot(x.pup.x - down.pup.x, x.pup.z - down.pup.z) - Math.hypot(y.pup.x - down.pup.x, y.pup.z - down.pup.z))[0];
-        if (by && Math.hypot(by.pup.x - down.pup.x, by.pup.z - down.pup.z) < HELP_FROM) this.helping = { down, by, x: by.pup.x, z: by.pup.z, ms: 0, lent: false };
+          .filter((f) => f.side === fouled.side && f !== fouled)
+          .sort((x, y) => Math.hypot(x.pup.x - fouled.pup.x, x.pup.z - fouled.pup.z) - Math.hypot(y.pup.x - fouled.pup.x, y.pup.z - fouled.pup.z))[0];
+        if (by && Math.hypot(by.pup.x - fouled.pup.x, by.pup.z - fouled.pup.z) < HELP_FROM) this.helping = { down: fouled, by, x: by.pup.x, z: by.pup.z, ms: 0, lent: false };
       }
       if (fl?.text === 'Steal' && a.hold !== undefined && a.hold >= 0 && figs[a.hold] && r(6) < 0.5) figs[a.hold].pup.cue('protest', null, 1200);
+      // (the ball taken from him, or thrown away: it stings; the man who took it is glad of it)
+      if (fl?.kind === 'to' && a.hold !== undefined && a.hold >= 0 && figs[a.hold]) figs[a.hold].feel('stung', fl.text === 'Steal' ? 0.9 : 0.7);
+      if (fl?.text === 'Steal' && b.hold !== undefined && b.hold >= 0 && figs[b.hold] && b.hold !== a.hold) figs[b.hold].feel('joy', 0.5);
     }
     const fv = this.fives;
     if (!fv) return;
@@ -2147,10 +2338,25 @@ export class CourtScene {
       if (Math.hypot(f.pup.x - fv.by.pup.x, f.pup.z - fv.by.pup.z) > FIVE_NEAR) continue;
       fv.by.pup.cue('five', f.pup, 500);
       f.pup.cue('five', fv.by.pup, 500);
+      // (each looks the other in the eye as their hands meet, and one of them nods)
+      this.glance(fv.by, f, LOOK_FIVE);
+      this.glance(f, fv.by, LOOK_FIVE);
+      (r(120 + fv.n) < 0.5 ? f : fv.by).nod('nod', 0.7, 0.35);
       fv.done.add(f);
       fv.n++;
       break;
     }
+  }
+
+  /** The referee nearest the ball: the one who blew the whistle (sideline.ts has him signal it). */
+  private official(): Fig | null {
+    let best: Fig | null = null;
+    let near = Infinity;
+    for (const o of this.arena.sideline.officials) {
+      const d = Math.hypot(o.fig.pup.x - this.ball.x, o.fig.pup.z - this.ball.z);
+      if (d < near) [near, best] = [d, o.fig];
+    }
+    return best;
   }
 
   /**
@@ -2217,6 +2423,12 @@ export class CourtScene {
     if (!pt || this.finalMs < Math.min(heard(pid), pt.at)) return none;
     const f = this.figs.get(pid);
     if (pt.hi && !pt.said && f) f.pup.cue(pt.hi, null, 1200);
+    // (and his face as it reaches him: the winners glad of it, a roar for a big one; the others stung, or a breath let out)
+    if (!pt.said && f) {
+      const won = f.side === p.final;
+      const big = (p.occasion ?? 'win') !== 'win';
+      f.feel(won ? (big && hash(pid, 41) < 0.6 ? 'shout' : 'joy') : hash(pid, 41) < 0.4 ? 'exhale' : 'stung', won ? 1 : 0.7);
+    }
     pt.said = true;
     // (the stage he is at: each sets off from where the last left him)
     let fx = x;
@@ -2237,7 +2449,7 @@ export class CourtScene {
     if (pt.gest && !pt.cued && f) f.pup.cue(pt.gest, null, 1800);
     pt.cued = true;
     const mate = pt.mate === null ? undefined : this.figs.get(pt.mate);
-    return { x: nx, z: nz, yaw: mate ? Math.atan2(mate.pup.x - nx, mate.pup.z - nz) : (pt.face ?? yaw), bump: !!pt.bump, act: pt.act, clip: pt.clip };
+    return { x: nx, z: nz, yaw: mate ? Math.atan2(mate.pup.x - nx, mate.pup.z - nz) : (pt.face ?? yaw), bump: !!pt.bump, act: pt.act, clip: pt.clip, mate };
   }
 
   /**
@@ -2936,6 +3148,13 @@ function set(v: Vector3, p: V3) {
 }
 
 export { loadModels } from './models';
+
+/** Where a man's head is (the scene's point): what another looks at when he looks at him. */
+function headOf(f: Fig): V3 {
+  const p = f.pup;
+  const j = p.j;
+  return p.world(j[J.head * 3], j[J.head * 3 + 1], j[J.head * 3 + 2], { x: 0, y: 0, z: 0 });
+}
 
 /** An open man has nobody of theirs within this far of him (ft). */
 const OPEN_FT = 9;

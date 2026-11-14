@@ -30,6 +30,16 @@ export interface Look {
   cut: { sides: number; top: number };
   /** A hairline his barber has squared off with a razor (short hair only): a crisp edge, square at the temples. */
   lineup: boolean;
+  /** How much of what he feels shows on his face, 0..1: a stone face to a loud one (figure.ts's feel). */
+  temper: number;
+  /** How a basket of his shows: 0 he shouts, 1 he grins (a big one makes a shouter of most men). */
+  grin: number;
+  /** How lived-in his face is, 0..1: the lines a face makes as it moves (his brow raised, a frown, a grin) are deeper the more of it he has. */
+  age: number;
+  /** How readily he sweats (about 1: half as much to half as much again), and how red his face goes with it. */
+  sweat: number;
+  /** His lips' own colour, -1..1: paler and pinker than his skin would have them, to browner and darker. */
+  lip: number;
   /**
    * His face's shape: how wide and how long his head is, his jaw's width and length, his nose's width and
    * how far it stands out (each about 1); then how heavy his brow's ridge is and how full his lips are
@@ -199,6 +209,12 @@ export function lookOf(pid: number): Look {
     side: r(24) < 0.5 ? 1 : -1,
     cut: { sides: r(25), top: r(26) },
     lineup: LINED.includes(STYLES[style].name) && r(27) < 0.55,
+    temper: span(34, 0.15, 1),
+    grin: r(35),
+    // (most men in the league are young: a face with lines in it is the veteran's)
+    age: r(36) ** 1.6,
+    sweat: span(37, 0.55, 1.45),
+    lip: span(38, -1, 1),
     face: {
       wide: kind.wide + span(8, -0.03, 0.03),
       long: kind.long + span(9, -0.03, 0.03),

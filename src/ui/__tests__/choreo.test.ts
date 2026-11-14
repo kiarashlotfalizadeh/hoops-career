@@ -665,6 +665,20 @@ describe('live court choreography', () => {
       expect(acts(6).join()).toMatch(/block,land/);
       expect(s.frames.find((f) => f.swat !== undefined)?.swat).toBe(6);
       expect(acts(9)).toContain('rebound');
+      // (he got to the spot he shoots from before the pass came, and goes up from about where he caught it, his man
+      // pressed up on him moving him a step at most; the rebound comes off the rim the way of the man who gets it: he
+      // steps in for it, he doesn't run the lane to it)
+      const spot = (f: Frame, j: number) => (j < 5 ? f.o[j] : f.d[j - 5]);
+      const moved = (i: number, j: number) => Math.hypot(spot(s.frames[i], j).x - spot(s.frames[i - 1], j).x, spot(s.frames[i], j).y - spot(s.frames[i - 1], j).y);
+      const shotAt = s.frames.findIndex((f) => f.act[1] === 'jumper');
+      expect(s.frames[shotAt - 1].act[1]).toBe('catch');
+      expect(moved(shotAt, 1)).toBeLessThan(1.5);
+      expect(
+        moved(
+          s.frames.findIndex((f) => f.act[9] === 'rebound'),
+          9,
+        ),
+      ).toBeLessThan(5);
       // the shooter faces the basket as he goes up; his defender faces him
       const up = s.frames.find((f) => f.act[1] === 'jumper')!;
       const to = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.atan2(b.y - a.y, b.x - a.x);
@@ -683,10 +697,42 @@ describe('live court choreography', () => {
     {
       const glb = (file: string) => readGlb(Uint8Array.from(atob(file.slice(file.indexOf(',') + 1)), (ch) => ch.charCodeAt(0)).buffer);
       const geo = figureGeo((o) => o, glb(figureGlb));
-      expect([...geo.order].sort((x, y) => x - y)).toEqual(Array.from({ length: 31 }, (_, i) => i));
+      expect([...geo.order].sort((x, y) => x - y)).toEqual(Array.from({ length: 47 }, (_, i) => i));
       expect(geo.wears).toEqual(expect.arrayContaining(['skin', 'hair', 'jersey', 'trim', 'cloth', 'shoe', 'white']));
       const w = geo.body.getAttribute('skinWeight');
       for (let i = 0; i < w.count; i += 37) expect(w.getX(i) + w.getY(i) + w.getZ(i) + w.getW(i)).toBeCloseTo(1, 3);
+      // (his lower lip's edge goes with his jaw all the way in the middle of his mouth, less toward its corners: an open
+      // mouth is an oval, not a box with his lips stretched down its sides; the upper lip's stays with his head)
+      {
+        const pos = geo.body.getAttribute('position');
+        const bone = geo.body.getAttribute('skinIndex');
+        // (his lips' skin, his head's picture on his sheet: not his teeth behind them, which are under it on the sheet)
+        const uv = geo.body.getAttribute('uv');
+        const headFoot = 1 - (512 + 400) / 1024;
+        const jawOf = (v: number) => [0, 1, 2, 3].reduce((s, c) => s + ([22, 30].includes(geo.order[bone.getComponent(v, c)]) ? w.getComponent(v, c) : 0), 0);
+        const lip: number[][] = [[], [], []];
+        for (let v = 0; v < pos.count; v++) {
+          const [x, y, z] = [pos.getX(v) / 0.3, (pos.getY(v) - 6.145) / 0.42, (pos.getZ(v) - 0.05) / 0.37];
+          const [px, py] = [(x / z) * 0.8, (y / z) * 0.8];
+          if (z < 0.5 || Math.abs(py + 0.522) > 0.006 || uv.getY(v) < headFoot) continue;
+          if (py > -0.522 && Math.abs(px) < 0.2) lip[2].push(jawOf(v));
+          else if (py < -0.522) (Math.abs(px) < 0.08 ? lip[0] : Math.abs(px) > 0.22 && Math.abs(px) < 0.27 ? lip[1] : []).push(jawOf(v));
+        }
+        expect(lip.map((l) => l.length).every((n) => n > 2)).toBe(true);
+        expect(Math.min(...lip[0])).toBeGreaterThan(0.9);
+        expect(Math.max(...lip[1])).toBeLessThan(0.8);
+        expect(Math.max(...lip[2])).toBeLessThan(0.05);
+      }
+      // (and a man told to look at a thing has it, where it is and how far off, for his eyes to find; one behind him, not)
+      {
+        const m = new Puppet(bodyOf(78, 215));
+        for (let t = 0; t < 600; t += 16) m.update({ x: 0, z: 0, yaw: 0, act: 'stand', ms: t, dur: 4000, ball: false, look: { x: 3, y: 10, z: 14 } }, 16);
+        expect(m.seen).toEqual({ x: 3, y: 10, z: 14 });
+        expect(m.lookFar).toBeGreaterThan(14);
+        expect(m.lookFar).toBeLessThan(16);
+        m.update({ x: 0, z: 0, yaw: 0, act: 'stand', ms: 616, dur: 4000, ball: false, look: { x: 0, y: 6, z: -12 } }, 16);
+        expect(m.lookFar).toBe(Infinity);
+      }
       // (6 ft 6 and his soles, standing as built)
       geo.body.computeBoundingBox();
       const tall = geo.body.boundingBox!.max.y - geo.body.boundingBox!.min.y;
@@ -873,6 +919,40 @@ describe('live court choreography', () => {
         const gave = caught(true).map((z, i) => z - still[i]);
         expect(Math.min(...gave.slice(25, 35))).toBeLessThan(-0.15);
         expect(Math.abs(gave[gave.length - 1])).toBeLessThan(0.02);
+        // a pass on its way to him is met: his hands are out where it will come a beat before it does (not still down by
+        // his side, nor stretched out straight at it while it is far off), and it comes into them there
+        const mt = new Puppet(bodyOf(78, 215));
+        const to = { x: 0, y: 0, z: 0 };
+        const met: number[] = [];
+        let reached = 0;
+        for (let t = 16; t <= 700; t += 16) {
+          const flying = t < 500;
+          mt.update({ x: 0, z: 0, yaw: 0, act: flying ? 'catch' : 'hold', ms: flying ? t : t - 500, dur: flying ? 500 : 3000, ball: !flying, who: 1 }, 16);
+          mt.carry(to);
+          const u = Math.min(1, t / 500);
+          const ball = flying ? { x: to.x + 5 * (1 - u), y: 5.5 + (to.y - 5.5) * u + 2 * u * (1 - u), z: to.z + 16 * (1 - u) } : to;
+          mt.arms(ball);
+          if (flying && t > 150)
+            reached = Math.max(reached, Math.hypot(mt.j[J.hl * 3] - mt.j[J.sl * 3], mt.j[J.hl * 3 + 1] - mt.j[J.sl * 3 + 1], mt.j[J.hl * 3 + 2] - mt.j[J.sl * 3 + 2]));
+          if (t === 400) met.push(Math.hypot(mt.j[J.hl * 3] - to.x, mt.j[J.hl * 3 + 1] - to.y, mt.j[J.hl * 3 + 2] - to.z));
+        }
+        expect(met[0]).toBeLessThan(BALL_R + 1.0);
+        expect(reached).toBeLessThan(2.0);
+        // a pass let go of goes on with the throw: from over his head, his hands are out in front of him within a tenth
+        // of a second of it leaving them, not left behind his head; and they come down from there round in front of him
+        const po = new Puppet(bodyOf(78, 215));
+        let ahead = 0;
+        for (let t = 16; t <= 1000; t += 16) {
+          const thrown = t >= 800;
+          po.update(
+            { x: 0, z: 0, yaw: 0, act: thrown ? 'pass' : 'hold', ms: thrown ? t - 800 : t, dur: thrown ? 500 : 800, ball: !thrown, pass: thrown ? undefined : 800 - t, who: 0 },
+            16,
+          );
+          po.arms(thrown ? null : po.carry(to));
+          if (t === 912) ahead = po.j[J.hr * 3 + 2] - po.j[J.sr * 3 + 2];
+        }
+        expect(po.clip).toBe('passOver');
+        expect(ahead).toBeGreaterThan(1.4);
         // a free hand doesn't go through a ball that isn't his: a pass across where it is goes by it
         const dg = new Puppet(bodyOf(78, 215));
         for (let t = 0; t < 400; t += 16) {
@@ -1201,6 +1281,21 @@ describe('live court choreography', () => {
       }
       expect(gLow).toBeLessThan(BALL_R + 0.2);
       expect(gStep).toBeLessThan(0.8);
+      // and gathered off a dribble he was bouncing: once it has come up into his hands it stays there (it isn't picked
+      // up off the floor a second time)
+      // (picked up at each point of a bounce)
+      let afterLow = 9;
+      for (let from = 800; from < 1300; from += 48) {
+        const gd = new Puppet(bodyOf(78, 215));
+        for (let t = 16; t <= from + 600; t += 16) {
+          const gathering = t > from;
+          gd.update({ x: 0, z: 0, yaw: 0, act: gathering ? 'catch' : 'dribble', ms: gathering ? t - from : t, dur: gathering ? 500 : 3000, ball: true, who: 7 }, 16);
+          const ball = gd.bounced(gd.carry(out));
+          gd.arms(ball);
+          if (gathering && t - from > 470) afterLow = Math.min(afterLow, ball.y);
+        }
+      }
+      expect(afterLow).toBeGreaterThan(3);
       // small on the picture, the ball's edge is drawn dark; up close it is only leather
       expect(ballSize(6)).toBe(1);
       expect(ballSize(13)).toBeGreaterThan(0);
@@ -1350,6 +1445,120 @@ describe('live court choreography', () => {
       expect(hard.lean).toBeLessThan(soft.lean - 0.15);
       expect(hard.stepped).toBe(true);
       expect(soft.stepped).toBe(false);
+      // (contact footwork: stood in his stance and turned most of the way round, a flat foot on the floor never turns
+      // on it (it pivots on its ball, heel up, or is picked up); boxing out, pushed off his spot every frame by the
+      // man behind him, a planted foot stays where it is (he steps, short and quick); going up for a rebound, his heels
+      // come up before his feet leave the floor)
+      const turner = new Puppet(bodyOf(78, 215));
+      let spun = 0;
+      for (let t = 0; t < 1400; t += 16) {
+        const was = turner.feet.map((f) => [f.yaw, f.swing, f.pitch] as const);
+        turner.update({ x: 0, z: 0, yaw: t < 300 ? 0 : Math.min(2.4, (t - 300) * 0.0032), act: 'defend', ms: t, dur: 9999, ball: false, who: 6 }, 16);
+        turner.feet.forEach((f, k) => {
+          if (t > 0 && !f.swing && !was[k][1] && Math.abs(f.pitch) < 0.05 && Math.abs(was[k][2]) < 0.05) spun = Math.max(spun, Math.abs(f.yaw - was[k][0]));
+        });
+      }
+      expect(spun).toBeLessThan(0.01);
+      const boxer = new Puppet(bodyOf(78, 215));
+      let skid = 0;
+      let shuffled = 0;
+      for (let t = 0; t < 1600; t += 16) {
+        const z = -Math.max(0, t - 300) * 0.0012;
+        const up = boxer.feet.map((f) => f.swing);
+        boxer.update({ x: 0, z, yaw: 0, act: 'boxout', ms: t, dur: 9999, ball: false, who: 7, touch: { x: 0, z: z - 2.3, w: 1 } }, 16);
+        const before = boxer.feet.map((f) => [f.x, f.z, f.swing] as const);
+        boxer.nudge(0, -0.04);
+        boxer.feet.forEach((f, k) => {
+          if (!f.swing) skid = Math.max(skid, Math.hypot(f.x - before[k][0], f.z - before[k][1]));
+          if (f.swing && !up[k]) shuffled++;
+        });
+      }
+      expect(skid).toBeLessThan(0.001);
+      expect(shuffled).toBeGreaterThan(3);
+      const jumper = new Puppet(bodyOf(78, 215));
+      let heelUp = 0;
+      for (let t = 0; t < 1600; t += 16) {
+        jumper.update(
+          t < 400
+            ? { x: 0, z: 0, yaw: 0, act: 'boxout', ms: t, dur: 9999, ball: false, who: 8 }
+            : { x: 0, z: 0, yaw: 0, act: 'rebound', ms: t - 400, dur: 650, ball: false, who: 8 },
+          16,
+        );
+        if (jumper.pose[I.air] < 0.5 && jumper.feet[0].lift < 0.4) heelUp = Math.max(heelUp, jumper.feet[0].pitch);
+      }
+      expect(heelUp).toBeGreaterThan(0.3);
+      // (the ball in his hands, turned round with the man on him: one foot stays down, his pivot, turned on its ball,
+      // and the other steps round it; never both, a travel)
+      const holder = new Puppet(bodyOf(78, 215));
+      const steps = [0, 0];
+      const balls: { x: number; z: number }[][] = [[], []];
+      for (let t = 0; t < 1600; t += 16) {
+        const yaw = t < 300 ? 0 : Math.min(2.6, (t - 300) * 0.004);
+        const was = holder.feet.map((f) => f.swing);
+        holder.update({ x: 0, z: 0, yaw, act: 'hold', ms: t, dur: 9999, ball: true, who: 9, press: { x: Math.sin(yaw) * 3, z: Math.cos(yaw) * 3 } }, 8, 16);
+        holder.feet.forEach((f, k) => {
+          if (f.swing && !was[k]) steps[k]++;
+          if (!f.swing) balls[k].push({ x: f.x + Math.sin(f.yaw) * 0.62, z: f.z + Math.cos(f.yaw) * 0.62 });
+        });
+      }
+      const pivot = steps.indexOf(0);
+      expect(pivot).toBeGreaterThanOrEqual(0);
+      expect(steps[1 - pivot]).toBeGreaterThan(1);
+      expect(Math.max(...balls[pivot].map((b) => Math.hypot(b.x - balls[pivot][0].x, b.z - balls[pivot][0].z)))).toBeLessThan(0.05);
+      expect(Math.abs(holder.yaw - 2.6)).toBeLessThan(0.05);
+      // (a jumper off the catch, and a rebound, go up off both feet, set under him; a layup at a run off the foot
+      // opposite the hand he finishes with, most of the time, and never off both)
+      const offBoth = (drive: (t: number) => Parameters<Puppet['update']>[0]) => {
+        const m = new Puppet(bodyOf(78, 215));
+        let down = [true, true];
+        for (let t = 0; t < 1400; t += 8) {
+          m.update(drive(t), 8, 16);
+          if (m.pose[I.air] > 0.5) return down;
+          down = m.feet.map((f) => !f.swing);
+        }
+        return [false, false];
+      };
+      expect(
+        offBoth((t) =>
+          t < 360
+            ? { x: 0, z: 0, yaw: 0, act: 'catch', ms: t, dur: 360, ball: false }
+            : { x: 0, z: 0, yaw: 0, act: 'jumper', ms: t - 360, dur: 300, ball: true, aim: { x: 0, z: 24 } },
+        ),
+      ).toEqual([true, true]);
+      const ease = (u: number) => 3 * u * u - 2 * u * u * u;
+      expect(
+        offBoth((t) =>
+          t < 300
+            ? { x: 0, z: 0, yaw: 0, act: 'boxout', ms: t, dur: 9999, ball: false }
+            : { x: 0, z: 3 * ease(Math.min(1, (t - 300) / 420)), yaw: 0, act: 'rebound', ms: t - 300, dur: 420, ball: false },
+        ),
+      ).toEqual([true, true]);
+      const run = (u: number) => (u < 600 ? 0.028 * u : 16.8 + 0.022 * (u - 600) - 8e-6 * (u - 600) ** 2);
+      let opposite = 0;
+      for (let who = 0; who < 12; who++)
+        for (const side of [1, -1]) {
+          const rim = { x: side * 3, z: run(900) + 2.5 };
+          const m = new Puppet(bodyOf(78, 215));
+          const raw = m as unknown as { south: boolean; euro: number };
+          const down = offBoth((t) =>
+            t < 600
+              ? { x: 0, z: run(t), yaw: 0, act: 'dribble', ms: t, dur: 9999, ball: true, who }
+              : { x: 0, z: run(t), yaw: 0, act: 'layup', ms: t - 600, dur: 300, ball: true, aim: rim, who },
+          );
+          // (the same man the same way: the hand and the euro are his own)
+          for (let t = 0; t < 640; t += 8)
+            m.update(
+              t < 600
+                ? { x: 0, z: run(t), yaw: 0, act: 'dribble', ms: t, dur: 9999, ball: true, who }
+                : { x: 0, z: run(t), yaw: 0, act: 'layup', ms: t - 600, dur: 300, ball: true, aim: rim, who },
+              8,
+              16,
+            );
+          const off = raw.euro ? (raw.euro > 0 ? 1 : 0) : raw.south ? 1 : 0;
+          expect(down[0] && down[1]).toBe(false);
+          if (down[off] && !down[1 - off]) opposite++;
+        }
+      expect(opposite / 24).toBeGreaterThan(0.55);
     }
 
     // the ten of a real game as the 3D court draws them (the plan's spots kept apart, then the bodies): no two trunks
