@@ -61,7 +61,7 @@ import { buildProps } from './props';
 import { Rig } from './rig';
 import { BALL_R, hash, J, type Body, type Puppet, type V3 } from './puppet';
 import { Sideline } from './sideline';
-import { BODY_GAP, clearance, clearOf, into, PARTS, passPath, reach as reachTo, Spacing, swerve, type Meet, type PassPath } from './spacing';
+import { BODY_GAP, clearance, clearOf, into, PARTS, passPath, reach as reachTo, Spacing, sunk, swerve, type Meet, type PassPath } from './spacing';
 
 export interface SceneProps {
   kits: [MatchKit, MatchKit];
@@ -409,8 +409,15 @@ const CLOSE_Y = 5.4;
 const HIGH_OFF = 30;
 const HIGH_Y = 13;
 const HIGH_HALF = 5.2;
-/** A close-up's half picture over where it looks (ft) from the low seat. */
-const LOW_HALF = 3.2;
+/**
+ * A close-up's half picture over where it looks (ft) from the low seat, and how far under his head it looks (ft, on
+ * the 6 ft 6 puppet): framed on his body (his knees to over his head), not his face. The faces are a hand-built
+ * sculpt that reads well at that size and not much nearer, so a cut-in is the man and what he does, the face a part of it.
+ */
+const LOW_HALF = 4.3;
+const CLOSE_UNDER = 2;
+/** How much of the half picture a close-up comes in over its hold (ft): a little, never to a face shot. */
+const CLOSE_IN = 0.3;
 const HANDS_UP = 1.9;
 /** A close-up keeps the top of his head and his hands this far up its picture at most (of the half picture over where it looks). */
 const CLOSE_TOP = 0.82;
@@ -439,6 +446,8 @@ const LEGS_TRUNK = [...PARTS.legs, ...PARTS.trunk];
 const CLASH_FAR = 4.5;
 /** An arm may graze another man's trunk or head this far (ft, into spacing.ts's shapes), no farther: a hand on him is not in him. */
 const ARM_GRAZE = 0.06;
+/** Any limb of one may graze any limb of the other this far (ft): an arm swinging through a teammate's as they cross is not let be. */
+const LIMB_GRAZE = 0.05;
 /** Looked at again up to this many times a frame: a man moved over his planted feet goes only part of the way. */
 const CLASH_PASSES = 5;
 const NEAR_MIN = 0.75;
@@ -2180,7 +2189,9 @@ export class CourtScene {
             a.clip === 'hug' && b.clip === 'hug'
               ? 0
               : Math.max(into(ja, a.body.s, a.body.bulk, jb, b.body.s, b.body.bulk, PARTS.arms), into(jb, b.body.s, b.body.bulk, ja, a.body.s, a.body.bulk, PARTS.arms));
-          const deep = Math.max(-gap, legs - LEG_GRAZE, arms - ARM_GRAZE);
+          // (and any limb in any limb: two crossing side by side, an arm swinging through the other's arm or thigh)
+          const limbs = a.clip === 'hug' && b.clip === 'hug' ? 0 : sunk(ja, a.body.s, a.body.bulk, jb, b.body.s, b.body.bulk, true);
+          const deep = Math.max(-gap, legs - LEG_GRAZE, arms - ARM_GRAZE, limbs - LIMB_GRAZE);
           if (deep <= 0) break;
           // (a little past touching, so the next look finds them clear and stops)
           const go = deep + SLACK / 2;
@@ -2976,14 +2987,14 @@ export class CourtScene {
     if (this.shot === 'intro') return d.aimIntro(cam, this.shotMs, aspect);
 
     if (this.shot === 'close' && who) {
-      // low and tight on him, following him as he goes; the frame is on his face: his waist to over his head, whatever its
-      // shape, and opened out for his hands when they go up over it (a flex, a hang on the rim), out quickly and back slowly
+      // low on him, following him as he goes; the frame is on his body: his knees to over his head, whatever its shape
+      // (see LOW_HALF), and opened out for his hands when they go up over it (a flex, a hang on the rim), out quickly and back slowly
       const j = who.pup.j;
       const c = who.pup.world(j[J.head * 3], j[J.head * 3 + 1], j[J.head * 3 + 2], TMP);
       let top = c.y + SKULL * 1.3 * who.pup.body.s;
       for (const k of [J.hl, J.hr]) top = Math.max(top, who.pup.world(j[k * 3], j[k * 3 + 1], j[k * 3 + 2], TMP2).y + HAND_R);
-      this.look.lerp(A.set(c.x, Math.max(4, c.y - 0.9), c.z), 1 - Math.exp(-real / 160));
-      const need = Math.max(this.closeBase - 0.5 * Math.min(1, this.shotMs / CUT_MS), (top - this.look.y) / CLOSE_TOP);
+      this.look.lerp(A.set(c.x, Math.max(3.4, c.y - CLOSE_UNDER * who.pup.body.s), c.z), 1 - Math.exp(-real / 160));
+      const need = Math.max(this.closeBase - CLOSE_IN * Math.min(1, this.shotMs / CUT_MS), (top - this.look.y) / CLOSE_TOP);
       this.closeHalf = this.shotMs === 0 ? need : this.closeHalf + (need - this.closeHalf) * (1 - Math.exp(-real / (need > this.closeHalf ? 110 : 420)));
       const half = this.closeHalf / Math.min(1, aspect);
       cam.fov = clamp((2 * Math.atan(half / this.seat.distanceTo(this.look)) * 180) / Math.PI, 10, 58);

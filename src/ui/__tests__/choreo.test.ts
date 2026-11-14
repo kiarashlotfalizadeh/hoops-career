@@ -73,22 +73,19 @@ const scores = (s: ReturnType<typeof buildScript>) => s.frames.filter((f) => f.s
 describe('live court choreography', () => {
   it('spaces the players, draws actions, sets and defenses, keeps the score, flashes timeouts and captions the play', () => {
     // the 2D floor fits its box: a phone's upright window across the width; a desktop's column (shorter
-    // than the floor's shape) filled top to bottom, panning, but the whole floor for the break's chart;
-    // a box longer than the floor, the whole floor across its height
+    // than the floor's shape) the whole floor across its width, never cropped; a box longer than the
+    // floor, the whole floor across its height
     {
       const up = courtFit(390, 388);
       expect(up.wide).toBe(false);
       expect(FLOOR_W * up.k).toBeCloseTo(390);
       const desk = courtFit(1013, 679);
-      expect(desk.pan).toBe(true);
-      expect(FLOOR_W * desk.k).toBeCloseTo(679);
-      expect(FLOOR_L * desk.k).toBeGreaterThan(1013);
-      const chart = courtFit(1013, 679, true);
-      expect(chart.pan).toBe(false);
-      expect(FLOOR_L * chart.k).toBeCloseTo(1013);
+      expect(desk.wide).toBe(true);
+      expect(FLOOR_L * desk.k).toBeCloseTo(1013);
+      expect(FLOOR_W * desk.k).toBeLessThan(679);
       const side = courtFit(780, 338);
-      expect(side.pan).toBe(false);
       expect(FLOOR_W * side.k).toBeCloseTo(338);
+      expect(FLOOR_L * side.k).toBeLessThanOrEqual(780);
     }
 
     // free throws lined up on separate lane spots

@@ -3,7 +3,7 @@
    partials above. The court is the hero: the page grows until the whole floor fills the height left
    under the scorebug and the call bar, the bench keeps a column beside it, and where the page can't
    grow that far (a screen not wide enough for its height) the picture still takes the whole column:
-   the 2D floor fills its height and pans with the ball (Court.tsx), never a band of ink under it. */
+   the 3D court fills it, the 2D floor shows whole, centered on the building's ink (Court.tsx). */
 @media (orientation: landscape) and (min-width: 600px) {
   :root {
     --lq-h: 54px;

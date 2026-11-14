@@ -1182,13 +1182,14 @@ export class Director {
       F.z = s.z + (r.rim.z - s.z) * 0.4;
       F.span = 9;
     } else {
-      // (on him, from his waist to over his head; at the rim on his way up, the rim too)
+      // (on him, from his knees to over his head: framed on his body, not his face (see scene.ts LOW_HALF); at the rim on
+      // his way up, the rim too)
       const w = clamp(1 - (Math.hypot(s.x - r.rim.x, s.z - r.rim.z) - 4) / 8, 0, 1) * 0.35 * (1 - past);
-      const face = head ? head.y - 1.1 : s.y + 0.6;
+      const mid = head ? head.y - 1.9 : s.y + 0.1;
       F.x = s.x + (r.rim.x - s.x) * w;
-      F.y = Math.max(3.8, face + (RIM_H - face) * w);
+      F.y = Math.max(3.4, mid + (RIM_H - mid) * w);
       F.z = s.z + (r.rim.z - s.z) * w;
-      F.span = 6.6 + w * 14;
+      F.span = 8.6 + w * 12;
     }
     return F;
   }

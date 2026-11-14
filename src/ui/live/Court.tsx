@@ -5,9 +5,10 @@
 // Two views of the same floor, picked by the shape the layout gives the canvas:
 // - upright (a phone held upright): a window on the floor that pans with the ball, so the players
 //   stay big; a set plays out at one end and a break carries the camera to the other;
-// - sideways (wide: a tablet, a desktop, or the compact court at a break): the whole floor at once,
-//   or, in a box not quite as long as the floor's shape (a desktop's column), the floor across its
-//   whole height, panning along its length with the ball, so no band of the building is left over.
+// - sideways (wide: a tablet, a desktop, the phone held sideways, the compact court at a break): the
+//   whole floor at once, always, centered in its box with the building (ink) round it. (A desktop's
+//   column, shorter than the floor's shape, used to fill its height and pan with the ball, which cut
+//   off the far end of the floor on some plays.)
 //
 // With no possession to draw the court is never empty: the fives line up for the tip, the players
 // stand where the last play left them (a huddle, a stop), or the floor shows the shot chart (a break).
@@ -122,9 +123,6 @@ export const FLOOR_L = COURT_LEN + 2 * END;
 const WIDE = 1.4;
 /** Upright, the window keeps the ball this far (ft) from its trailing edge: the rest of the view is ahead of it, toward the basket. */
 const TRAIL = 8;
-/** Panning, the window keeps this much floor (ft) behind the basket under attack, and the ball at least this far in from its edge. */
-const RIM_ROOM = 6;
-const BALL_ROOM = 3;
 /** A player is a disc this many feet across the middle (choreo.ts keeps them at least two of these apart). */
 const BODY = 1.45;
 /** Nothing written on the court is smaller than this (px). */
@@ -214,20 +212,15 @@ export interface View {
   k: number;
   w: number;
   h: number;
-  /** Upright: the court y at the top edge of the window. Sideways: the margins that center the floor (or, panning, put the window's part of it in view). */
+  /** Upright: the court y at the top edge of the window. Sideways: the margins that center the floor. */
   top: number;
   ox: number;
   oy: number;
 }
-/**
- * How the floor fits a canvas of w × h: sideways (`wide`) or the upright window, and its scale. Sideways
- * in a box shorter than the floor's shape it fills the height and pans (`pan`), unless the whole floor
- * is asked for (the break's shot chart).
- */
-export function courtFit(w: number, h: number, whole = false): { wide: boolean; pan: boolean; k: number } {
+/** How the floor fits a canvas of w × h: sideways (`wide`: the whole floor, as big as fits) or the upright window, and its scale. */
+export function courtFit(w: number, h: number): { wide: boolean; k: number } {
   const wide = w >= h * WIDE;
-  const pan = wide && !whole && w < (FLOOR_L * h) / FLOOR_W;
-  return { wide, pan, k: !wide ? w / FLOOR_W : pan ? h / FLOOR_W : Math.min(w / FLOOR_L, h / FLOOR_W) };
+  return { wide, k: !wide ? w / FLOOR_W : Math.min(w / FLOOR_L, h / FLOOR_W) };
 }
 
 const project = (v: View, p: Pt): Pt =>
@@ -294,11 +287,9 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
       const cut = sc !== lastScript;
       lastScript = sc;
 
-      // the view: the floor sideways when the canvas is wide, a window on it upright. Sideways in a box
-      // shorter than the floor's shape, the floor fills the height and pans with the ball (the break's
-      // shot chart keeps the whole floor)
-      const { wide, pan, k } = courtFit(w, h, !sc && p.idle?.kind === 'chart');
-      const view: View = { wide, k, w, h, top: 0, ox: wide ? (w - FLOOR_L * k) / 2 : 0, oy: wide && !pan ? (h - FLOOR_W * k) / 2 : 0 };
+      // the view: the whole floor sideways when the canvas is wide, a window on it upright
+      const { wide, k } = courtFit(w, h);
+      const view: View = { wide, k, w, h, top: 0, ox: wide ? (w - FLOOR_L * k) / 2 : 0, oy: wide ? (h - FLOOR_W * k) / 2 : 0 };
       const play = sc ? pose(sc, s.t, calm) : null;
       // where everyone is, for the 3D court and for the floor between possessions
       if (sc && play) {
@@ -321,20 +312,18 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
         return;
       }
       // (the view just turned: the window finds the play again)
-      const mode = !wide ? 'up' : pan ? 'pan' : 'whole';
+      const mode = wide ? 'whole' : 'up';
       if (mode !== camMode) cam = null;
       camMode = mode;
       if (mode !== 'whole') {
-        const len = (pan ? w : h) / k;
+        const len = h / k;
         const lo = -END;
         const hi = Math.max(lo, COURT_LEN + END - len);
         let want: number;
         if (play && sc) {
           // most of the window ahead of the ball, toward the basket it's headed for
           // (so a set plays out with the window pinned to the baseline, and a break carries it up the floor)
-          // (and the basket it attacks kept in the window, its backboard and the baseline with it, as long as the ball
-          // can be too: a long floor in a desktop's column showed the rim at the window's edge as the ball came up)
-          const local = clamp(Math.max(Math.min(play.ball.y - (len - TRAIL), BASKET.y - RIM_ROOM), play.ball.y - len + BALL_ROOM), -END, COURT_LEN + END - len);
+          const local = clamp(play.ball.y - (len - TRAIL), -END, COURT_LEN + END - len);
           want = sc.dir === 1 ? local : COURT_LEN - local - len;
         } else if (p.idle?.kind === 'chart') want = lo;
         else if (p.idle?.kind === 'tip' || !ballAt) want = COURT_LEN / 2 - len / 2;
@@ -346,8 +335,7 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
           cam === null || calm || (cut && sc && (!ballAt || Math.hypot(ballAt.x - toWorld(sc.frames[0].ball, sc.dir).x, ballAt.y - toWorld(sc.frames[0].ball, sc.dir).y) > 10));
         cam = jump ? want : cam! + (want - cam!) * (1 - Math.exp((-dt * Math.max(1, p.speed)) / 170));
         if (Math.abs(want - cam) < 0.02) cam = want;
-        if (pan) view.ox = -(cam + END) * k;
-        else view.top = cam;
+        view.top = cam;
       }
 
       const fl = p.floor;
