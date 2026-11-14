@@ -626,20 +626,66 @@ def oval(y, w, f, b, n, cz=0.0, square=1.0, pinch=0.0):
 #: his hair's (1.25) and a fiftieth for each place in this list (change both).
 HAIR_STYLES = ('afro', 'bun', 'tail', 'long', 'curls')
 FANS = {
-    'fanA': dict(n=12, hn=12, m=8, sleeve='long', hair='short', collar=True, belly=0.0, limb=1.0, broad=1.0),
-    'fanB': dict(n=12, hn=12, m=8, sleeve='short', hair='none', cap=True, belly=0.15, limb=1.14, broad=1.06),
-    'fanC': dict(n=12, hn=12, m=8, sleeve='long', hair='long', woman=True, belly=-0.02, limb=0.82, broad=1.0),
-    'fanD': dict(n=12, hn=12, m=8, sleeve='none', hair='tail', woman=True, belly=-0.03, limb=0.8, broad=0.97),
-    'fanE': dict(n=12, hn=12, m=8, sleeve='long', hair='big', hood=True, belly=0.04, limb=1.04, broad=0.96),
-    'fanF': dict(n=12, hn=12, m=8, sleeve='long', hair='none', jacket=True, collar=True, belly=0.08, limb=1.08, broad=1.02),
-    'fanG': dict(n=12, hn=12, m=8, sleeve='long', hair='up', woman=True, coat=True, collar=True, belly=0.0, limb=0.84, broad=1.02),
-    'fanH': dict(n=12, hn=12, m=8, sleeve='long', hair='short', beanie=True, hood=True, belly=0.3, limb=1.2, broad=1.1),
-    'fanKid': dict(n=12, hn=12, m=8, sleeve='short', hair='short', kid=True, belly=0.02, limb=0.92, broad=1.0),
+    'fanA': dict(n=16, hn=12, m=10, sleeve='long', hair='short', collar=True, belly=0.0, limb=1.0, broad=1.0),
+    'fanB': dict(n=16, hn=12, m=10, sleeve='short', hair='none', cap=True, belly=0.15, limb=1.14, broad=1.06),
+    'fanC': dict(n=16, hn=12, m=10, sleeve='long', hair='long', woman=True, belly=-0.02, limb=0.82, broad=1.0),
+    'fanD': dict(n=16, hn=12, m=10, sleeve='none', hair='tail', woman=True, belly=-0.03, limb=0.8, broad=0.97),
+    'fanE': dict(n=16, hn=12, m=10, sleeve='long', hair='big', hood=True, belly=0.04, limb=1.04, broad=0.96),
+    'fanF': dict(n=16, hn=12, m=10, sleeve='long', hair='none', jacket=True, collar=True, belly=0.08, limb=1.08, broad=1.02),
+    'fanG': dict(n=16, hn=12, m=10, sleeve='long', hair='up', woman=True, coat=True, collar=True, belly=0.0, limb=0.84, broad=1.02),
+    'fanH': dict(n=16, hn=12, m=10, sleeve='long', hair='short', beanie=True, hood=True, belly=0.3, limb=1.2, broad=1.1),
+    'fanKid': dict(n=16, hn=12, m=10, sleeve='short', hair='short', kid=True, belly=0.02, limb=0.92, broad=1.0),
     'fanMidA': dict(n=8, hn=8, m=6, sleeve='short', hair='short', belly=0.05, limb=1.08, broad=1.0),
     'fanMidB': dict(n=8, hn=8, m=6, sleeve='long', hair='long', woman=True, belly=-0.02, limb=0.86, broad=1.0),
     'fanMidC': dict(n=8, hn=8, m=6, sleeve='long', hair='none', cap=True, jacket=True, belly=0.2, limb=1.12, broad=1.06),
     'fanLow': dict(n=5, hn=5, m=3, sleeve='short', hair='short', low=True, belly=0.03, limb=1.0, broad=1.0),
 }
+
+
+#: The sculpted head (figure.py's) on a spectator by the floor: how many of its triangles, its size on him, and where
+#: its eyes and the tip of its nose go (his frame, before a kid's head is made bigger). CROWD_FACE in crowd.ts paints a
+#: face where the old head had one (eyes 2.315, mouth 2.035): `_FACE` is each point's place on that face (FAN_FACE_Y).
+FAN_HEAD_TRIS = 560
+FAN_HEAD_S = 0.95
+FAN_EYE_Y, FAN_NOSE_Z = 2.27, 0.37
+#: The painted face's eyes and mouth, and the sculpt's (as FAN_HEAD_S puts it): a point of the sculpt's face is
+#: painted as the old face's point the same way between them.
+FAN_FACE_Y = (2.315, 2.035)
+
+
+def sculpt_head(hs, hy, top, back, cap):
+    """
+    The player's head, sculpted, at FAN_HEAD_TRIS: put where a spectator's goes (eyes at FAN_EYE_Y, the tip of his
+    nose FAN_NOSE_Z forward), marked as his head's points are (skin, his crop or a cap over it), and flagged `_SC`
+    for fan() to give its points their place on the painted face.
+    """
+    import figure as F
+
+    o = F.head(FAN_HEAD_TRIS / 1400)
+    if 'tag' in o.data.attributes:
+        o.data.attributes.remove(o.data.attributes['tag'])
+    s = FAN_HEAD_S * hs
+    eye = F.face_point(F.EYE_X, F.EYE_Y)
+    nose = F.face_point(0, F.NOSE_TIP)
+    marks = []
+    for v in o.data.vertices:
+        x, y, z = F.G(v.co)
+        q = (x * s, hy(FAN_EYE_Y) + (y - eye[1]) * s, FAN_NOSE_Z * hs + (z - nose[2]) * s - 0.01)
+        v.co = B(*q)
+        # (his crop or a cap over his skull: from a hairline across his forehead, down round his temples to the nape)
+        yy, zz = q[1], q[2]
+        line = hy(2.44) - 0.12 * max(0.0, min(1.0, (0.22 - zz) / 0.35)) - 0.2 * max(0.0, min(1.0, (-0.05 - zz) / 0.25))
+        if yy > hy(2.5) and cap:
+            marks.append(top)
+        elif yy > line:
+            marks.append(top if (cap or yy > hy(2.5)) else back)
+        else:
+            marks.append(1)
+    o.data.update()
+    o.data.attributes.new('_PART', 'FLOAT', 'POINT').data.foreach_set('value', [float(m) for m in marks])
+    o.data.attributes.new('_SC', 'FLOAT', 'POINT').data.foreach_set('value', [1.0] * len(o.data.vertices))
+    fix_normals(o)
+    return o
 
 
 def fan(name):
@@ -678,6 +724,17 @@ def fan(name):
         oval(1.74, 0.21, 0.14, 0.18, n, -0.04),
         oval(1.8, 0.145, 0.125, 0.15, n, -0.04),
     ]
+    if near:
+        # (by the floor, rounder: no corner to a chest or a back, and his shoulders slope to his neck, not a shelf)
+        trunk = [[(x, y, z) for (x, y, z) in r] for r in trunk]
+        trunk = trunk[:6] + [oval(1.61, sw * 0.82, 0.2 + thick, 0.25 + thick, n, -0.04)] + trunk[6:]
+        rounder = [oval(-0.04, hips, 0.3 + belly * 0.5, 0.3, n, 0.02, 0.92),
+                   oval(0.42, (hips + waist) / 2 + belly * 0.2, 0.28 + belly, 0.27 + thick, n, 0.0, 0.95),
+                   oval(0.8, waist, 0.25 + belly * 0.7 + thick, 0.25 + thick, n, -0.01, 1.0),
+                   oval(1.14, sw - 0.07, 0.28 + bust + belly * 0.3 + thick, 0.28 + thick, n, -0.01, 0.95),
+                   oval(1.4, sw - 0.02, 0.26 + bust * 0.4 + thick, 0.29 + thick, n, -0.03, 0.95),
+                   oval(1.53, sw - 0.06, 0.22 + thick, 0.27 + thick, n, -0.04, 1.0)]
+        trunk = rounder + trunk[6:]
     if low:
         trunk = [trunk[0], trunk[3], trunk[5], trunk[8]]
     elif not near:
@@ -733,20 +790,18 @@ def fan(name):
                 grown.append(back if z < -0.14 else SKIN)
             else:
                 grown.append(SKIN)
-    parts.append(fan_piece(head, grown + [top], 'head', tip=(0, hy(2.69), -0.04)))
     if near:
-        # a nose (its bridge down from between his eyes, out to a rounded tip over the wings of his nostrils,
-        # back under to his lip), his lips, and his ears: what tell a face from the back of a head at the
-        # first rows' distance
-        nose = [
-            [(0.03 * hs, hy(2.33), 0.28 * hs), (-0.03 * hs, hy(2.33), 0.28 * hs), (0, hy(2.335), 0.3 * hs)],
-            [(0.045 * hs, hy(2.24), 0.285 * hs), (-0.045 * hs, hy(2.24), 0.285 * hs), (0, hy(2.25), 0.335 * hs)],
-            [(0.068 * hs, hy(2.15), 0.285 * hs), (-0.068 * hs, hy(2.15), 0.285 * hs), (0, hy(2.175), 0.385 * hs)],
-        ]
-        parts.append(fan_piece(nose, SKIN, 'nose', start=True, tip=(0, hy(2.115), 0.33 * hs)))
-        parts.append(marked(ellipsoid((0, hy(2.035), 0.272 * hs), (0.088 * hs, 0.034, 0.05), 6, 3, 'lips'), SKIN))
-        for s in (-1, 1):
-            parts.append(marked(ellipsoid((s * 0.283 * hs, hy(2.24), -0.03), (0.03, 0.085, 0.055), 4, 3, 'ear'), SKIN))
+        # (by the floor his head is the player's, sculpted (figure.py head: a brow, sockets, a nose, cheekbones, lips, a
+        # jaw), at a fraction of its triangles: a face with planes the light finds, not an egg with a face painted on;
+        # and a neck up into it)
+        parts.append(fan_piece([oval(hy(1.74), 0.13 * hs, 0.12, 0.14, n, -0.04), oval(hy(2.16), 0.125 * hs, 0.115, 0.13, n, -0.04)], SKIN, 'neck'))
+        parts.append(sculpt_head(hs, hy, top, back, cap))
+    else:
+        parts.append(fan_piece(head, grown + [top], 'head', tip=(0, hy(2.69), -0.04)))
+    if near:
+        # (and his ears, on the sculpt's sides)
+        for s_ in (-1, 1):
+            parts.append(marked(ellipsoid((s_ * 0.29 * hs, hy(2.24), -0.03), (0.035, 0.09, 0.06), 6, 4, 'ear'), SKIN))
     # his hair: a crop over his skull, a lot of it, down to her shoulders, tied back in a tail; or a cap, or a
     # knitted beanie with its cuff turned up
     seg = (8, 4) if near else (6, 4)
@@ -758,7 +813,8 @@ def fan(name):
         parts.append(fan_piece([[(0.25, hy(2.44), 0.22), (-0.25, hy(2.44), 0.22), (-0.25, hy(2.48), 0.22), (0.25, hy(2.48), 0.22)], [(0.18, hy(2.39), 0.66), (-0.18, hy(2.39), 0.66), (-0.18, hy(2.415), 0.66), (0.18, hy(2.415), 0.66)]], CAP, 'brim', end=True))
     elif hair == 'big':
         parts.append(marked(ellipsoid((0, hy(2.5), -0.07), (0.39 * hs, 0.32 * hs, 0.39 * hs), *seg, 'hair'), HAIR))
-    elif hair != 'none' and not low:
+    elif hair != 'none' and not low and not near:
+        # (by the floor his crop is on his sculpted head itself, its strands drawn there: no shell over it to read as a helmet)
         parts.append(marked(ellipsoid((0, hy(2.47), -0.055), (0.3 * hs, 0.245 * hs, 0.335 * hs), *seg, 'hair'), HAIR))
     if hair == 'long' and not styled:
         parts.append(hair_fall(HAIR, hs, hy, near))
@@ -859,6 +915,28 @@ def fan(name):
 
     # (no face is painted on him: a few points across a head would carry it as a band; crowd.ts draws it)
     paint(out, lambda x, y, z: 1.0)
+    # where on the painted face each point is (crowd.ts CROWD_FACE draws there): his own place, but on a sculpted
+    # head, the place between the painted eyes and mouth that it has between the sculpt's
+    me = out.data
+    sc = [0.0] * len(me.vertices)
+    if '_SC' in me.attributes:
+        me.attributes['_SC'].data.foreach_get('value', sc)
+        me.attributes.remove(me.attributes['_SC'])
+    kid = w.get('kid', False)
+    hs2 = (0.94 if w.get('woman') else 1.0) * (1.16 if kid else 1)
+    k = 1.12 if kid else 1
+    eye_y = 1.74 + (FAN_EYE_Y - 1.74) * k
+    import figure as F
+
+    span = (F.face_point(F.EYE_X, F.EYE_Y)[1] - F.face_point(F.MOUTH_W * 0, F.MOUTH_Y)[1]) * FAN_HEAD_S * hs2
+    ky = (FAN_FACE_Y[0] - FAN_FACE_Y[1]) / span
+    face = []
+    for v in me.vertices:
+        x, y, z = F.G(v.co)
+        if sc[v.index] > 0.5:
+            y = FAN_FACE_Y[0] + (y - eye_y) * ky
+        face.extend((x, y, z))
+    me.attributes.new('_FACE', 'FLOAT_VECTOR', 'POINT').data.foreach_set('vector', face)
     return out
 
 

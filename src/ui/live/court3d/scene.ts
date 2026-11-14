@@ -442,6 +442,25 @@ const LEG_GRAZE = 0.04;
 /** Two who meet and are into each other are moved apart, and looked at again, up to this many times a frame. */
 const LEG_PASSES = 3;
 const LEGS_TRUNK = [...PARTS.legs, ...PARTS.trunk];
+/** How thick an upper arm and a forearm are kept off the ball going by (ft, on the 6 ft 6 puppet: with a hair over, see clear). */
+const UPPER_ARM_R = 0.2;
+const FOREARM_R = 0.16;
+/** A thigh and a shin, the same (spacing.ts's, with a hair over); looked at only with the ball under this high (ft). */
+const THIGH_R = 0.24;
+const SHIN_R = 0.17;
+const LEGS_UP = 4;
+/** A dribble moved off his own legs is let go of over this long (ms, the bodies' time: see ownLegs). */
+const OWN_LET = 60;
+/** The dribbles a man's own legs are kept out of (see ownLegs): a crossover, across in front of his shins. */
+const DRIBBLE_CLIPS = new Set(['crossover']);
+const LEG_JOINTS = [
+  [J.jl, J.kl, J.fl],
+  [J.jr, J.kr, J.fr],
+] as const;
+const ARM_JOINTS = [
+  [J.sl, J.el, J.hl],
+  [J.sr, J.er, J.hr],
+] as const;
 /** Two who don't meet are looked at for bodies into each other (see unclash) only this near (ft, on the 6 ft 6 puppet). */
 const CLASH_FAR = 4.5;
 /** An arm may graze another man's trunk or head this far (ft, into spacing.ts's shapes), no farther: a hand on him is not in him. */
@@ -449,7 +468,7 @@ const ARM_GRAZE = 0.06;
 /** Any limb of one may graze any limb of the other this far (ft): an arm swinging through a teammate's as they cross is not let be. */
 const LIMB_GRAZE = 0.05;
 /** Looked at again up to this many times a frame: a man moved over his planted feet goes only part of the way. */
-const CLASH_PASSES = 5;
+const CLASH_PASSES = 9;
 const NEAR_MIN = 0.75;
 const NEAR_MAX = 3.2;
 /** What a lean or a sit changes of that, at most either way (ft), learnt only from two this near (ft): farther, their trunks are not what's nearest. */
@@ -699,7 +718,7 @@ export class CourtScene {
     this.renderer.shadowMap.type = PCFShadowMap;
     this.lens = new Lens(this.renderer);
     const keep = <T extends { dispose(): void }>(o: T): T => (this.trash.push(o), o);
-    this.geo = figureGeo(keep, models.figure);
+    this.geo = figureGeo(keep, models.figure, models.faces);
 
     // light: an arena's, from high over the floor (it throws the shadows), a little from behind for an edge,
     // and what comes back up off the wood onto the undersides of things (its colour is the floor's: see frame).
@@ -1123,6 +1142,7 @@ export class CourtScene {
         holder = figs[carried];
         set(ball, holder.pup.bounced(holder.pup.carry(TMP)));
         this.give(holder, null, ease);
+        this.ownLegs(holder, own);
       } else if (b.fx) {
         const one = was?.pup.one;
         if (was && one && isDunk(one.id) && !this.slammed) {
@@ -2167,7 +2187,6 @@ export class CourtScene {
         const fa = this.figs.get(pids[i])!;
         const pa = !!pinned?.has(fa);
         const pb = !!pinned?.has(fb!);
-        if (pa && pb) continue;
         if (this.meeting.some((m) => m.w >= 0.5 && ((pids[m.i] === pids[i] && pids[m.j] === pids[k]) || (pids[m.i] === pids[k] && pids[m.j] === pids[i])))) continue;
         const d = Math.hypot(b.x - a.x, b.z - a.z);
         if (d > CLASH_FAR * Math.max(a.body.s, b.body.s)) continue;
@@ -2175,7 +2194,8 @@ export class CourtScene {
         // (the lighter man gives more of the room; one on the ring none of it)
         const ma = a.body.s * a.body.s * a.body.bulk;
         const mb = b.body.s * b.body.s * b.body.bulk;
-        const share = a.onRim || pa ? 1 : b.onRim || pb ? 0 : ma / (ma + mb);
+        // (both with the ball in their hands, a pass from one to the other: each gives his share, as two without it)
+        const share = a.onRim || (pa && !pb) ? 1 : b.onRim || (pb && !pa) ? 0 : ma / (ma + mb);
         for (let pass = 0; pass < CLASH_PASSES; pass++) {
           const [ja, jb] = [jointsOf(a, JA), jointsOf(b, JB)];
           const gap = clearance(ja, a.body.s, a.body.bulk, jb, b.body.s, b.body.bulk, false);
@@ -2739,6 +2759,24 @@ export class CourtScene {
       clearOf(ball, hips, chest, TRUNK * s * Math.sqrt(f.pup.body.bulk) + BALL_R - 0.1, GIVE);
       const head = f.pup.world(j[J.head * 3], j[J.head * 3 + 1], j[J.head * 3 + 2], TMP);
       clearOf(ball, chest, head, SKULL * s + BALL_R - 0.1, GIVE);
+      // (and his arms: an arm at his side or up in a lane is gone round, not through; his own hands get out of its way
+      // too, see Puppet.clearArm, but a shoulder can't)
+      for (const [sh, el, ha] of ARM_JOINTS) {
+        const a0 = f.pup.world(j[sh * 3], j[sh * 3 + 1], j[sh * 3 + 2], TMP);
+        const a1 = f.pup.world(j[el * 3], j[el * 3 + 1], j[el * 3 + 2], TMP2);
+        clearOf(ball, a0, a1, UPPER_ARM_R * s + BALL_R, GIVE);
+        const a2 = f.pup.world(j[ha * 3], j[ha * 3 + 1], j[ha * 3 + 2], TMP);
+        clearOf(ball, a1, a2, FOREARM_R * s + BALL_R, GIVE);
+      }
+      // (and his legs: a dribble low by a man in his stance goes by his shins, not through them)
+      if (ball.y < LEGS_UP * s)
+        for (const [hip, knee, ankle] of LEG_JOINTS) {
+          const l0 = f.pup.world(j[hip * 3], j[hip * 3 + 1], j[hip * 3 + 2], TMP);
+          const l1 = f.pup.world(j[knee * 3], j[knee * 3 + 1], j[knee * 3 + 2], TMP2);
+          clearOf(ball, l0, l1, THIGH_R * s * Math.sqrt(f.pup.body.bulk) + BALL_R, GIVE);
+          const l2 = f.pup.world(j[ankle * 3], j[ankle * 3 + 1], j[ankle * 3 + 2], TMP);
+          clearOf(ball, l1, l2, SHIN_R * s + BALL_R, GIVE);
+        }
     }
     const dx = ball.x - x;
     const dz = ball.z - z;
@@ -2746,6 +2784,38 @@ export class CourtScene {
     ball.x = x + dx * k;
     ball.z = z + dz * k;
   }
+  /**
+   * A dribble low by his own legs (a crossover in front of his shins, one at his side as he goes) goes by them, out in
+   * front of him, not through them: his hand on it goes with it (his arms are solved after this).
+   */
+  private ownLegs(f: Fig, ms: number) {
+    const ball = this.ball;
+    const p = f.pup;
+    // (what it had been moved off them is let go of over OWN_LET ms, not dropped in a frame)
+    const O = this.ownOff;
+    const let_ = Math.exp(-Math.max(0, ms) / OWN_LET);
+    O.x *= let_;
+    O.z *= let_;
+    if (!DRIBBLE_CLIPS.has(p.clip) || ball.y > LEGS_UP * 0.65 * p.body.s) {
+      O.x = O.z = 0;
+      return;
+    }
+    const [x0, z0] = [ball.x, ball.z];
+    ball.x += O.x;
+    ball.z += O.z;
+    const j = p.j;
+    const s = p.body.s;
+    const way = { x: Math.sin(p.yaw), z: Math.cos(p.yaw) };
+    for (const [hip, knee, ankle] of LEG_JOINTS) {
+      const l0 = p.world(j[hip * 3], j[hip * 3 + 1], j[hip * 3 + 2], TMP);
+      const l1 = p.world(j[knee * 3], j[knee * 3 + 1], j[knee * 3 + 2], TMP2);
+      clearOf(ball, l0, l1, THIGH_R * s * Math.sqrt(p.body.bulk) + BALL_R, 0, way);
+      const l2 = p.world(j[ankle * 3], j[ankle * 3 + 1], j[ankle * 3 + 2], TMP);
+      clearOf(ball, l1, l2, SHIN_R * s + BALL_R, 0, way);
+    }
+    [O.x, O.z] = [ball.x - x0, ball.z - z0];
+  }
+  private readonly ownOff = { x: 0, z: 0 };
   /**
    * The ball, in a man's hands or on its way between two, gives way to the bodies by it (all but `a` and
    * `b`, whose hands it is in): eased, so it is carried and passed round a man, never hopped off him, and

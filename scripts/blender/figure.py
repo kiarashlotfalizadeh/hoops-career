@@ -22,6 +22,7 @@
 #
 # He stands with his arms out from his sides (they can't be fused hanging against the trunk); the
 # rig's bones carry that pose, so the game needs to know nothing about it.
+import json
 import os
 import random
 import sys
@@ -1924,11 +1925,162 @@ def report(fig):
     print(f'[models] {fig.name}: {tri_count(fig)} triangles {count}, {len(fig.data.vertices)} points')
 
 
+# ---------------------------------------------------------------- faces of their own
+#: How finely a point's place is told in faces.bin (ft; run.ts's GRID: the packed model's points are on it, so a
+#: point of the model is found in the file by its place).
+FACE_GRID = 1 / 4096
+#: Which bones a point of his head hangs on (the hair's swing is not his face).
+FACE_BONES = ('head', 'jaw', 'nose', 'brow', 'lip')
+#: How many times each shape is smoothed over his head (a feature's own, a whole head's: see faces_bin).
+FACE_SMOOTH = (8, 20, 30)
+
+
+def face_point(px, py):
+    """The point of his skin at that place on the plane of his face (face_at's), in the game's frame."""
+    size = (HEAD_W, HEAD_H, HEAD_D)
+    d = (px / 0.8, py / 0.8, 1.0)
+    ln = math.sqrt(sum(v * v for v in d))
+    n = tuple(v / ln for v in d)
+    r = head_r(n)
+    return tuple(HEAD_C[i] + n[i] * r * size[i] for i in range(3))
+
+
+def face_reach(p):
+    """How much of a face's shape a point of his head takes: all of his face and jaw, none of his crown, the back of his head or his neck (his hair stays where it is)."""
+    size = (HEAD_W, HEAD_H, HEAD_D)
+    d = [(p[i] - HEAD_C[i]) / size[i] for i in range(3)]
+    ln = math.sqrt(sum(v * v for v in d))
+    if ln < 1e-6 or ln > 1.3:
+        return 0.0
+    n = [v / ln for v in d]
+    return sstep(-0.55, -0.1, n[2]) * sstep(0.78, 0.45, n[1]) * sstep(-0.98, -0.86, n[1])
+
+
+def faces_bin(fig, path):
+    """
+    faces.bin: how far each point of his head moves for each of mh.py's shapes. 'FACE', a version, the length of a
+    JSON head ({names, scales, points}), the JSON (padded to a fourth byte); each point's place (int16 x3, in
+    FACE_GRID); then a shape at a time: how many points it moves (uint32), which (uint16 each, padded to a fourth
+    byte), and by how much (int8 x3 each, times the shape's scale, padded).
+    """
+    import struct
+
+    import mh
+
+    theirs = mh.Theirs()
+    ours = {
+        'eye': face_point(EYE_X, EYE_Y),
+        'eye_x': face_point(EYE_X, EYE_Y)[0],
+        'nose': face_point(0, NOSE_TIP),
+        'mouth': face_point(MOUTH_W, MOUTH_Y),
+        'chin': face_point(0, -0.84),
+        'crown': (0, HEAD_C[1] + head_r((0, 1, 0)) * HEAD_H, HEAD_C[2]),
+        'back': (0, HEAD_C[1], HEAD_C[2] - head_r((0, 0, -1)) * HEAD_D),
+    }
+    s, o = mh.fit(ours, theirs)
+    for k in ('eye', 'nose', 'mouth', 'chin', 'crown', 'back'):
+        t = getattr(theirs, k) * s + o
+        t[0] = abs(t[0]) if k != 'eye' else theirs.eye_x * s[0]
+        print(f'[models] faces: {k} theirs on ours {tuple(round(float(v), 3) for v in t)} ours {tuple(round(float(v), 3) for v in ours[k])}')
+    me = fig.data
+    names = {g.index: g.name for g in fig.vertex_groups}
+    keys, points = {}, []
+    for v in me.vertices:
+        on = sum(g.weight for g in v.groups if names[g.group] in FACE_BONES)
+        if on < 0.5:
+            continue
+        p = G(v.co)
+        q = tuple(int(round(c / FACE_GRID)) for c in p)
+        if q in keys:
+            continue
+        keys[q] = len(points)
+        points.append(tuple(c * FACE_GRID for c in q))
+    def skin(p):
+        size = (HEAD_W, HEAD_H, HEAD_D)
+        d = [(p[i] - HEAD_C[i]) / size[i] for i in range(3)]
+        ln = math.sqrt(sum(v * v for v in d)) or 1.0
+        n = tuple(v / ln for v in d)
+        r = head_r(n)
+        return tuple(HEAD_C[i] + n[i] * r * size[i] for i in range(3))
+
+    moves, found = mh.shapes(theirs, points, HEAD_C, s, o, face_reach, ours, skin)
+    # (smoothed over our head's own surface: what is theirs alone, a fold of their lip a little off ours, would be a
+    # lump on ours; what is left is the shape. The whole head's shapes most, a nose's or a lip's least)
+    vkey = {}
+    for v in me.vertices:
+        q = tuple(int(round(c / FACE_GRID)) for c in G(v.co))
+        if q in keys:
+            vkey[v.index] = keys[q]
+    near = [set() for _ in points]
+    for e in me.edges:
+        a, b = (vkey.get(i) for i in e.vertices)
+        if a is not None and b is not None and a != b:
+            near[a].add(b)
+            near[b].add(a)
+    rows = np.array([i for i, nb in enumerate(near) for _ in nb])
+    cols = np.array([j for nb in near for j in nb])
+    count = np.maximum(1, np.bincount(rows, minlength=len(points)))[:, None]
+    wide = set(mh.KINDS) | {'real', 'age', 'oval', 'round', 'square', 'triangle', 'heart', 'diamond', 'oblong', 'fat', 'nubian', 'slope', 'temples'}
+    # (a cheek, a jaw, a chin are broad: what is theirs of them is a bulge, and only its broad shape is a face's)
+    broad = {'cheekBone', 'cheekFull', 'cheekIn', 'chinOut', 'chinWide', 'chinLong', 'jawBone', 'underbite', 'laugh', 'browOut', 'browTilt', 'corners'}
+    for k, m in moves.items():
+        for _ in range(FACE_SMOOTH[2] if k in wide else FACE_SMOOTH[1] if k in broad else FACE_SMOOTH[0]):
+            avg = np.zeros_like(m)
+            np.add.at(avg, rows, m[cols])
+            m[:] = 0.5 * m + 0.5 * avg / count
+    # (their eyes are holes in their skin, ours are balls under lids: our eyes and their sockets keep our own shape)
+    for i, p in enumerate(points):
+        d = [(p[k] - HEAD_C[k]) / sz for k, sz in enumerate((HEAD_W, HEAD_H, HEAD_D))]
+        ln = math.sqrt(sum(v * v for v in d)) or 1.0
+        n = [v / ln for v in d]
+        # (and only his face's front: round his sides, his ears and the corners of his jaw are his own)
+        moves['real'][i] *= sstep(-0.05, 0.35, n[2])
+        if n[2] <= 0.2:
+            continue
+        px, py = face_at(n)
+        e = math.hypot((abs(px) - EYE_X) / (EYE_W * 1.9), (py - EYE_Y - 0.01) / 0.16)
+        moves['real'][i] *= sstep(0.75, 1.35, e)
+    order = list(moves)
+    if os.environ.get('FACE_DEBUG'):
+        for k in order:
+            m = moves[k]
+            avg = np.zeros_like(m)
+            np.add.at(avg, rows, m[cols])
+            dev = np.linalg.norm(m - avg / count, axis=1)
+            i = int(dev.argmax())
+            print(f'[models] spike {k}: {dev[i]:.4f} at {tuple(round(c, 3) for c in points[i])} move {np.round(m[i], 4)} n {len(near[i])}')
+    head, blobs, scales = [], [], []
+    for k in order:
+        m = moves[k]
+        ln = np.linalg.norm(m, axis=1)
+        idx = np.where(ln > 0.0003)[0]
+        top = float(np.abs(m[idx]).max()) if len(idx) else 0.0
+        scale = top / 127 if top else 1.0
+        q = np.clip(np.round(m[idx] / scale), -127, 127).astype(np.int8)
+        scales.append(scale)
+        blob = struct.pack('<I', len(idx)) + idx.astype(np.uint16).tobytes()
+        blob += b'\0' * (-len(blob) % 4)
+        blob += q.tobytes()
+        blob += b'\0' * (-len(blob) % 4)
+        blobs.append(blob)
+        head.append(f'{k} {len(idx)} {top:.4f}')
+    meta = json.dumps({'names': order, 'scales': scales, 'points': len(points), 'grid': FACE_GRID}).encode()
+    meta += b' ' * (-len(meta) % 4)
+    out = b'FACE' + struct.pack('<II', 1, len(meta)) + meta
+    pts = np.array([[int(round(c / FACE_GRID)) for c in p] for p in points], dtype=np.int16).tobytes()
+    out += pts + b'\0' * (-len(pts) % 4)
+    out += b''.join(blobs)
+    with open(path, 'wb') as f:
+        f.write(out)
+    print(f'[models] faces: {len(points)} points, {found} found on theirs, {len(out) // 1024} kB; ' + ', '.join(head))
+
+
 if __name__ == '__main__':
     a = args()
     fig, arm_ob = build()
     report(fig)
     export_glb(os.path.join(a['out'], 'figure.glb'), [fig, arm_ob])
+    faces_bin(fig, os.path.join(a['out'], 'faces.bin'))
     save_blend(os.path.join(a['blend'], 'figure.blend'))
     if 'preview' in a:
         hand = arm_frame(1) @ Vector((0, -(ARM + 0.35), 0))

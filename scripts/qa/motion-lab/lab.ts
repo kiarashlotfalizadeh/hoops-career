@@ -2510,6 +2510,7 @@ function footwork({ speed = 2, most = 10 } = {}) {
   type Raw = { has: boolean; south: boolean; felt: number; vs: number; vx: number; vz: number };
   type Man = {
     held: boolean;
+    inb: boolean;
     steps: [number, number];
     still: [number, number];
     deg: number;
@@ -2524,7 +2525,7 @@ function footwork({ speed = 2, most = 10 } = {}) {
     pz: number;
   };
   const men = new Map<number, Man>();
-  const held = { spells: 0, travels: 0, oneFoot: 0, still: 0, pivotDeg: 0, at: [] as string[] };
+  const held = { spells: 0, travels: 0, inbound: 0, oneFoot: 0, still: 0, pivotDeg: 0, at: [] as string[] };
   const takeoffs: Record<string, { both: number; L: number; R: number; none: number; right: number }> = {};
   const slides = { lead: 0, trail: 0, again: 0, frames: 0, clicked: 0, crossed: 0 };
   const contact = { frames: 0, wide: 0, hips: 0 };
@@ -2538,7 +2539,9 @@ function footwork({ speed = 2, most = 10 } = {}) {
     if (!m.held) return;
     m.held = false;
     held.spells++;
-    if (m.still[0] && m.still[1]) {
+    // (an inbounder walks with the ball behind the line as he likes: no travel out of bounds)
+    if (m.inb) held.inbound++;
+    else if (m.still[0] && m.still[1]) {
       held.travels++;
       if (held.at.length < most) held.at.push(at);
     } else if (m.still[0] || m.still[1]) held.oneFoot++;
@@ -2558,6 +2561,7 @@ function footwork({ speed = 2, most = 10 } = {}) {
         if (m) close(m, '');
         m = {
           held: false,
+          inb: false,
           steps: [0, 0],
           still: [0, 0],
           deg: 0,
@@ -2579,7 +2583,8 @@ function footwork({ speed = 2, most = 10 } = {}) {
       const sp = Math.hypot(raw.vx, raw.vz) * 1000;
       // held, not dribbled
       const holding = raw.has && !DRIB.has(p.clip) && !air && !(p.one && SHOTS.has(p.one.id) && p.one.tau > -60);
-      if (holding && !m.held) [m.held, m.steps, m.still, m.deg] = [true, [0, 0], [0, 0], 0];
+      if (holding && !m.held) [m.held, m.inb, m.steps, m.still, m.deg] = [true, false, [0, 0], [0, 0], 0];
+      if (m.held && act === 'inbound') m.inb = true;
       else if (!holding && m.held) close(m, at);
       for (let k = 0; k < 2; k++) {
         const ft = p.feet[k];

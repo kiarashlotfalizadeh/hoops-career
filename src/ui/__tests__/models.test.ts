@@ -3,7 +3,7 @@
 // a bone or a list the app relies on, a file older than its script, or a file the reader should have
 // turned away, fails here and not as a blank court on someone's phone.
 import { describe, expect, it } from 'vitest';
-import { figureGeo } from '../live/court3d/figure';
+import { figureGeo, readFaces } from '../live/court3d/figure';
 import { merged, placed, readGlb, type Thing } from '../live/court3d/glb';
 import { lookOf, STYLES } from '../live/court3d/look';
 import { PARTS, POSE_NAMES, posed } from '../live/court3d/sideline';
@@ -332,16 +332,23 @@ describe("the 3D court's models", () => {
       // (the widest of one picture's own are the few small ones round the very top of his head, where its picture meets at a point: under a quarter of the sheet)
       expect(wide, 'a triangle stretched across the sheet').toBeLessThan(0.24);
       expect(geo.shorts[1] - geo.shorts[0]).toBeGreaterThan(1);
-      // (his hair's fuzz: his scalp again in layers, the last all the way out, a few thousand triangles; over his hairline,
-      // so none of it is on his face, his brows or his ears)
+      // (his hair's fuzz: his scalp again in layers, the last all the way out, some thousands of triangles; over his
+      // hairline and where a beard grows, so none of it is on his eyes, his brows or his nose)
       const fuzz = geo.fuzz;
       expect(fuzz.index!.count / 3).toBeGreaterThan(2000);
-      expect(fuzz.index!.count / 3).toBeLessThan(8000);
+      expect(fuzz.index!.count / 3).toBeLessThan(12_000);
       expect(most(fuzz.getAttribute('fuzz').array)).toBe(1);
       const fp = fuzz.getAttribute('position');
-      let brow = Infinity;
-      for (let i = 0; i < fp.count; i++) if (fp.getZ(i) > 0.25) brow = Math.min(brow, fp.getY(i));
-      expect(brow, 'fuzz on his face').toBeGreaterThan(6.27);
+      let onFace = 0;
+      for (let i = 0; i < fp.count; i++) if (fp.getZ(i) > 0.25 && Math.abs(fp.getX(i)) < 0.2 && fp.getY(i) > 6.11 && fp.getY(i) < 6.27) onFace++;
+      expect(onFace, 'fuzz on his eyes, brows or nose').toBe(0);
+      // (and faces.bin: MakeHuman's shapes of a face, each found on his head and moving it a little, none a long way)
+      const shapes = readFaces(Uint8Array.from(fs.readFileSync(at('faces.bin'))).buffer, merged(fig).geo);
+      expect(shapes.names.length).toBeGreaterThan(30);
+      for (const [t, name] of shapes.names.entries()) {
+        expect(shapes.at[t].length, `the ${name} shape moves no point of his`).toBeGreaterThan(0);
+        expect(Math.max(...shapes.by[t].map(Math.abs)), `the ${name} shape`).toBeLessThan(0.1);
+      }
       // and the men he is dressed as: each the same man every time, every way of wearing hair turning up over a league,
       // and two men picked at random hardly ever the same at a glance (his hair, his beard, his skin within a shade)
       expect(lookOf(1234)).toEqual(lookOf(1234));
@@ -421,14 +428,14 @@ describe("the 3D court's models", () => {
         }
     }
 
-    // the spectators: under 1150 triangles by the floor (a hand, a nose and lips on each; 250 more for one with hair of his
-    // own, who carries every style of it, all but one folded away) and under five hundred behind, each point marked with the
-    // part of him it is (the crowd's shader moves him by it)
+    // the spectators: under 2150 triangles by the floor (the player's sculpted head on each, a rounder trunk and limbs, a
+    // hand; 250 more for one with hair of his own, who carries every style of it, all but one folded away) and under five
+    // hundred behind, each point marked with the part of him it is (the crowd's shader moves him by it)
     {
       for (const fan of fans) {
         expect(fan.parts.length).toBe(1);
         const styled = Array.from(fan.parts[0].geo.getAttribute('aPart').array).some((v) => v > 1.26 && v < 1.4);
-        expect(triangles(fan)).toBeLessThanOrEqual(FANS_MID.includes(fan.name) ? 500 : styled ? 1400 : 1150);
+        expect(triangles(fan)).toBeLessThanOrEqual(FANS_MID.includes(fan.name) ? 500 : styled ? 2400 : 2150);
         const marks = fan.parts[0].geo.getAttribute('aPart');
         expect(marks?.itemSize).toBe(1);
         // (0 trunk, 1 head, 2 and 3 arms, 4 legs; a mark may carry a little more: a quarter for skin or an end in its own colour, a half for a cap)

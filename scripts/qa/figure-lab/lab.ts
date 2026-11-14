@@ -176,7 +176,8 @@ floor.rotation.x = -Math.PI / 2;
 floor.receiveShadow = true;
 scene.add(floor);
 
-const geo = figureGeo((o) => o, (await loadModels()).figure);
+const models = await loadModels();
+const geo = figureGeo((o) => o, models.figure, new URLSearchParams(location.search).get('shapes') === '0' ? undefined : models.faces);
 const kit = {
   color: '#1d428a',
   trim: '#ffc72c',
@@ -194,6 +195,9 @@ const figs = Array.from({ length: n }, (_, i) => {
   if (q.has('tones')) look.tone = i % SKINS.length;
   if (q.has('tone')) look.tone = num('tone', 0) % SKINS.length;
   look.skin = SKINS[look.tone];
+  // (&real=0..1: how far his head is taken onto MakeHuman's; &mix=name:w,name:w sets shapes of a face, see look.ts shape)
+  if (q.has('real')) look.shape.real = num('real', 1);
+  for (const kv of (q.get('mix') ?? '').split(',').filter(Boolean)) look.shape[kv.split(':')[0]] = Number(kv.split(':')[1]);
   if (q.has('kind') || q.has('kinds')) {
     const kind = (q.has('kinds') ? i : num('kind', 0)) % FACES.length;
     const k = FACES[kind];

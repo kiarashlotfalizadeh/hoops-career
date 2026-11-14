@@ -41,6 +41,12 @@ export interface Look {
   /** His lips' own colour, -1..1: paler and pinker than his skin would have them, to browner and darker. */
   lip: number;
   /**
+   * His face's own shape beyond that, as a mix of the shapes a real head takes (scripts/blender/mh.py, from
+   * MakeHuman: his nose's hump and wings, his lips, his chin, his cheekbones, the fold over his eyes, which of three
+   * peoples' average his face is nearest, how it has aged), each about -1..1: figure.ts puts it on his head.
+   */
+  shape: Record<string, number>;
+  /**
    * His face's shape: how wide, how long and how deep his head is, his jaw's width and length, his nose's width and
    * how far it stands out (each about 1); then how heavy his brow's ridge is and how full his lips are
    * (0..1), how far his eyes' outer corners are tipped up and how wide open he holds them (about 1), and
@@ -121,6 +127,83 @@ export const FACES = [
 const JAW_SLIM = 0.95;
 const LEAN = 0.25;
 
+/**
+ * How far each of the shapes of a face (mh.py's SHAPES) may go, either way (those with a third number only one way,
+ * and only on that share of men): a face is a handful of these, each its own way, and no two men's are the same.
+ */
+const SHAPE_SPREAD: readonly (readonly [string, number, number?])[] = [
+  ['fat', 0.45],
+  ['hump', 0.9],
+  ['flare', 0.8],
+  ['tip', 0.8],
+  ['nostrils', 0.8],
+  ['noseLong', 0.7],
+  ['greek', 0.7],
+  ['curve', 0.7],
+  ['tipUp', 0.55],
+  ['noseOut', 0.55],
+  ['noseBig', 0.7],
+  ['chinOut', 0.7],
+  ['chinWide', 0.7],
+  ['chinLong', 0.55],
+  ['cleft', 0.8, 0.2],
+  ['jawBone', 0.8],
+  ['underbite', 0.4],
+  ['cheekBone', 0.6],
+  ['cheekFull', 0.5],
+  ['cheekIn', 0.45],
+  ['upperLip', 0.8],
+  ['lowerLip', 0.8],
+  ['mouthWide', 0.6],
+  ['bow', 0.7],
+  ['corners', 0.45],
+  ['philtrum', 0.6],
+  ['laugh', 0.6, 0.5],
+  ['hooded', 0.7],
+  ['deepSet', 0.7],
+  ['browOut', 0.6],
+  ['browTilt', 0.55],
+  ['nubian', 0.3],
+  ['temples', 0.5],
+  ['slope', 0.45],
+];
+/** The head's outline (mh.py): a man's is one or two of these, some of the way. */
+const OUTLINES = ['oval', 'round', 'square', 'triangle', 'heart', 'diamond', 'oblong'];
+
+/** A man's mix of the shapes of a face, from his id and his tone (see Look.shape). */
+function shapeOf(r: (salt: number) => number, tone: number, age: number): Record<string, number> {
+  const out: Record<string, number> = {};
+  SHAPE_SPREAD.forEach(([name, most, share], k) => {
+    const roll = r(100 + k);
+    if (share !== undefined) out[name] = r(140 + k) < share ? most * (0.4 + 0.6 * roll) : 0;
+    // (most men near the middle of each, a few a long way out)
+    else out[name] = most * Math.sign(roll - 0.5) * Math.abs(2 * roll - 1) ** 0.8;
+  });
+  const first = Math.floor(r(180) * OUTLINES.length) % OUTLINES.length;
+  const second = (first + 1 + (Math.floor(r(181) * (OUTLINES.length - 1)) % (OUTLINES.length - 1))) % OUTLINES.length;
+  out[OUTLINES[first]] = 0.35 + 0.5 * r(182);
+  out[OUTLINES[second]] = (out[OUTLINES[second]] ?? 0) + 0.35 * r(183);
+  // which people's average his face is nearest: loosely with his tone (the middle tones any of the three), a share
+  // of each, so a face is never only its kind's
+  const dark = Math.min(1, Math.max(0, (tone - 1.5) / 4.5));
+  const a = dark * (0.6 + 0.6 * r(184));
+  const e = (1 - dark) * (0.6 + 0.6 * r(185));
+  const s = (tone >= 1 && tone <= 4 ? 0.9 : 0.25) * r(186) ** 1.5;
+  const sum = a + e + s || 1;
+  out.african = (0.85 * a) / sum;
+  out.caucasian = (0.85 * e) / sum;
+  out.asian = (0.85 * s) / sum;
+  // (the fold at an eye's inner corner goes with that last)
+  out.epicanthus = 0.9 * out.asian + 0.3 * (r(187) - 0.5);
+  // (and every face some of the way onto a real head's anatomy: its cheekbones, the planes of its jaw; see mh.py 'real')
+  out.real = 0.6;
+  // (and a veteran's face has aged: fuller under the eyes, the lines from his nose deeper)
+  out.age = 0.75 * age;
+  out.bags = 0.6 * age + 0.25 * r(188);
+  out.laugh = Math.max(out.laugh ?? 0, 0.5 * age);
+  return out;
+}
+
 /** Hair's natural colours, darkest first. */
 const BLACK = '#17130f';
 const SOFT_BLACK = '#221a14';
@@ -200,7 +283,9 @@ export function lookOf(pid: number): Look {
   const kind = FACES[kinds];
   // (a man's own, off his kind's by as much as a third of the way to either end)
   const off = (at: number, salt: number) => Math.min(1, Math.max(-1, at + span(salt, -0.35, 0.35)));
+  const age = r(36) ** 1.6;
   return {
+    shape: shapeOf(r, tone, age),
     skin: SKINS[tone],
     hair: dyed ?? own,
     brows: own,
@@ -219,7 +304,7 @@ export function lookOf(pid: number): Look {
     temper: span(34, 0.15, 1),
     grin: r(35),
     // (most men in the league are young: a face with lines in it is the veteran's)
-    age: r(36) ** 1.6,
+    age,
     sweat: span(37, 0.55, 1.45),
     lip: span(38, -1, 1),
     face: {

@@ -519,6 +519,8 @@ const CROWD_HEAD = /* glsl */ `
   attribute vec4 aWho;
   attribute vec4 aLook;
   attribute float aPart;
+  // (where on his painted face a point is: arena.py _FACE; the models without one are their own)
+  attribute vec3 aFace;
   uniform float uDim;
   varying vec2 vBounce;
   varying vec4 vFace;
@@ -592,8 +594,9 @@ const CROWD_COLOR = /* glsl */ `
   // (how much of the bowl's light reaches his seat: bowl.ts lit, the same number his seat and his step take; and
   // the less of it, the less colour his clothes show)
   // (where on his face a point of it is, as the model has it: the fragment draws his eyes and his mouth there)
-  // (and where on his trunk a point of his top is: 2; and on his hair: 3)
-  vFace = aPart > 0.5 && aPart < 1.5 && over < 0.1 ? vec4(position, 1.0) : aPart < 0.5 && over < 0.1 ? vec4(position, 2.0) : strands ? vec4(position, hairPiece == ${HAIR.afro}.0 || hairPiece == ${HAIR.curls}.0 ? 3.5 : 3.0) : vec4(0.0);
+  // (and where on his trunk a point of his top is: 2; and on his hair: 1.5)
+  vec3 faced = dot(aFace, aFace) > 0.0 ? aFace : position;
+  vFace = aPart > 0.5 && aPart < 1.5 && over < 0.1 ? vec4(faced, 1.0) : aPart < 0.5 && over < 0.1 ? vec4(faced, 2.0) : strands ? vec4(faced, hairPiece == ${HAIR.afro}.0 || hairPiece == ${HAIR.curls}.0 ? 1.75 : 1.5) : vec4(0.0);
   float reach = abs(aWho.w);
   // (his own number, for the shirt under his top, his jersey's number and his face; how lit he is, for what
   // shows on it; a beard (1) or a woman (-1); glasses)
@@ -625,7 +628,7 @@ const CROWD_MOVE = /* glsl */ `
  * his skin (on some of the women a lipstick), a little colour in some cheeks, a beard (stubble, short, full
  * up his cheeks, or a goatee: its edge broken, not ruled) and glasses (vOwn.zw). Further off the eyes are
  * dark under a brow, and gone before they are too small to hold: then the shade of his eye sockets is what
- * is left, and a far row's faces are a tone, as they are from across a building. His hair (vFace.w 3) has
+ * is left, and a far row's faces are a tone, as they are from across a building. His hair (vFace.w 1.5: between his face's and his top's, so its edge with his face never reads as a shirt) has
  * its strands close to. And his top (a point of his trunk: vFace.w 2), as TOP says (vLook.w; its second
  * colour vLook.rgb): a jacket or a hood open in a V over a shirt with a zip under it, a replica jersey (trim
  * round its neck and its armholes, the tee under it past them, a number on its front and a bigger one on
@@ -695,12 +698,12 @@ const CROWD_FACE = /* glsl */ `
       rim = max(1.0 - smoothstep(0.05, 0.15, ring2), (1.0 - smoothstep(0.03, 0.04, f.x)) * (1.0 - smoothstep(0.005, 0.012, abs(f.y - 2.325))));
     }
     diffuseColor.rgb = c * (1.0 - max(max(eye * 0.82 * (1.0 - close), rim * 0.6), max(mouth * 0.55, max(nostril * 0.6, under * 0.12))) * seen - 0.3 * socket * far);
-  } else if (vFace.w > 2.9) {
+  } else if (vFace.w > 1.2 && vFace.w < 1.9) {
     // hair: its strands, close to, streaked along the way it is combed (back from his face and down); or curls
-    // (an afro, a head of them: vFace.w 3.5), a speckle of tight coils with the hollows between them darker
+    // (an afro, a head of them: vFace.w 1.75), a speckle of tight coils with the hollows between them darker
     vec3 q = vFace.xyz;
     float seen = 1.0 - smoothstep(0.004, 0.02, fwidth(q.y));
-    if (vFace.w > 3.4) {
+    if (vFace.w > 1.65) {
       float coil = fract(sin(dot(floor(q * 26.0), vec3(12.9898, 78.233, 37.719))) * 43758.5453);
       diffuseColor.rgb *= 1.0 + ((coil - 0.5) * 0.7 - 0.12) * seen;
     } else {
@@ -808,13 +811,41 @@ const TOWEL_MOVE = /* glsl */ `
   vec3 elbow = fanAt(vec3(0.67, 0.5, 0.0), 2.0, aWho, instanceMatrix);
   vec3 along = normalize(hand - elbow);
   vec3 across = normalize(cross(along, vec3(0.0, 0.0, 1.0)));
+  vec3 facing = cross(across, along);
   float ph = uTime * 8.0 + beat * 4.0;
+  vec3 cloth = towelAt(position.x, position.y, hand, along, across, facing, ph);
+  // (the way it faces, from the cloth either side of the point: it is lit as it turns over, not a flat strip)
+  vec3 du = towelAt(position.x + 0.02, position.y, hand, along, across, facing, ph) - cloth;
+  vec3 dv = towelAt(position.x, position.y + 0.02, hand, along, across, facing, ph) - cloth;
+  vTowelN = normalize(cross(du, dv));
+  vTowelUv = position.xy;
   float t = position.y;
-  vec3 cloth = hand + along * (0.05 + t * 1.05) + across * position.x * 0.46 * (1.0 - 0.35 * t) - across * cos(ph) * t * t * 0.6;
-  // (it curls across, and ripples down its length)
-  cloth.z += (position.x * position.x * 0.5 + sin(ph * 1.7 + t * 4.5) * 0.16) * t;
   vec3 transformed = mix(hand, cloth, smoothstep(0.05, 0.4, on));`;
-
+/**
+ * Where a point of a towel is: gathered in the hand at its top corner, then streaming out along his arm's swing, the
+ * cloth's width curling across, a fold or two down its length, trailing the way the arm goes and rippling as it
+ * flaps (x across it -0.5..0.5, t along it 0..1).
+ */
+const TOWEL_AT = /* glsl */ `
+  vec3 towelAt(float x, float t, vec3 hand, vec3 along, vec3 across, vec3 facing, float ph) {
+    float gather = 0.35 + 0.65 * smoothstep(0.0, 0.3, t);
+    vec3 p = hand + along * (0.05 + t * 1.05) + across * x * 0.46 * gather * (1.0 - 0.3 * t) - across * cos(ph) * t * t * 0.6;
+    // (it curls across, its edges back; a fold runs down it; it ripples down its length, most at its free end)
+    p += facing * ((x * x * 0.55 - 0.06) * t + sin(x * 9.0 + t * 3.0 + ph * 0.5) * 0.035 * t + sin(ph * 1.7 + t * 4.5 + x * 1.5) * 0.16 * t);
+    return p;
+  }`;
+/** A towel's cloth: terry, its loops a fine grain; a woven band across each end; a short fringe at its free end. */
+const TOWEL_CLOTH = /* glsl */ `
+  float tt = vTowelUv.y;
+  // (the light on it: its own side either way, a top light and the floor's)
+  vec3 n = normalize(vTowelN) * (gl_FrontFacing ? 1.0 : -1.0);
+  float lit = 0.38 + 0.5 * max(0.0, n.y) + 0.32 * abs(n.z) + 0.12 * max(0.0, -n.y);
+  float fine = fwidth(vTowelUv.y * 60.0);
+  float loops = fract(sin(dot(floor(vTowelUv * vec2(120.0, 160.0)), vec2(12.9898, 78.233))) * 43758.5453);
+  float grain = mix(0.86 + 0.14 * loops, 0.93, smoothstep(0.3, 1.0, fine));
+  float band = smoothstep(0.035, 0.03, abs(tt - 0.1)) + smoothstep(0.035, 0.03, abs(tt - 0.9));
+  if (tt > 0.97 && fract(vTowelUv.x * 46.0) > 0.55) discard;
+  diffuseColor.rgb *= lit * grain * (1.0 - 0.18 * band);`;
 /** What someone has in his hands (see PROP_MOVE), and how many of the home fans by the floor bring a sign, and a foam finger. */
 const PROP = { phone: 0, sign: 1, finger: 2, phoneUp: 3 } as const;
 const SIGN_SHARE = 0.2;
@@ -1090,10 +1121,11 @@ export class Crowd {
     this.towelMat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, this.u);
       sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', `#include <common>\nattribute vec4 aWho;${FAN_MOVE}`)
-        .replace('#include <begin_vertex>', TOWEL_MOVE)
-        // (it catches the light as it turns over)
-        .replace('#include <fog_vertex>', '#include <fog_vertex>\n  vColor *= 0.62 + 0.38 * abs(cos(ph + t * 2.0));');
+        .replace('#include <common>', `#include <common>\nattribute vec4 aWho;\nvarying vec3 vTowelN;\nvarying vec2 vTowelUv;${FAN_MOVE}\n${TOWEL_AT}`)
+        .replace('#include <begin_vertex>', TOWEL_MOVE);
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vTowelN;\nvarying vec2 vTowelUv;')
+        .replace('#include <color_fragment>', `#include <color_fragment>\n${TOWEL_CLOTH}`);
     };
     this.towelMat.customProgramCacheKey = () => 'towel';
 
@@ -1403,7 +1435,8 @@ export class Crowd {
 
     // the towels in the hands of those who brought one (see TOWEL_MOVE), each in his seat and on his beat
     const waving = everyone.filter((i) => who[i].kind === 1);
-    const cloth = keep(new PlaneGeometry(1, 1, 1, 3));
+    // (fine enough to fold and ripple: a strip of four quads is a plank)
+    const cloth = keep(new PlaneGeometry(1, 1, 6, 12));
     cloth.translate(0, 0.5, 0);
     cloth.setAttribute('aWho', numbers(waving));
     this.towels = new InstancedMesh(cloth, this.towelMat, waving.length);

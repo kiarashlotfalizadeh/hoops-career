@@ -7,3 +7,7 @@ declare module '*.glb?url' {
   const url: string;
   export default url;
 }
+declare module '*.bin?url' {
+  const url: string;
+  export default url;
+}

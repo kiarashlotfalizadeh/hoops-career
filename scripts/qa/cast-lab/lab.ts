@@ -77,7 +77,10 @@ const winner: 0 | 1 = before[0] > before[1] ? 0 : 1;
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const paints = readPaints(canvas);
 const kits = matchKits(league.teams[H].colors, league.teams[AW].colors);
-const scene = new CourtScene(canvas, paints.ball, paints.ballSeam, await loadModels());
+const models = await loadModels();
+// (?shapes=0: every face the sculpt's own, without MakeHuman's shapes: see figure.ts ownShape)
+if (new URLSearchParams(location.search).get('shapes') === '0') models.faces = undefined;
+const scene = new CourtScene(canvas, paints.ball, paints.ballSeam, models);
 const floorCv = document.createElement('canvas');
 const t0 = league.teams[H];
 const floor: CourtFloor = { kind: 'home', abbrev: t0.abbrev, name: t0.name, colors: t0.colors, paint: kits[0].color, trim: kits[0].trim, mark: 'circle' };

@@ -316,12 +316,162 @@ export interface Geo {
   shorts: [number, number];
   /** His hair's fuzz: the scalp again in layers, each a little further out (see fuzzOf). */
   fuzz: BufferGeometry;
+  /** The shapes a face can take (faces.bin: see readFaces), on the body's points; null where the file didn't come. */
+  shapes: Shapes | null;
   blob: BufferGeometry;
   ring: BufferGeometry;
 }
 
+/**
+ * The shapes a face can take, each a move of some of the body's points (`at`, its points; `by`, how far each, ft:
+ * three to a point). A man's face is his own mix of them (look.ts `shape`), put on his head once (`ownShape`).
+ */
+export interface Shapes {
+  names: string[];
+  at: Int32Array[];
+  by: Float32Array[];
+}
+
+/**
+ * faces.bin (scripts/blender/figure.py faces_bin: MakeHuman's shapes of a face, carried over onto our head), its
+ * points found on the body's by their place (both on the same grid): one point of the file may be several of the
+ * body's (a seam in the sheet).
+ */
+export function readFaces(file: ArrayBuffer, geo: BufferGeometry): Shapes {
+  const head = new DataView(file);
+  if (file.byteLength < 12 || head.getUint32(0, true) !== 0x45434146) throw new Error('faces.bin: not one');
+  const metaLen = head.getUint32(8, true);
+  const meta = JSON.parse(new TextDecoder().decode(new Uint8Array(file, 12, metaLen))) as { names: string[]; scales: number[]; points: number; grid: number };
+  let at = 12 + metaLen;
+  const places = new Int16Array(file.slice(at, at + meta.points * 6));
+  at += meta.points * 6;
+  at += -at & 3;
+  const pos = geo.getAttribute('position');
+  const of = new Map<string, number[]>();
+  for (let v = 0; v < pos.count; v++) {
+    const key = `${Math.round(pos.getX(v) / meta.grid)},${Math.round(pos.getY(v) / meta.grid)},${Math.round(pos.getZ(v) / meta.grid)}`;
+    const list = of.get(key);
+    if (list) list.push(v);
+    else of.set(key, [v]);
+  }
+  const body: number[][] = [];
+  // (a point a hair either side of a step of the grid, as Blender wrote it and as the file has it, is the same point)
+  const found = new Set<number>();
+  for (let k = 0; k < meta.points; k++) {
+    const [x, y, z] = [places[k * 3], places[k * 3 + 1], places[k * 3 + 2]];
+    let list = of.get(`${x},${y},${z}`);
+    for (let d = 0; !list && d < 27; d++) if (d !== 13) list = of.get(`${x + (d % 3) - 1},${y + (Math.floor(d / 3) % 3) - 1},${z + Math.floor(d / 9) - 1}`);
+    body.push(list ?? []);
+    for (const v of list ?? []) found.add(v);
+  }
+  if (typeof window !== 'undefined' && (window as { faceDebug?: unknown }).faceDebug !== undefined)
+    (window as { faceDebug?: unknown }).faceDebug = { points: meta.points, missing: body.filter((b) => !b.length).length, found: found.size };
+  const out: Shapes = { names: meta.names, at: [], by: [] };
+  meta.names.forEach((_name, t) => {
+    const n = head.getUint32(at, true);
+    at += 4;
+    const idx = new Uint16Array(file.slice(at, at + n * 2));
+    at += n * 2;
+    at += -at & 3;
+    const q = new Int8Array(file.slice(at, at + n * 3));
+    at += n * 3;
+    at += -at & 3;
+    const vs: number[] = [];
+    const ds: number[] = [];
+    for (let i = 0; i < n; i++)
+      for (const v of body[idx[i]]) {
+        vs.push(v);
+        ds.push(q[i * 3] * meta.scales[t], q[i * 3 + 1] * meta.scales[t], q[i * 3 + 2] * meta.scales[t]);
+      }
+    out.at.push(Int32Array.from(vs));
+    out.by.push(Float32Array.from(ds));
+  });
+  return out;
+}
+
+/**
+ * A man's own head: the body's shape (`base`, shared by every man) with his face's mix of the shapes put on it, as
+ * the attribute `aShape` (how far each point moves, ft: the material adds it: see stuffMaterial) and the way each
+ * point now faces (its normal, turned by as much as the triangles round it are). Everything else is shared. `from`
+ * says which of the body's points each of base's is (the fuzz's layers are copies), where they are not the same.
+ */
+export function ownShape(base: BufferGeometry, shapes: Shapes, mix: Record<string, number>, from?: Int32Array): BufferGeometry {
+  const n = base.getAttribute('position').count;
+  const total = from ? Math.max(...shapes.at.map((a) => (a.length ? Math.max(...a) : 0))) + 1 : n;
+  const move = new Float32Array(total * 3);
+  shapes.names.forEach((name, t) => {
+    const w = mix[name] ?? 0;
+    if (!w) return;
+    const at = shapes.at[t];
+    const by = shapes.by[t];
+    for (let i = 0; i < at.length; i++) {
+      const v = at[i] * 3;
+      move[v] += by[i * 3] * w;
+      move[v + 1] += by[i * 3 + 1] * w;
+      move[v + 2] += by[i * 3 + 2] * w;
+    }
+  });
+  const shift = new Float32Array(n * 3);
+  for (let v = 0; v < n; v++) {
+    const src = from ? from[v] : v;
+    if (src * 3 + 2 < move.length) shift.set(move.subarray(src * 3, src * 3 + 3), v * 3);
+  }
+  const g = new BufferGeometry();
+  for (const [k, a] of Object.entries(base.attributes)) g.setAttribute(k, a);
+  g.setIndex(base.index);
+  g.setAttribute('aShape', new BufferAttribute(shift, 3));
+  // (each moved point's normal turned as the triangles round it are: the sum of their faces before and after)
+  const pos = base.getAttribute('position');
+  const nor = base.getAttribute('normal');
+  const was = new Float32Array(n * 3);
+  const now = new Float32Array(n * 3);
+  const index = base.index!;
+  const p = [new Vector3(), new Vector3(), new Vector3()];
+  const q = [new Vector3(), new Vector3(), new Vector3()];
+  const e1 = new Vector3();
+  const e2 = new Vector3();
+  const moved = (v: number) => shift[v * 3] !== 0 || shift[v * 3 + 1] !== 0 || shift[v * 3 + 2] !== 0;
+  for (let t = 0; t < index.count; t += 3) {
+    const vs = [index.getX(t), index.getX(t + 1), index.getX(t + 2)];
+    if (!vs.some(moved)) continue;
+    vs.forEach((v, k) => {
+      p[k].fromBufferAttribute(pos, v);
+      q[k].set(p[k].x + shift[v * 3], p[k].y + shift[v * 3 + 1], p[k].z + shift[v * 3 + 2]);
+    });
+    const a = e1.subVectors(p[1], p[0]).cross(e2.subVectors(p[2], p[0]));
+    const [ax, ay, az] = [a.x, a.y, a.z];
+    const b = e1.subVectors(q[1], q[0]).cross(e2.subVectors(q[2], q[0]));
+    for (const v of vs) {
+      was[v * 3] += ax;
+      was[v * 3 + 1] += ay;
+      was[v * 3 + 2] += az;
+      now[v * 3] += b.x;
+      now[v * 3 + 1] += b.y;
+      now[v * 3 + 2] += b.z;
+    }
+  }
+  const turned = new Float32Array(n * 3);
+  for (let v = 0; v < n; v++) {
+    let x = nor.getX(v);
+    let y = nor.getY(v);
+    let z = nor.getZ(v);
+    const len = Math.hypot(was[v * 3], was[v * 3 + 1], was[v * 3 + 2]);
+    if (len > 0) {
+      x += (now[v * 3] - was[v * 3]) / len;
+      y += (now[v * 3 + 1] - was[v * 3 + 1]) / len;
+      z += (now[v * 3 + 2] - was[v * 3 + 2]) / len;
+    }
+    const l = Math.hypot(x, y, z) || 1;
+    turned[v * 3] = x / l;
+    turned[v * 3 + 1] = y / l;
+    turned[v * 3 + 2] = z / l;
+  }
+  g.setAttribute('normal', new BufferAttribute(turned, 3));
+  return g;
+}
+
 /** The shapes every figure shares (built once; `keep` takes each to throw away with the scene). */
-export function figureGeo(keep: <T extends { dispose(): void }>(o: T) => T, model: Map<string, Thing>): Geo {
+export function figureGeo(keep: <T extends { dispose(): void }>(o: T) => T, model: Map<string, Thing>, faces?: ArrayBuffer): Geo {
   const fig = model.get('figure');
   if (!fig?.bones) throw new Error('figure.glb: no figure');
   const { geo, materials } = merged(fig);
@@ -334,6 +484,12 @@ export function figureGeo(keep: <T extends { dispose(): void }>(o: T) => T, mode
   const inverse = fig.bones.map((b) => b.inverse);
   const { shorts, piece } = sheetUv(geo, materials, order, inverse);
   const fuzz = keep(fuzzOf(geo, piece));
+  let shapes: Shapes | null = null;
+  try {
+    if (faces) shapes = readFaces(faces, geo);
+  } catch (e) {
+    console.warn(e);
+  }
   const blob = keep(new CircleGeometry(1.25, 20));
   blob.rotateX(-Math.PI / 2);
   const ring = keep(new RingGeometry(1.55, 1.85, 28));
@@ -355,7 +511,7 @@ export function figureGeo(keep: <T extends { dispose(): void }>(o: T) => T, mode
     return g;
   };
   geo.dispose();
-  return { body: wearing(null), wearing, wears: materials, order, inverse, shorts, fuzz, blob, ring };
+  return { body: wearing(null), wearing, wears: materials, order, inverse, shorts, fuzz, shapes, blob, ring };
 }
 
 /**
@@ -388,7 +544,12 @@ function fuzzOf(geo: BufferGeometry, piece: string[]): BufferGeometry {
     const ny = (pos.getY(v) - HEAD_REST - HEAD_MID.y) / HEAD_SIZE[1];
     const nz = (pos.getZ(v) - HEAD_MID.z) / HEAD_SIZE[2];
     const len = Math.hypot(nx, ny, nz);
-    return len > 0 && ny / len > hairlineAt(Math.atan2(Math.abs(nx), nz)) - 0.2;
+    if (!(len > 0)) return false;
+    // (and where a beard grows: his jaw and chin, round his mouth, his cheeks up to his sideburns. Its strands stand
+    // where his picture says there is a beard, and nowhere else: a clean-shaven man's are none, see stuffMaterial)
+    const [ux, uy, uz] = [Math.abs(nx) / len, ny / len, nz / len];
+    if (uy < 0.3 && uy > -0.97 && uz > -0.3 + 0.35 * Math.max(0, uy) && !(uz > 0.35 && uy > -0.12)) return true;
+    return uy > hairlineAt(Math.atan2(ux, uz)) - 0.2;
   };
   const keep = new Map<number, number>();
   const from: number[] = [];
@@ -417,6 +578,8 @@ function fuzzOf(geo: BufferGeometry, piece: string[]): BufferGeometry {
   for (let l = 0; l < FUZZ_LAYERS; l++) layer.fill((l + 1) / FUZZ_LAYERS, l * n, (l + 1) * n);
   out.setAttribute('fuzz', new BufferAttribute(layer, 1));
   out.setIndex(Array.from({ length: FUZZ_LAYERS }, (_v, l) => tris.map((v) => v + l * n)).flat());
+  // (which of the body's points each of its points is: a man's own face moves them with it, see ownShape)
+  out.userData.from = Int32Array.from({ length: n * FUZZ_LAYERS }, (_v, k) => from[k % n]);
   return out;
 }
 
@@ -615,6 +778,8 @@ const STUFF = {
   hair: [0.84, 0.16, 0],
   curl: [0.95, 0.1, 0],
   beard: [0.88, 0.12, 0],
+  // (stubble is hair too, but the ends of it under his skin: no strand of it stands off him, see fuzzOf)
+  stubble: [0.84, 0.3, 0],
   vest: [0.86, 0.85, 1],
   // (a number is pressed on: smoother than the knit round it, and none of its sheen)
   print: [0.55, 0.12, 0],
@@ -1363,7 +1528,7 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
             const g = 0.55 + 0.6 * strand + 0.25 * (speck - 0.5) + 0.2 * (fine2 - 0.5);
             to([brows[0] * g + 0.03 * skin[0], brows[1] * g + 0.02 * skin[1], brows[2] * g + 0.015 * skin[2]], on);
           }
-          made('beard', sstep(0.15, 0.65, on));
+          made(look.beard === 1 ? 'stubble' : 'beard', sstep(0.15, 0.65, on));
           lift = Math.max(lift, deep);
         }
       }
@@ -2210,10 +2375,10 @@ const PORES_DEEP = 0.00014;
 const TUFTS = 110;
 const TUFTS_DEEP = 0.0009;
 /** How far past the line where the light stops falling on his skin it still comes out of it, warmer (a share of the turn: see RE_Direct_Skin). */
-const WRAP_SKIN = '0.75';
+const WRAP_SKIN = '0.55';
 /** How much light of its own his head has (a share of its colour), for the lightest skin; the darkest has this many times that again (see uTone). */
-const FACE_FILL = '0.32';
-const FACE_FILL_DARK = '3.2';
+const FACE_FILL = '0.25';
+const FACE_FILL_DARK = '2.6';
 /** How much of a lamp behind him comes through his ears and the wings of his nose toward the camera (a share of its light on his skin's colour). */
 const THROUGH = '2.4';
 /**
@@ -2667,6 +2832,11 @@ const PAPILLAE = 300;
 const PAPILLAE_DEEP = 0.00025;
 /** Above his ears' strip on the sheet (in uv): his head's own picture. */
 const INSIDE_V = (1 - (R_EAR[1] - 2) / SHEET).toFixed(4);
+/**
+ * How far forward (ft, as built) the top of his neck up inside his head is his mouth's dark: behind that, what is
+ * seen of it past the corner of his jaw is his neck, lit as his skin is, not a black hole under his ear.
+ */
+const INSIDE_FRONT = '0.18';
 /** The dark inside his mouth, as the material draws the inside of his head (linear). */
 const MOUTH_DARK = 'vec3( 0.022, 0.006, 0.005 )';
 
@@ -2685,7 +2855,7 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
     // (and where each point of him is as built, for his skin's grain: see PORES)
     // (and his face is his own shape: the point moved out or in, and the way it faces turned with the slope of that)
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', `#include <common>\nuniform sampler2D uStuff;\nvarying vec3 vRest;\n${FACE_SHAPE}\n${FACE_MOVE}`)
+      .replace('#include <common>', `#include <common>\nuniform sampler2D uStuff;\nattribute vec3 aShape;\nvarying vec3 vRest;\n${FACE_SHAPE}\n${FACE_MOVE}`)
       .replace(
         '#include <beginnormal_vertex>',
         /* glsl */ `#include <beginnormal_vertex>
@@ -2713,7 +2883,7 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
       )
       .replace(
         '#include <begin_vertex>',
-        `#include <begin_vertex>\nvRest = position;\ntransformed += faceOff;\nif ${ON_HEAD('uv')} transformed += normal * textureLod( uStuff, uv, 0.0 ).b * ${HAIR_MAX.toFixed(3)};`,
+        `#include <begin_vertex>\nvRest = position;\ntransformed += faceOff + aShape;\nif ${ON_HEAD('uv')} transformed += normal * textureLod( uStuff, uv, 0.0 ).b * ${HAIR_MAX.toFixed(3)};`,
       );
     // (his hair's fuzz: each layer its share of the way out past his hair, which goes further on hair left long)
     if (fuzz)
@@ -2737,6 +2907,15 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
         // edge as the picture does, so nothing his skin has stops in a step there)
         float skinK = ${ON_HEAD('vMapUv')} ? smoothstep( 0.35, 0.97, stuff.g ) : smoothstep( 0.92, 0.98, stuff.g );
         skinWrap = skinK;
+        // (and no skin is one colour: broad mottling, a finer unevenness, and here and there a redder patch, as a
+        // living skin has and a wax one never does)
+        if ( skinK > 0.0 ) {
+          float mot = noise3( vRest * 9.0 ) - 0.5;
+          float grain = noise3( vRest * 55.0 + 7.3 ) - 0.5;
+          float blot = smoothstep( 0.6, 0.82, noise3( vRest * 23.0 + 3.1 ) );
+          diffuseColor.rgb *= 1.0 + skinK * ( 0.12 * mot + 0.07 * grain );
+          diffuseColor.rgb *= mix( vec3( 1.0 ), vec3( 1.03, 0.9, 0.88 ), skinK * ( 0.5 * max( 0.0, mot ) + 0.22 * blot ) );
+        }
         ${
           fuzz
             ? /* glsl */ `// (his hair's fuzz: a strand where one stands, each a run of hairs laid back over his head, fewer in each layer
@@ -2850,7 +3029,7 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
         // (the inside of his head and neck, seen through his open mouth past his teeth, is the dark of his mouth, not the
         // back of his skin, nor the top of his neck where it goes up inside his head; but for his ears, whose strip is
         // along the foot of his head's picture, and his hair's fuzz)
-        float inside = ${fuzz ? '0.0' : `vRest.y > ${(HEAD_REST - 0.6).toFixed(2)} && ( ${ON_HEAD('vMapUv')} ? ! gl_FrontFacing && vMapUv.y > ${INSIDE_V} : skinK > 0.5 && ( ! gl_FrontFacing || length( ( vRest - ${HEAD_C} ) / ${HEAD_S} ) < 0.92 ) ) ? 1.0 : 0.0`};
+        float inside = ${fuzz ? '0.0' : `vRest.y > ${(HEAD_REST - 0.6).toFixed(2)} && ( ${ON_HEAD('vMapUv')} ? ! gl_FrontFacing && vMapUv.y > ${INSIDE_V} : skinK > 0.5 && ( ! gl_FrontFacing || length( ( vRest - ${HEAD_C} ) / ${HEAD_S} ) < 0.92 && vRest.z > ${INSIDE_FRONT} ) ) ? 1.0 : 0.0`};
         // (but the inside of his lips, along the line of his mouth, is their own wet red, going into the dark)
         float lipIn = 0.0;
         if ( inside > 0.0 ) {
@@ -2961,7 +3140,7 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
         '#include <lights_physical_fragment>',
         /* glsl */ `#include <lights_physical_fragment>
         // (skin has a soft edge of its own against the light, warmer than cloth's)
-        material.sheenColor = mix( stuff.g * mix( vec3( 1.0 ), diffuseColor.rgb, 0.45 ) * 0.7, vec3( 0.95, 0.6, 0.45 ) * ( 0.1 + 0.12 * uTone ), skinK );
+        material.sheenColor = mix( stuff.g * mix( vec3( 1.0 ), diffuseColor.rgb, 0.45 ) * 0.7, vec3( 0.95, 0.6, 0.45 ) * ( 0.05 + 0.08 * uTone ), skinK );
         // (skin gives back less of a lamp than the default does, at its face: a skin's is near 0.028 against plastic's 0.04)
         material.specularColor *= 1.0 - 0.3 * skinK;`,
       );
@@ -3514,7 +3693,15 @@ export class Fig {
     for (const k of [B.shl, B.shr]) scale(k, thick * leg * low, s, thick * leg * low);
     for (const k of [B.hal, B.har, B.ftl, B.ftr]) scale(k, s, s, s);
     for (const hand of DIGIT_BONES) for (const [k1, k2] of hand) for (const k of [k1, k2]) scale(k, s, s, s);
-    const mesh = new SkinnedMesh(geo.wearing(STYLES[look.style].piece, gear.shoe.high), mat);
+    // (his face his own shape: MakeHuman's shapes of a face, in his mix, on his head; see ownShape)
+    let worn = geo.wearing(STYLES[look.style].piece, gear.shoe.high);
+    let fuzzGeo = geo.fuzz;
+    if (geo.shapes) {
+      worn = ownShape(worn, geo.shapes, look.shape);
+      fuzzGeo = ownShape(geo.fuzz, geo.shapes, look.shape, geo.fuzz.userData.from as Int32Array);
+      this.own.push(worn, fuzzGeo);
+    }
+    const mesh = new SkinnedMesh(worn, mat);
     this.mesh = mesh;
     const bones = new Skeleton(
       geo.order.map((k) => this.bones[k]),
@@ -3528,11 +3715,11 @@ export class Fig {
     mesh.frustumCulled = false;
     this.group.add(mesh);
     // (his hair's fuzz, on the same bones; a shaved head has none, and it casts no shadow of its own)
-    this.fuzz = new SkinnedMesh(geo.fuzz, fuzzMat);
+    this.fuzz = new SkinnedMesh(fuzzGeo, fuzzMat);
     this.fuzz.bind(bones, new Matrix4());
     this.fuzz.frustumCulled = false;
     this.fuzz.receiveShadow = true;
-    this.fuzz.visible = STYLES[look.style].name !== 'shaved';
+    this.fuzz.visible = STYLES[look.style].name !== 'shaved' || look.beard > 1;
     this.group.add(this.fuzz);
     const dark = new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.05, depthWrite: false });
     this.shadow = new Mesh(geo.blob, dark);

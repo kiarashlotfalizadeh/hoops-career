@@ -24,11 +24,13 @@ const root = join(here, '..', '..');
 export const MODELS_DIR = join(root, 'src/ui/live/court3d/models');
 /** Each model, and the scripts here it is built from: its own, and the ones that one imports. */
 export const SOURCES: Record<string, string[]> = {
-  figure: ['figure.py', 'lib.py'],
-  people: ['people.py', 'figure.py', 'lib.py'],
-  arena: ['arena.py', 'lib.py'],
+  figure: ['figure.py', 'lib.py', 'mh.py'],
+  people: ['people.py', 'figure.py', 'lib.py', 'mh.py'],
+  arena: ['arena.py', 'lib.py', 'figure.py', 'mh.py'],
 };
 const MODELS = Object.keys(SOURCES);
+/** What a model's script writes beside its .glb, for the app to read with it. */
+export const EXTRAS: Record<string, string[] | undefined> = { figure: ['faces.bin'] };
 /** Which way of packing wrote a file. Raise it when pack() changes what it writes: the test then asks for a rebuild. */
 export const PACK = 2;
 /**
@@ -428,6 +430,12 @@ async function main(argv: string[]): Promise<number> {
         const after = pack(before, notes);
         same(before, after);
         put(join(out, `${m}.glb`), after);
+        // (and what a model writes beside itself: the figure's faces.bin, see figure.py faces_bin)
+        for (const extra of EXTRAS[m] ?? []) {
+          const at = join(packOnly ? out : raw, extra);
+          if (!existsSync(at)) throw new Error(`${m}.py wrote no ${extra}`);
+          if (!packOnly) put(join(out, extra), readFileSync(at));
+        }
         console.log(`[${m}] packed ${kB(before.length)} to ${kB(after.length)}${notes.length ? ` (${notes.join('; ')})` : ''}, ${secs()}`);
         return { m, bytes: after.length, line: `${m.padEnd(7)}${secs().padStart(8)}  ${kB(before.length).padStart(7)} to ${kB(after.length)}` };
       } catch (e) {
