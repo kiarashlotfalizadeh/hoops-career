@@ -628,6 +628,100 @@ const CAST_GRAIN_COLOR = /* glsl */ `
     float castFine = 1.0 - smoothstep(0.5, 1.4, length(fwidth(castG)));
     diffuseColor.rgb *= 1.0 + castFine * vCastBeard * (0.55 * castGrain(castG) - 0.3);
   }`;
+/**
+ * What everyone round the floor is made of, as the players are (figure.ts): skin that has a shine and is never one
+ * colour, cloth that hangs in folds, hair that is a mass of it and not a cap. Each point knows which part of him it is
+ * (aPart) and where on him it is as built; the rest is worked out where it is drawn, and gone before it is finer than
+ * the picture's dots. For a material's `onBeforeCompile`, after its own: `declared` says its vertex shader has aPart already.
+ */
+const PPL_FOLDS = { loose: 0.055, suit: 0.018 };
+function peopleShade(sh: { vertexShader: string; fragmentShader: string }, declared: boolean) {
+  const f = (v: number) => v.toFixed(1);
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <common>', `#include <common>\n${declared ? '' : 'attribute float aPart;\n'}varying float vPplPart;\nvarying vec3 vPplAt;`)
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vPplPart = aPart;\n  vPplAt = position;');
+  sh.fragmentShader = sh.fragmentShader
+    .replace(
+      '#include <common>',
+      /* glsl */ `#include <common>
+  varying float vPplPart;
+  varying vec3 vPplAt;
+  float pplHash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+  float pplNoise(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mix(pplHash(i), pplHash(i + vec3(1.0, 0.0, 0.0)), f.x), mix(pplHash(i + vec3(0.0, 1.0, 0.0)), pplHash(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
+      mix(mix(pplHash(i + vec3(0.0, 0.0, 1.0)), pplHash(i + vec3(1.0, 0.0, 1.0)), f.x), mix(pplHash(i + vec3(0.0, 1.0, 1.0)), pplHash(i + 1.0), f.x), f.y), f.z);
+  }
+  // (a bump from a height in ft, by how it changes across the screen: as figure.ts's knitNormal)
+  vec3 pplBump(vec3 at, vec3 n, vec2 dH, float face) {
+    vec3 sx = dFdx(at);
+    vec3 sy = dFdy(at);
+    vec3 r1 = cross(sy, n);
+    vec3 r2 = cross(n, sx);
+    float det = dot(sx, r1) * face;
+    return normalize(abs(det) * n - sign(det) * (dH.x * r1 + dH.y * r2));
+  }
+  float pplSkin = 0.0;
+  float pplHair = 0.0;
+  float pplCloth = 0.0;
+  float pplH = 0.0;`,
+    )
+    .replace(
+      '#include <color_fragment>',
+      /* glsl */ `#include <color_fragment>
+  pplSkin = vPplPart < 0.5 || abs(vPplPart - ${f(PART.lip)}) < 0.5 ? 1.0 : 0.0;
+  pplHair = (vPplPart > 0.5 && vPplPart < ${f(PART.brow + 0.5)}) || (vPplPart > ${f(PART.beard - 0.5)} && vPplPart < ${f(PART.strap + 0.5)}) ? 1.0 : 0.0;
+  pplCloth = (vPplPart > ${f(PART.white - 0.5)} && vPplPart < ${f(PART.cloth + 0.5)}) || (vPplPart > ${f(PART.suit - 0.5)} && vPplPart < ${f(PART.top + 0.5)}) || vPplPart > ${f(PART.towel - 0.5)} ? 1.0 : 0.0;
+  if (pplSkin > 0.5) {
+    // (no skin is one colour: broad mottling, a redder patch here and there)
+    float mot = pplNoise(vPplAt * 9.0) - 0.5;
+    diffuseColor.rgb *= (1.0 + 0.12 * mot) * mix(vec3(1.0), vec3(1.03, 0.9, 0.88), 0.5 * max(0.0, mot));
+  } else if (pplCloth > 0.5) {
+    // (cloth hangs in folds, creased: a suit's are few and shallow, a warm-up's and a pair of trousers' deeper)
+    float seen = 1.0 - smoothstep(0.35, 0.9, length(fwidth(vPplAt * 5.0)));
+    if (seen > 0.0) {
+      float tailored = vPplPart > ${f(PART.suit - 0.5)} && vPplPart < ${f(PART.lapel + 0.5)} || abs(vPplPart - ${f(PART.tie)}) < 0.5 ? 1.0 : 0.0;
+      float warp = pplNoise(vPplAt * 1.3 + 4.0) - 0.5;
+      vec3 q = vec3(vPplAt.x * 5.6 + warp * 2.0, vPplAt.y * 1.1 + 0.5 * abs(vPplAt.x), vPplAt.z * 5.6 - warp * 2.0);
+      float a = pplNoise(q);
+      float fold = 0.4 * a + 0.3 * pplNoise(q * 2.4 + 3.3) + 0.6 * abs(2.0 * a - 1.0);
+      pplH = mix(${PPL_FOLDS.loose}, ${PPL_FOLDS.suit}, tailored) * seen * fold;
+      diffuseColor.rgb *= 1.0 - 0.4 * seen * (1.0 - smoothstep(0.0, 0.55, fold));
+    }
+  } else if (pplHair > 0.5) {
+    // (hair is lumps of it and a grain over them, darker down between)
+    float seen = 1.0 - smoothstep(0.3, 0.9, length(fwidth(vPplAt * 36.0)));
+    float lump = pplNoise(vPplAt * 36.0);
+    pplH = 0.012 * seen * lump;
+    diffuseColor.rgb *= mix(1.0, 0.55 + 0.85 * lump, seen);
+  }`,
+    )
+    .replace(
+      '#include <roughnessmap_fragment>',
+      /* glsl */ `#include <roughnessmap_fragment>
+  if (pplSkin > 0.5) roughnessFactor = 0.55 + 0.12 * (pplNoise(vPplAt * 7.0) - 0.5);
+  else if (pplHair > 0.5) roughnessFactor = 0.86;
+  else if (abs(vPplPart - ${f((PART.eye + PART.iris) / 2)}) < 1.0) roughnessFactor = 0.12;
+  else if (abs(vPplPart - ${f(PART.shoe)}) < 0.5) roughnessFactor = 0.5;
+  else if (abs(vPplPart - ${f(PART.metal)}) < 0.5) roughnessFactor = 0.3;`,
+    )
+    .replace(
+      '#include <normal_fragment_maps>',
+      /* glsl */ `#include <normal_fragment_maps>
+  if (pplH > 0.0) normal = pplBump(-vViewPosition, normal, vec2(dFdx(pplH), dFdy(pplH)), faceDirection);`,
+    )
+    .replace(
+      '#include <lights_fragment_end>',
+      /* glsl */ `#include <lights_fragment_end>
+  // (skin gives back the lamps, not the whole lit roof; and what light comes to it off the building is warmer on it)
+  if (pplSkin > 0.5) {
+    reflectedLight.indirectSpecular *= 0.5;
+    reflectedLight.indirectDiffuse *= vec3(1.04, 0.99, 0.96);
+  }`,
+    );
+}
 const CAST_NORMAL = /* glsl */ `
   objectNormal = castTurn(normalize(mix(objectNormal, aToN, aMix)));`;
 const CAST_MOVE = /* glsl */ `
@@ -1064,6 +1158,7 @@ class Walker {
       // his colours, a point at a time: the part's, under its baked shade; a part he doesn't have is left out
       const shade = suit.geo.getAttribute('color');
       const col = new Float32Array(shade.count * 3);
+      const which = new Float32Array(shade.count);
       const c = new Color();
       const corners: number[] = [];
       const all = suit.geo.index!.array;
@@ -1075,6 +1170,7 @@ class Walker {
         c.set(hex);
         // (a beard's edge thins out to his skin: how much of it shows is its shade's blue, see FADED)
         const faded = FADED.has(part.name);
+        which.fill(PART[part.name as PartName] ?? PART.cloth, part.from, part.from + part.count);
         for (let i = part.from; i < part.from + part.count; i++) {
           const k = faded ? edge.copy(skinTone).lerp(c, shade.getZ(i)) : c;
           col.set([k.r * shade.getX(i), k.g * shade.getY(i), k.b * (faded ? shade.getY(i) : shade.getZ(i))], i * 3);
@@ -1082,6 +1178,8 @@ class Walker {
         for (let i = part.start; i < part.start + part.size; i++) corners.push(all[i]);
       }
       geo.setAttribute('color', new BufferAttribute(col, 3));
+      // (and which part: what it is made of, see peopleShade)
+      geo.setAttribute('aPart', new BufferAttribute(which, 1));
       geo.setIndex(corners);
       const mesh = new SkinnedMesh(geo, mat);
       const skeleton = new Skeleton(
@@ -1513,6 +1611,10 @@ export class Sideline {
     this.refMat = keep(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.8, vertexColors: true, side: DoubleSide }));
     this.coachMat = keep(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.8, vertexColors: true, side: DoubleSide }));
     this.benchMat = keep(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.82, vertexColors: true, side: DoubleSide }));
+    for (const m of [this.refMat, this.coachMat, this.benchMat]) {
+      m.onBeforeCompile = (sh) => peopleShade(sh, false);
+      m.customProgramCacheKey = () => 'walker';
+    }
     this.group.add(this.walkers);
 
     // the chairs: each bench's, and the table crew's behind the table
@@ -1686,8 +1788,9 @@ export class Sideline {
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', `#include <common>${CAST_GRAIN}`)
         .replace('#include <color_fragment>', `#include <color_fragment>${CAST_GRAIN_COLOR}`);
+      peopleShade(sh, true);
     };
-    mat.customProgramCacheKey = () => 'cast3';
+    mat.customProgramCacheKey = () => 'cast4';
     this.castMats.push(mat);
     const row = new InstancedBufferAttribute(new Float32Array(ROWS), 1);
     const life = new InstancedBufferAttribute(new Float32Array(ROWS * 4), 4);
@@ -1849,9 +1952,10 @@ export class Sideline {
   /** How much of their light the benches keep (the coaches with them): the men on the floor by the far sideline stand out from their own bench. */
   dim(bench: number) {
     // (not as far down as the scene asks: their warm-ups already set them apart from the men on the floor)
-    for (const m of this.castMats) m.color.setScalar(0.5 + 0.5 * bench);
-    this.coachMat.color.setScalar(0.6 + 0.4 * bench);
-    this.benchMat.color.setScalar(0.5 + 0.5 * bench);
+    // (and less far again now the stands behind them sit a stop under the floor: see rig.ts SPILL)
+    for (const m of this.castMats) m.color.setScalar(0.7 + 0.3 * bench);
+    this.coachMat.color.setScalar(0.75 + 0.25 * bench);
+    this.benchMat.color.setScalar(0.7 + 0.3 * bench);
   }
 
   /**

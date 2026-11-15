@@ -24,10 +24,10 @@ const NEAR = 20;
 
 /** The four lamps: where from (x along the floor, y up, z toward the camera), colour, how bright, how many dots its shadow map is across. */
 const LAMPS: readonly (readonly [number, number, number, number, number, number])[] = [
-  [34, 78, 40, 0xfff6ea, 1.25, 2048],
-  [-34, 78, 40, 0xfff6ea, 0.8, 2048],
-  [-40, 72, -44, 0xf3f6ff, 0.8, 1024],
-  [40, 72, -44, 0xf3f6ff, 0.8, 1024],
+  [34, 78, 40, 0xfff3e2, 2.0, 2048],
+  [-34, 78, 40, 0xfff3e2, 1.2, 2048],
+  [-40, 72, -44, 0xeef3ff, 1.15, 1024],
+  [40, 72, -44, 0xeef3ff, 1.15, 1024],
 ];
 /**
  * The lamps before this one have their shadows drawn afresh every frame (the camera's side: the key's is
@@ -37,23 +37,25 @@ const LAMPS: readonly (readonly [number, number, number, number, number, number]
  */
 const EVERY_FRAME = 2;
 /** The edge light from behind the far stands, and the soft one from the camera's side. */
-const RIM = 1.3;
-const FRONT = 0.45;
+const RIM = 1.9;
+const FRONT = 0.5;
 /** The sky (cool, from above), the flat light all round, what comes back up off the wood. */
-const SKY = 0.85;
-const FILL = 0.1;
-const BOUNCE = 0.22;
+const SKY = 0.4;
+const FILL = 0.03;
+const BOUNCE = 0.34;
 /** The darker house: how much of each is left when the mood is all the way down. */
 const MOOD_SKY = 0.45;
 const MOOD_FRONT = 0.35;
 const MOOD_ENV = 0.6;
 /** How much of the building's own light (lens.ts arenaLight) the scene takes: the lamps are in the rig too. */
-const ENV = 0.65;
+const ENV = 0.8;
 /** The mood gets where it is going in about this long (ms). */
 const MOOD_MS = 900;
 
 /** How many of the lamps throw shadows at each step down (Court3D's STEPS, scene.lite). */
 const CASTERS = [4, 2, 0, 0];
+/** How much of the lamps' light the stands have (a share of the floor's: the banks are aimed at the floor, and a broadcast's crowd sits a stop under it). */
+const SPILL = 0.42;
 
 /**
  * A material nothing's shadow falls on (the people in the stands, their seats, the steps): its shader goes
@@ -63,7 +65,11 @@ const CASTERS = [4, 2, 0, 0];
  */
 export function unshadowed(sh: { vertexShader: string; fragmentShader: string }) {
   sh.vertexShader = `#undef USE_SHADOWMAP\n${sh.vertexShader}`;
-  sh.fragmentShader = `#undef USE_SHADOWMAP\n${sh.fragmentShader}`;
+  // (and the lamps are aimed at the floor: the stands have their spill, not their beam)
+  sh.fragmentShader = `#undef USE_SHADOWMAP\n${sh.fragmentShader}`.replace(
+    '#include <lights_fragment_end>',
+    `#include <lights_fragment_end>\n  reflectedLight.directDiffuse *= ${SPILL.toFixed(2)};`,
+  );
 }
 
 export class Rig {

@@ -55,7 +55,7 @@ PIT = 0.72, 4.74
 PIT_N = Vector((0.954, 0.3, 0)).normalized()
 VK, VM, VC = 1.0, 0.5, 5.27
 VLEN = math.sqrt(1 + VK * VK + VM * VM)
-TRIM = 0.055
+TRIM = 0.038
 # the head (a tenth bigger than a real one for his height, as a figurine's is: narrower than it is
 # long, longer than it is deep), set forward on his neck as a head is
 HEAD_W, HEAD_H, HEAD_D = 0.3, 0.42, 0.37
@@ -716,9 +716,9 @@ def arm(s):
         (0.75, 0.168, 0.19, 0.008),
         (0.95, 0.158, 0.168, 0.0),
         (1.1, 0.164, 0.152, 0.0),
-        (1.28, 0.176, 0.166, 0.008),
-        (1.5, 0.166, 0.158, 0.006),
-        (1.75, 0.138, 0.124, 0.004),
+        (1.28, 0.165, 0.154, 0.008),
+        (1.5, 0.152, 0.144, 0.006),
+        (1.75, 0.128, 0.114, 0.004),
         (1.95, 0.114, 0.096, 0.0),
         (2.08, 0.106, 0.084, 0.0),
         (2.19, 0.1, 0.08, 0.0),
@@ -731,13 +731,13 @@ def arm(s):
     # behind; the point of the elbow; the forearm's two bellies, thickest just under the elbow
     # (where: out from the arm's middle, down it, forward; then its half sizes)
     for (out, u, z), r in (
-        ((0.01, 0.25, 0.0), (0.17, 0.4, 0.222)),
-        ((0.075, 0.42, -0.01), (0.14, 0.26, 0.17)),
+        ((0.01, 0.25, 0.0), (0.158, 0.39, 0.204)),
+        ((0.07, 0.42, -0.01), (0.128, 0.26, 0.158)),
         ((-0.01, 0.63, 0.078), (0.148, 0.31, 0.142)),
         ((0.015, 0.55, -0.085), (0.158, 0.35, 0.142)),
         ((0.0, 1.12, -0.095), (0.07, 0.11, 0.07)),
-        ((0.045, 1.36, 0.035), (0.142, 0.31, 0.132)),
-        ((-0.045, 1.42, -0.01), (0.132, 0.33, 0.128)),
+        ((0.045, 1.36, 0.035), (0.13, 0.31, 0.12)),
+        ((-0.045, 1.42, -0.01), (0.12, 0.33, 0.116)),
     ):
         parts.append(transform(ellipsoid((s * out, -u, z), r, 16, 12, 'muscle'), f))
     # the palm (its back to the outside, thumb edge forward), the heel of the thumb
@@ -745,7 +745,7 @@ def arm(s):
     heel = ellipsoid((-s * 0.03, -(ARM + 0.14), 0.09), (0.06, 0.13, 0.085), 12, 8, 'heel')
     # (the shoulder runs into the chest and the back: no ball on a stick)
     # (over the top of the joint only: under it his armpit is a hollow, or an arm raised overhead would carry a lump up with it)
-    bridge = ellipsoid((-s * 0.2, -0.04, 0.0), (0.26, 0.14, 0.25), 16, 10, 'bridge')
+    bridge = ellipsoid((-s * 0.2, -0.03, 0.0), (0.25, 0.118, 0.225), 16, 10, 'bridge')
     for p in (bridge, palm, heel):
         transform(p, f)
         parts.append(p)
@@ -755,10 +755,10 @@ def arm(s):
 def girdle(s):
     """What ties an arm to his trunk: the trapezius from his neck down to the point of the shoulder, the chest's muscle to the front of the armpit, the back's to the back of it, a collarbone."""
     out = [
-        ellipsoid((s * 0.43, 5.47, -0.09), (0.44, 0.115, 0.24), 16, 10, 'trap', Matrix.Rotation(-s * 0.4, 3, 'Z')),
-        ellipsoid((s * 0.35, 4.94, 0.285), (0.34, 0.25, 0.185), 16, 10, 'pec', Matrix.Rotation(s * 0.25, 3, 'Z')),
+        ellipsoid((s * 0.42, 5.445, -0.09), (0.41, 0.088, 0.21), 16, 10, 'trap', Matrix.Rotation(-s * 0.4, 3, 'Z')),
+        ellipsoid((s * 0.35, 4.94, 0.275), (0.33, 0.24, 0.165), 16, 10, 'pec', Matrix.Rotation(s * 0.25, 3, 'Z')),
         ellipsoid((s * 0.42, 4.7, -0.2), (0.28, 0.42, 0.17), 16, 10, 'lat', Matrix.Rotation(-s * 0.2, 3, 'Z')),
-        ellipsoid((s * 0.4, 5.415, 0.17), (0.36, 0.04, 0.045), 12, 8, 'collarbone', Matrix.Rotation(-s * 0.08, 3, 'Z') @ Matrix.Rotation(s * 0.3, 3, 'Y')),
+        ellipsoid((s * 0.34, 5.405, 0.17), (0.29, 0.036, 0.042), 12, 8, 'collarbone', Matrix.Rotation(-s * 0.08, 3, 'Z') @ Matrix.Rotation(s * 0.3, 3, 'Y')),
     ]
     return out
 

@@ -124,8 +124,8 @@ export const FACES = [
   { name: 'round', wide: 1.07, long: 0.95, jaw: 0.97, chin: 0.92, ridge: 0.2, nose: 1.03, lips: 0.6, cheeks: -0.2, full: 0.2, point: -0.6, flare: 0.1, deep: -0.3 },
 ] as const;
 /** Every man's jaw a little narrower than the sculpt's, and his cheeks a little leaner: the sculpt reads puffy up close. */
-const JAW_SLIM = 0.95;
-const LEAN = 0.25;
+const JAW_SLIM = 0.9;
+const LEAN = 0.4;
 
 /**
  * How far each of the shapes of a face (mh.py's SHAPES) may go, either way (those with a third number only one way,
@@ -196,7 +196,7 @@ function shapeOf(r: (salt: number) => number, tone: number, age: number): Record
   // (the fold at an eye's inner corner goes with that last)
   out.epicanthus = 0.9 * out.asian + 0.3 * (r(187) - 0.5);
   // (and every face some of the way onto a real head's anatomy: its cheekbones, the planes of its jaw; see mh.py 'real')
-  out.real = 0.6;
+  out.real = 0.85;
   // (and a veteran's face has aged: fuller under the eyes, the lines from his nose deeper)
   out.age = 0.75 * age;
   out.bags = 0.6 * age + 0.25 * r(188);

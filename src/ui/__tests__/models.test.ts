@@ -332,11 +332,12 @@ describe("the 3D court's models", () => {
       // (the widest of one picture's own are the few small ones round the very top of his head, where its picture meets at a point: under a quarter of the sheet)
       expect(wide, 'a triangle stretched across the sheet').toBeLessThan(0.24);
       expect(geo.shorts[1] - geo.shorts[0]).toBeGreaterThan(1);
-      // (his hair's fuzz: his scalp again in layers, the last all the way out, some thousands of triangles; over his
-      // hairline and where a beard grows, so none of it is on his eyes, his brows or his nose)
+      // (his hair's fuzz: his scalp again in layers (six: enough that close up his hair has depth), the last all the
+      // way out, some tens of thousands of triangles; over his hairline and where a beard grows, so none of it is on
+      // his eyes, his brows or his nose)
       const fuzz = geo.fuzz;
       expect(fuzz.index!.count / 3).toBeGreaterThan(2000);
-      expect(fuzz.index!.count / 3).toBeLessThan(12_000);
+      expect(fuzz.index!.count / 3).toBeLessThan(36_000);
       expect(most(fuzz.getAttribute('fuzz').array)).toBe(1);
       const fp = fuzz.getAttribute('position');
       let onFace = 0;

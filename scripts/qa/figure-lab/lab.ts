@@ -22,6 +22,7 @@
 //   &gest=protest|call|talk|... (a gesture, his talk with it)  &at=520 (how far into it, ms of his own time)
 import {
   AmbientLight,
+  Color,
   DirectionalLight,
   HemisphereLight,
   Mesh,
@@ -38,6 +39,8 @@ import {
 import type { Act } from '../../../src/ui/live/choreo';
 import { GESTURES, type Gesture } from '../../../src/ui/live/court3d/clips';
 import { Fig, figureGeo, settleHeads, type Feel } from '../../../src/ui/live/court3d/figure';
+import { arenaLight } from '../../../src/ui/live/court3d/lens';
+import { Rig } from '../../../src/ui/live/court3d/rig';
 import { BEARDS, FACES, lookOf, SKINS, STYLES } from '../../../src/ui/live/court3d/look';
 import { loadModels } from '../../../src/ui/live/court3d/models';
 import { BALL_R, bodyOf, FARM, J, UARM, type Drive } from '../../../src/ui/live/court3d/puppet';
@@ -158,19 +161,26 @@ renderer.toneMapping = NeutralToneMapping;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = PCFSoftShadowMap;
 const scene = new Scene();
-scene.add(new HemisphereLight(0xffffff, 0x9a7d5e, 1.5), new AmbientLight(0xffffff, 0.3));
-const key = new DirectionalLight(0xfff6ea, 2.1);
-key.position.set(8, 30, 14);
-key.castShadow = true;
-key.shadow.mapSize.set(2048, 2048);
-// (the figures take shadows too: kept off their own skin)
-key.shadow.bias = -0.0006;
-key.shadow.normalBias = 0.06;
-Object.assign(key.shadow.camera, { left: -30, right: 30, top: 20, bottom: -20, near: 5, far: 80 });
-scene.add(key);
-const rim = new DirectionalLight(0xcfdcff, 0.9);
-rim.position.set(-10, 14, -24);
-scene.add(rim);
+// (the game's own lamps and its building's light, so a figure is seen here as it is on the floor; &studio=1: the old plain lights)
+if (q.has('studio')) {
+  scene.add(new HemisphereLight(0xffffff, 0x9a7d5e, 1.5), new AmbientLight(0xffffff, 0.3));
+  const key = new DirectionalLight(0xfff6ea, 2.1);
+  key.position.set(8, 30, 14);
+  key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048);
+  // (the figures take shadows too: kept off their own skin)
+  key.shadow.bias = -0.0006;
+  key.shadow.normalBias = 0.06;
+  Object.assign(key.shadow.camera, { left: -30, right: 30, top: 20, bottom: -20, near: 5, far: 80 });
+  scene.add(key);
+  const rim = new DirectionalLight(0xcfdcff, 0.9);
+  rim.position.set(-10, 14, -24);
+  scene.add(rim);
+} else {
+  new Rig(scene);
+  scene.environment = arenaLight(renderer, new Color(0xc99a62)).texture;
+  renderer.toneMappingExposure = 1.14;
+}
 const floor = new Mesh(new PlaneGeometry(200, 200), new MeshStandardMaterial({ color: 0xc99a62, roughness: 0.6 }));
 floor.rotation.x = -Math.PI / 2;
 floor.receiveShadow = true;
