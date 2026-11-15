@@ -24,9 +24,14 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lib import *  # noqa: E402,F403
+import figure as F  # noqa: E402
+import mhbody  # noqa: E402
 from figure import (  # noqa: E402
     AN_Y,
     ARM,
+    REAL,
+    apply_modifier,
+    fix_normals,
     BY_PLACE,
     CLOTH,
     FACE,
@@ -152,7 +157,7 @@ def lapel(p):
 
 # --- his face and his hair: skins of their own, just off his head ---
 
-def patch(name, mat, to_n, f, us, vs, out, kind=FACE, fade=None):
+def patch(name, mat, to_n, f, us, vs, out, kind=FACE, fade=None, put=None):
     """
     A thin skin over part of his head: where f(u, v) is over 0, on a grid of (u, v) that `to_n` turns into
     directions from the head's middle, `out(u, v)` feet off his skin. The grid's cells are cut along
@@ -174,7 +179,7 @@ def patch(name, mat, to_n, f, us, vs, out, kind=FACE, fade=None):
         key = (round(p[0], 6), round(p[1], 6))
         if key not in index:
             index[key] = len(verts)
-            verts.append(tuple(on_head(to_n(*p), out(*p) if callable(out) else out)))
+            verts.append(tuple((put or on_head)(to_n(*p), out(*p) if callable(out) else out)))
             shows.append(fade(*p) if fade else 1.0)
         return index[key]
 
@@ -217,7 +222,12 @@ def patch(name, mat, to_n, f, us, vs, out, kind=FACE, fade=None):
 
 
 def on_face(px, py):
-    """The direction a place on the plane of his face is in (figure.py's face_at, the other way round)."""
+    """
+    The direction a place on the plane of his face is in (figure.py's face_at, the other way round). The place is
+    the formula's (figure.ts paints by it); his head is a real man's, and the place is where that is on him
+    (mhbody.py's face_back).
+    """
+    px, py = mhbody.face_back(px, py)
     return (px / 0.8, py / 0.8, 1.0)
 
 
@@ -256,9 +266,10 @@ def eye_open(px, py):
     return min(up - ey, ey - low, EYE_W - abs(ex))
 
 
-def eye_iris(px, py, r=1.0):
+def eye_iris(px, py, r=1.0, lidded=True):
     ex, ey, _, _ = lids(px, py)
-    return min(eye_open(px, py), (r - math.hypot(ex / 0.06, (ey - 0.01) / 0.043)) * 0.05)
+    disc = (r - math.hypot(ex / 0.062, (ey - 0.01) / 0.05)) * 0.05
+    return min(eye_open(px, py), disc) if lidded else disc
 
 
 def eye_lash(px, py):
@@ -282,7 +293,7 @@ def lips(px, py):
 
 def mouth_line(px, py):
     t = min(1.0, abs(px) / MOUTH_W)
-    return min(0.008 - abs(py - MOUTH_Y + 0.012 * t * t), MOUTH_W - 0.015 - abs(px))
+    return min(0.02 - abs(py - MOUTH_Y), MOUTH_W - 0.03 - abs(px))
 
 
 def whiskers(n):
@@ -293,7 +304,8 @@ def whiskers(n):
     nx, ny, nz = unit(n)
     ax = abs(nx)
     fz = max(nz, 0.3)
-    px, py = nx / fz * 0.8, ny / fz * 0.8
+    # (his face read where the formula has it: see mhbody.py's face_t)
+    px, py = mhbody.face_t(nx / fz * 0.8, ny / fz * 0.8)
     apx = abs(px)
     front_ = 1.0 if nz > 0.3 else 0.0
     mouth = front_ * sstep(0.3, 0.26, apx) * sstep(-0.617, -0.602, py) * sstep(-0.447, -0.462, py)
@@ -301,24 +313,23 @@ def whiskers(n):
     bars = front_ * sstep(0.2, 0.26, apx) * sstep(0.4, 0.34, apx) * sstep(-0.47, -0.53, py) * sstep(-0.95, -0.8, py)
     chin = sstep(-0.635, -0.695, py) * sstep(0.42, 0.34, apx) * front_ * sstep(-1.25, -1.0, py)
     round_ = max(tache, bars, chin) * (1 - mouth)
-    cheek = sstep(0.05, -0.09, ny + 0.52 - 0.62 * (ax - 0.3) - 0.5 * (ax - 0.3) ** 2) * sstep(-0.99, -0.9, ny) * sstep(-0.1, 0.06, nz) * (1 - mouth)
+    cheek = sstep(0.05, -0.09, ny + 0.52 - 0.62 * (ax - 0.3) - 0.5 * (ax - 0.3) ** 2) * sstep(-0.99, -0.9, ny) * sstep(0.04, 0.2, nz) * (1 - mouth)
     jaw = max(0.25 * ax - ny - 0.4 * nz - 0.83, -ny + 0.12 * nz - 1.137)
-    ramus = sstep(0.14, 0.09, nz + 0.06 * (ny + 0.3)) * sstep(0.62, 0.74, ax) * sstep(0.32, 0.18, ny)
-    strap = max(sstep(-0.27, -0.21, jaw - 0.12 * sstep(0.5, 0.1, ax)), ramus) * sstep(-0.99, -0.9, ny) * sstep(-0.12, -0.05, nz) * (1 - mouth)
+    ramus = sstep(0.28, 0.23, nz + 0.06 * (ny + 0.3)) * sstep(0.62, 0.74, ax) * sstep(0.32, 0.18, ny)
+    strap = max(sstep(-0.27, -0.21, jaw - 0.12 * sstep(0.5, 0.1, ax)), ramus) * sstep(-0.99, -0.9, ny) * sstep(0.02, 0.09, nz) * (1 - mouth)
     return round_, cheek, strap
 
 
 def face():
     """What a player has painted on his head: the whites of his eyes between their lids, an iris and a pupil in each, lashes, brows, lips and the line between them."""
     eyes = ((-0.56, 0.56, 56), (-0.01, 0.15, 10))
+    # (his eyes are balls behind his lids (see eye_balls): an iris and a pupil lie on each, his lids over what they cover)
     return [
-        patch('eyeWhite', WHITE, on_face, eye_open, *eyes, 0.004),
-        patch('iris', IRIS, on_face, eye_iris, *eyes, 0.006),
-        patch('pupil', EYE, on_face, lambda x, y: eye_iris(x, y, 0.46), (-0.47, 0.47, 94), (0.03, 0.12, 9), 0.008),
-        patch('lash', EYE, on_face, eye_lash, (-0.56, 0.56, 56), (0.04, 0.16, 10), 0.008),
+        patch('iris', IRIS, on_face, lambda x, y: eye_iris(x, y, 1.0, False), *eyes, 0.0012, put=F.on_eye),
+        patch('pupil', EYE, on_face, lambda x, y: eye_iris(x, y, 0.46, False), (-0.47, 0.47, 94), (0.03, 0.12, 9), 0.0024, put=F.on_eye),
+        patch('lash', EYE, on_face, eye_lash, (-0.56, 0.56, 56), (0.04, 0.16, 10), 0.003),
         patch('brow', BROW, on_face, brow, (-0.7, 0.7, 56), (0.14, 0.34, 10), 0.006),
-        patch('lips', LIP, on_face, lips, (-0.3, 0.3, 20), (-0.62, -0.44, 9), 0.004),
-        patch('mouth', EYE, on_face, mouth_line, (-0.3, 0.3, 20), (-0.56, -0.5, 6), 0.007),
+        patch('lips', LIP, on_face, lips, (-0.3, 0.3, 20), (-0.62, -0.44, 9), 0.004, put=on_lips),
     ]
 
 
@@ -350,10 +361,10 @@ def beards():
     # (it lies closer at its edge than in its middle, its edge all but on his skin: no step up onto it)
     deep = lambda f, most: (lambda a, e: 0.0015 + most * sstep(0.0, 0.6, f(a, e)))  # noqa: E731
     return [
-        patch('beard', BEARD, round_him, full, (-1.9, 1.9, 44), (-1.5, 0.2, 22), deep(full, 0.012), fade=thin(full_w)),
-        patch('goatee', GOATEE, round_him, goat, (-0.75, 0.75, 30), (-1.4, -0.3, 26), deep(goat, 0.01), fade=thin(goat_w)),
+        patch('beard', BEARD, round_him, full, (-1.9, 1.9, 44), (-1.5, 0.2, 22), deep(full, 0.012), fade=thin(full_w), put=on_jaw),
+        patch('goatee', GOATEE, round_him, goat, (-0.75, 0.75, 30), (-1.4, -0.3, 26), deep(goat, 0.01), fade=thin(goat_w), put=on_jaw),
         # (a strap is a narrow band: a coarser skin than a full beard's does, and its edge fades all the same)
-        patch('strap', STRAP, round_him, strap, (-1.9, 1.9, 30), (-1.5, 0.2, 14), deep(strap, 0.006), fade=thin(strap_w)),
+        patch('strap', STRAP, round_him, strap, (-1.9, 1.9, 30), (-1.5, 0.2, 14), deep(strap, 0.006), fade=thin(strap_w), put=on_jaw),
     ]
 
 
@@ -397,23 +408,84 @@ def bob():
 def hairs(keep=0.4):
     """Every way he may wear his hair, each a material of its own: the players' pieces (lighter: seen from further off), a fuller crop, hair to the jaw."""
     out = []
-    for o in hair_pieces():
+    for o in hair_pieces(light=True):
         out.append(thin(o, max(120, tri_count(o) * keep)))
     top = volume(HAIR_TOP, lambda n: 0.012 + 0.05 * sstep(0.3, 0.7, n[1]) + 0.025 * sstep(0.35, 0.9, n[2]) * sstep(0.5, 0.7, n[1]), cols=36, rows=9)
     set_material(top, material(HAIR_TOP))
     return [*out, far(tag(top, ON_HEAD)), far(bob())]
 
 
-def head_bits(tris=2600):
-    """His head (its scalp his cropped hair), his ears, his face, his beard and his hair."""
-    h = head(1.0)
-    # (thinned as figure.py thins it: his face keeps more of its triangles than its size gives it)
-    mid = (0, HEAD_C[1] - 0.08, HEAD_C[2] + 0.3)
-    swell(h, mid, 0.3, 2.6)
-    thin(h, tris)
-    swell(h, mid, 0.3, 2.6, back=True)
+def on_lips(n, out=0.0):
+    """
+    A point of his lips along n, `out` feet off them: on his skin, but never down in the crease where the two meet
+    (no deeper than a hair under the fuller of what is just over and under it), so their colour runs across the line
+    of his mouth and is not lost in it.
+    """
+    c = Vector(HEAD_C)
+    p = on_head(n, 0.0)
+    far_ = max((on_head((n[0], n[1] + dy, n[2]), 0.0) - c).length for dy in (-0.03, -0.015, 0.015, 0.03))
+    r = max((p - c).length, far_ - 0.003)
+    return c + (p - c).normalized() * (r + out)
+
+
+def on_jaw(n, out=0.0):
+    """A point of his skin along n for his beard: none of it lower than under his jaw (a ray down his neck finds his collar)."""
+    p = on_head(n, out)
+    # (the line of his jaw: lowest under his chin, rising back to its corner under his ear)
+    u = unit(n)
+    low = HEAD_C[1] - HEAD_H * (0.7 + 0.32 * sstep(-0.1, 0.7, u[2]))
+    if p.y < low:
+        k = max(0.6, 1 - 2.5 * (low - p.y))
+        p.y = low
+        p.x *= k
+        p.z = HEAD_C[2] + (p.z - HEAD_C[2]) * k
+    return p
+
+
+def eye_balls():
+    """His eyes' balls, as they are in his head (the half of each that faces out): their whites."""
+    man = _man
+    used = sorted({i for f in man.eyes for i in f})
+    to = {v: i for i, v in enumerate(used)}
+    o = mesh_obj('eyeWhite', [tuple(man.Q[i]) for i in used], [[to[i] for i in f] for f in man.eyes])
+    fix_normals(o)
+    # (behind his lids: the shade of that is not theirs, see figure.py's finish)
+    o.data.attributes.new('ball', 'FLOAT', 'POINT').data.foreach_set('value', [1.0] * len(used))
+    set_material(o, material(WHITE))
+    return tag(o, FACE)
+
+
+def head_bits():
+    """What is on his head (his head itself is his skin's: see skin_of): his eyes, his face, his beard and his hair."""
     # (the far body's eyes, brows and lips keep more than their share: a dot each is what is left of them)
-    return [crop(tag(h, FACE)), *[far(o) for o in ears()], *[far(o, 1.6) for o in face()], *[far(o) for o in beards()], *hairs()]
+    return [far(eye_balls(), 3.0), *[far(o, 1.6) for o in face()], *[far(o) for o in beards()], *hairs()]
+
+
+#: How many triangles his head is given of his skin's (a head as fine as a player's needs most of them over his face).
+HEAD_TRIS = 3400
+#: The man being dressed (mhbody.Player, his body's points this body's own: see the build).
+_man = None
+
+
+def thin_keeping(obj, tris, spots):
+    """
+    Thins a skin to so many triangles, these places of it (each a middle, how far round it, how much) swollen while
+    it is: thinning goes by size, so they keep more of their triangles than their size gives them (figure.py's swell).
+    """
+    at = []
+    for c, reach, by in spots:
+        c = Vector(c)
+        # (where this one's middle is once those before it are swollen: pushed off them as everything past their reach is)
+        for o, r0, b0 in at:
+            d = c - o
+            if d.length > r0:
+                c = o + d * ((d.length + r0 * (b0 - 1)) / d.length)
+        swell(obj, c, reach, by)
+        at.append((c, reach, by))
+    thin(obj, tris)
+    for c, reach, by in reversed(at):
+        swell(obj, c, reach, by, back=True)
+    return obj
 
 
 # --- what they wear ---
@@ -427,11 +499,33 @@ def lighter(built, keep=0.4):
 
 
 def skin_of(mid, tris, planes, keep):
-    """The skin that shows: cut from the body first, then thinned, so what little shows keeps its shape."""
-    body = cut(copy(mid, 'body'), planes, keep)
-    thin(body, tris)
-    set_material(body, material(SKIN))
-    return tag(body, BY_PLACE)
+    """
+    The skin that shows, his head with it: the real man's own points (figure.py's real_skin), cut where his clothes
+    begin and then thinned, his face and his hands keeping more of their triangles than their size gives them; his
+    scalp over his hairline his cropped hair.
+    """
+    from mathutils.kdtree import KDTree
+
+    man = _man
+    # (his lips shut: no one here opens his mouth)
+    body = F.real_skin(man, man.faces + man.lips_shut, 'body')
+    for a in [a.name for a in body.data.attributes if a.name in ('mhv', 'ball') or a.name.startswith('d_')]:
+        body.data.attributes.remove(body.data.attributes[a])
+    cut(body, planes, keep, under=5.7)
+    spots = [((0, HEAD_C[1] - 0.08, HEAD_C[2] + 0.3), 0.3, 2.6)]
+    for s in (1, -1):
+        spots.append((tuple(arm_frame(s) @ Vector((0.0, -(ARM + 0.2), 0.01))), 0.32, 1.7))
+    thin_keeping(body, tris + HEAD_TRIS, spots)
+    # (what each point is: his head's, or his body's, as the point of him nearest it was)
+    tree = KDTree(len(man.Q))
+    for i, q in enumerate(man.Q):
+        tree.insert(B(*q), i)
+    tree.balance()
+    body.data.attributes.remove(body.data.attributes['tag'])
+    crop(body)
+    kinds = [FACE if man.is_head[tree.find(v.co)[1]] else REAL for v in body.data.vertices]
+    body.data.attributes.new('tag', 'INT', 'POINT').data.foreach_set('value', kinds)
+    return body
 
 
 def trousers(tris, mat):
@@ -463,8 +557,8 @@ def dress_bench(hi):
     body = skin_of(
         mid,
         2000,
-        [level(5.28), *cuffs(CUFF - 0.08), level(HEM + 0.3), level(SOCK_HI - 0.06)],
-        lambda p: (p[1] > 5.28 and abs(p[0]) < 0.95 and down_arm(p) < 0.55) or down_arm(p) > CUFF - 0.08 or (SOCK_HI - 0.06 < p[1] < HEM + 0.3 and abs(p[0]) < 1.2),
+        [neck_plane(c - 0.2), *cuffs(CUFF - 0.08), level(HEM + 0.1), level(SOCK_HI - 0.06)],
+        lambda p: (neck(p, c) > -0.2 and abs(p[0]) < 0.6 and down_arm(p) < 0.4) or down_arm(p) > CUFF - 0.08 or (SOCK_HI - 0.06 < p[1] < HEM + 0.1 and abs(p[0]) < 1.2),
     )
 
     top = copy(mid, 'top')
@@ -483,6 +577,7 @@ def dress_bench(hi):
     slots(top, [WARM, TRIM_M], lambda p: TRIM_M if neck(p, c) > -band or down_arm(p) > CUFF - band else WARM)
 
     shorts = shorts_form()
+    F.fit_shorts(shorts, mid)
     thin(shorts, 1500)
     cut(shorts, [level(HEM), level(WAIST), level(HEM + 0.085)], lambda p: HEM < p[1] < WAIST and abs(p[0]) < 1.2)
     slots(shorts, [CLOTH, TRIM_M], lambda p: TRIM_M if p[1] < HEM + 0.085 else CLOTH)
@@ -498,7 +593,7 @@ def dress_bench(hi):
         tag(o, BY_PLACE)
     built = [body, top, shorts, socks, *head_bits()]
     for s in (1, -1):
-        built += [far(o, 1.4) for o in fingers(s)] + lighter(shoe(s))
+        built += lighter(shoe(s))
     return built
 
 
@@ -549,8 +644,6 @@ def dress_official(hi):
     for o in (shirt, whistle, *cord):
         tag(o, BY_PLACE)
     built = [body, shirt, trousers(2200, LEGS), whistle, *cord, *head_bits()]
-    for s in (1, -1):
-        built += [far(o, 1.4) for o in fingers(s)]
     return built + dark_shoes()
 
 
@@ -607,7 +700,8 @@ def dress_staff(hi):
     # the jacket: looser than he is, open in a V, down past his hips
     jacket = copy(mid, 'jacket')
     # (well off him: smoothing draws cloth in, and the shirt must never come through it)
-    push(jacket, lambda p: 0.1 + 0.08 * sstep(3.9, 3.3, p[1]) * (1 if down_arm(p) < 0.5 else 0))
+    # (less of it down his arms: a sleeve is cut closer than a jacket's body, and a thick one is a body-builder's arm)
+    push(jacket, lambda p: 0.1 - 0.035 * sstep(0.25, 0.6, down_arm(p)) + 0.08 * sstep(3.9, 3.3, p[1]) * (1 if down_arm(p) < 0.5 else 0))
     # (pushed out, it runs through itself under the arms: one skin is made of it again)
     jacket = apply_modifier(jacket, 'REMESH', mode='VOXEL', voxel_size=0.03, adaptivity=0.0, use_smooth_shade=True)
     relax(jacket, 8)
@@ -661,8 +755,6 @@ def dress_staff(hi):
     for o in (shirt, collar, jacket, tie):
         tag(o, BY_PLACE)
     built = [body, shirt, collar, jacket, *flaps, *buttons, tie, trousers(2300, LEGS), *head_bits()]
-    for s in (1, -1):
-        built += [far(o, 1.4) for o in fingers(s, 6)]
     return built + dark_shoes()
 
 
@@ -727,18 +819,32 @@ if __name__ == '__main__':
     for name, color in ((WARM, (0.08, 0.1, 0.2)), (TOP, (0.3, 0.3, 0.32)), (LEGS, (0.02, 0.02, 0.025)), (METAL, (0.5, 0.5, 0.52)), (LAPEL, (0.015, 0.016, 0.02))):
         material(name, color, 0.75)
 
-    hi = fused()
+    # the man they all are: the player's own (mhbody.py), his head the real head; a coach and a referee the same man
+    # with a softer body (how muscled, how heavy; how broad his chest, how thick his limbs, his trunk and his neck)
+    man = F.real_player()
+    HEAD_W, HEAD_H, HEAD_D = F.PLAYER_HEAD
+    F.scalp_of(man, shut=True)
+    print(f'[models] people: {len(man.lips_shut)} faces shut his lips')
+    athlete = man.Q
+    BUILDS = {'bench': None, 'staff': (0.55, 0.62, 1.08, 1.0, 1.06, 1.04), 'official': (0.72, 0.5, 1.1, 1.03, 1.06, 1.08)}
+    bodies = {name: (athlete if b is None else man.built(*b)) for name, b in BUILDS.items()}
     people = []
     for detail, suffix in ((1.0, ''), (FAR, 'Far')):
         DETAIL = detail
         for name, dress in (('bench', dress_bench), ('staff', dress_staff), ('official', dress_official)):
-            fig, rig_ob = finish(dress(copy(hi, 'hi2')), name + suffix)
-            paint(fig, face_hollows)
+            man.Q = bodies[name]
+            _man = man
+            # (his clothes are cut from a finer copy of all of him, a closed skin: a jacket is made one skin again from it)
+            hi = F.real_skin(man, man.whole, 'hi')
+            hi = apply_modifier(hi, 'SUBSURF', levels=2)
+            for at in [at.name for at in hi.data.attributes if at.name in ('tag', 'mhv', 'ball') or at.name.startswith('d_')]:
+                hi.data.attributes.remove(hi.data.attributes[at])
+            fix_normals(hi)
+            fig, rig_ob = finish(dress(hi), name + suffix)
             rig_ob.name = name + suffix + 'Rig'
             report(fig)
             people += [fig, rig_ob]
         one_head(people[-6::2])
-    bpy.data.objects.remove(hi)
     # (how much of a beard's colour shows over his skin, `_FADE` (see beards), goes in its shade's blue: the shade
     # is a grey, and the file has no other list to spend on it; sideline.ts reads it back out)
     for fig in people[0::2]:

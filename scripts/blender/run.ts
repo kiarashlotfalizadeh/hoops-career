@@ -24,9 +24,9 @@ const root = join(here, '..', '..');
 export const MODELS_DIR = join(root, 'src/ui/live/court3d/models');
 /** Each model, and the scripts here it is built from: its own, and the ones that one imports. */
 export const SOURCES: Record<string, string[]> = {
-  figure: ['figure.py', 'lib.py', 'mh.py'],
-  people: ['people.py', 'figure.py', 'lib.py', 'mh.py'],
-  arena: ['arena.py', 'lib.py', 'figure.py', 'mh.py'],
+  figure: ['figure.py', 'lib.py', 'mh.py', 'mhbody.py'],
+  people: ['people.py', 'figure.py', 'lib.py', 'mh.py', 'mhbody.py'],
+  arena: ['arena.py', 'lib.py', 'figure.py', 'mh.py', 'mhbody.py'],
 };
 const MODELS = Object.keys(SOURCES);
 /** What a model's script writes beside its .glb, for the app to read with it. */

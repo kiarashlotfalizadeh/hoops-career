@@ -10,7 +10,7 @@ import { ballIn, into, PARTS, Spacing, sunk } from '../live/court3d/spacing';
 import { blocked, CAM_KINDS, camKind, clearSeat, clutter, fenced, Operator, seen, shot, type View } from '../live/court3d/cameras';
 import { captured, CHANNELS, CLIPS, DUNK_AT, DUNKS, GESTURES, I, mirror, N, PASSES, sample, span } from '../live/court3d/clips';
 import { occasionOf } from '../live/occasion';
-import { figureGeo, follow, handOf } from '../live/court3d/figure';
+import { faceT, figureGeo, follow, handOf } from '../live/court3d/figure';
 import { readGlb } from '../live/court3d/glb';
 import arenaGlb from '../live/court3d/models/arena.glb?inline';
 import figureGlb from '../live/court3d/models/figure.glb?inline';
@@ -719,7 +719,8 @@ describe('live court choreography', () => {
       const glb = (file: string) => readGlb(Uint8Array.from(atob(file.slice(file.indexOf(',') + 1)), (ch) => ch.charCodeAt(0)).buffer);
       const geo = figureGeo((o) => o, glb(figureGlb));
       expect([...geo.order].sort((x, y) => x - y)).toEqual(Array.from({ length: 49 }, (_, i) => i));
-      expect(geo.wears).toEqual(expect.arrayContaining(['skin', 'hair', 'jersey', 'trim', 'cloth', 'shoe', 'white']));
+      // (no scalp of its own: his head is a real man's, one skin, and his hair is painted on its picture)
+      expect(geo.wears).toEqual(expect.arrayContaining(['skin', 'jersey', 'trim', 'cloth', 'shoe', 'white']));
       const w = geo.body.getAttribute('skinWeight');
       for (let i = 0; i < w.count; i += 37) expect(w.getX(i) + w.getY(i) + w.getZ(i) + w.getW(i)).toBeCloseTo(1, 3);
       // (his lower lip's edge goes with his jaw all the way in the middle of his mouth, less toward its corners: an open
@@ -733,8 +734,11 @@ describe('live court choreography', () => {
         const jawOf = (v: number) => [0, 1, 2, 3].reduce((s, c) => s + ([22, 30].includes(geo.order[bone.getComponent(v, c)]) ? w.getComponent(v, c) : 0), 0);
         const lip: number[][] = [[], [], []];
         for (let v = 0; v < pos.count; v++) {
-          const [x, y, z] = [pos.getX(v) / 0.3, (pos.getY(v) - 6.145) / 0.42, (pos.getZ(v) - 0.05) / 0.37];
-          const [px, py] = [(x / z) * 0.8, (y / z) * 0.8];
+          // (his head's half sizes, figure.ts's HEAD_SIZE; the plane of his face read where the formula has it: faceT)
+          const d = [pos.getX(v) / 0.28, (pos.getY(v) - 6.145) / 0.465, (pos.getZ(v) - 0.05) / 0.376];
+          const len = Math.hypot(d[0], d[1], d[2]);
+          const z = d[2] / len;
+          const [px, py] = faceT((d[0] / len / Math.max(z, 0.3)) * 0.8, (d[1] / len / Math.max(z, 0.3)) * 0.8);
           if (z < 0.5 || Math.abs(py + 0.522) > 0.006 || uv.getY(v) < headFoot) continue;
           if (py > -0.522 && Math.abs(px) < 0.2) lip[2].push(jawOf(v));
           else if (py < -0.522) (Math.abs(px) < 0.08 ? lip[0] : Math.abs(px) > 0.22 && Math.abs(px) < 0.27 ? lip[1] : []).push(jawOf(v));
@@ -797,7 +801,9 @@ describe('live court choreography', () => {
           down = Math.max(down, -p.y);
           if (-p.y > 0.15 && -p.y < 0.3 && Math.abs(p.z) < 0.05) thick = Math.max(thick, Math.abs(p.x));
         }
-        expect(n, 'a palm has the triangles to keep its shape').toBeGreaterThan(130);
+        // (a real man's hand, its points laid by its modellers along its creases: fewer of them are all the hand's own
+        // than a thinned skin's were, his fingers' and thumb's roots sharing the rest)
+        expect(n, 'a palm has the triangles to keep its shape').toBeGreaterThan(70);
         expect(down).toBeLessThan(0.45);
         expect(thick).toBeLessThan(0.06);
       }

@@ -306,11 +306,11 @@ describe("the 3D court's models", () => {
       // (the vest's picture, his number, goes on by its uv; as one shape every part has one)
       expect(fig.parts.find((p) => p.material === 'jersey')!.geo.getAttribute('uv')).toBeTruthy();
       expect(merged(fig).geo.getAttribute('uv').count).toBe(fig.parts.reduce((n, p) => n + p.geo.getAttribute('position').count, 0));
-      // (with every piece of hair in the file; a man is drawn with one of them at most, and with no more than 28,500 triangles: his face has a thousand of them more than it had, and his mouth's insides some 1,300, his teeth each a crown of its own)
-      expect(triangles(fig)).toBeLessThanOrEqual(35_000);
+      // (with every piece of hair in the file; a man is drawn with one of them at most, and with no more than 33,500 triangles: his body and head are a real man's (mhbody.py), every point their modellers gave them kept, his mouth's insides some 1,300, his teeth each a crown of its own, and a head of locks or twists some 5,000: each lock round, its end rounded off)
+      expect(triangles(fig)).toBeLessThanOrEqual(45_000);
       const size = (m: string) => fig.parts.filter((p) => p.material === m).reduce((n, p) => n + p.geo.index!.count / 3, 0);
       const pieces = HAIR_PIECES.reduce((n, m) => n + size(m), 0);
-      expect(triangles(fig) - pieces + Math.max(...HAIR_PIECES.map(size))).toBeLessThanOrEqual(28_500);
+      expect(triangles(fig) - pieces + Math.max(...HAIR_PIECES.map(size))).toBeLessThanOrEqual(33_500);
       // as the app dresses him: one shape for one material, every point of him somewhere on his sheet, and no
       // triangle stretched across it (one across two of its pictures, or a picture's seam, would show the others in between)
       const geo = figureGeo((o) => o, figure);

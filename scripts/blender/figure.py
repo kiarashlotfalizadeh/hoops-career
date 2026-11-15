@@ -29,6 +29,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lib import *  # noqa: E402,F403
+import mhbody  # noqa: E402
 
 # the 6 ft 6 puppet's measures (src/ui/live/court3d/puppet.ts), feet
 HIP, THIGH, SHIN, ANKLE = 3.35, 1.62, 1.55, 0.28
@@ -96,6 +97,15 @@ SKIN, HAIR, JERSEY, TRIM_M, CLOTH, SHOE, WHITE = 'skin', 'hair', 'jersey', 'trim
 BUN, TAIL, TWISTS, LOCS, BRAIDS, AFRO, HIGHTOP, CURLS = 'bun', 'tail', 'twists', 'locs', 'braids', 'afro', 'hightop', 'curls'
 # what a hand-built part hangs on (anything else: by where each point is)
 BY_PLACE, SHORTS, HAND_L, HAND_R, ON_HEAD, FOOT_L, FOOT_R, FACE, SWINGS, ON_JAW = range(10)
+# (and a point of the real man's skin, mhbody.py's: by where it is, as BY_PLACE, but each finger's share of it is the one his own modellers gave it)
+REAL = 10
+# the man on the floor's head: a real man's for his height (the formula's, HEAD_W and the rest, is wider for its height
+# than a head is: the benches and the stands keep that one). figure.ts's HEAD_SIZE.
+PLAYER_HEAD = (0.28, 0.465, 0.376)
+# the real man while he is being built (mhbody.Player), and his head's skin to find a point of his scalp on (see on_head)
+_real = None
+_scalp = None
+_balls = None
 RIGID = {ON_HEAD: 'head', FOOT_L: 'ftl', FOOT_R: 'ftr', ON_JAW: 'lip'}
 # what is behind his lips (see mouth): the dark at the back of it, his teeth, his gums, his tongue; and his ears
 MOUTH, TEETH, GUM, TONGUE, EAR = 'mouth', 'teeth', 'gum', 'tongue', 'ear'
@@ -469,6 +479,8 @@ def head(q=1.0, slit=False):
 # are and the lower ones' (his upper teeth come down over the edges of his lower ones)
 TOOTH_MM = 0.0034
 TEETH_BACK, LOWER_BACK = 0.021, 0.009
+# (the real man's lips are a lip thick, and a ray finds their front: his teeth are that much further back)
+REAL_TEETH_BACK = 0.028
 UPPER_EDGE, LOWER_EDGE = 0.007, 0.003
 # each crown, from the middle of his mouth round to his second premolar above and his first below (the rest are too far
 # back, behind his cheeks and his lower lip, to be seen):
@@ -514,8 +526,16 @@ def mouth():
     lying in his lower jaw, its tip behind his lower teeth; and the dark at the back of his mouth. Shut, his lips are
     in front of all of it.
     """
-    lip = on_head((0, MOUTH_Y / 0.8, 1.0))
-    mid_y, front = lip[1], lip[2] - TEETH_BACK
+    if _scalp is not None:
+        # (the real man's: the line of his mouth is where the map has it on him, and his lips are parted along it, so a
+        # ray down it finds no skin: one just over it does, and the line is at that depth)
+        line = mhbody.face_back(0.0, MOUTH_Y)[1]
+        lip = on_head((0, line / 0.8 + 0.012, 1.0))
+        mid_y, front = HEAD_C[1] + (line / 0.8) * HEAD_H / HEAD_D * (lip[2] - HEAD_C[2]), lip[2] - TEETH_BACK - REAL_TEETH_BACK
+    else:
+        lip = on_head((0, MOUTH_Y / 0.8, 1.0))
+        mid_y, front = lip[1], lip[2] - TEETH_BACK
+    print(f'[models] mouth: the line of it {mid_y:.4f} ft up, his upper teeth\'s fronts {front:.4f} ft forward, their edges {mid_y - UPPER_EDGE:.4f} and {mid_y - LOWER_EDGE:.4f}')
     upper = arch(front, 9.2, 400)
     lower = arch(front - LOWER_BACK, 10.0, 450)
 
@@ -1096,12 +1116,20 @@ def vee(p):
     return (p[1] - VK * abs(p[0]) + VM * p[2] - VC) / VLEN
 
 
-def cut(obj, planes, keep):
-    """Splits the mesh along each plane ((point, normal), game frame), then keeps the faces `keep` says yes to (by their middle)."""
+def cut(obj, planes, keep, under=None):
+    """
+    Splits the mesh along each plane ((point, normal), game frame), then keeps the faces `keep` says yes to (by their
+    middle). `under`: only what is below that height is split (a plane through his shoulder goes on up through his face).
+    """
     bm = bmesh.new()
     bm.from_mesh(obj.data)
     for co, no in planes:
-        bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], dist=1e-5, plane_co=B(*co), plane_no=B(*no))
+        if under is None:
+            geom = bm.verts[:] + bm.edges[:] + bm.faces[:]
+        else:
+            fs = [f for f in bm.faces if all(G(v.co)[1] < under for v in f.verts)]
+            geom = list({v for f in fs for v in f.verts}) + list({e for f in fs for e in f.edges}) + fs
+        bmesh.ops.bisect_plane(bm, geom=geom, dist=1e-5, plane_co=B(*co), plane_no=B(*no))
     dead = [f for f in bm.faces if not keep(G(f.calc_center_median()))]
     bmesh.ops.delete(bm, geom=dead, context='FACES')
     bmesh.ops.triangulate(bm, faces=bm.faces[:])
@@ -1189,7 +1217,7 @@ def weights(p, kind):
         e = sstep(UARM - 0.24, UARM + 0.24, u)
         h = sstep(ARM - 0.1, ARM + 0.1, u)
         # (the ball of muscle at the heel of his hand, over the thumb's long bone, goes part of the way with the thumb: see THUMB)
-        tb = thenar(loc, s) * h
+        tb = 0.0 if kind == REAL else thenar(loc, s) * h
         if girdled:
             # (his chest gives way to the shoulder's own bone, and that to the arm: two gentle turns, not one sharp one)
             mine = sstep(0.45, 1.0, m)
@@ -1282,6 +1310,9 @@ def face_weights(p):
     ln = math.sqrt(sum(v * v for v in d)) or 1.0
     n = tuple(v / ln for v in d)
     px, py = face_at(n)
+    if _real is not None:
+        # (the real man's face, read where the formula has it: see mhbody.py's face_t)
+        px, py = (float(v) for v in mhbody.face_t(px, py))
     apx = abs(px)
     nose = sstep(0.1, 0.4, n[2]) * math.exp(-((px / 0.2) ** 2 + ((py + 0.25) / 0.17) ** 2)) * 0.9
     # (round the sides, by how far under the line from his ear to the corner of his mouth; in front, by the line of his mouth)
@@ -1467,23 +1498,38 @@ def crop(body):
     return body
 
 
-def dress_player(hi, q=1.0):
-    """In his kit: a V-neck vest tucked into shorts, socks, sneakers. `q` scales how many triangles he's made of (the bench is seen from far off)."""
-    # (the clothes are cut from a lighter copy: cloth has no fine detail to keep)
-    mid = thin(copy(hi, 'mid'), 44000)
+def fit_shorts(shorts, body):
+    """
+    The shorts' waist drawn in to the real man's (the form is cut for a thicker trunk: on him its waistband would
+    stand off his vest all round, a hoop), eased out again to its own shape over his hips; and its legs a little
+    narrower, as his thighs are.
+    """
+    def girth(o, y):
+        ps = [G(v.co) for v in o.data.vertices]
+        ps = [p for p in ps if abs(p[1] - y) < 0.04 and abs(p[0]) < 0.9]
+        return max(abs(p[0]) for p in ps), max(p[2] for p in ps), max(-p[2] for p in ps)
 
-    # the skin that shows: head, neck and shoulders outside the vest, the arms; the legs from under the shorts to inside the socks
-    body = thin_body(hi, (8600 if q >= 1 else 3000) * q)
-    # (how far under the vest's edges his skin goes on: less on the benches' coarser bodies, which would poke through it)
-    under = UNDER if q >= 1 else 0.07
-    cut(
-        body,
-        [plane_pit(1, -under), plane_pit(-1, -under), plane_vee(1, -under), plane_vee(-1, -under), level(HEM + 0.3), level(SOCK_HI - 0.06)],
-        lambda p: pit(p, 1) > -under or pit(p, -1) > -under or (vee(p) > -under and p[1] > 4.9) or (SOCK_HI - 0.06 < p[1] < HEM + 0.3 and abs(p[0]) < 1.2),
-    )
-    set_material(body, material(SKIN))
-    top = crop(head(q, slit=q >= 1))
+    bw, bf, bb = girth(body, WAIST)
+    sw, sf, sb = girth(shorts, WAIST)
+    room = 0.05
+    fx, ff, fb = (bw + room) / sw, (bf + room) / sf, (bb + room) / sb
+    print(f'[models] shorts: his waist {bw:.3f} wide, {bf:.3f} and {bb:.3f} deep; theirs {sw:.3f}, {sf:.3f}, {sb:.3f}')
+    for v in shorts.data.vertices:
+        x, y, z = G(v.co)
+        t = sstep(HIP - 0.2, WAIST - 0.18, y)
+        x *= 1 + (fx - 1) * t
+        z *= 1 + (fb + (ff - fb) * sstep(-0.12, 0.12, z) - 1) * t
+        if y < FORK - 0.02 and abs(x) > 0.06:
+            # (each leg about its own middle, below where the two part)
+            k = 1 - 0.07 * sstep(FORK - 0.02, FORK - 0.3, y) * sstep(0.06, 0.2, abs(x))
+            cx = math.copysign(0.445, x)
+            x, z = cx + (x - cx) * k, 0.012 + (z - 0.012) * k
+        v.co = B(x, y, z)
+    shorts.data.update()
 
+
+def kit(mid, q=1.0):
+    """His kit, cut from a lighter copy of his skin (`mid`, which becomes his socks): a V-neck vest tucked into shorts, socks."""
     # the vest: his trunk, a little looser, cut at the armholes and the V of the neck, tucked in; a band of trim round each opening
     vest = copy(mid, 'vest')
     # (it stands a little further off him round the armholes: the skin that goes on under their edge never shows through)
@@ -1528,6 +1574,8 @@ def dress_player(hi, q=1.0):
 
     # the shorts: their own shape over his hips, a leg each; a waistband, a hem band and a stripe down each side
     shorts = shorts_form()
+    if _real is not None:
+        fit_shorts(shorts, mid)
     thin(shorts, 3320 * q)
     stripe = lambda p: abs(p[2] - 0.02) < 0.075 and abs(p[0]) > 0.45  # noqa: E731
     cut(
@@ -1545,11 +1593,151 @@ def dress_player(hi, q=1.0):
     cut(socks, [level(SOCK_LO), level(SOCK_HI)], lambda p: SOCK_LO < p[1] < SOCK_HI)
     set_material(socks, material(WHITE))
 
+    return vest, shorts, socks
+
+
+def dress_player(hi, q=1.0):
+    """In his kit: a V-neck vest tucked into shorts, socks, sneakers. `q` scales how many triangles he's made of (the bench is seen from far off)."""
+    # (the clothes are cut from a lighter copy: cloth has no fine detail to keep)
+    mid = thin(copy(hi, 'mid'), 44000)
+
+    # the skin that shows: head, neck and shoulders outside the vest, the arms; the legs from under the shorts to inside the socks
+    body = thin_body(hi, (8600 if q >= 1 else 3000) * q)
+    # (how far under the vest's edges his skin goes on: less on the benches' coarser bodies, which would poke through it)
+    under = UNDER if q >= 1 else 0.07
+    cut(
+        body,
+        [plane_pit(1, -under), plane_pit(-1, -under), plane_vee(1, -under), plane_vee(-1, -under), level(HEM + 0.3), level(SOCK_HI - 0.06)],
+        lambda p: pit(p, 1) > -under or pit(p, -1) > -under or (vee(p) > -under and p[1] > 4.9) or (SOCK_HI - 0.06 < p[1] < HEM + 0.3 and abs(p[0]) < 1.2),
+    )
+    set_material(body, material(SKIN))
+    top = crop(head(q, slit=q >= 1))
+
+    vest, shorts, socks = kit(mid, q)
     for o in (body, vest, socks):
         tag(o, BY_PLACE)
     built = [body, top, vest, shorts, socks, *ears(EAR if q >= 1 else SKIN), *(mouth() if q >= 1 else [])]
     for s in (1, -1):
         built += fingers(s) + (shoe_fine(s) if q >= 1 else shoe(s))
+    return built
+
+
+def real_player():
+    """The man on the floor: a real man's body and head on the puppet's joints (mhbody.py), his head the size a head is."""
+    global HEAD_W, HEAD_H, HEAD_D, _real
+    HEAD_W, HEAD_H, HEAD_D = PLAYER_HEAD
+    # (each finger's line, as fingers() lays them out: theirs are put on ours)
+    for s in (1, -1):
+        for o in fingers(s):
+            bpy.data.objects.remove(o)
+    ours = {
+        'eye': face_point(EYE_X, EYE_Y),
+        'eye_x': face_point(EYE_X, EYE_Y)[0],
+        'nose': face_point(0, NOSE_TIP),
+        'mouth': face_point(MOUTH_W, MOUTH_Y),
+        'chin': face_point(0, -0.84),
+        'crown': (0, HEAD_C[1] + head_r((0, 1, 0)) * HEAD_H, HEAD_C[2]),
+        'back': (0, HEAD_C[1], HEAD_C[2] - head_r((0, 0, -1)) * HEAD_D),
+    }
+    # (figure.ts's own numbers for what it paints: his eye's half width as it draws it, how far open, his lips' corners)
+    marks = {'eye': (EYE_X, EYE_Y, 0.166), 'eye_up': 0.05, 'eye_low': 0.039, 'mouth_y': MOUTH_Y, 'mouth_w': MOUTH_W}
+    m = dict(HIP=HIP, KN_Y=KN_Y, AN_Y=AN_Y, HIP_W=HIP_W, SHOULDER=SHOULDER, SH_Y=SH_Y, UARM=UARM, FARM=FARM, ARM_OUT=ARM_OUT)
+    _real = mhbody.Player(m, DIGITS, ours, HEAD_C, PLAYER_HEAD, marks)
+    return _real
+
+
+def real_skin(man, faces, name):
+    """Some of the real man's faces as a mesh, each point knowing which of theirs it is (`mhv`), what it is (`tag`) and its fingers' shares (`d_...`)."""
+    used = sorted({i for f in faces for i in f})
+    to = {v: i for i, v in enumerate(used)}
+    o = mesh_obj(name, [tuple(man.Q[i]) for i in used], [[to[i] for i in f] for f in faces])
+    me = o.data
+    me.attributes.new('tag', 'INT', 'POINT').data.foreach_set('value', [FACE if man.is_head[i] else REAL for i in used])
+    me.attributes.new('mhv', 'FLOAT', 'POINT').data.foreach_set('value', [float(i + 1) for i in used])
+    me.attributes.new('ball', 'FLOAT', 'POINT').data.foreach_set('value', [1.0 if man.eye[i] or man.lip_edge[i] else 0.0 for i in used])
+    for d in mhbody.DIGIT_OF:
+        for k in (1, 2):
+            me.attributes.new(f'd_{d}{k}', 'FLOAT', 'POINT').data.foreach_set('value', [float(man.digits[f'{d}{k}l'][i] + man.digits[f'{d}{k}r'][i]) for i in used])
+    return o
+
+
+def scalp_of(man, shut=False):
+    """His head's skin to find a point of his scalp on (see on_head), and each eye's ball (its middle and how big it is: see on_eye)."""
+    global _scalp, _balls
+    from mathutils.bvhtree import BVHTree
+
+    pts, polys = [], []
+    for f in man.faces + man.eyes + (man.lips_shut if shut else []):
+        # (and the top of his neck under it: what grows under his jaw is put on that)
+        if min(man.Q[i][1] for i in f) > HEAD_C[1] - HEAD_H * 1.45 and all(abs(man.Q[i][0]) < 0.5 for i in f):
+            polys.append(list(range(len(pts), len(pts) + len(f))))
+            pts += [Vector(man.Q[i]) for i in f]
+    _scalp = BVHTree.FromPolygons(pts, polys)
+    _balls = {}
+    for s in (1, -1):
+        ix = sorted({i for f in man.eyes for i in f if s * man.Q[i][0] > 0})
+        P = np.array([man.Q[i] for i in ix])
+        # (the ball those points are on: least squares)
+        A = np.hstack([2 * P, np.ones((len(P), 1))])
+        sol, *_ = np.linalg.lstsq(A, (P * P).sum(1), rcond=None)
+        c = sol[:3]
+        _balls[s] = (Vector(c), math.sqrt(sol[3] + c @ c))
+
+
+def on_eye(n, out=0.0):
+    """The point of his eye's ball along n (in the head's half sizes), `out` feet off it: where his lids are in the way, the ball behind them."""
+    size = (HEAD_W, HEAD_H, HEAD_D)
+    d = Vector([n[i] * size[i] for i in range(3)]).normalized()
+    c, r = _balls[1 if n[0] > 0 else -1]
+    o = Vector(HEAD_C) - c
+    b = o.dot(d)
+    disc = b * b - (o.length_squared - r * r)
+    t = -b + math.sqrt(disc) if disc > 0 else -b
+    p = Vector(HEAD_C) + d * t
+    # (a ray that misses the ball: the point of the ball nearest it)
+    return c + (p - c).normalized() * (r + out)
+
+
+def dress_real(man):
+    """The real man in his kit: as dress_player, but his skin is his own points (none thinned away), his head, ears and hands part of it."""
+    global _scalp
+    from mathutils.bvhtree import BVHTree
+
+    # (the clothes are cut from a finer, then lighter, copy of him below his chin)
+    hi = real_skin(man, [f for f in man.faces if max(man.Q[i][1] for i in f) < 5.95], 'hi')
+    hi = apply_modifier(hi, 'SUBSURF', levels=2)
+    for a in list(hi.data.attributes):
+        if a.name in ('tag', 'mhv', 'ball') or a.name.startswith('d_'):
+            hi.data.attributes.remove(a)
+    fix_normals(hi)
+    mid = thin(hi, 44000)
+
+    body = real_skin(man, man.faces + man.eyes, 'body')
+    ear = set(np.where(man.ear)[0])
+    ears_at = [i for i, f in enumerate(man.faces + man.eyes) if all(v in ear for v in f)]
+    body.data.materials.append(material(SKIN))
+    body.data.materials.append(material(EAR))
+    for i in ears_at:
+        body.data.polygons[i].material_index = 1
+    pts, polys = [], []
+    for p in body.data.polygons:
+        if G(p.center)[1] > HEAD_C[1] - HEAD_H * 1.2:
+            polys.append(list(range(len(pts), len(pts) + len(p.vertices))))
+            pts += [G(body.data.vertices[i].co) for i in p.vertices]
+    _scalp = BVHTree.FromPolygons(pts, polys)
+    under = UNDER
+    cut(
+        body,
+        [plane_pit(1, -under), plane_pit(-1, -under), plane_vee(1, -under), plane_vee(-1, -under), level(HEM + 0.12), level(SOCK_HI - 0.06)],
+        lambda p: pit(p, 1) > -under or pit(p, -1) > -under or (vee(p) > -under and p[1] > 4.9) or (SOCK_HI - 0.06 < p[1] < HEM + 0.12 and abs(p[0]) < 1.2),
+        under=5.7,
+    )
+    vest, shorts, socks = kit(mid)
+    for o in (vest, socks):
+        tag(o, BY_PLACE)
+    built = [body, vest, shorts, socks, *mouth()]
+    for s in (1, -1):
+        built += shoe_fine(s)
     return built
 
 
@@ -1665,13 +1853,58 @@ def finish(built, name='figure'):
     tags = [0] * len(me.vertices)
     me.attributes['tag'].data.foreach_get('value', tags)
     groups = {b: fig.vertex_groups.new(name=b) for b in [*BONES, *leaves()]}
+    digit = {}
+    for a in me.attributes:
+        if a.name.startswith('d_'):
+            digit[a.name[2:]] = np.zeros(len(me.vertices), dtype=np.float32)
+            a.data.foreach_get('value', digit[a.name[2:]])
+    if 'ball' in me.attributes:
+        # (an eye's ball is behind its lids, and the edge of a lip behind the lip: the shade of that is not theirs)
+        ball = np.zeros(len(me.vertices), dtype=np.float32)
+        me.attributes['ball'].data.foreach_get('value', ball)
+        col = me.color_attributes['Col']
+        data = np.zeros(len(col.data) * 4, dtype=np.float32)
+        col.data.foreach_get('color', data)
+        data = data.reshape(-1, 4)
+        if len(data) == len(me.vertices):
+            data[ball > 0.5, :3] = 1.0
+        else:
+            for lp in me.loops:
+                if ball[lp.vertex_index] > 0.5:
+                    data[lp.index, :3] = 1.0
+        col.data.foreach_set('color', data.ravel())
     for v in me.vertices:
         kind = tags[v.index]
         at = tuple(G(v.co))
         ws = {RIGID[kind]: 1.0} if kind in RIGID else swing_weights(at) if kind == SWINGS else face_weights(at) if kind == FACE else hand_weights(at, kind) if kind in (HAND_L, HAND_R) else weights(at, kind)
+        if kind == REAL:
+            # (his fingers' and thumb's shares are his own modellers')
+            sfx = 'l' if at[0] > 0 else 'r'
+            mine = {f'{d}{sfx}': float(a[v.index]) for d, a in digit.items() if a[v.index] > 0.004}
+            if not digit:
+                # (a skin that was thinned has lost them: each finger's points are those nearest its line, as a built hand's)
+                hand = ws.get('ha' + sfx, 0.0)
+                if hand > 0.004:
+                    hw = hand_weights(at, HAND_L if sfx == 'l' else HAND_R)
+                    del ws['ha' + sfx]
+                    for k, w in hw.items():
+                        ws[k] = ws.get(k, 0.0) + hand * w
+                    top = sorted(((w, k) for k, w in ws.items() if w > 0.004), reverse=True)[:4]
+                    tot = sum(w for w, _ in top)
+                    ws = {k: w / tot for w, k in top}
+            f = min(1.0, sum(mine.values()))
+            if f > 0:
+                ws = {k: w * (1 - f) for k, w in ws.items()}
+                for k, w in mine.items():
+                    ws[k] = ws.get(k, 0.0) + w
+                top = sorted(((w, k) for k, w in ws.items() if w > 0.004), reverse=True)[:4]
+                tot = sum(w for w, _ in top)
+                ws = {k: w / tot for w, k in top}
         for b, wt in ws.items():
             groups[b].add([v.index], wt, 'REPLACE')
     me.attributes.remove(me.attributes['tag'])
+    for a in [a.name for a in me.attributes if a.name == 'ball' or a.name.startswith('d_')]:
+        me.attributes.remove(me.attributes[a])
     arm_ob = rig(fig)
     return fig, arm_ob
 
@@ -1700,8 +1933,18 @@ def on_head(n, out=0.0):
     """The point of his scalp along n (in the head's half sizes), `out` feet off it."""
     ln = math.sqrt(sum(v * v for v in n))
     n = tuple(v / ln for v in n)
-    r = head_r(n)
     size = (HEAD_W, HEAD_H, HEAD_D)
+    if _scalp is not None:
+        # (the real man's: where a ray in from outside, along n, meets his skin)
+        d = Vector([n[i] * size[i] for i in range(3)]).normalized()
+        for lift in (0.0, 0.006, -0.006, 0.014):
+            # (a ray down the line between his lips finds no skin there, but the inside of the back of his head: one a
+            # hair over the line does)
+            dd = (d + Vector((0, lift, 0))).normalized()
+            hit = _scalp.ray_cast(Vector(HEAD_C) + dd * 3.0, -dd)
+            if hit[0] is not None and (hit[0] - Vector(HEAD_C)).dot(dd) > 0:
+                return hit[0] + Vector(n) * out
+    r = head_r(n)
     p = Vector([HEAD_C[i] + n[i] * r * size[i] for i in range(3)])
     return p + Vector(n) * out
 
@@ -1786,7 +2029,7 @@ def hightop(cols=40):
     span = max(math.hypot(p.x, p.z - axis) for p in base)
 
     def lump(p):
-        return 0.011 * (math.sin(p.x * 61 + p.y * 37) * math.sin(p.z * 57 - p.y * 41) + 0.6 * math.sin(p.x * 113 - p.z * 97 + p.y * 71))
+        return 0.003 * (math.sin(p.x * 61 + p.y * 37) * math.sin(p.z * 57 - p.y * 41) + 0.6 * math.sin(p.x * 113 - p.z * 97 + p.y * 71))
 
     # (each ring: how far out from the axis, as a share of where the foot of the hair is; how high, from its foot to the top)
     prof = [(0.96, -0.012, 0.0), (1.0, 0.0, 0.0), (1.035, 0.0, 0.25), (1.065, 0.0, 0.55), (1.08, 0.0, 0.8), (1.075, 0.0, 1.0)]
@@ -1827,80 +2070,145 @@ def hightop(cols=40):
     return o
 
 
-def hair_pieces():
-    """Hair that stands off his head as shapes of their own: a bun, hair tied back, short twists, locks to his neck, the ends of his braids."""
+def lock(pts, r, sides, name, wind=0.0, swell=0.0, tip=0.6):
+    """
+    A lock of hair through these points: round, its end rounded off (never a cut stub), a little thinner toward it
+    (`tip`: its share of the root's thickness there). `wind` turns each ring on from the last (a twist is wound);
+    `swell` makes it thicker and thinner along itself, as a lock that was palm-rolled is.
+    """
+    n = len(pts)
+    verts, faces = [], []
+    for i, p in enumerate(pts):
+        d = (pts[min(i + 1, n - 1)] - pts[max(i - 1, 0)]).normalized()
+        e1 = d.cross(Vector((0.3, 0.2, 1))).normalized()
+        e2 = d.cross(e1)
+        t = i / (n - 1)
+        rad = r * (1 - (1 - tip) * t ** 1.5) * (1 + swell * math.sin(i * 2.4 + pts[0].x * 40))
+        for k in range(sides):
+            a = 2 * math.pi * k / sides + wind * i
+            verts.append(tuple(p + (e1 * math.cos(a) + e2 * math.sin(a)) * rad))
+    # (its end: a smaller ring a little past the last, and a point)
+    d = (pts[-1] - pts[-2]).normalized()
+    e1 = d.cross(Vector((0.3, 0.2, 1))).normalized()
+    e2 = d.cross(e1)
+    for k in range(sides):
+        a = 2 * math.pi * k / sides + wind * n
+        verts.append(tuple(pts[-1] + d * r * tip * 0.7 + (e1 * math.cos(a) + e2 * math.sin(a)) * r * tip * 0.6))
+    end = len(verts)
+    verts.append(tuple(pts[-1] + d * r * tip))
+    for i in range(n):
+        for k in range(sides):
+            a, b_ = i * sides + k, i * sides + (k + 1) % sides
+            faces.append((a, b_, b_ + sides, a + sides))
+    for k in range(sides):
+        faces.append((n * sides + k, n * sides + (k + 1) % sides, end))
+    o = mesh_obj(name, verts, faces)
+    fix_normals(o)
+    return o
+
+
+def scalp_spots(count, rnd, low=0.06, crown=1.75, power=0.62):
+    """Places spread evenly over his scalp (a spiral from his crown down), a little off it each its own way: directions from his head's middle, over his hairline."""
+    out = []
+    for i in range(count):
+        t = (i + 0.5) / count
+        e = math.pi / 2 - t ** power * crown
+        a = i * 2.39996 + rnd.uniform(-0.12, 0.12)
+        n = (math.cos(e) * math.sin(a), math.sin(e), math.cos(e) * math.cos(a))
+        if hairline(tuple(on_head(n))) >= low:
+            out.append(n)
+    return out
+
+
+def hair_pieces(light=False):
+    """
+    Hair that stands off his head as shapes of their own: a bun, hair tied back, short twists, locks to his shoulders,
+    the ends of his braids, an afro, a high top, a head of curls. `light`: the benches', seen from further off (fewer
+    twists and locks, each of fewer sides).
+    """
     rnd = random.Random(7)
     out = []
-    # a bun, high on the back of his crown, over the knot it's tied in
-    bun = ellipsoid(tuple(on_head((0, 0.62, -0.72), 0.075)), (0.115, 0.1, 0.11), 14, 10, 'bun', Matrix.Rotation(0.7, 3, 'X'))
-    knot = ellipsoid(tuple(on_head((0, 0.62, -0.72), 0.0)), (0.07, 0.05, 0.07), 10, 6, 'knot', Matrix.Rotation(0.7, 3, 'X'))
-    out.append((join([bun, knot], 'bun'), BUN))
-    # hair tied at the back of his head, its tail down to the nape
-    root = on_head((0, 0.25, -1), 0.02)
-    tail = [root + Vector((0, 0.03, 0.02)), root + Vector((0, 0.02, -0.07)), root + Vector((0, -0.08, -0.12)), root + Vector((0, -0.2, -0.11)), root + Vector((0, -0.31, -0.08)), root + Vector((0, -0.38, -0.06))]
+    down = Vector((0, -1, 0))
+    # a bun, high on the back of his crown: a knot of hair wound round, flatter than a ball, a dimple in its middle,
+    # over the band it's tied with
+    at, way = on_head((0, 0.62, -0.72), 0.0), Vector((0, 0.62, -0.72)).normalized()
+    side = way.cross(Vector((1, 0, 0))).normalized()
     rings = []
-    for i, p in enumerate(tail):
-        w = (0.035, 0.07, 0.075, 0.065, 0.045, 0.012)[i]
-        rings.append([(p.x + math.cos(a) * w * 1.25, p.y, p.z + math.sin(a) * w) for a in (2 * math.pi * k / 8 for k in range(8))])
+    for u, rad, off in ((0.0, 0.07, -0.01), (0.25, 0.105, 0.02), (0.5, 0.122, 0.055), (0.75, 0.112, 0.092), (0.9, 0.08, 0.112), (1.0, 0.03, 0.108)):
+        rings.append([tuple(at + way * off + (Vector((1, 0, 0)) * math.cos(a) + side * math.sin(a)) * rad * (1 + 0.07 * math.sin(a * 3 + u * 5))) for a in (2 * math.pi * k / 16 for k in range(16))])
+    out.append((solid(rings, 'bun'), BUN))
+    # hair tied at the back of his head: gathered at the band, a tail that swells out from it and hangs to his nape,
+    # round, coming to a soft end, a little wave in it
+    root = on_head((0, 0.28, -1), 0.012)
+    line = [root + Vector((0, 0.02, 0.01)), root + Vector((0, 0.012, -0.035)), root + Vector((0, -0.04, -0.075)), root + Vector((0.008, -0.13, -0.085)), root + Vector((-0.006, -0.23, -0.075)), root + Vector((0.004, -0.32, -0.06)), root + Vector((0, -0.39, -0.05))]
+    rings = []
+    for i, p in enumerate(line):
+        w = (0.024, 0.04, 0.052, 0.05, 0.043, 0.031, 0.013)[i]
+        d = (line[min(i + 1, len(line) - 1)] - line[max(i - 1, 0)]).normalized()
+        e1 = Vector((1, 0, 0))
+        e2 = d.cross(e1).normalized()
+        rings.append([tuple(p + (e1 * math.cos(a) * 1.05 + e2 * math.sin(a) * 0.9) * w * (1 + 0.07 * math.sin(a * 5 + i))) for a in (2 * math.pi * k / 10 for k in range(10))])
     out.append((solid(rings, 'tail'), TAIL))
-    # short twists all over his scalp: each a stub with a round end, standing off it and leaning its own way, the
-    # scalp showing in the partings between them
+    # short twists all over his scalp: each a wound lock a finger long, standing off his head where it grows and
+    # falling over with its own weight, its end round; thick enough that they crowd one another and little scalp shows
     parts = []
-    for i in range(124):
-        # (spread evenly over the scalp: a spiral from the crown down to the hairline)
-        t = (i + 0.5) / 124
-        e = math.pi / 2 - t ** 0.62 * 1.75
-        a = i * 2.39996
-        n = (math.cos(e) * math.sin(a), math.sin(e), math.cos(e) * math.cos(a))
-        if hairline(tuple(on_head(n))) < 0.06:
-            continue
-        base = on_head(n, -0.012)
-        lean = Vector((rnd.uniform(-0.4, 0.4), -0.35, rnd.uniform(-0.4, 0.4)))
-        tall = rnd.uniform(0.07, 0.105)
-        mid = on_head(n, tall * 0.6) + lean * 0.018
-        tip = on_head(n, tall) + lean * 0.05
-        r = rnd.uniform(0.03, 0.037)
-        e1 = Vector(n).cross(Vector((0.3, 0.2, 1))).normalized()
-        e2 = Vector(n).cross(e1).normalized()
-        rings = [[tuple(at + (e1 * math.cos(q + turn) + e2 * math.sin(q + turn)) * rad) for q in (2 * math.pi * k / 5 for k in range(5))] for at, rad, turn in ((base, r, 0.0), (mid, r * 0.96, 0.5), (tip, r * 0.62, 1.0))]
-        # (its foot is under his scalp: left open, a triangle or three saved on each)
-        stub = mesh_obj('twist', [p for ring_ in rings for p in ring_], [(i * 5 + k, i * 5 + (k + 1) % 5, (i + 1) * 5 + (k + 1) % 5, (i + 1) * 5 + k) for i in range(2) for k in range(5)] + [tuple(range(10, 15))])
-        fix_normals(stub)
-        parts.append(stub)
+    for n in scalp_spots(74 if light else 165, rnd, power=0.68):
+        nv = Vector(n)
+        lean = Vector((rnd.uniform(-0.5, 0.5), 0, rnd.uniform(-0.5, 0.5)))
+        tall = rnd.uniform(0.11, 0.165)
+        # (those round his hairline hang; those on his crown stand a little and fall outward)
+        out_ = Vector((n[0], 0, n[2]))
+        out_ = out_.normalized() if out_.length > 0.1 else lean.normalized()
+        fall = (out_ * 0.55 + down * (0.5 + 0.5 * (1 - n[1])) + lean * 0.3).normalized()
+        p0 = on_head(n, -0.012)
+        p1 = p0 + nv * tall * 0.36
+        p2 = p1 + (nv * 0.55 + fall * 0.6).normalized() * tall * 0.34
+        p3 = p2 + (nv * 0.1 + fall).normalized() * tall * 0.3
+        parts.append(lock([p0, p1, p2, p3], rnd.uniform(0.036, 0.042) if light else rnd.uniform(0.03, 0.037), 4 if light else 5, 'twist', wind=0.5, tip=0.7))
     out.append((join(parts, 'twists'), TWISTS))
-    # locks from his crown down to his neck, over his ears
+    # locks from his crown down past his jaw, over his ears and down the back of his neck: each lies over his head from
+    # where it grows, comes off it and hangs straight, thick as a finger, uneven along itself
     parts = []
-    for i in range(46):
-        t = (i + 0.5) / 46
-        e = math.pi / 2 - (0.25 + t ** 0.7 * 1.2)
-        a = i * 2.39996
-        n = (math.cos(e) * math.sin(a), math.sin(e), math.cos(e) * math.cos(a))
-        if hairline(tuple(on_head(n))) < 0.05:
-            continue
-        base = on_head(n, 0.0)
-        # (out over the scalp, then straight down; the ones in front are swept back)
-        side = Vector((n[0], 0, min(n[2], 0.1)))
-        side = side.normalized() if side.length > 0.05 else Vector((0, 0, -1))
-        over = on_head((n[0] * 1.3, n[1] - 0.3, min(n[2] * 1.2, n[2] - 0.15)), 0.035)
-        end_y = HEAD_C[1] - HEAD_H * rnd.uniform(0.85, 1.15)
-        over.z = min(over.z, 0.12)
-        low = Vector((over.x + side.x * 0.03, min(over.y - 0.05, max(end_y, over.y - 0.5)), over.z + side.z * 0.03 - 0.02))
-        mid = (over + low) / 2 + side * 0.012
-        parts.append(strand([base, (base + over) / 2 + Vector(n) * 0.03, over, mid, low], 0.03, 5, 'lock'))
+    for n in scalp_spots(42 if light else 86, rnd, low=0.05, crown=1.5, power=0.78):
+        nv = Vector(n)
+        side = Vector((n[0], 0, min(n[2], 0.15)))
+        side = side.normalized() if side.length > 0.08 else Vector((rnd.uniform(-0.4, 0.4), 0, -1)).normalized()
+        base = on_head(n, -0.008)
+        # (out over his scalp toward his side or the back, never down over his face: those in front are swept back)
+        m1 = on_head((n[0] + side.x * 0.35, n[1] - 0.12, min(n[2], 0.55) + side.z * 0.35), 0.03)
+        m2 = on_head((n[0] + side.x * 0.75, n[1] - 0.42, min(n[2], 0.3) + side.z * 0.75 - 0.1), 0.045)
+        m2.z = min(m2.z, 0.1)
+        end_y = HEAD_C[1] - HEAD_H * rnd.uniform(1.0, 1.45)
+        end_y = min(end_y, m2.y - 0.08)
+        sway = Vector((rnd.uniform(-0.02, 0.02), 0, rnd.uniform(-0.02, 0.02)))
+        pts = [base, m1, m2]
+        for f in (0.3, 0.62, 1.0):
+            pts.append(Vector((m2.x + side.x * 0.03 * f, m2.y + (end_y - m2.y) * f, m2.z + side.z * 0.03 * f - 0.015 * f)) + sway * f)
+        parts.append(lock(pts, rnd.uniform(0.033, 0.039) if light else rnd.uniform(0.027, 0.033), 4 if light else 6, 'lock', swell=0.1, tip=0.72))
     out.append((join(parts, 'locs'), LOCS))
-    # the ends of his braids, a row of them down the back of his neck
+    # the ends of his braids, each row's own, down the back of his neck: plaited (thicker and thinner along it), a
+    # bead's width, hanging a hand's breadth
     parts = []
-    for i in range(9):
-        a = math.pi + (i - 4) * 0.19
-        n = (math.sin(a) * 0.9, -0.42, math.cos(a) * 0.9)
-        base = on_head(n, 0.0)
-        drop = rnd.uniform(0.2, 0.3)
-        parts.append(strand([base + Vector((0, 0.03, 0.01)), base + Vector((0, -0.02, -0.012)), base + Vector((0, -drop * 0.6, -0.008)), base + Vector((0, -drop, 0.0))], 0.018, 4, 'braid'))
+    for i in range(11):
+        a = math.pi + (i - 5) * 0.2
+        n = (math.sin(a) * 0.9, -0.4 + 0.03 * abs(i - 5), math.cos(a) * 0.9)
+        base = on_head(n, -0.004)
+        drop = rnd.uniform(0.26, 0.4)
+        back = Vector((n[0], 0, n[2])).normalized()
+        pts = [base + Vector((0, 0.03, 0)), base + back * 0.012 + Vector((0, -0.03, 0))]
+        for f in (0.3, 0.55, 0.8, 1.0):
+            pts.append(base + back * (0.02 - 0.012 * f) + Vector((rnd.uniform(-0.006, 0.006), -drop * f, 0)))
+        parts.append(lock(pts, 0.021, 4 if light else 5, 'braid', swell=0.22, tip=0.75))
     out.append((join(parts, 'braids'), BRAIDS))
-    # heads of hair that stand off the scalp: an afro, round; a high top, its sides left to the scalp; short curls, uneven
-    out.append((volume('afro', lambda n: 0.1 + 0.1 * sstep(0.05, 0.8, n[1]) - 0.03 * sstep(0.3, 0.9, n[2]), cols=52, rows=15, lumps=0.022), AFRO))
+    # heads of hair that stand off the scalp (his hair's fuzz is laid over them as coils: figure.ts's COILED, so their
+    # own shape is the mass under the curls, even, with no lumps of its own): an afro, round, fullest over his temples and
+    # crown, drawn in a little at his nape; a high top; short curls
+    def afro(n):
+        return 0.11 + 0.11 * sstep(-0.1, 0.75, n[1]) - 0.035 * sstep(0.35, 0.95, n[2]) * sstep(0.7, 0.2, n[1]) + 0.025 * sstep(0.5, 0.95, abs(n[0])) * sstep(-0.2, 0.3, n[1])
+
+    out.append((volume('afro', afro, cols=46 if light else 56, rows=13 if light else 16, lumps=0.006), AFRO))
     out.append((hightop(), HIGHTOP))
-    out.append((volume('curls', lambda n: 0.034 + 0.01 * math.sin(n[0] * 23 + n[1] * 9) * math.sin(n[2] * 21 - n[1] * 13), cols=52, rows=14), CURLS))
+    out.append((volume('curls', lambda n: 0.04 + 0.022 * sstep(0.2, 0.8, n[1]), cols=52, rows=14, lumps=0.004), CURLS))
     for o, name in out:
         set_material(o, material(name, (0.05, 0.04, 0.035), 0.8))
         tag(o, SWINGS if name in (TAIL, LOCS, BRAIDS) else ON_HEAD)
@@ -1912,6 +2220,8 @@ def build(who='player'):
     reset()
     materials()
     girdled = who == 'player'
+    if who == 'player':
+        return finish(dress_real(real_player()) + hair_pieces(), 'figure')
     hi = fused()
     # (only the men on the floor have hair that is a shape of its own: the benches are seen from far off)
     return finish(dress_player(hi) + hair_pieces() if who == 'player' else dress_coach(hi), 'figure' if who == 'player' else who)
@@ -2040,8 +2350,44 @@ def faces_bin(fig, path):
         px, py = face_at(n)
         e = math.hypot((abs(px) - EYE_X) / (EYE_W * 1.9), (py - EYE_Y - 0.01) / 0.16)
         moves['real'][i] *= sstep(0.75, 1.35, e)
+    write_faces(path, points, moves, found, rows, cols, count, near)
+
+
+def faces_bin_real(fig, man, path):
+    """
+    faces.bin for the real man: his head's points are MakeHuman's own, so each of mh.py's shapes moves each of them
+    as it moves theirs (in our head's scale), less toward his crown and the back of his head (face_reach: his hair
+    stays where it is). The file is as faces_bin writes it.
+    """
+    import mh
+
+    theirs = mh.Theirs()
+    me = fig.data
+    names = {g.index: g.name for g in fig.vertex_groups}
+    mhv = np.zeros(len(me.vertices), dtype=np.float32)
+    me.attributes['mhv'].data.foreach_get('value', mhv)
+    keys, points, src = {}, [], []
+    for v in me.vertices:
+        on = sum(g.weight for g in v.groups if names[g.group] in FACE_BONES)
+        if on < 0.5 or mhv[v.index] < 0.5:
+            continue
+        q = tuple(int(round(c / FACE_GRID)) for c in G(v.co))
+        if q in keys:
+            continue
+        keys[q] = len(points)
+        points.append(tuple(c * FACE_GRID for c in q))
+        src.append(int(round(mhv[v.index])) - 1)
+    src = np.array(src)
+    reach = np.array([face_reach(p) for p in points])
+    moves = {k: m[src] * man.scale * reach[:, None] for k, m in theirs.moves.items()}
+    write_faces(path, points, moves, len(points))
+
+
+def write_faces(path, points, moves, found, rows=None, cols=None, count=None, near=None):
+    import struct
+
     order = list(moves)
-    if os.environ.get('FACE_DEBUG'):
+    if os.environ.get('FACE_DEBUG') and rows is not None:
         for k in order:
             m = moves[k]
             avg = np.zeros_like(m)
@@ -2079,8 +2425,9 @@ if __name__ == '__main__':
     a = args()
     fig, arm_ob = build()
     report(fig)
+    faces_bin_real(fig, _real, os.path.join(a['out'], 'faces.bin'))
+    fig.data.attributes.remove(fig.data.attributes['mhv'])
     export_glb(os.path.join(a['out'], 'figure.glb'), [fig, arm_ob])
-    faces_bin(fig, os.path.join(a['out'], 'faces.bin'))
     save_blend(os.path.join(a['blend'], 'figure.blend'))
     if 'preview' in a:
         hand = arm_frame(1) @ Vector((0, -(ARM + 0.35), 0))

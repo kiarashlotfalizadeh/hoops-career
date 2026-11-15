@@ -1083,7 +1083,8 @@ function bones(kit: Kit, body: Body, look: Look, id: number, dress: MatchKit): {
     const { s, bulk } = body;
     const thick = s * (0.78 + 0.22 * bulk);
     const deep = Math.sqrt(bulk) * s;
-    const hs = Math.sqrt(s) * 1.06;
+    // (a real man's head for his height, as a player's is: figure.ts)
+    const hs = Math.sqrt(s);
     const f = look.face;
     const size = (names: string[], x: number, y: number, z: number) => {
       for (const name of names) {

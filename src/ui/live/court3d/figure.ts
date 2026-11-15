@@ -185,13 +185,15 @@ const ARM_BONES = [
   [B.uar, B.far, B.fwr, B.har, ...DIGIT_BONES[1].flat()],
 ];
 /** Where his jaw, his nose and his brows are scaled about, from the head bone (figure.py's JAW_AT, NOSE_AT and BROW_AT). */
-const JAW_AT = new Vector3(0, 0.045 - 0.5 * 0.42, 0.05 + 0.25 * 0.37);
-const NOSE_AT = new Vector3(0, 0.045 - 0.2 * 0.42, 0.05 + 0.8 * 0.37);
-const BROW_AT = new Vector3(0, 0.045 + 0.24 * 0.42, 0.05 + 0.8 * 0.37);
+const HEAD_H = 0.465;
+const HEAD_D = 0.376;
+const JAW_AT = new Vector3(0, 0.045 - 0.5 * HEAD_H, 0.05 + 0.25 * HEAD_D);
+const NOSE_AT = new Vector3(0, 0.045 - 0.2 * HEAD_H, 0.05 + 0.8 * HEAD_D);
+const BROW_AT = new Vector3(0, 0.045 + 0.24 * HEAD_H, 0.05 + 0.8 * HEAD_D);
 /** Where his jaw hinges, just in front of his ear (from the head bone, ft): it comes open about this, not about where it is scaled. */
-const JAW_HINGE = new Vector3(0, 0.045 - 0.03 * 0.42, 0.05 - 0.2 * 0.37);
+const JAW_HINGE = new Vector3(0, 0.045 - 0.03 * HEAD_H, 0.05 - 0.2 * HEAD_D);
 /** Where hair that hangs swings from (figure.py's HAIR_AT). */
-const HAIR_AT = new Vector3(0, 0.045 + 0.1 * 0.42, 0.05 - 0.6 * 0.37);
+const HAIR_AT = new Vector3(0, 0.045 + 0.1 * HEAD_H, 0.05 - 0.6 * HEAD_D);
 
 // ---------------------------------------------------------------- his sheet: where each thing is on it
 
@@ -239,9 +241,195 @@ const HAND_FROM = [2.04, 2.22] as const;
 /** How far down an arm and a leg its strip reaches, ft (shoulder to fingertips, hip to sole, on the 6 ft 6 body). */
 const ARM_LEN = 2.75;
 const LEG_LEN = 3.5;
-/** His head's middle, from the head bone (figure.py's HEAD_C), and its half width, height and depth: his head's picture is drawn round it. */
+/** His head's middle, from the head bone (figure.py's HEAD_C), and its half width, height and depth (figure.py's PLAYER_HEAD: a real man's head for his height): his head's picture is drawn round it. */
 const HEAD_MID = new Vector3(0, 0.045, 0.05);
-const HEAD_SIZE = [0.3, 0.42, 0.37] as const;
+const HEAD_SIZE = [0.28, HEAD_H, HEAD_D] as const;
+/**
+ * A real face's layout, and the formula's. His head is a real man's (scripts/blender/mhbody.py), whose features are
+ * not where figure.py's formula has them (his nose is shorter than its, his chin longer, his eyes lower and further
+ * apart, his lips fuller), and everything here that paints or moves a face does it by the formula's places. So a
+ * place on his face is read through a map: from where a thing is on him (the plane of his face) to where the formula
+ * has it. Up and down, the map is a table: at each of a few distances out from the middle of his face (FACE_COLS),
+ * the heights of some things on him and the heights the formula has them at, straight between them (so it never
+ * doubles back), and straight between one distance and the next. Across, a place by his eye goes in with his eye,
+ * and the corner of his mouth with it (FACE_ACROSS: where, how wide and tall the patch that moves is, how far).
+ * mhbody.py has the same tables and the same map: keep the two alike.
+ */
+const FACE_COLS: readonly (readonly [number, readonly (readonly [number, number])[]])[] = [
+  [
+    0.0,
+    [
+      [0.62, 0.62],
+      [0.03, 0.075],
+      [-0.209, -0.262],
+      [-0.317, -0.345],
+      [-0.383, -0.481],
+      [-0.445, -0.522],
+      [-0.548, -0.61],
+      [-0.727, -0.685],
+      [-0.929, -0.84],
+      [-1.3, -1.3],
+    ],
+  ],
+  [
+    0.08,
+    [
+      [0.62, 0.62],
+      [0.03, 0.075],
+      [-0.209, -0.262],
+      [-0.317, -0.345],
+      [-0.378, -0.471],
+      [-0.458, -0.522],
+      [-0.555, -0.604],
+      [-0.727, -0.685],
+      [-0.929, -0.84],
+      [-1.3, -1.3],
+    ],
+  ],
+  [
+    0.16,
+    [
+      [0.62, 0.62],
+      [0.12, 0.2],
+      [0.03, 0.075],
+      [-0.243, -0.298],
+      [-0.398, -0.479],
+      [-0.471, -0.522],
+      [-0.565, -0.587],
+      [-0.727, -0.685],
+      [-0.929, -0.84],
+      [-1.3, -1.3],
+    ],
+  ],
+  [
+    0.24,
+    [
+      [0.62, 0.62],
+      [0.14, 0.215],
+      [0.02, 0.065],
+      [-0.243, -0.29],
+      [-0.469, -0.496],
+      [-0.489, -0.522],
+      [-0.53, -0.55],
+      [-0.727, -0.69],
+      [-0.929, -0.84],
+      [-1.3, -1.3],
+    ],
+  ],
+  [
+    0.32,
+    [
+      [0.62, 0.62],
+      [0.15, 0.235],
+      [0.02, 0.065],
+      [-0.25, -0.27],
+      [-0.519, -0.522],
+      [-0.75, -0.71],
+      [-0.93, -0.85],
+      [-1.3, -1.3],
+    ],
+  ],
+  [
+    0.45,
+    [
+      [0.62, 0.62],
+      [0.165, 0.26],
+      [0.021, 0.066],
+      [-0.25, -0.24],
+      [-0.52, -0.515],
+      [-0.93, -0.88],
+      [-1.3, -1.3],
+    ],
+  ],
+  [
+    0.65,
+    [
+      [0.62, 0.62],
+      [0.15, 0.22],
+      [0.026, 0.071],
+      [-0.3, -0.29],
+      [-1.3, -1.3],
+    ],
+  ],
+  [
+    0.95,
+    [
+      [0.62, 0.62],
+      [-1.3, -1.3],
+    ],
+  ],
+];
+const FACE_ACROSS: readonly (readonly [number, number, number, number, number])[] = [
+  [0.45, 0.08, 0.22, 0.2, -0.071],
+  [0.32, -0.52, 0.05, 0.06, -0.019],
+  [0.155, -0.243, 0.06, 0.06, -0.007],
+];
+/** A column of the table at height y. */
+function faceCol(knots: readonly (readonly [number, number])[], y: number): number {
+  if (y >= knots[0][0]) return y;
+  for (let i = 1; i < knots.length; i++) {
+    const [y0, v0] = knots[i - 1];
+    const [y1, v1] = knots[i];
+    if (y >= y1) return v0 + ((v1 - v0) * (y0 - y)) / (y0 - y1);
+  }
+  return y;
+}
+/** Where the formula has what is at (px, py) on his face. */
+export function faceT(px: number, py: number): [number, number] {
+  const ax = Math.abs(px);
+  let y = py;
+  const last = FACE_COLS.length - 1;
+  if (ax < FACE_COLS[last][0]) {
+    let k = 1;
+    while (ax > FACE_COLS[k][0]) k++;
+    const [x0, k0] = FACE_COLS[k - 1];
+    const [x1, k1] = FACE_COLS[k];
+    const t = (ax - x0) / (x1 - x0);
+    y = faceCol(k0, py) * (1 - t) + faceCol(k1, py) * t;
+  }
+  let dx = 0;
+  for (const [cx, cy, sx, sy, by] of FACE_ACROSS) dx += by * Math.exp(-(((ax - cx) / sx) ** 2 + ((py - cy) / sy) ** 2));
+  return [ax > 1e-9 ? Math.sign(px) * (ax + dx) : 0, y];
+}
+/** Where on his face the formula's (fx, fy) is: faceT undone (up and down by halving: the map never doubles back). */
+function faceBack(fx: number, fy: number): [number, number] {
+  let x = fx;
+  let y = fy;
+  for (let i = 0; i < 6; i++) {
+    y = solve((v) => faceT(x, v)[1], fy, -1.4, 0.8);
+    x += fx - faceT(x, y)[0];
+  }
+  return [x, y];
+}
+/** The same map for a shader (`faceT( vec2 )`): each column a run of straight pieces. */
+const FACE_T = (() => {
+  const f = (v: number) => v.toFixed(4);
+  const col = (knots: readonly (readonly [number, number])[]) => {
+    let out = 'y';
+    for (let i = knots.length - 1; i >= 1; i--) {
+      const [y0, v0] = knots[i - 1];
+      const [y1, v1] = knots[i];
+      out = `( y >= ${f(y1)} ? ${f(v0)} + ${f((v1 - v0) / (y0 - y1))} * ( ${f(y0)} - y ) : ${out} )`;
+    }
+    return `( y >= ${f(knots[0][0])} ? y : ${out} )`;
+  };
+  const cols = FACE_COLS.map(([, knots], k) => `float faceCol${k}( float y ) { return ${col(knots)}; }`).join('\n');
+  let pick = 'p.y';
+  for (let k = FACE_COLS.length - 1; k >= 1; k--) {
+    const x0 = FACE_COLS[k - 1][0];
+    const x1 = FACE_COLS[k][0];
+    pick = `( ax <= ${f(x1)} ? mix( faceCol${k - 1}( p.y ), faceCol${k}( p.y ), ( ax - ${f(x0)} ) / ${f(x1 - x0)} ) : ${pick} )`;
+  }
+  const across = FACE_ACROSS.map(([cx, cy, sx, sy, by]) => `${f(by)} * exp( - pow( ( ax - ${f(cx)} ) / ${f(sx)}, 2.0 ) - pow( ( p.y - ${f(cy)} ) / ${f(sy)}, 2.0 ) )`).join(' + ');
+  return /* glsl */ `
+${cols}
+vec2 faceT( vec2 p ) {
+  float ax = abs( p.x );
+  float y = ${pick};
+  float dx = ${across};
+  return vec2( ax > 1e-6 ? sign( p.x ) * ( ax + dx ) : 0.0, y );
+}`;
+})();
 /** The most his hair stands off his scalp, ft (an afro, a high top's crown). */
 const HAIR_MAX = 0.32;
 /**
@@ -299,6 +487,14 @@ const RECT: Record<Pic, Rect> = {
 const PIECES = ['bun', 'tail', 'twists', 'locs', 'braids', 'afro', 'hightop', 'curls'];
 /** What makes a shoe a high one (the collar on up round his ankle, a longer tongue): a piece too, left off a man who wears his low. */
 const HIGH = 'high';
+/**
+ * Those of them that are a mass of tight curls: his hair's fuzz is laid over them too, as coils (COIL_OUT ft long, a
+ * coil COIL_ACROSS to the foot of him), so the edge of an afro against the light is curls, each its own, not a
+ * smooth ball.
+ */
+const COILED = ['afro', 'hightop', 'curls'];
+const COIL_OUT = 0.034;
+const COIL_ACROSS = 84;
 /** Those of them that are curls, not strands: their half of the hair's picture is tufts. */
 const TUFTED = ['afro', 'hightop', 'curls', 'twists'];
 /** Which of a picture's two ways goes round (0 across, 1 up; -1 neither): a triangle across its seam is given points of its own. */
@@ -318,6 +514,8 @@ export interface Geo {
   shorts: [number, number];
   /** His hair's fuzz: the scalp again in layers, each a little further out (see fuzzOf). */
   fuzz: BufferGeometry;
+  /** That, for a man who wears this piece of hair (or none): a head of curls has its own curls on it too (see COILED). */
+  fuzzFor(piece: string | null): BufferGeometry;
   /** The shapes a face can take (faces.bin: see readFaces), on the body's points; null where the file didn't come. */
   shapes: Shapes | null;
   blob: BufferGeometry;
@@ -512,8 +710,19 @@ export function figureGeo(keep: <T extends { dispose(): void }>(o: T) => T, mode
     }
     return g;
   };
-  geo.dispose();
-  return { body: wearing(null), wearing, wears: materials, order, inverse, shorts, fuzz, shapes, blob, ring };
+  // (the points stay for a head of curls' own fuzz, made when the first man who wears one comes on)
+  const shell = geo;
+  const coiled = new Map<string, BufferGeometry>();
+  const fuzzFor = (name: string | null) => {
+    if (name === null || !COILED.includes(name)) return fuzz;
+    let g = coiled.get(name);
+    if (!g) {
+      g = keep(fuzzOf(shell, piece, name));
+      coiled.set(name, g);
+    }
+    return g;
+  };
+  return { body: wearing(null), wearing, wears: materials, order, inverse, shorts, fuzz, fuzzFor, shapes, blob, ring };
 }
 
 /**
@@ -533,7 +742,7 @@ const STRANDS = 230;
  * material draws a strand where one stands, fewer in each layer out, so his hair's edge against the light is single
  * hairs and its outline broken, and close up it has depth: not a cap painted on his head.
  */
-function fuzzOf(geo: BufferGeometry, piece: string[]): BufferGeometry {
+function fuzzOf(geo: BufferGeometry, piece: string[], coils: string | null = null): BufferGeometry {
   const pos = geo.getAttribute('position');
   const uv = geo.getAttribute('uv');
   const index = geo.index!;
@@ -560,7 +769,8 @@ function fuzzOf(geo: BufferGeometry, piece: string[]): BufferGeometry {
   const tris: number[] = [];
   for (let t = 0; t < index.count; t += 3) {
     const vs = [index.getX(t), index.getX(t + 1), index.getX(t + 2)];
-    if (piece[t / 3] !== '' || !vs.every(hairy)) continue;
+    // (`coils`: a head of curls that is a shape of its own is in it too, all of it: its curls stand off it, see COILED)
+    if (piece[t / 3] === '' ? !vs.every(hairy) : piece[t / 3] !== coils) continue;
     for (const v of vs) {
       if (!keep.has(v)) {
         keep.set(v, from.length);
@@ -682,6 +892,8 @@ function sheetUv(geo: BufferGeometry, wears: string[], order: number[], inverse:
       case Pic.Hair:
         // (the hair's picture laid over him again and again, each time the other way round so it has no edge: combed
         // hair, in the left half of it, runs down a lock; a head of curls, in the right, is tufts every way)
+        // (hair gathered in a tail or a bun is combed strands and nothing else: between two of the picture's turns of a lock)
+        if (wear[v] === 'tail' || wear[v] === 'bun') return [0.02 + 0.46 * 0.068, fold(P.x * 7.3 + P.z * 5.9)];
         return TUFTED.includes(wear[v]) ? [0.52 + 0.46 * fold(P.x * 2.3 + P.y * 0.9), fold(P.z * 6.4 + P.y * 3.7)] : [0.02 + 0.46 * fold(P.y * 1.7), fold(P.x * 7.3 + P.z * 5.9)];
       case Pic.Mouth:
       case Pic.Teeth:
@@ -1307,8 +1519,7 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
       if (nz > 0.1) {
         // his face, on its plane (figure.py's face_at)
         const fz = Math.max(nz, 0.3);
-        const px = (nx / fz) * 0.8;
-        const py = (ny / fz) * 0.8;
+        const [px, py] = faceT((nx / fz) * 0.8, (ny / fz) * 0.8);
         const apx = Math.abs(px);
         made('face', 1);
         // (and its shine: most down his nose and across his forehead, least on his cheeks; uneven, as skin is)
@@ -1369,13 +1580,10 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
             // (the upper lip faces down, out of the light, and is drier: only the lower one has a lip's shine all over)
             made(lower ? 'lip' : 'face', inLip);
             // (wet along where they meet, and most over the fullness of his lower one: they shine)
-            made('wetLip', inLip * Math.max(sstep(0.03, 0.008, Math.abs(py - my)), lower ? 0.8 * bump(px, py, 0, my - 0.04 * full, 0.16, 0.03) : 0));
+            made('wetLip', inLip * Math.max(0, lower ? 0.45 * bump(px, py, 0, my - 0.04 * full, 0.16, 0.03) : 0));
           }
           // (the line between them, deepest at the corners)
-          to(
-            [skin[0] * 0.2, skin[1] * 0.11, skin[2] * 0.11],
-            (0.55 + 0.35 * t) * sstep(0.006 + 0.003 * t, 0.002, Math.abs(py - my + 0.03 * t * t * t)) * sstep(mw + 0.02, mw - 0.03, apx),
-          );
+          to([skin[0] * 0.2, skin[1] * 0.11, skin[2] * 0.11], (0.25 + 0.3 * t) * sstep(0.011 + 0.003 * t, 0.003, Math.abs(py - my)) * sstep(mw + 0.02, mw - 0.03, apx));
           shade(0.2 * bump(apx, py, mw + 0.005, my - 0.025, 0.035, 0.03));
         }
         // his eyes: the white between its lids, the iris with its dark rim and pupil, a light in it; lashes, the fold
@@ -1440,8 +1648,7 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
       // ground has the shadow of a shave
       if (nz > -0.25 && ny < 0.36) {
         const fz = Math.max(nz, 0.3);
-        const px = (nx / fz) * 0.8;
-        const py = (ny / fz) * 0.8;
+        const [px, py] = faceT((nx / fz) * 0.8, (ny / fz) * 0.8);
         const apx = Math.abs(px);
         const front = sstep(0.2, 0.36, nz);
         // (round the mouth: over the lip, down beside it, the chin; never on the lips)
@@ -1611,9 +1818,10 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
           }
           case 'twists':
           case 'locs':
-            cover = over(0.05) * (0.78 + 0.22 * curl);
+            // (parted into squares at the roots, each lock's own: dark between them, little of his scalp to be seen)
+            cover = over(0.05) * (0.9 + 0.1 * curl);
             lift = 0.012 * over(0.05);
-            tex = 0.75 + 0.4 * curl;
+            tex = 0.62 + 0.4 * curl;
             break;
           case 'tied':
             cover = over(0.03);
@@ -2508,7 +2716,7 @@ function faceUv(px: number, py: number): [number, number] {
 const EYES = (() => {
   const f = (v: number) => v.toFixed(5);
   // (the eyes' own corner of the sheet, a little over: nothing is worked out anywhere else)
-  const box = [-1, 1].flatMap((sx) => [-1, 1].map((sy) => faceUv(sx * (EYE[0] + EYE[2] + 0.06), EYE[1] + sy * 0.13)));
+  const box = [-1, 1].flatMap((sx) => [-1, 1].map((sy) => faceUv(...faceBack(sx * (EYE[0] + EYE[2] + 0.06), EYE[1] + sy * 0.13))));
   const [u0, u1] = [Math.min(...box.map((c) => c[0])), Math.max(...box.map((c) => c[0]))];
   const [v0, v1] = [Math.min(...box.map((c) => c[1])), Math.max(...box.map((c) => c[1]))];
   const lin = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
@@ -2525,7 +2733,7 @@ const EYES = (() => {
       }
       float hel = ( ht - 0.5 ) * 3.14159;
       // (and from there the plane of his face: out from his nose, and up)
-      vec2 fp = vec2( tan( ha ) * ${f((HEAD_SIZE[2] / HEAD_SIZE[0]) * 0.8)}, tan( hel ) / cos( ha ) * ${f((HEAD_SIZE[2] / HEAD_SIZE[1]) * 0.8)} );
+      vec2 fp = faceT( vec2( tan( ha ) * ${f((HEAD_SIZE[2] / HEAD_SIZE[0]) * 0.8)}, tan( hel ) / cos( ha ) * ${f((HEAD_SIZE[2] / HEAD_SIZE[1]) * 0.8)} ) );
       float side = sign( fp.x );
       float ex = abs( fp.x ) - ${f(EYE[0])};
       float ey = fp.y - ${f(EYE[1])};
@@ -2630,6 +2838,8 @@ const EYES = (() => {
 interface Told {
   uTone: { value: number };
   uSkin: { value: Color };
+  /** His hair's colour (his fuzz stands only where his head's picture is nearly all of it: see stuffMaterial). */
+  uHair: { value: Color };
   uBlink: { value: number };
   uIris: { value: Color };
   uEye: { value: Vector2 };
@@ -2801,10 +3011,15 @@ const HEAD_S = `vec3( ${HEAD_SIZE.map((v) => v.toFixed(3)).join(', ')} )`;
  * or not, his nose's wings broad or narrow), placed by the plane of his face as figure.py's head_r places it.
  * Each is a share of uShape and uShape2 (0 the middling man): no two faces one head scaled.
  */
-const FACE_SHAPE = /* glsl */ `
+const FACE_SHAPE = /* glsl */ `${FACE_T}
 uniform vec4 uShape;
 uniform vec4 uShape2;
 float faceG( vec2 p, vec2 c, vec2 s ) { vec2 q = ( p - c ) / s; return exp( - dot( q, q ) ); }
+// (how much of his face's shape and moves a point takes: none of them where his head's skin gives way to his neck's,
+// under his jaw and round the top of his neck (mhbody.py's own line): the two are one skin, and must not part there)
+float faceOn( vec3 n ) {
+  return max( smoothstep( -0.62, -0.5, n.y ), smoothstep( 1.0, 1.2, length( vec2( n.x * ${(HEAD_SIZE[0] / 0.225).toFixed(4)}, ( n.z * ${HEAD_SIZE[2].toFixed(4)} + 0.08 ) / 0.19 ) ) ) );
+}
 float faceShape( vec3 p ) {
   vec3 n = normalize( ( p - vec3( 0.0, ${(HEAD_REST + HEAD_MID.y).toFixed(3)}, ${HEAD_MID.z.toFixed(3)} ) ) / vec3( ${HEAD_SIZE.map((v) => v.toFixed(3)).join(', ')} ) );
   float ax = abs( n.x );
@@ -2813,7 +3028,7 @@ float faceShape( vec3 p ) {
   float f = uShape.w * 0.05 * exp( - dot( q, q ) );
   float front = smoothstep( 0.1, 0.5, n.z );
   if ( front > 0.0 ) {
-    vec2 fp = vec2( ax, n.y ) / max( n.z, 0.3 ) * 0.8;
+    vec2 fp = faceT( vec2( ax, n.y ) / max( n.z, 0.3 ) * 0.8 );
     float k = uShape.x * 0.034 * faceG( fp, vec2( 0.54, -0.14 ), vec2( 0.16, 0.1 ) );
     k += uShape.y * ( 0.036 * faceG( fp, vec2( 0.5, -0.43 ), vec2( 0.2, 0.17 ) ) + 0.01 * faceG( fp, vec2( 0.3, -0.62 ), vec2( 0.15, 0.15 ) ) );
     k += uShape.z * 0.042 * faceG( fp, vec2( 0.0, -0.84 ), vec2( 0.2, 0.12 ) );
@@ -2824,7 +3039,7 @@ float faceShape( vec3 p ) {
     k += uShape2.w * 0.022 * faceG( fp, vec2( 0.15, -0.3 ), vec2( 0.055, 0.045 ) );
     f += k * front;
   }
-  return f * 0.36;
+  return f * 0.36 * faceOn( n );
 }`;
 
 /** The line of his mouth on the plane of his face (figure.py's MOUTH_Y), and how far out from its middle his lips part (figure.py's SLIT): past that they meet, at its corners. */
@@ -2849,13 +3064,13 @@ uniform vec4 uMove2;
 uniform vec4 uMove3;
 float lipUp( vec3 p ) {
   vec3 n = normalize( ( p - ${HEAD_C} ) / ${HEAD_S} );
-  return smoothstep( -0.0006, 0.0006, n.y / max( n.z, 0.3 ) * 0.8 - ${MOUTH_Y.toFixed(3)} );
+  return smoothstep( -0.0006, 0.0006, faceT( n.xy / max( n.z, 0.3 ) * 0.8 ).y - ${MOUTH_Y.toFixed(3)} );
 }
 vec3 faceMove( vec3 p, float up ) {
   vec3 n = normalize( ( p - ${HEAD_C} ) / ${HEAD_S} );
   float front = smoothstep( 0.15, 0.5, n.z );
   if ( front <= 0.0 ) return vec3( 0.0 );
-  vec2 fp = n.xy / max( n.z, 0.3 ) * 0.8;
+  vec2 fp = faceT( n.xy / max( n.z, 0.3 ) * 0.8 );
   float side = fp.x < 0.0 ? -1.0 : 1.0;
   float ax = abs( fp.x );
   float my = fp.y - ${MOUTH_Y.toFixed(3)};
@@ -2882,7 +3097,7 @@ vec3 faceMove( vec3 p, float up ) {
   d += uMove3.y * ( faceG( vec2( ax, fp.y ), vec2( 0.4, -0.46 ), vec2( 0.18, 0.17 ) ) * vec3( side * 0.03, -0.002, 0.022 ) + lips * vec3( 0.0, 0.0, 0.005 ) );
   // (stretched: the corners straight out and a little back, his lips drawn thin over his teeth)
   d += uMove3.z * ( vec3( side * 0.022, -0.003, 0.0 ) * outward - vec3( 0.0, 0.0, 0.008 ) * corner + lips * vec3( 0.0, -0.15 * my, -0.002 ) );
-  return d * front;
+  return d * front * faceOn( n );
 }`;
 
 /** Where his head is on the sheet (in uv): there the stuff picture's third channel is how far his hair stands off him, not a knit. */
@@ -2898,9 +3113,9 @@ const INSIDES_UV = [R_MOUTH[0] / SHEET, (R_TEETH[0] + R_TEETH[2]) / SHEET, 1 - R
  * His mouth as built (figure.py's mouth): the line of it at its middle (ft up), how far forward his upper teeth's front
  * faces are there, and how high their edges are and his lower teeth's.
  */
-const MOUTH_MID = 5.912;
-const TEETH_FRONT = 0.343;
-const TEETH_EDGES = [5.905, 5.909] as const;
+const MOUTH_MID = 5.903;
+const TEETH_FRONT = 0.369;
+const TEETH_EDGES = [5.896, 5.9] as const;
 /**
  * How far into his mouth the light gets (ft behind his front teeth: a share of it is left each time), with his lips
  * just apart and with his jaw wide open; and how much of it gets past lips just apart at all.
@@ -2977,12 +3192,12 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
         .replace('#include <common>', '#include <common>\nattribute float fuzz;\nvarying float vFuzz;')
         .replace(
           'vRest = position;',
-          `vRest = position;\nvFuzz = fuzz;\nfloat fuzzLen = ${FUZZ_OUT[0].toFixed(4)} + ${(FUZZ_OUT[1] * HAIR_MAX).toFixed(4)} * textureLod( uStuff, uv, 0.0 ).b;\nvec3 fuzzLie = position.y < ${(HEAD_REST + HEAD_MID.y - 0.06).toFixed(3)} ? vec3( 0.0, -1.0, 0.15 ) : normalize( vec3( 0.0, normal.z * 1.2 - 0.5, -1.0 ) );\nfuzzLie -= normal * dot( fuzzLie, normal );\ntransformed += normal * fuzz * fuzzLen + fuzzLie * fuzz * fuzz * fuzzLen * ${FUZZ_LIE.toFixed(2)};`,
+          `vRest = position;\nvFuzz = fuzz;\nfloat fuzzLen = ${FUZZ_OUT[0].toFixed(4)} + ${(FUZZ_OUT[1] * HAIR_MAX).toFixed(4)} * textureLod( uStuff, uv, 0.0 ).b;\nvec3 fuzzLie = position.y < ${(HEAD_REST + HEAD_MID.y - 0.06).toFixed(3)} ? vec3( 0.0, -1.0, 0.15 ) : normalize( vec3( 0.0, normal.z * 1.2 - 0.5, -1.0 ) );\nfuzzLie -= normal * dot( fuzzLie, normal );\nfuzzLen *= 0.35 + 0.65 * ( 1.0 - smoothstep( 0.2, 0.45, textureLod( uStuff, uv, 0.0 ).g ) );\nif ${ON_PIECE('uv')} { fuzzLen = ${COIL_OUT.toFixed(3)}; fuzzLie = vec3( 0.0 ); }\ntransformed += normal * fuzz * fuzzLen + fuzzLie * fuzz * fuzz * fuzzLen * ${FUZZ_LIE.toFixed(2)};`,
         );
     sh.fragmentShader = sh.fragmentShader
       .replace(
         '#include <common>',
-        `#include <common>\n${STUFF_PARS}\nuniform float uTone;\nuniform vec3 uSkin;\nuniform float uBlink;\nuniform vec3 uIris;\nuniform vec2 uEye;\nuniform vec3 uGaze;\nuniform vec2 uLid;\nuniform float uMouth;\nuniform mat3 uHead;\nuniform vec4 uWorn;\nuniform vec4 uCrease;\nuniform vec4 uMove;\nuniform vec4 uMove2;\nvarying vec3 vRest;${fuzz ? '\nvarying float vFuzz;' : ''}\n${WORN_PARS}`,
+        `#include <common>\n${STUFF_PARS}\n${FACE_T}\nuniform float uTone;\nuniform vec3 uSkin;\nuniform vec3 uHair;\nuniform float uBlink;\nuniform vec3 uIris;\nuniform vec2 uEye;\nuniform vec3 uGaze;\nuniform vec2 uLid;\nuniform float uMouth;\nuniform mat3 uHead;\nuniform vec4 uWorn;\nuniform vec4 uCrease;\nuniform vec4 uMove;\nuniform vec4 uMove2;\nvarying vec3 vRest;${fuzz ? '\nvarying float vFuzz;' : ''}\n${WORN_PARS}`,
       )
       .replace('#include <lights_physical_pars_fragment>', `#include <lights_physical_pars_fragment>\n${SKIN_WRAP}`)
       // (skin's hollows are warm, not grey: the shade baked into him takes less of its red than of its blue)
@@ -3013,9 +3228,23 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
         // (a strand is thick at its root and a point at its end: fewer and finer in each layer out)
         // (further off, where a strand is finer than the picture's dots, the layers go from the outside in: no stray
         // specks of the last of them left over his forehead)
-        if ( vFuzz > sharp * 1.15 || strand * hairK < 0.3 + 0.42 * vFuzz ) discard;
+        if ${ON_PIECE('vMapUv')} {
+          // (on a head of curls: coils, each a round tuft that narrows to its end, every way up)
+          vec3 cp = vRest * ${COIL_ACROSS.toFixed(1)};
+          sharp = 1.0 - smoothstep( 0.25, 0.7, length( fwidth( cp ) ) );
+          strand = 0.7 * noise3( cp ) + 0.3 * noise3( cp * 2.3 + 3.0 );
+          hairK = 1.0;
+          if ( vFuzz > sharp * 1.15 || strand < 0.34 + 0.4 * vFuzz ) discard;
+        } else {
+          // (and only where his head's picture is nearly all hair: along his hairline it thins to his skin, and a strand
+          // stood there would be the colour of both, a pale spike over his forehead)
+          vec3 toHair = uHair - uSkin;
+          float cover = clamp( dot( diffuseColor.rgb - uSkin, toHair ) / max( 0.004, dot( toHair, toHair ) ), 0.0, 1.0 );
+          hairK *= smoothstep( 0.82, 0.96, cover );
+          if ( vFuzz > sharp * 1.15 || strand * hairK < 0.3 + 0.42 * vFuzz ) discard;
+        }
         // (down among them it is dark, where the others shade them; their ends are in the light)
-        diffuseColor.rgb *= mix( 0.78, 1.25, vFuzz ) * ( 0.85 + 0.3 * strand );`
+        diffuseColor.rgb *= mix( 0.78, 1.08, vFuzz ) * ( 0.85 + 0.3 * strand );`
             : /* glsl */ `// (and down among the strands, his hair is darker: its roots, in their shade)
         if ( ${ON_HEAD('vMapUv')} ) diffuseColor.rgb *= 1.0 - 0.18 * ( 1.0 - smoothstep( 0.2, 0.28, stuff.g ) ) * ( 1.0 - skinK );`
         }
@@ -3074,7 +3303,7 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
         float hairWet = 0.0;
         {
           vec3 hn = normalize( ( vRest - ${HEAD_C} ) / ${HEAD_S} );
-          vec2 fp = hn.xy / max( hn.z, 0.3 ) * 0.8;
+          vec2 fp = faceT( hn.xy / max( hn.z, 0.3 ) * 0.8 );
           float apx = abs( fp.x );
           float onHead = ${ON_HEAD('vMapUv')} ? 1.0 : 0.0;
           float ear = vMapUv.y < ${INSIDE_V} ? onHead : 0.0;
@@ -3314,7 +3543,7 @@ const FIX_SPREAD = [0.24, 0.1] as const;
 /** On a thing, the spots his eyes rest on about it are this near it (radians: across, up). */
 const FIX_ON = [0.035, 0.022] as const;
 /** Where his eyes turn about, half way between them (from the head bone, ft, as built): what he looks at is found from there. */
-const EYES_AT = new Vector3(0, 0.076, 0.34);
+const EYES_AT = new Vector3(0, 0.056, 0.33);
 /** The farthest his eyes turn in his head (radians): across, up, down. Past that his head has to bring them round. */
 const EYE_REACH = [0.5, 0.36, -0.45] as const;
 /**
@@ -3736,6 +3965,7 @@ export class Fig {
     this.told = {
       uTone: { value: look.tone / (SKINS.length - 1) },
       uSkin: { value: new Color(look.skin) },
+      uHair: { value: new Color(look.hair) },
       uBlink: { value: 0 },
       uIris: { value: new Color(look.eyes) },
       uEye: { value: new Vector2(EYE_TILT * look.face.tilt, EYE_OPEN * look.face.open) },
@@ -3828,10 +4058,10 @@ export class Fig {
     for (const hand of DIGIT_BONES) for (const [k1, k2] of hand) for (const k of [k1, k2]) scale(k, s, s, s);
     // (his face his own shape: MakeHuman's shapes of a face, in his mix, on his head; see ownShape)
     let worn = geo.wearing(STYLES[look.style].piece, gear.shoe.high);
-    let fuzzGeo = geo.fuzz;
+    let fuzzGeo = geo.fuzzFor(STYLES[look.style].piece);
     if (geo.shapes) {
       worn = ownShape(worn, geo.shapes, look.shape);
-      fuzzGeo = ownShape(geo.fuzz, geo.shapes, look.shape, geo.fuzz.userData.from as Int32Array);
+      fuzzGeo = ownShape(fuzzGeo, geo.shapes, look.shape, fuzzGeo.userData.from as Int32Array);
       this.own.push(worn, fuzzGeo);
     }
     const mesh = new SkinnedMesh(worn, mat);

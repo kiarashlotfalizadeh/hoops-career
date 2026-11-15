@@ -123,9 +123,14 @@ export const FACES = [
   { name: 'angular', wide: 1.0, long: 1.04, jaw: 1.06, chin: 1.08, ridge: 0.75, nose: 1.02, lips: 0.35, cheeks: 0.8, full: -0.7, point: 0.7, flare: 0.7, deep: 0.6 },
   { name: 'round', wide: 1.07, long: 0.95, jaw: 0.97, chin: 0.92, ridge: 0.2, nose: 1.03, lips: 0.6, cheeks: -0.2, full: 0.2, point: -0.6, flare: 0.1, deep: -0.3 },
 ] as const;
-/** Every man's jaw a little narrower than the sculpt's, and his cheeks a little leaner: the sculpt reads puffy up close. */
-const JAW_SLIM = 0.9;
-const LEAN = 0.4;
+/** Every man's cheeks a little leaner than the middling face's (his jaw is a real man's: left as it is). */
+const JAW_SLIM = 1;
+const LEAN = 0.15;
+/**
+ * How much of a shape's spread a man takes at most. His head is MakeHuman's own, so each shape moves it as far as it
+ * moves theirs, and the end of one of their scales is a caricature: a face is a little of many, not all of a few.
+ */
+const SHAPE_K = 0.55;
 
 /**
  * How far each of the shapes of a face (mh.py's SHAPES) may go, either way (those with a third number only one way,
@@ -163,7 +168,7 @@ const SHAPE_SPREAD: readonly (readonly [string, number, number?])[] = [
   ['deepSet', 0.7],
   ['browOut', 0.6],
   ['browTilt', 0.55],
-  ['nubian', 0.3],
+  ['nubian', 0.25],
   ['temples', 0.5],
   ['slope', 0.45],
 ];
@@ -175,14 +180,14 @@ function shapeOf(r: (salt: number) => number, tone: number, age: number): Record
   const out: Record<string, number> = {};
   SHAPE_SPREAD.forEach(([name, most, share], k) => {
     const roll = r(100 + k);
-    if (share !== undefined) out[name] = r(140 + k) < share ? most * (0.4 + 0.6 * roll) : 0;
+    if (share !== undefined) out[name] = r(140 + k) < share ? SHAPE_K * most * (0.4 + 0.6 * roll) : 0;
     // (most men near the middle of each, a few a long way out)
-    else out[name] = most * Math.sign(roll - 0.5) * Math.abs(2 * roll - 1) ** 0.8;
+    else out[name] = SHAPE_K * most * Math.sign(roll - 0.5) * Math.abs(2 * roll - 1) ** 0.8;
   });
   const first = Math.floor(r(180) * OUTLINES.length) % OUTLINES.length;
   const second = (first + 1 + (Math.floor(r(181) * (OUTLINES.length - 1)) % (OUTLINES.length - 1))) % OUTLINES.length;
-  out[OUTLINES[first]] = 0.35 + 0.5 * r(182);
-  out[OUTLINES[second]] = (out[OUTLINES[second]] ?? 0) + 0.35 * r(183);
+  out[OUTLINES[first]] = SHAPE_K * (0.35 + 0.5 * r(182));
+  out[OUTLINES[second]] = (out[OUTLINES[second]] ?? 0) + SHAPE_K * 0.35 * r(183);
   // which people's average his face is nearest: loosely with his tone (the middle tones any of the three), a share
   // of each, so a face is never only its kind's
   const dark = Math.min(1, Math.max(0, (tone - 1.5) / 4.5));
@@ -195,9 +200,9 @@ function shapeOf(r: (salt: number) => number, tone: number, age: number): Record
   out.asian = (0.85 * s) / sum;
   // (the fold at an eye's inner corner goes with that last)
   out.epicanthus = 0.9 * out.asian + 0.3 * (r(187) - 0.5);
-  // (and every face some of the way onto a real head's anatomy: its cheekbones, the planes of its jaw; see mh.py 'real')
-  out.real = 0.85;
   // (and a veteran's face has aged: fuller under the eyes, the lines from his nose deeper)
+  // (the middling man's upper lip is thin: every man's a little fuller than that)
+  out.upperLip = (out.upperLip ?? 0) + 0.5;
   out.age = 0.75 * age;
   out.bags = 0.6 * age + 0.25 * r(188);
   out.laugh = Math.max(out.laugh ?? 0, 0.5 * age);

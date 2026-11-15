@@ -200,6 +200,8 @@ const gap = num('gap', 5);
 const figs = Array.from({ length: n }, (_, i) => {
   const look = lookOf(num('seed', 1) + i);
   if (q.has('styles')) look.style = (i + Math.max(0, num('styles', 1) - 1)) % STYLES.length;
+  // (&pick=4,9,6: each man the next style of the list)
+  if (q.has('pick')) look.style = q.get('pick')!.split(',').map(Number)[i % q.get('pick')!.split(',').length] % STYLES.length;
   if (q.has('style')) look.style = num('style', 0) % STYLES.length;
   if (q.has('beard')) look.beard = num('beard', 0) % BEARDS.length;
   if (q.has('tones')) look.tone = i % SKINS.length;
