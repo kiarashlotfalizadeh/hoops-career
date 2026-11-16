@@ -14,6 +14,7 @@ import { worthCall } from '../ai/counterWorth';
 import { pick } from './quotes';
 import { impactCounter } from '../ai/advisor';
 import { TACTIC_LEVELS, applyPatch, cloneTactics, levelName, tacticsDiff, emptyPatch } from '../sim/tactics';
+import { playbookLabel } from '../sim/playbooks';
 import { CALL_WORTH, callCosts, callKey, callWorth, worthLine } from './callWorth';
 
 export interface DebriefAdvice {
@@ -101,11 +102,70 @@ export interface Debrief {
   plan: PlanGrade[];
   /** Said on a coach's first games: one night's shooting is luck, a plan shows over a stretch. */
   frame?: string;
+  /** His very first game (teaching on): the plan he went in with, how it came out, and one next step (see firstLesson). */
+  lesson?: FirstLesson;
   /** His players hurt in the game, and for how long: "Davis, out 5 games · Sarr, out 3 games". */
   hurt?: string;
   /** The opponent, and whether the teams meet again this season (a plan against them would be played). */
   opp: number;
   meetAgain: boolean;
+}
+
+/** The first debrief as a lesson in deciding, not in finding screens: plan, outcome, next action. */
+export interface FirstLesson {
+  plan: string;
+  outcome: string;
+  next: string;
+  /** Where the next step is done, when it's on another screen. */
+  to?: string;
+  toLabel?: string;
+}
+
+/**
+ * The coach's first game told as a decision: what he went in with (his playbook, his own or the
+ * staff's, and his plan against them), how it came out (the result and what decided it, luck named
+ * as luck, the plan's counters against their target), and the one sensible next step: the staff's
+ * fix below when there is one, a counter for the next opponent when he made no plan, else patience.
+ */
+function firstLesson(league: League, res: GameResult, side: 0 | 1, decided: Factor[], plan: PlanGrade[], advice: DebriefAdvice[]): FirstLesson {
+  const me = league.userTid;
+  const t = league.teams[me].tactics;
+  const oppTid = side === 0 ? res.away.tid : res.home.tid;
+  const opp = league.teams[oppTid];
+  const mine = side === 0 ? res.home.pts : res.away.pts;
+  const theirs = side === 0 ? res.away.pts : res.home.pts;
+  const whose = t.manual ? 'your own' : "your staff's";
+  const planText = plan.length
+    ? `You went in with ${whose} playbook (${playbookLabel(t)}) and a plan against the ${opp.name}: ${plan.map((g) => g.label).join(', ')}.`
+    : `You went in with ${whose} playbook (${playbookLabel(t)}) and no plan of your own against the ${opp.name}.`;
+  const top = decided[0];
+  const why = top ? ` What decided it: ${top.title.replace(/\.$/, '').replace(/^./, (c) => c.toLowerCase())}${top.luck ? ', which was mostly shooting luck' : ''}.` : '';
+  const showed = plan.filter((g) => g.night === 'better').map((g) => g.label);
+  const missed = plan.filter((g) => g.night === 'worse').map((g) => g.label);
+  const planNight = showed.length
+    ? ` Your plan showed on ${showed.join(', ')}.`
+    : missed.length
+      ? ` It went against ${missed.join(', ')} tonight.`
+      : plan.length
+        ? ' One night is too few to grade your plan.'
+        : '';
+  const outcome = `${mine > theirs ? 'You won' : 'You lost'} ${Math.max(mine, theirs)}-${Math.min(mine, theirs)}.${why}${planNight}`;
+  const fix = advice.find((a) => a.patch && a.label);
+  if (fix)
+    return {
+      plan: planText,
+      outcome,
+      next: `Try the staff's fix below, ${fix.label}, for a few games, then check Tactics → Analysis to see whether it helped.`,
+    };
+  if (!plan.length)
+    return {
+      plan: planText,
+      outcome,
+      next: 'Pick one counter for your next opponent on its preview. The staff tells you after the game how it went.',
+      to: '/preview',
+      toLabel: 'Next opponent',
+    };
+  return { plan: planText, outcome, next: 'Keep your plan for a few games before you judge it: one night is noisy.' };
 }
 
 /**
@@ -647,5 +707,6 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
   const lucky = decided.some((f) => f.luck);
   const frame = first ? `${lucky ? "One night's shooting is luck. " : ''}A plan shows over a stretch of games, not one night.` : undefined;
   const hurt = hurtLine(league, res);
-  return { headline: verdict(res, side, report), decided, moves, advice: advice.slice(0, 5), plan, frame, ...(hurt && { hurt }), opp, meetAgain };
+  const lesson = first && gamesIn(league, res, me) === 1 ? firstLesson(league, res, side, decided, plan, advice) : undefined;
+  return { headline: verdict(res, side, report), decided, moves, advice: advice.slice(0, 5), plan, frame, ...(lesson && { lesson }), ...(hurt && { hurt }), opp, meetAgain };
 }

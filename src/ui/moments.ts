@@ -84,10 +84,29 @@ export interface Moment {
   story?: number;
   /** Mail it says in full (the award's letter, the record's note): read once it has shown. */
   mail?: number[];
+  /** Moments told on this card as a line each (see pickMoments): they don't show or wait on their own. */
+  folded?: string[];
 }
 
 const ROUND = ['', 'First Round', 'Conference Semifinals', 'Conference Finals', 'NBA Finals'];
 const NEXT = ['', 'the conference semifinals', 'the conference finals', 'the NBA Finals'];
+
+/**
+ * What came after a series won, as the bracket stands when the card shows (it can show a sim or more
+ * later): the next round still to start, under way, won, or lost ("Then out in the conference
+ * semifinals, 2-4 to the Celtics"), never "next up" for a round already over.
+ */
+function afterSeries(league: League, round: number): string {
+  const me = league.userTid;
+  const next = league.playoffs.find((x) => x.round === round + 1 && (x.high === me || x.low === me));
+  const what = NEXT[round] ?? 'the next round';
+  if (!next) return `Next up: ${what}.`;
+  const opp = league.teams[next.high === me ? next.low : next.high]?.name ?? 'other side';
+  const [w, l] = next.high === me ? [next.highWins, next.lowWins] : [next.lowWins, next.highWins];
+  if (next.winner === undefined)
+    return w + l === 0 ? `Next up: ${what}, against the ${opp}.` : `Now in ${what}: ${w === l ? `level at ${w}-${l}` : `${w}-${l}`} against the ${opp}.`;
+  return next.winner === me ? `They won ${what} too, ${w}-${l} over the ${opp}.` : `Then out in ${what}, ${w}-${l} to the ${opp}.`;
+}
 
 /** A free agent this good (OVR) or this expensive (share of the cap, in $K) makes his signing a moment. */
 export const BIG_SIGNING_OVR = 80;
@@ -172,11 +191,18 @@ const CAREER_ORDER: MomentKind[] = ['title', 'cup', 'series', 'clinch', 'award',
 /** The job's moments in the order they show, after the biggest of the rest: the verdict, then what it led to. */
 const JOB_ORDER: MomentKind[] = ['verdict', 'ultimatum', 'fired', 'hired'];
 
+/** Other moments this card can tell as lines, at most: what came out with it in the same sim. */
+const FOLD_MAX = 4;
+
+/** A moment as one line on another's card ("Sixth Man of the Year · Malik Monk takes the award."). */
+const foldLine = (m: Moment) => `${m.title} · ${m.sub.split(/(?<=\.)\s/)[0]}`;
+
 /**
- * The moments to show from those new at once: the biggest career moment, or else the biggest
- * front-page story, so whatever ends a sim takes the screen once, not as a stack of cards (the rest
- * wait: see scheduleMoments); and after it every one of the job's (a sack says the season's verdict
- * itself).
+ * The moments to show from those new at once: one card a sim, not a stack to dismiss. The biggest
+ * career moment, or else the biggest front-page story, takes the screen, and tells as lines what came
+ * out with it (the other career moments, the biggest few; the rest wait: see scheduleMoments) and
+ * the owner's verdict on the season, his link if the card has none. After it only the job's moments
+ * that can't be a line (the ultimatum, the sack, a new job) show on their own.
  */
 export function pickMoments(fresh: Moment[]): Moment[] {
   const job = fresh.filter((m) => JOB_MOMENTS.has(m.kind)).sort((a, b) => JOB_ORDER.indexOf(a.kind) - JOB_ORDER.indexOf(b.kind));
@@ -185,7 +211,20 @@ export function pickMoments(fresh: Moment[]): Moment[] {
   const career = fresh
     .filter((m) => m.kind !== 'story' && !JOB_MOMENTS.has(m.kind) && !(jobs.length && MINOR.has(m.kind)))
     .sort((a, b) => CAREER_ORDER.indexOf(a.kind) - CAREER_ORDER.indexOf(b.kind) || (b.rank ?? 0) - (a.rank ?? 0));
-  if (career.length) return [career[0], ...jobs];
+  if (career.length) {
+    const [top, ...rest] = career;
+    const also = rest.slice(0, FOLD_MAX);
+    const verdict = jobs.find((m) => m.kind === 'verdict');
+    if (!also.length && !verdict) return [top, ...jobs];
+    const card: Moment = {
+      ...top,
+      lines: [...(top.lines ?? []), ...also.map(foldLine), ...(verdict ? [`The owner's verdict · ${verdict.title}. ${verdict.sub}`] : [])],
+      ...(!top.link && verdict?.link ? { link: verdict.link, linkLabel: verdict.linkLabel } : {}),
+      mail: [...(top.mail ?? []), ...also.flatMap((m) => m.mail ?? []), ...(verdict?.mail ?? [])],
+      folded: [...also, ...(verdict ? [verdict] : [])].map((m) => m.key),
+    };
+    return [card, ...jobs.filter((m) => m !== verdict)];
+  }
   if (jobs.length) return jobs;
   const stories = fresh.filter((m) => m.kind === 'story').sort((a, b) => (b.rank ?? 0) - (a.rank ?? 0));
   return stories.slice(0, 1);
@@ -238,8 +277,9 @@ export function scheduleMoments(queued: Moment[], fresh: Moment[], waiting: Mome
   const live = (m: Moment) => m.season === undefined || (m.season === now.season && (KEEPS.has(m.kind) || now.day - (m.day ?? now.day) <= WAIT_DAYS));
   const pool = [...queued, ...fresh, ...waiting.filter(live)].filter((m, i, all) => all.findIndex((x) => x.key === m.key) === i);
   const show = pickMoments(pool);
+  const told = new Set(show.flatMap((m) => [m.key, ...(m.folded ?? [])]));
   const wait = pool
-    .filter((m) => !show.includes(m) && WAITS.has(m.kind) && live(m))
+    .filter((m) => !told.has(m.key) && WAITS.has(m.kind) && live(m))
     .sort((a, b) => CAREER_ORDER.indexOf(a.kind) - CAREER_ORDER.indexOf(b.kind) || (b.rank ?? 0) - (a.rank ?? 0))
     .slice(0, WAIT_MAX);
   return { show, wait };
@@ -733,7 +773,9 @@ export function currentMoments(league: League): Moment[] {
         kind: 'series',
         over: `${seasonLabel(season)} · ${ROUND[s.round] ?? 'Playoffs'}`,
         title: 'Series won',
-        sub: `${w}-${l} over the ${opp?.name ?? 'other side'}. Next up: ${NEXT[s.round] ?? 'the next round'}.`,
+        sub: `${w}-${l} over the ${opp?.name ?? 'other side'}. ${afterSeries(league, s.round)}`,
+        // (of two series won in one sim, the later round shows: see pickMoments)
+        rank: s.round,
       });
   }
 

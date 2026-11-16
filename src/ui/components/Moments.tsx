@@ -80,8 +80,14 @@ export function Moments() {
     const led = useStore.getState().digest?.moment?.story;
     const keep = (m: Moment) => !(onLive && m.news === 'game') && !(led !== undefined && m.story === led);
     const at = { season: league.season, day: league.day };
-    const held = released ? waiting.current : [];
-    const { show, wait } = scheduleMoments(queued.current.filter(keep), fresh.filter(keep), on ? held.filter(keep) : [], at);
+    // (a moment queued or waiting is told as things stand now: a series card a sim on says how the next round went)
+    const asNow = (m: Moment) => {
+      const n = now.find((x) => x.key === m.key);
+      // (a card telling others as lines keeps them: only its own line under the headline is read again)
+      return n ? (m.folded ? { ...m, sub: n.sub } : n) : m;
+    };
+    const held = released ? waiting.current.map(asNow) : [];
+    const { show, wait } = scheduleMoments(queued.current.map(asNow).filter(keep), fresh.filter(keep), on ? held.filter(keep) : [], at);
     // (what wasn't let out keeps waiting, with what this one leaves)
     waiting.current = released ? wait : [...waiting.current, ...wait.filter((m) => !waiting.current.some((x) => x.key === m.key))];
     for (const m of show) if (!landed.current.has(m.key)) landed.current.set(m.key, path.current);

@@ -1,10 +1,11 @@
 // "While you were away": what the latest sim of more than a day did, in one sheet that opens by itself
-// once the sim is done (after any big moment, and never over the live game): the record over the
+// once the sim is done (never over the live game; after a big moment only when the sim stopped for
+// something, else the moment is the sim's one card and the digest waits on Today): the record over the
 // stretch with each result's headline, the stories about the user's team, where he stands now,
 // who got hurt, new mail and the league's biggest stories. Each line opens its own page. Closing it
 // keeps it a tap away on Today until the next sim, and marks the mail it listed read (what still
 // needs him stays unread: a decision open, big news).
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
@@ -28,10 +29,21 @@ const MAIL_SHOWN = 3;
 export function DigestHost() {
   const digest = useStore((s) => s.digest);
   const open = useStore((s) => s.digestOpen);
-  const blocked = useStore((s) => !!s.sim || s.momentUp);
+  const momentUp = useStore((s) => s.momentUp);
+  const blocked = useStore((s) => !!s.sim) || momentUp;
   const { pathname } = useLocation();
   const league = useStore((s) => s.league);
-  const show = open && !blocked && pathname !== '/live' && !!digest && !!league && digest.leagueId === league.id;
+  // one thing to dismiss a sim: a moment that had the screen is the sim's card, and the digest stays a
+  // tap away on Today, unless the sim stopped for something (a call, a stop): then it opens to answer it
+  const [folded, setFolded] = useState<Digest | null>(null);
+  useEffect(() => {
+    if (momentUp && open && digest && !digest.stop) setFolded(digest);
+  }, [momentUp, open, digest]);
+  const quiet = !!digest && folded === digest;
+  useEffect(() => {
+    if (quiet && open && !momentUp) useStore.getState().showDigest(false);
+  }, [quiet, open, momentUp]);
+  const show = open && !blocked && !quiet && pathname !== '/live' && !!digest && !!league && digest.leagueId === league.id;
   // once it has been read, the mail it listed is read too, but for what still needs him
   const was = useRef(false);
   useEffect(() => {

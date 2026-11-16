@@ -10,6 +10,8 @@ import { CAP_FOR, contractSeason, curTeamSeason, dateToDay, freeAgents, payroll,
 import { DEC_15, DUMP_PER_FIRST, FIRST_VALUE, askingContract, marketSalary, releaseDeadMoney, releasePlayer, signPlayer, tradeValue, twoWaySalary } from '../league/contracts';
 import { capPayroll } from '../league/freeAgency';
 import { changesStarters, tradeImpact } from '../league/tradeImpact';
+import { ensureRotation } from '../league/games';
+import { decisionLines } from '../league/legacyReview';
 import {
   CASH_PCT,
   PROTECTIONS,
@@ -877,6 +879,52 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
     expect(gone).toMatchObject({ dealt: 'out', to: 0 });
     if (gone.startsNow) expect(changesStarters(im) && im.moves.some((m) => m.startsWith && !m.startsNow)).toBe(true);
     expect(im.future).toEqual([`Your ${dp.season} first`, `The right to swap firsts in ${swapYear}`]);
+    expect(im.manual).toBe(false);
+  }
+
+  // a rotation he runs himself: the read is the game's (his order and minutes kept, the newcomer at
+  // the end with none), not the staff's, and after the deal the game plays it that way
+  {
+    const l = termsLeague();
+    const team = l.teams[U];
+    team.rotation.manual = true;
+    const theirs = [...standardRoster(l, AI)].sort((a, b) => b.ovr - a.ovr)[0];
+    const mine = [...standardRoster(l, U)].sort((a, b) => a.ovr - b.ovr)[0];
+    const o = deal({ pids: [mine.pid] }, { pids: [theirs.pid] });
+    const im = tradeImpact(l, o);
+    expect(im.manual).toBe(true);
+    const inc = im.moves.find((m) => m.pid === theirs.pid);
+    expect(inc?.startsWith ?? false).toBe(false);
+    expect(inc?.to ?? 0).toBeLessThan(12);
+    executeTrade(l, o);
+    ensureRotation(l, U);
+    expect(team.rotation.order.at(-1)).toBe(theirs.pid);
+    expect(team.rotation.minutes[theirs.pid] ?? 0).toBe(0);
+    // a need a deal filled is kept on its log line, in the shape the review reads
+    const need = l.transactions!.at(-1)!.need;
+    if (need) expect(need.rankTo).toBeLessThan(need.rankFrom);
+  }
+
+  // the season's review keeps a deal of picks alone, each pick named as sent, flagged while its draft
+  // is still to come, and the cash; a player's role reads as games, minutes, his line and the net on court
+  {
+    const l = termsLeague();
+    const dp = own(l, U, l.season + 1);
+    const theirs = own(l, AI, l.season + 2, 2);
+    executeTrade(l, deal({ dpids: [dp.dpid], cash: 500 }, { dpids: [theirs.dpid] }));
+    const lines = decisionLines(l, l.season, U);
+    expect(lines[0]).toBe(`Trade: the ${l.teams[AI].abbrev} ${theirs.season} 2nd, still to come for your ${dp.season} 1st, still to come, $0.5M cash.`);
+    // a training focus is graded on the skills it trains and what the rest of his game gave up, not his OVR
+    const p = [...standardRoster(l, U)].sort((a, b) => b.ovr - a.ovr)[0];
+    p.training = 'shooting';
+    const r0 = { ...p.ratings };
+    p.ratingsHistory = [
+      { season: l.season - 1, ovr: p.ovr, pot: p.pot, r: { ...r0, tp: r0.tp - 3, mid: r0.mid - 3, ft: r0.ft - 3 } },
+      { season: l.season, ovr: p.ovr, pot: p.pot, r: r0, focus: 'shooting' },
+    ];
+    expect(decisionLines(l, l.season, U)).toContain(
+      `Shooting focus for ${p.firstName} ${p.lastName}: those skills +3.0, the rest of his game +0.0 since last season, it paid off.`,
+    );
   }
 
   // protects your own first as it goes: valued lower by them, set on the pick, named in labels, the news and the log

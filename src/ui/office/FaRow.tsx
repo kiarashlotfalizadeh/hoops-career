@@ -22,6 +22,7 @@ export function FaRow({
   mode,
   s,
   space,
+  fill,
   onOpen,
 }: {
   league: League;
@@ -34,6 +35,8 @@ export function FaRow({
   s: number;
   /** Your cap space (after holds and pending offers). */
   space: number;
+  /** What he'd do to your roster's need ("Rim protection D → B"), when he'd move it: `good` when he'd fill it. */
+  fill?: { text: string; good: boolean };
   onOpen: () => void;
 }) {
   const tid = league.userTid;
@@ -95,6 +98,14 @@ export function FaRow({
               {' · '}
               <span className="fo-interest" style={{ ['--note' as string]: ai.color }}>
                 {ai.label}
+              </span>
+            </>
+          )}
+          {fill && (
+            <>
+              {' · '}
+              <span className={fill.good ? 'good' : 'warn'} aria-label={`Your need: ${fill.text}`}>
+                {fill.text}
               </span>
             </>
           )}

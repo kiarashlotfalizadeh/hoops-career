@@ -298,7 +298,11 @@ describe('the journey between screens', () => {
       const at = { season: l.season, day: 40 };
       const first = scheduleMoments([], [...m, story], [], at);
       expect(first.show.map((x) => x.kind)).toEqual(['cup']);
-      expect(first.wait.length).toBe(3);
+      // (one card a sim: the biggest tells four of the rest as lines, and only what's past that waits)
+      expect(first.show[0].folded).toHaveLength(4);
+      expect(first.show[0].lines!.slice(-4).every((x) => x.includes(' · '))).toBe(true);
+      expect(first.wait.length).toBe(m.length - 1 - 4);
+      expect(first.wait.some((x) => first.show[0].folded!.includes(x.key))).toBe(false);
       expect(first.wait.some((x) => x.kind === 'story')).toBe(false);
       const next = scheduleMoments([], [], first.wait, at);
       expect(next.show).toEqual([first.wait[0]]);
@@ -307,6 +311,17 @@ describe('the journey between screens', () => {
       expect(late.show.every((x) => x.kind === 'farewell' || x.kind === 'jersey')).toBe(true);
       expect(late.wait.every((x) => x.kind === 'farewell' || x.kind === 'jersey')).toBe(true);
       expect(scheduleMoments([], [], first.wait, { season: l.season + 1, day: 0 }).show).toEqual([]);
+      // a series card reads the bracket as it stands when it shows: never "next up" for a round already lost
+      {
+        const k = structuredClone(l);
+        const s1 = { id: 'E1-0', round: 1, conf: 'E' as const, high: me, low: 3, highSeed: 1, lowSeed: 8, highWins: 4, lowWins: 1, winner: me };
+        k.playoffs = [s1];
+        expect(currentMoments(k).find((x) => x.kind === 'series')!.sub).toBe(`4-1 over the ${k.teams[3].name}. Next up: the conference semifinals.`);
+        k.playoffs = [s1, { id: 'E2-0', round: 2, conf: 'E', high: me, low: 5, highSeed: 1, lowSeed: 4, highWins: 2, lowWins: 4, winner: 5 }];
+        expect(currentMoments(k).find((x) => x.key === `series-${k.season}-E1-0`)!.sub).toBe(
+          `4-1 over the ${k.teams[3].name}. Then out in the conference semifinals, 2-4 to the ${k.teams[5].name}.`,
+        );
+      }
       // beside the job's own, a night's or a player's moment waits
       const verdict = { key: 'v', kind: 'verdict' as const, over: '', title: '', sub: '' };
       expect(pickMoments([one('record')[0], verdict]).map((x) => x.kind)).toEqual(['verdict']);
@@ -342,6 +357,11 @@ describe('the journey between screens', () => {
       // they never wait in the digest behind a bigger moment, and the sack says the verdict itself
       const clinch = { key: 'c', kind: 'clinch' as const, over: '', title: '', sub: '' };
       expect(pickMoments([v, fm[0], clinch]).map((x) => x.kind)).toEqual(['clinch', 'fired']);
+      // a celebration and the verdict that come out together are one card: the verdict a line on it, its review the link
+      const one2 = pickMoments([v, clinch]);
+      expect(one2.map((x) => x.kind)).toEqual(['clinch']);
+      expect(one2[0].lines!.at(-1)).toMatch(/^The owner's verdict · /);
+      expect(one2[0]).toMatchObject({ link: v.link, folded: [v.key] });
       // a new job: the new team's own moment, its owner and what's next
       f.settings.godMode = true;
       expect(takeJob(f, 5)).toBeNull();

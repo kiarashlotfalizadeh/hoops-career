@@ -11,6 +11,7 @@ import type { League, Player, Txn, TxnKind, TxnSide } from '../types';
 import { seasonLabel } from '../constants';
 import { playerName } from './helpers';
 import { money } from '../format';
+import { moveNeed } from './rosterNeed';
 
 /** Seasons other teams' moves stay in the log, besides the current one (trades and the user's moves stay for good). */
 export const TXN_KEEP_SEASONS = 2;
@@ -22,7 +23,22 @@ export function logTxn(league: League, t: Omit<Txn, 'id' | 'season' | 'day' | 'p
   league.nextTxnId = id + 1;
   const txn: Txn = { id, season: league.season, day: league.day, phase: league.phase, ...t };
   for (const k of Object.keys(txn) as (keyof Txn)[]) if (txn[k] === undefined) delete txn[k];
-  if (t.tids.includes(league.userTid)) txn.user = true;
+  if (t.tids.includes(league.userTid)) {
+    txn.user = true;
+    // a move that brings players in: the need they came for, kept for Today and the season's review
+    const me = league.userTid;
+    const add =
+      t.kind === 'trade'
+        ? (t.sides ?? []).filter((s) => s.tid !== me).flatMap((s) => s.players.map((x) => x.pid))
+        : (t.kind === 'sign' || t.kind === 'claim' || (t.kind === 'tenDay' && t.note !== 'ended')) && t.tids[0] === me && t.pid !== undefined
+          ? [t.pid]
+          : [];
+    const drop = t.kind === 'trade' ? (t.sides?.find((s) => s.tid === me)?.players.map((x) => x.pid) ?? []) : [];
+    if (add.length && league.teams[me]?.rotation) {
+      const need = moveNeed(league, add, drop);
+      if (need) txn.need = need;
+    }
+  }
   log.push(txn);
   return txn;
 }

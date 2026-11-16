@@ -79,7 +79,7 @@ const SUMMER_SD = { young: 3.7, prime: 2.6 };
 const BALANCED_GAIN = 0.25;
 const OFF_FOCUS_GAIN = 0.05;
 
-const FOCUS_KEYS: Record<TrainingFocus, RatingKey[]> = {
+export const FOCUS_KEYS: Record<TrainingFocus, RatingKey[]> = {
   balanced: [],
   shooting: ['tp', 'mid', 'ft'],
   finishing: ['ins', 'drw', 'post'],
@@ -461,7 +461,7 @@ export function annualProgression(league: League, rng: Rng): { pid: number; delt
     lateVolume(p, playerAge(p, league.season));
     threeVolume(p, league.season - 1);
     usageVolume(p, league.season - 1);
-    p.ratingsHistory.push({ season: league.season, ovr: p.ovr, pot: p.pot, r: { ...p.ratings } });
+    p.ratingsHistory.push({ season: league.season, ovr: p.ovr, pot: p.pot, r: { ...p.ratings }, ...(p.training !== 'balanced' ? { focus: p.training } : {}) });
     if (p.ratingsHistory.length > 25) p.ratingsHistory.shift();
     // older snapshots only chart OVR: full ratings on every one grew the save by a few hundred KB a season
     for (const h of p.ratingsHistory.slice(0, -2)) delete h.r;

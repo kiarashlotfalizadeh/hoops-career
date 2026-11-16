@@ -184,6 +184,8 @@ export interface RatingsSnapshot {
   pot: number;
   /** Full ratings: only the latest two snapshots keep them (the Ratings tab compares them). */
   r?: Ratings;
+  /** The training focus the summer's development ran under (annualProgression), so a review grades the right one. */
+  focus?: TrainingFocus;
 }
 
 export interface DraftInfo {
@@ -1292,6 +1294,11 @@ export interface Txn {
   note?: string;
   /** The user's team was in it: kept for good, even after he moves on to another team. */
   user?: true;
+  /**
+   * The need the user brought players in for (rosterNeed.ts): the system quality that was his weakest
+   * without them, its grade and rank without and with them. Only when they filled it.
+   */
+  need?: { id: string; from: string; to: string; rankFrom: number; rankTo: number };
 }
 
 export interface InboxMessage {

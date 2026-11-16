@@ -9,6 +9,7 @@ import { continueDraft, userDraftPick } from '../../core/league/season';
 import { releasePlayer, userBuyout } from '../../core/league/contracts';
 import { declineJob, takeJob } from '../../core/league/jobs';
 import { act } from '../actions';
+import { movedNeedText } from '../../core/league/rosterNeed';
 import { useStore } from '../store';
 
 /** A sim or a phase change is running: buttons that change the league wait. */
@@ -54,7 +55,8 @@ export function makeTrade(league: League, o: TradeOffer, label = 'The trade'): b
   const names = o.b.pids.map((pid) => league.players[pid]?.lastName).filter(Boolean);
   const picks = o.b.dpids.length;
   const got = [names.join(', '), picks ? (picks === 1 ? 'a pick' : `${picks} picks`) : ''].filter(Boolean).join(' and ');
-  say(`Trade done with ${abbrev}${got ? `: ${got} join${names.length === 1 && !picks ? 's' : ''} you` : ''}.`, 'good');
+  const now = useStore.getState().league;
+  say(`Trade done with ${abbrev}${got ? `: ${got} join${names.length === 1 && !picks ? 's' : ''} you` : ''}.${now ? movedNeedText(now) : ''}`, 'good');
   return true;
 }
 

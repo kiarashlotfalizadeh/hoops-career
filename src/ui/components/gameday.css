@@ -1322,6 +1322,29 @@ table.stats .bx-div td {
   gap: 2px;
   min-height: 44px;
 }
+/* his first game as a decision: the plan, how it went, the next step */
+.gd-lesson {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 12px var(--row-px);
+}
+.gd-lesson p {
+  margin: 0;
+  line-height: 1.45;
+  max-width: 60ch;
+}
+.gd-lesson b {
+  font-weight: 640;
+}
+.gd-lesson .card-link {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+}
 /* the first nights' word on luck against the plan, under the edges that decided it */
 .gd-frame {
   margin: 0;

@@ -381,6 +381,13 @@ describe('scouting and the staff', () => {
         expect(d.moves).toBeNull();
         // a new coach's first five nights say what one game can and can't show
         expect(!!d.frame).toBe(i < 5);
+        // his very first: a lesson in deciding (the plan he went in with, how it came out, one next step)
+        expect(!!d.lesson).toBe(i === 0);
+        if (d.lesson) {
+          expect(d.lesson.plan).toMatch(/^You went in with (your own|your staff's) playbook \(.+ · .+\) and /);
+          expect(d.lesson.outcome).toMatch(/^You (won|lost) \d+-\d+\./);
+          expect(d.lesson.next).toMatch(/^(Try the staff's fix below|Pick one counter|Keep your plan)/);
+        }
       }
       expect(fixes).toBeGreaterThan(0);
     }

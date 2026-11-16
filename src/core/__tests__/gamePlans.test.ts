@@ -16,7 +16,7 @@ import { LOSING_ADJUSTMENTS } from '../sim/engine/coach';
 import { Rng } from '../random';
 import type { League, PlayoffSeries } from '../types';
 import { counterWorth, measureChanges, shrinkWorth, worthCall, WORTH_MAX } from '../ai/counterWorth';
-import { CHECK_AFTER, EDIT_AHEAD, checksDue, editPlan, madeLine, readEdit, recordEdit, revertEdit, saveCheck, saveMade, type GameReadings } from '../ai/tacticEdits';
+import { CHECK_AFTER, EDIT_AHEAD, checksDue, editPlan, evenText, madeLine, readEdit, recordEdit, revertEdit, saveCheck, saveMade, type GameReadings } from '../ai/tacticEdits';
 import { PLAN_MAX_PTS, planPoints, projectGame } from '../analysis/projection';
 
 const opponentOf = (l: League) => {
@@ -424,8 +424,11 @@ describe('game plans', () => {
       const w = readEdit(await play(check, 6)).worth;
       saveCheck(l, e.id, w, check.count);
       expect(l.inbox.length).toBe(mail + 1);
-      expect(l.inbox[0].subject).toMatch(/^Your change (seems to have helped|seems to have hurt|made no clear difference)$/);
+      expect(l.inbox[0].subject).toMatch(/^Your change (seems to have helped|seems to have hurt)$|^Your change: too close to call$/);
       expect(l.inbox[0].body).toMatch(/with your change and without it/);
+      // an even reading is inconclusive, never "no effect": a tight one rules out a big swing, a wide one can't tell
+      expect(evenText({ raw: 0.1, se: 0.1 }, 12)).toMatch(/^Too close to call over 12 games: the replays rule out a big swing/);
+      expect(evenText({ raw: 0.2, se: 0.6 }, 12)).toMatch(/^Inconclusive over 12 games: .* It may help or hurt/);
       saveCheck(l, e.id, w, check.count);
       expect(l.inbox.length).toBe(mail + 1);
       expect(checksDue(l)).toHaveLength(0);

@@ -1,6 +1,8 @@
 // Office → Free agents: everyone you could sign (and claim off waivers), filtered and sorted, with
 // your cap room on top and, while free agency runs, the market and its days. The sheets live in
 // src/ui/office/ (ContractSheet, FaSheets, TenDayPanel); ?offer=pid opens a player's.
+import { ordinal } from '../../core/format';
+import { fills, hurts, needCache, needMove, needText, teamNeed } from '../../core/league/rosterNeed';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Lock, SlidersHorizontal } from 'lucide-react';
@@ -124,6 +126,23 @@ export default function FreeAgents() {
     });
 
   const mode: FaListMode = twoWayMode ? 'twoWay' : tenDays ? 'tenDay' : 'standard';
+  // the roster's need (Team → Tactics's weakest quality), and which of the rows in view would fill it
+  const shownKey = rows
+    .slice(0, limit)
+    .map((r) => r.p.pid)
+    .join(',');
+  const needs = useLeagueMemo(() => {
+    const shown = shownKey ? shownKey.split(',').map(Number) : [];
+    const cache = needCache(league);
+    const need = teamNeed(league, cache);
+    const fill = new Map<number, { text: string; good: boolean }>();
+    if (need)
+      for (const pid of shown) {
+        const m = needMove(league, need.id, [pid], [], cache);
+        if (fills(m) || hurts(m)) fill.set(pid, { text: needText(m), good: fills(m) });
+      }
+    return { need, fill };
+  }, [league, shownKey]);
   // position, OVR and the order live in a sheet: its button counts the ones changed (and "Can sign now", which names the list)
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filtered = [pos !== 'all', minOvr !== 0, sort !== 'value'].filter(Boolean).length;
@@ -267,6 +286,12 @@ export default function FreeAgents() {
         </div>
       </Sheet>
 
+      {needs.need && mode === 'standard' && (
+        <div className="tiny dim">
+          Your roster&apos;s need: <b>{needs.need.label}</b>, graded {needs.need.grade} ({ordinal(needs.need.rank)} of {needs.need.of}). A player who&apos;d move it says which way.
+        </div>
+      )}
+
       {rows.length === 0 ? (
         <>
           {all.length > 0 && <div className="row between">{filterBtn}</div>}
@@ -300,6 +325,7 @@ export default function FreeAgents() {
                   mode={mode}
                   s={s}
                   space={space}
+                  fill={needs.fill.get(p.pid)}
                   onOpen={() => (p.waivers ? setWaiverSel(p.pid) : twoWayMode ? setTwoWaySel(p.pid) : tenDays ? setTenDaySel(p.pid) : setSel(p.pid))}
                 />
               ))}

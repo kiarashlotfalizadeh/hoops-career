@@ -1,7 +1,7 @@
 // "Since you changed it" (Tactics → Analysis → Report) and the bar the staff's measuring takes on
 // Tactics after Done. A change shows what it moved and what the staff makes of it in words: as it was
 // made, then again once CHECK_AFTER games have been played ("Seems to help", "Seems to hurt" with a tap
-// to put it back, or "No clear change"). The reading behind the words stays under the hood (paired
+// to put it back, or "Too close to call"). The reading behind the words stays under the hood (paired
 // games with and without the change, see core/ai/tacticEdits.ts).
 import { X } from 'lucide-react';
 import type { League, TacticEdit } from '../../core/types';

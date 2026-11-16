@@ -1465,7 +1465,13 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
     // a buy is the call only once it measures as a gain: one too close to say, or a cost, is his to take, not the staff's
     const flat = call?.mode === 'buy' && pts !== undefined && pts < WORTH_MIN;
     // the staff's opinion of the deal on the row; the odds in words, its contracts and the owner's goals a tap down
-    const measured = pts !== undefined && on ? dealWords(pts) : offer ? 'The staff is measuring the deal.' : '';
+    // (measured with the staff's rotation: with his own set by hand, say so, the deal plays as he places them)
+    const measured =
+      pts !== undefined && on
+        ? `${dealWords(pts)}${league.teams[me].rotation.manual ? " Read with the staff's minutes: yours, set by hand, will differ." : ''}`
+        : offer
+          ? 'The staff is measuring the deal.'
+          : '';
     const detail = offer
       ? [
           `${flat ? 'The best buy it found: ' : ''}${assetText(league, offer.b)} from the ${other?.name ?? league.teams[offer.b.tid].name} for ${assetText(league, offer.a)}.`,

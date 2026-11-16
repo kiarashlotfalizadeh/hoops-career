@@ -17,7 +17,7 @@ export const leanTone = (l: Lean): '' | 'good' | 'bad' => (l === 'gain' ? 'good'
 export const AHEAD: Record<Lean, string> = { gain: 'Should help', cost: 'Could hurt', even: 'No clear edge' };
 
 /** After a choice was made: what the staff makes of it so far. */
-export const SINCE: Record<Lean, string> = { gain: 'Seems to help', cost: 'Seems to hurt', even: 'No clear change' };
+export const SINCE: Record<Lean, string> = { gain: 'Seems to help', cost: 'Seems to hurt', even: 'Too close to call' };
 
 /** A playbook, a shape or a fit against the one in use. */
 export const FIT: Record<Lean, string> = { gain: 'Better fit', cost: 'Worse fit', even: 'Similar fit' };

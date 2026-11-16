@@ -316,6 +316,21 @@ export function youthNews(league: League) {
 
 const YOUTH_NEWS = 'turn to their young players';
 
+/**
+ * The user's own rotation after the roster changes under it (a trade, a signing): his order and
+ * minutes kept, departed players dropped, new ones at the end of the depth chart with no minutes set
+ * (the trade screen's impact reads the same, see tradeImpact).
+ */
+export function keepManualRotation(rot: Rotation, players: Player[]) {
+  const pids = new Set(players.map((p) => p.pid));
+  rot.order = rot.order.filter((pid) => pids.has(pid));
+  for (const p of [...players].sort((a, b) => b.ovr - a.ovr)) if (!rot.order.includes(p.pid)) rot.order.push(p.pid);
+  for (const k of Object.keys(rot.minutes)) if (!pids.has(+k)) delete rot.minutes[+k];
+  rot.closers = rot.closers.filter((pid) => pids.has(pid));
+  rot.restB2B = rot.restB2B.filter((pid) => pids.has(pid));
+  for (const k of Object.keys(rot.caps)) if (!pids.has(+k)) delete rot.caps[+k];
+}
+
 /** Keep AI rotations/tactics fresh (injuries, trades) and validate the user's. */
 export function ensureRotation(league: League, tid: number) {
   const team = league.teams[tid];
@@ -329,15 +344,7 @@ export function ensureRotation(league: League, tid: number) {
     const youth = youthMovement(league, tid);
     // (a youth movement also spreads the minutes: nobody past 30, the end of the bench plays)
     team.rotation = autoRotation(players, rot, youth ? { lean: (p) => youth * youthLean(playerAge(p, league.season)), maxMinutes: 38 - 8 * youth } : {});
-  } else if (stale) {
-    // keep the user's order, drop departed players, append new ones at the end
-    rot.order = rot.order.filter((pid) => pids.has(pid));
-    for (const p of players.sort((a, b) => b.ovr - a.ovr)) if (!rot.order.includes(p.pid)) rot.order.push(p.pid);
-    for (const k of Object.keys(rot.minutes)) if (!pids.has(+k)) delete rot.minutes[+k];
-    rot.closers = rot.closers.filter((pid) => pids.has(pid));
-    rot.restB2B = rot.restB2B.filter((pid) => pids.has(pid));
-    for (const k of Object.keys(rot.caps)) if (!pids.has(+k)) delete rot.caps[+k];
-  }
+  } else if (stale) keepManualRotation(rot, players);
   // (a youth movement plays its two-way prospects too)
   if ((!isUser || !team.rotation.manual) && youthMovement(league, tid) < 1) benchTwoWays(team.rotation, players);
   const missingRoles = players.some((p) => team.tactics.offense.roles[p.pid] === undefined);

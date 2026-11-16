@@ -9,6 +9,8 @@
 // item can be settled where it stands: the staff's suggestion and any quick choices are
 // AgendaActions that resolveAgenda carries out, and `to` opens the screen that has the whole
 // decision. Nothing here is stored except the guided week's progress (League.onboarding).
+import { needsDeploying } from './rosterNeed';
+import { QUALITY_META, type QualityId } from '../analysis/system';
 import type { League, Player } from '../types';
 import { CAP } from '../constants';
 import { addInbox, fmtDate, freeAgents, playerName, standardRoster, teamPlayers, twoWayRoster, TWO_WAY_MAX } from './helpers';
@@ -25,7 +27,8 @@ import { planByUser } from './gamePlans';
 import { ultimatumVerdict } from './jobSecurity';
 import { resolveCall, staffCalls, type CallAction, type CallChoice, type CallKind, type CallMeasure } from './calls';
 
-export type AgendaKind = 'fired' | 'cuts' | 'signings' | 'twoWays' | 'offerSheet' | 'draftPick' | 'tenDay' | 'tradeOffer' | 'jobOffers' | 'ultimatum' | 'guide' | CallKind;
+export type AgendaKind =
+  'fired' | 'cuts' | 'signings' | 'twoWays' | 'offerSheet' | 'draftPick' | 'tenDay' | 'tradeOffer' | 'jobOffers' | 'ultimatum' | 'deploy' | 'guide' | CallKind;
 
 /** The agenda's kinds that are the staff's calls (see calls.ts): Needs you puts them first, and the digest and the Play options show them. */
 export const CALL_KINDS: ReadonlySet<AgendaKind> = new Set<CallKind>(['injury', 'odds', 'floor', 'deadline', 'series', 'books', 'skid', 'week']);
@@ -486,6 +489,22 @@ export function agenda(league: League): AgendaItem[] {
       tone: 'bad',
       to: '/office/owner',
     });
+
+  // a player brought in for a need, sitting out of a rotation he runs himself: place him (or not)
+  if (league.phase === 'regular' || league.phase === 'preseason' || league.phase === 'playin' || league.phase === 'playoffs')
+    for (const { txn, p } of needsDeploying(league)) {
+      const label = QUALITY_META[txn.need!.id as QualityId]?.label ?? 'a need';
+      items.push({
+        id: `deploy:${p.pid}`,
+        kind: 'deploy',
+        required: false,
+        title: `${playerName(p)} isn't in your rotation`,
+        line: `He came in for ${label.toLowerCase()}. You run the rotation: give him minutes.`,
+        tone: 'warn',
+        to: '/team/rotation',
+        pids: [p.pid],
+      });
+    }
 
   // the staff's calls: what the season needs an answer to now, the one the last sim stopped for first (that day)
   const stop = league.stopCall?.season === league.season && league.stopCall.day === league.day ? league.stopCall.id : null;

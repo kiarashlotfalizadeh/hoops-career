@@ -8,6 +8,9 @@ import type { TradeOffer } from './trades';
 import { playerAge } from '../playerGen';
 import { autoRotation, fitRoster, rosterProfile, type ProfileKey } from '../ai/coachAI';
 import { shortName, teamPlayers } from './helpers';
+import { keepManualRotation } from './games';
+import { needCache, needMove, teamNeed, type NeedMove } from './rosterNeed';
+import { normalizeMinutes, planInputs, planRoles } from '../sim/rotationPlan';
 
 /** A player whose role the deal changes: minutes a game now and with it, and whether he starts each way. */
 export interface RotationMove {
@@ -28,6 +31,25 @@ export interface TradeImpact {
   costs: string | null;
   /** What he gives up for later, in words: picks, swap rights, young players. */
   future: string[];
+  /**
+   * Read for his own rotation (he set it): the deal keeps his order and minutes, the players coming
+   * in go to the end of his depth chart with no minutes set, until he places them.
+   */
+  manual: boolean;
+  /** The roster's need (Team → Tactics's weakest quality) as the deal moves it, when he has one. */
+  need?: NeedMove;
+}
+
+/** The minutes a rotation actually plays for these players (the engine's plan: unset starters get a starter's share, the total scaled to 240). */
+function planned(rot: Rotation, players: Player[]): Record<number, number> {
+  const order = new Map(rot.order.map((pid, i) => [pid, i]));
+  const roster = [...players].sort((a, b) => (order.get(a.pid) ?? 99) - (order.get(b.pid) ?? 99));
+  const pp = planInputs(
+    roster.map((p) => ({ pid: p.pid, available: !(p.injury && p.injury.gamesRemaining > 0), ...planRoles(p.ratings, p.pos), endurance: p.ratings.end })),
+    rot,
+  );
+  const mins = normalizeMinutes(pp);
+  return Object.fromEntries(pp.map((p, i) => [p.pid, mins[i]]));
 }
 
 /** Each roster quality in a few words, as the deal moves it. */
@@ -65,10 +87,21 @@ export function tradeImpact(league: League, offer: TradeOffer): TradeImpact {
   const out = new Set(mine.pids);
   const inc = theirs.pids.map((pid) => league.players[pid]).filter(Boolean);
   const after = [...before.filter((p) => !out.has(p.pid)), ...inc];
-  // the rotation he has (his own, if he set it) against the one his staff would play after the deal
-  // (both the staff's when he leaves it to them, so only the deal moves anyone)
-  const now: Rotation = team.rotation.manual ? team.rotation : autoRotation(healthy(before), team.rotation);
-  const next = autoRotation(healthy(after), team.rotation);
+  // the rotation he has against the one he'd have after the deal, as the game will run it: his own
+  // when he set it (ensureRotation keeps it: new players at the end, no minutes), else his staff's
+  // both ways, so only the deal moves anyone
+  const manual = !!team.rotation.manual;
+  let now: Rotation;
+  let next: Rotation;
+  if (manual) {
+    const kept = structuredClone(team.rotation);
+    keepManualRotation(kept, after);
+    now = { ...team.rotation, minutes: planned(team.rotation, before) };
+    next = { ...kept, minutes: planned(kept, after) };
+  } else {
+    now = autoRotation(healthy(before), team.rotation);
+    next = autoRotation(healthy(after), team.rotation);
+  }
   const starts = (r: Rotation, pid: number) => r.order.slice(0, 5).includes(pid);
   const all = [...before, ...inc];
   const moves = all
@@ -94,6 +127,9 @@ export function tradeImpact(league: League, offer: TradeOffer): TradeImpact {
   const diffs = keys.map((k) => ({ k, d: pa[k] - pb[k] })).sort((x, y) => y.d - x.d);
   const top = diffs[0];
   const low = diffs[diffs.length - 1];
+  const cache = needCache(league);
+  const named = teamNeed(league, cache);
+  const need = named ? needMove(league, named.id, theirs.pids, mine.pids, cache) : undefined;
   const future: string[] = [];
   for (const dpid of mine.dpids) {
     const dp = league.draftPicks.find((x) => x.dpid === dpid);
@@ -112,6 +148,8 @@ export function tradeImpact(league: League, offer: TradeOffer): TradeImpact {
     adds: top && top.d >= QUALITY_MIN ? QUALITY[top.k] : null,
     costs: low && low.d <= -QUALITY_MIN ? QUALITY[low.k] : null,
     future,
+    manual,
+    ...(need && { need }),
   };
 }
 

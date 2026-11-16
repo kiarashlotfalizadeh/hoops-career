@@ -11,6 +11,9 @@ import { agenda, agendaBlocker, cutOrder, GUIDE_STEPS, guideDone, guideFinished,
 import { canStartRegularSeason, simDay, startRegularSeason } from '../league/season';
 import { CAP_FOR, curTeamSeason, fmtDate, playerName, revenueScale, standardRoster } from '../league/helpers';
 import { releasePlayer } from '../league/contracts';
+import { executeTrade } from '../league/trades';
+import { ensureRotation } from '../league/games';
+import { fills, movedNeedText, needCache, needMove, teamNeed } from '../league/rosterNeed';
 import { CAP } from '../constants';
 import {
   ULTIMATUM_ODDS,
@@ -109,6 +112,36 @@ describe('the agenda', () => {
   }
 
   it("holds the league for required decisions with the staff's call one tap away, guides the first week, keeps the job on the line, and speaks with one voice", async () => {
+    // the roster's need, carried through: Tactics's weakest quality is named, a player who'd fill it
+    // reads so, the deal for him keeps it on its log line, and on a rotation the coach runs himself
+    // Today asks for him in it until he plays
+    {
+      const l = camp(5);
+      startRegularSeason(l);
+      // (a team with one: a quality in the league's bottom half)
+      l.userTid = l.teams.find((t) => (l.userTid = t.tid) >= 0 && teamNeed(l))!.tid;
+      const me = l.userTid;
+      const cache = needCache(l);
+      const need = teamNeed(l, cache)!;
+      expect(need.rank).toBeGreaterThan(Math.ceil(need.of / 2));
+      const filler = Object.values(l.players)
+        .filter((p) => p.tid >= 0 && p.tid !== me && !p.injury)
+        .sort((a, b) => b.ovr - a.ovr)
+        .slice(0, 60)
+        .find((p) => fills(needMove(l, need.id, [p.pid], [], cache)))!;
+      expect(filler).toBeDefined();
+      l.teams[me].rotation.manual = true;
+      executeTrade(l, { a: { tid: me, pids: [], dpids: [] }, b: { tid: filler.tid, pids: [filler.pid], dpids: [] } });
+      ensureRotation(l, me);
+      const txn = l.transactions!.at(-1)!;
+      expect(txn.need).toMatchObject({ id: need.id });
+      expect(movedNeedText(l)).toMatch(/^ It fills your need: .+ [A-F]\+? → [A-F]\+?\.$/);
+      const row = agenda(l).find((i) => i.id === `deploy:${filler.pid}`)!;
+      expect(row).toMatchObject({ kind: 'deploy', to: '/team/rotation', title: `${playerName(filler)} isn't in your rotation` });
+      l.teams[me].rotation.minutes[filler.pid] = 20;
+      expect(agenda(l).some((i) => i.kind === 'deploy')).toBe(false);
+    }
+
     // it holds opening night on a roster over 15, with the releases the staff would make one tap away
     {
       const l = camp(19);

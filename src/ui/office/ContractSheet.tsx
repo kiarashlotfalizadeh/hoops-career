@@ -2,6 +2,7 @@
 // ask up top, your offer, his counter, his patience; see TalkPanel), or for a top free agent in the
 // summer an offer weighed against other teams' (BidPanel). Its extension mode (the Office, the
 // player page and Re-sign) is in ExtendBody.tsx.
+import { fills, hurts, movedNeedText, needCache, needMove, teamNeed } from '../../core/league/rosterNeed';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Ban, Scale, ShieldCheck, TriangleAlert } from 'lucide-react';
@@ -47,7 +48,7 @@ import {
   userResign,
 } from '../../core/league/freeAgency';
 import { PLAYER_OPTION, TEAM_OPTION, YEAR_PREMIUM, type OfferResult, type TalkKind, askFor, talkAsk, talkSalaries, talkState } from '../../core/league/negotiation';
-import { useLeague, useStore } from '../../state/store';
+import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Segmented, Sheet, Statline } from '../components/ui';
 import { CapBar, Callout, HelpSheet, OvrPot, PlayerHead, appealInfo, capRoomFig, capSeason, forYears, shortSeason, taxLine } from './common';
@@ -106,6 +107,13 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   const ownRfa = mode === 'resign' && p.tid === FREE_AGENT;
   const kind: TalkKind = mode === 'resign' ? 'resign' : 'fa';
   const mine = mode === 'fa' ? counterpart(league, p) : null;
+  // the roster's need, and what he'd do to it (a free agent only: your own are already counted)
+  const need = useLeagueMemo(() => {
+    if (mode !== 'fa') return null;
+    const cache = needCache(league);
+    const n = teamNeed(league, cache);
+    return n ? needMove(league, n.id, [p.pid], [], cache) : null;
+  }, [league, p.pid, mode]);
   // his ask on his own terms (up after re-sign talks broke down)
   const ask = bidding ? askingContract(league, p, tid) : talkAsk(league, p, kind);
   const minAmt = p.experience >= 3 ? cap.vetMin : cap.minContract;
@@ -202,6 +210,13 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
       ? (signingClosedReason(league) ?? (sheet ? sheetBlockedReason(league, p, c.years) : null) ?? offerBlockedReason(league, p, c.amount, c.years, via))
       : (closed ?? (rosterBlocked ? `Your offseason roster is full, at ${rosterMax}.` : frozenAt(c.amount)));
 
+  /** His counter's payroll line on its own terms (the cap section below follows the slider's offer). */
+  const counterImpact = (c: TalkTerms) =>
+    taxLine(league, pay, pay + c.amount, season) ??
+    (mode === 'fa'
+      ? { text: `${cap.salaryCap - pay - c.amount >= 0 ? 'cap space' : 'over the cap by'} ${money(Math.abs(cap.salaryCap - pay - c.amount))} after`, tone: 'dim' }
+      : { text: `${shortSeason(season)} payroll ${money(pay + c.amount)}`, tone: 'dim' });
+
   const submit = (terms: TalkTerms = { amount, years, option }) => {
     // a refused offer still counts in the talks (his patience): only the answer differs
     const res = settle<OfferResult>(
@@ -217,7 +232,8 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
     );
     if (!res) return;
     if (res.ok) {
-      useStore.getState().toast(res.reason, 'good');
+      const now = useStore.getState().league;
+      useStore.getState().toast(`${res.reason}${now ? movedNeedText(now) : ''}`, 'good');
       onClose();
     } else if (bidding) useStore.getState().toast(res.reason, 'bad');
     else setReply({ text: res.reason, tone: res.counter ? 'warn' : 'bad' });
@@ -431,9 +447,30 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
         </Callout>
       )}
 
+      {need && (
+        <div className={`tiny ${fills(need) ? 'good' : hurts(need) ? 'warn' : 'dim'}`}>
+          Your need, {need.label.toLowerCase()}:{' '}
+          {fills(need)
+            ? `${need.from} → ${need.to} with him.`
+            : hurts(need)
+              ? `${need.from} → ${need.to} with him: he'd make it worse.`
+              : `still ${need.to} with him: he doesn't fill it.`}
+        </div>
+      )}
+
       {/* (a player who takes the minimum on these terms has nothing to talk about) */}
       {!bidding && !closed && !overRights && (askAt > minAmt + 1 || !!reply || !!talks?.counter || !!talks?.closed) && (
-        <TalkPanel p={p} kind={kind} amount={amount} years={years} option={option} reply={reply} counterBlocked={counterBlocked} onAcceptCounter={acceptCounter} />
+        <TalkPanel
+          p={p}
+          kind={kind}
+          amount={amount}
+          years={years}
+          option={option}
+          reply={reply}
+          counterBlocked={counterBlocked}
+          impact={counterImpact}
+          onAcceptCounter={acceptCounter}
+        />
       )}
 
       {mode === 'fa' ? (

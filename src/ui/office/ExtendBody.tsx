@@ -15,7 +15,7 @@ import { contractExp, salaryFor } from '../../core/playerGen';
 import { useLeague, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Statline } from '../components/ui';
-import { CapBar, Callout, HelpSheet, OvrPot, PlayerHead, appealInfo, forYears, salaryText, shortSeason } from './common';
+import { CapBar, Callout, HelpSheet, OvrPot, PlayerHead, appealInfo, forYears, salaryText, shortSeason, taxLine } from './common';
 import { OfferControls, STEP } from './OfferControls';
 import { type Reply, TalkPanel } from './TalkPanel';
 import { money, moneyExact } from '../../core/format';
@@ -136,6 +136,7 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
           years={years}
           reply={reply}
           counterBlocked={(c) => extensionFrozenReason(league, p, c.amount)}
+          impact={(c) => taxLine(league, pay, pay + c.amount, season) ?? { text: `${shortSeason(season)} payroll ${money(pay + c.amount)}`, tone: 'dim' }}
           onAcceptCounter={(c) => (setAmount(c.amount), setYears(c.years), submit(c))}
         />
       )}

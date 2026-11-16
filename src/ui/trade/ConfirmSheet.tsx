@@ -2,6 +2,7 @@
 // it gets, moves a first-round pick, changes who starts or sends a young player away. What each side
 // sends, what it does to your rotation (who starts, who loses minutes), the need it fills and the one
 // it opens, the future you give up, and what it does to your books, with the trade one more tap away.
+import { ordinal } from '../../core/format';
 import { Handshake } from 'lucide-react';
 import type { League } from '../../core/types';
 import { CAP_FOR, playerName } from '../../core/league/helpers';
@@ -99,7 +100,7 @@ export function ImpactList({ im }: { im: TradeImpact }) {
   const names = (ms: typeof im.moves) => ms.map((m) => `${m.name}${m.dealt === 'in' ? ' (new)' : ''}`).join(', ');
   return (
     <div className="fo-impact">
-      <div className="over">With the deal</div>
+      <div className="over">With the deal · {im.manual ? 'your rotation as you set it' : "your staff's rotation"}</div>
       <ul className="fo-impact-l small">
         {(im.adds || im.costs) && (
           <li>
@@ -107,10 +108,22 @@ export function ImpactList({ im }: { im: TradeImpact }) {
             {im.costs ? `, and costs you ${im.costs}.` : '.'}
           </li>
         )}
+        {im.need && (
+          <li>
+            Your need, {im.need.label.toLowerCase()}:{' '}
+            {im.need.from === im.need.to && im.need.rankTo === im.need.rankFrom
+              ? `still ${im.need.from}, the deal doesn't touch it`
+              : `${im.need.from} → ${im.need.to} (${ordinal(im.need.rankFrom)} → ${ordinal(im.need.rankTo)} in the league)`}
+            .
+          </li>
+        )}
         {up.length > 0 && <li>Into the starting five: {names(up)}.</li>}
         {down.length > 0 && <li>To the bench: {names(down)}.</li>}
         {rest.length > 0 && <li>Minutes a game: {rest.map((m) => `${m.name} ${m.from} → ${m.to}`).join(', ')}.</li>}
         {!up.length && !down.length && !rest.length && <li>Your starting five and minutes stay about the same.</li>}
+        {im.manual && im.moves.some((m) => m.dealt === 'in') && (
+          <li className="dim">You run the rotation: who comes in sits at the end of your depth chart until you place him.</li>
+        )}
         {im.future.length > 0 && <li>For later, you give up: {im.future.join('; ')}.</li>}
       </ul>
     </div>

@@ -113,6 +113,27 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
         </p>
       )}
 
+      {d.lesson && (
+        // (his first game: the plan, how it came out, one next step: deciding, not finding screens)
+        <section className="gd-lesson card" aria-label="Your first game">
+          <div className="over">Your first game</div>
+          <p className="small">
+            <b>The plan.</b> {d.lesson.plan}
+          </p>
+          <p className="small">
+            <b>How it went.</b> {d.lesson.outcome}
+          </p>
+          <p className="small">
+            <b>Next.</b> {d.lesson.next}
+          </p>
+          {d.lesson.to && (
+            <Link to={d.lesson.to} className="card-link">
+              {d.lesson.toLabel} <ChevronRight size={14} aria-hidden="true" />
+            </Link>
+          )}
+        </section>
+      )}
+
       {d.frame && <p className="gd-frame small dim2">{d.frame}</p>}
 
       {d.plan.length > 0 && (

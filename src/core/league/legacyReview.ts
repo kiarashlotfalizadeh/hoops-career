@@ -4,7 +4,7 @@
 // player and its breakout, the records set, the honors, and what next season should bring. Built once
 // a season from the league as it stands that night and kept small (a few hundred bytes), so it reads
 // the same years later when the games behind it are gone.
-import type { League, Player, PlayerStats } from '../types';
+import type { League, Player, PlayerStats, RatingKey, TrainingFocus } from '../types';
 import { seasonLabel } from '../constants';
 import { playerName } from './helpers';
 import { coachCareer, userCoach } from './coaches';
@@ -16,11 +16,13 @@ import { playerAge } from '../playerGen';
 import { bestWinOf, legacyOf, type PulsePoint, type SignatureWin } from './legacy';
 import { fanScore } from './legacyPulse';
 import { jobSecurity } from './jobSecurity';
-import { ordinal, plural } from '../format';
+import { money, ordinal, plural } from '../format';
 import { editCall, editsOf } from '../ai/tacticEdits';
 import { SINCE } from '../analysis/staffWords';
 import { seasonCoachingLine } from '../analysis/debrief';
-import { FOCUS_META } from './progression';
+import { FOCUS_KEYS, FOCUS_META } from './progression';
+import { needNow } from './rosterNeed';
+import { QUALITY_META, type QualityId } from '../analysis/system';
 
 export interface SeasonReview {
   season: number;
@@ -65,68 +67,166 @@ export interface SeasonReview {
   decisions?: string[];
 }
 
-/** Decisions the review reconnects, at most. */
-const DECISIONS_MAX = 7;
+/** Decisions the review reconnects, at most (trades first, then development, tactics, live coaching). */
+const DECISIONS_MAX = 10;
 
-/** A player's regular-season line with one team in a season, short: "14.2 PTS in 51 games" (null: he didn't play for it). */
-function shortLine(p: Player | undefined, season: number, tid: number): string | null {
+/** "+3.1" / "−2.0": a signed figure as the review's lines read it. */
+const signed = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}`;
+
+/**
+ * A player's role and worth with one team in a season, not just his scoring: games, minutes, his
+ * line, and the team's net per 100 possessions with him on the floor ("41 games, 28 MPG, 14/6/3,
+ * +3.1 per 100 on court"). Null when he didn't play for it.
+ */
+function roleLine(p: Player | undefined, season: number, tid: number): string | null {
   const s = p && lineOf(p, season, tid);
-  return s?.gp ? `${per(s.pts, s.gp)} PTS in ${plural(s.gp, 'game')}` : null;
+  if (!s?.gp) return null;
+  const box = `${Math.round(s.pts / s.gp)}/${Math.round((s.orb + s.drb) / s.gp)}/${Math.round(s.ast / s.gp)}`;
+  const net = s.onPoss >= 200 ? `, ${signed(((s.onPtsFor - s.onPtsAgainst) / s.onPoss) * 100)} per 100 on court` : '';
+  return `${plural(s.gp, 'game')}, ${Math.round(s.min / s.gp)} MPG, ${box}${net}`;
+}
+
+/**
+ * A traded pick as the deal named it, whose it is (the log names it as its sender held it: his own
+ * plain, "2028 1st", another's with its team), flagged when its draft is still to come ("your 2028
+ * 1st, still to come", "the BOS 2029 2nd").
+ */
+function pickText(label: string, season: number, owner: string | null): string {
+  const y = Number(/^(\d{4})/.exec(label)?.[1]);
+  const named = /\(\w+\)/.test(label) ? label : owner === null ? `your ${label}` : `the ${owner} ${label}`;
+  return y && y >= season ? `${named}, still to come` : named;
+}
+
+/** What a training focus is for, measured where it shows: the stat it should move. */
+const FOCUS_STAT: Partial<Record<TrainingFocus, { label: string; pct: boolean; of: (s: PlayerStats) => number | null }>> = {
+  shooting: { label: '3P%', pct: true, of: (s) => (s.tpa >= 40 ? (s.tpm / s.tpa) * 100 : null) },
+  finishing: { label: 'At the rim', pct: true, of: (s) => (s.rimA >= 40 ? (s.rimM / s.rimA) * 100 : null) },
+  playmaking: { label: 'AST/36', pct: false, of: (s) => (s.min >= 300 ? (s.ast / s.min) * 36 : null) },
+  rebounding: { label: 'REB/36', pct: false, of: (s) => (s.min >= 300 ? ((s.orb + s.drb) / s.min) * 36 : null) },
+  perimeterD: { label: 'STL/36', pct: false, of: (s) => (s.min >= 300 ? (s.stl / s.min) * 36 : null) },
+  interiorD: { label: 'BLK/36', pct: false, of: (s) => (s.min >= 300 ? (s.blk / s.min) * 36 : null) },
+};
+
+/** His regular-season totals for a season, every team summed (null: he didn't play). */
+function seasonTotals(p: Player, season: number): PlayerStats | null {
+  const rows = p.stats.filter((s) => s.season === season && !s.playoffs && !s.real);
+  if (!rows.length) return null;
+  const t = { ...rows[0] };
+  const sum = t as unknown as Record<string, number>;
+  for (const r of rows.slice(1)) for (const [k, v] of Object.entries(r)) if (typeof v === 'number' && typeof sum[k] === 'number' && k !== 'season' && k !== 'tid') sum[k] += v;
+  return t;
+}
+
+/**
+ * A training focus graded on what it trains: the focused skills' average change against the rest of
+ * his game (the cost: off-focus skills grow slower than balanced work), from the snapshot before the
+ * summer it ran (when that summer ran under this focus) or from opening night (set since: in-season
+ * growth only, and past 25 none, so it waits for the summer), and the stat it should move against
+ * last season's. OVR isn't the measure: a shooting focus can pay off with OVR flat.
+ */
+function focusLine(p: Player, season: number): string | null {
+  const keys = FOCUS_KEYS[p.training];
+  if (!keys.length) return null;
+  const hist = p.ratingsHistory;
+  const open = hist.find((h) => h.season === season);
+  const prev = hist.find((h) => h.season === season - 1);
+  // the summer before this season ran under this focus: grade it from before that summer
+  const summer = open?.focus === p.training && !!prev?.r;
+  const from = summer ? prev!.r : open?.r;
+  if (!from) return null;
+  const others = (Object.keys(from) as RatingKey[]).filter((k) => k !== 'hgt' && !keys.includes(k));
+  const avg = (ks: RatingKey[]) => ks.reduce((a, k) => a + (p.ratings[k] - from[k]), 0) / Math.max(1, ks.length);
+  const on = avg(keys);
+  const off = avg(others);
+  const label = FOCUS_META[p.training].label;
+  if (!summer && Math.abs(on) < 0.3 && playerAge(p, season) > 25)
+    return `${label} focus for ${playerName(p)}: set this season. At his age it works over the summer: judge it next year.`;
+  const fs = FOCUS_STAT[p.training];
+  const now = fs ? seasonTotals(p, season) : null;
+  const then = fs ? seasonTotals(p, season - 1) : null;
+  const a = fs && now ? fs.of(now) : null;
+  const b = fs && then ? fs.of(then) : null;
+  const fmt = (x: number) => (fs!.pct ? `${Math.round(x)}%` : x.toFixed(1));
+  const stat = fs && a !== null && b !== null ? ` ${fs.label} ${fmt(b)} → ${fmt(a)}.` : '';
+  const verdict = on >= 1.5 && on - off >= 1 ? 'it paid off' : on - off < 0.5 ? 'no edge over balanced work yet' : 'a modest gain';
+  return `${label} focus for ${playerName(p)}: those skills ${signed(on)}, the rest of his game ${signed(off)} ${summer ? 'since last season' : 'since opening night'}, ${verdict}.${stat}`;
 }
 
 /**
  * The coach's decisions, reconnected with what followed (the review keeps them as words, so an old
- * season reads the same): each trade of his this season and last, what came in (how they've played
- * for him since) against what went out (how they've played where they went, the picks given); each
- * of his players on a training focus, his OVR then and now; his tactical changes this season the
- * staff checked, with its verdict; his live coaching over the season.
+ * season reads the same): each trade of his this season and last, pick-only deals too, with what came
+ * in (role and on-court worth for him since) against what went out (the same where they went), the
+ * specific picks, swaps and cash each way, picks still to come flagged; each of his players on a
+ * training focus, graded on the skills and stat it trains and what the rest of his game gave up; his
+ * tactical changes this season, checked or not yet (an unmeasured one says so); his live coaching.
  */
 export function decisionLines(league: League, season: number, tid: number): string[] {
   const out: string[] = [];
   const name = (pid: number, frozen: string) => (league.players[pid] ? playerName(league.players[pid]) : frozen);
   // trades: this season's and last's, newest first
   const trades = (league.transactions ?? []).filter((t) => t.kind === 'trade' && t.tids.includes(tid) && (t.season === season || t.season === season - 1) && t.sides);
-  for (const t of [...trades].reverse().slice(0, 3)) {
+  for (const t of [...trades].reverse().slice(0, 4)) {
     const mine = t.sides!.find((x) => x.tid === tid);
-    const theirs = t.sides!.find((x) => x.tid !== tid);
-    if (!mine || !theirs) continue;
-    const got = theirs.players.map((x) => {
-      const l = shortLine(league.players[x.pid], season, tid);
-      return `${name(x.pid, x.name)}${l ? ` (${l} for you)` : league.players[x.pid]?.tid === tid ? " (hasn't played)" : ' (gone since)'}`;
-    });
-    const gave = mine.players.map((x) => {
-      const p = league.players[x.pid];
-      const l = p ? shortLine(p, season, theirs.tid) : null;
-      return `${name(x.pid, x.name)}${l ? ` (${l} for ${league.teams[theirs.tid].abbrev})` : ''}`;
-    });
-    const picks = mine.picks.length ? `${mine.picks.length === 1 ? 'a pick' : `${mine.picks.length} picks`}` : '';
+    const others = t.sides!.filter((x) => x.tid !== tid);
+    if (!mine || !others.length) continue;
+    const got = [
+      ...others.flatMap((o) =>
+        o.players.map((x) => {
+          const l = roleLine(league.players[x.pid], season, tid);
+          return `${name(x.pid, x.name)} (${l ? `${l} for you` : league.players[x.pid]?.tid === tid ? "hasn't played" : 'gone since'})`;
+        }),
+      ),
+      ...others.flatMap((o) => o.picks.map((x) => pickText(x, season, league.teams[o.tid].abbrev))),
+      ...others.flatMap((o) => (o.swaps ?? []).map((y) => `the right to swap ${y} firsts`)),
+      ...(others.some((o) => o.cash) ? [`${money(others.reduce((a, o) => a + (o.cash ?? 0), 0))} cash`] : []),
+    ];
+    const gave = [
+      ...mine.players.map((x) => {
+        const p = league.players[x.pid];
+        const to = p && p.tid >= 0 ? p.tid : others[0].tid;
+        const l = p ? roleLine(p, season, to) : null;
+        return `${name(x.pid, x.name)}${l ? ` (${l} for ${league.teams[to].abbrev})` : ''}`;
+      }),
+      ...mine.picks.map((x) => pickText(x, season, null)),
+      ...(mine.swaps ?? []).map((y) => `the right to swap ${y} firsts`),
+      ...(mine.cash ? [`${money(mine.cash)} cash`] : []),
+    ];
     const when = t.season === season ? '' : ` (${seasonLabel(t.season)})`;
-    const gaveText = [...gave, ...(picks ? [picks] : [])].join(', ') || 'nothing';
-    if (got.length || gave.length) out.push(`Trade${when}: ${got.join(', ') || 'picks'} for ${gaveText}.`);
+    if (got.length || gave.length) out.push(`Trade${when}: ${got.join(', ') || 'nothing'} for ${gave.join(', ') || 'nothing'}.`);
   }
-  // development: his players on a training focus, OVR at the season's start against now
+  // needs: the moves he made for one, the need graded again now (the rotation he ended with)
+  const needed = (league.transactions ?? []).filter((t) => t.season === season && t.need && t.tids.includes(tid)).slice(-2);
+  for (const t of needed) {
+    const n = t.need!;
+    const label = QUALITY_META[n.id as QualityId]?.label ?? 'A need';
+    const pids = t.kind === 'trade' ? (t.sides ?? []).filter((x) => x.tid !== tid).flatMap((x) => x.players.map((y) => y.pid)) : t.pid !== undefined ? [t.pid] : [];
+    const who = pids.map((pid) => league.players[pid]).filter((p): p is Player => !!p);
+    const names = who.map((p) => playerName(p)).join(' and ') || t.name || 'the move';
+    const now = tid === league.userTid ? needNow(league, n.id as QualityId) : null;
+    const role = who.map((p) => roleLine(p, season, tid)).find(Boolean);
+    out.push(
+      `${label}, your need: ${n.from} → ${n.to} when ${names} came in${now ? `, ${now.grade} by the season's end` : ''}.${role ? ` ${who[0].lastName}: ${role}.` : who.length && who[0].tid === tid ? ` ${who[0].lastName} hardly played.` : ''}`,
+    );
+  }
+  // development: his players on a training focus, graded on what it trains, best players first
   const dev = Object.values(league.players)
     .filter((p) => p.tid === tid && p.training && p.training !== 'balanced')
-    .map((p) => ({ p, from: p.ratingsHistory.find((h) => h.season === season)?.ovr }))
-    .filter((x) => x.from !== undefined)
-    .sort((a, b) => Math.abs(b.p.ovr - b.from!) - Math.abs(a.p.ovr - a.from!))
-    .slice(0, 2);
-  for (const { p, from } of dev) {
-    const d = p.ovr - from!;
-    out.push(`${FOCUS_META[p.training].label} focus for ${playerName(p)}: OVR ${from} → ${p.ovr}${d >= 3 ? ', it paid off' : d <= -2 ? ', he slipped anyway' : ''}.`);
-  }
-  // tactics: his changes this season the staff checked, the clearest first
+    .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
+    .map((p) => focusLine(p, season))
+    .filter((x): x is string => !!x)
+    .slice(0, 3);
+  out.push(...dev);
+  // tactics: his changes this season, the clearest first, then ones still unmeasured
   const edits = editsOf(league)
-    .filter((e) => e.season === season && (e.check || e.worth))
-    .map((e) => ({ e, call: editCall(e.check ?? e.worth)! }))
-    .sort((a, b) => Number(b.call !== 'even') - Number(a.call !== 'even') || b.e.day - a.e.day)
-    .slice(0, 2);
-  for (const { e, call } of edits) {
-    const w = e.check ?? e.worth!;
-    const what = e.what.split(' · ')[0];
-    out.push(
-      `${what}${e.what.includes(' · ') ? ' and more' : ''}: ${SINCE[call].toLowerCase()}, over ${plural(w.games, 'game')}${e.closed === 'reverted' ? '. You put it back' : ''}.`,
-    );
+    .filter((e) => e.season === season)
+    .map((e) => ({ e, w: e.check ?? e.worth }))
+    .map((x) => ({ ...x, call: x.w ? editCall(x.w) : undefined }))
+    .sort((a, b) => Number(!!b.call) - Number(!!a.call) || Number(b.call !== 'even') - Number(a.call !== 'even') || b.e.day - a.e.day)
+    .slice(0, 3);
+  for (const { e, w, call } of edits) {
+    const what = `${e.what.split(' · ')[0]}${e.what.includes(' · ') ? ' and more' : ''}`;
+    const back = e.closed === 'reverted' ? '. You put it back' : e.closed ? '. Replaced since' : '';
+    out.push(call && w ? `${what}: ${SINCE[call].toLowerCase()}, over ${plural(w.games, 'game')}${back}.` : `${what}: not measured, too few games with it in place${back}.`);
   }
   // live coaching over the season
   const live = seasonCoachingLine(league, season, tid);

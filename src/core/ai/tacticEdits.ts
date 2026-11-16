@@ -20,7 +20,7 @@ import type { League, Player, Rotation, ScheduledGame, Tactics, TacticEdit } fro
 import { tacticsChanges } from '../sim/playbooks';
 import { addInbox, playerName, teamPlayers } from '../league/helpers';
 import { plural } from '../format';
-import { poolWorth, worthCall, type CounterWorth, type LeagueChange } from './counterWorth';
+import { WORTH_MIN, poolWorth, worthCall, type CounterWorth, type LeagueChange } from './counterWorth';
 import { leadAssistant } from './assistant';
 
 /** The user's games ahead a change is measured on as it's made. */
@@ -408,10 +408,10 @@ export function saveCheck(league: League, id: number, w: CounterWorth, games: nu
       ? `${replayed} It seems to have helped. I'd keep it.`
       : call === 'cost'
         ? `${replayed} It seems to have hurt. Put it back from Team → Tactics → Analysis.`
-        : `${replayed} It neither won nor cost you games. Keep it if you like how the team plays with it.`;
+        : `${replayed} ${evenText(w, games)}`;
   addInbox(league, {
     from: `${lead.name}, lead assistant`,
-    subject: call === 'gain' ? 'Your change seems to have helped' : call === 'cost' ? 'Your change seems to have hurt' : 'Your change made no clear difference',
+    subject: call === 'gain' ? 'Your change seems to have helped' : call === 'cost' ? 'Your change seems to have hurt' : 'Your change: too close to call',
     body: `${shortWhat(e)}${e.what.includes(' · ') ? ' and more' : ''}. ${body}`,
     link: '/team/tactics/analysis',
     tone: call === 'gain' ? 'good' : call === 'cost' ? 'bad' : 'neutral',
@@ -461,11 +461,19 @@ export function checkLine(e: TacticEdit): string {
   const c = e.check;
   if (!c) return '';
   const call = worthCall(c);
-  return call === 'gain'
-    ? 'Your change seems to have helped.'
-    : call === 'cost'
-      ? 'Your change seems to have hurt.'
-      : `Over ${c.games} games your change neither won nor cost you games. Keep it if you like how the team plays with it.`;
+  return call === 'gain' ? 'Your change seems to have helped.' : call === 'cost' ? 'Your change seems to have hurt.' : evenText(c, c.games);
+}
+
+/**
+ * An even reading in honest words: inconclusive, not "no effect". Readings whose whole likely range
+ * sits inside the gain/cost line (|raw| + 2 se under WORTH_MIN) rule out a big swing either way;
+ * the rest just couldn't tell the change apart from the old setup.
+ */
+export function evenText(w: Pick<CounterWorth, 'raw' | 'se'>, games: number): string {
+  const small = Math.abs(w.raw) + 2 * w.se < WORTH_MIN;
+  return small
+    ? `Too close to call over ${games} games: the replays rule out a big swing either way, but it may still help or hurt a little. Keep it if you like how the team plays with it.`
+    : `Inconclusive over ${games} games: the replays couldn't tell it apart from your old setup. It may help or hurt; more games would tell. Keep it if you like how the team plays with it.`;
 }
 
 /** The call of a reading, for its tone. */

@@ -30,6 +30,7 @@ export function TalkPanel({
   option,
   reply,
   counterBlocked,
+  impact,
   onAcceptCounter,
 }: {
   p: Player;
@@ -40,6 +41,8 @@ export function TalkPanel({
   reply: Reply | null;
   /** Why his counter can't be signed as it stands (the cap, the roster), or null. */
   counterBlocked: (c: TalkTerms) => string | null;
+  /** What his counter does to your payroll as signed (its own terms, not the offer on the slider), or null. */
+  impact?: (c: TalkTerms) => { text: string; tone: string } | null;
   onAcceptCounter: (c: TalkTerms) => void;
 }) {
   const league = useLeague();
@@ -58,6 +61,7 @@ export function TalkPanel({
   const cWhy = c ? counterBlocked(c) : null;
   // (as signed: the same raises the deal is written with, see talkSalaries)
   const cTotal = c ? talkSalaries(league, p, kind, c.amount, c.years).reduce((a, x) => a + x, 0) : 0;
+  const cImpact = c && impact ? impact(c) : null;
   const tone = st.patience <= 1 ? 'bad' : st.patience === 2 ? 'warn' : 'good';
   // his counter shows in its own row: the reply keeps only what it adds (that a lowball stung)
   const replyText = reply && c && reply.tone === 'warn' ? reply.text.replace(/^.*? counters at .*? over \d+ years?\.\s*/, '') : reply?.text;
@@ -88,6 +92,7 @@ export function TalkPanel({
           <div className="grow">
             <b>His counter:</b> <span className="num">{moneyExact(c.amount)}</span> × {yrs(c.years)}
             <span className="dim"> · {money(cTotal)} total</span>
+            {cImpact && <div className={`tiny num ${cImpact.tone}`}>If you accept: {cImpact.text}</div>}
             {cWhy && <div className="tiny warn">{cWhy}</div>}
           </div>
           <button className="btn xs primary" disabled={!!cWhy} onClick={() => onAcceptCounter(c)}>

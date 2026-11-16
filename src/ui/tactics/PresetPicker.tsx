@@ -9,7 +9,8 @@ import { ChevronRight } from 'lucide-react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { edit } from '../../state/actions';
 import { DEF_PRESETS, OFF_PRESETS, applyDefPreset, applyOffPreset, type DefPreset, type OffPreset } from '../../core/sim/tactics';
-import { presetMatches } from '../../core/sim/playbooks';
+import { changeText, presetMatches, tacticsChanges } from '../../core/sim/playbooks';
+import { QUALITY_META, gradeChanges, systemReport } from '../../core/analysis/system';
 import { CHANGE_UPS, baseDefenses, defPresetFit, defPresetTerms, fitRoster, offPresetFit, offPresetTerms, rosterProfile, staffPick } from '../../core/ai/coachAI';
 import { inSeason, rosterSorted } from '../../core/league/helpers';
 import { rosterNames } from '../stats';
@@ -109,6 +110,7 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
               <span>{sheet.bestFor}</span>
             </div>
             <PresetFit id={sheet.id} cur={cur} curName={curName ?? 'yours'} best={best.id === sheet.id} terms={terms[sheet.id]} fits={fits} pr={prof} name={name} />
+            {!sheetOn && <PresetDiff kind={kind} id={sheet.id} curName={curName ?? 'yours'} similar={shownFit(sheet.id, terms[sheet.id], fits, cur).lean === 'even'} />}
             <button
               className="btn primary block"
               disabled={sheetOn && !sheetCustom}
@@ -123,5 +125,56 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
         )}
       </Sheet>
     </>
+  );
+}
+
+/** Settings changes the diff names, at most: the ones that change how the team plays most visibly come first in tacticsChanges' screen order. */
+const STYLE_MAX = 4;
+
+/**
+ * What switching to playbook `id` changes from the one in use, beyond the fit: how the team would
+ * play (the settings it moves, in the screens' words) and where it would be better or exposed (the
+ * system report's grades with it against without). For two playbooks the staff reads about even this
+ * is the difference: comparable results, a different team.
+ */
+function PresetDiff({ kind, id, curName, similar }: { kind: 'off' | 'def'; id: string; curName: string; similar: boolean }) {
+  const league = useLeague();
+  const diff = useLeagueMemo(() => {
+    const me = league.userTid;
+    const t = league.teams[me].tactics;
+    const next = { ...t, ...(kind === 'off' ? { offense: applyOffPreset(t.offense, id), offPreset: id } : { defense: applyDefPreset(t.defense, id), defPreset: id }) };
+    const base = systemReport(league, me);
+    const withIt = systemReport(league, me, next, base.others);
+    const grades = gradeChanges(base, withIt);
+    const style = tacticsChanges(t, next)
+      .filter((c) => !/playbook|identity/i.test(c.label))
+      .slice(0, STYLE_MAX)
+      .map(changeText);
+    return { grades, style };
+  }, [league, kind, id]);
+  const better = diff.grades.filter((g) => g.up);
+  const worse = diff.grades.filter((g) => !g.up);
+  const text = (gs: typeof diff.grades) => gs.map((g) => `${QUALITY_META[g.id].label}: ${g.from} → ${g.to}`).join('; ');
+  return (
+    <div className="tx-terms">
+      <div className="over">What changes from {curName}</div>
+      {similar && <p className="small dim2">The staff reads them about even: the difference is how you play and where you&apos;re exposed.</p>}
+      {diff.style.length > 0 && (
+        <p className="small">
+          <b>How you&apos;d play:</b> {diff.style.join(' · ')}.
+        </p>
+      )}
+      {better.length > 0 && (
+        <p className="small">
+          <b className="good">Better at:</b> {text(better)}.
+        </p>
+      )}
+      {worse.length > 0 && (
+        <p className="small">
+          <b className="bad">Exposed at:</b> {text(worse)}.
+        </p>
+      )}
+      {!better.length && !worse.length && <p className="small dim2">No grade on your system report moves: it plays differently, not better or worse at any one thing.</p>}
+    </div>
   );
 }
