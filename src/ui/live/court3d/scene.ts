@@ -25,7 +25,7 @@ import {
   type Object3D,
   type WebGLRenderTarget,
 } from 'three';
-import { BASKET, COURT_LEN, faceWorld, toWorld, type Act, type Flash, type Pt, type Script } from '../choreo';
+import { BASKET, COURT_LEN, faceWorld, toWorld, type Act, type Flash, type Frame, type Pt, type Script } from '../choreo';
 import { FLOOR_L, FLOOR_W, type GameInfo, type Stage } from '../Court';
 import type { MatchKit, Venue } from '../../teamColors';
 import type { Occasion } from '../occasion';
@@ -59,7 +59,7 @@ import type { Models } from './models';
 import type { NetSim } from './net';
 import { buildProps } from './props';
 import { Rig } from './rig';
-import { BALL_R, hash, J, type Body, type Puppet, type V3 } from './puppet';
+import { BALL_R, hash, J, type Body, type Puppet, type Tape, type V3 } from './puppet';
 import { Sideline } from './sideline';
 import { BODY_GAP, clearance, clearOf, into, PARTS, passPath, reach as reachTo, Spacing, sunk, swerve, type Meet, type PassPath } from './spacing';
 
@@ -161,6 +161,17 @@ const TOUCH_FT = 2.2;
 const DRIBBLES = new Set(['dribble', 'dribbleRun', 'crossover']);
 /** Acts that go at the rim. */
 const AIMED = new Set<Act>(['layup', 'dunk', 'floater', 'jumper', 'release']);
+/** A body into a body the play calls for (see bump): only two this near (ft), this far through its move (and a whistle's own), the man going in leaning into it this much of the move before. */
+const BUMP_REACH = 4.4;
+const BUMP_AT = 0.62;
+const BUMP_AT_FOUL = 0.12;
+const BUMP_BRACE = 0.22;
+/** A man's turns keep up with the play up to this many times the clock (see frame). */
+const TURN_PACE = 2;
+/** Going up for a shot. */
+const SHOTS = new Set<Act>(['layup', 'dunk', 'floater', 'jumper']);
+/** An alley-oop's lob is thrown at least this far up over the straight line to his hands (ft). */
+const LOB_ARC = 2.6;
 /** Acts in a contest for the ball: on it, at it, going up for it. Such a man's face and hands are kept clear of the words as the ball is. */
 const CONTESTS = new Set<Act>(['guard', 'trap', 'contest', 'block', 'steal', 'rebound', 'crash', 'boxout', 'tip']);
 /** The joints that stand on the floor. */
@@ -230,6 +241,8 @@ const BALL_PUSH = 14;
  * there, part of the way (hands only closing on it meet it on its way; they don't pull it to them).
  */
 const HOLD_FROM = 0.2;
+/** And it is drawn there over this long of the hand having it (ms, the bodies' time). */
+const HOLD_IN = 110;
 const HOLD_SURE = 0.65;
 /** A pass leaves from where his hands had it, off where his move would have it by at most this far (ft). */
 const SLIP_MOST = 3.2;
@@ -450,7 +463,8 @@ const THIGH_R = 0.24;
 const SHIN_R = 0.17;
 const LEGS_UP = 4;
 /** A dribble moved off his own legs is let go of over this long (ms, the bodies' time: see ownLegs). */
-const OWN_LET = 60;
+const OWN_LET = 140;
+const OWN_TAKE = 30;
 /** The dribbles a man's own legs are kept out of (see ownLegs): a crossover, across in front of his shins. */
 const DRIBBLE_CLIPS = new Set(['crossover']);
 const LEG_JOINTS = [
@@ -973,8 +987,12 @@ export class CourtScene {
     // (what is eased, a turn, a step aside, arms going up, is eased on the clock: no bigger a frame at 2x or 4x)
     const ease = Math.min(own, real);
     const aside = Math.min(own, real * ASIDE_PACE);
+    // (a body's turn, a hip opened to run, where he looks: these belong to the play he is in, so they keep up with it
+    // up to TURN_PACE times the clock; held to the clock itself, at 4x a man was still turning to face a run the plan
+    // already had him well into, and went up the floor sideways)
+    let turnMs = Math.min(own, real * TURN_PACE);
     // (the buzzer is a held moment: after it the bodies run on the clock too, whatever speed the game was played at)
-    if (p.final !== undefined) own = ease;
+    if (p.final !== undefined) own = turnMs = ease;
     const sec = own / 1000;
     this.finalMs = p.final === undefined ? 0 : this.finalMs + ease;
     // (the buzzer: the winners go up and the others' heads go down one after another, not all ten in one frame)
@@ -1045,6 +1063,16 @@ export class CourtScene {
       const dead = line || b.flash?.kind === 'foul' || !!b.flash?.text.startsWith('Timeout') || b.act.every((x) => x === 'stand' || x === 'hold');
       const late = sc.q >= 4 && play.clock <= LATE_S;
       const looks = this.looks(sc, play, bi, dead);
+      // (how each move of this possession is made, kept with it: a replay makes them the same way, see Tape)
+      let takes = this.takes.get(sc);
+      if (!takes) this.takes.set(sc, (takes = new Map()));
+      const tape: Tape = { takes, again: !!reel };
+      // (the move each man's act began in)
+      const runs = pids.map((_, j) => {
+        let k = bi;
+        while (k > 0 && sc.frames[k - 1].act[j] === b.act[j]) k--;
+        return k;
+      });
       pids.forEach((pid, j) => {
         const side = (j < nO ? sc.off : 1 - sc.off) as 0 | 1;
         const f = this.fig(pid, side, p);
@@ -1088,10 +1116,17 @@ export class CourtScene {
             party: end.clip,
             who: pid,
             touch: this.touched(j),
+            how: b.how !== undefined && (said === 'release' || SHOTS.has(said)) ? b.how : undefined,
+            fake: b.fake === j,
+            tape,
+            k: bi,
+            k0: runs[j],
+            t: this.scriptAt,
           },
           dt,
           own,
           ease,
+          turnMs,
         );
         figs.push(f);
         seen.add(pid);
@@ -1199,7 +1234,12 @@ export class CourtScene {
           // a shot: thrown from his hand to the rim, and what it does there (ballistics.ts): through it, off the iron, off the glass
           const made = b.fx === 'make';
           if (!this.flight) {
-            const kind: ShotKind = this.ftAt.includes(bi - 1) ? 'ft' : ((['layup', 'floater', 'jumper'] as const).find((k) => a.act.includes(k)) ?? 'jumper');
+            // (a tip goes up off his hand at the top of his jump for the board: a layup's little way to the rim)
+            const kind: ShotKind = this.ftAt.includes(bi - 1)
+              ? 'ft'
+              : b.how === 'tip'
+                ? 'layup'
+                : ((['layup', 'floater', 'jumper'] as const).find((k) => a.act.includes(k)) ?? 'jumper');
             // (where the play takes it after: a rebounder's hands, or the floor where it is next wanted)
             const nf = made ? undefined : sc.frames[bi + 1];
             const to = nf && toWorld(nf.ball, sc.dir);
@@ -1300,7 +1340,14 @@ export class CourtScene {
         const secs = play.dur / 1000 / pace;
         const rise = flying ? clamp((this.fromV.y * secs - (to.y - this.from.y)) / 4, 0, REBOUND_MOST) : 0;
         // (a pass is thrown up by as much as it falls on its way: a long one is a lob, a short one all but flat; a ball already in the air is not thrown again)
-        const arc = Math.max(this.path.lob, flying ? 0 : Math.min(next ? 1.8 : 3, passArc(secs)), off ? Math.max(rise, Math.min(REBOUND_ARC, 0.6 + far * 0.2)) : rise);
+        // (an alley-oop is a lob whatever its length: up over the rim's height and down to him)
+        const lobbed = !!next && b.how === 'oop' && b.act[figs.indexOf(next)] === 'dunk';
+        const arc = Math.max(
+          this.path.lob,
+          flying ? 0 : Math.min(next ? 1.8 : 3, passArc(secs)),
+          off ? Math.max(rise, Math.min(REBOUND_ARC, 0.6 + far * 0.2)) : rise,
+          lobbed ? LOB_ARC : 0,
+        );
         const side = swerve(this.path, lu, SIDE);
         if (flying) {
           const way = veer(to.x - this.from.x, to.z - this.from.z, this.fromV.x, this.fromV.z, secs, lu, WAY);
@@ -1309,7 +1356,7 @@ export class CourtScene {
         }
         ball.set(
           this.from.x + (to.x - this.from.x) * lu + side.x,
-          this.path.bounce ? bouncePass(this.from.y, to.y, BALL_R, this.path.bounce, lu, secs) : this.from.y + (to.y - this.from.y) * lu + 4 * arc * lu * (1 - lu),
+          this.path.bounce && !lobbed ? bouncePass(this.from.y, to.y, BALL_R, this.path.bounce, lu, secs) : this.from.y + (to.y - this.from.y) * lu + 4 * arc * lu * (1 - lu),
           this.from.z + (to.z - this.from.z) * lu + side.z,
         );
         // (the opening tip with no referee to throw it up: it rises between the two who jump for it)
@@ -1325,6 +1372,7 @@ export class CourtScene {
       }
       this.heldBy = holder ? (sc.oPids.concat(sc.dPids)[figs.indexOf(holder)] ?? null) : null;
       this.react(sc, play, figs, holder, line, lu, own);
+      this.bump(b, figs, key, lu);
 
       // what the page writes over the picture: the handler's name, the play's label
       const hold = play.u >= 0.5 ? b.hold : a.hold;
@@ -1496,8 +1544,10 @@ export class CourtScene {
       if (!seen.has(pid)) continue;
       f.ball = hands.has(f) ? ball : null;
       f.pup.arms(hands.has(f) ? ball : null, onFloor, hands.has(f) || pid === taking ? null : LOOSE);
-      if (f === has && hands.has(f)) this.inHands(f);
+      if (f === has && hands.has(f)) this.inHands(f, own);
+      else if (f === has) this.heldMs = 0;
     }
+    if (!has) this.heldMs = 0;
     // (and again with their arms where they are drawn this frame: an arm, a trunk or a leg still in a man moves them
     // apart now, not next frame; a man with the ball in his hands stays where it is)
     this.unclash(
@@ -2791,29 +2841,42 @@ export class CourtScene {
   private ownLegs(f: Fig, ms: number) {
     const ball = this.ball;
     const p = f.pup;
-    // (what it had been moved off them is let go of over OWN_LET ms, not dropped in a frame)
+    // (what its move's own place needs to be clear of them, taken up over OWN_TAKE ms and let go of over OWN_LET, not in
+    // a frame either way: a leg swinging by under it a stride at a time doesn't shake it in his hand)
     const O = this.ownOff;
-    const let_ = Math.exp(-Math.max(0, ms) / OWN_LET);
-    O.x *= let_;
-    O.z *= let_;
     if (!DRIBBLE_CLIPS.has(p.clip) || ball.y > LEGS_UP * 0.65 * p.body.s) {
-      O.x = O.z = 0;
+      const let_ = Math.exp(-Math.max(0, ms) / OWN_LET);
+      O.x *= let_;
+      O.z *= let_;
+      ball.x += O.x;
+      ball.z += O.z;
       return;
     }
     const [x0, z0] = [ball.x, ball.z];
-    ball.x += O.x;
-    ball.z += O.z;
     const j = p.j;
     const s = p.body.s;
     const way = { x: Math.sin(p.yaw), z: Math.cos(p.yaw) };
-    for (const [hip, knee, ankle] of LEG_JOINTS) {
-      const l0 = p.world(j[hip * 3], j[hip * 3 + 1], j[hip * 3 + 2], TMP);
-      const l1 = p.world(j[knee * 3], j[knee * 3 + 1], j[knee * 3 + 2], TMP2);
-      clearOf(ball, l0, l1, THIGH_R * s * Math.sqrt(p.body.bulk) + BALL_R, 0, way);
-      const l2 = p.world(j[ankle * 3], j[ankle * 3 + 1], j[ankle * 3 + 2], TMP);
-      clearOf(ball, l1, l2, SHIN_R * s + BALL_R, 0, way);
-    }
-    [O.x, O.z] = [ball.x - x0, ball.z - z0];
+    const legs = () => {
+      let hit = false;
+      for (const [hip, knee, ankle] of LEG_JOINTS) {
+        const l0 = p.world(j[hip * 3], j[hip * 3 + 1], j[hip * 3 + 2], TMP);
+        const l1 = p.world(j[knee * 3], j[knee * 3 + 1], j[knee * 3 + 2], TMP2);
+        hit = clearOf(ball, l0, l1, THIGH_R * s * Math.sqrt(p.body.bulk) + BALL_R, 0, way) || hit;
+        const l2 = p.world(j[ankle * 3], j[ankle * 3 + 1], j[ankle * 3 + 2], TMP);
+        hit = clearOf(ball, l1, l2, SHIN_R * s + BALL_R, 0, way) || hit;
+      }
+      return hit;
+    };
+    legs();
+    const [nx, nz] = [ball.x - x0, ball.z - z0];
+    const more = nx * nx + nz * nz > O.x * O.x + O.z * O.z;
+    const k = 1 - Math.exp(-Math.max(0, ms) / (more ? OWN_TAKE : OWN_LET));
+    O.x += (nx - O.x) * k;
+    O.z += (nz - O.z) * k;
+    ball.x = x0 + O.x;
+    ball.z = z0 + O.z;
+    // (and never in them for a frame while that is taken up: what is still short of clear is made up at once)
+    if (legs()) [O.x, O.z] = [ball.x - x0, ball.z - z0];
   }
   private readonly ownOff = { x: 0, z: 0 };
   /**
@@ -2845,16 +2908,24 @@ export class CourtScene {
    * them when both are on it, not where his move guessed they would be (a hand still on its way, an arm that can't
    * reach); part of the way while his hands are only taking it. Still out of his own body.
    */
-  private inHands(f: Fig) {
+  private inHands(f: Fig, own: number) {
     const w = f.pup.holds(TMP);
-    if (w <= HOLD_FROM) return;
-    const k = smooth(clamp((w - HOLD_FROM) / (HOLD_SURE - HOLD_FROM), 0, 1));
+    if (w <= HOLD_FROM) {
+      this.heldMs = 0;
+      return;
+    }
+    // (a dribble coming back up into a palm that isn't quite where it comes up: it is drawn to the hand over HOLD_IN
+    // ms of having it, it doesn't jump there the frame the hand closes on it)
+    this.heldMs += own;
+    const k = smooth(clamp((w - HOLD_FROM) / (HOLD_SURE - HOLD_FROM), 0, 1)) * smooth(clamp(this.heldMs / HOLD_IN, 0, 1));
     const ball = this.ball;
     ball.set(ball.x + (TMP.x - ball.x) * k, ball.y + (TMP.y - ball.y) * k, ball.z + (TMP.z - ball.z) * k);
     f.pup.keepOut(ball);
     // (a dribble's next push starts from where his palm has it)
     f.pup.heldAt(ball.y);
   }
+  /** How long the man with the ball has had a hand on it (ms, the bodies' time: see inHands). */
+  private heldMs = 0;
   /** Where the plan had each man last frame (x, z), before anyone stepped aside. */
   private readonly planAt = new Map<number, [number, number]>();
   private spotsFor(n: number): Float32Array {
@@ -3268,6 +3339,40 @@ export class CourtScene {
   }
   private readonly rest = new Float32Array(48);
   private restN = 0;
+
+  /**
+   * A body into a body the play calls for (Frame.hit: a driver's shoulder into the man on him, the contact a whistle is
+   * for), if they are near enough to touch: the man going in leans into it a beat before, the man he hits is thrown
+   * off it and takes a step to stay up, and he comes back off him himself, less. Once a move.
+   */
+  private bump(b: Frame, figs: readonly Fig[], key: string, lu: number) {
+    const h = b.hit;
+    const from = h && figs[h[0]];
+    const to = h && figs[h[1]];
+    if (!h || !from || !to) return;
+    const dx = to.pup.x - from.pup.x;
+    const dz = to.pup.z - from.pup.z;
+    const d = Math.hypot(dx, dz);
+    if (d < 1e-3 || d > BUMP_REACH) return;
+    // (a whistle's own move begins with it; in any other it comes as they come together)
+    const at = b.foul !== undefined ? BUMP_AT_FOUL : BUMP_AT;
+    if (this.braceKey !== key && lu >= at - BUMP_BRACE) {
+      this.braceKey = key;
+      from.pup.hit(dx / d, dz / d, 0.5 * h[2]);
+    }
+    if (this.bumpKey === key || lu < at) return;
+    this.bumpKey = key;
+    to.pup.hit(dx / d, dz / d, h[2]);
+    from.pup.hit(-dx / d, -dz / d, 0.5 * h[2]);
+    to.jolt(h[2]);
+    from.jolt(0.5 * h[2]);
+    if (h[2] >= WINCE_FROM) to.feel('wince', h[2]);
+  }
+  private braceKey = '';
+  private bumpKey = '';
+
+  /** How each possession's moves were made (Tape): what its replay is made from. */
+  private readonly takes = new WeakMap<Script, Map<string, unknown>>();
 
   /** Into a replay or out of it: the next frame starts afresh (everyone on his spot, the ball where its move has it, a cut). */
   private recut() {

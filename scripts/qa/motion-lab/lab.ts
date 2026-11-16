@@ -834,7 +834,8 @@ function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only =
           turnAt.push(`k${c.k} t${Math.round(c.t)} i${play?.i} p${pid} ${label} ${sc && play ? play.b.act[[...sc.oPids, ...sc.dPids].indexOf(pid)] : '-'} ${ys.toFixed(2)}`);
         const snap = Math.abs(ys - b.ys[0]);
         pop.yawMax = Math.max(pop.yawMax, snap);
-        if (snap > YAW_POP) {
+        // (at the speed chip's size, as the bones' pops are: a body's turns keep up with a play run fast, up to the scene's TURN_PACE)
+        if (snap > YAW_POP * Math.min(speed, 2)) {
           pop.yawN++;
           yawWhy.set(label, (yawWhy.get(label) ?? 0) + 1);
           if (yawAt.length < 20 && !yawAt.some((x) => x.startsWith(`k${c.k} `)))
@@ -1863,8 +1864,10 @@ function track({ k = 0, pid = -1, from = 0, to = Infinity, speed = 2, keys = ['l
       const w = p.world(p.j[q * 3], p.j[q * 3 + 1], p.j[q * 3 + 2], V);
       return `${n}(${w.x.toFixed(2)},${w.y.toFixed(2)},${w.z.toFixed(2)})`;
     });
+    const sn = inner as unknown as { bend: { x: number; z: number }; ownOff: { x: number; z: number }; ball: { x: number; y: number; z: number } };
+    const dr = (p as unknown as { drib: { phase: number; hand: number; to: number } }).drib;
     out.push(
-      `${Math.round(c.t)} i${c.stage.play?.i} ${p.clip}${raw.one ? `(${raw.one.id}@${Math.round(raw.one.tau)})` : ''} b${raw.blend.toFixed(2)} yaw${p.yaw.toFixed(2)} ${keys.map((n) => `${n}${p.pose[I[n as keyof typeof I]].toFixed(2)}`).join(' ')} ${j.join(' ')}`,
+      `${Math.round(c.t)} i${c.stage.play?.i} ${p.clip}${raw.one ? `(${raw.one.id}@${Math.round(raw.one.tau)})` : ''} b${raw.blend.toFixed(2)} yaw${p.yaw.toFixed(2)} at(${p.x.toFixed(2)},${p.z.toFixed(2)}) ball(${sn.ball.x.toFixed(2)},${sn.ball.y.toFixed(2)},${sn.ball.z.toFixed(2)}) bend(${sn.bend.x.toFixed(2)},${sn.bend.z.toFixed(2)}) own(${sn.ownOff.x.toFixed(2)},${sn.ownOff.z.toFixed(2)}) dr${dr.phase.toFixed(2)}/${dr.hand}/${dr.to} ${keys.map((n) => `${n}${p.pose[I[n as keyof typeof I]].toFixed(2)}`).join(' ')} ${j.join(' ')}`,
     );
   }
   return out;
@@ -2702,7 +2705,68 @@ function footTrace({ k = 0, pid = -1, from = 0, to = Infinity, speed = 2, lead =
   return out;
 }
 
+/**
+ * A possession played, then its instant replay: the moves each man made (the clips he acted, in order) live and
+ * again. `same`: the replay made no move the play didn't. (k: -1, every possession with a replay due, up to `most`.)
+ */
+function replays({ k = -1, ks = [] as number[], most = 12, speed = 1 } = {}) {
+  const out: { k: number; same: boolean; live: string[]; again: string[] }[] = [];
+  const c = new Clock(speed);
+  c.tipMs = 0;
+  const dir = inner as unknown as { director: { onAir: boolean } };
+  const moves = (into: string[], was: Map<number, string>) => {
+    for (const [pid, f] of inner.figs) {
+      const one = (f.pup as unknown as { one: { id: string; tau: number } | null }).one;
+      const id = one && !['stop', 'start', 'closeout', 'stumble', 'bump'].includes(one.id) ? `${one.id}${(f.pup as unknown as { lefty: boolean }).lefty ? '(L)' : ''}` : '';
+      if (id && was.get(pid) !== id) into.push(`p${pid} ${id}`);
+      was.set(pid, id);
+    }
+  };
+  let live: string[] = [];
+  let was = new Map<number, string>();
+  let at = 0;
+  while (c.step() && out.length < most && c.finalMs < 0) {
+    if (c.k !== at) {
+      // (the possession just finished: its replay, if one is due)
+      const sc = scripts[at];
+      if ((ks.length ? ks.includes(at) : k < 0 || k === at) && scene.replay(sc)) {
+        const again: string[] = [];
+        const w2 = new Map<number, string>();
+        let n = 0;
+        while (!scene.released && n++ < 4000) {
+          scene.frame(c.stage, props, 0, FRAME, false, FRAME * speed);
+          if (dir.director.onAir) moves(again, w2);
+        }
+        // (the replay shows the end of the play: every move in it was one of the play's, in the play's order)
+        const upTo = new Map<string, number>();
+        const same = again.every((m) => {
+          const who = m.split(' ')[0];
+          const j = live.indexOf(m, upTo.get(who) ?? 0);
+          if (j < 0) return false;
+          upTo.set(who, j);
+          return true;
+        });
+        out.push({ k: at, same, live, again });
+      }
+      at = c.k;
+      live = [];
+      was = new Map();
+    }
+    moves(live, was);
+  }
+  return { n: out.length, differ: out.filter((x) => !x.same), all: out.map((x) => `k${x.k} ${x.same ? 'same' : 'DIFFERS'}: ${x.again.join(', ')}`) };
+}
+
+/** The possessions whose shot has a finish of its own (choreo's Finish), by finish. */
+function finishes() {
+  const out: Record<string, number[]> = {};
+  scripts.forEach((sc, k) => sc.frames.forEach((f) => f.how && !(out[f.how] ??= []).includes(k) && out[f.how].push(k)));
+  return out;
+}
+
 (window as unknown as { lab: unknown }).lab = {
+  replays,
+  finishes,
   footTrace,
   footwork,
   feet,

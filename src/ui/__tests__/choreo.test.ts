@@ -4,7 +4,7 @@
 import { PerspectiveCamera, Scene, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { courtFit, FLOOR_L, FLOOR_W, pose, type Stage } from '../live/Court';
-import { attackDir, BASKET, buildScript, captionAt, COURT_LEN, faceWorld, standing, toWorld, type Frame, type Pt, type Script, type Standing } from '../live/choreo';
+import { attackDir, BASKET, buildScript, captionAt, COURT_LEN, faceWorld, finishOf, standing, toWorld, type Frame, type Pt, type Script, type Standing } from '../live/choreo';
 import { Director, REPLAY_GAP, type BigKind } from '../live/court3d/director';
 import { ballIn, into, PARTS, Spacing, sunk } from '../live/court3d/spacing';
 import { blocked, CAM_KINDS, camKind, clearSeat, clutter, fenced, Operator, seen, shot, type View } from '../live/court3d/cameras';
@@ -17,7 +17,7 @@ import figureGlb from '../live/court3d/models/figure.glb?inline';
 import peopleGlb from '../live/court3d/models/people.glb?inline';
 import { bouncePass, meets, planShot, RIM_H, shotAt, shotSpeed, spinFor, Spring, stretch, type How } from '../live/court3d/ballistics';
 import { NET, NetSim } from '../live/court3d/net';
-import { BALL_R, baseClip, bodyOf, hash, HIP, J, Puppet } from '../live/court3d/puppet';
+import { BALL_R, baseClip, bodyOf, hash, HIP, J, OWN_LEGS_UP, Puppet } from '../live/court3d/puppet';
 import { ballSize } from '../live/court3d/ballskin';
 import { House } from '../live/court3d/boards';
 import { ShotClock, shotText } from '../live/shotClock';
@@ -645,6 +645,7 @@ describe('live court choreography', () => {
       );
       const nm = (pid: number) => league.players[pid].lastName;
       let shots = 0;
+      const named = new Set<string>();
       while (!sim.over) {
         sim.step();
         for (const l of sim.drainLogs()) {
@@ -659,12 +660,33 @@ describe('live court choreography', () => {
           for (const f of s.frames) if (f.hold !== undefined && f.hold >= 0) expect(f.act[f.hold]).not.toMatch(/^(stand|move|guard|defend|boxout)$/);
           s.frames.forEach((f, i) => {
             const who = f.act.indexOf('release');
-            if (who >= 0) expect(s.frames[i - 1].act[who]).toMatch(/^(jumper|floater|layup|dunk|ft)$/);
+            // (a tip-in goes up at the top of his jump for the board: no move of its own before it)
+            if (who >= 0) expect(s.frames[i - 1].act[who]).toMatch(f.how === 'tip' ? /^(layup|rebound)$/ : /^(jumper|floater|layup|dunk|ft)$/);
           });
           for (const st of l.steps) if (st.k === 'shot') shots += st.d ? 1 : 0;
+          // a named finish is carried to the move it is made in: the word for the shot says how, and the frames say so too
+          for (const st of l.steps) {
+            if (st.k !== 'shot') continue;
+            const fin = finishOf(st.d);
+            if (fin) expect(s.frames.some((f) => f.how === fin)).toBe(true);
+            if (fin) named.add(fin);
+          }
+          // an alley-oop's lob is thrown in the move he goes up in: he takes it in the air, never standing on the floor
+          s.frames.forEach((f, i) => {
+            if (f.how !== 'oop' || !f.act.includes('dunk')) return;
+            const up = f.act.indexOf('dunk');
+            expect(f.hold).toBe(up);
+            expect(f.act.includes('pass')).toBe(true);
+            expect(s.frames[i - 1].hold).toBe(f.act.indexOf('pass'));
+            expect(s.frames[i - 1].act[up]).not.toBe('catch');
+          });
         }
       }
       expect(shots).toBeGreaterThan(100);
+      expect(named.size).toBeGreaterThan(6);
+      expect(finishOf('hook shot')).toBe('hook');
+      expect(finishOf('putback dunk')).toBeUndefined();
+      expect(finishOf('layup')).toBeUndefined();
     }
 
     // what the players are doing and where they look, for the 3D figures
@@ -1732,7 +1754,9 @@ describe('live court choreography', () => {
               m.world(m.j[q * 3], m.j[q * 3 + 1], m.j[q * 3 + 2], v);
               [w[q * 3], w[q * 3 + 1], w[q * 3 + 2]] = [v.x, v.y, v.z];
             }
-            if (j === carried && ballIn(m.bounced(m.carry(v)), w, m.body.s, m.body.bulk, BALL_R, false) > 0.1) mine++;
+            // (a crossover down by his legs is taken round them by the scene, eased (ownLegs): the motion lab counts those)
+            const held = j === carried ? m.bounced(m.carry(v)) : null;
+            if (held && !(m.clip === 'crossover' && held.y <= OWN_LEGS_UP * m.body.s) && ballIn(held, w, m.body.s, m.body.bulk, BALL_R, false) > 0.1) mine++;
           });
           for (let i = 0; i < 10; i++)
             for (let j = i + 1; j < 10; j++) {

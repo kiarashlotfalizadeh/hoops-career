@@ -118,6 +118,7 @@ export type ClipId =
   | 'passOver'
   | 'catch'
   | 'jumper'
+  | 'pump'
   | 'floater'
   | 'layup'
   | 'putback'
@@ -384,7 +385,8 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
     // (the ball already on its way up in front of his face: from over his head (an inbound) it doesn't dip to his chest first)
     // (his elbows up and forward over it, not out to his sides: swung round their arms, forward, as it goes back behind his head)
     [-230, { bx: 0, by: 6.2, bz: 0.6, gl: 1, gr: 1, hip: -0.08, lean: 0.04, lsw: -0.5, rsw: 0.5 }],
-    [-100, { bx: 0, by: 6.75, bz: -0.55, gl: 1, gr: 1, lean: -0.1, surge: -0.1, hip: -0.06, nod: 0.1, lsw: -1.3, rsw: 1.3 }],
+    // (back over the top of his head, not through the back of it)
+    [-100, { bx: 0, by: 7.3, bz: -0.3, gl: 1, gr: 1, lean: -0.1, surge: -0.1, hip: -0.06, nod: 0.1, lsw: -1.3, rsw: 1.3 }],
     [0, { bx: 0, by: 7.45, bz: 0.75, gl: 1, gr: 1, lean: 0.1, surge: 0.14, hip: -0.1, lsw: -1.0, rsw: 1.0 }],
     // (thrown: his arms on out after it, all but straight, up toward where it went)
     [55, { gl: 0, gr: 0, lx: 0.15, ly: 1.2, lz: 1.65, rx: 0.15, ry: 1.2, rz: 1.65, lean: 0.2, surge: 0.22, hip: -0.12, lsw: -0.4, rsw: 0.4 }],
@@ -435,6 +437,22 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
       [150, { hip: 1.2, air: 1, gl: 0, gr: 0, lx: 0.35, ly: 0.8, lz: 0.6, rx: 0.05, ry: 1.95, rz: 0.95 }],
       [340, { hip: -0.3, gl: 0, gr: 0, lx: 0.4, ly: -0.6, lz: 0.5, rx: 0.1, ry: 1.3, rz: 0.9 }],
       [580, { gl: 0, gr: 0 }],
+    ],
+    { grip: 'under' },
+  ),
+  // (a shot fake: the ball shown up at his forehead as he comes up on his toes, and brought back down as the man goes up; 0: it starts)
+  pump: clip(
+    'pump',
+    'shot',
+    0,
+    { gl: 1, gr: 1, bx: 0.2 },
+    [
+      [0, { ...HOLD, hip: -0.3 }],
+      [90, { hip: -0.5, by: 4.4, bz: 0.75, lean: 0.14 }],
+      [200, { hip: 0.03, by: 6.35, bz: 0.85, lean: 0.02, nod: -0.12 }],
+      [290, { hip: 0.03, by: 6.25, bz: 0.85, lean: 0.02, nod: -0.12 }],
+      [450, { hip: -0.45, by: 4.3, bz: 0.8, lean: 0.16, wide: 0.15 }],
+      [560, { ...HOLD, hip: -0.4 }],
     ],
     { grip: 'under' },
   ),

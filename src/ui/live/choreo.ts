@@ -79,6 +79,16 @@ export interface Frame {
   fx?: 'make' | 'miss';
   /** What each player does through the move into this frame: [offense..., defense...]. */
   act: Act[];
+  /** A shot going up or away in this move: what the play-by-play's word for it says of how it is made (see Finish). */
+  how?: Finish;
+  /** Who shows the ball and brings it back down in this move, a shot fake (an index into [offense..., defense...]). */
+  fake?: number;
+  /**
+   * One man's body goes into another's in this move, [who, into whom, how hard 0..1] (indices into [offense...,
+   * defense...]): a driver's shoulder into the man on him, the foul a whistle is for. The 3D figures brace, take it
+   * and recover, if they are near enough to have touched.
+   */
+  hit?: [number, number, number];
   /** Where each faces as he gets here, [offense..., defense...]: a heading in the offense's frame (radians, atan2(y, x)); `faceWorld` turns it. */
   face: number[];
   /** A blocked shot: who got a hand to it (an index into [offense..., defense...]). */
@@ -129,12 +139,47 @@ export function faceWorld(a: number, dir: 1 | -1): number {
   return dir === 1 ? a : a + Math.PI;
 }
 
+/**
+ * What makes a named shot that shot, where its name says so: the 3D figures make it that way and no other (a shot
+ * with no such word is a plain one of its kind: a jumper doesn't fade unless the play-by-play said it did).
+ *  - 'oop': caught in the air off a lob and put down;   'two': a dunk with both hands
+ *  - 'hook': one arm over the top, side on to the rim;   'runner': a floater on the move
+ *  - 'tip': tipped back up at the top of his jump for the board;   'putback': down with it and straight back up
+ *  - 'under': a fake, then a step under the man who went up for it;   'step': a long step across (a drop step)
+ *  - 'reverse': under the rim and back over his head;   'roll': rolled off the fingers, the arm out long
+ *  - 'fade': going away from the rim;   'turn': from his back to it;   'stepBack': a step back off the dribble
+ *  - 'pullUp': straight up off the dribble;   'set': off the catch
+ */
+export type Finish = 'oop' | 'two' | 'hook' | 'runner' | 'tip' | 'putback' | 'under' | 'step' | 'reverse' | 'roll' | 'fade' | 'turn' | 'stepBack' | 'pullUp' | 'set';
+const FINISHES: [RegExp, Finish][] = [
+  [/alley-oop/, 'oop'],
+  [/two-handed/, 'two'],
+  [/hook/, 'hook'],
+  [/tip-in/, 'tip'],
+  [/putback(?! dunk)/, 'putback'],
+  [/up-and-under/, 'under'],
+  [/drop-step/, 'step'],
+  [/reverse/, 'reverse'],
+  [/finger roll/, 'roll'],
+  [/step-back/, 'stepBack'],
+  [/turnaround/, 'turn'],
+  [/fadeaway/, 'fade'],
+  [/pull-up/, 'pullUp'],
+  [/floater|runner/, 'runner'],
+  [/catch-and-shoot/, 'set'],
+];
+export function finishOf(d: string | undefined): Finish | undefined {
+  return d ? FINISHES.find(([re]) => re.test(d))?.[1] : undefined;
+}
+
 /** How a shot is taken, from its zone and the play-by-play's word for it. */
 function shotAct(st: PossStep): Act {
   const d = st.d ?? '';
   if (/dunk|alley-oop/.test(d)) return 'dunk';
+  // (a hook is a hook wherever it is from: at the rim too)
+  if (/hook/.test(d)) return 'floater';
   if (st.zone === 'rim' || /layup|finger roll|putback|tip-in|up-and-under/.test(d)) return 'layup';
-  if (/floater|runner|hook/.test(d)) return 'floater';
+  if (/floater|runner/.test(d)) return 'floater';
   return 'jumper';
 }
 
@@ -342,6 +387,14 @@ const MEET = 1.3;
  */
 const SHOT_SET = 2;
 const SHOT_GO = 320;
+/** How hard a driver's shoulder goes into the man on him, a man fouling a shooter into him, and a foul on the floor (0..1: see Frame.hit); a man this far from the one he fouls (ft) or nearer gets to him. */
+const DRIVE_BUMP = 0.35;
+const SHOT_BUMP = 0.6;
+const FOUL_BUMP = 0.7;
+const FOUL_REACH = 9;
+/** An alley-oop's lob is in the air this long (ms): he goes up under it and takes it at the top. A shot fake takes this long. */
+const LOB_MS = 460;
+const FAKE_MS = 300;
 /** The opening tip: the ball is in the air this long before the jumpers get a hand to it, and the tap takes this long to come down (ms). */
 const TIP_UP = 280;
 const TIP_TAP = 210;
@@ -497,6 +550,8 @@ export function buildScript(
   const start = from ?? (tipped ? { at: tipSpots(log.on), ball: { x: 0, y: COURT_LEN / 2 } } : undefined);
   const first = steps.find((s) => s.pid !== undefined && oPids.includes(s.pid));
   let holder = first?.pid ?? oPids[0];
+  /** The man who throws the lob for the alley-oop that comes next (its pass is made in the shot's move). */
+  let lobFrom: number | undefined;
   const spots = baseSpots(oInfo, holder);
   const guardOf = new Map<number, number>(Object.entries(log.guards).map(([o, d]) => [Number(o), d]));
   const manOf = new Map<number, number>([...guardOf].map(([o, d]) => [d, o]));
@@ -1005,7 +1060,12 @@ export function buildScript(
         // (the nearest help steps in front of him)
         help(o.get(pid)!, pid);
         does(pid, 'drive');
-        snap(620, cap(`${N(pid)} drives`));
+        // (he gets a shoulder into the man on him on his way by)
+        const on = zone || junk ? undefined : guardOf.get(pid);
+        snap(620, {
+          ...(on !== undefined && dPids.includes(on) && { hit: [oPids.indexOf(pid), nO + dPids.indexOf(on), DRIVE_BUMP] as [number, number, number] }),
+          ...cap(`${N(pid)} drives`),
+        });
         break;
       }
       case 'post': {
@@ -1056,6 +1116,12 @@ export function buildScript(
         // (a catch and shoot: the ball is thrown to him at the spot he shoots from, and one from somewhere else gets
         // there first)
         const next = steps[at + 1];
+        // (an alley-oop: the lob goes up as he does, and he takes it in the air: the pass is the shot's own first move)
+        // (thrown by the man who has it: the log leaves out a pass that got it to the man it names)
+        if (next?.k === 'shot' && next.pid === to && holder !== to && o.has(to) && o.has(holder) && finishOf(next.d) === 'oop') {
+          lobFrom = holder;
+          break;
+        }
         const spot = next?.k === 'shot' && next.pid === to && shotAct(next) === 'jumper' ? { x: next.x ?? 0, y: next.y ?? 10 } : undefined;
         if (spot && was !== to && o.has(to)) {
           const far = dist(o.get(to)!, spot) > SHOT_SET;
@@ -1079,20 +1145,46 @@ export function buildScript(
         const target = { x: st.x ?? 0, y: st.y ?? 10 };
         // (a jumper goes up from where he stands: a man away from his spot gets there on the dribble first)
         const from = o.get(pid);
+        const fin = finishOf(st.d);
+        let lob = lobFrom;
+        lobFrom = undefined;
+        // (an alley-oop the log gives no pass for, a missed one: thrown by whoever has it; his own, he gives it to
+        // the man farthest out and goes to the rim for it back)
+        if (fin === 'oop' && lob === undefined) {
+          if (holder !== pid && o.has(holder)) lob = holder;
+          else {
+            const out = oPids.filter((p) => p !== pid).sort((a, b) => dist(o.get(b)!, BASKET) - dist(o.get(a)!, BASKET))[0];
+            if (out !== undefined) {
+              catchBall(out);
+              lob = out;
+            }
+          }
+        }
         if (shotAct(st) === 'jumper' && from && dist(from, target) > SHOT_SET) {
           moveTo(pid, target);
           give(pid);
           follow();
           snap(SHOT_GO);
         }
-        moveTo(pid, target);
+        // (a turnaround starts with his back to the rim: he has it there, as the move before this one ends)
+        const j0 = all.indexOf(pid);
+        const last = frames[frames.length - 1];
+        if (fin === 'turn' && last && last.hold === j0 && from && dist(from, target) < 6 && (last.act[j0] === 'post' || last.act[j0] === 'hold' || last.act[j0] === 'dribble')) {
+          last.face[j0] = heading(BASKET, from) + (from.x >= 0 ? 0.5 : -0.5);
+          lastFace[j0] = last.face[j0];
+        }
+        // (a tip-in is tipped at the top of his jump for the board: he never comes down with it)
+        const tipped = fin === 'tip' && !!last && last.hold === j0 && last.act[j0] === 'rebound';
+        if (!tipped) moveTo(pid, target);
         give(pid);
         follow();
         // contest: nearest defender closes out to a hand's length, on the basket side
         // (a blocked shot: the man who blocks it is the one who goes up with him)
         const next = steps[at + 1];
         const blocker = next?.k === 'block' && next.pid !== undefined && d.has(next.pid) ? next.pid : undefined;
-        const near = blocker ?? [...dPids].sort((a, b) => dist(d.get(a)!, target) - dist(d.get(b)!, target))[0];
+        // (fouled on it: the man the whistle is on is the one who goes up with him, and into him)
+        const hacker = next?.k === 'foul' && next.pid !== undefined && d.has(next.pid) ? next.pid : undefined;
+        const near = blocker ?? hacker ?? [...dPids].sort((a, b) => dist(d.get(a)!, target) - dist(d.get(b)!, target))[0];
         const toRim = dist(target, BASKET);
         const [ux, uy] = toRim > 0.5 ? [(BASKET.x - target.x) / toRim, (BASKET.y - target.y) / toRim] : [0, -1];
         const how = shotAct(st);
@@ -1124,9 +1216,23 @@ export function buildScript(
         };
         clearLanding();
         const what = st.d ?? (st.v === 3 ? 'three' : 'jumper');
-        does(pid, how, BASKET);
-        does(near, blocker !== undefined ? 'block' : 'contest', target);
-        snap(300, cap(`${N(pid)}, ${what}…`));
+        // (an up-and-under: he shows it, the man on him goes up, and he steps under him as he comes down)
+        const bit = fin === 'under' && near !== undefined && blocker === undefined;
+        if (bit) {
+          does(pid, 'hold', BASKET);
+          does(near, 'contest', target);
+          snap(FAKE_MS, { fake: j0, ...cap(`${N(pid)} shows it…`) });
+        }
+        if (!tipped) {
+          does(pid, how, BASKET);
+          if (lob !== undefined && o.has(lob)) does(lob, 'pass', target);
+          does(near, bit ? 'land' : blocker !== undefined ? 'block' : 'contest', target);
+          snap(lob !== undefined ? LOB_MS : 300, {
+            ...(fin && { how: fin }),
+            ...(hacker !== undefined && { hit: [nO + dPids.indexOf(hacker), j0, SHOT_BUMP] as [number, number, number] }),
+            ...cap(lob !== undefined ? `${N(lob)} lobs it up for ${N(pid)}…` : `${N(pid)}, ${what}…`),
+          });
+        }
         // (the shooter's own spot, as the crowd around him left it)
         const release = o.get(pid)!;
         ball = { ...BASKET };
@@ -1172,8 +1278,10 @@ export function buildScript(
         }
         clearLanding();
         for (const p of oPids) does(p, p === pid ? 'release' : glass.includes(p) ? 'crash' : dist(o.get(p)!, BASKET) > 18 ? 'move' : 'stand', BASKET);
-        for (const p of dPids) does(p, p === near ? 'land' : boxing.has(p) ? 'boxout' : 'stand', BASKET);
+        // (the man who went up for a fake is down already, and nobody went up with a tip)
+        for (const p of dPids) does(p, p === near && !bit && !tipped ? 'land' : boxing.has(p) ? 'boxout' : 'stand', BASKET);
         snap(st.zone === 'rim' ? 380 : Math.round(520 + far * 7), {
+          ...(fin && { how: fin }),
           ...(blocker !== undefined && { swat: nO + dPids.indexOf(blocker) }),
           ...(held.length && { meet: held }),
           ballZ: st.zone === 'rim' ? 2.4 : 4.5 + far * 0.24,
@@ -1249,8 +1357,25 @@ export function buildScript(
         // fouled on a make: and one
         const andOne = prev?.k === 'shot' && !!prev.made;
         const on = st.pid === undefined ? -1 : all.indexOf(st.pid);
+        // (a foul on the floor is a body into a body: the man it is on gets into the man with the ball (reaching in,
+        // or riding him), or, his own side's, into the man guarding him (a charge, a moving screen). One on a shot was
+        // made as it went up: see the shot)
+        let hit: [number, number, number] | undefined;
+        if (on >= 0 && prev?.k !== 'shot') {
+          const fouler = st.pid!;
+          const into = d.has(fouler) ? holder : guardOf.get(fouler);
+          const a = d.get(fouler) ?? o.get(fouler);
+          const b = into === undefined ? undefined : (o.get(into) ?? d.get(into));
+          if (a && b && into !== fouler && dist(a, b) < FOUL_REACH) {
+            const far = dist(a, b);
+            // (he closes on him, to an arm's length: the 3D court draws them touching)
+            if (d.has(fouler) && far > APART) d.set(fouler, { x: b.x + ((a.x - b.x) / far) * APART, y: b.y + ((a.y - b.y) / far) * APART });
+            hit = [on, all.indexOf(into!), FOUL_BUMP];
+          }
+        }
         snap(380, {
           ...(on >= 0 && { foul: on }),
+          ...(hit && { hit, meet: [[hit[0], hit[1]]] as [number, number][] }),
           flash: { text: andOne ? 'And one!' : 'Foul', kind: andOne ? 'make' : 'foul', x: ball.x, y: ball.y + 3 },
           ...cap(andOne ? `And one! Foul on ${N(st.pid)}` : `Foul on ${N(st.pid)}`),
         });
