@@ -118,6 +118,7 @@ export type ClipId =
   | 'passOver'
   | 'handoff'
   | 'catch'
+  | 'take'
   | 'jumper'
   | 'pump'
   | 'floater'
@@ -382,15 +383,18 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
     { grip: 'under' },
   ),
   // (a hand-off: the ball held out at his belly on the side the man comes by, one hand under it and one on it, his
-  // body turned to wall off the man's defender; taken out of his hands (0: the other's hands are on it), let go of as it
-  // is, and his hands come back in as he sets his feet for the screen that comes with it)
+  // body turned to wall off the man's defender. 0 is the hand-off's move beginning: the taker's hands are on it by
+  // HANDOFF_AT through it (114 ms of the 380 ms move), and only then do his own open, the hand under it last; his hands
+  // come back in as he sets his feet for the screen that comes with it)
   handoff: clip('handoff', 'shot', 0, {}, [
     [-220, { ...HOLD }],
-    [-60, { bx: 0.6, by: 4.05, bz: 1.15, gl: 0.8, gr: 1, lx: 0.4, ly: -0.95, lz: 1.0, rx: 0.65, ry: -1.2, rz: 0.9, twist: -0.28, hip: -0.24, lean: 0.12, wide: 0.22 }],
-    [0, { bx: 0.65, by: 4.05, bz: 1.2, gl: 0.6, gr: 0.9, lx: 0.45, ly: -0.95, lz: 1.05, rx: 0.7, ry: -1.2, rz: 0.95, twist: -0.32, hip: -0.26, lean: 0.12, wide: 0.26 }],
-    [120, { gl: 0, gr: 0, lx: 0.4, ly: -1.05, lz: 0.95, rx: 0.65, ry: -1.25, rz: 0.9, twist: -0.3, hip: -0.28, lean: 0.1, wide: 0.3 }],
-    [300, { gl: 0, gr: 0, lx: 0.15, ly: -1.4, lz: 0.55, rx: 0.2, ry: -1.4, rz: 0.55, twist: -0.12, hip: -0.28, lean: 0.08, wide: 0.34 }],
-    [420, { gl: 0, gr: 0, hip: -0.24, wide: 0.34 }],
+    [-60, { bx: 0.6, by: 4.05, bz: 1.15, gl: 0.9, gr: 1, lx: 0.4, ly: -0.95, lz: 1.0, rx: 0.65, ry: -1.2, rz: 0.9, twist: -0.28, hip: -0.24, lean: 0.12, wide: 0.22 }],
+    [0, { bx: 0.65, by: 4.05, bz: 1.2, gl: 0.9, gr: 1, lx: 0.45, ly: -0.95, lz: 1.05, rx: 0.7, ry: -1.2, rz: 0.95, twist: -0.32, hip: -0.26, lean: 0.12, wide: 0.26 }],
+    [100, { bx: 0.65, by: 4.05, bz: 1.2, gl: 0.8, gr: 0.95, lx: 0.45, ly: -0.95, lz: 1.05, rx: 0.7, ry: -1.2, rz: 0.95, twist: -0.32, hip: -0.27, lean: 0.12, wide: 0.28 }],
+    [150, { gl: 0.35, gr: 0.6, lx: 0.42, ly: -1.0, lz: 1.0, rx: 0.68, ry: -1.22, rz: 0.92, twist: -0.31, hip: -0.28, lean: 0.11, wide: 0.29 }],
+    [210, { gl: 0, gr: 0, lx: 0.4, ly: -1.05, lz: 0.95, rx: 0.65, ry: -1.25, rz: 0.9, twist: -0.3, hip: -0.28, lean: 0.1, wide: 0.3 }],
+    [340, { gl: 0, gr: 0, lx: 0.15, ly: -1.4, lz: 0.55, rx: 0.2, ry: -1.4, rz: 0.55, twist: -0.12, hip: -0.28, lean: 0.08, wide: 0.34 }],
+    [440, { gl: 0, gr: 0, hip: -0.24, wide: 0.34 }],
   ]),
   // (two hands over his head: back behind it, then thrown from there)
   passOver: clip('passOver', 'shot', 0, {}, [
@@ -417,6 +421,18 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
     // (he has it: down into a triple threat, the ball on his hip away from the man, his eyes up)
     [230, { ...THREAT }],
     [420, { ...THREAT, hip: -0.36, by: 3.5 }],
+  ]),
+  // (a hand-off taken on the run: the same hands out for it and on it, closed on it at 0 (HANDOFF_AT through its move),
+  // then brought in to his belly on the side he goes on with it, out in front of his legs, ready to put it on the floor;
+  // not down on his hip in a triple threat, where his running legs would be through it)
+  take: clip('take', 'shot', 0, { bx: 0, by: 4.5, bz: 1.25 }, [
+    [-420, { lx: 0.3, ly: -0.95, lz: 1.0, rx: 0.3, ry: -0.95, rz: 1.0, hip: -0.1 }],
+    [-230, { lx: 0.2, ly: -0.7, lz: 1.35, rx: 0.2, ry: -0.7, rz: 1.35, hip: -0.14, lean: 0.07 }],
+    [-70, { lx: 0.1, ly: -0.5, lz: 1.65, rx: 0.1, ry: -0.5, rz: 1.65, gl: 0.5, gr: 0.5, hip: -0.18, lean: 0.12, surge: 0.2 }],
+    [0, { gl: 1, gr: 1, lx: 0.1, ly: -0.55, lz: 1.45, rx: 0.1, ry: -0.55, rz: 1.45, hip: -0.18, lean: 0.12, surge: 0.18 }],
+    [110, { gl: 1, gr: 1, lx: 0.12, ly: -0.85, lz: 1.1, rx: 0.12, ry: -0.85, rz: 1.1, bx: 0.15, by: 4.25, bz: 1.1, hip: -0.2, lean: 0.14 }],
+    [260, { gl: 1, gr: 1, lx: 0.15, ly: -0.95, lz: 1.0, rx: 0.2, ry: -1.0, rz: 0.95, bx: 0.4, by: 4.0, bz: 1.05, hip: -0.22, lean: 0.16, twist: -0.06 }],
+    [420, { gl: 0.8, gr: 1, lx: 0.2, ly: -1.0, lz: 0.95, rx: 0.3, ry: -1.1, rz: 0.9, bx: 0.6, by: 3.8, bz: 1.0, hip: -0.22, lean: 0.17, twist: -0.08 }],
   ]),
   // (out of bounds with it after a basket: the ball over his head, a look one way and a pump, before he throws it in)
   // (his hands up on it, where it is, whether the referee has let go of it yet or not: never down by his sides)

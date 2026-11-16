@@ -1052,6 +1052,7 @@ describe('live court choreography', () => {
         }
         expect(met[0]).toBeLessThan(BALL_R + 1.0);
         expect(reached).toBeLessThan(2.0);
+        // (man 5 throws his over his head: see Puppet.passOf)
         // a pass let go of goes on with the throw: from over his head, his hands are out in front of him within a tenth
         // of a second of it leaving them, not left behind his head; and they come down from there round in front of him
         const po = new Puppet(bodyOf(78, 215));
@@ -1059,7 +1060,7 @@ describe('live court choreography', () => {
         for (let t = 16; t <= 1000; t += 16) {
           const thrown = t >= 800;
           po.update(
-            { x: 0, z: 0, yaw: 0, act: thrown ? 'pass' : 'hold', ms: thrown ? t - 800 : t, dur: thrown ? 500 : 800, ball: !thrown, pass: thrown ? undefined : 800 - t, who: 0 },
+            { x: 0, z: 0, yaw: 0, act: thrown ? 'pass' : 'hold', ms: thrown ? t - 800 : t, dur: thrown ? 500 : 800, ball: !thrown, pass: thrown ? undefined : 800 - t, who: 5 },
             16,
           );
           po.arms(thrown ? null : po.carry(to));

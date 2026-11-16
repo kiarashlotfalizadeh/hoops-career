@@ -77,11 +77,12 @@ const BREAK_MS = 6000;
 const knocked = { n: 0, hard: 0, at: [] as string[] };
 let stamp = () => '';
 const hitWas = Puppet.prototype.hit;
-Puppet.prototype.hit = function (this: Puppet, dx: number, dz: number, power: number) {
+Puppet.prototype.hit = function (this: Puppet, ...args: Parameters<Puppet['hit']>) {
+  const [, , power, kind] = args;
   knocked.n++;
   if (power > 0.6) knocked.hard++;
-  if (power > 0.4 && knocked.at.length < 40) knocked.at.push(`${stamp()} p${(this as unknown as { who: number }).who} ${this.clip} ${power.toFixed(2)}`);
-  hitWas.call(this, dx, dz, power);
+  if (power > 0.4 && knocked.at.length < 40) knocked.at.push(`${stamp()} p${(this as unknown as { who: number }).who} ${this.clip} ${kind ?? 'bump'} ${power.toFixed(2)}`);
+  hitWas.apply(this, args);
 };
 
 // the game
@@ -2256,8 +2257,9 @@ function knockLook({ speed = 2, most = 12 } = {}) {
   const T = new Vector3();
   let t = 0;
   const hitNow = Puppet.prototype.hit;
-  Puppet.prototype.hit = function (this: Puppet, dx: number, dz: number, power: number) {
-    hitNow.call(this, dx, dz, power);
+  Puppet.prototype.hit = function (this: Puppet, ...args: Parameters<Puppet['hit']>) {
+    const [, , power, kind] = args;
+    hitNow.apply(this, args);
     if (live.some((k) => k.p === this)) return;
     live.push({
       p: this,
@@ -2272,7 +2274,7 @@ function knockLook({ speed = 2, most = 12 } = {}) {
       thrown: 0,
       stepped: false,
       was: this.feet.map((f) => f.swing),
-      where: `k${c.k} t${Math.round(c.t)} p${(this as unknown as { who: number }).who} ${this.clip}`,
+      where: `k${c.k} t${Math.round(c.t)} p${(this as unknown as { who: number }).who} ${this.clip} ${kind ?? 'bump'}`,
     });
   };
   while (c.step()) {
@@ -2827,6 +2829,126 @@ function dunks({ speed = 1 } = {}) {
   return out;
 }
 
+/**
+ * Every hand-off in the game, from the move before it to the end of its own: frame by frame, how far the ball is from
+ * where the hands on it hold it (Puppet.holds: either man's, a hand counting once it is half on it), and the frame it
+ * becomes the taker's (heldBy). `float`: frames no hand holds it within FLOAT_FT; `owned`: the taker's grip and gap
+ * when it became his. A hand-off never floats, and is the taker's only once his hands are on it.
+ */
+function handoffs({ speed = 1, most = 20 } = {}) {
+  const FLOAT_FT = 0.3;
+  const out: { k: number; i: number; frames: number; float: number; before: number; gap: number; owned: string; trail: string[] }[] = [];
+  const v = { x: 0, y: 0, z: 0 };
+  for (let k = 0; k < scripts.length && out.length < most; k++) {
+    const sc = scripts[k];
+    const i = sc.frames.findIndex((f) => f.handoff);
+    if (i < 1) continue;
+    const a = sc.frames[i - 1];
+    const b = sc.frames[i];
+    if (a.hold === undefined || b.hold === undefined || a.hold < 0 || b.hold < 0) continue;
+    const pids = sc.oPids.concat(sc.dPids);
+    const gp = pids[a.hold];
+    const rp = pids[b.hold];
+    (scene as unknown as { takes: WeakMap<Script, unknown> }).takes.delete(sc);
+    const c = new Clock(speed);
+    c.tipMs = 0;
+    c.k = k;
+    let frames = 0;
+    let float = 0;
+    let before = 0;
+    let gap = 0;
+    let owned = '';
+    const trail: string[] = [];
+    while (c.k === k && c.finalMs < 0) {
+      c.step();
+      const pl = c.stage.play;
+      if (!pl || pl.i < i - 1 || pl.i > i) continue;
+      const G = inner.figs.get(gp)?.pup;
+      const R = inner.figs.get(rp)?.pup;
+      if (!G || !R) continue;
+      const ball = inner.ball;
+      const held = (inner as unknown as { heldBy: number | null }).heldBy;
+      const gg = G.holds(v);
+      const gd = gg > 0.5 ? Math.hypot(ball.x - v.x, ball.y - v.y, ball.z - v.z) : Infinity;
+      const rg = R.holds(v);
+      const rd = rg > 0.5 ? Math.hypot(ball.x - v.x, ball.y - v.y, ball.z - v.z) : Infinity;
+      const near = Math.min(gd, rd);
+      // (the move before: it is only his once the hand-off's own move is under way)
+      // (a dribble in the air is in nobody's hands, and not floating)
+      const up = (G.dribble?.phase ?? 1) < 1;
+      if (pl.i === i - 1 && held === gp && !up) {
+        frames++;
+        if (near > FLOAT_FT) {
+          float++;
+          before++;
+        }
+        continue;
+      }
+      if (pl.i !== i) continue;
+      frames++;
+      if (near > FLOAT_FT) float++;
+      if (Number.isFinite(near)) gap = Math.max(gap, near);
+      else gap = Math.max(gap, 9);
+      const u = pl.dur > 0 ? pl.ms / pl.dur : 1;
+      if (!owned && held === rp) owned = `u${u.toFixed(2)} grip ${rg.toFixed(2)} gap ${Number.isFinite(rd) ? rd.toFixed(2) : '-'} giver ${gg.toFixed(2)}`;
+      trail.push(
+        `u${u.toFixed(2)} g${gg.toFixed(2)}/${Number.isFinite(gd) ? gd.toFixed(2) : '-'} r${rg.toFixed(2)}/${Number.isFinite(rd) ? rd.toFixed(2) : '-'}${held === rp ? ' R' : held === gp ? ' G' : ''} d${Math.hypot(G.x - R.x, G.z - R.z).toFixed(2)} rgl${Math.max((R as unknown as { pose: number[] }).pose[I.gl], (R as unknown as { pose: number[] }).pose[I.gr]).toFixed(2)} ${R.clip} yaw${(((Math.atan2(ball.x - R.x, ball.z - R.z) - R.yaw + 9 * Math.PI) % (2 * Math.PI)) - Math.PI).toFixed(2)} bd${Math.hypot(ball.x - R.x, ball.z - R.z).toFixed(2)} by${ball.y.toFixed(2)}`,
+      );
+    }
+    out.push({ k, i, frames, float, before, gap: Math.round(gap * 100) / 100, owned, trail });
+  }
+  return {
+    n: out.length,
+    float: out.reduce((s, x) => s + x.float, 0),
+    before: out.reduce((s, x) => s + x.before, 0),
+    frames: out.reduce((s, x) => s + x.frames, 0),
+    early: out.filter((x) => !x.owned || / grip 0\.[0-4]/.test(x.owned)).length,
+    all: out,
+  };
+}
+
+/**
+ * How square each man is at the instant his move is timed to (the play's): a shot's release (radians off the rim) and
+ * a catch (off the ball's way to him), at a speed. Mean and share past FACING_OFF. At 4x a man should be about as
+ * square as at 1x.
+ */
+function facing({ speed = 1 } = {}) {
+  const FACING_OFF = 0.6;
+  const c = new Clock(speed);
+  c.tipMs = 0;
+  const was = new Map<number, { id: string; tau: number }>();
+  const out: Record<string, { n: number; sum: number; off: number }> = {};
+  const add = (k: string, a: number) => {
+    const o = (out[k] ??= { n: 0, sum: 0, off: 0 });
+    o.n++;
+    o.sum += a;
+    if (a > FACING_OFF) o.off++;
+  };
+  while (c.step() && c.finalMs < 0) {
+    const sc = scripts[c.k];
+    for (const [pid, f] of inner.figs) {
+      const one = (f.pup as unknown as { one: { id: string; tau: number } | null }).one;
+      const prev = was.get(pid);
+      if (one && prev && prev.id === one.id && prev.tau < 0 && one.tau >= 0) {
+        const p = f.pup;
+        let to: number | null = null;
+        if (['jumper', 'floater', 'layup', 'hook', 'freeThrow'].includes(one.id) && sc) {
+          const rimW = w({ x: 0, y: 5.25 }, sc.dir);
+          to = Math.atan2(rimW.y - 47 - p.x, -rimW.x - p.z);
+        } else if ((one.id === 'catch' || one.id === 'take') && inner.ball) {
+          const b = inner.ball;
+          const v = (inner as unknown as { ballV: Vector3 }).ballV;
+          // (the way it comes from: back along its flight, or, held out to him, from where it is)
+          to = v.lengthSq() > 4 ? Math.atan2(-v.x, -v.z) : Math.atan2(b.x - p.x, b.z - p.z);
+        }
+        if (to !== null) add(one.id, Math.abs(((to - p.yaw + 9 * Math.PI) % (2 * Math.PI)) - Math.PI));
+      }
+      was.set(pid, one ? { id: one.id, tau: one.tau } : { id: '', tau: 0 });
+    }
+  }
+  return Object.fromEntries(Object.entries(out).map(([k, o]) => [k, { n: o.n, mean: Math.round((o.sum / o.n) * 100) / 100, offPct: Math.round((o.off / o.n) * 100) }]));
+}
+
 /** The possessions whose shot has a finish of its own (choreo's Finish), by finish. */
 function finishes() {
   const out: Record<string, number[]> = {};
@@ -2835,6 +2957,8 @@ function finishes() {
 }
 
 (window as unknown as { lab: unknown }).lab = {
+  facing,
+  handoffs,
   dunks,
   replays,
   finishes,

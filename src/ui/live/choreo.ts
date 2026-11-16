@@ -364,6 +364,13 @@ const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** Two players are never drawn closer than this (a player is a 1.45 ft disc): a crowd at the rim spreads into a ring. */
 const APART = 2.92;
+/**
+ * A hand-off: the man it is for goes by the big this far off him (ft, middle to middle) as it changes hands, on a run
+ * this long through the hand-off's move (ft), the ball changing hands 0.3 of the way along it (the 3D court's
+ * HANDOFF_AT). Either end of the run is APART off the big.
+ */
+const HANDOFF_BY = 2.3;
+const HANDOFF_RUN = 6.2;
 /** The gap the man on the ball gives him (ft): in the post, and out on the floor. */
 const ON_BALL: [number, number] = [2.92, 4];
 /** A jump shot is contested from this far (ft): a hand up at the ball, not a chest in the shooter's. */
@@ -1093,7 +1100,8 @@ export function buildScript(
         const big = st.pid!;
         const sh = st.pid2!;
         const side = o.get(sh)!.x >= 0 ? 1 : -1;
-        moveTo(big, { x: side * 9, y: 21 });
+        const spot = { x: side * 9, y: 21 };
+        moveTo(big, spot);
         follow();
         snap(480);
         if (holder !== big) {
@@ -1101,13 +1109,23 @@ export function buildScript(
           does(big, 'catch', o.get(holder));
         }
         give(big);
-        moveTo(sh, { x: side * 11, y: 24 });
-        does(big, doing.get(big) ?? 'hold');
+        // (the man it is for runs at the big and on past him, HANDOFF_BY off him on the side away from the rim as it
+        // changes hands, HANDOFF_AT through the hand-off's move (the 3D court's), and on the way he was going after)
+        const r0 = o.get(sh)!;
+        const far = dist(r0, spot);
+        const ux = far > 4 ? (spot.x - r0.x) / far : -side * 0.86;
+        const uy = far > 4 ? (spot.y - r0.y) / far : -0.51;
+        const n = (spot.x - BASKET.x) * -uy + (spot.y - BASKET.y) * ux >= 0 ? 1 : -1;
+        const by = { x: spot.x - uy * n * HANDOFF_BY, y: spot.y + ux * n * HANDOFF_BY };
+        moveTo(sh, { x: by.x - ux * HANDOFF_RUN * 0.3, y: by.y - uy * HANDOFF_RUN * 0.3 });
+        // (already holding it: he turns to where it is taken as the man comes, not as he gets there)
+        does(big, doing.get(big) ?? 'hold', doing.has(big) ? undefined : by);
         snap(380);
-        does(big, 'pass', o.get(sh));
-        does(sh, 'catch', o.get(big));
+        // (he takes it on the run, looking where he is going: past the big, not back at him)
+        does(big, 'pass', by);
+        does(sh, 'catch', { x: by.x + ux * HANDOFF_RUN * 2, y: by.y + uy * HANDOFF_RUN * 2 });
         give(sh);
-        moveTo(sh, { x: side * 13, y: 25 });
+        moveTo(sh, { x: by.x + ux * HANDOFF_RUN * 0.7, y: by.y + uy * HANDOFF_RUN * 0.7 });
         follow();
         snap(380, { handoff: true, ...cap(`${N(big)} hands off to ${N(sh)}`) });
         break;

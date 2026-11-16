@@ -4287,7 +4287,7 @@ export class Fig {
         if (p.overBall && !drib) free = OPEN;
         if (one && one.tau > 0 && PASSED.has(one.id)) free = OPEN;
         if (one && one.tau > 0 && FLICKED.has(one.id)) free = left ? OPEN : GOOSE;
-        if (one?.id === 'catch' && one.tau < 0) free = CATCH;
+        if ((one?.id === 'catch' || one?.id === 'take') && one.tau < 0) free = CATCH;
         if (p.onRim) free = GRAB;
       }
       // a hand off the ball has a wrist: let hang, loose and a little bent toward the palm; a defender's turned to show
@@ -4342,7 +4342,7 @@ export class Fig {
         else if (hold === 'under' && !left) W3.set(p.up.x + p.front.x, p.up.y + p.front.y, p.up.z + p.front.z).normalize();
         else W3.set(p.left.x, p.left.y, p.left.z).multiplyScalar(way);
         const fore = E.set(0, -1, 0).applyQuaternion(this.bones[f].quaternion);
-        const up = one?.id === 'catch' && one.tau < 0 ? CATCH_UP : hold === 'side' && !drib ? SIDE_UP : 0;
+        const up = (one?.id === 'catch' || one?.id === 'take') && one.tau < 0 ? CATCH_UP : hold === 'side' && !drib ? SIDE_UP : 0;
         if (up > 0) {
           // (on its side, and out for a pass: its fingers up the ball from his forearm's line, and its palm square to them
           // toward the ball's middle: the wrist is down the ball from the palm, see the puppet's SIDE_GRIP)
