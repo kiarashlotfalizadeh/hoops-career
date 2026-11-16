@@ -36,6 +36,12 @@ export const EDIT_MIN_GAMES = 40;
 export const CHECK_AFTER = 10;
 /** The most of them it's measured on (the first played after the change). */
 export const CHECK_MAX = 15;
+/**
+ * A check that couldn't tell the change apart (wideEven) gets one more look, this many more games on,
+ * over every game played since (up to RECHECK_MAX), with twice the replays: then it's final.
+ */
+export const RECHECK_AFTER = 10;
+export const RECHECK_MAX = 30;
 /** Paired games each configuration plays over all of them, for the check (at least CHECK_MIN_GAMES a game). */
 export const CHECK_GAMES = 480;
 export const CHECK_MIN_GAMES = 30;
@@ -353,10 +359,10 @@ export function editPlan(league: League, e: TacticEdit, kind: 'made' | 'check'):
   if (kind === 'made') {
     const ahead = e.ahead.map((gid) => byGid.get(gid)).filter((g): g is ScheduledGame => !!g && !g.played);
     list = ahead.length ? ahead : gamesAhead(league);
-  } else list = playedSince(league, e).slice(0, CHECK_MAX);
+  } else list = playedSince(league, e).slice(0, e.check ? RECHECK_MAX : CHECK_MAX);
   if (!list.length) return {};
   const games = planGames(league, list);
-  const [total, least] = kind === 'made' ? [EDIT_GAMES, EDIT_MIN_GAMES] : [CHECK_GAMES, CHECK_MIN_GAMES];
+  const [total, least] = kind === 'made' ? [EDIT_GAMES, EDIT_MIN_GAMES] : [e.check ? CHECK_GAMES * 2 : CHECK_GAMES, CHECK_MIN_GAMES];
   const perGame = Math.max(least, Math.round(total / games.length));
   const without: LeagueChange = { id: 'without', teams: { [me]: { tactics: back.part.tactics, rotation: back.part.rotation } } };
   return { plan: { games, changes: [without], perGame, count: list.length } };
@@ -395,9 +401,22 @@ export const CHECK_END_MIN = 3;
  * Changes due their check: CHECK_AFTER of the user's games played since, not checked, not closed
  * (whether or not the forecast as it was made ever finished: the check reads played games, not it).
  * `seasonOver`: his season is done, so one with CHECK_END_MIN played is checked on what there is.
+ * And a check that couldn't tell (wideEven), once RECHECK_AFTER more are played (CHECK_END_MIN more
+ * when the season is done), for its one second look.
  */
 export const checksDue = (league: League, seasonOver = false) =>
-  editsOf(league).filter((e) => !e.check && !e.closed && playedSince(league, e).length >= (seasonOver ? CHECK_END_MIN : CHECK_AFTER));
+  editsOf(league).filter((e) => {
+    if (e.closed) return false;
+    const n = playedSince(league, e).length;
+    if (!e.check) return n >= (seasonOver ? CHECK_END_MIN : CHECK_AFTER);
+    return recheckAhead(e) && n >= e.check.games + (seasonOver ? CHECK_END_MIN : RECHECK_AFTER);
+  });
+
+/** A check whose likely range is too wide to rule out a real swing: inconclusive, where more games would tell (evenText). */
+export const wideEven = (w: Pick<CounterWorth, 'pts' | 'raw' | 'se'>) => worthCall(w) === 'even' && Math.abs(w.raw) + 2 * w.se >= WORTH_MIN;
+
+/** Change `e`'s check couldn't tell, and its one second look is still to come (in its season). */
+export const recheckAhead = (e: TacticEdit) => !!e.check && !e.check.recheck && !e.closed && wideEven(e.check);
 
 /**
  * The checks that are due, measured where the sim runs (each sim morning: callMeasure.ts's
@@ -441,21 +460,32 @@ export async function editMorning(
 export function saveCheck(league: League, id: number, w: CounterWorth, games: number) {
   const e = editsOf(league).find((x) => x.id === id);
   if (!e) return;
-  e.check = { pts: w.pts, raw: w.raw, se: w.se, games, day: league.day };
-  if (e.told) return;
+  // (a check on a change already checked is its second look, over more games: see recheckAhead; the
+  // same first check saved twice, the Team screens' and the sim morning's, is kept once)
+  if (e.check && (e.check.recheck || games <= e.check.games)) return;
+  const second = !!e.check;
+  e.check = { pts: w.pts, raw: w.raw, se: w.se, games, day: league.day, ...(second ? { recheck: true as const } : {}) };
+  if (e.told && !second) return;
   e.told = true;
   const lead = leadAssistant(league);
   const call = worthCall(w);
-  const replayed = 'I went back over the games since, with your change and without it.';
+  const replayed = second ? 'I took the second look I promised, over every game since.' : 'I went back over the games since, with your change and without it.';
   const body =
     call === 'gain'
       ? `${replayed} It seems to have helped. I'd keep it.`
       : call === 'cost'
         ? `${replayed} It seems to have hurt. Put it back from Team → Tactics → Analysis.`
-        : `${replayed} ${evenText(w, games)}`;
+        : `${replayed} ${evenText(e.check, games)}`;
   addInbox(league, {
     from: `${lead.name}, lead assistant`,
-    subject: call === 'gain' ? 'Your change seems to have helped' : call === 'cost' ? 'Your change seems to have hurt' : 'Your change: too close to call',
+    subject:
+      call === 'gain'
+        ? 'Your change seems to have helped'
+        : call === 'cost'
+          ? 'Your change seems to have hurt'
+          : second
+            ? 'Your change: still too close to call'
+            : 'Your change: too close to call',
     body: `${shortWhat(e)}${e.what.includes(' · ') ? ' and more' : ''}. ${body}`,
     link: '/team/tactics/analysis',
     tone: call === 'gain' ? 'good' : call === 'cost' ? 'bad' : 'neutral',
@@ -517,11 +547,13 @@ export function checkLine(e: TacticEdit): string {
  * sits inside the gain/cost line (|raw| + 2 se under WORTH_MIN) rule out a big swing either way;
  * the rest just couldn't tell the change apart from the old setup.
  */
-export function evenText(w: Pick<CounterWorth, 'raw' | 'se'>, games: number): string {
+export function evenText(w: Pick<CounterWorth, 'raw' | 'se'> & { recheck?: true }, games: number): string {
   const small = Math.abs(w.raw) + 2 * w.se < WORTH_MIN;
-  return small
-    ? `Too close to call over ${games} games: the replays rule out a big swing either way, but it may still help or hurt a little. Keep it if you like how the team plays with it.`
-    : `Inconclusive over ${games} games: the replays couldn't tell it apart from your old setup. It may help or hurt; more games would tell. Keep it if you like how the team plays with it.`;
+  if (small)
+    return `Too close to call over ${games} games: the replays rule out a big swing either way, but it may still help or hurt a little. That's final. Keep it if you like how the team plays with it.`;
+  return w.recheck
+    ? `Still inconclusive over ${games} games: the replays couldn't tell it apart from your old setup. That was the staff's last look. Keep it if you like how the team plays with it.`
+    : `Inconclusive over ${games} games: the replays couldn't tell it apart from your old setup. The staff takes one more look after ${RECHECK_AFTER} more games, if the season has them.`;
 }
 
 /** The call of a reading, for its tone. */

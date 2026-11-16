@@ -49,6 +49,8 @@ interface AppState {
   digestOpen: boolean;
   /** A big moment has the screen (Moments.tsx): the digest waits for it. */
   momentUp: boolean;
+  /** The digest is on screen (AwaySheet.tsx): a moment that comes in after it waits for it to close. */
+  digestUp: boolean;
   showDigest: (open: boolean) => void;
   setLeague: (l: League | null) => void;
   /**
@@ -237,6 +239,7 @@ export const useStore = create<AppState>((set, get) => ({
   digest: null,
   digestOpen: false,
   momentUp: false,
+  digestUp: false,
   showDigest: (open) => set({ digestOpen: open && !!get().digest }),
   setLeague: (l) => {
     const old = get().league;

@@ -17,14 +17,16 @@ import {
   growthStory,
   isBreakout,
   isRookie,
+  focusChances,
   ovrChange,
+  potentialText,
   ratingDeltas,
   reportMail,
   seasonMoves,
   seasonTrail,
   unpackRatings,
 } from '../league/devWatch';
-import { RATING_KEYS, attrDisplay } from '../ratings';
+import { RATING_KEYS, attrDisplay, tierLabel } from '../ratings';
 import { hashString } from '../random';
 
 const fresh = (seed = 5) => {
@@ -65,6 +67,18 @@ describe('the development watch', () => {
   it('snapshots the league, draws the arrows, spots breakouts, writes the monthly report, and changes nothing about how a league plays out', async () => {
     const base = opened();
     const copy = () => structuredClone(base);
+
+    // a potential is named in the ladder's own words, the badge's and the sentence's alike (82 is a
+    // Quality Starter everywhere, never an All-Star in one place); and a focus's chances are its
+    // development steps: none yet before the first check-in, which is the next
+    {
+      const l = copy();
+      const p = youngest(l);
+      [p.ovr, p.pot] = [70, 82];
+      expect(potentialText(p)).toMatch(/he would be a Quality Starter\.? /);
+      expect(tierLabel(82)).toBe('Quality Starter');
+      expect(focusChances(l, p, { season: l.season, day: l.day })).toEqual({ had: 0, next: expect.stringMatching(/^the check-in on /) });
+    }
 
     // opening night writes down every rostered player, and a check-in only the ones who moved
     {

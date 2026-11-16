@@ -19,12 +19,14 @@ import { counterWorth, measureChanges, shrinkWorth, worthCall, WORTH_MAX } from 
 import {
   CHECK_AFTER,
   EDIT_AHEAD,
+  RECHECK_AFTER,
   checksDue,
   editMorning,
   editPlan,
   evenText,
   madeLine,
   readEdit,
+  recheckAhead,
   recordEdit,
   revertEdit,
   saveCheck,
@@ -455,10 +457,27 @@ describe('game plans', () => {
       const w = readEdit(await play(check, 6)).worth;
       // an even reading is inconclusive, never "no effect": a tight one rules out a big swing, a wide one can't tell
       expect(evenText({ raw: 0.1, se: 0.1 }, 12)).toMatch(/^Too close to call over 12 games: the replays rule out a big swing/);
-      expect(evenText({ raw: 0.2, se: 0.6 }, 12)).toMatch(/^Inconclusive over 12 games: .* It may help or hurt/);
+      expect(evenText({ raw: 0.1, se: 0.1 }, 12)).toMatch(/That's final\./);
+      expect(evenText({ raw: 0.2, se: 0.6 }, 12)).toMatch(/^Inconclusive over 12 games: .* one more look after 10 more games/);
+      expect(evenText({ raw: 0.2, se: 0.6, recheck: true }, 22)).toMatch(/^Still inconclusive over 22 games: .* last look/);
+      // the same first check saved again (the Team screens' and the sim morning's) is kept once
       saveCheck(l, e.id, w, check.count);
       expect(l.inbox.length).toBe(mail + 2);
       expect(checksDue(l)).toHaveLength(0);
+      // a wide even check gets one second look RECHECK_AFTER games on, over all of them, and then it's final
+      const first = l.tacticEdits![0];
+      first.check = { pts: 0.1, raw: 0.2, se: 0.6, games: CHECK_AFTER, day: l.day };
+      expect(recheckAhead(first)).toBe(true);
+      expect(checksDue(l).map((x) => x.id)).not.toContain(e.id);
+      for (const g of l.schedule.filter((x) => !x.played && (x.home === l.userTid || x.away === l.userTid)).slice(0, RECHECK_AFTER)) g.played = true;
+      expect(checksDue(l).map((x) => x.id)).toContain(e.id);
+      const again = editPlan(l, first, 'check').plan!;
+      expect(again.count).toBe(CHECK_AFTER + RECHECK_AFTER);
+      saveCheck(l, e.id, { ...w, pts: 0, raw: 0.2, se: 0.6 }, again.count);
+      expect(first.check).toMatchObject({ games: CHECK_AFTER + RECHECK_AFTER, recheck: true });
+      expect(l.inbox.filter((m) => m.subject === 'Your change: still too close to call')).toHaveLength(1);
+      expect(recheckAhead(first)).toBe(false);
+      expect(checksDue(l).map((x) => x.id)).not.toContain(e.id);
       // put back: the coverage goes back; a setting moved again since stays where the user put it
       me.tactics.offense.pace = 64;
       expect(revertEdit(l, l.tacticEdits![0])).toBe(true);

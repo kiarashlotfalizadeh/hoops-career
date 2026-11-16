@@ -326,6 +326,16 @@ export function tierLabel(ovr: number): string {
   return ovrTier(ovr).names.find(([min]) => ovr >= min)?.[1] ?? 'Fringe';
 }
 
+/**
+ * The tier name as a noun phrase for prose ("an All-Star", "a Quality Starter", "a Rotation player"),
+ * so a sentence about a rating always uses the ladder's own word for it, never a private one.
+ */
+export function tierPhrase(ovr: number): string {
+  const name = tierLabel(ovr);
+  const noun = ['Superstar', 'All-Star', 'Quality Starter', 'Starter'].includes(name) ? name : `${name} player`;
+  return `${/^[AEIOU]/.test(noun) ? 'an' : 'a'} ${noun}`;
+}
+
 export function ovrColor(ovr: number): string {
   return `var(--tier-${ovrTier(ovr).tone})`;
 }

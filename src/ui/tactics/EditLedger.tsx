@@ -5,7 +5,7 @@
 // games with and without the change, see core/ai/tacticEdits.ts).
 import { X } from 'lucide-react';
 import type { League, TacticEdit } from '../../core/types';
-import { CHECK_AFTER, editCall, editsOf, playedSince } from '../../core/ai/tacticEdits';
+import { CHECK_AFTER, RECHECK_AFTER, editCall, editsOf, playedSince, recheckAhead } from '../../core/ai/tacticEdits';
 import { AHEAD, SINCE, leanTone } from '../../core/analysis/staffWords';
 import { plural } from '../../core/format';
 import { fmtDate } from '../../core/league/helpers';
@@ -36,7 +36,14 @@ function metaOf(e: TacticEdit, league: League, measuring: boolean): string {
   const w = e.check ?? e.worth;
   if (!w) return `${when} · ${e.closed ? 'No read' : 'The staff reads it when you next open Team'}`;
   if (e.closed === 'reverted') return `${when} · put back${e.closedDay === undefined ? '' : ` ${fmtDate(e.season, e.closedDay)}`}`;
-  if (e.check) return `${when} · over ${plural(e.check.games, 'game')}`;
+  if (e.check && recheckAhead(e)) {
+    // (one that couldn't tell: its one second look, and when; the season over, the first look stands)
+    const left = Math.max(0, e.check.games + RECHECK_AFTER - playedSince(league, e).length);
+    return e.season === league.season
+      ? `${when} · over ${plural(e.check.games, 'game')} · second look in ${plural(left, 'game')}`
+      : `${when} · over ${plural(e.check.games, 'game')} · final`;
+  }
+  if (e.check) return `${when} · over ${plural(e.check.games, 'game')}${e.check.recheck ? ' · second look, final' : ' · final'}`;
   const left = Math.max(0, CHECK_AFTER - playedSince(league, e).length);
   // (read on the games then ahead: a forecast until the check on played games)
   return e.closed ? `${when} · forecast only, never checked` : `${when} · forecast · check in ${plural(left, 'game')}`;
@@ -75,7 +82,10 @@ export function SinceYouChanged({ league }: { league: League }) {
       title="Since you changed it"
       right={
         <Help title="Since you changed it">
-          <p>First a forecast on your next games. After {CHECK_AFTER} played games, a check on what happened.</p>
+          <p>
+            First a forecast on your next games. After {CHECK_AFTER} played games, a check on what happened. If it can&apos;t tell, one more look {RECHECK_AFTER} games later, then
+            it&apos;s final.
+          </p>
         </Help>
       }
     >

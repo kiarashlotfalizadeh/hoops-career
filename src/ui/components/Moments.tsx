@@ -110,10 +110,22 @@ export function Moments() {
   // (over a report or the draft, only what landed there and is the screen's size, or the job's own: see momentFits)
   // (and while a sheet is open he's mid-edit: all but the two no one misses wait for it to close)
   const editing = useSheetOpen();
+  // one automatic card at a time: the digest yields to the sim's own moment (it waits on momentUp),
+  // but a moment that comes in once the digest is up waits for it to close, all but the two no one
+  // misses (the one already up keeps the screen: it's the sim's card, and the digest is what yields)
+  const digestUp = useStore((s) => s.digestUp);
+  const upKey = useRef<string | null>(null);
   const showing =
     !simming && pathname !== '/live' && league
-      ? queue.find((m) => !(onReport && m.news === 'game') && (!editing || MUST_SEE.has(m.kind)) && momentFits(m, pathname, landed.current.get(m.key)))
+      ? queue.find(
+          (m) =>
+            !(onReport && m.news === 'game') &&
+            (!editing || MUST_SEE.has(m.kind)) &&
+            (!digestUp || MUST_SEE.has(m.kind) || m.key === upKey.current) &&
+            momentFits(m, pathname, landed.current.get(m.key)),
+        )
       : undefined;
+  upKey.current = showing?.key ?? null;
   // the digest waits while a moment has the screen
   const up = !!showing;
   useEffect(() => {

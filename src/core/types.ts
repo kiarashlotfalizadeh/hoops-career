@@ -639,8 +639,12 @@ export interface TacticEdit {
   ahead: number[];
   /** What it measured on them, in points a game (shrunk toward even; `raw` before, `se` its standard error). */
   worth?: { pts: number; raw: number; se: number; games: number };
-  /** Measured again on the user's games played since (`games` of them, through `day`): each replayed with and without it, paired. */
-  check?: { pts: number; raw: number; se: number; games: number; day: number };
+  /**
+   * Measured again on the user's games played since (`games` of them, through `day`): each replayed
+   * with and without it, paired. A check that couldn't tell (wideEven) gets one more, RECHECK_AFTER
+   * games on, over all of them: `recheck` marks that second and last look.
+   */
+  check?: { pts: number; raw: number; se: number; games: number; day: number; recheck?: true };
   /** The staff's note on the check has gone out. */
   told?: boolean;
   /** No longer checked: put back (the check's one tap), or every setting it moved changed again since. */

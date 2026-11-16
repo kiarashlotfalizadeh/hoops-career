@@ -21,6 +21,7 @@ import { CHECK_AFTER, CHECK_END_MIN, editCall, editsOf, playedSince } from '../a
 import { AHEAD, SINCE } from '../analysis/staffWords';
 import { seasonCoachingLine } from '../analysis/debrief';
 import { FOCUS_KEYS, FOCUS_META } from './progression';
+import { focusChances } from './devWatch';
 import { needNow } from './rosterNeed';
 import { QUALITY_META, type QualityId } from '../analysis/system';
 
@@ -169,6 +170,11 @@ function focusLine(league: League, p: Player, season: number): string | null {
   if (!from) return null;
   const days = setNow ? Math.max(0, league.day - setNow.day) : null;
   const span = setLast ? 'set last season' : summer ? 'in place since last summer' : days !== null ? `set ${plural(days, 'day')} ago` : 'set this season';
+  // (set after the season's last development step, or at an age that waits for the summer: it had no chance to work, so nothing it did is read)
+  if (setNow) {
+    const { had, next } = focusChances(league, p, setNow);
+    if (!had) return `${span}: no development step has run under it yet, so there is nothing to read. The next is ${next}.`;
+  }
   if (days !== null && days < FOCUS_MIN_DAYS) return `${span}: too soon to read.`;
   // (a save from before the day's ratings were kept: only opening night's, so it says what it's read from)
   const base = setNow && !setNow.r ? ' (read from opening night)' : '';
@@ -192,7 +198,7 @@ function focusLine(league: League, p: Player, season: number): string | null {
 /** A tactical change as far as it has been read: checked on played games, forecast only, or not read. */
 function editStatus(league: League, e: TacticEdit): string {
   const back = e.closed === 'reverted' ? ' You put it back.' : e.closed ? ' Replaced since.' : '';
-  if (e.check) return `Checked on ${plural(e.check.games, 'game')} played with it: ${SINCE[editCall(e.check)!].toLowerCase()}.${back}`;
+  if (e.check) return `Checked on ${plural(e.check.games, 'game')} played with it${e.check.recheck ? ', a second look' : ''}: ${SINCE[editCall(e.check)!].toLowerCase()}.${back}`;
   // (the review is read when his season is over: a check never run is one the season ran out on)
   const played = playedSince(league, e).length;
   const pending = e.closed
@@ -364,6 +370,7 @@ function tally(what: string, reads: string[]): string {
 /** A focus line's read in a word or two, for the thread's summary. */
 function focusRead(line: string): string {
   if (/too soon/.test(line)) return 'too soon to read';
+  if (/no development step/.test(line)) return 'no development step yet';
   if (/next year/.test(line)) return 'read next year';
   if (/grew/.test(line)) return 'grew';
   if (/slipped/.test(line)) return 'slipped';

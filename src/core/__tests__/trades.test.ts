@@ -53,7 +53,7 @@ import { shareRevenue } from '../league/finances';
 import { signOfferSheet } from '../league/rfa';
 import { txnLine, txnText } from '../league/transactions';
 import { CAP } from '../constants';
-import { contractExp } from '../playerGen';
+import { contractExp, playerAge } from '../playerGen';
 import { Rng } from '../random';
 import type { DraftPick, League, Player } from '../types';
 import { leagueBoard, revealOutlook } from '../league/prospects';
@@ -925,7 +925,8 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
       ],
     });
     // a training focus is graded on the skills it trains and what the rest of his game gave up, not his OVR
-    const p = [...standardRoster(l, U)].sort((a, b) => b.ovr - a.ovr)[0];
+    // (one young enough to develop at the season's check-ins)
+    const p = [...standardRoster(l, U)].filter((x) => playerAge(x, l.season) <= 26).sort((a, b) => b.ovr - a.ovr)[0];
     p.training = 'shooting';
     const r0 = { ...p.ratings };
     p.ratingsHistory = [
@@ -938,8 +939,17 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
       `${p.firstName} ${p.lastName}, shooting`,
       "In place since last summer: its skills +3.0, the rest of his game +0.0. The focused skills grew; what balanced work would have done isn't known.",
     ]);
-    // a focus set days ago isn't read at all
+    // a focus that no development step has run under (set after the season's last check-in) isn't
+    // read as progress: it says so, and when the next one is
     p.ratingsHistory[1] = { ...p.ratingsHistory[1], focus: 'balanced' };
+    l.devWatch = { season: l.season, start: {}, checks: [{ day: l.day - 50, ovr: {} }], told: [] };
+    p.trainingSince = { season: l.season, day: l.day - 40, r: { ...r0, tp: r0.tp - 1, mid: r0.mid - 1, ft: r0.ft - 1 } };
+    expect(training().rows[0][1]).toMatch(
+      /^Set 40 days ago: no development step has run under it yet, so there is nothing to read\. The next is (the summer|the check-in on .+)\.$/,
+    );
+    expect(training().summary).toBe('1 focus: no development step yet.');
+    // one that has had a check-in: a focus set days ago isn't read at all
+    l.devWatch.checks.push({ day: l.day, ovr: {} });
     p.trainingSince = { season: l.season, day: l.day };
     expect(training().rows[0][1]).toBe('Set 0 days ago: too soon to read.');
     // read from his ratings the day it was set: what his shooting did before it (here +3 since opening night) isn't its doing

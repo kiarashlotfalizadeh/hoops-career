@@ -11,7 +11,8 @@ import { ChevronRight } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { agenda, CALL_KINDS } from '../../core/league/agenda';
 import { keepFigures, ordinal } from '../../core/format';
-import { Avatar, Sheet } from '../components/ui';
+import { Avatar, Sheet, useSheetOpen } from '../components/ui';
+import { onTaskScreen } from '../moments';
 import { TeamLogo } from '../components/TeamLogo';
 import { curTeamSeason } from '../../core/league/helpers';
 import { storyLink } from './front';
@@ -30,8 +31,13 @@ export function DigestHost() {
   const digest = useStore((s) => s.digest);
   const open = useStore((s) => s.digestOpen);
   const momentUp = useStore((s) => s.momentUp);
-  const blocked = useStore((s) => !!s.sim) || momentUp;
   const { pathname } = useLocation();
+  // one automatic card at a time, and never over a task: it waits for a moment, for a sheet he's
+  // working in (Play options, a deal) and for a task screen (Settings: see onTaskScreen); a sheet
+  // opened from it (a call's answer) is his next step from the digest, and it stays under that
+  const editing = useSheetOpen();
+  const wasUp = useRef(false);
+  const blocked = useStore((s) => !!s.sim) || momentUp || (editing && !wasUp.current) || onTaskScreen(pathname);
   const league = useStore((s) => s.league);
   // one thing to dismiss a sim: a moment that had the screen is the sim's card, and the digest stays a
   // tap away on Today, unless the sim stopped for something (a call, a stop): then it opens to answer it
@@ -44,6 +50,11 @@ export function DigestHost() {
     if (quiet && open && !momentUp) useStore.getState().showDigest(false);
   }, [quiet, open, momentUp]);
   const show = open && !blocked && !quiet && pathname !== '/live' && !!digest && !!league && digest.leagueId === league.id;
+  wasUp.current = show;
+  useEffect(() => {
+    if (useStore.getState().digestUp !== show) useStore.setState({ digestUp: show });
+  }, [show]);
+  useEffect(() => () => useStore.setState({ digestUp: false }), []);
   // once it has been read, the mail it listed is read too, but for what still needs him
   const was = useRef(false);
   useEffect(() => {

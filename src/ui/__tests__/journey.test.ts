@@ -292,6 +292,9 @@ describe('the journey between screens', () => {
       // while he edits his tactics a celebration waits; the job's own doesn't
       expect(momentFits(one('cup')[0], '/team/tactics', '/')).toBe(false);
       expect(momentFits({ ...one('cup')[0], kind: 'fired' }, '/team/tactics', '/')).toBe(true);
+      // on a task screen (Settings) nothing optional takes over, not even what landed there
+      expect(momentFits(one('cup')[0], '/settings', '/settings')).toBe(false);
+      expect(momentFits({ ...one('cup')[0], kind: 'fired' }, '/settings', '/settings')).toBe(true);
       // knocked out of the Cup: that's a moment too, and "into the knockouts" is old news that never shows
       l.cup.bracket[0] = { ...l.cup.bracket[0], winner: 3, highPts: 99, lowPts: 104 };
       {

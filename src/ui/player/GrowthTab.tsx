@@ -7,7 +7,7 @@ import { RATING_META, ovrColor, tierLabel } from '../../core/ratings';
 import { seasonLabel } from '../../core/constants';
 import { playerAge } from '../../core/playerGen';
 import { FOCUS_META } from '../../core/league/progression';
-import { baseLabel, devBase, ovrChange, potentialText, ratingDeltas } from '../../core/league/devWatch';
+import { baseLabel, devBase, focusChances, ovrChange, potentialText, ratingDeltas } from '../../core/league/devWatch';
 import { edit } from '../../state/actions';
 import { useStore } from '../../state/store';
 import { Chips, Help, Section, Statline } from '../components/ui';
@@ -169,6 +169,8 @@ export function GrowthTab({ p, league, mine }: { p: Player; league: League; mine
               options={(Object.keys(FOCUS_META) as TrainingFocus[]).map((k) => ({ id: k, label: FOCUS_META[k].label }))}
             />
             <div className="small dim">{FOCUS_META[p.training].help}</div>
+            {/* when it next gets to work: development runs at set steps, not day by day */}
+            {p.tid >= 0 && <div className="small dim">Next development step: {focusChances(league, p, { season: league.season, day: league.day }).next}.</div>}
           </div>
         </Section>
       )}

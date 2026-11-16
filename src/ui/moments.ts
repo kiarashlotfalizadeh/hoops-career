@@ -253,8 +253,18 @@ const WORK: { at: string; own: MomentKind[] }[] = [
   { at: '/office/resign', own: ['signing'] },
 ];
 
-/** Whether moment `m`, queued on screen `landed`, can take the screen at `path` now (see WORK). */
+/**
+ * Screens that are a task of their own (Settings, the commissioner's tools, a matchup's pre-game
+ * setup): nothing optional takes the screen there, not even what landed there. A moment waits until
+ * he leaves (the job's own and MUST_SEE still show), and so does the sim's digest.
+ */
+const TASKS = ['/settings', '/god', '/games/'];
+/** Whether he's on a task screen (see TASKS): optional moments and the digest wait. */
+export const onTaskScreen = (path: string) => TASKS.some((t) => path === t || path.startsWith(t.endsWith('/') ? t : `${t}/`));
+
+/** Whether moment `m`, queued on screen `landed`, can take the screen at `path` now (see WORK and TASKS). */
 export function momentFits(m: Moment, path: string, landed: string | undefined): boolean {
+  if (onTaskScreen(path)) return JOB_MOMENTS.has(m.kind) || MUST_SEE.has(m.kind);
   const work = WORK.find((w) => path.startsWith(w.at));
   if (!work || JOB_MOMENTS.has(m.kind) || work.own.includes(m.kind)) return true;
   // (on the screen it landed on: only a moment of the season's own size, a title or a series)

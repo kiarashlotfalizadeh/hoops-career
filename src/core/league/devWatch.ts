@@ -8,11 +8,11 @@
 // the league's random stream: the phrasing varies on a stream of the occasion's own (worldRng).
 import type { League, Player, RatingKey } from '../types';
 import { FREE_AGENT, RETIRED } from '../types';
-import { RATING_KEYS, RATING_META, attrDisplay, expectedGrowth } from '../ratings';
+import { RATING_KEYS, RATING_META, attrDisplay, expectedGrowth, tierPhrase } from '../ratings';
 import { playerAge } from '../playerGen';
 import { seasonLabel } from '../constants';
 import { ordinal, plural, rankOf } from '../format';
-import { addInbox, addNews, andList, playerName, seasonTotals, sentence, shortName, teamPlayers } from './helpers';
+import { addInbox, addNews, andList, fmtDate, playerName, seasonTotals, sentence, shortName, teamPlayers } from './helpers';
 import { FOCUS_META } from './progression';
 import { awardRaces } from './awards';
 import { worldRng } from './world';
@@ -43,6 +43,26 @@ export interface DevWatchState {
 
 /** The check-ins' days (the season loop's periodic): the staff reports on each. */
 export const CHECK_DAYS = [45, 90, 135];
+
+/**
+ * A training focus's chances to work, as opposed to what it did with them: how many development
+ * steps have run under a focus set on `since` (each in-season check-in on or after that day, for a
+ * player 26 or under, and a summer once one has passed), and the next one (a check-in's day this
+ * season, or the summer). A focus with none run has nothing to read, however long it's been set.
+ */
+export function focusChances(league: League, p: Player, since: { season: number; day: number }): { had: number; next: string } {
+  const age = playerAge(p, league.season);
+  const inSeason = age <= GROWS_IN_SEASON;
+  const checks = league.devWatch?.season === league.season ? league.devWatch.checks : [];
+  // (the day loop runs a day's check-in before the day moves on: one on the day it was set came after it)
+  const had = since.season < league.season ? 1 : inSeason ? checks.filter((c) => c.day >= since.day).length : 0;
+  const ahead =
+    inSeason && (league.phase === 'preseason' || league.phase === 'regular')
+      ? CHECK_DAYS.find((d) => (league.phase === 'preseason' || d >= league.day) && !checks.some((c) => c.day === d))
+      : undefined;
+  const next = ahead !== undefined ? `the check-in on ${fmtDate(league.season, ahead)}` : 'the summer';
+  return { had, next };
+}
 /** Through this age develop() treats a player as young: his summers swing widest, and minutes help him grow. */
 export const YOUNG = 25;
 /** Past this age a player doesn't change in season (inSeasonProgression). */
@@ -288,7 +308,7 @@ export function growthStory(league: League, p: Player): string {
 export function potentialText(p: Player): string {
   const room = p.pot - p.ovr;
   if (room <= 0) return 'He has reached the ceiling scouts saw for him.';
-  const at = p.pot >= 89 ? 'an All-NBA player' : p.pot >= 82 ? 'an All-Star' : p.pot >= 76 ? 'a quality starter' : p.pot >= 70 ? 'a rotation player' : 'a bench piece';
+  const at = tierPhrase(p.pot);
   if (room >= 8) return `Scouts see ${room} more in him: at ${p.pot} he would be ${at}. Growth that size needs minutes, coaching and a good summer or two.`;
   return `${room} to go to the ceiling scouts see, ${at} at ${p.pot}.`;
 }
@@ -401,7 +421,10 @@ function reasonFor(league: League, p: Player, x: Pick<DevLine, 'group' | 'recent
     const set = p.trainingSince?.r && p.trainingSince.season >= league.season - 1 ? p.trainingSince : null;
     const gain = set ? keys.reduce((a, k) => a + attrDisplay(p.ratings[k]) - attrDisplay(set.r![k]), 0) : keys.reduce((a, k) => a + (d[k] ?? 0), 0);
     const days = set && set.season === league.season ? league.day - set.day : null;
+    const chances = set && set.season === league.season ? focusChances(league, p, set) : null;
     if (gain > 0) out.push(`The ${label} focus shows`);
+    // (no development has run under it yet: nothing to show, whatever the days say)
+    else if (chances && !chances.had) out.push(`The ${label} focus hasn't had a development step yet: the next is ${chances.next}`);
     else if (days !== null && days < FOCUS_NEW_DAYS) out.push(`The ${label} focus is new: set ${plural(days, 'day')} ago`);
     else if (x.group !== 'rising') out.push(`The ${label} focus hasn't shown yet`);
   }
