@@ -2715,6 +2715,11 @@ function replays({ k = -1, ks = [] as number[], most = 12, speed = 1 } = {}) {
   c.tipMs = 0;
   const dir = inner as unknown as { director: { onAir: boolean } };
   const moves = (into: string[], was: Map<number, string>) => {
+    // (and the ball's way to the rim: what a shot meets on its way, net, iron or glass, the same live and again)
+    const fl = (inner as unknown as { flight: { hits: { what: string }[] } | null }).flight;
+    const shot = fl ? `ball ${fl.hits.map((h) => h.what).join('-') || 'air'}` : '';
+    if (shot && was.get(-1) !== shot) into.push(shot);
+    was.set(-1, shot);
     for (const [pid, f] of inner.figs) {
       const one = (f.pup as unknown as { one: { id: string; tau: number } | null }).one;
       const id = one && !['stop', 'start', 'closeout', 'stumble', 'bump'].includes(one.id) ? `${one.id}${(f.pup as unknown as { lefty: boolean }).lefty ? '(L)' : ''}` : '';
@@ -2757,6 +2762,71 @@ function replays({ k = -1, ks = [] as number[], most = 12, speed = 1 } = {}) {
   return { n: out.length, differ: out.filter((x) => !x.same), all: out.map((x) => `k${x.k} ${x.same ? 'same' : 'DIFFERS'}: ${x.again.join(', ')}`) };
 }
 
+/**
+ * Every dunk in the game played three ways: as the play has it, missed, and blocked (the man who goes up with him gets
+ * a hand to it). For each: whether the ball went down through the ring (`through`), whether the dunker hung on the
+ * rim (`hung`), and how near the blocker's hand the ball came (ft). A missed or blocked dunk is never through, and
+ * never hung on.
+ */
+function dunks({ speed = 1 } = {}) {
+  const out: { k: number; as: string; through: boolean; hung: boolean; nearHand: number; trail: string[] }[] = [];
+  const ks = [...new Set(find('dunk').map((x) => x.k))];
+  for (const k of ks) {
+    const sc = scripts[k];
+    const i = sc.frames.findIndex((f, n) => n > 0 && sc.frames[n - 1].act.includes('dunk') && !!f.fx);
+    if (i < 0) continue;
+    const f = sc.frames[i];
+    const nO = sc.oPids.length;
+    const blk = sc.frames[i - 1].act.findIndex((a, j) => j >= nO && (a === 'contest' || a === 'block'));
+    const keep = { fx: f.fx, swat: f.swat };
+    for (const as of ['play', 'miss', 'block']) {
+      if (as === 'miss') f.fx = 'miss';
+      if (as === 'block') {
+        if (blk < 0) continue;
+        f.fx = 'miss';
+        f.swat = blk;
+      }
+      // (made afresh each way: what the possession's moves were made as is kept with it, see Tape)
+      (scene as unknown as { takes: WeakMap<Script, unknown> }).takes.delete(sc);
+      const c = new Clock(speed);
+      c.tipMs = 0;
+      c.k = k;
+      const trail: string[] = [];
+      const rimW = w({ x: 0, y: 5.25 }, sc.dir);
+      const [rx, rz] = [rimW.y - 47, -rimW.x];
+      let through = false;
+      let hung = false;
+      let nearHand = Infinity;
+      while (c.k === k && c.finalMs < 0) {
+        c.step();
+        const b = inner.ball;
+        // (out of everyone's hands, inside the ring's cords under the rim: it is going down through the net)
+        const held = (inner as unknown as { heldBy: number | null }).heldBy !== null;
+        // (only through the shot's own move: a made play's next moves, played after a dunk made a miss, have the ball under the net)
+        if (c.stage.play?.i === i && !held && b.y < 9.85 && b.y > 8.8 && Math.hypot(b.x - rx, b.z - rz) < 0.55) through = true;
+        if (c.stage.play?.i === i)
+          trail.push(
+            `${Math.round(c.t)} ${b.x.toFixed(2)},${b.y.toFixed(2)},${b.z.toFixed(2)} r${Math.hypot(b.x - rx, b.z - rz).toFixed(2)}${(inner as unknown as { heldBy: number | null }).heldBy !== null ? ' H' : ''}`,
+          );
+        for (const fig of inner.figs.values()) if (fig.pup.onRim) hung = true;
+        if (blk >= 0) {
+          const g = inner.figs.get(sc.dPids[blk - nO]);
+          if (g) {
+            const j = g.pup.j;
+            const h = g.pup.world(j[J.hr * 3], j[J.hr * 3 + 1], j[J.hr * 3 + 2], { x: 0, y: 0, z: 0 });
+            nearHand = Math.min(nearHand, Math.hypot(b.x - h.x, b.y - h.y, b.z - h.z));
+          }
+        }
+      }
+      out.push({ k, as, through, hung, nearHand: Math.round(nearHand * 100) / 100, trail });
+      f.fx = keep.fx;
+      f.swat = keep.swat;
+      if (keep.swat === undefined) delete f.swat;
+    }
+  }
+  return out;
+}
+
 /** The possessions whose shot has a finish of its own (choreo's Finish), by finish. */
 function finishes() {
   const out: Record<string, number[]> = {};
@@ -2765,6 +2835,7 @@ function finishes() {
 }
 
 (window as unknown as { lab: unknown }).lab = {
+  dunks,
   replays,
   finishes,
   footTrace,

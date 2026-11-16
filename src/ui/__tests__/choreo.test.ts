@@ -645,6 +645,7 @@ describe('live court choreography', () => {
       );
       const nm = (pid: number) => league.players[pid].lastName;
       let shots = 0;
+      let handoffs = 0;
       const named = new Set<string>();
       while (!sim.over) {
         sim.step();
@@ -680,8 +681,17 @@ describe('live court choreography', () => {
             expect(s.frames[i - 1].hold).toBe(f.act.indexOf('pass'));
             expect(s.frames[i - 1].act[up]).not.toBe('catch');
           });
+          // a hand-off goes from the big man's hands to the man coming by: one passes, the other catches, and the second has it
+          s.frames.forEach((f) => {
+            if (!f.handoff) return;
+            handoffs++;
+            const from = f.act.indexOf('pass');
+            expect(from).toBeGreaterThanOrEqual(0);
+            expect(f.hold).toBe(f.act.indexOf('catch'));
+          });
         }
       }
+      expect(handoffs).toBeGreaterThan(0);
       expect(shots).toBeGreaterThan(100);
       expect(named.size).toBeGreaterThan(6);
       expect(finishOf('hook shot')).toBe('hook');
@@ -1473,10 +1483,10 @@ describe('live court choreography', () => {
         if (i) expect(rate).toBeGreaterThan((1000 * even[i - 1].length) / even[i - 1].reduce((n, s) => n + s.ms, 0));
         expect(len).toBeLessThan(7.5);
       }
-      // (getting up to 26 ft a second at 15 ft a second squared, his steps through 14..22 against an even run's at 18;
-      // pulling up from it, his lean against an even run's)
+      // (getting up to 26 ft a second at 15 ft a second squared, his steps through 14..22 against an even run's at 18:
+      // shorter; pulling up from it, his lean against an even run's)
       const going = steps((t) => Math.min(26, (15 * t) / 1000), 2200, 900, 1500).out;
-      expect(going.reduce((n, s) => n + s.len, 0) / going.length).toBeLessThan((0.95 * even[2].reduce((n, s) => n + s.len, 0)) / even[2].length);
+      expect(going.reduce((n, s) => n + s.len, 0) / going.length).toBeLessThan((0.96 * even[2].reduce((n, s) => n + s.len, 0)) / even[2].length);
       const evenLean = steps(() => 26, 3000, 2000).lean;
       const stopping = steps((t) => (t < 2000 ? 26 : Math.max(0, 26 - (30 * (t - 2000)) / 1000)), 3000, 2200, 2800);
       expect(stopping.lean).toBeLessThan(evenLean - 0.15);

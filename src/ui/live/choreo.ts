@@ -83,6 +83,8 @@ export interface Frame {
   how?: Finish;
   /** Who shows the ball and brings it back down in this move, a shot fake (an index into [offense..., defense...]). */
   fake?: number;
+  /** The ball goes from hand to hand in this move, not thrown: a hand-off, taken out of the big man's hands as the man coming by gets to them. */
+  handoff?: true;
   /**
    * One man's body goes into another's in this move, [who, into whom, how hard 0..1] (indices into [offense...,
    * defense...]): a driver's shoulder into the man on him, the foul a whistle is for. The 3D figures brace, take it
@@ -1107,7 +1109,7 @@ export function buildScript(
         give(sh);
         moveTo(sh, { x: side * 13, y: 25 });
         follow();
-        snap(380, cap(`${N(big)} hands off to ${N(sh)}`));
+        snap(380, { handoff: true, ...cap(`${N(big)} hands off to ${N(sh)}`) });
         break;
       }
       case 'pass': {

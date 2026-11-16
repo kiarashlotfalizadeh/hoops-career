@@ -116,6 +116,7 @@ export type ClipId =
   | 'pass'
   | 'passOne'
   | 'passOver'
+  | 'handoff'
   | 'catch'
   | 'jumper'
   | 'pump'
@@ -380,6 +381,17 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
     ],
     { grip: 'under' },
   ),
+  // (a hand-off: the ball held out at his belly on the side the man comes by, one hand under it and one on it, his
+  // body turned to wall off the man's defender; taken out of his hands (0: the other's hands are on it), let go of as it
+  // is, and his hands come back in as he sets his feet for the screen that comes with it)
+  handoff: clip('handoff', 'shot', 0, {}, [
+    [-220, { ...HOLD }],
+    [-60, { bx: 0.6, by: 4.05, bz: 1.15, gl: 0.8, gr: 1, lx: 0.4, ly: -0.95, lz: 1.0, rx: 0.65, ry: -1.2, rz: 0.9, twist: -0.28, hip: -0.24, lean: 0.12, wide: 0.22 }],
+    [0, { bx: 0.65, by: 4.05, bz: 1.2, gl: 0.6, gr: 0.9, lx: 0.45, ly: -0.95, lz: 1.05, rx: 0.7, ry: -1.2, rz: 0.95, twist: -0.32, hip: -0.26, lean: 0.12, wide: 0.26 }],
+    [120, { gl: 0, gr: 0, lx: 0.4, ly: -1.05, lz: 0.95, rx: 0.65, ry: -1.25, rz: 0.9, twist: -0.3, hip: -0.28, lean: 0.1, wide: 0.3 }],
+    [300, { gl: 0, gr: 0, lx: 0.15, ly: -1.4, lz: 0.55, rx: 0.2, ry: -1.4, rz: 0.55, twist: -0.12, hip: -0.28, lean: 0.08, wide: 0.34 }],
+    [420, { gl: 0, gr: 0, hip: -0.24, wide: 0.34 }],
+  ]),
   // (two hands over his head: back behind it, then thrown from there)
   passOver: clip('passOver', 'shot', 0, {}, [
     // (the ball already on its way up in front of his face: from over his head (an inbound) it doesn't dip to his chest first)

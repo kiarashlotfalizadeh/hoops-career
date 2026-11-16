@@ -59,7 +59,7 @@ import type { Models } from './models';
 import type { NetSim } from './net';
 import { buildProps } from './props';
 import { Rig } from './rig';
-import { BALL_R, hash, J, type Body, type Puppet, type Tape, type V3 } from './puppet';
+import { BALL_R, hash, J, type Body, type Contact, type Puppet, type Tape, type V3 } from './puppet';
 import { Sideline } from './sideline';
 import { BODY_GAP, clearance, clearOf, into, PARTS, passPath, reach as reachTo, Spacing, sunk, swerve, type Meet, type PassPath } from './spacing';
 
@@ -234,6 +234,11 @@ const SKULL = 0.42;
 const GIVE = 0.4;
 /** What the ball has given way to a body is let go of over this long (ms) once he is out of its way (see give). */
 const BEND_MS = 80;
+/** A give turned round to a man's other side (see give) goes over about this long (ms), past this much of one (ft). */
+const BEND_TURN_MS = 40;
+/** A hand-off is in the other man's hands this far through its move. */
+const HANDOFF_TAKE = 0.3;
+const BEND_TURN_FROM = 0.15;
 /** A loose ball is moved off a body at this speed at most, ft a second: it rolls off him, it doesn't jump. */
 const BALL_PUSH = 14;
 /**
@@ -276,6 +281,18 @@ const SHARP_DEEP = 1.5;
 const FOCUS_MS = 140;
 /** The flash of light on a slam, and on a shot at the buzzer that drops (lens.bump; none with reduced motion). */
 const DUNK_BUMP = 0.16;
+/**
+ * A missed dunk jammed off the iron: where it comes off (ft out from the rim's middle, and up over the ring), how
+ * fast up (ft a second, and up to this much more) and out toward the rebound.
+ */
+const MISS_OFF = 0.55;
+const MISS_LIFT = 0.45;
+const MISS_UP = 7;
+const MISS_UP_JIT = 4;
+const MISS_OUT = 5;
+const MISS_OUT_JIT = 3;
+/** A rebound nearer the rim's middle than this (ft) gives no way out: it comes off back the way he came. */
+const MISS_TO = 2;
 const BUZZER_BUMP = 0.22;
 /** On the lane at a free throw: men this near the rim (ft) get down into a stance as it goes up. */
 const LANE_FT = 11;
@@ -483,6 +500,11 @@ const ARM_GRAZE = 0.06;
 const LIMB_GRAZE = 0.05;
 /** Looked at again up to this many times a frame: a man moved over his planted feet goes only part of the way. */
 const CLASH_PASSES = 9;
+/**
+ * A move apart must take them out of each other by at least this share of how far it moved them: one that does less
+ * (a leg left behind over a planted foot, an arm round the other man) is undone, and they are left as near as they came.
+ */
+const CLASH_GAIN = 0.15;
 const NEAR_MIN = 0.75;
 const NEAR_MAX = 3.2;
 /** What a lean or a sit changes of that, at most either way (ft), learnt only from two this near (ft): farther, their trunks are not what's nearest. */
@@ -636,6 +658,9 @@ export class CourtScene {
   private moveKey = '';
   private lastScript: unknown = null;
   private scriptN = 0;
+  /** What a possession's chances are drawn from (a shot's path, a swat, the players' reactions): its own, kept with it, so a replay draws the same. */
+  private seed = 0;
+  private readonly seeds = new WeakMap<Script, number>();
   private heldBy: number | null = null;
   private slammed = false;
   // a shot has landed (it falls on its own from there); a pass's way past whoever is in its lane (null: not worked out)
@@ -1022,6 +1047,10 @@ export class CourtScene {
     if (started) {
       this.lastScript = sc;
       this.scriptN++;
+      if (sc) {
+        if (!this.seeds.has(sc)) this.seeds.set(sc, this.scriptN);
+        this.seed = this.seeds.get(sc)!;
+      }
       this.ftAt = [];
       sc?.frames.forEach((f, k) => f.act.includes('ft') && this.ftAt.push(k));
       this.glances.length = 0;
@@ -1117,7 +1146,11 @@ export class CourtScene {
             who: pid,
             touch: this.touched(j),
             how: b.how !== undefined && (said === 'release' || SHOTS.has(said)) ? b.how : undefined,
+            // (his shot won't go down: the move it lands in is a miss, or a hand gets to it)
+            fails: ((o) => (o?.swat !== undefined ? 'block' : o?.fx === 'miss' ? 'miss' : undefined))(said === 'release' ? b : SHOTS.has(said) ? nb : undefined),
             fake: b.fake === j,
+            // (his pass in this move, or the next, goes from his hands to the other's: see Frame.handoff)
+            handoff: (!!b.handoff && b.act[j] === 'pass') || (!!nb?.handoff && nb.act[j] === 'pass'),
             tape,
             k: bi,
             k0: runs[j],
@@ -1180,40 +1213,74 @@ export class CourtScene {
         this.ownLegs(holder, own);
       } else if (b.fx) {
         const one = was?.pup.one;
-        if (was && one && isDunk(one.id) && !this.slammed) {
+        const dunking = !!was && !!one && isDunk(one.id);
+        if (dunking && !this.slammed && b.swat === undefined) {
           // a dunk: it stays in his hands to the rim
-          set(ball, was.pup.carry(TMP));
+          set(ball, was!.pup.carry(TMP));
           this.give(null, null, ease, false);
           holder = was;
-          if (one.tau >= DUNK_AT) {
+          if (one!.tau >= DUNK_AT) {
             this.slammed = true;
-            ball.set(rim.x, RIM_H - 0.2, rim.z);
-            this.vy = -17;
-            this.drift.x = this.drift.z = 0;
-            // (the rim takes his weight and springs back; the net is pulled harder than a shot pulls it)
+            // (the rim takes his weight and springs back)
             this.rimKick = 1;
             this.rimHit = 1.7;
             if (b.fx === 'make') {
+              // down through it, the net pulled harder than a shot pulls it
+              ball.set(rim.x, RIM_H - 0.2, rim.z);
+              this.vy = -17;
+              this.drift.x = this.drift.z = 0;
               this.netKick = 1;
               this.netHit = 1.5;
               roar(sc.off === 0, true);
               // (the building's flashes go off on a slam: the picture takes a breath of light)
               if (!calm) this.lens.bump(DUNK_BUMP);
+            } else {
+              // missed: it is jammed off the iron, up over the ring and out toward where the play next has it
+              const r = hash(this.seed, bi + 11);
+              const nf = sc.frames[bi + 1];
+              const to = nf ? toWorld(nf.ball, sc.dir) : null;
+              // (where the play next has it, if that is out from the rim at all; or back out the way he came, a little to a side)
+              let ox = to ? sx(to) - rim.x : 0;
+              let oz = to ? sz(to) - rim.z : 0;
+              if (Math.hypot(ox, oz) < MISS_TO) {
+                const turn = (r - 0.5) * 1.2;
+                const [bx, bz] = [was!.pup.x - rim.x, was!.pup.z - rim.z];
+                [ox, oz] = [bx * Math.cos(turn) - bz * Math.sin(turn), bx * Math.sin(turn) + bz * Math.cos(turn)];
+              }
+              const ol = Math.hypot(ox, oz) || 1;
+              [ox, oz] = ol > 1e-3 ? [ox / ol, oz / ol] : [1, 0];
+              ball.set(rim.x + ox * MISS_OFF, RIM_H + MISS_LIFT, rim.z + oz * MISS_OFF);
+              this.vy = MISS_UP + MISS_UP_JIT * r;
+              const out = MISS_OUT + MISS_OUT_JIT * r;
+              this.drift.x = ox * out;
+              this.drift.z = oz * out;
+              this.spin.set(oz, 0, -ox).multiplyScalar(9);
+              if (!calm) this.sways[rimEnd].kick(-UNIT_SLAM * 0.8);
+              // (out of his hands this frame: it goes on as it was sent)
+              holder = null;
+              free = true;
             }
           }
         } else if (this.slammed) {
           free = true;
-          // (he may hang on the rim on his way down)
-          if (was && one && isDunk(one.id)) hanger = was;
+          // (he may hang on the rim on his way down: never off a miss)
+          if (dunking && b.fx === 'make') hanger = was;
         } else if (this.swatted) free = true;
         else if (b.swat !== undefined && figs[b.swat]) {
-          // blocked: it gets as far as his hand, and goes off it the way the play takes it next (or back where it came from)
+          // blocked: it gets as far as his hand, and goes off it the way the play takes it next (or back where it came from).
+          // (a dunk is taken out of the dunker's hands on its way up, not from where the move began)
+          if (dunking) {
+            const c = was!.pup.carry(TMP2);
+            this.from.set(c.x, c.y, c.z);
+          }
           const blk = figs[b.swat];
           hands.add(blk);
           const j = blk.pup.j;
           const hand = blk.pup.world(j[J.hr * 3], j[J.hr * 3 + 1] + 0.4, j[J.hr * 3 + 2], TMP);
           const w = Math.min(1, lu / 0.32);
-          ball.set(this.from.x + (hand.x - this.from.x) * w, this.from.y + (hand.y - this.from.y) * w + 1.2 * w * (1 - w), this.from.z + (hand.z - this.from.z) * w);
+          // (a stuffed dunk meets the hand straight on: no loop up over it)
+          const loop = dunking ? 0 : 1.2;
+          ball.set(this.from.x + (hand.x - this.from.x) * w, this.from.y + (hand.y - this.from.y) * w + loop * w * (1 - w), this.from.z + (hand.z - this.from.z) * w);
           this.give(null, null, ease, false);
           backspin = true;
           if (lu >= 0.32) {
@@ -1223,7 +1290,7 @@ export class CourtScene {
             let k = bi + 1;
             for (; k < sc.frames.length && !((sc.frames[k].hold ?? -1) >= 0); k++) left += sc.frames[k].dur;
             const to = sc.frames[k] ? toWorld(sc.frames[k].ball, sc.dir) : null;
-            const v = swat(hand, this.from, to && { x: sx(to), y: 0, z: sz(to) }, left / 1000 / pace, hash(this.scriptN, bi + 3), TMP2);
+            const v = swat(hand, this.from, to && { x: sx(to), y: 0, z: sz(to) }, left / 1000 / pace, hash(this.seed, bi + 3), TMP2);
             this.vy = v.y;
             this.drift.x = v.x;
             this.drift.z = v.z;
@@ -1250,7 +1317,7 @@ export class CourtScene {
               made,
               secs: play.dur / 1000 / pace,
               next: to ? { x: sx(to), y: 0, z: sz(to) } : null,
-              r: [hash(this.scriptN, bi), hash(this.scriptN, bi + 50), hash(this.scriptN, bi + 7)],
+              r: [hash(this.seed, bi), hash(this.seed, bi + 50), hash(this.seed, bi + 7)],
             });
           }
           const shot = this.flight;
@@ -1289,7 +1356,16 @@ export class CourtScene {
           }
         }
       } else if (this.swatted && !next) free = true;
-      else if (!was && next && this.refGave && b.act[figs.indexOf(next)] === 'hold' && Math.hypot(ball.x - next.pup.x, ball.z - next.pup.z) < GIVEN_FT) {
+      else if (b.handoff && was && next && was !== next) {
+        // a hand-off: from his hands into the other's as the man coming by gets to him, hand to hand, not thrown
+        const w = smooth(clamp(lu / HANDOFF_TAKE, 0, 1));
+        const c1 = was.pup.carry(TMP);
+        const [x1, y1, z1] = [c1.x, c1.y, c1.z];
+        const c2 = next.pup.carry(TMP);
+        ball.set(x1 + (c2.x - x1) * w, y1 + (c2.y - y1) * w, z1 + (c2.z - z1) * w);
+        this.give(was, next, ease);
+        if (w >= 1) holder = next;
+      } else if (!was && next && this.refGave && b.act[figs.indexOf(next)] === 'hold' && Math.hypot(ball.x - next.pup.x, ball.z - next.pup.z) < GIVEN_FT) {
         // a referee has given it to the man waiting for it before the move is out: it is in his hands, not on its way
         // from where the move began
         holder = next;
@@ -1333,7 +1409,7 @@ export class CourtScene {
           // (how far out from the rim he is going to take it: where the move has him at its end)
           const e = toWorld([...b.o, ...b.d][figs.indexOf(next)], sc.dir);
           const long = Math.hypot(sx(e) - rim.x, sz(e) - rim.z);
-          next.pup.rebound(off ? 1 - smooth(clamp((long - REB_NEAR) / (REB_FAR - REB_NEAR), 0, 1)) + (hash(this.scriptN, bi * 7 + 3) - 0.5) * REB_JIT : 1);
+          next.pup.rebound(off ? 1 - smooth(clamp((long - REB_NEAR) / (REB_FAR - REB_NEAR), 0, 1)) + (hash(this.seed, bi * 7 + 3) - 0.5) * REB_JIT : 1);
         }
         // (a ball picked out of the air, off the iron or off a block, starts the way it was going: up, if it was on its way up)
         const flying = !was && this.fromV.lengthSq() > 4;
@@ -1723,12 +1799,12 @@ export class CourtScene {
         word = sc.moment ? BIG_WORD[sc.moment] : this.slammed ? BIG_WORD.dunk : BIG_WORD.three;
         // (not always his face: now and then his bench on its feet. Never the crowd full-screen in place of the scorer)
         const side = on === null ? undefined : this.figs.get(on)?.side;
-        const r = hash(this.scriptN, 21);
+        const r = hash(this.seed, 21);
         if (side !== undefined && !sc.moment) {
           whose = side;
           if (r < 0.2 && d.benchClear(side, this.view.men, this.view.n)) cue = 'bench';
         }
-      } else if (made && line && hash(this.scriptN, 22) < 0.6) {
+      } else if (made && line && hash(this.seed, 22) < 0.6) {
         // (a free throw down: the man at the line, now and then)
         cue = 'close';
         on = this.scorer;
@@ -2064,12 +2140,15 @@ export class CourtScene {
         // (the lighter man takes more of it)
         const ma = A.body.s * A.body.s * A.body.bulk;
         const mb = B.body.s * B.body.s * B.body.bulk;
+        // (what kind of meeting it is: each takes it his own way, see Puppet.hit)
+        const clips = [A.clip, B.clip];
+        const kind: Contact = clips.some((c) => c === 'boxout' || c === 'crash') ? 'seal' : clips.includes('screen') ? 'screen' : 'bump';
         for (const [P, sign, share] of [
           [A, -1, mb / (ma + mb)],
           [B, 1, ma / (ma + mb)],
         ] as const) {
           const k = clamp(2 * share, 0.5, 1.3) * power;
-          P.hit((sign * dx) / d, (sign * dz) / d, k);
+          P.hit((sign * dx) / d, (sign * dz) / d, k, kind);
           // (his eyes shut a beat with it; a hard one, by how hard they came together, and he winces)
           const fig = this.figs.get(pids[P === A ? a : b]);
           fig?.jolt(k);
@@ -2193,6 +2272,9 @@ export class CourtScene {
       const d = a && b ? Math.hypot(a.x - b.x, a.z - b.z) : Infinity;
       if (!a || !b || m.w < 0.5 || d > FEEL_FAR || d < 1e-3) continue;
       const [ux, uz] = [(b.x - a.x) / d, (b.z - a.z) / d];
+      // (each look less into each other than the last, or the last move is undone: see unclash)
+      let was = Infinity;
+      let last = 0;
       for (let pass = 0; pass < LEG_PASSES; pass++) {
         const [ja, jb] = [jointsOf(a, JA), jointsOf(b, JB)];
         const gap = clearance(ja, a.body.s, a.body.bulk, jb, b.body.s, b.body.bulk, false);
@@ -2212,6 +2294,12 @@ export class CourtScene {
         // now, each his share. A leg through a man is never let be, however far into meeting they are)
         const deep = Math.max((TOUCH - SLACK - gap) * m.w, legs - LEG_GRAZE - SLACK);
         if (deep <= 0) break;
+        if (was - deep < CLASH_GAIN * last) {
+          a.nudge(ux * last * (1 - m.share), uz * last * (1 - m.share));
+          b.nudge(-ux * last * m.share, -uz * last * m.share);
+          break;
+        }
+        was = last = deep;
         a.nudge(-ux * deep * (1 - m.share), -uz * deep * (1 - m.share));
         b.nudge(ux * deep * m.share, uz * deep * m.share);
       }
@@ -2246,6 +2334,11 @@ export class CourtScene {
         const mb = b.body.s * b.body.s * b.body.bulk;
         // (both with the ball in their hands, a pass from one to the other: each gives his share, as two without it)
         const share = a.onRim || (pa && !pb) ? 1 : b.onRim || (pb && !pa) ? 0 : ma / (ma + mb);
+        // (each look must find them less into each other than the last: moved over a planted foot, a man's leg can trail
+        // back into the other as his body goes, and moving him on would only take it deeper. Then the last move is undone
+        // and they are left as near as they came)
+        let was = Infinity;
+        let lx = 0;
         for (let pass = 0; pass < CLASH_PASSES; pass++) {
           const [ja, jb] = [jointsOf(a, JA), jointsOf(b, JB)];
           const gap = clearance(ja, a.body.s, a.body.bulk, jb, b.body.s, b.body.bulk, false);
@@ -2263,10 +2356,17 @@ export class CourtScene {
           const limbs = a.clip === 'hug' && b.clip === 'hug' ? 0 : sunk(ja, a.body.s, a.body.bulk, jb, b.body.s, b.body.bulk, true);
           const deep = Math.max(-gap, legs - LEG_GRAZE, arms - ARM_GRAZE, limbs - LIMB_GRAZE);
           if (deep <= 0) break;
+          if (was - deep < CLASH_GAIN * lx) {
+            a.nudge(ux * lx * (1 - share), uz * lx * (1 - share));
+            b.nudge(-ux * lx * share, -uz * lx * share);
+            break;
+          }
+          was = deep;
           // (a little past touching, so the next look finds them clear and stops)
           const go = deep + SLACK / 2;
           a.nudge(-ux * go * (1 - share), -uz * go * (1 - share));
           b.nudge(ux * go * share, uz * go * share);
+          lx = go;
         }
       }
     }
@@ -2408,7 +2508,7 @@ export class CourtScene {
     const key = this.moveKey;
     const first = key !== this.reactKey;
     this.reactKey = key;
-    const r = (n: number) => hash(this.scriptN, n);
+    const r = (n: number) => hash(this.seed, n);
     const nO = sc.oPids.length;
     // a basket, once, when it's down (the slam, or the ball through the net)
     // (a free throw down: a breath let out, or a little grin; the men of his own who step in from the lane slap his hand, see choreo.ts)
@@ -2787,7 +2887,7 @@ export class CourtScene {
     if (this.tossed) return;
     this.tossed = true;
     this.vy = TOSS;
-    const a = hash(this.scriptN, 9) * Math.PI * 2;
+    const a = hash(this.seed, 9) * Math.PI * 2;
     this.drift.x = Math.cos(a) * 2;
     this.drift.z = Math.sin(a) * 2;
   }
@@ -2893,7 +2993,11 @@ export class CourtScene {
     // (more give than it has: taken at once, so a man stepping into its way is never passed through (GIVE has it bend
     // round him before it gets to him); less: let go of eased, so it doesn't snap back onto its line)
     const [tx, tz] = [ball.x - px, ball.z - pz];
-    const k = tx * tx + tz * tz > this.bend.x * this.bend.x + this.bend.z * this.bend.z + 1e-6 ? 1 : 1 - Math.exp(-ease / BEND_MS);
+    const grow = tx * tx + tz * tz > this.bend.x * this.bend.x + this.bend.z * this.bend.z + 1e-6;
+    // (but turned round to the other side of a man, across his middle: quickly, eased; it goes round him, it doesn't hop
+    // from one side of him to the other in a frame)
+    const turned = grow && tx * this.bend.x + tz * this.bend.z < 0 && Math.hypot(this.bend.x, this.bend.z) > BEND_TURN_FROM;
+    const k = grow && !turned ? 1 : 1 - Math.exp(-ease / (turned ? BEND_TURN_MS : BEND_MS));
     this.bend.x += (tx - this.bend.x) * k;
     this.bend.z += (tz - this.bend.z) * k;
     ball.x = px + this.bend.x;
@@ -3356,14 +3460,16 @@ export class CourtScene {
     if (d < 1e-3 || d > BUMP_REACH) return;
     // (a whistle's own move begins with it; in any other it comes as they come together)
     const at = b.foul !== undefined ? BUMP_AT_FOUL : BUMP_AT;
+    // (a driver's shoulder into the man set in his way; any other, a body into a body)
+    const kind: Contact = b.act[h[0]] === 'drive' || b.act[h[1]] === 'drive' ? 'drive' : 'bump';
     if (this.braceKey !== key && lu >= at - BUMP_BRACE) {
       this.braceKey = key;
-      from.pup.hit(dx / d, dz / d, 0.5 * h[2]);
+      from.pup.hit(dx / d, dz / d, 0.5 * h[2], kind);
     }
     if (this.bumpKey === key || lu < at) return;
     this.bumpKey = key;
-    to.pup.hit(dx / d, dz / d, h[2]);
-    from.pup.hit(-dx / d, -dz / d, 0.5 * h[2]);
+    to.pup.hit(dx / d, dz / d, h[2], kind);
+    from.pup.hit(-dx / d, -dz / d, 0.5 * h[2], kind);
     to.jolt(h[2]);
     from.jolt(0.5 * h[2]);
     if (h[2] >= WINCE_FROM) to.feel('wince', h[2]);
