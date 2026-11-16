@@ -4,7 +4,7 @@
 // player and its breakout, the records set, the honors, and what next season should bring. Built once
 // a season from the league as it stands that night and kept small (a few hundred bytes), so it reads
 // the same years later when the games behind it are gone.
-import type { League, Player, PlayerStats, RatingKey, TrainingFocus } from '../types';
+import type { League, Player, PlayerStats, RatingKey, TacticEdit, TrainingFocus, Txn } from '../types';
 import { seasonLabel } from '../constants';
 import { playerName } from './helpers';
 import { coachCareer, userCoach } from './coaches';
@@ -17,8 +17,8 @@ import { bestWinOf, legacyOf, type PulsePoint, type SignatureWin } from './legac
 import { fanScore } from './legacyPulse';
 import { jobSecurity } from './jobSecurity';
 import { money, ordinal, plural } from '../format';
-import { editCall, editsOf } from '../ai/tacticEdits';
-import { SINCE } from '../analysis/staffWords';
+import { CHECK_AFTER, editCall, editsOf } from '../ai/tacticEdits';
+import { AHEAD, SINCE } from '../analysis/staffWords';
 import { seasonCoachingLine } from '../analysis/debrief';
 import { FOCUS_KEYS, FOCUS_META } from './progression';
 import { needNow } from './rosterNeed';
@@ -60,15 +60,26 @@ export interface SeasonReview {
   /** Job security when it was off for the season (changes wait for opening night, so one a season). */
   jobSecurity?: false;
   /**
-   * The coach's own decisions and what came of them, a line each (see decisionLines): his trades this
-   * season and last with how each side has played since, his players' training focus against their
-   * growth, his tactical changes with the staff's verdict, and his live coaching over the season.
+   * The coach's own decisions and what came of them, a thread each (see decisionThreads): a move from
+   * why to what's still open, his players' training, his tactical changes and his live coaching.
    */
+  threads?: DecisionThread[];
+  /** Reviews from before threads: the same as a line each. */
   decisions?: string[];
 }
 
-/** Decisions the review reconnects, at most (trades first, then development, tactics, live coaching). */
-const DECISIONS_MAX = 10;
+/** One decision of the coach's, told once from why to what's still open (see decisionThreads). */
+export interface DecisionThread {
+  title: string;
+  /** Its parts in order, each said once: 'Why', 'In', 'Cost', 'Use', 'Result', 'Open' for a move; a name or a change for the rest. */
+  rows: [label: string, text: string][];
+}
+
+/** Moves the review follows, at most: trades, then signings made for a need. */
+const TRADES_MAX = 4;
+const SIGNINGS_MAX = 2;
+/** Days a focus has to have run in season before its skills are read at all. */
+const FOCUS_MIN_DAYS = 30;
 
 /** "+3.1" / "−2.0": a signed figure as the review's lines read it. */
 const signed = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}`;
@@ -88,13 +99,13 @@ function roleLine(p: Player | undefined, season: number, tid: number): string | 
 
 /**
  * A traded pick as the deal named it, whose it is (the log names it as its sender held it: his own
- * plain, "2028 1st", another's with its team), flagged when its draft is still to come ("your 2028
- * 1st, still to come", "the BOS 2029 2nd").
+ * plain, "2028 1st", another's with its team): "your 2028 1st", "the BOS 2029 2nd". `open`: its
+ * draft is still to come, so what it turns into isn't known yet.
  */
-function pickText(label: string, season: number, owner: string | null): string {
+function pickOf(label: string, season: number, owner: string | null): { text: string; open: boolean } {
   const y = Number(/^(\d{4})/.exec(label)?.[1]);
-  const named = /\(\w+\)/.test(label) ? label : owner === null ? `your ${label}` : `the ${owner} ${label}`;
-  return y && y >= season ? `${named}, still to come` : named;
+  const text = /\(\w+\)/.test(label) ? label : owner === null ? `your ${label}` : `the ${owner} ${label}`;
+  return { text, open: !!y && y >= season };
 }
 
 /** What a training focus is for, measured where it shows: the stat it should move. */
@@ -118,29 +129,33 @@ function seasonTotals(p: Player, season: number): PlayerStats | null {
 }
 
 /**
- * A training focus graded on what it trains: the focused skills' average change against the rest of
- * his game (the cost: off-focus skills grow slower than balanced work), from the snapshot before the
- * summer it ran (when that summer ran under this focus) or from opening night (set since: in-season
- * growth only, and past 25 none, so it waits for the summer), and the stat it should move against
- * last season's. OVR isn't the measure: a shooting focus can pay off with OVR flat.
+ * A training focus told as what's known about it: how long it has run (through last summer when
+ * that summer ran under it, else since the day it was set: Player.trainingSince), what the skills it
+ * trains did over that time, what the rest of his game did beside them, and the stat it should move
+ * against last season's. It doesn't say the focus beat or lost to balanced work: his other skills
+ * aren't that comparison (they grow and fade on their own curves), and the review never saw him on
+ * balanced work. A focus set too recently (FOCUS_MIN_DAYS), or in season past 25 where growth waits
+ * for the summer, says so and judges nothing. OVR isn't the measure either.
  */
-function focusLine(p: Player, season: number): string | null {
+function focusLine(league: League, p: Player, season: number): string | null {
   const keys = FOCUS_KEYS[p.training];
   if (!keys.length) return null;
   const hist = p.ratingsHistory;
   const open = hist.find((h) => h.season === season);
   const prev = hist.find((h) => h.season === season - 1);
-  // the summer before this season ran under this focus: grade it from before that summer
+  // the summer before this season ran under this focus: read it from before that summer
   const summer = open?.focus === p.training && !!prev?.r;
   const from = summer ? prev!.r : open?.r;
   if (!from) return null;
+  const since = p.trainingSince;
+  const days = !summer && since?.season === season ? Math.max(0, league.day - since.day) : null;
+  const span = summer ? 'in place since last summer' : days !== null ? `set ${plural(days, 'day')} ago` : 'set this season';
+  if (days !== null && days < FOCUS_MIN_DAYS) return `${span}: too soon to read.`;
   const others = (Object.keys(from) as RatingKey[]).filter((k) => k !== 'hgt' && !keys.includes(k));
   const avg = (ks: RatingKey[]) => ks.reduce((a, k) => a + (p.ratings[k] - from[k]), 0) / Math.max(1, ks.length);
   const on = avg(keys);
   const off = avg(others);
-  const label = FOCUS_META[p.training].label;
-  if (!summer && Math.abs(on) < 0.3 && playerAge(p, season) > 25)
-    return `${label} focus for ${playerName(p)}: set this season. At his age it works over the summer: judge it next year.`;
+  if (!summer && Math.abs(on) < 0.3 && playerAge(p, season) > 25) return `${span}. At his age it works over the summer: read it next year.`;
   const fs = FOCUS_STAT[p.training];
   const now = fs ? seasonTotals(p, season) : null;
   const then = fs ? seasonTotals(p, season - 1) : null;
@@ -148,35 +163,68 @@ function focusLine(p: Player, season: number): string | null {
   const b = fs && then ? fs.of(then) : null;
   const fmt = (x: number) => (fs!.pct ? `${Math.round(x)}%` : x.toFixed(1));
   const stat = fs && a !== null && b !== null ? ` ${fs.label} ${fmt(b)} → ${fmt(a)}.` : '';
-  const verdict = on >= 1.5 && on - off >= 1 ? 'it paid off' : on - off < 0.5 ? 'no edge over balanced work yet' : 'a modest gain';
-  return `${label} focus for ${playerName(p)}: those skills ${signed(on)}, the rest of his game ${signed(off)} ${summer ? 'since last season' : 'since opening night'}, ${verdict}.${stat}`;
+  const read = on >= 1.5 ? 'The focused skills grew' : on <= -0.5 ? 'The focused skills slipped' : 'The focused skills barely moved';
+  return `${span}: its skills ${signed(on)}, the rest of his game ${signed(off)}. ${read}; what balanced work would have done isn't known.${stat}`;
+}
+
+/** A tactical change as far as it has been read: checked on played games, forecast only, or not read. */
+function editStatus(e: TacticEdit): string {
+  const back = e.closed === 'reverted' ? ' You put it back.' : e.closed ? ' Replaced since.' : '';
+  if (e.check) return `Checked on ${plural(e.check.games, 'game')} played with it: ${SINCE[editCall(e.check)!].toLowerCase()}.${back}`;
+  // (the reading as it was made is of the games then ahead: a forecast, never told as what happened)
+  const pending = e.closed ? 'It was never checked on played games.' : `The check on played games is still to come (after ${CHECK_AFTER}).`;
+  if (e.worth) return `Forecast when you made it: ${AHEAD[editCall(e.worth)!].toLowerCase()}. ${pending}${back}`;
+  return `Not read: too few games with it in place.${back}`;
 }
 
 /**
- * The coach's decisions, reconnected with what followed (the review keeps them as words, so an old
- * season reads the same): each trade of his this season and last, pick-only deals too, with what came
- * in (role and on-court worth for him since) against what went out (the same where they went), the
- * specific picks, swaps and cash each way, picks still to come flagged; each of his players on a
- * training focus, graded on the skills and stat it trains and what the rest of his game gave up; his
- * tactical changes this season, checked or not yet (an unmeasured one says so); his live coaching.
+ * The coach's decisions as threads, each told once from why to what's still open (the review keeps
+ * them as words, so an old season reads the same). A move (each trade of his this season and last,
+ * pick-only deals too, and each signing made for a need) says why (the need the staff named, when it
+ * was made for one), what came in, what it cost (who went out and how they've played where they
+ * went, picks, swaps, cash), how he used who came in (role and on-court worth), the result (the
+ * need as forecast when the move was made, and as it stands on the rotation he ended with), and what
+ * is still open (picks whose draft is to come, either way). Then his players' training, his tactical
+ * changes (checked, forecast only, or unread: see editStatus) and his live coaching, a thread each.
  */
-export function decisionLines(league: League, season: number, tid: number): string[] {
-  const out: string[] = [];
+export function decisionThreads(league: League, season: number, tid: number): DecisionThread[] {
+  const out: DecisionThread[] = [];
   const name = (pid: number, frozen: string) => (league.players[pid] ? playerName(league.players[pid]) : frozen);
+  const needRows = (t: Txn, who: Player[]): { why?: string; result?: string } => {
+    const n = t.need;
+    if (!n) return {};
+    const label = QUALITY_META[n.id as QualityId]?.label ?? 'A need';
+    const now = tid === league.userTid && who.some((p) => p.tid === tid) ? needNow(league, n.id as QualityId) : null;
+    return {
+      why: `${label} was the need the staff named, graded ${n.from}.`,
+      result: `Forecast with the staff's minutes: ${label.toLowerCase()} ${n.from} → ${n.to}.${now ? ` Observed on the rotation you ended with: ${now.grade}.` : ''}`,
+    };
+  };
+  const roleOf = (pids: number[]) =>
+    pids
+      .map((pid) => {
+        const p = league.players[pid];
+        if (!p) return null;
+        const l = roleLine(p, season, tid);
+        return `${p.lastName}: ${l ?? (p.tid === tid ? "hasn't played" : 'gone since')}`;
+      })
+      .filter((x): x is string => !!x)
+      .join(' · ');
+  const row = (rows: DecisionThread['rows'], label: string, text: string | undefined) => {
+    if (text) rows.push([label, text]);
+  };
   // trades: this season's and last's, newest first
   const trades = (league.transactions ?? []).filter((t) => t.kind === 'trade' && t.tids.includes(tid) && (t.season === season || t.season === season - 1) && t.sides);
-  for (const t of [...trades].reverse().slice(0, 4)) {
+  for (const t of [...trades].reverse().slice(0, TRADES_MAX)) {
     const mine = t.sides!.find((x) => x.tid === tid);
     const others = t.sides!.filter((x) => x.tid !== tid);
     if (!mine || !others.length) continue;
+    const inPids = others.flatMap((o) => o.players.map((x) => x.pid));
+    const inPicks = others.flatMap((o) => o.picks.map((x) => pickOf(x, season, league.teams[o.tid].abbrev)));
+    const outPicks = mine.picks.map((x) => pickOf(x, season, null));
     const got = [
-      ...others.flatMap((o) =>
-        o.players.map((x) => {
-          const l = roleLine(league.players[x.pid], season, tid);
-          return `${name(x.pid, x.name)} (${l ? `${l} for you` : league.players[x.pid]?.tid === tid ? "hasn't played" : 'gone since'})`;
-        }),
-      ),
-      ...others.flatMap((o) => o.picks.map((x) => pickText(x, season, league.teams[o.tid].abbrev))),
+      ...others.flatMap((o) => o.players.map((x) => name(x.pid, x.name))),
+      ...inPicks.map((x) => x.text),
       ...others.flatMap((o) => (o.swaps ?? []).map((y) => `the right to swap ${y} firsts`)),
       ...(others.some((o) => o.cash) ? [`${money(others.reduce((a, o) => a + (o.cash ?? 0), 0))} cash`] : []),
     ];
@@ -187,51 +235,58 @@ export function decisionLines(league: League, season: number, tid: number): stri
         const l = p ? roleLine(p, season, to) : null;
         return `${name(x.pid, x.name)}${l ? ` (${l} for ${league.teams[to].abbrev})` : ''}`;
       }),
-      ...mine.picks.map((x) => pickText(x, season, null)),
+      ...outPicks.map((x) => x.text),
       ...(mine.swaps ?? []).map((y) => `the right to swap ${y} firsts`),
       ...(mine.cash ? [`${money(mine.cash)} cash`] : []),
     ];
-    const when = t.season === season ? '' : ` (${seasonLabel(t.season)})`;
-    if (got.length || gave.length) out.push(`Trade${when}: ${got.join(', ') || 'nothing'} for ${gave.join(', ') || 'nothing'}.`);
+    if (!got.length && !gave.length) continue;
+    const who = inPids.map((pid) => league.players[pid]).filter((p): p is Player => !!p);
+    const need = needRows(t, who);
+    const open = [...inPicks.filter((x) => x.open).map((x) => `${x.text} (coming to you)`), ...outPicks.filter((x) => x.open).map((x) => `${x.text} (owed)`)];
+    const rows: DecisionThread['rows'] = [];
+    row(rows, 'Why', need.why);
+    row(rows, 'In', got.join(', ') || 'nothing');
+    row(rows, 'Cost', gave.join(', ') || 'nothing');
+    row(rows, 'Use', roleOf(inPids) || undefined);
+    row(rows, 'Result', need.result);
+    row(rows, 'Open', open.length ? `Draft still to come: ${open.join(', ')}.` : undefined);
+    out.push({ title: `Trade with ${others.map((o) => league.teams[o.tid].abbrev).join(', ')}${t.season === season ? '' : ` (${seasonLabel(t.season)})`}`, rows });
   }
-  // needs: the moves he made for one, the need graded again now (the rotation he ended with)
-  const needed = (league.transactions ?? []).filter((t) => t.season === season && t.need && t.tids.includes(tid)).slice(-2);
-  for (const t of needed) {
-    const n = t.need!;
-    const label = QUALITY_META[n.id as QualityId]?.label ?? 'A need';
-    const pids = t.kind === 'trade' ? (t.sides ?? []).filter((x) => x.tid !== tid).flatMap((x) => x.players.map((y) => y.pid)) : t.pid !== undefined ? [t.pid] : [];
-    const who = pids.map((pid) => league.players[pid]).filter((p): p is Player => !!p);
-    const names = who.map((p) => playerName(p)).join(' and ') || t.name || 'the move';
-    const now = tid === league.userTid ? needNow(league, n.id as QualityId) : null;
-    const role = who.map((p) => roleLine(p, season, tid)).find(Boolean);
-    out.push(
-      `${label}, your need: ${n.from} → ${n.to} when ${names} came in${now ? `, ${now.grade} by the season's end` : ''}.${role ? ` ${who[0].lastName}: ${role}.` : who.length && who[0].tid === tid ? ` ${who[0].lastName} hardly played.` : ''}`,
-    );
+  // signings made for a need
+  const signings = (league.transactions ?? [])
+    .filter((t) => t.kind !== 'trade' && t.season === season && t.need && t.tids.includes(tid) && t.pid !== undefined)
+    .slice(-SIGNINGS_MAX);
+  for (const t of signings) {
+    const p = league.players[t.pid!];
+    const need = needRows(t, p ? [p] : []);
+    const rows: DecisionThread['rows'] = [];
+    row(rows, 'Why', need.why);
+    row(rows, 'Cost', t.amount ? `${money(t.amount)} this season${t.years ? `, ${plural(t.years, 'year')}` : ''}` : undefined);
+    row(rows, 'Use', roleOf([t.pid!]) || undefined);
+    row(rows, 'Result', need.result);
+    out.push({ title: `Signed ${name(t.pid!, t.name ?? 'a player')}`, rows });
   }
-  // development: his players on a training focus, graded on what it trains, best players first
+  // development: his players on a training focus, best players first
   const dev = Object.values(league.players)
     .filter((p) => p.tid === tid && p.training && p.training !== 'balanced')
     .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
-    .map((p) => focusLine(p, season))
-    .filter((x): x is string => !!x)
+    .map((p): [string, string] | null => {
+      const l = focusLine(league, p, season);
+      return l ? [`${playerName(p)}, ${FOCUS_META[p.training].label.toLowerCase()}`, l.replace(/^./, (c) => c.toUpperCase())] : null;
+    })
+    .filter((x): x is [string, string] => !!x)
     .slice(0, 3);
-  out.push(...dev);
-  // tactics: his changes this season, the clearest first, then ones still unmeasured
+  if (dev.length) out.push({ title: 'Training focus', rows: dev });
+  // tactics: his changes this season, checked ones first, then forecasts, then unread
   const edits = editsOf(league)
     .filter((e) => e.season === season)
-    .map((e) => ({ e, w: e.check ?? e.worth }))
-    .map((x) => ({ ...x, call: x.w ? editCall(x.w) : undefined }))
-    .sort((a, b) => Number(!!b.call) - Number(!!a.call) || Number(b.call !== 'even') - Number(a.call !== 'even') || b.e.day - a.e.day)
+    .sort((a, b) => Number(!!b.check) - Number(!!a.check) || Number(!!b.worth) - Number(!!a.worth) || b.day - a.day)
     .slice(0, 3);
-  for (const { e, w, call } of edits) {
-    const what = `${e.what.split(' · ')[0]}${e.what.includes(' · ') ? ' and more' : ''}`;
-    const back = e.closed === 'reverted' ? '. You put it back' : e.closed ? '. Replaced since' : '';
-    out.push(call && w ? `${what}: ${SINCE[call].toLowerCase()}, over ${plural(w.games, 'game')}${back}.` : `${what}: not measured, too few games with it in place${back}.`);
-  }
+  if (edits.length) out.push({ title: 'Tactical changes', rows: edits.map((e) => [`${e.what.split(' · ')[0]}${e.what.includes(' · ') ? ' and more' : ''}`, editStatus(e)]) });
   // live coaching over the season
   const live = seasonCoachingLine(league, season, tid);
-  if (live) out.push(`${live}.`);
-  return out.slice(0, DECISIONS_MAX);
+  if (live) out.push({ title: 'Live coaching', rows: [['Measured', `${live}.`]] });
+  return out;
 }
 
 /** A player's line for a season with one team, regular season. */
@@ -307,7 +362,7 @@ export function buildSeasonReview(league: League): SeasonReview | null {
   }
   const s = legacyOf(league);
   const pulse = s.pulse && s.pulse.season === season && s.pulse.tid === tid ? s.pulse.pts : undefined;
-  const decisions = decisionLines(league, season, tid);
+  const threads = decisionThreads(league, season, tid);
   return {
     season,
     tid,
@@ -340,7 +395,7 @@ export function buildSeasonReview(league: League): SeasonReview | null {
     ...(next ? { next } : {}),
     ...(league.fired ? { fired: true as const } : {}),
     ...(league.settings.jobSecurity ? {} : { jobSecurity: false as const }),
-    ...(decisions.length ? { decisions } : {}),
+    ...(threads.length ? { threads } : {}),
   };
 }
 

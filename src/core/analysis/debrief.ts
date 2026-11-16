@@ -14,8 +14,8 @@ import { worthCall } from '../ai/counterWorth';
 import { pick } from './quotes';
 import { impactCounter } from '../ai/advisor';
 import { TACTIC_LEVELS, applyPatch, cloneTactics, levelName, tacticsDiff, emptyPatch } from '../sim/tactics';
-import { playbookLabel } from '../sim/playbooks';
 import { CALL_WORTH, callCosts, callKey, callWorth, worthLine } from './callWorth';
+import { CHECK_AFTER } from '../ai/tacticEdits';
 
 export interface DebriefAdvice {
   id: string;
@@ -124,20 +124,21 @@ export interface FirstLesson {
 /**
  * The coach's first game told as a decision: what he went in with (his playbook, his own or the
  * staff's, and his plan against them), how it came out (the result and what decided it, luck named
- * as luck, the plan's counters against their target), and the one sensible next step: the staff's
- * fix below when there is one, a counter for the next opponent when he made no plan, else patience.
+ * as luck, the plan's counters against their target), and the one next step he can take now: the
+ * staff's fix below when there is one, else a plan for the next opponent (the one he made is used up).
+ * The playbook named is the one that game was played with (GameResult.setup), not today's.
  */
 function firstLesson(league: League, res: GameResult, side: 0 | 1, decided: Factor[], plan: PlanGrade[], advice: DebriefAdvice[]): FirstLesson {
-  const me = league.userTid;
-  const t = league.teams[me].tactics;
+  // (the setup that night, as the result kept it: today's playbook isn't what he went in with)
+  const used = res.setup;
   const oppTid = side === 0 ? res.away.tid : res.home.tid;
   const opp = league.teams[oppTid];
   const mine = side === 0 ? res.home.pts : res.away.pts;
   const theirs = side === 0 ? res.away.pts : res.home.pts;
-  const whose = t.manual ? 'your own' : "your staff's";
+  const book = used ? `${used.own ? 'your own' : "your staff's"} playbook (${used.playbook})` : 'your playbook';
   const planText = plan.length
-    ? `You went in with ${whose} playbook (${playbookLabel(t)}) and a plan against the ${opp.name}: ${plan.map((g) => g.label).join(', ')}.`
-    : `You went in with ${whose} playbook (${playbookLabel(t)}) and no plan of your own against the ${opp.name}.`;
+    ? `You went in with ${book} and a plan against the ${opp.name}: ${plan.map((g) => g.label).join(', ')}.`
+    : `You went in with ${book} and no plan of your own against the ${opp.name}.`;
   const top = decided[0];
   const why = top ? ` What decided it: ${top.title.replace(/\.$/, '').replace(/^./, (c) => c.toLowerCase())}${top.luck ? ', which was mostly shooting luck' : ''}.` : '';
   const showed = plan.filter((g) => g.night === 'better').map((g) => g.label);
@@ -155,7 +156,7 @@ function firstLesson(league: League, res: GameResult, side: 0 | 1, decided: Fact
     return {
       plan: planText,
       outcome,
-      next: `Try the staff's fix below, ${fix.label}, for a few games, then check Tactics → Analysis to see whether it helped.`,
+      next: `Tap the staff's fix below, ${fix.label}, and apply it for every game. After ${CHECK_AFTER} games, Tactics → Analysis says whether it helped.`,
     };
   if (!plan.length)
     return {
@@ -165,7 +166,14 @@ function firstLesson(league: League, res: GameResult, side: 0 | 1, decided: Fact
       to: '/preview',
       toLabel: 'Next opponent',
     };
-  return { plan: planText, outcome, next: 'Keep your plan for a few games before you judge it: one night is noisy.' };
+  // (a plan against an opponent is for that game and is used up: nothing to "keep")
+  return {
+    plan: planText,
+    outcome,
+    next: `That plan was for the ${opp.name} and is used up. Make one for your next opponent on its preview: a plan shows over several games.`,
+    to: '/preview',
+    toLabel: 'Next opponent',
+  };
 }
 
 /**
@@ -209,7 +217,8 @@ const HOME = new Set(TACTIC_LEVELS.help.slice(0, 2));
  */
 export function stayedHome(league: League, res: GameResult, side: 0 | 1): { most: boolean; from?: string } | null {
   const me = side === 0 ? res.home.tid : res.away.tid;
-  let home = HOME.has(levelName('help', league.teams[me]?.tactics.defense.help ?? 50));
+  // (the help he tipped off with, as the result kept it; an older result has only today's)
+  let home = HOME.has(levelName('help', res.setup?.help ?? league.teams[me]?.tactics.defense.help ?? 50));
   for (const u of res.plan ?? []) {
     if (/stay home|never help/i.test(u.label)) home = true;
     else if (/pack the paint|wall off/i.test(u.label)) home = false;

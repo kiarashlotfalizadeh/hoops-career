@@ -21,6 +21,7 @@ import { recapFacts } from '../analysis/quotes';
 import { recordGame, recordNews } from './records';
 import { numberTeam } from './jerseys';
 import { plural } from '../format';
+import { playbookLabel } from '../sim/playbooks';
 import { userYouth } from './youthLean';
 
 export function wearPerf(p: Player) {
@@ -557,6 +558,7 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
     // and the game plan's counters it was played with (used up just below), for the report's grade of the plan
     const plan = planFor(league, g.home === league.userTid ? g.away : g.home, g);
     const base = league.teams[league.userTid].tactics;
+    res.setup = { playbook: playbookLabel(base), own: !!base.manual, help: base.defense.help };
     if (plan?.items.length) res.plan = plan.items.map((it) => ({ label: it.label, ...planAim(base, it.patch), ...(it.pts !== undefined ? { pts: it.pts } : {}) }));
     // and what its quotes read that the save doesn't keep for good (who got hurt, the winner's low point)
     Object.assign(

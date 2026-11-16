@@ -142,16 +142,33 @@ export function SeasonReviewView({ league, season }: { league: League; season: n
         </Section>
       )}
 
-      {r.decisions && r.decisions.length > 0 && (
+      {r.threads && r.threads.length > 0 ? (
         <Section title="Your calls, and what came of them">
-          <div className="card flush list fo-rv-in" style={step()}>
-            {r.decisions.map((d) => (
-              <div key={d} className="listrow fo-rv-honor">
-                <span className="grow">{d}</span>
-              </div>
-            ))}
-          </div>
+          {r.threads.map((t) => (
+            <div key={t.title} className="card flush list fo-rv-in fo-rv-thread" style={step()}>
+              <div className="list-divider">{t.title}</div>
+              {t.rows.map(([k, v]) => (
+                <div key={k} className="listrow fo-rv-honor fo-rv-trow">
+                  <span className="over fo-rv-tk">{k}</span>
+                  <span className="grow">{v}</span>
+                </div>
+              ))}
+            </div>
+          ))}
         </Section>
+      ) : (
+        r.decisions &&
+        r.decisions.length > 0 && (
+          <Section title="Your calls, and what came of them">
+            <div className="card flush list fo-rv-in" style={step()}>
+              {r.decisions.map((d) => (
+                <div key={d} className="listrow fo-rv-honor">
+                  <span className="grow">{d}</span>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )
       )}
 
       {(r.honors.length > 0 || r.records.length > 0) && (

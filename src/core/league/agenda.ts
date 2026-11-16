@@ -499,7 +499,7 @@ export function agenda(league: League): AgendaItem[] {
         kind: 'deploy',
         required: false,
         title: `${playerName(p)} isn't in your rotation`,
-        line: `He came in for ${label.toLowerCase()}. You run the rotation: give him minutes.`,
+        line: `He came in for ${label.toLowerCase()}. He has no minutes in your rotation: place him, or leave him out.`,
         tone: 'warn',
         to: '/team/rotation',
         pids: [p.pid],

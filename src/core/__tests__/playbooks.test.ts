@@ -2,7 +2,7 @@
 // moved, and the list of what changed between two sets of tactics in the Tactics screen's words.
 import { describe, expect, it } from 'vitest';
 import { testLeague } from '../../state/__tests__/fixtures';
-import { changeText, defenseLabel, offenseLabel, playbookLabel, presetMatches, tacticsChanges } from '../sim/playbooks';
+import { changeSay, changeText, defenseLabel, offenseLabel, playbookLabel, presetMatches, tacticsChanges } from '../sim/playbooks';
 import { DEF_PRESETS, OFF_PRESETS, applyDefPreset, applyOffPreset, cloneTactics } from '../sim/tactics';
 import { teamPlayers } from '../league/helpers';
 import type { League } from '../types';
@@ -43,6 +43,14 @@ describe('playbook labels and changes', () => {
         ]),
       );
       expect(lines).toHaveLength(5);
+      // a setting moved inside the same named level is told in basketball words, never as raw figures
+      {
+        const fine = cloneTactics(cur);
+        fine.offense.transition = cur.offense.transition - 1;
+        const [c] = tacticsChanges(cur, fine, names);
+        expect(changeText(c)).toBe('Push a little less after stops');
+        expect(changeSay(tacticsChanges(cur, t, names)[0])).toBe('Play faster (Up-tempo)');
+      }
       expect(tacticsChanges(t, cloneTactics(t))).toEqual([]);
       // a player the names don't know has left: his settings went with him, no line with an empty name
       expect(tacticsChanges(cur, t, (pid) => (pid === a ? '' : `#${pid}`)).map(changeText)).not.toEqual(expect.arrayContaining([expect.stringMatching(/role/)]));

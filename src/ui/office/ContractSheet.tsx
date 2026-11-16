@@ -2,7 +2,7 @@
 // ask up top, your offer, his counter, his patience; see TalkPanel), or for a top free agent in the
 // summer an offer weighed against other teams' (BidPanel). Its extension mode (the Office, the
 // player page and Re-sign) is in ExtendBody.tsx.
-import { fills, hurts, movedNeedText, needCache, needMove, teamNeed } from '../../core/league/rosterNeed';
+import { fills, hurts, movedNeedText, needCache, needLead, needMinutes, needMove, teamNeed } from '../../core/league/rosterNeed';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Ban, Scale, ShieldCheck, TriangleAlert } from 'lucide-react';
@@ -112,7 +112,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
     if (mode !== 'fa') return null;
     const cache = needCache(league);
     const n = teamNeed(league, cache);
-    return n ? needMove(league, n.id, [p.pid], [], cache) : null;
+    return n ? { ...needMove(league, n.id, [p.pid], [], cache), by: n.by, active: n.staff ? n.grade : undefined } : null;
   }, [league, p.pid, mode]);
   // his ask on his own terms (up after re-sign talks broke down)
   const ask = bidding ? askingContract(league, p, tid) : talkAsk(league, p, kind);
@@ -449,12 +449,13 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
 
       {need && (
         <div className={`tiny ${fills(need) ? 'good' : hurts(need) ? 'warn' : 'dim'}`}>
-          Your need, {need.label.toLowerCase()}:{' '}
+          {needLead(need)}, {need.label.toLowerCase()}:{' '}
           {fills(need)
-            ? `${need.from} → ${need.to} with him.`
+            ? `${need.from} → ${need.to} with him${needMinutes(need)} (staff's minutes).`
             : hurts(need)
-              ? `${need.from} → ${need.to} with him: he'd make it worse.`
-              : `still ${need.to} with him: he doesn't fill it.`}
+              ? `${need.from} → ${need.to} with him${needMinutes(need)} (staff's minutes): he'd make it worse.`
+              : `still ${need.to} with him${needMinutes(need)} (staff's minutes): he doesn't fill it.`}
+          {need.active ? ` With your rotation now: ${need.active}.` : ''}
         </div>
       )}
 

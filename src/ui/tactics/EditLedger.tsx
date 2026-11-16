@@ -1,12 +1,12 @@
 // "Since you changed it" (Tactics → Analysis → Report) and the bar the staff's measuring takes on
 // Tactics after Done. A change shows what it moved and what the staff makes of it in words: as it was
-// made, then again once CHECK_AFTER games have been played ("Seems to help", "Seems to hurt" with a tap
-// to put it back, or "Too close to call"). The reading behind the words stays under the hood (paired
+// made (a forecast on the games ahead: "Should help", "Could hurt"), then again once CHECK_AFTER games
+// have been played (the check: "Seems to help", "Seems to hurt" with a tap to put it back, or "Too close to call"). The reading behind the words stays under the hood (paired
 // games with and without the change, see core/ai/tacticEdits.ts).
 import { X } from 'lucide-react';
 import type { League, TacticEdit } from '../../core/types';
 import { CHECK_AFTER, editCall, editsOf, playedSince } from '../../core/ai/tacticEdits';
-import { SINCE, leanTone } from '../../core/analysis/staffWords';
+import { AHEAD, SINCE, leanTone } from '../../core/analysis/staffWords';
 import { plural } from '../../core/format';
 import { fmtDate } from '../../core/league/helpers';
 import { Help, Section, Tag } from '../components/ui';
@@ -38,7 +38,8 @@ function metaOf(e: TacticEdit, league: League, measuring: boolean): string {
   if (e.closed === 'reverted') return `${when} · put back${e.closedDay === undefined ? '' : ` ${fmtDate(e.season, e.closedDay)}`}`;
   if (e.check) return `${when} · over ${plural(e.check.games, 'game')}`;
   const left = Math.max(0, CHECK_AFTER - playedSince(league, e).length);
-  return e.closed ? when : `${when} · check in ${plural(left, 'game')}`;
+  // (read on the games then ahead: a forecast until the check on played games)
+  return e.closed ? `${when} · forecast only, never checked` : `${when} · forecast · check in ${plural(left, 'game')}`;
 }
 
 function EditRow({ e, league, measuring }: { e: TacticEdit; league: League; measuring: boolean }) {
@@ -51,7 +52,7 @@ function EditRow({ e, league, measuring }: { e: TacticEdit; league: League; meas
         <span className="lr-name ellipsis">{e.what}</span>
         <span className="lr-meta tx-edmeta">{metaOf(e, league, measuring)}</span>
       </span>
-      {call && !measuring && <Tag tone={leanTone(call) || undefined}>{SINCE[call]}</Tag>}
+      {call && !measuring && <Tag tone={leanTone(call) || undefined}>{e.check ? SINCE[call] : AHEAD[call]}</Tag>}
       {back && (
         <button className="btn xs" onClick={() => putBackEdit(e)}>
           Put back
@@ -74,7 +75,7 @@ export function SinceYouChanged({ league }: { league: League }) {
       title="Since you changed it"
       right={
         <Help title="Since you changed it">
-          <p>What the staff makes of each change you made. They look again after {CHECK_AFTER} games.</p>
+          <p>First a forecast on your next games. After {CHECK_AFTER} played games, a check on what happened.</p>
         </Help>
       }
     >

@@ -17,7 +17,7 @@
 // (src/ui/tactics/editWatch.ts).
 
 import type { League, Player, Rotation, ScheduledGame, Tactics, TacticEdit } from '../types';
-import { tacticsChanges } from '../sim/playbooks';
+import { changeColon, tacticsChanges } from '../sim/playbooks';
 import { addInbox, playerName, teamPlayers } from '../league/helpers';
 import { plural } from '../format';
 import { WORTH_MIN, poolWorth, worthCall, type CounterWorth, type LeagueChange } from './counterWorth';
@@ -188,7 +188,7 @@ function rotationWords(a: Rotation, b: Rotation, nameOf: (pid: number) => string
 
 /** "Ball-screen coverage: Drop → Ice · Starting: Okongwu for Capela": what a change moved, as the screens name it. */
 export function editWords(a: TeamPart, b: TeamPart, nameOf: (pid: number) => string): string {
-  const t = tacticsChanges(a.tactics, b.tactics, nameOf).map((c) => (c.from || c.to ? `${c.label}: ${c.from} → ${c.to}` : `${c.label} changes`));
+  const t = tacticsChanges(a.tactics, b.tactics, nameOf).map((c) => (c.from || c.to ? changeColon(c) : `${c.label} changes`));
   const r = rotationWords(a.rotation, b.rotation, nameOf);
   const all = [...t, ...r];
   if (!all.length) return 'Your tactics';
@@ -443,17 +443,21 @@ export function revertEdit(league: League, e: TacticEdit): boolean {
 
 // ---------------------------------------------------------------- the lines
 
-/** The staff's line on a change as it's made, in words (the reading stays under the hood). */
+/**
+ * The staff's line on a change as it's made, in words (the reading stays under the hood). It's read
+ * on the games ahead, so it's said as a forecast; what happened is the check's to say (checkLine).
+ */
 export function madeLine(e: TacticEdit): string {
   const w = e.worth;
   if (!w) return 'The staff is watching your change.';
   const call = worthCall(w);
-  // (even isn't "nothing happened": the change still moves how the team plays, the results just can't tell it apart yet)
+  const later = `The staff checks it on real games after ${CHECK_AFTER}.`;
+  // (even isn't "nothing happened": the change still moves how the team plays, the forecast just can't tell it apart)
   return call === 'gain'
-    ? 'Your change seems to help.'
+    ? `Forecast: your change should help. ${later}`
     : call === 'cost'
-      ? 'Your change seems to hurt.'
-      : `No clear swing in results from your change yet. It's a style call: the staff looks again after ${CHECK_AFTER} games.`;
+      ? `Forecast: your change could hurt. ${later}`
+      : `Forecast: no clear swing from your change. It's a style call. ${later}`;
 }
 
 /** The check's verdict, in words, on the games since. */

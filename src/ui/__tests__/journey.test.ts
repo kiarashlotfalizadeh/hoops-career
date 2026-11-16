@@ -9,7 +9,7 @@ import { createLeague, defaultSettings } from '../../core/league/create';
 import { curTeamSeason, standardRoster, teamPlayers } from '../../core/league/helpers';
 import { CAP } from '../../core/constants';
 import { flowActions, liveScoreText, simStart, simSummary } from '../flow';
-import { BIG_SIGNING_OVR, WAIT_DAYS, currentMoments, newMoments, pickMoments, scheduleMoments } from '../moments';
+import { BIG_SIGNING_OVR, WAIT_DAYS, currentMoments, momentFits, newMoments, pickMoments, scheduleMoments } from '../moments';
 import { emptyBook } from '../../core/league/records';
 import { currentGoals, setOwnerGoals } from '../../core/league/ownerGoals';
 import { ownerEvaluation } from '../../core/league/owner';
@@ -287,8 +287,20 @@ describe('the journey between screens', () => {
       expect(one('cup')[0]).toMatchObject({ title: 'Into the knockouts' });
       // (the career mark's and the farewell's news items are theirs, not a front-page story's)
       expect(one('story')).toEqual([]);
-      // knocked out of the Cup: that's a moment too
+      // told as the bracket stands: the quarterfinal still to play is in the future tense
+      expect(one('cup')[0].sub).toMatch(/The quarterfinal is at home to the .+ on .+: win twice more and it's Las Vegas\.$/);
+      // while he edits his tactics a celebration waits; the job's own doesn't
+      expect(momentFits(one('cup')[0], '/team/tactics', '/')).toBe(false);
+      expect(momentFits({ ...one('cup')[0], kind: 'fired' }, '/team/tactics', '/')).toBe(true);
+      // knocked out of the Cup: that's a moment too, and "into the knockouts" is old news that never shows
       l.cup.bracket[0] = { ...l.cup.bracket[0], winner: 3, highPts: 99, lowPts: 104 };
+      {
+        const ko = currentMoments(l).find((x) => x.key === `cup-ko-${l.season}`)!;
+        expect(ko.stale).toBe(true);
+        expect(ko.sub).not.toMatch(/The quarterfinal is/);
+        expect(newMoments([ko], new Set())).toEqual([]);
+        expect(scheduleMoments([ko], [], [], { season: l.season, day: 42 }).show).toEqual([]);
+      }
       expect(currentMoments(l).find((x) => x.key === `cup-out-${l.season}`)).toMatchObject({
         title: 'Out of the Cup',
         sub: `104-99 to the ${l.teams[3].name} in the quarterfinal.`,

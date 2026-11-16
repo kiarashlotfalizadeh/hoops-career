@@ -11,7 +11,7 @@ import { DEC_15, DUMP_PER_FIRST, FIRST_VALUE, askingContract, marketSalary, rele
 import { capPayroll } from '../league/freeAgency';
 import { changesStarters, tradeImpact } from '../league/tradeImpact';
 import { ensureRotation } from '../league/games';
-import { decisionLines } from '../league/legacyReview';
+import { decisionThreads } from '../league/legacyReview';
 import {
   CASH_PCT,
   PROTECTIONS,
@@ -912,8 +912,16 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
     const dp = own(l, U, l.season + 1);
     const theirs = own(l, AI, l.season + 2, 2);
     executeTrade(l, deal({ dpids: [dp.dpid], cash: 500 }, { dpids: [theirs.dpid] }));
-    const lines = decisionLines(l, l.season, U);
-    expect(lines[0]).toBe(`Trade: the ${l.teams[AI].abbrev} ${theirs.season} 2nd, still to come for your ${dp.season} 1st, still to come, $0.5M cash.`);
+    const threads = decisionThreads(l, l.season, U);
+    // (one thread a move, each part said once: what came in, what it cost, and the picks still open)
+    expect(threads[0]).toEqual({
+      title: `Trade with ${l.teams[AI].abbrev}`,
+      rows: [
+        ['In', `the ${l.teams[AI].abbrev} ${theirs.season} 2nd`],
+        ['Cost', `your ${dp.season} 1st, $0.5M cash`],
+        ['Open', `Draft still to come: the ${l.teams[AI].abbrev} ${theirs.season} 2nd (coming to you), your ${dp.season} 1st (owed).`],
+      ],
+    });
     // a training focus is graded on the skills it trains and what the rest of his game gave up, not his OVR
     const p = [...standardRoster(l, U)].sort((a, b) => b.ovr - a.ovr)[0];
     p.training = 'shooting';
@@ -922,9 +930,34 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
       { season: l.season - 1, ovr: p.ovr, pot: p.pot, r: { ...r0, tp: r0.tp - 3, mid: r0.mid - 3, ft: r0.ft - 3 } },
       { season: l.season, ovr: p.ovr, pot: p.pot, r: r0, focus: 'shooting' },
     ];
-    expect(decisionLines(l, l.season, U)).toContain(
-      `Shooting focus for ${p.firstName} ${p.lastName}: those skills +3.0, the rest of his game +0.0 since last season, it paid off.`,
-    );
+    // (how long it ran, what its skills did, and no claim against balanced work it never saw)
+    const training = () => decisionThreads(l, l.season, U).find((t) => t.title === 'Training focus')!;
+    expect(training().rows[0]).toEqual([
+      `${p.firstName} ${p.lastName}, shooting`,
+      "In place since last summer: its skills +3.0, the rest of his game +0.0. The focused skills grew; what balanced work would have done isn't known.",
+    ]);
+    // a focus set days ago isn't read at all
+    p.ratingsHistory[1] = { ...p.ratingsHistory[1], focus: 'balanced' };
+    p.trainingSince = { season: l.season, day: l.day };
+    expect(training().rows[0][1]).toBe('Set 0 days ago: too soon to read.');
+    // a tactical change read only as it was made is a forecast, never told as what happened; a check is
+    l.tacticEdits = [
+      { id: 1, season: l.season, day: 1, what: 'Tempo: Balanced → Up-tempo', diff: [], ahead: [], worth: { pts: 2, raw: 2, se: 0.5, games: 5 } },
+      {
+        id: 2,
+        season: l.season,
+        day: 2,
+        what: 'Help defense: Balanced → Stay home',
+        diff: [],
+        ahead: [],
+        worth: { pts: 2, raw: 2, se: 0.5, games: 5 },
+        check: { pts: -2, raw: -2, se: 0.5, games: 10, day: 30 },
+      },
+    ];
+    expect(decisionThreads(l, l.season, U).find((t) => t.title === 'Tactical changes')!.rows).toEqual([
+      ['Help defense: Balanced → Stay home', 'Checked on 10 games played with it: seems to hurt.'],
+      ['Tempo: Balanced → Up-tempo', 'Forecast when you made it: should help. The check on played games is still to come (after 10).'],
+    ]);
   }
 
   // protects your own first as it goes: valued lower by them, set on the pick, named in labels, the news and the log

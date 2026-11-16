@@ -13,7 +13,7 @@ import { CAP_FOR, curTeamSeason, fmtDate, playerName, revenueScale, standardRost
 import { releasePlayer } from '../league/contracts';
 import { executeTrade } from '../league/trades';
 import { ensureRotation } from '../league/games';
-import { fills, movedNeedText, needCache, needMove, teamNeed } from '../league/rosterNeed';
+import { fills, movedNeedText, needCache, needMove, needOptions, teamNeed } from '../league/rosterNeed';
 import { CAP } from '../constants';
 import {
   ULTIMATUM_ODDS,
@@ -130,12 +130,25 @@ describe('the agenda', () => {
         .slice(0, 60)
         .find((p) => fills(needMove(l, need.id, [p.pid], [], cache)))!;
       expect(filler).toBeDefined();
+      // it's the staff's opinion, read with the staff's minutes: the allocation a candidate is graded with is said
+      expect(need.by).toBe('staff');
+      expect(needMove(l, need.id, [filler.pid], [], cache).minutes).toBeGreaterThan(0);
+      // the coach can make another weakness his priority, or accept his weaknesses as trade-offs
+      {
+        const mine = structuredClone(l);
+        const options = needOptions(mine);
+        expect(options[0].id).toBe(need.id);
+        mine.needChoice = 'none';
+        expect(teamNeed(mine)).toBeNull();
+        mine.needChoice = options.at(-1)!.id;
+        expect(teamNeed(mine)).toMatchObject({ id: options.at(-1)!.id, by: 'you' });
+      }
       l.teams[me].rotation.manual = true;
       executeTrade(l, { a: { tid: me, pids: [], dpids: [] }, b: { tid: filler.tid, pids: [filler.pid], dpids: [] } });
       ensureRotation(l, me);
       const txn = l.transactions!.at(-1)!;
       expect(txn.need).toMatchObject({ id: need.id });
-      expect(movedNeedText(l)).toMatch(/^ It fills your need: .+ [A-F]\+? → [A-F]\+?\.$/);
+      expect(movedNeedText(l)).toMatch(/^ It fills the staff's read of your need: .+ [A-F]\+? → [A-F]\+?\.$/);
       const row = agenda(l).find((i) => i.id === `deploy:${filler.pid}`)!;
       expect(row).toMatchObject({ kind: 'deploy', to: '/team/rotation', title: `${playerName(filler)} isn't in your rotation` });
       l.teams[me].rotation.minutes[filler.pid] = 20;

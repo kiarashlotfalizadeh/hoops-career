@@ -9,7 +9,7 @@ import { ChevronRight } from 'lucide-react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { edit } from '../../state/actions';
 import { DEF_PRESETS, OFF_PRESETS, applyDefPreset, applyOffPreset, type DefPreset, type OffPreset } from '../../core/sim/tactics';
-import { changeText, presetMatches, tacticsChanges } from '../../core/sim/playbooks';
+import { changeSay, presetMatches, tacticsChanges } from '../../core/sim/playbooks';
 import { QUALITY_META, gradeChanges, systemReport } from '../../core/analysis/system';
 import { CHANGE_UPS, baseDefenses, defPresetFit, defPresetTerms, fitRoster, offPresetFit, offPresetTerms, rosterProfile, staffPick } from '../../core/ai/coachAI';
 import { inSeason, rosterSorted } from '../../core/league/helpers';
@@ -149,7 +149,7 @@ function PresetDiff({ kind, id, curName, similar }: { kind: 'off' | 'def'; id: s
     const style = tacticsChanges(t, next)
       .filter((c) => !/playbook|identity/i.test(c.label))
       .slice(0, STYLE_MAX)
-      .map(changeText);
+      .map(changeSay);
     return { grades, style };
   }, [league, kind, id]);
   const better = diff.grades.filter((g) => g.up);

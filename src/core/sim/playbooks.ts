@@ -63,14 +63,54 @@ export function playbookLabel(t: { offense: object; defense: object; offPreset: 
 /** The parts of Tactics compared on their own (or not at all). */
 const KNOWN = ['offense', 'defense', 'manage', 'offPreset', 'defPreset', 'manual', 'identity'];
 
-/** One difference between two sets of tactics: "Tempo 62 → 80". Without from/to, "Screeners changed". */
+/**
+ * One difference between two sets of tactics: "Tempo Balanced → Up-tempo". Without from/to,
+ * "Screeners changed". A setting the team feels on the floor also says it in basketball words
+ * (`say`: "push less after stops"); `fine` when both values read as the same setting on the screens,
+ * so the words are all there is to tell (never the raw figures, "55 → 38").
+ */
 export interface TacticsChange {
   label: string;
   from: string;
   to: string;
+  say?: string;
+  fine?: true;
 }
 
-export const changeText = (c: TacticsChange) => (c.from || c.to ? `${c.label} ${c.from} → ${c.to}` : `${c.label} changed`);
+const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
+
+const changeWith = (c: TacticsChange, sep: string) => (c.fine && c.say ? cap(c.say) : c.from || c.to ? `${c.label}${sep}${c.from} → ${c.to}` : `${c.label} changed`);
+
+/** "Tempo Balanced → Up-tempo", or the change in words when the values read alike: "Push a little less after stops". */
+export const changeText = (c: TacticsChange) => changeWith(c, ' ');
+/** The same with a colon after the setting's name: "Tempo: Balanced → Up-tempo". */
+export const changeColon = (c: TacticsChange) => changeWith(c, ': ');
+
+/** A change in basketball words where it has them: "Play faster (Up-tempo)", "Push a little less after stops"; else as changeText. */
+export const changeSay = (c: TacticsChange) => (c.say ? (c.fine || /^(On|Off)$/.test(c.to) ? cap(c.say) : `${cap(c.say)} (${c.to})`) : changeText(c));
+
+/** What moving a setting means on the floor: `up` whether it went up (or on), `slight` when the screens' name for it didn't change. */
+type Say = (up: boolean, slight: boolean) => string;
+const amount = (up: boolean, slight: boolean, more = 'more', less = 'less') => `${slight ? 'a little ' : ''}${up ? more : less}`;
+const SAY: Record<string, Say> = {
+  pace: (u, s) => `play ${amount(u, s, 'faster', 'slower')}`,
+  transition: (u, s) => `push ${amount(u, s)} after stops`,
+  threePoint: (u, s) => `take ${s ? 'a few ' : ''}${u ? 'more' : 'fewer'} threes`,
+  rimAttack: (u, s) => `attack the rim ${amount(u, s)}`,
+  crashBoards: (u, s) => `crash the offensive glass ${amount(u, s)}`,
+  huntMismatch: (u) => (u ? 'hunt mismatches' : 'stop hunting mismatches'),
+  hotHand: (u) => (u ? 'feed the hot hand' : 'stop feeding the hot hand'),
+  switchOffBall: (u) => (u ? 'switch off-ball screens' : 'fight through off-ball screens'),
+  help: (u, s) => (u ? `help ${amount(u, s)} off shooters` : `stay ${s ? 'a little ' : ''}closer to shooters`),
+  pressure: (u, s) => `pressure the ball ${amount(u, s)}`,
+  physicality: (u, s) => `play ${amount(u, s)} physical`,
+  getBack: (u, s) => (u ? `get back ${amount(u, s)} on defense` : `send ${s ? 'a little ' : ''}more to the glass than back`),
+};
+/** An action's share of the offense: "run more pick-and-roll". */
+const sayAction =
+  (label: string): Say =>
+  (u, s) =>
+    `run ${amount(u, s)} ${label.toLowerCase()}`;
 
 const onOff = (v: unknown) => (v ? 'On' : 'Off');
 /** A switch that's on unless switched off (no key: on). */
@@ -162,17 +202,21 @@ const same = (x: unknown, y: unknown) => x === y || JSON.stringify(x) === JSON.s
  */
 export function tacticsChanges(a: Tactics, b: Tactics, nameOf: (pid: number) => string = (pid) => `#${pid}`): TacticsChange[] {
   const out: TacticsChange[] = [];
-  const add = (label: string, x: unknown, y: unknown, fmt: (v: unknown) => string = String) => {
+  const add = (label: string, x: unknown, y: unknown, fmt: (v: unknown) => string = String, say?: Say) => {
     if (same(x, y) || (fmt === onUnlessOff && fmt(x) === fmt(y))) return;
-    if (LEVEL_FMT.has(fmt) && typeof x === 'number' && typeof y === 'number' && fmt(x) === fmt(y)) fmt = whole;
+    // (two values the screens call the same: the change is told in words, the figures only as a fallback)
+    const fine = LEVEL_FMT.has(fmt) && typeof x === 'number' && typeof y === 'number' && fmt(x) === fmt(y);
+    if (fine) fmt = whole;
     const prim = (v: unknown) => v === undefined || v === null || typeof v !== 'object';
     // (a switch that isn't there is off: the screens delete some when they're turned off)
     const shown = (v: unknown) => (v === undefined && fmt !== onOff && fmt !== onUnlessOff ? '—' : fmt(v));
-    out.push(prim(x) && prim(y) ? { label, from: shown(x), to: shown(y) } : { label, from: '', to: '' });
+    const up = typeof x === 'number' && typeof y === 'number' ? y > x : !!y;
+    const words = say && (typeof y === 'number' || typeof y === 'boolean' || y === undefined) ? { say: say(up, fine), ...(fine ? { fine: true as const } : {}) } : {};
+    out.push(prim(x) && prim(y) ? { label, from: shown(x), to: shown(y), ...words } : { label, from: '', to: '' });
   };
   // known fields in screen order, then any others in that part of the tactics
   const section = (x: Record<string, unknown>, y: Record<string, unknown>, fields: Field<string>[]) => {
-    for (const [k, label, fmt] of fields) add(label, x[k], y[k], fmt);
+    for (const [k, label, fmt] of fields) add(label, x[k], y[k], fmt, SAY[k]);
     const known = new Set(fields.map((f) => f[0]));
     for (const k of new Set([...Object.keys(x), ...Object.keys(y)])) if (!known.has(k) && !NOT_COMPARED.has(k)) add(humanize(k), x[k], y[k], onOffOr);
   };
@@ -183,7 +227,7 @@ export function tacticsChanges(a: Tactics, b: Tactics, nameOf: (pid: number) => 
   add('Offensive playbook', a.offPreset, b.offPreset, presetName(OFF_PRESETS));
   add('Defensive identity', a.defPreset, b.defPreset, presetName(DEF_PRESETS));
   section(a.offense as unknown as Record<string, unknown>, b.offense as unknown as Record<string, unknown>, OFFENSE_FIELDS);
-  for (const k of ACTIONS) add(ACTION_META[k].label, a.offense.actions[k], b.offense.actions[k], ACTION_LEVEL);
+  for (const k of ACTIONS) add(ACTION_META[k].label, a.offense.actions[k], b.offense.actions[k], ACTION_LEVEL, sayAction(ACTION_META[k].label));
   section(a.defense as unknown as Record<string, unknown>, b.defense as unknown as Record<string, unknown>, DEFENSE_FIELDS);
   section(a.manage as unknown as Record<string, unknown>, b.manage as unknown as Record<string, unknown>, MANAGE_FIELDS);
   const goTo = (v: number | null | undefined) => (v === null || v === undefined ? 'None' : nameOf(v));

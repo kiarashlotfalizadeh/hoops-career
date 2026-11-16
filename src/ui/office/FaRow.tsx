@@ -104,7 +104,7 @@ export function FaRow({
           {fill && (
             <>
               {' · '}
-              <span className={fill.good ? 'good' : 'warn'} aria-label={`Your need: ${fill.text}`}>
+              <span className={fill.good ? 'good' : 'warn'} aria-label={`The need: ${fill.text}`}>
                 {fill.text}
               </span>
             </>

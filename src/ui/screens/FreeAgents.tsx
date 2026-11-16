@@ -1,8 +1,8 @@
 // Office → Free agents: everyone you could sign (and claim off waivers), filtered and sorted, with
 // your cap room on top and, while free agency runs, the market and its days. The sheets live in
 // src/ui/office/ (ContractSheet, FaSheets, TenDayPanel); ?offer=pid opens a player's.
-import { ordinal } from '../../core/format';
-import { fills, hurts, needCache, needMove, needText, teamNeed } from '../../core/league/rosterNeed';
+import { fills, hurts, needCache, needMinutes, needMove, needOptions, needText, teamNeed } from '../../core/league/rosterNeed';
+import { NeedNote } from '../office/NeedNote';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Lock, SlidersHorizontal } from 'lucide-react';
@@ -139,9 +139,9 @@ export default function FreeAgents() {
     if (need)
       for (const pid of shown) {
         const m = needMove(league, need.id, [pid], [], cache);
-        if (fills(m) || hurts(m)) fill.set(pid, { text: needText(m), good: fills(m) });
+        if (fills(m) || hurts(m)) fill.set(pid, { text: `${needText(m)}${needMinutes(m)}`, good: fills(m) });
       }
-    return { need, fill };
+    return { need, fill, options: needOptions(league, cache) };
   }, [league, shownKey]);
   // position, OVR and the order live in a sheet: its button counts the ones changed (and "Can sign now", which names the list)
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -286,11 +286,7 @@ export default function FreeAgents() {
         </div>
       </Sheet>
 
-      {needs.need && mode === 'standard' && (
-        <div className="tiny dim">
-          Your roster&apos;s need: <b>{needs.need.label}</b>, graded {needs.need.grade} ({ordinal(needs.need.rank)} of {needs.need.of}). A player who&apos;d move it says which way.
-        </div>
-      )}
+      {mode === 'standard' && <NeedNote league={league} need={needs.need} options={needs.options} />}
 
       {rows.length === 0 ? (
         <>

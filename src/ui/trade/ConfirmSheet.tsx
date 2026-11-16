@@ -110,11 +110,12 @@ export function ImpactList({ im }: { im: TradeImpact }) {
         )}
         {im.need && (
           <li>
-            Your need, {im.need.label.toLowerCase()}:{' '}
+            {im.needBy === 'you' ? 'Your priority' : "Staff's read of your need"}, {im.need.label.toLowerCase()}:{' '}
             {im.need.from === im.need.to && im.need.rankTo === im.need.rankFrom
               ? `still ${im.need.from}, the deal doesn't touch it`
               : `${im.need.from} → ${im.need.to} (${ordinal(im.need.rankFrom)} → ${ordinal(im.need.rankTo)} in the league)`}
-            .
+            , read with the staff&apos;s minutes both ways{im.need.minutes > 0 ? `: ${im.need.minutes} a game for who comes in` : ''}.
+            {im.needCoach ? ` Coaching alternative: your setting “${im.needCoach.text}” costs it (${im.needCoach.to} without).` : ''}
           </li>
         )}
         {up.length > 0 && <li>Into the starting five: {names(up)}.</li>}

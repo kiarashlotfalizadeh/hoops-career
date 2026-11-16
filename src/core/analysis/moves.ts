@@ -9,7 +9,7 @@
 
 import type { CoachMove, LiveOp, MoveTally, Tactics, TacticsPatch } from '../types';
 import type { FinishType, PossLog } from '../sim/log';
-import { tacticsChanges } from '../sim/playbooks';
+import { changeColon, tacticsChanges } from '../sim/playbooks';
 import { SCHEME_META, applyPatch } from '../sim/tactics';
 import { callLabel } from '../sim/sets';
 import { GAME } from '../constants';
@@ -124,7 +124,7 @@ export function planAim(base: Tactics, patch: TacticsPatch): Aim {
 
 /** A tactics change in a few words, as the Tactics screen names it, game-specific orders included ("Dort guards Fox"). */
 export function moveText(a: Tactics, b: Tactics, nameOf: (pid: number) => string): string {
-  const parts = tacticsChanges(a, b, nameOf).map((c) => (c.from || c.to ? `${c.label}: ${c.from} → ${c.to}` : `${c.label} changed`));
+  const parts = tacticsChanges(a, b, nameOf).map((c) => changeColon(c));
   const d0 = a.defense;
   const d1 = b.defense;
   for (const p of new Set([...Object.keys(d0.matchups), ...Object.keys(d1.matchups)].map(Number)))

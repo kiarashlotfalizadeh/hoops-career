@@ -86,6 +86,8 @@ export interface Moment {
   mail?: number[];
   /** Moments told on this card as a line each (see pickMoments): they don't show or wait on their own. */
   folded?: string[];
+  /** Overtaken by what happened since (into the Cup's knockouts, and already out of them): it counts as seen and never shows. */
+  stale?: true;
 }
 
 const ROUND = ['', 'First Round', 'Conference Semifinals', 'Conference Finals', 'NBA Finals'];
@@ -231,13 +233,20 @@ export function pickMoments(fresh: Moment[]): Moment[] {
 }
 
 /**
- * Screens where the user is at work (a game's report, the draft, a deal being made): a moment queued
+ * Screens where the user is at work (a game's report, his tactics, rotation and game plan, the draft,
+ * a deal being made): a moment queued
  * elsewhere (a live game, the screen before) doesn't take the screen over that work, nor does a
  * night's or a player's moment (MINOR, a story) even as the screen's landing. Each holds until he's
  * on another screen, except the job's own and that work's own result (his pick, his signing).
  */
 const WORK: { at: string; own: MomentKind[] }[] = [
   { at: '/game/', own: [] },
+  // (where he edits his team: a celebration waits until he leaves the screen)
+  { at: '/team/tactics', own: [] },
+  { at: '/team/rotation', own: [] },
+  { at: '/team/lineups', own: [] },
+  { at: '/preview', own: [] },
+  { at: '/gameplan', own: [] },
   { at: '/office/draft', own: ['draft'] },
   { at: '/office/trade', own: ['signing'] },
   { at: '/office/free-agents', own: ['signing'] },
@@ -275,7 +284,8 @@ const WAIT_MAX = 3;
 export function scheduleMoments(queued: Moment[], fresh: Moment[], waiting: Moment[], now: { season: number; day: number }): { show: Moment[]; wait: Moment[] } {
   // (a banner night and a legend's farewell wait out a long sim: they're once in a career, not a week's news)
   const live = (m: Moment) => m.season === undefined || (m.season === now.season && (KEEPS.has(m.kind) || now.day - (m.day ?? now.day) <= WAIT_DAYS));
-  const pool = [...queued, ...fresh, ...waiting.filter(live)].filter((m, i, all) => all.findIndex((x) => x.key === m.key) === i);
+  // (one overtaken since it was queued, as it reads now, is dropped: see Moment.stale)
+  const pool = [...queued, ...fresh, ...waiting.filter(live)].filter((m, i, all) => !m.stale && all.findIndex((x) => x.key === m.key) === i);
   const show = pickMoments(pool);
   const told = new Set(show.flatMap((m) => [m.key, ...(m.folded ?? [])]));
   const wait = pool
@@ -516,24 +526,40 @@ function cupMoments(league: League): Moment[] {
   const out: Moment[] = [];
   const conf = league.teams[me].conf;
   const seed = cup.seeds[conf].indexOf(me);
+  const lost = cup.bracket.find((t) => t.winner !== undefined && t.winner !== me && (t.high === me || t.low === me));
   if (seed >= 0) {
-    const qf = cup.bracket.find((t) => t.round === 'qf' && (t.high === me || t.low === me));
-    const opp = qf ? league.teams[qf.high === me ? qf.low : qf.high] : undefined;
+    // told as the bracket stands when the card shows (it can wait a sim or more): the tie still to
+    // play is named in the future, a round already won in the past, and once his Cup is over (out,
+    // or won) the card is old news and gives way to that one (stale)
+    const ties = cup.bracket.filter((t) => t.high === me || t.low === me);
+    const ROUND_NAME = { qf: 'quarterfinal', sf: 'semifinal', final: 'final' } as const;
+    const ahead = ties.find((t) => t.winner === undefined);
+    const won = ties.filter((t) => t.winner === me);
+    const lastWon = won.at(-1);
+    const opp = ahead ? league.teams[ahead.high === me ? ahead.low : ahead.high] : undefined;
+    const through = lastWon ? ` They won the ${ROUND_NAME[lastWon.round]}.` : '';
+    const next =
+      ahead && opp
+        ? ahead.round === 'final'
+          ? ` The final is against the ${opp.name} on ${fmtDate(league.season, ahead.day)} in Las Vegas.`
+          : ` The ${ROUND_NAME[ahead.round]} is ${ahead.high === me ? 'at home to' : 'at'} the ${opp.name} on ${fmtDate(league.season, ahead.day)}${ahead.round === 'qf' ? ": win twice more and it's Las Vegas" : ''}.`
+        : '';
+    const over = !!lost || won.some((t) => t.round === 'final');
     out.push({
       key: `cup-ko-${league.season}`,
       kind: 'cup',
       over: `${seasonLabel(league.season)} · NBA Cup`,
       title: 'Into the knockouts',
-      sub: `The ${ordinalSeed(seed)} seed in the ${conf === 'E' ? 'East' : 'West'}${seed === 3 ? ', the wild card' : ''}.${qf && opp ? ` The quarterfinal is ${qf.high === me ? 'at home to' : 'at'} the ${opp.name} on ${fmtDate(league.season, qf.day)}: win twice more and it's Las Vegas.` : ''}`,
+      sub: `The ${ordinalSeed(seed)} seed in the ${conf === 'E' ? 'East' : 'West'}${seed === 3 ? ', the wild card' : ''}.${through}${next}`,
       link: '/league/cup',
       linkLabel: 'The bracket',
       rank: 1,
       season: league.season,
       day: league.day,
       mail: mailOf(league, 'League Office', (x) => x === 'NBA Cup: into the knockouts'),
+      ...(over ? { stale: true as const } : {}),
     });
   }
-  const lost = cup.bracket.find((t) => t.winner !== undefined && t.winner !== me && (t.high === me || t.low === me));
   if (lost) {
     const round = lost.round === 'final' ? 'final' : lost.round === 'sf' ? 'semifinal' : 'quarterfinal';
     const [us, them] = lost.high === me ? [lost.highPts, lost.lowPts] : [lost.lowPts, lost.highPts];
@@ -844,5 +870,5 @@ export function currentMoments(league: League): Moment[] {
 
 /** The moments in `now` that weren't in `seen`, oldest first. */
 export function newMoments(now: Moment[], seen: ReadonlySet<string>): Moment[] {
-  return now.filter((m) => !seen.has(m.key));
+  return now.filter((m) => !seen.has(m.key) && !m.stale);
 }

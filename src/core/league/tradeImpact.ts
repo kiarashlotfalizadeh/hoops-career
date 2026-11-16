@@ -9,7 +9,7 @@ import { playerAge } from '../playerGen';
 import { autoRotation, fitRoster, rosterProfile, type ProfileKey } from '../ai/coachAI';
 import { shortName, teamPlayers } from './helpers';
 import { keepManualRotation } from './games';
-import { needCache, needMove, teamNeed, type NeedMove } from './rosterNeed';
+import { needCache, needMove, teamNeed, type Need, type NeedMove } from './rosterNeed';
 import { normalizeMinutes, planInputs, planRoles } from '../sim/rotationPlan';
 
 /** A player whose role the deal changes: minutes a game now and with it, and whether he starts each way. */
@@ -36,8 +36,11 @@ export interface TradeImpact {
    * in go to the end of his depth chart with no minutes set, until he places them.
    */
   manual: boolean;
-  /** The roster's need (Team → Tactics's weakest quality) as the deal moves it, when he has one. */
+  /** The roster's need (the staff's read, or the priority he chose) as the deal moves it, when he has one: read with the staff's minutes both ways. */
   need?: NeedMove;
+  /** Whose need it is, and the coaching alternative when his settings cost it (see Need). */
+  needBy?: Need['by'];
+  needCoach?: Need['coach'];
 }
 
 /** The minutes a rotation actually plays for these players (the engine's plan: unset starters get a starter's share, the total scaled to 240). */
@@ -149,7 +152,8 @@ export function tradeImpact(league: League, offer: TradeOffer): TradeImpact {
     costs: low && low.d <= -QUALITY_MIN ? QUALITY[low.k] : null,
     future,
     manual,
-    ...(need && { need }),
+    ...(need && { need, needBy: named!.by }),
+    ...(named?.coach && { needCoach: named.coach }),
   };
 }
 

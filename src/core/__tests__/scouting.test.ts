@@ -386,7 +386,15 @@ describe('scouting and the staff', () => {
         if (d.lesson) {
           expect(d.lesson.plan).toMatch(/^You went in with (your own|your staff's) playbook \(.+ · .+\) and /);
           expect(d.lesson.outcome).toMatch(/^You (won|lost) \d+-\d+\./);
-          expect(d.lesson.next).toMatch(/^(Try the staff's fix below|Pick one counter|Keep your plan)/);
+          expect(d.lesson.next).toMatch(/^(Tap the staff's fix below|Pick one counter|That plan was for)/);
+          // the report reads the same after today's playbook changes: it names the setup that game was played with
+          const later = structuredClone(league);
+          const lt = later.teams[0].tactics;
+          lt.manual = !lt.manual;
+          lt.offPreset = 'none';
+          lt.defense.help = lt.defense.help > 50 ? 0 : 100;
+          expect(debrief(later, res, rep).lesson).toEqual(d.lesson);
+          expect(res.setup).toMatchObject({ own: !lt.manual });
         }
       }
       expect(fixes).toBeGreaterThan(0);

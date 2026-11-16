@@ -213,3 +213,17 @@
 .fo-room > .statline {
   margin-top: 16px;
 }
+
+/* the roster need's sheet: each choice a name over its grade, the one in force ticked */
+.fo-need-opt {
+  width: 100%;
+  text-align: left;
+}
+.fo-need-opt > .grow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fo-need-btn {
+  margin-left: 4px;
+}

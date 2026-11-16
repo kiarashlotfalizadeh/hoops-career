@@ -232,6 +232,8 @@ export interface Player {
   injury: Injury | null;
   injuryCount: number;
   training: TrainingFocus;
+  /** When the user last set his training focus (absent: never changed, or from before it was kept), so a review knows how long it has run. */
+  trainingSince?: { season: number; day: number };
   awards: AwardRecord[];
   /** Season he joined current team. */
   joinedSeason: number;
@@ -999,6 +1001,12 @@ export interface GameResult {
   movesWorth?: MovesWorth;
   /** The user's games: his game plan's counters at tip-off, each with what it was aimed at, for the report's grade of the plan (see analysis/debrief.ts). */
   plan?: PlanUse[];
+  /**
+   * The user's games: the setup he played it with, kept as it was that night so a report read later
+   * doesn't tell it from today's tactics: his playbook's name, whether it was his own or the staff's,
+   * and his help-defense level. Absent in older results (their reports don't name a playbook).
+   */
+  setup?: { playbook: string; own: boolean; help: number };
 }
 
 /** What a live game's moves were worth (GameResult.movesWorth). */
@@ -1464,6 +1472,12 @@ export interface League {
   version: number;
   created: number;
   userTid: number;
+  /**
+   * What the coach said about his roster's need (rosterNeed.ts): a system quality's id he made his
+   * priority over the staff's read, or 'none' when he accepts his weaknesses as a trade-off. Absent:
+   * the staff's read stands.
+   */
+  needChoice?: string;
   coachName: string;
   season: number;
   phase: Phase;

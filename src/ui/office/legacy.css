@@ -490,3 +490,15 @@ a.fo-rv-row:active {
   font-weight: 600;
   letter-spacing: -0.04em;
 }
+
+/* a decision thread in the season's review: its title, then a labelled row for each part */
+.fo-rv-thread + .fo-rv-thread {
+  margin-top: var(--s-3, 12px);
+}
+.fo-rv-trow {
+  align-items: baseline;
+  gap: var(--s-3, 12px);
+}
+.fo-rv-tk {
+  flex: 0 0 4.2em;
+}

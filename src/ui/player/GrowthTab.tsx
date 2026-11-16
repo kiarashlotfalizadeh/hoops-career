@@ -159,7 +159,12 @@ export function GrowthTab({ p, league, mine }: { p: Player; league: League; mine
               label="Training focus"
               value={p.training}
               disabled={busy}
-              onChange={(f: TrainingFocus) => edit((l) => void (l.players[p.pid].training = f))}
+              onChange={(f: TrainingFocus) =>
+                edit((l) => {
+                  l.players[p.pid].training = f;
+                  l.players[p.pid].trainingSince = { season: l.season, day: l.day };
+                })
+              }
               options={(Object.keys(FOCUS_META) as TrainingFocus[]).map((k) => ({ id: k, label: FOCUS_META[k].label }))}
             />
             <div className="small dim">{FOCUS_META[p.training].help}</div>

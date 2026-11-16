@@ -4,7 +4,7 @@ import { useStore } from '../../state/store';
 import { MUST_SEE, currentMoments, momentFits, newMoments, scheduleMoments, type Moment } from '../moments';
 import { touch } from '../../state/actions';
 import { TeamLogo } from './TeamLogo';
-import { Avatar } from './ui';
+import { Avatar, useSheetOpen } from './ui';
 import { slabVars } from '../teamColors';
 import { haptic } from '../../native';
 import { reducedMotion } from '../motion';
@@ -108,8 +108,12 @@ export function Moments() {
     if (onReport && queue.some((m) => m.news === 'game')) setQueue((q) => q.filter((m) => m.news !== 'game'));
   }, [onReport, queue]);
   // (over a report or the draft, only what landed there and is the screen's size, or the job's own: see momentFits)
+  // (and while a sheet is open he's mid-edit: all but the two no one misses wait for it to close)
+  const editing = useSheetOpen();
   const showing =
-    !simming && pathname !== '/live' && league ? queue.find((m) => !(onReport && m.news === 'game') && momentFits(m, pathname, landed.current.get(m.key))) : undefined;
+    !simming && pathname !== '/live' && league
+      ? queue.find((m) => !(onReport && m.news === 'game') && (!editing || MUST_SEE.has(m.kind)) && momentFits(m, pathname, landed.current.get(m.key)))
+      : undefined;
   // the digest waits while a moment has the screen
   const up = !!showing;
   useEffect(() => {

@@ -1,4 +1,15 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { useInRouterContext, useLocation } from 'react-router-dom';
 import { ChevronDown, ChevronLeft, HelpCircle, X } from 'lucide-react';
@@ -381,6 +392,11 @@ const SHEET_OUT_MS = 180;
 
 /** The open sheets, the top one last: Escape and Tab are its alone (a Help sheet over a contract sheet). */
 const openSheets: object[] = [];
+const sheetWatchers = new Set<() => void>();
+const tellSheets = () => sheetWatchers.forEach((f) => f());
+const watchSheets = (f: () => void) => (sheetWatchers.add(f), () => void sheetWatchers.delete(f));
+/** Whether a sheet is open: the user is in the middle of something (a celebration waits for it to close). */
+export const useSheetOpen = () => useSyncExternalStore(watchSheets, () => openSheets.length > 0);
 
 // ---------------------------------------------------------------- Back closes the top sheet
 // Each open sheet holds a history entry of its own: the same URL and router key, marked with the
@@ -494,6 +510,7 @@ export function Sheet({
     const prev = document.activeElement as HTMLElement | null;
     const me = {};
     openSheets.push(me);
+    tellSheets();
     const entry = openSheetEntry(() => closeRef.current());
     document.body.classList.add('sheet-open');
     ref.current?.focus({ preventScroll: true });
@@ -520,6 +537,7 @@ export function Sheet({
     return () => {
       window.removeEventListener('keydown', onKey);
       openSheets.splice(openSheets.indexOf(me), 1);
+      tellSheets();
       closeSheetEntry(entry);
       if (!openSheets.length) document.body.classList.remove('sheet-open');
       prev?.focus?.({ preventScroll: true });
