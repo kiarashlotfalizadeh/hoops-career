@@ -916,6 +916,8 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
     // (one thread a move, each part said once: what came in, what it cost, and the picks still open)
     expect(threads[0]).toEqual({
       title: `Trade with ${l.teams[AI].abbrev}`,
+      // (its takeaway in a line, the rows its evidence)
+      summary: 'No players: 2 picks still to come.',
       rows: [
         ['In', `the ${l.teams[AI].abbrev} ${theirs.season} 2nd`],
         ['Cost', `your ${dp.season} 1st, $0.5M cash`],
@@ -940,6 +942,12 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
     p.ratingsHistory[1] = { ...p.ratingsHistory[1], focus: 'balanced' };
     p.trainingSince = { season: l.season, day: l.day };
     expect(training().rows[0][1]).toBe('Set 0 days ago: too soon to read.');
+    // read from his ratings the day it was set: what his shooting did before it (here +3 since opening night) isn't its doing
+    p.ratingsHistory[1] = { ...p.ratingsHistory[1], r: { ...r0, tp: r0.tp - 3, mid: r0.mid - 3, ft: r0.ft - 3 } };
+    p.trainingSince = { season: l.season, day: l.day - 40, r: { ...r0, tp: r0.tp - 1, mid: r0.mid - 1, ft: r0.ft - 1 } };
+    expect(training().rows[0][1]).toBe(
+      "Set 40 days ago: its skills +1.0, the rest of his game +0.0. The focused skills barely moved; what balanced work would have done isn't known.",
+    );
     // a tactical change read only as it was made is a forecast, never told as what happened; a check is
     l.tacticEdits = [
       { id: 1, season: l.season, day: 1, what: 'Tempo: Balanced → Up-tempo', diff: [], ahead: [], worth: { pts: 2, raw: 2, se: 0.5, games: 5 } },
@@ -954,9 +962,11 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
         check: { pts: -2, raw: -2, se: 0.5, games: 10, day: 30 },
       },
     ];
+    expect(decisionThreads(l, l.season, U).find((t) => t.title === 'Tactical changes')!.summary).toBe('2 changes: 1 hurt, 1 not checked.');
+    expect(training().summary).toBe('1 focus: barely moved.');
     expect(decisionThreads(l, l.season, U).find((t) => t.title === 'Tactical changes')!.rows).toEqual([
       ['Help defense: Balanced → Stay home', 'Checked on 10 games played with it: seems to hurt.'],
-      ['Tempo: Balanced → Up-tempo', 'Forecast when you made it: should help. The check on played games is still to come (after 10).'],
+      ['Tempo: Balanced → Up-tempo', 'Forecast when you made it: should help. No games played with it, so nothing to check.'],
     ]);
   }
 

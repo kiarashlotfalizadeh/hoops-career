@@ -18,6 +18,9 @@ import { counterWorth, measureChanges, withChange, type WorthOpts } from '../ai/
 import { callNeeds, callsDecide, changeWorth, countersWorth, storeWorth, type CallMeasure, type CallWorth } from './calls';
 import { payoffNeeds, weekDecide, weekNeeds, youthPayoff } from './weekCall';
 import { leverMorning } from './staffLever';
+import { editMorning } from '../ai/tacticEdits';
+import { seasonReviewOf } from './legacy';
+import { refreshEditThread } from './legacyReview';
 
 /** Paired games a configuration plays in a sim's measurement. */
 export const SIM_GAMES = 40;
@@ -67,6 +70,13 @@ export async function staffMorning(league: League, opts: WorthOpts & { onMeasure
     staffDecide(league);
   }
   staffDecide(league);
+  // (the user's tactical changes due their check on the games played since: told as they come due,
+  // and at his season's end on what there is, before the review is read; a review already kept is
+  // brought up to date)
+  const review = seasonReviewOf(league, league.season);
+  const edits = await editMorning(league, { ...opts, seasonOver: !!review });
+  if (edits.checked.length) refreshEditThread(league, league.season);
+  if (!edits.ok) return false;
   // (the staff's measured change to the user's playbook, every couple of weeks: staffLever.ts)
   return leverMorning(league, opts);
 }

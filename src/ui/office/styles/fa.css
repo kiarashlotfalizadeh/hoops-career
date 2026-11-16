@@ -227,3 +227,10 @@
 .fo-need-btn {
   margin-left: 4px;
 }
+/* the choice in force, above the list */
+.fo-need-now {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}

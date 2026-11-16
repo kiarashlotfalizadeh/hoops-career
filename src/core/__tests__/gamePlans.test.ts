@@ -16,7 +16,22 @@ import { LOSING_ADJUSTMENTS } from '../sim/engine/coach';
 import { Rng } from '../random';
 import type { League, PlayoffSeries } from '../types';
 import { counterWorth, measureChanges, shrinkWorth, worthCall, WORTH_MAX } from '../ai/counterWorth';
-import { CHECK_AFTER, EDIT_AHEAD, checksDue, editPlan, evenText, madeLine, readEdit, recordEdit, revertEdit, saveCheck, saveMade, type GameReadings } from '../ai/tacticEdits';
+import {
+  CHECK_AFTER,
+  EDIT_AHEAD,
+  checksDue,
+  editMorning,
+  editPlan,
+  evenText,
+  madeLine,
+  readEdit,
+  recordEdit,
+  revertEdit,
+  saveCheck,
+  saveMade,
+  type GameReadings,
+} from '../ai/tacticEdits';
+import { refreshEditThread } from '../league/legacyReview';
 import { PLAN_MAX_PTS, planPoints, projectGame } from '../analysis/projection';
 
 const opponentOf = (l: League) => {
@@ -418,21 +433,31 @@ describe('game plans', () => {
       expect(checksDue(l)).toHaveLength(0);
       const mine = l.schedule.filter((g) => !g.played && (g.home === l.userTid || g.away === l.userTid)).slice(0, CHECK_AFTER);
       for (const g of mine) g.played = true;
-      expect(checksDue(l)).toHaveLength(1);
+      // due whether or not its forecast ever finished (the pace change never had one)
+      expect(checksDue(l).map((x) => x.id)).toEqual([e.id, e.id + 1]);
       const check = editPlan(l, l.tacticEdits![0], 'check').plan!;
       expect(check.count).toBe(CHECK_AFTER);
       expect(check.changes.map((c) => c.id)).toEqual(['without']);
       const mail = l.inbox.length;
+      // a season's review kept before the check came in is told again as it now stands
+      const legacy = (l.legacy ??= { since: l.season, done: [], milestones: [], wins: [], honors: [], beaten: [], reviews: [] });
+      legacy.reviews = [{ season: l.season, tid: l.userTid, threads: [{ title: 'Live coaching', rows: [] }] } as unknown as (typeof legacy.reviews)[number]];
+      // checked where the sim runs, in its morning, whatever screen the user is on (staffMorning)
+      expect(await editMorning(l)).toEqual({ ok: true, checked: [e.id, e.id + 1] });
+      refreshEditThread(l, l.season);
+      expect(l.tacticEdits![0].check!.games).toBe(check.count);
+      expect(l.inbox.length).toBe(mail + 2);
+      const note = l.inbox.find((m) => m.link === '/team/tactics/analysis' && m.body.startsWith(l.tacticEdits![0].what.split(' · ')[0]))!;
+      expect(note.subject).toMatch(/^Your change (seems to have helped|seems to have hurt)$|^Your change: too close to call$/);
+      expect(note.body).toMatch(/with your change and without it/);
+      expect(legacy.reviews[0].threads!.map((t) => t.title)).toEqual(['Tactical changes', 'Live coaching']);
+      expect(legacy.reviews[0].threads![0].rows[0][1]).toMatch(/^Checked on 10 games played with it: /);
       const w = readEdit(await play(check, 6)).worth;
-      saveCheck(l, e.id, w, check.count);
-      expect(l.inbox.length).toBe(mail + 1);
-      expect(l.inbox[0].subject).toMatch(/^Your change (seems to have helped|seems to have hurt)$|^Your change: too close to call$/);
-      expect(l.inbox[0].body).toMatch(/with your change and without it/);
       // an even reading is inconclusive, never "no effect": a tight one rules out a big swing, a wide one can't tell
       expect(evenText({ raw: 0.1, se: 0.1 }, 12)).toMatch(/^Too close to call over 12 games: the replays rule out a big swing/);
       expect(evenText({ raw: 0.2, se: 0.6 }, 12)).toMatch(/^Inconclusive over 12 games: .* It may help or hurt/);
       saveCheck(l, e.id, w, check.count);
-      expect(l.inbox.length).toBe(mail + 1);
+      expect(l.inbox.length).toBe(mail + 2);
       expect(checksDue(l)).toHaveLength(0);
       // put back: the coverage goes back; a setting moved again since stays where the user put it
       me.tactics.offense.pace = 64;

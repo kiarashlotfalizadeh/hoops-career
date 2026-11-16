@@ -390,13 +390,13 @@ export function Bar({ value, max = 100, color, height = 6 }: { value: number; ma
 /** How long a closing sheet takes to slide out (overlays.css `.sheet.closing`). */
 const SHEET_OUT_MS = 180;
 
-/** The open sheets, the top one last: Escape and Tab are its alone (a Help sheet over a contract sheet). */
-const openSheets: object[] = [];
+/** The open sheets, the top one last: Escape and Tab are its alone (a Help sheet over a contract sheet). `holds`: the user is mid-edit in it (see Sheet's `holds`). */
+const openSheets: { holds: boolean }[] = [];
 const sheetWatchers = new Set<() => void>();
 const tellSheets = () => sheetWatchers.forEach((f) => f());
 const watchSheets = (f: () => void) => (sheetWatchers.add(f), () => void sheetWatchers.delete(f));
-/** Whether a sheet is open: the user is in the middle of something (a celebration waits for it to close). */
-export const useSheetOpen = () => useSyncExternalStore(watchSheets, () => openSheets.length > 0);
+/** Whether a sheet the user is working in is open: he's in the middle of something (a celebration waits for it to close). */
+export const useSheetOpen = () => useSyncExternalStore(watchSheets, () => openSheets.some((s) => s.holds));
 
 // ---------------------------------------------------------------- Back closes the top sheet
 // Each open sheet holds a history entry of its own: the same URL and router key, marked with the
@@ -467,6 +467,7 @@ export function Sheet({
   children,
   title,
   label,
+  holds = true,
 }: {
   open: boolean;
   onClose: () => void;
@@ -474,6 +475,12 @@ export function Sheet({
   title?: ReactNode;
   /** What screen readers call a sheet without a title. */
   label?: string;
+  /**
+   * The user works in it, so a big moment waits for it to close (useSheetOpen). False for a sheet
+   * that itself waits for the moments (the sim's digest): if each waited for the other, the two
+   * would hand the screen back and forth without end.
+   */
+  holds?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -508,7 +515,7 @@ export function Sheet({
   useEffect(() => {
     if (!open) return;
     const prev = document.activeElement as HTMLElement | null;
-    const me = {};
+    const me = { holds };
     openSheets.push(me);
     tellSheets();
     const entry = openSheetEntry(() => closeRef.current());
@@ -542,6 +549,8 @@ export function Sheet({
       if (!openSheets.length) document.body.classList.remove('sheet-open');
       prev?.focus?.({ preventScroll: true });
     };
+    // (`holds` is fixed for a sheet's life)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   if (!mounted) return null;
   const shown = open ? { children, title } : kept.current;

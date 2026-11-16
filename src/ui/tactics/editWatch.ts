@@ -5,8 +5,9 @@
 // measuring it over the next few games (10-20 seconds on a phone, the progress on Tactics, which can
 // stop it). The result comes back as a line wherever the user is (a toast that opens Tactics →
 // Analysis) and stays in the ledger there. A change recorded while a sim was starting is recorded
-// when it ends. Later, a change due its check (CHECK_AFTER games played) is measured again on the
-// games played and the staff's note goes out once.
+// when it ends. A change due its check (CHECK_AFTER games played) is measured again on the games
+// played in the sim's own morning (tacticEdits.ts editMorning), wherever the user is; one still due
+// here (a sim stopped part-way) is checked when the lane is free, and the staff's note goes out once.
 //
 // One measurement at a time, and never over one the user is waiting on (the matchup page's counters,
 // worthLane.ts): a change whose measurement was stopped stays in the ledger unmeasured and is picked
@@ -37,6 +38,7 @@ import {
   type TeamPart,
 } from '../../core/ai/tacticEdits';
 import { teamPlayers } from '../../core/league/helpers';
+import { refreshEditThread } from '../../core/league/legacyReview';
 import { cancelWorth, measureChanges } from '../../state/simClient';
 import { useStore } from '../../state/store';
 import { edit } from '../../state/actions';
@@ -174,7 +176,13 @@ async function kick(): Promise<void> {
   const r = readEdit(readings);
   put({ running: null });
   const cur = useStore.getState().league;
-  if (cur?.id === l.id && edit((x) => (kind === 'made' ? saveMade(x, e.id, r, plan.count) : saveCheck(x, e.id, r.worth, plan.count)))) {
+  const save = (x: League) => {
+    if (kind === 'made') return saveMade(x, e.id, r, plan.count);
+    saveCheck(x, e.id, r.worth, plan.count);
+    // (a season's review kept already tells it as it now stands)
+    refreshEditThread(x, e.season);
+  };
+  if (cur?.id === l.id && edit(save)) {
     const saved = editsOf(cur).find((x) => x.id === e.id)!;
     const line = kind === 'made' ? madeLine(saved) : checkLine(saved);
     const call = editCall(kind === 'made' ? saved.worth : saved.check);

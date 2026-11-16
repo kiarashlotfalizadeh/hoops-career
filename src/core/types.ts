@@ -232,8 +232,12 @@ export interface Player {
   injury: Injury | null;
   injuryCount: number;
   training: TrainingFocus;
-  /** When the user last set his training focus (absent: never changed, or from before it was kept), so a review knows how long it has run. */
-  trainingSince?: { season: number; day: number };
+  /**
+   * When the user last set his training focus (absent: never changed, or from before it was kept), so
+   * a review knows how long it has run, and his ratings that day (`r`; absent in saves from before
+   * it was kept), so it reads only what moved under the focus.
+   */
+  trainingSince?: { season: number; day: number; r?: Ratings };
   awards: AwardRecord[];
   /** Season he joined current team. */
   joinedSeason: number;
@@ -1304,9 +1308,10 @@ export interface Txn {
   user?: true;
   /**
    * The need the user brought players in for (rosterNeed.ts): the system quality that was his weakest
-   * without them, its grade and rank without and with them. Only when they filled it.
+   * without them, its grade and rank without and with them, and whose it was (`by`: the staff's read,
+   * or the priority the user set; absent in saves from before it was kept). Only when they filled it.
    */
-  need?: { id: string; from: string; to: string; rankFrom: number; rankTo: number };
+  need?: { id: string; from: string; to: string; rankFrom: number; rankTo: number; by?: 'staff' | 'you' };
 }
 
 export interface InboxMessage {

@@ -14,6 +14,8 @@ import { releasePlayer } from '../league/contracts';
 import { executeTrade } from '../league/trades';
 import { ensureRotation } from '../league/games';
 import { fills, movedNeedText, needCache, needMove, needOptions, teamNeed } from '../league/rosterNeed';
+import { decisionThreads } from '../league/legacyReview';
+import { QUALITY_META } from '../analysis/system';
 import { CAP } from '../constants';
 import {
   ULTIMATUM_ODDS,
@@ -137,7 +139,11 @@ describe('the agenda', () => {
       {
         const mine = structuredClone(l);
         const options = needOptions(mine);
-        expect(options[0].id).toBe(need.id);
+        expect(options[0]).toMatchObject({ id: need.id, staff: true, weak: true });
+        // every quality is offered, weaknesses first, strengths after: not just the few weakest
+        expect(options.length).toBe(Object.keys(QUALITY_META).length);
+        expect(options.some((o) => !o.weak)).toBe(true);
+        expect(options.map((o) => o.weak)).toEqual(options.map((o) => o.weak).sort((a, b) => Number(b) - Number(a)));
         mine.needChoice = 'none';
         expect(teamNeed(mine)).toBeNull();
         mine.needChoice = options.at(-1)!.id;
@@ -147,8 +153,15 @@ describe('the agenda', () => {
       executeTrade(l, { a: { tid: me, pids: [], dpids: [] }, b: { tid: filler.tid, pids: [filler.pid], dpids: [] } });
       ensureRotation(l, me);
       const txn = l.transactions!.at(-1)!;
-      expect(txn.need).toMatchObject({ id: need.id });
+      expect(txn.need).toMatchObject({ id: need.id, by: 'staff' });
       expect(movedNeedText(l)).toMatch(/^ It fills the staff's read of your need: .+ [A-F]\+? → [A-F]\+?\.$/);
+      // whose need it was stays on the log line: the review and the toast say it as it was then
+      const why = () => decisionThreads(l, l.season, me)[0].rows.find(([k]) => k === 'Why')![1];
+      expect(why()).toMatch(/ was the need the staff named, graded /);
+      txn.need!.by = 'you';
+      expect(why()).toMatch(/ was the priority you set, graded /);
+      expect(movedNeedText(l)).toMatch(/^ It fills your priority: /);
+      txn.need!.by = 'staff';
       const row = agenda(l).find((i) => i.id === `deploy:${filler.pid}`)!;
       expect(row).toMatchObject({ kind: 'deploy', to: '/team/rotation', title: `${playerName(filler)} isn't in your rotation` });
       l.teams[me].rotation.minutes[filler.pid] = 20;

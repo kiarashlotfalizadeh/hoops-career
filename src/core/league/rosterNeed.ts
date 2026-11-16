@@ -1,6 +1,6 @@
 // The roster's need, carried from where it's named to how it turned out. It's the staff's opinion
 // unless the coach says otherwise: the system report's weakest quality (Team → Tactics names it under
-// Weaknesses), which he can swap for another weakness he'd rather fix, or set aside as a trade-off he
+// Weaknesses), which he can swap for any other quality he'd rather build up, or set aside as a trade-off he
 // accepts (League.needChoice). A weakness the settings cause is said as that, with what the coach can
 // do about it, beside the players who'd fill it. A candidate is read by what he'd do to it with the
 // staff's minutes both ways (said as that: a rotation he runs gives a newcomer none until he places
@@ -47,9 +47,6 @@ const DEPLOY_DAYS = 30;
 /** Ranks a candidate has to lift the need by to fill it (or a better grade). */
 const FILL_RANKS = 3;
 
-/** Weaknesses the coach can pick his priority from, at most. */
-const OPTIONS_MAX = 4;
-
 /** The others' scores for the report, worked out once a screen (systemReport's `others`). */
 export type NeedCache = Map<number, Record<QualityId, number>>;
 
@@ -90,12 +87,17 @@ export const needChoice = (league: League): QualityId | 'none' | undefined => {
   return c === 'none' || (c !== undefined && c in QUALITY_META) ? (c as QualityId | 'none') : undefined;
 };
 
-/** The weaknesses he can make his priority: his bottom-half qualities, weakest first (the first is the staff's read). */
-export function needOptions(league: League, cache?: NeedCache): Pick<Need, 'id' | 'label' | 'grade' | 'rank' | 'of'>[] {
-  return weakest(league, cache)
-    .filter(bottomHalf)
-    .slice(0, OPTIONS_MAX)
-    .map((q) => ({ id: q.id, label: QUALITY_META[q.id].label, grade: q.grade, rank: q.rank, of: q.of }));
+/** A quality he can make his priority: its grade and rank, whether it's a weakness (the league's bottom half), and whether it's the staff's read. */
+export interface NeedOption extends Pick<Need, 'id' | 'label' | 'grade' | 'rank' | 'of'> {
+  weak: boolean;
+  staff: boolean;
+}
+
+/** Every quality he can make his priority, weakest first: the first is the staff's read when it's a weakness. */
+export function needOptions(league: League, cache?: NeedCache): NeedOption[] {
+  const all = weakest(league, cache);
+  const staff = all[0] && bottomHalf(all[0]) ? all[0].id : undefined;
+  return all.map((q) => ({ id: q.id, label: QUALITY_META[q.id].label, grade: q.grade, rank: q.rank, of: q.of, weak: bottomHalf(q), staff: q.id === staff }));
 }
 
 /**
@@ -184,7 +186,7 @@ export function moveNeed(league: League, add: number[], drop: number[] = []): No
   const need = teamNeed(without, cache);
   if (!need) return null;
   const m = needMove(league, need.id, add, drop, cache);
-  return fills(m) ? { id: m.id, from: m.from, to: m.to, rankFrom: m.rankFrom, rankTo: m.rankTo } : null;
+  return fills(m) ? { id: m.id, from: m.from, to: m.to, rankFrom: m.rankFrom, rankTo: m.rankTo, by: need.by } : null;
 }
 
 /** The need's grade now (the user's rotation as it is), for the review's look back. */
@@ -220,5 +222,10 @@ export function movedNeedText(league: League): string {
   const t = league.transactions?.at(-1);
   if (!t?.need || !t.user || t.season !== league.season || t.day !== league.day) return '';
   const label = QUALITY_META[t.need.id as QualityId]?.label ?? 'Your need';
-  return ` It fills ${needChoice(league) ? 'your priority' : "the staff's read of your need"}: ${needText({ label, from: t.need.from as Grade, to: t.need.to as Grade })}.`;
+  return ` It fills ${needWhose(t.need)}: ${needText({ label, from: t.need.from as Grade, to: t.need.to as Grade })}.`;
+}
+
+/** Whose need a move filled, as its log line kept it: "your priority" / "the staff's read of your need" / (an older line) "your need". */
+export function needWhose(n: Pick<NonNullable<Txn['need']>, 'by'>): string {
+  return n.by === 'you' ? 'your priority' : n.by === 'staff' ? "the staff's read of your need" : 'your need';
 }

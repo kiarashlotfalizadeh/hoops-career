@@ -342,6 +342,9 @@ function movers(d: Partial<Record<RatingKey, number>>, n = 2, sign = 0): string 
     .join(', ');
 }
 
+/** Days a focus is new for: nothing moved under it yet is no verdict on it. */
+const FOCUS_NEW_DAYS = 30;
+
 const FOCUS_KEYS: Record<string, RatingKey[]> = {
   shooting: ['tp', 'mid', 'ft'],
   finishing: ['ins', 'drw', 'post'],
@@ -393,9 +396,13 @@ function reasonFor(league: League, p: Player, x: Pick<DevLine, 'group' | 'recent
   } else if (age > GROWS_IN_SEASON) out.push('Players his age hold until the summer');
   if (p.training !== 'balanced') {
     const keys = FOCUS_KEYS[p.training] ?? [];
-    const gain = keys.reduce((a, k) => a + (d[k] ?? 0), 0);
     const label = FOCUS_META[p.training].label.toLowerCase();
+    // a focus set since last season is read from his ratings the day it was set: what moved before it isn't its doing
+    const set = p.trainingSince?.r && p.trainingSince.season >= league.season - 1 ? p.trainingSince : null;
+    const gain = set ? keys.reduce((a, k) => a + attrDisplay(p.ratings[k]) - attrDisplay(set.r![k]), 0) : keys.reduce((a, k) => a + (d[k] ?? 0), 0);
+    const days = set && set.season === league.season ? league.day - set.day : null;
     if (gain > 0) out.push(`The ${label} focus shows`);
+    else if (days !== null && days < FOCUS_NEW_DAYS) out.push(`The ${label} focus is new: set ${plural(days, 'day')} ago`);
     else if (x.group !== 'rising') out.push(`The ${label} focus hasn't shown yet`);
   }
   return out.map(said).join(' ');

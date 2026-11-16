@@ -70,7 +70,8 @@ export function DigestHost() {
       });
   }, [show, digest]);
   return (
-    <Sheet open={show} onClose={() => useStore.getState().showDigest(false)} title="While you were away">
+    // (not a sheet he works in: it waits for a moment, so a moment mustn't wait for it)
+    <Sheet open={show} onClose={() => useStore.getState().showDigest(false)} title="While you were away" holds={false}>
       {digest && league && <DigestBody d={digest} />}
     </Sheet>
   );

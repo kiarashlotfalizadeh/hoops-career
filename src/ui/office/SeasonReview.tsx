@@ -12,7 +12,7 @@ import type { League } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { fmtDate } from '../../core/league/helpers';
 import { legacyOf } from '../../core/league/legacy';
-import { endText, gradeWord, vsPress, type SeasonReview } from '../../core/league/legacyReview';
+import { endText, gradeWord, vsPress, type DecisionThread, type SeasonReview } from '../../core/league/legacyReview';
 import { ownerWord } from '../../core/league/legacyPulse';
 import { resultText } from '../../core/league/ownerGoals';
 import { ordinal, plural } from '../../core/format';
@@ -23,6 +23,40 @@ import { PulseChart } from './Pulse';
 import './legacy.css';
 
 const gradeTone = (x: number) => (x >= 0.1 ? 'good' : x <= -0.1 ? 'bad' : 'warn');
+
+/** A move's parts that stay in sight under its takeaway: what it cost and what's still owed or to come. */
+const KEPT = new Set(['Cost', 'Open']);
+
+/**
+ * One of the coach's calls: its takeaway in a line, what it cost and what's still open always in
+ * sight, the rest (why, what came in, how he used them, the result; a thread's items) one tap down.
+ * An older review without takeaways shows every row.
+ */
+function Thread({ t, style }: { t: DecisionThread; style: CSSProperties }) {
+  const row = ([k, v]: [string, string]) => (
+    <div key={k} className="listrow fo-rv-honor fo-rv-trow">
+      <span className="over fo-rv-tk">{k}</span>
+      <span className="grow">{v}</span>
+    </div>
+  );
+  const kept = t.summary ? t.rows.filter(([k]) => KEPT.has(k)) : t.rows;
+  // (a thread of one row its takeaway already says has nothing more to show)
+  const rest = t.summary ? t.rows.filter(([k, v]) => !KEPT.has(k) && v !== t.summary) : [];
+  return (
+    <div className="card flush list fo-rv-in fo-rv-thread" style={style}>
+      <div className="list-divider">{t.title}</div>
+      {t.summary && <div className="listrow fo-rv-tsum">{t.summary}</div>}
+      {kept.map(row)}
+      {rest.length > 0 && (
+        <div className="listrow fo-rv-tmore">
+          <More label="Evidence">
+            <div className="list fo-rv-tev">{rest.map(row)}</div>
+          </More>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** The whole review, or a line saying there's none for that season. */
 export function SeasonReviewView({ league, season }: { league: League; season: number }) {
@@ -145,15 +179,7 @@ export function SeasonReviewView({ league, season }: { league: League; season: n
       {r.threads && r.threads.length > 0 ? (
         <Section title="Your calls, and what came of them">
           {r.threads.map((t) => (
-            <div key={t.title} className="card flush list fo-rv-in fo-rv-thread" style={step()}>
-              <div className="list-divider">{t.title}</div>
-              {t.rows.map(([k, v]) => (
-                <div key={k} className="listrow fo-rv-honor fo-rv-trow">
-                  <span className="over fo-rv-tk">{k}</span>
-                  <span className="grow">{v}</span>
-                </div>
-              ))}
-            </div>
+            <Thread key={t.title} t={t} style={step()} />
           ))}
         </Section>
       ) : (

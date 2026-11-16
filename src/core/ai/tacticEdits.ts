@@ -13,14 +13,15 @@
 //   paired replays can (12 games × 40 pairs each read to about ±0.5).
 // Both readings are pooled over the games and shrunk toward even as one (poolWorth), and read as a
 // gain, a cost or "too close to say" by worthCall's WORTH_MIN.
-// Pure: the functions here plan a measurement, read it and record it; the worker runs the games
-// (src/ui/tactics/editWatch.ts).
+// The functions here plan a measurement, read it and record it; the worker runs the games: a change
+// as it's made from the Team screens (src/ui/tactics/editWatch.ts), its check in the sim's morning
+// (editMorning), so it never waits on a visit to Team.
 
 import type { League, Player, Rotation, ScheduledGame, Tactics, TacticEdit } from '../types';
 import { changeColon, tacticsChanges } from '../sim/playbooks';
 import { addInbox, playerName, teamPlayers } from '../league/helpers';
 import { plural } from '../format';
-import { WORTH_MIN, poolWorth, worthCall, type CounterWorth, type LeagueChange } from './counterWorth';
+import { WORTH_MIN, measureChanges, poolWorth, worthCall, type CounterWorth, type LeagueChange } from './counterWorth';
 import { leadAssistant } from './assistant';
 
 /** The user's games ahead a change is measured on as it's made. */
@@ -387,8 +388,51 @@ export const unmeasured = (league: League) =>
     .filter((e) => !e.worth && !e.closed && e.season === league.season)
     .reverse();
 
-/** Changes due their check: CHECK_AFTER of the user's games played since, not checked, not closed. */
-export const checksDue = (league: League) => editsOf(league).filter((e) => e.worth && !e.check && !e.closed && playedSince(league, e).length >= CHECK_AFTER);
+/** At the season's end, a change with this many games played since is checked on them (fewer than CHECK_AFTER: the season ran out). */
+export const CHECK_END_MIN = 3;
+
+/**
+ * Changes due their check: CHECK_AFTER of the user's games played since, not checked, not closed
+ * (whether or not the forecast as it was made ever finished: the check reads played games, not it).
+ * `seasonOver`: his season is done, so one with CHECK_END_MIN played is checked on what there is.
+ */
+export const checksDue = (league: League, seasonOver = false) =>
+  editsOf(league).filter((e) => !e.check && !e.closed && playedSince(league, e).length >= (seasonOver ? CHECK_END_MIN : CHECK_AFTER));
+
+/**
+ * The checks that are due, measured where the sim runs (each sim morning: callMeasure.ts's
+ * staffMorning), so a check never waits for the Team screens to be opened, nor the season's review
+ * for it. Each goes out as the staff's note (saveCheck). Returns false if it was stopped part-way
+ * (what's checked is kept; the rest is checked the next morning) and the ids it checked or closed
+ * (one whose settings have all been changed again since is closed as replaced, with nothing to check).
+ */
+export async function editMorning(
+  league: League,
+  opts: { seasonOver?: boolean; onMeasure?: () => void; cancelled?: () => boolean; between?: () => Promise<void> | void } = {},
+): Promise<{ ok: boolean; checked: number[] }> {
+  const checked: number[] = [];
+  for (const e of checksDue(league, opts.seasonOver)) {
+    const { plan, replaced } = editPlan(league, e, 'check');
+    if (!plan) {
+      if (replaced) {
+        closeEdit(league, e.id, 'replaced');
+        checked.push(e.id);
+      }
+      continue;
+    }
+    opts.onMeasure?.();
+    const readings: GameReadings = [];
+    for (const g of plan.games) {
+      const game = league.schedule.find((x) => x.gid === g.gid);
+      const out = await measureChanges(league, g.opp, plan.changes, game, { games: plan.perGame, cancelled: opts.cancelled, between: opts.between });
+      if (!out) return { ok: false, checked };
+      readings.push({ w: g.w, worth: out });
+    }
+    saveCheck(league, e.id, readEdit(readings).worth, plan.count);
+    checked.push(e.id);
+  }
+  return { ok: true, checked };
+}
 
 /**
  * Put a check on change `id`, and send the staff's note on it (once): the verdict, its number and the
