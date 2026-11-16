@@ -1282,6 +1282,15 @@ table.stats .bx-div td {
 .gd-hurt b {
   color: var(--bad);
 }
+/* the night put together (schemes, shooting luck, your moves), under the edges that decided it */
+.gd-together {
+  margin: 0 0 10px;
+  line-height: 1.45;
+  max-width: 60ch;
+}
+.gd-together b {
+  font-weight: 640;
+}
 /* a plan counter's grade under its name: the verdict and its measured worth, in the signal's colour */
 .gd-plan-v {
   display: inline-flex;

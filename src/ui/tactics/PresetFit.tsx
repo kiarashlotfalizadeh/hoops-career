@@ -2,7 +2,7 @@
 // what suits the roster and what works against it, with the players behind each, and what would raise
 // it. All words: the figures stay under the hood (core/ai/coachAI.ts, core/analysis/staffWords.ts).
 import type { FitTerm, ProfileKey, RosterProfile } from '../../core/ai/coachAI';
-import { FIT, leanTone } from '../../core/analysis/staffWords';
+import { leanTone } from '../../core/analysis/staffWords';
 import { shownFit, type ShownFit } from './fit';
 
 /** Each roster quality as the fit explanation names it, and what having more of it means. */
@@ -92,7 +92,7 @@ export function PresetFit({
   return (
     <div className="col tx-why">
       <div className="tx-why-head">
-        <span className={`tx-fitv tx-read ${mine ? '' : leanTone(f.lean)}`}>{mine ? 'Yours' : FIT[f.lean]}</span>
+        <span className={`tx-fitv tx-read ${mine ? '' : leanTone(f.lean)}`}>{mine ? 'Yours' : f.word}</span>
         <span className="grow tx-term-s">{mine ? "The staff's read for your roster." : `Against ${curName}, by the staff's read.`}</span>
       </div>
       <Parts title="Suits your roster" parts={suits} pr={pr} name={name} />

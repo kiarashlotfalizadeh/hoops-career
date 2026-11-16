@@ -5,7 +5,7 @@
 // (by that same read: StaffFor in coachAI) and how it compares with his.
 import type { League, Tactics } from '../../core/types';
 import { autoTactics, defPresetFit, fitRoster, offPresetFit, rosterProfile, type FitTerm } from '../../core/ai/coachAI';
-import { leanOf, type Lean } from '../../core/analysis/staffWords';
+import { fitWord, leanOf, type Lean } from '../../core/analysis/staffWords';
 import { rosterSorted } from '../../core/league/helpers';
 import { DEF_PRESETS, OFF_PRESETS } from '../../core/sim/tactics';
 
@@ -30,6 +30,8 @@ export const bestFit = <T extends { id: string }>(presets: T[], fits: Record<str
 export interface ShownFit {
   /** Its lean against the playbook in use (even for that playbook itself). */
   lean: Lean;
+  /** Its read against the playbook in use in words, a shade inside even (see fitWord). */
+  word: string;
   /** The roster qualities that move it, each with which way (parts that round to nothing left out). */
   parts: { term: FitTerm; v: number }[];
 }
@@ -40,7 +42,8 @@ export function shownFit(id: string, terms: FitTerm[], fits: Record<string, numb
     .filter((t) => t.key !== 'base')
     .map((term) => ({ term, v: Math.round(term.value) }))
     .filter((p) => p.v !== 0);
-  return { lean: leanOf(versus(id, fits, cur)), parts };
+  const v = versus(id, fits, cur);
+  return { lean: leanOf(v), word: fitWord(v), parts };
 }
 
 /** The tactics the user's staff would put in for this roster (as the hand-over does). */

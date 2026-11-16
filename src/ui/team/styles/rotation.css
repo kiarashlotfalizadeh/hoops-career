@@ -5,11 +5,16 @@
 .tm-rhero {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px var(--pad-card) 4px;
+  gap: 8px;
+  padding: 10px var(--pad-card) 2px;
 }
-.tm-rhero .statline .v {
-  font-size: 30px;
+/* the targets' minutes in one line (the starters' list stays on a phone's first screen) */
+.tm-rsum-line {
+  color: var(--text-dim);
+}
+.tm-rsum-line b {
+  color: var(--text);
+  font-weight: 700;
 }
 .tm-auto {
   display: flex;

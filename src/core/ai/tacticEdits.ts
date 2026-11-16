@@ -408,7 +408,7 @@ export function saveCheck(league: League, id: number, w: CounterWorth, games: nu
       ? `${replayed} It seems to have helped. I'd keep it.`
       : call === 'cost'
         ? `${replayed} It seems to have hurt. Put it back from Team → Tactics → Analysis.`
-        : `${replayed} It made no clear difference. Nothing to undo.`;
+        : `${replayed} It neither won nor cost you games. Keep it if you like how the team plays with it.`;
   addInbox(league, {
     from: `${lead.name}, lead assistant`,
     subject: call === 'gain' ? 'Your change seems to have helped' : call === 'cost' ? 'Your change seems to have hurt' : 'Your change made no clear difference',
@@ -448,7 +448,12 @@ export function madeLine(e: TacticEdit): string {
   const w = e.worth;
   if (!w) return 'The staff is watching your change.';
   const call = worthCall(w);
-  return call === 'gain' ? 'Your change seems to help.' : call === 'cost' ? 'Your change seems to hurt.' : 'Your change makes no clear difference.';
+  // (even isn't "nothing happened": the change still moves how the team plays, the results just can't tell it apart yet)
+  return call === 'gain'
+    ? 'Your change seems to help.'
+    : call === 'cost'
+      ? 'Your change seems to hurt.'
+      : `No clear swing in results from your change yet. It's a style call: the staff looks again after ${CHECK_AFTER} games.`;
 }
 
 /** The check's verdict, in words, on the games since. */
@@ -456,7 +461,11 @@ export function checkLine(e: TacticEdit): string {
   const c = e.check;
   if (!c) return '';
   const call = worthCall(c);
-  return call === 'gain' ? 'Your change seems to have helped.' : call === 'cost' ? 'Your change seems to have hurt.' : 'Your change made no clear difference.';
+  return call === 'gain'
+    ? 'Your change seems to have helped.'
+    : call === 'cost'
+      ? 'Your change seems to have hurt.'
+      : `Over ${c.games} games your change neither won nor cost you games. Keep it if you like how the team plays with it.`;
 }
 
 /** The call of a reading, for its tone. */

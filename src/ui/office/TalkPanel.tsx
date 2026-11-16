@@ -4,8 +4,7 @@
 // only his ask, and that he may take a little less.
 import { Handshake, MessagesSquare, PhoneOff, TriangleAlert } from 'lucide-react';
 import type { Player, TalkTerms } from '../../core/types';
-import { LOWBALL, type TalkKind, askFor, breakdownRule, closedLabel, patienceText, talkState } from '../../core/league/negotiation';
-import { makeContract } from '../../core/league/contracts';
+import { LOWBALL, type TalkKind, askFor, breakdownRule, closedLabel, patienceText, talkSalaries, talkState } from '../../core/league/negotiation';
 import { playerName, shortName } from '../../core/league/helpers';
 import { useLeague } from '../../state/store';
 import { More } from '../components/ui';
@@ -26,7 +25,6 @@ export const optionLabel = (o?: TalkTerms['option']) => (o ? `${o} option` : 'no
 export function TalkPanel({
   p,
   kind,
-  season,
   amount,
   years,
   option,
@@ -36,8 +34,6 @@ export function TalkPanel({
 }: {
   p: Player;
   kind: TalkKind;
-  /** The first season of the contract talked about (for the counter's total). */
-  season: number;
   amount: number;
   years: number;
   option?: TalkTerms['option'];
@@ -60,7 +56,8 @@ export function TalkPanel({
   const lowball = amount < askAt * LOWBALL;
   const c = st.counter;
   const cWhy = c ? counterBlocked(c) : null;
-  const cTotal = c ? makeContract(league, c.amount, c.years, season, p.experience).salaries.reduce((a, x) => a + x, 0) : 0;
+  // (as signed: the same raises the deal is written with, see talkSalaries)
+  const cTotal = c ? talkSalaries(league, p, kind, c.amount, c.years).reduce((a, x) => a + x, 0) : 0;
   const tone = st.patience <= 1 ? 'bad' : st.patience === 2 ? 'warn' : 'good';
   // his counter shows in its own row: the reply keeps only what it adds (that a lowball stung)
   const replyText = reply && c && reply.tone === 'warn' ? reply.text.replace(/^.*? counters at .*? over \d+ years?\.\s*/, '') : reply?.text;

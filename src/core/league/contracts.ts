@@ -406,6 +406,21 @@ export const maxYearsWith = (league: League, p: Player, tid: number) => (ownTeam
 export const raiseWith = (league: League, p: Player, tid: number) => (ownTeam(p, tid) && birdTier(league, p) !== 'non' ? 0.08 : 0.05);
 
 /**
+ * The raises and max a signing writes into his deal with team `tid` (see signPlayer). The contract
+ * sheets total an offer, and his counter, with these, so what they show is what gets signed.
+ */
+export const signingTerms = (league: League, p: Player, tid: number, start: number, opts: { bird?: boolean; raise?: number } = {}) => ({
+  raise: opts.raise ?? (opts.bird ? 0.08 : raiseWith(league, p, tid)),
+  max: playerMax(league, p, start, tid),
+});
+
+/** The salaries an extension at `amount` a season writes, from the season after his deal ends (see extendContract). */
+export function extensionSalaries(league: League, p: Player, amount: number, years: number): number[] {
+  const start = contractExp(p.contract) + 1;
+  return makeContract(league, amount, years, start, p.experience, { raise: 0.08, max: playerMax(league, p, start, p.tid) }).salaries;
+}
+
+/**
  * What he asks of team `tid` (of the market, without one): his market value, an unsigned free
  * agent's price as it has come down (see faDay), over the years he wants. A star worth nearly the
  * max (MAX_ASK) asks his max of everyone, so his interest in a team decides where he signs (see
@@ -881,7 +896,7 @@ export function signPlayer(
   const own = prevTid === tid || p.rfa?.tid === tid || !!opts.bird;
   const start = opts.start ?? league.season;
   // (read before he joins: Bird rights are his old team's, and so is a bigger max)
-  const terms = opts.tenDay || opts.twoWay ? {} : { raise: opts.raise ?? (opts.bird ? 0.08 : raiseWith(league, p, tid)), max: playerMax(league, p, start, tid) };
+  const terms = opts.tenDay || opts.twoWay ? {} : signingTerms(league, p, tid, start, opts);
   p.tid = tid;
   p.contract = opts.tenDay ? { start, salaries: [amount], tenDay: { ...opts.tenDay } } : makeContract(league, amount, years, start, opts.twoWay ? undefined : p.experience, terms);
   if (opts.twoWay) p.contract.twoWay = true;
@@ -1605,8 +1620,7 @@ export function willExtend(league: League, p: Player, amount: number, years: num
  * can't be traded until December 15, or three months on in season.
  */
 export function extendContract(league: League, p: Player, amount: number, years: number) {
-  const start = contractExp(p.contract) + 1;
-  p.contract.next = { salaries: makeContract(league, amount, years, start, p.experience, { raise: 0.08, max: playerMax(league, p, start, p.tid) }).salaries };
+  p.contract.next = { salaries: extensionSalaries(league, p, amount, years) };
   delete p.contract.option;
   p.tradeLock = league.phase === 'regular' ? { season: league.season, day: Math.max(DEC_15, league.day + 90) } : { season: contractSeason(league), day: DEC_15 };
   const team = league.teams[p.tid];

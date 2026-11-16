@@ -16,6 +16,8 @@ import { salaryFor } from '../../core/playerGen';
 import { useLeagueMemo } from '../../state/store';
 import { act, touch } from '../../state/actions';
 import { AgendaRow } from '../components/Agenda';
+import { ImpactList } from '../trade/ConfirmSheet';
+import { tradeImpact } from '../../core/league/tradeImpact';
 import { TeamLogo } from '../components/TeamLogo';
 import { Empty, More, Ovr } from '../components/ui';
 import { capSeason, contractEnd, salaryText, taxLine } from './common';
@@ -88,6 +90,7 @@ function OfferCard({
   // in neutral (league) value: every offer is at worst slightly against the user
   const { net, out: worth } = neutralBalance(league, p.offer);
   const share = worth > 0 ? net / worth : net >= 0 ? 1 : -1;
+  const im = useLeagueMemo(() => tradeImpact(league, p.offer), [league, p]);
   const verdict = share > 0.05 ? { l: 'In your favor', c: 'good' } : share < -0.05 ? { l: 'A little short', c: 'warn' } : { l: 'Fair value', c: 'info' };
   return (
     <section ref={ref} className={`card flush fo-offer ${focus ? 'focus' : ''}`} aria-label={`Offer from the ${t.region} ${t.name}`}>
@@ -114,6 +117,8 @@ function OfferCard({
           <Side league={league} title="You send" side={p.offer.a} />
           <Side league={league} title="You get" side={p.offer.b} />
         </div>
+        {/* what it does to your rotation, the need it fills and the future it gives up, before Accept */}
+        {!error && <ImpactList im={im} />}
         {/* the money in its own line, so the verdict and Review keep theirs */}
         <div className="tiny dim num">
           Payroll after <b className={after > cap.luxuryTax ? 'bad' : after > cap.salaryCap ? 'warn' : 'good'}>{money(after)}</b>

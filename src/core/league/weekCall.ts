@@ -32,7 +32,7 @@
 // (Gilgeous-Alexander, 2027). A call whose honest answer is always "play him" isn't a choice.
 import type { League, Rotation, ScheduledGame } from '../types';
 import type { YouthLean } from './youthLean';
-import { fmtDate, teamPlayers } from './helpers';
+import { fmtDate, shortName, teamPlayers } from './helpers';
 import { guideOpen } from './agenda';
 import { worthSig, type CallCard, type CallMeasure, type CallWorth } from './calls';
 import { WORTH_MIN } from '../ai/counterWorth';
@@ -142,6 +142,50 @@ export function leanedRotation(league: League, level: number): Rotation {
   const rot = autoRotation(players, league.teams[league.userTid].rotation, { lean: (p) => level * youthLean(playerAge(p, league.season)), maxMinutes: 38 - 8 * level });
   if (level < 1) benchTwoWays(rot, players);
   return rot;
+}
+
+/** A player the young players' lean moves: his minutes a game now and with it, and whether he starts each way. */
+export interface YouthMove {
+  pid: number;
+  name: string;
+  from: number;
+  to: number;
+  startsNow: boolean;
+  startsWith: boolean;
+}
+
+/**
+ * Who the young players' lean moves before it's taken (the week's card shows it): each player whose
+ * place in the starting five changes or whose minutes move 4 or more a game, biggest change first.
+ */
+export function youthMoves(league: League, level = YOUTH_LEVEL): YouthMove[] {
+  const now = league.teams[league.userTid].rotation;
+  const lean = leanedRotation(league, level);
+  const starts = (r: Rotation, pid: number) => r.order.slice(0, 5).includes(pid);
+  return healthy(league)
+    .filter((p) => !(p.injury && p.injury.gamesRemaining > 0))
+    .map((p) => ({
+      pid: p.pid,
+      name: shortName(league, p),
+      from: Math.round(now.minutes[p.pid] ?? 0),
+      to: Math.round(lean.minutes[p.pid] ?? 0),
+      startsNow: starts(now, p.pid),
+      startsWith: starts(lean, p.pid),
+    }))
+    .filter((m) => m.startsNow !== m.startsWith || Math.abs(m.to - m.from) >= 4)
+    .sort((a, b) => Math.abs(b.to - b.from) - Math.abs(a.to - a.from) || a.pid - b.pid);
+}
+
+/** The lean's moves in words for the card: "Smith and Lee start; Jones to the bench; Hall out of the rotation." (empty: nobody's role changes). */
+export function youthMovesText(moves: YouthMove[]): string {
+  const list = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}` : (xs[0] ?? ''));
+  const up = moves.filter((m) => m.startsWith && !m.startsNow).map((m) => m.name);
+  // (a player who plays now and wouldn't at all isn't on the bench: he's out of the rotation)
+  const out = moves.filter((m) => m.from > 0 && m.to === 0).map((m) => m.name);
+  const down = moves.filter((m) => m.startsNow && !m.startsWith && m.to > 0).map((m) => m.name);
+  return [up.length ? `${list(up)} start${up.length === 1 ? 's' : ''}` : '', down.length ? `${list(down)} to the bench` : '', out.length ? `${list(out)} out of the rotation` : '']
+    .filter(Boolean)
+    .join('; ');
 }
 
 /** Minutes a game a rotation gives the players the owner's youth goal counts (YOUNG_AGE or under). */
@@ -384,11 +428,13 @@ export function weekDecide(league: League) {
     } else if (yw.pts <= -WORTH_MIN) {
       wc.ask = 'youth';
     } else {
+      // (who it moves, read before the lean goes in)
+      const roles = youthMovesText(youthMoves(league));
       putYouth(league, 'auto', wc);
       const what = y.why === 'draft' ? ', the postseason out of reach.' : ", for the owner's goal.";
       notePick(
         league,
-        `About ${y.add} more minutes a game for the young players until ${fmtDate(league.season, league.youthLean!.until)}${what} ${yw.pts >= WORTH_MIN ? 'It should help.' : "It shouldn't cost you."}`,
+        `About ${y.add} more minutes a game for the young players until ${fmtDate(league.season, league.youthLean!.until)}${what}${roles ? ` ${roles.replace(/^./, (c) => c.toUpperCase())}.` : ''} ${yw.pts >= WORTH_MIN ? 'It should help.' : "It shouldn't cost you."}`,
       );
     }
   }
@@ -517,12 +563,19 @@ export function weekCard(league: League): CallCard | null {
           : 'His minutes goal looks safe either way.';
     why = leans ? 'The owner counts the minutes for more.' : 'The owner counts the wins for more.';
   }
+  // who it moves and for how long, before it's taken: the starters it changes on the row, every minute a tap down
+  const moves = youthMoves(league);
+  const roles = youthMovesText(moves);
+  const games = Math.min(YOUTH_GAMES, gamesLeft(league));
+  const span = `For ${games} game${games === 1 ? '' : 's'}, through ${fmtDate(league.season, youthUntil(league))}`;
+  const minutes = moves.length ? `Minutes a game: ${moves.map((m) => `${m.name} ${m.from} → ${m.to}`).join(', ')}.` : '';
   return {
     id,
     kind: 'week',
     title: `${y.add} more minutes a game for the young players?`,
-    line: `The staff leans ${leans ? 'to playing them' : 'to the rotation as it is'}. ${lead}`,
-    detail: [why, ...(y.why === 'draft' ? [cost] : []), gain, tomorrow].join('\n'),
+    line: `${span}${roles ? `: ${roles}` : ''}. The staff leans ${leans ? 'to playing them' : 'to the rotation as it is'}. ${lead}`,
+    detail: [minutes, why, ...(y.why === 'draft' ? [cost] : []), gain, tomorrow].filter(Boolean).join('\n'),
+    pids: moves.map((m) => m.pid),
     tone: 'info',
     to: y.why === 'draft' ? '/office/draft' : '/office/owner',
     suggestion: leans ? play : keep,

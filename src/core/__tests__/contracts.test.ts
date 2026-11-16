@@ -60,6 +60,7 @@ import {
   userExtend,
   walkAwayDiscount,
   walkAwayFor,
+  talkSalaries,
 } from '../league/negotiation';
 import { aiExtensions, capHolds, expiringPlayers, releaseExpiring, renouncePlayer, signedThisSummer, userOffer, userResign } from '../league/freeAgency';
 import { executeTrade, untradeableReason, validateTrade } from '../league/trades';
@@ -470,6 +471,32 @@ it('negotiation and extensions: the ask, the walk-away price, counters and patie
     expect(userExtend(l, p.pid, extensionAsk(l, p).amount, ask.years).ok).toBe(true);
     expect(p.contract.next).toBeDefined();
     expect(p.talks).toBeUndefined();
+  }
+
+  // his counter's total as the sheet shows it (talkSalaries) is the deal signed: re-signing on Bird
+  // rights writes 8% raises, not the 5% a plain total would (a 5-year counter showed $72.1M, signed $76.55M)
+  {
+    const l = talksLeague('resign');
+    const p = expiring(l);
+    // (full Bird rights: three seasons with the team)
+    p.birdSince = l.season - 3;
+    const ask = talkAsk(l, p, 'resign');
+    const r = userResign(l, p.pid, round50(ask.amount * 0.86), ask.years);
+    const c = r.counter!;
+    expect(c).toBeDefined();
+    const shown = talkSalaries(l, p, 'resign', c.amount, c.years);
+    // (Bird rights: 8% raises in what the sheet shows)
+    if (c.years > 1) expect(shown[1]).toBeGreaterThan(shown[0] * 1.07);
+    expect(userResign(l, p.pid, c.amount, c.years).ok).toBe(true);
+    expect(p.contract.salaries).toEqual(shown);
+    // an extension's preview is its signed salaries too
+    const e = extLeague();
+    e.phase = 'regular';
+    const q = finalYear(e, standardRoster(e, U)[0], 78, 27);
+    const amt = agreed(e, q, 3);
+    const preview = talkSalaries(e, q, 'extend', amt, 3);
+    expect(userExtend(e, q.pid, amt, 3).ok).toBe(true);
+    expect(q.contract.next!.salaries).toEqual(preview);
   }
 
   // a new period starts talks over, and signing anywhere ends them

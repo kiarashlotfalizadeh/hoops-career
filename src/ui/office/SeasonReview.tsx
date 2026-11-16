@@ -2,7 +2,8 @@
 // The season's record and how it ended on a slab, the owner's verdict with each goal's grade (his
 // review, owner.ts), the season against what he asked and what the press predicted, its best win,
 // best player and breakout, the records and honors (its milestones one tap away), the owner's and the
-// fans' pulse through it (one tap down) and what next season should bring. Built once (legacyReview.ts) and kept, so an old
+// fans' pulse through it (one tap down), the coach's own calls (trades, training, tactics, live
+// coaching) with what came of each, and what next season should bring. Built once (legacyReview.ts) and kept, so an old
 // season reads the same. The sections come in one after another, quickly; reduced motion shows them.
 import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
@@ -137,6 +138,18 @@ export function SeasonReviewView({ league, season }: { league: League; season: n
                 <span className="lr-meta num">{r.breakout.line}</span>
               </Row>
             )}
+          </div>
+        </Section>
+      )}
+
+      {r.decisions && r.decisions.length > 0 && (
+        <Section title="Your calls, and what came of them">
+          <div className="card flush list fo-rv-in" style={step()}>
+            {r.decisions.map((d) => (
+              <div key={d} className="listrow fo-rv-honor">
+                <span className="grow">{d}</span>
+              </div>
+            ))}
           </div>
         </Section>
       )}

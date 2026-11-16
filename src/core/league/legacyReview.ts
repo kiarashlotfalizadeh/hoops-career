@@ -17,6 +17,10 @@ import { bestWinOf, legacyOf, type PulsePoint, type SignatureWin } from './legac
 import { fanScore } from './legacyPulse';
 import { jobSecurity } from './jobSecurity';
 import { ordinal, plural } from '../format';
+import { editCall, editsOf } from '../ai/tacticEdits';
+import { SINCE } from '../analysis/staffWords';
+import { seasonCoachingLine } from '../analysis/debrief';
+import { FOCUS_META } from './progression';
 
 export interface SeasonReview {
   season: number;
@@ -53,6 +57,81 @@ export interface SeasonReview {
   fired?: true;
   /** Job security when it was off for the season (changes wait for opening night, so one a season). */
   jobSecurity?: false;
+  /**
+   * The coach's own decisions and what came of them, a line each (see decisionLines): his trades this
+   * season and last with how each side has played since, his players' training focus against their
+   * growth, his tactical changes with the staff's verdict, and his live coaching over the season.
+   */
+  decisions?: string[];
+}
+
+/** Decisions the review reconnects, at most. */
+const DECISIONS_MAX = 7;
+
+/** A player's regular-season line with one team in a season, short: "14.2 PTS in 51 games" (null: he didn't play for it). */
+function shortLine(p: Player | undefined, season: number, tid: number): string | null {
+  const s = p && lineOf(p, season, tid);
+  return s?.gp ? `${per(s.pts, s.gp)} PTS in ${plural(s.gp, 'game')}` : null;
+}
+
+/**
+ * The coach's decisions, reconnected with what followed (the review keeps them as words, so an old
+ * season reads the same): each trade of his this season and last, what came in (how they've played
+ * for him since) against what went out (how they've played where they went, the picks given); each
+ * of his players on a training focus, his OVR then and now; his tactical changes this season the
+ * staff checked, with its verdict; his live coaching over the season.
+ */
+export function decisionLines(league: League, season: number, tid: number): string[] {
+  const out: string[] = [];
+  const name = (pid: number, frozen: string) => (league.players[pid] ? playerName(league.players[pid]) : frozen);
+  // trades: this season's and last's, newest first
+  const trades = (league.transactions ?? []).filter((t) => t.kind === 'trade' && t.tids.includes(tid) && (t.season === season || t.season === season - 1) && t.sides);
+  for (const t of [...trades].reverse().slice(0, 3)) {
+    const mine = t.sides!.find((x) => x.tid === tid);
+    const theirs = t.sides!.find((x) => x.tid !== tid);
+    if (!mine || !theirs) continue;
+    const got = theirs.players.map((x) => {
+      const l = shortLine(league.players[x.pid], season, tid);
+      return `${name(x.pid, x.name)}${l ? ` (${l} for you)` : league.players[x.pid]?.tid === tid ? " (hasn't played)" : ' (gone since)'}`;
+    });
+    const gave = mine.players.map((x) => {
+      const p = league.players[x.pid];
+      const l = p ? shortLine(p, season, theirs.tid) : null;
+      return `${name(x.pid, x.name)}${l ? ` (${l} for ${league.teams[theirs.tid].abbrev})` : ''}`;
+    });
+    const picks = mine.picks.length ? `${mine.picks.length === 1 ? 'a pick' : `${mine.picks.length} picks`}` : '';
+    const when = t.season === season ? '' : ` (${seasonLabel(t.season)})`;
+    const gaveText = [...gave, ...(picks ? [picks] : [])].join(', ') || 'nothing';
+    if (got.length || gave.length) out.push(`Trade${when}: ${got.join(', ') || 'picks'} for ${gaveText}.`);
+  }
+  // development: his players on a training focus, OVR at the season's start against now
+  const dev = Object.values(league.players)
+    .filter((p) => p.tid === tid && p.training && p.training !== 'balanced')
+    .map((p) => ({ p, from: p.ratingsHistory.find((h) => h.season === season)?.ovr }))
+    .filter((x) => x.from !== undefined)
+    .sort((a, b) => Math.abs(b.p.ovr - b.from!) - Math.abs(a.p.ovr - a.from!))
+    .slice(0, 2);
+  for (const { p, from } of dev) {
+    const d = p.ovr - from!;
+    out.push(`${FOCUS_META[p.training].label} focus for ${playerName(p)}: OVR ${from} → ${p.ovr}${d >= 3 ? ', it paid off' : d <= -2 ? ', he slipped anyway' : ''}.`);
+  }
+  // tactics: his changes this season the staff checked, the clearest first
+  const edits = editsOf(league)
+    .filter((e) => e.season === season && (e.check || e.worth))
+    .map((e) => ({ e, call: editCall(e.check ?? e.worth)! }))
+    .sort((a, b) => Number(b.call !== 'even') - Number(a.call !== 'even') || b.e.day - a.e.day)
+    .slice(0, 2);
+  for (const { e, call } of edits) {
+    const w = e.check ?? e.worth!;
+    const what = e.what.split(' · ')[0];
+    out.push(
+      `${what}${e.what.includes(' · ') ? ' and more' : ''}: ${SINCE[call].toLowerCase()}, over ${plural(w.games, 'game')}${e.closed === 'reverted' ? '. You put it back' : ''}.`,
+    );
+  }
+  // live coaching over the season
+  const live = seasonCoachingLine(league, season, tid);
+  if (live) out.push(`${live}.`);
+  return out.slice(0, DECISIONS_MAX);
 }
 
 /** A player's line for a season with one team, regular season. */
@@ -128,6 +207,7 @@ export function buildSeasonReview(league: League): SeasonReview | null {
   }
   const s = legacyOf(league);
   const pulse = s.pulse && s.pulse.season === season && s.pulse.tid === tid ? s.pulse.pts : undefined;
+  const decisions = decisionLines(league, season, tid);
   return {
     season,
     tid,
@@ -160,6 +240,7 @@ export function buildSeasonReview(league: League): SeasonReview | null {
     ...(next ? { next } : {}),
     ...(league.fired ? { fired: true as const } : {}),
     ...(league.settings.jobSecurity ? {} : { jobSecurity: false as const }),
+    ...(decisions.length ? { decisions } : {}),
   };
 }
 

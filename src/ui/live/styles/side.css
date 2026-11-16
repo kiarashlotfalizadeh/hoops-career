@@ -387,8 +387,61 @@
 .lv-turn-keep:active {
   background: color-mix(in srgb, var(--paper-ink) 26%, transparent);
 }
+/* a phone's first live game, upright: watch sideways or keep upright, asked once before the page turns */
+.lv-turn-ask {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 8;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 12px;
+  align-items: start;
+  padding: 14px 14px 12px;
+  border-radius: var(--radius-lg, 14px);
+  /* (opaque: it sits over the intro's line-ups) */
+  background: #161616;
+  color: #fff;
+  box-shadow: var(--shadow-float);
+  animation: pop var(--dur-slow) var(--ease-out) both;
+}
+.lv-turn-ask-t {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.lv-turn-ask-t b {
+  font-size: 14px;
+  font-weight: 680;
+}
+.lv-turn-ask-acts {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+}
+.lv-turn-ask-acts button {
+  flex: 1;
+  min-height: 44px;
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  font-weight: 680;
+  border: 0;
+}
+/* light on the dark plate: the pick, then the quieter other */
+.lv-turn-ask-acts .lv-turn-ask-go {
+  background: #fff;
+  color: #161616;
+}
+.lv-turn-ask-acts .lv-turn-ask-keep {
+  background: color-mix(in srgb, #fff 16%, transparent);
+  color: #fff;
+}
 @media (prefers-reduced-motion: reduce) {
-  .lv-turn-hint {
+  .lv-turn-hint,
+  .lv-turn-ask {
     animation: none;
   }
 }

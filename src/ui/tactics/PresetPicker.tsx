@@ -13,7 +13,7 @@ import { presetMatches } from '../../core/sim/playbooks';
 import { CHANGE_UPS, baseDefenses, defPresetFit, defPresetTerms, fitRoster, offPresetFit, offPresetTerms, rosterProfile, staffPick } from '../../core/ai/coachAI';
 import { inSeason, rosterSorted } from '../../core/league/helpers';
 import { rosterNames } from '../stats';
-import { FIT, leanTone } from '../../core/analysis/staffWords';
+import { leanTone } from '../../core/analysis/staffWords';
 import { Sheet, Tag } from '../components/ui';
 import { PresetFit } from './PresetFit';
 import { bestFit, byFit, shownFit } from './fit';
@@ -72,7 +72,7 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
         {presets.map((p) => {
           const on = cur === p.id;
           const custom = isCustom(p);
-          const { lean } = shownFit(p.id, terms[p.id], fits, cur);
+          const { lean, word } = shownFit(p.id, terms[p.id], fits, cur);
           const tone = leanTone(lean);
           return (
             <div key={p.id} className={`tx-preset ${on ? 'on' : ''}`}>
@@ -88,11 +88,11 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
               </button>
               <button
                 className="tx-fit"
-                aria-label={on ? `About ${p.name}, in use` : changeUp(p.id) ? `About ${p.name}, a change-up` : `About ${p.name}, the staff's read: ${FIT[lean]}`}
+                aria-label={on ? `About ${p.name}, in use` : changeUp(p.id) ? `About ${p.name}, a change-up` : `About ${p.name}, the staff's read: ${word}`}
                 aria-haspopup="dialog"
                 onClick={() => setOpen(p.id)}
               >
-                {on ? <Tag>Yours</Tag> : changeUp(p.id) ? <Tag>Change-up</Tag> : <Tag tone={tone || undefined}>{FIT[lean]}</Tag>}
+                {on ? <Tag>Yours</Tag> : changeUp(p.id) ? <Tag>Change-up</Tag> : <Tag tone={tone || undefined}>{word}</Tag>}
                 <ChevronRight size={16} className="dim" aria-hidden="true" />
               </button>
             </div>

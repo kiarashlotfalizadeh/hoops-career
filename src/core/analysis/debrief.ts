@@ -307,6 +307,48 @@ export function luckLine(res: GameResult, side: 0 | 1, won: boolean): string {
   return `${what}. That part was luck, not the plan.`;
 }
 
+/** Points a side's shots fell above (or below) what its looks were worth: eFG against expected, over its attempts. */
+function luckPts(res: GameResult, s: 0 | 1): number {
+  const box = s === 0 ? res.home : res.away;
+  const x = res.xShots?.[s];
+  return x && box.t.fga ? box.t.fgm * 2 + box.t.tpm - x.pts : 0;
+}
+
+/** A scheme or luck swing in points that reads as more than a rounding in the together line. */
+const TOGETHER_MIN = 1.5;
+
+/**
+ * The night put together, so its parts don't read as pulling against each other: what the schemes
+ * did (the tactical edges, and the plan on what it aimed at), what shooting luck did (shots against
+ * their looks, both sides), which of the two counted for more, and whether the coach's moves helped
+ * (the replayed night, or that it's too close to say). Words only. Undefined for a night with
+ * nothing measured to put together (an old result).
+ */
+export function togetherLine(res: GameResult, side: 0 | 1, report: GameReport, plan: PlanGrade[] = []): string | undefined {
+  if (!res.xShots) return undefined;
+  const other = (1 - side) as 0 | 1;
+  const scheme = report.factors.filter((f) => f.category === 'tactics' && !f.luck).reduce((a, f) => a + f.pts, 0);
+  const luck = luckPts(res, side) - luckPts(res, other);
+  const planBit = plan.some((g) => g.night === 'better') ? ', and your plan did its job' : plan.some((g) => g.night === 'worse') ? ", but your plan's target got loose" : '';
+  const schemeText =
+    scheme >= TOGETHER_MIN ? `Our scheme won us ground${planBit}` : scheme <= -TOGETHER_MIN ? `Our scheme gave up ground${planBit}` : `The schemes about broke even${planBit}`;
+  const luckText = luck >= TOGETHER_MIN ? 'the shooting ran our way' : luck <= -TOGETHER_MIN ? 'the shooting ran theirs' : 'the shooting was about what the looks were worth';
+  const bigger =
+    Math.abs(luck) >= TOGETHER_MIN && Math.abs(luck) > Math.abs(scheme) * 1.5
+      ? ' Tonight the shooting counted for more than anything we drew up.'
+      : Math.abs(scheme) >= TOGETHER_MIN && Math.abs(scheme) > Math.abs(luck) * 1.5
+        ? ' Tonight the scheme counted for more than the shooting.'
+        : '';
+  const n = res.moves?.length
+    ? nightLine(
+        res,
+        res.moves.every((m) => m.by === 'staff'),
+      )
+    : null;
+  const movesText = !res.moves?.length ? '' : n ? ` ${n.text}.` : ' Whether your moves helped, the staff is still working out.';
+  return `${schemeText}; ${luckText}.${bigger}${movesText}`;
+}
+
 /** Trips on what a counter was aimed at before tonight reads as anything (fewer: "too few to tell"). */
 const PLAN_MIN_TRIPS = 4;
 /** Trips coming in a team's own rate needs to be the baseline (fewer: the league's rate on those plays). */

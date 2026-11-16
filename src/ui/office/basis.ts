@@ -5,6 +5,7 @@ import type { League, Phase, Player } from '../../core/types';
 import { CAP } from '../../core/constants';
 import { contractExp } from '../../core/playerGen';
 import { CAP_FOR, rosterMaxNow, standardRoster, teamPlayers, twoWayRoster } from '../../core/league/helpers';
+import { summerRoster } from '../../core/league/contracts';
 import { keepFigures, money, moneyExact } from '../../core/format';
 
 export const OFFSEASON_PHASES: Phase[] = ['draftLottery', 'draft', 'resign', 'freeAgency'];
@@ -32,13 +33,32 @@ export function rosterSpots(league: League, tid = league.userTid): { season: num
   return { season, signed, expiring: std.length - signed, twoWay: twoWayRoster(league, tid).length, hardship: all.length - std.length };
 }
 
-/** What a roster count says beside its figure, most pressing first: to cut, open or full, the offseason's limit, the expiring deals, the two-ways. */
-function rosterParts(league: League, r: ReturnType<typeof rosterSpots>): { status: string; max: string; expiring: string; twoWay: string; hardship: string } {
+/**
+ * What a roster count says beside its figure, most pressing first: to cut, open or full, the offseason's
+ * camp (the 21 a team may carry until opening night, pending offers and offer sheets holding theirs,
+ * see summerRoster: a team at 15 can still sign until it's full), the expiring deals, the two-ways.
+ */
+function rosterParts(league: League, r: ReturnType<typeof rosterSpots>, tid: number): { status: string; max: string; expiring: string; twoWay: string; hardship: string } {
   const over = r.signed - CAP.rosterMax;
   const max = rosterMaxNow(league);
+  const off = isOffseason(league) && max > CAP.rosterMax;
+  // (the camp counts what's held for next season: in the re-sign period the expiring deals aren't in it yet)
+  const camp = off ? summerRoster(league, tid) : 0;
+  const campLeft = max - camp;
   return {
-    status: over > 0 ? `${over} to cut` : over === 0 ? 'full' : `${-over} open`,
-    max: r.signed + r.expiring >= max && max > CAP.rosterMax ? `${max} max` : '',
+    // the 15 is opening night's: in the offseason it's a target, not a wall
+    status: off
+      ? over > 0
+        ? `${over} to cut by opening night`
+        : over === 0
+          ? '15 for opening night'
+          : `${-over} open`
+      : over > 0
+        ? `${over} to cut`
+        : over === 0
+          ? 'full'
+          : `${-over} open`,
+    max: off ? (campLeft > 0 ? `${campLeft} camp spot${campLeft === 1 ? '' : 's'} left of ${max}` : `camp full at ${max}`) : '',
     expiring: r.expiring ? `+${r.expiring} expiring` : '',
     twoWay: r.twoWay ? `+${r.twoWay} two-way` : '',
     hardship: r.hardship ? `+${r.hardship} hardship` : '',
@@ -54,13 +74,13 @@ export function rosterFig(league: League, tid = league.userTid): { k: string; v:
   const r = rosterSpots(league, tid);
   const n = r.signed;
   const over = n - CAP.rosterMax;
-  const p = rosterParts(league, r);
+  const p = rosterParts(league, r, tid);
   return {
     k: isOffseason(league) ? `Roster ${shortSeason(r.season)}` : 'Roster',
     v: `${n}/${CAP.rosterMax}`,
     // (short of the 13 only matters in season: the offseason fills it)
     color: n + r.expiring > rosterMaxNow(league) ? 'var(--bad)' : over > 0 || (n < CAP.rosterMin && !isOffseason(league)) ? 'var(--warn)' : undefined,
-    s: over > 0 ? [p.status, p.max].filter(Boolean).join(' · ') : p.expiring || [p.status, p.hardship || p.twoWay].filter(Boolean).join(' · '),
+    s: over > 0 || p.max ? [p.status, p.max].filter(Boolean).join(' · ') : p.expiring || [p.status, p.hardship || p.twoWay].filter(Boolean).join(' · '),
   };
 }
 
@@ -70,7 +90,7 @@ export function rosterFig(league: League, tid = league.userTid): { k: string; v:
  */
 export function rosterLine(league: League, tid = league.userTid, label = true): string {
   const f = rosterFig(league, tid);
-  const p = rosterParts(league, rosterSpots(league, tid));
+  const p = rosterParts(league, rosterSpots(league, tid), tid);
   return `${label ? `${f.k} ` : ''}${[f.v, p.status, p.max, p.expiring, p.hardship, p.twoWay].filter(Boolean).join(' · ')}`;
 }
 

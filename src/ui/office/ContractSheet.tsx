@@ -10,6 +10,7 @@ import { FREE_AGENT } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
 import { CAP_FOR, payroll, playerName, rosterMaxNow, shortName, standardRoster } from '../../core/league/helpers';
+import { CAP } from '../../core/constants';
 import {
   EXCEPTIONS,
   EXCEPTION_ORDER,
@@ -19,7 +20,6 @@ import {
   exceptionRoom,
   birdTier,
   isException,
-  makeContract,
   marketHolds,
   marketSalary,
   maxYearsWith,
@@ -46,7 +46,7 @@ import {
   userOffer,
   userResign,
 } from '../../core/league/freeAgency';
-import { PLAYER_OPTION, TEAM_OPTION, YEAR_PREMIUM, type OfferResult, type TalkKind, askFor, talkAsk, talkState } from '../../core/league/negotiation';
+import { PLAYER_OPTION, TEAM_OPTION, YEAR_PREMIUM, type OfferResult, type TalkKind, askFor, talkAsk, talkSalaries, talkState } from '../../core/league/negotiation';
 import { useLeague, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Segmented, Sheet, Statline } from '../components/ui';
@@ -117,6 +117,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   const wants = mode === 'resign' ? askingContract(league, p, tid).amount : 0;
   const overRights = limit !== null && wants > limit;
   const yearsMax = mode === 'resign' ? maxYearsWith(league, p, tid) : sheet ? SHEET_MAX_YEARS : FA_YEARS;
+  // his raises as the deal is written (8% re-signing on Bird rights, 5% otherwise: see talkSalaries)
   const raise = mode === 'resign' ? raiseWith(league, p, tid) : 0.05;
   // (his minimum exactly when he asks it: a little more would no longer be a minimum deal)
   const [amount, setAmount] = useState(() => bid?.amount ?? (ask.amount <= minAmt + 1 ? minAmt : clamp(Math.ceil(ask.amount / STEP) * STEP, minAmt, maxAmt)));
@@ -191,8 +192,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   const talksOff = !!talks?.closed;
   const blocked = !!closed || rosterBlocked || capBlocked || !!tooLong || !!frozenWhy || amount < floor || (sheet && years < SHEET_MIN_YEARS) || talksOff || overRights;
   // as signed: each season at least his minimum
-  const contract = makeContract(league, amount, years, season, p.experience, { raise, max: maxAmt });
-  const total = contract.salaries.reduce((a, b) => a + b, 0);
+  const total = talkSalaries(league, p, kind, amount, years).reduce((a, b) => a + b, 0);
   // what this deal does to the luxury tax: the bill with him against the bill without
   const tax = taxLine(league, pay, after, season);
 
@@ -200,7 +200,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   const counterBlocked = (c: TalkTerms): string | null =>
     mode === 'fa'
       ? (signingClosedReason(league) ?? (sheet ? sheetBlockedReason(league, p, c.years) : null) ?? offerBlockedReason(league, p, c.amount, c.years, via))
-      : (closed ?? (rosterBlocked ? `Your roster is full for next season, at ${rosterMax}.` : frozenAt(c.amount)));
+      : (closed ?? (rosterBlocked ? `Your offseason roster is full, at ${rosterMax}.` : frozenAt(c.amount)));
 
   const submit = (terms: TalkTerms = { amount, years, option }) => {
     // a refused offer still counts in the talks (his patience): only the answer differs
@@ -335,7 +335,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
       )}
       {rosterBlocked && !closed && (
         <Callout tone="bad" icon={<Ban size={18} className="bad" />}>
-          <b>Roster full at {rosterMax}.</b>{' '}
+          <b>{rosterMax > CAP.rosterMax ? `Offseason roster full at ${rosterMax}.` : `Roster full at ${rosterMax}.`}</b>{' '}
           {pendingN > 0 ? (
             `That counts ${pendingN} pending offer${pendingN > 1 ? 's' : ''}. Withdraw one, or release or trade someone.`
           ) : (
@@ -433,7 +433,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
 
       {/* (a player who takes the minimum on these terms has nothing to talk about) */}
       {!bidding && !closed && !overRights && (askAt > minAmt + 1 || !!reply || !!talks?.counter || !!talks?.closed) && (
-        <TalkPanel p={p} kind={kind} season={season} amount={amount} years={years} option={option} reply={reply} counterBlocked={counterBlocked} onAcceptCounter={acceptCounter} />
+        <TalkPanel p={p} kind={kind} amount={amount} years={years} option={option} reply={reply} counterBlocked={counterBlocked} onAcceptCounter={acceptCounter} />
       )}
 
       {mode === 'fa' ? (

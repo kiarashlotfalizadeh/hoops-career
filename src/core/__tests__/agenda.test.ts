@@ -1160,8 +1160,8 @@ describe('the agenda', () => {
       answer(free, -0.2);
       expect(card(free)).toBeUndefined();
       expect(userYouth(free)).toBeGreaterThan(0);
-      // the digest says what went in and the staff's opinion of it, not what it measured
-      expect(staffPicksSince(free, free.season, free.day - 1).at(-1)).toMatch(/for the owner's goal\. It shouldn't cost you\.$/);
+      // the digest says what went in, who it moves, and the staff's opinion of it, not what it measured
+      expect(staffPicksSince(free, free.season, free.day - 1).at(-1)).toMatch(/for the owner's goal\.( [^.]*(start|bench|rotation)[^.]*\.)? It shouldn't cost you\.$/);
       const young = (x: League) =>
         Object.values(x.players)
           .filter((p) => p.tid === x.userTid && x.season - p.bornYear <= 23)
@@ -1173,7 +1173,12 @@ describe('the agenda', () => {
       answer(l, -0.9);
       const c = card(l)!;
       expect(c.title).toBe(`${wc.youth!.add} more minutes a game for the young players?`);
-      expect(c.line).toMatch(/^The staff leans to (playing them|the rotation as it is)\. (It could cost you wins|It should only cost a little)\.$/);
+      // before it's taken: how long, who it moves (and every minute a tap down), then the staff's lean
+      expect(c.line).toMatch(
+        /^For \d+ games?, through [A-Z][a-z]{2} \d+(: [^.]+)?\. The staff leans to (playing them|the rotation as it is)\. (It could cost you wins|It should only cost a little)\.$/,
+      );
+      expect(c.detail).toMatch(/^Minutes a game: [^\n]+ \d+ → \d+/);
+      expect(c.pids?.length).toBeGreaterThan(0);
       expect(c.detail).toMatch(/\nYou'd still fall short of his 99,999 minutes\./);
       expect(c.detail).not.toMatch(/pts|to win|On pace/);
       // turned down: not asked again for a while
@@ -1208,9 +1213,10 @@ describe('the agenda', () => {
       expect(staffPicksSince(flat, flat.season, flat.day - 1).at(-1)).toMatch(/^The rotation stays as it is\. More minutes for the young players wouldn't move your pick\.$/);
       answer(l, -6);
       const c = card(l)!;
-      expect(c.line).toMatch(/^The staff leans to (playing them|the rotation as it is)\. It should help your draft pick\.$/);
+      expect(c.line).toMatch(/^For \d+ games?, through [A-Z][a-z]{2} \d+(: [^.]+)?\. The staff leans to (playing them|the rotation as it is)\. It should help your draft pick\.$/);
       expect(c.detail).toMatch(/It could cost you wins\.\nYour own first should land higher with it\./);
-      expect(c.detail).not.toMatch(/\d/);
+      // (the planned minutes are the plan's facts; past them, words: no reading behind the lean)
+      expect(c.detail!.replace(/^Minutes a game: [^\n]*\n/, '')).not.toMatch(/\d/);
       expect(c.to).toBe('/office/draft');
       expect(resolveAgenda(l, [c.suggestion!, ...c.choices!].find((x) => x.label === 'Play the young players')!.action).ok).toBe(true);
       const y = l.youthLean!;

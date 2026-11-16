@@ -13,7 +13,7 @@ import { ALL_SCHEMES, DEF_ROLE_META, SCHEME_META, SHAPE_META, defRoleOf, shapeOf
 import { betterFit, defRoleFits, roleFits, roleScale, roleStars, type RoleScale } from '../../core/analysis/system';
 import { fitRoster, shapeFits } from '../../core/ai/coachAI';
 import { composites } from '../../core/ratings';
-import { FIT, leanOf, leanTone, type Lean } from '../../core/analysis/staffWords';
+import { fitWord, leanOf, leanTone, type Lean } from '../../core/analysis/staffWords';
 import { rosterNames } from '../stats';
 import { Help, Section } from '../components/ui';
 import { Term } from '../components/Glossary';
@@ -162,7 +162,7 @@ export function Board({
                     <>
                       {s !== 'fourOut' && (
                         <>
-                          <b className={leanTone(shapeLean(fits[s]))}>{FIT[shapeLean(fits[s])]}</b> ·{' '}
+                          <b className={leanTone(shapeLean(fits[s]))}>{fitWord(Math.round(fits[s]) / 10)}</b> ·{' '}
                         </>
                       )}
                       {first(SHAPE_META[s].help)}
@@ -180,8 +180,8 @@ export function Board({
               note={
                 shape === 'fourOut' ? undefined : (
                   <>
-                    Staff&apos;s read: <b className={leanTone(shapeLean(fits[shape]))}>{FIT[shapeLean(fits[shape])].toLowerCase()}</b>
-                    {shapeLean(fits[shape]) === 'even' ? ' to' : ' than'} 4-Out, 1-In
+                    Staff&apos;s read: <b className={leanTone(shapeLean(fits[shape]))}>{fitWord(Math.round(fits[shape]) / 10).toLowerCase()}</b>
+                    {fitWord(Math.round(fits[shape]) / 10) === 'Similar fit' ? ' to' : ' than'} 4-Out, 1-In
                   </>
                 )
               }

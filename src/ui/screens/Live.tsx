@@ -93,6 +93,12 @@ export default function Live() {
   const side = shape === 'side' || shape === 'turned';
   const [drawer, setDrawer] = useState(false);
   const setTurn = (to: 'side' | 'upright') => edit((l) => void (l.settings.liveTurn = to));
+  // a phone's first live game: asked once, upright, whether to watch sideways (the page turns only once he says so)
+  const askTurn = shape === 'upright' && league.settings.liveTurn === undefined && onAir;
+  // (a phone turned by hand the first time is his answer)
+  useEffect(() => {
+    if (shape === 'side' && league.settings.liveTurn === undefined) edit((l) => void (l.settings.liveTurn = 'side'));
+  }, [shape, league.settings.liveTurn]);
   // turned: a word to turn the phone, for a moment; and where the screen can be locked sideways, it is
   // (on the first touch: a lock needs one), and let go when the game is
   const [hint, setHint] = useState(false);
@@ -694,6 +700,23 @@ export default function Live() {
           >
             <Smartphone size={16} aria-hidden="true" />
           </button>
+        )}
+        {askTurn && (
+          <div className="lv-turn-ask" role="dialog" aria-label="Watch sideways?" onClick={(e) => e.stopPropagation()}>
+            <RotateCcw size={22} aria-hidden="true" />
+            <div className="lv-turn-ask-t">
+              <b>The game is a broadcast: it plays sideways.</b>
+              <span>Turn your phone once the court turns. You can change this in Settings.</span>
+            </div>
+            <div className="lv-turn-ask-acts">
+              <button type="button" className="lv-turn-ask-go" onClick={() => setTurn('side')}>
+                Watch sideways
+              </button>
+              <button type="button" className="lv-turn-ask-keep" onClick={() => setTurn('upright')}>
+                Keep upright
+              </button>
+            </div>
+          </div>
         )}
         {hint && shape === 'turned' && (
           <div className="lv-turn-hint" role="status" onClick={(e) => e.stopPropagation()}>

@@ -3,14 +3,29 @@
 // matters to him.
 import { Check, Gavel, Minus, TriangleAlert, X } from 'lucide-react';
 import type { Player } from '../../core/types';
-import { PREF_KEYS, SUMMER_FLOOR, type PlayerPrefs, appealTerms, askingContract, floorAmounts, playerPrefs, willSign } from '../../core/league/contracts';
-import { MARKET_HOLD_DAYS, bidDecideDay, bidRivals, bidStanding, marketMoney, pendingBid, withdrawBid } from '../../core/league/freeAgency';
+import {
+  EXCEPTIONS,
+  PREF_KEYS,
+  SUMMER_FLOOR,
+  type PlayerPrefs,
+  type SigningRoute,
+  appealTerms,
+  askingContract,
+  floorAmounts,
+  isException,
+  playerPrefs,
+  willSign,
+} from '../../core/league/contracts';
+import { MARKET_HOLD_DAYS, bidDecideDay, bidRivals, bidStanding, marketMoney, mostPayable, pendingBid, withdrawBid } from '../../core/league/freeAgency';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Callout, Line, forYears } from './common';
 import { money, moneyExact } from '../../core/format';
 
 const LABEL: Record<keyof PlayerPrefs, string> = { winning: 'Winning', money: 'Money', role: 'Playing time', market: 'Market' };
+
+/** How an offer is paid for, in running text: "your cap space", "the mid-level exception". */
+const routeWords = (r: SigningRoute | null) => (r === 'space' ? 'your cap space' : r === 'min' ? 'a minimum deal' : isException(r) ? `the ${EXCEPTIONS[r].name}` : 'nothing open');
 
 /** How much a priority weighs, in words (weights average 1). */
 const weight = (w: number) => (w >= 1.25 ? 'matters a lot' : w >= 0.85 ? 'matters' : 'matters a little');
@@ -21,6 +36,10 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
   // rival bids don't depend on the slider: work them out once per league change
   const offers = useLeagueMemo(() => bidRivals(league, p), [league, p]);
   const standing = bidStanding(league, p, amount, years, offers);
+  // the most you can offer him for this many years, and what pays for it: advice never goes past it
+  const pay = useLeagueMemo(() => mostPayable(league, p, years), [league, p, years]);
+  const lead = standing.toLead;
+  const canLead = lead !== null && lead <= pay.amount;
   const prefs = playerPrefs(league, p);
   const terms = useLeagueMemo(() => appealTerms(league, tid, p), [league, tid, p]);
   const decide = bidDecideDay(league, p.pid);
@@ -72,6 +91,11 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
       <Callout icon={<Gavel size={18} className="dim" />}>
         <b>He weighs offers and decides {when}.</b>{' '}
         {rivals.length ? `Bidding: ${rivals.slice(0, 2).join(', ')}${rivals.length > 2 ? `, +${rivals.length - 2}` : ''}.` : 'No other team is bidding yet.'}
+        <div className="small dim2">
+          {pay.amount > 0
+            ? `You can pay up to ${moneyExact(pay.amount)} ${forYears(years)}, with ${routeWords(pay.route)}.`
+            : `You can't fund an offer ${forYears(years)} right now.`}
+        </div>
         {dry && (
           <div className="small dim2">
             {room! > 0
@@ -103,10 +127,20 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
       ) : (
         <Callout tone="warn" icon={<TriangleAlert size={18} className="warn" />}>
           <b>{best ? `${league.teams[best.tid].abbrev}'s offer is ahead today.` : "No rival bids, so he'll hold out for his ask."}</b>{' '}
-          {standing.toLead !== null ? (
-            <button className="btn xs fo-lead" onClick={() => onAmount(standing.toLead!)}>
-              {best ? 'Lead with' : 'Offer'} {moneyExact(standing.toLead)}
+          {canLead ? (
+            <button className="btn xs fo-lead" onClick={() => onAmount(lead!)}>
+              {best ? 'Lead with' : 'Offer'} {moneyExact(lead!)}
             </button>
+          ) : lead !== null ? (
+            // (leading costs more than you can fund: say so, and offer your most if it helps)
+            <>
+              {best ? 'Leading' : 'Signing him'} takes {moneyExact(lead)}, more than {routeWords(pay.route)} pays ({moneyExact(pay.amount)}).{' '}
+              {pay.amount >= floor && pay.amount > amount && (
+                <button className="btn xs fo-lead" onClick={() => onAmount(pay.amount)}>
+                  Offer your most, {moneyExact(pay.amount)}
+                </button>
+              )}
+            </>
           ) : (
             'Even a max offer would not top theirs now.'
           )}

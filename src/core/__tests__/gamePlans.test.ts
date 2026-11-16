@@ -405,7 +405,7 @@ describe('game plans', () => {
       expect(r.worth.raw).toBeCloseTo(-rm.reduce((a, x) => a + x.w * x.worth.find((c) => c.id === 'without')!.raw, 0), 1);
       expect(Math.abs(r.worth.pts)).toBeLessThanOrEqual(Math.abs(r.worth.raw) + 0.05);
       saveMade(l, e.id, r, made.count);
-      expect(madeLine(l.tacticEdits![0])).toMatch(/^Your change (seems to help|seems to hurt|makes no clear difference)\.$/);
+      expect(madeLine(l.tacticEdits![0])).toMatch(/^(Your change (seems to help|seems to hurt)\.|No clear swing in results from your change yet\. .+)$/);
       // a change to another setting that day is a change of its own: the first keeps its reading
       const mid = structuredClone({ tactics: me.tactics, rotation: me.rotation });
       me.tactics.offense.pace = me.tactics.offense.pace > 50 ? 20 : 90;

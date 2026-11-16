@@ -68,6 +68,7 @@ import {
   fillRosters,
   marketMoney,
   marqueeFA,
+  mostPayable,
   offerBlockedReason,
   offerRoute,
   pendingBid,
@@ -815,6 +816,11 @@ it('competing offers for top free agents (W5, B2), and the player priorities the
     expect(standing.leads).toBe(false);
     // (null: not even a max offer would top theirs)
     expect(standing.toLead === null || standing.toLead > ask.amount).toBe(true);
+    // the most you can fund is what the advice checks a lead against: it's an offer you can make, and $50K more isn't
+    const pay = mostPayable(l, star, ask.years);
+    expect(pay.amount).toBeGreaterThan(0);
+    expect(offerBlockedReason(l, star, pay.amount, ask.years)).toBeNull();
+    if (pay.amount + 50 <= CAP_FOR(l, contractSeason(l)).maxContract(star.experience)) expect(offerBlockedReason(l, star, pay.amount + 50, ask.years)).not.toBeNull();
     expect(bidAtAsk(l, star).ok).toBe(true);
     resolveBids(l);
     expect(star.tid).toBe(R);

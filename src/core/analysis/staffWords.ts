@@ -22,6 +22,19 @@ export const SINCE: Record<Lean, string> = { gain: 'Seems to help', cost: 'Seems
 /** A playbook, a shape or a fit against the one in use. */
 export const FIT: Record<Lean, string> = { gain: 'Better fit', cost: 'Worse fit', even: 'Similar fit' };
 
+/** Inside even, a fit this far from the one in use (points a game) still leans a shade: the staff's read is a model, not a noisy measurement. */
+export const SHADE_MIN = 0.2;
+
+/**
+ * A fit against the one in use in words, with a shade inside even ("Slightly better"), so a list of
+ * playbooks the staff reads close still says which way each leans and no two read the same for no reason.
+ */
+export function fitWord(pts: number): string {
+  const l = leanOf(pts);
+  if (l !== 'even') return FIT[l];
+  return pts >= SHADE_MIN ? 'Slightly better' : pts <= -SHADE_MIN ? 'Slightly worse' : 'Similar fit';
+}
+
 /** How big an edge in a game was, for "what decided it": sized, not counted. */
 export function edgeWord(pts: number): string {
   const a = Math.abs(pts);

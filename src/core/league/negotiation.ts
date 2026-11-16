@@ -24,10 +24,13 @@ import {
   extensionBlockedReason,
   extensionMaxYears,
   extensionRefusal,
+  extensionSalaries,
   askingContract,
+  makeContract,
   playerMax,
   resignLimit,
   playerPrefs,
+  signingTerms,
   summerFloor,
   teamAppeal,
   valueScore,
@@ -136,6 +139,19 @@ export function talkBounds(league: League, p: Player, kind: TalkKind): { min: nu
   const cap = CAP_FOR(league, season);
   const max = kind === 'resign' ? resignLimit(league, p, league.userTid) : playerMax(league, p, season, kind === 'extend' ? league.userTid : undefined);
   return { min: p.experience >= 3 ? cap.vetMin : cap.minContract, max };
+}
+
+/**
+ * The salaries a deal at `amount` over `years` writes if he signs it in these talks, as the signing
+ * itself writes them (userResign, userOffer, userBid, userExtend): every total the contract sheet
+ * shows, his counter's included, is this, so the preview and the deal signed never differ. Another
+ * team's restricted free agent signs an offer sheet, written at 5% raises (see rfa.ts).
+ */
+export function talkSalaries(league: League, p: Player, kind: TalkKind, amount: number, years: number): number[] {
+  if (kind === 'extend') return extensionSalaries(league, p, amount, years);
+  const start = contractSeason(league);
+  const sheet = kind === 'fa' && !!p.rfa && p.rfa.tid !== league.userTid;
+  return makeContract(league, amount, years, start, p.experience, sheet ? { raise: 0.05 } : signingTerms(league, p, league.userTid, start)).salaries;
 }
 
 /** His price for a deal on these terms, as a multiple of his ask: 3% a year away from the length he wants, 4% off for a player option, 6% more for a team option. */

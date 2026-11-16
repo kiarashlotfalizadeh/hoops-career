@@ -9,6 +9,7 @@ import { startRegularSeason } from '../league/season';
 import { CAP_FOR, contractSeason, curTeamSeason, dateToDay, freeAgents, payroll, standardRoster, twoWayRoster } from '../league/helpers';
 import { DEC_15, DUMP_PER_FIRST, FIRST_VALUE, askingContract, marketSalary, releaseDeadMoney, releasePlayer, signPlayer, tradeValue, twoWaySalary } from '../league/contracts';
 import { capPayroll } from '../league/freeAgency';
+import { changesStarters, tradeImpact } from '../league/tradeImpact';
 import {
   CASH_PCT,
   PROTECTIONS,
@@ -864,6 +865,20 @@ it('the rules: back-to-back firsts, protections going home, no trading straight 
 }, 120_000);
 
 it('deal terms: protections on your own firsts, pick swaps and cash, and how they count in a deal (G1-G3)', () => {
+  // the last look's account of a deal (tradeImpact): your best player sent away leaves the starting
+  // five and someone takes his place, your own first and the swap right are the future given up
+  {
+    const l = termsLeague();
+    const best = [...standardRoster(l, U)].sort((a, b) => b.ovr - a.ovr)[0];
+    const dp = own(l, U, l.season + 1);
+    const swapYear = l.season + 2;
+    const im = tradeImpact(l, deal({ pids: [best.pid], dpids: [dp.dpid], swaps: [swapYear] }, { pids: [standardRoster(l, AI).sort((a, b) => a.ovr - b.ovr)[0].pid] }));
+    const gone = im.moves.find((m) => m.pid === best.pid)!;
+    expect(gone).toMatchObject({ dealt: 'out', to: 0 });
+    if (gone.startsNow) expect(changesStarters(im) && im.moves.some((m) => m.startsWith && !m.startsNow)).toBe(true);
+    expect(im.future).toEqual([`Your ${dp.season} first`, `The right to swap firsts in ${swapYear}`]);
+  }
+
   // protects your own first as it goes: valued lower by them, set on the pick, named in labels, the news and the log
   {
     const l = termsLeague();

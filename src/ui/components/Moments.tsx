@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../../state/store';
-import { MUST_SEE, currentMoments, newMoments, scheduleMoments, type Moment } from '../moments';
+import { MUST_SEE, currentMoments, momentFits, newMoments, scheduleMoments, type Moment } from '../moments';
 import { touch } from '../../state/actions';
 import { TeamLogo } from './TeamLogo';
 import { Avatar } from './ui';
@@ -34,6 +34,15 @@ export function Moments() {
   const v = useStore((s) => s.v);
   const simming = useStore((s) => !!s.sim);
   const { pathname } = useLocation();
+  // the screen each queued moment landed on (see momentFits: one queued elsewhere doesn't take over a report or the draft)
+  const path = useRef(pathname);
+  path.current = pathname;
+  const landed = useRef(new Map<string, string>());
+  // a sim ran since the moments waiting were last looked at: only a sim's end lets them out (not a pick, a deal or a read mail)
+  const simRan = useRef(false);
+  useEffect(() => {
+    if (simming) simRan.current = true;
+  }, [simming]);
   const seen = useRef<{ who: string; keys: Set<string> } | null>(null);
   const last = useRef('');
   const waiting = useRef<Moment[]>([]);
@@ -62,14 +71,20 @@ export function Moments() {
     for (const m of all) seen.current.keys.add(m.key);
     const on = league.settings.moments !== false;
     const fresh = on ? all : all.filter((m) => MUST_SEE.has(m.kind));
-    if (!fresh.length && !waiting.current.length) return;
+    // (the ones waiting go out only at a sim's end: a draft pick or a signing meanwhile doesn't let a farewell in over the draft)
+    const released = simRan.current && !useStore.getState().sim;
+    if (released) simRan.current = false;
+    if (!fresh.length && !(released && waiting.current.length)) return;
     const onLive = window.location.hash.startsWith('#/live');
     // (the digest that opens with this sim leads with its moment of the stretch: that one is told)
     const led = useStore.getState().digest?.moment?.story;
     const keep = (m: Moment) => !(onLive && m.news === 'game') && !(led !== undefined && m.story === led);
     const at = { season: league.season, day: league.day };
-    const { show, wait } = scheduleMoments(queued.current.filter(keep), fresh.filter(keep), on ? waiting.current.filter(keep) : [], at);
-    waiting.current = wait;
+    const held = released ? waiting.current : [];
+    const { show, wait } = scheduleMoments(queued.current.filter(keep), fresh.filter(keep), on ? held.filter(keep) : [], at);
+    // (what wasn't let out keeps waiting, with what this one leaves)
+    waiting.current = released ? wait : [...waiting.current, ...wait.filter((m) => !waiting.current.some((x) => x.key === m.key))];
+    for (const m of show) if (!landed.current.has(m.key)) landed.current.set(m.key, path.current);
     setQueue(show);
   }, [league, v]);
   // a new digest leads with its moment of the stretch: a moment queued or waiting that tells the same story is dropped
@@ -86,7 +101,9 @@ export function Moments() {
   useEffect(() => {
     if (onReport && queue.some((m) => m.news === 'game')) setQueue((q) => q.filter((m) => m.news !== 'game'));
   }, [onReport, queue]);
-  const showing = !simming && pathname !== '/live' && league ? queue.find((m) => !(onReport && m.news === 'game')) : undefined;
+  // (over a report or the draft, only what landed there and is the screen's size, or the job's own: see momentFits)
+  const showing =
+    !simming && pathname !== '/live' && league ? queue.find((m) => !(onReport && m.news === 'game') && momentFits(m, pathname, landed.current.get(m.key))) : undefined;
   // the digest waits while a moment has the screen
   const up = !!showing;
   useEffect(() => {

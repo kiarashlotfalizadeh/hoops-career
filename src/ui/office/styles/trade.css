@@ -986,3 +986,18 @@ body:has(.simbar) .fo-dock {
   min-width: 0;
   max-width: 100%;
 }
+
+/* the trade's last look: what it does to your rotation, the need it fills, the future it gives up */
+.fo-impact {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fo-impact-l {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.45;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

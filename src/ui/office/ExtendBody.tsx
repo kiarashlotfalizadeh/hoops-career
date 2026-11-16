@@ -8,9 +8,9 @@ import type { Player, TalkTerms } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
 import { CAP_FOR, payroll } from '../../core/league/helpers';
-import { extensionBlockedReason, extensionMaxYears, extensionRefusal, makeContract, playerMax, teamAppeal } from '../../core/league/contracts';
+import { extensionBlockedReason, extensionMaxYears, extensionRefusal, playerMax, teamAppeal } from '../../core/league/contracts';
 import { teamTaxBill } from '../../core/league/finances';
-import { YEAR_PREMIUM, type OfferResult, askFor, extensionFrozenReason, talkAsk, talkState, userExtend } from '../../core/league/negotiation';
+import { YEAR_PREMIUM, type OfferResult, askFor, extensionFrozenReason, talkAsk, talkSalaries, talkState, userExtend } from '../../core/league/negotiation';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { useLeague, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
@@ -51,7 +51,7 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
   const after = pay + amount;
   const taxBill = teamTaxBill(league, tid, after, season);
   // as signed: each season at least his minimum
-  const total = makeContract(league, amount, years, season, p.experience, { raise: 0.08, max: maxAmt }).salaries.reduce((a, b) => a + b, 0);
+  const total = talkSalaries(league, p, 'extend', amount, years).reduce((a, b) => a + b, 0);
 
   const submit = (terms: TalkTerms = { amount, years }) => {
     const res = settle<OfferResult>('The extension', (l) => userExtend(l, p.pid, terms.amount, terms.years), 'good', true);
@@ -132,7 +132,6 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
         <TalkPanel
           p={p}
           kind="extend"
-          season={season}
           amount={amount}
           years={years}
           reply={reply}

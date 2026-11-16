@@ -35,14 +35,16 @@ function isPhone(): boolean {
 
 /**
  * The live game's shape on this device, and the page turned while it is 'turned' (`data-turned` on the
- * root). `pref` is the setting (sideways unless 'upright'); `onAir`: a game is on (the final card and the
+ * root). `pref` is the setting: 'side' turns the page, 'upright' keeps it, and unset (a phone's first
+ * live game) keeps it upright until the user picks, so the page never turns a quarter round on him
+ * unannounced (Live asks: see the first-game turn card). `onAir`: a game is on (the final card and the
  * report are upright screens).
  */
 export function useLiveShape(pref: 'side' | 'upright' | undefined, onAir: boolean): LiveShape {
   const coarse = useSyncExternalStore(onCoarse, isCoarse, never);
   const land = useSyncExternalStore(onLand, isLand, never);
   const phone = coarse && isPhone();
-  const shape: LiveShape = !phone ? null : land ? 'side' : pref !== 'upright' && onAir ? 'turned' : 'upright';
+  const shape: LiveShape = !phone ? null : land ? 'side' : pref === 'side' && onAir ? 'turned' : 'upright';
   useEffect(() => {
     if (shape !== 'turned') return;
     const root = document.documentElement;

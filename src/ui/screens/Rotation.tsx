@@ -10,7 +10,7 @@ import { edit } from '../../state/actions';
 import { rosterSorted } from '../../core/league/helpers';
 import { ensureRotation } from '../../core/league/games';
 import { buildMinutePlan, normalizeMinutes, planInputs, planRoles } from '../../core/sim/rotationPlan';
-import { Avatar, Help, Ovr, Section, Sheet, Slider, Statline, Tag, Toggle, activateOnKey } from '../components/ui';
+import { Avatar, Help, Ovr, Section, Sheet, Slider, Tag, Toggle, activateOnKey } from '../components/ui';
 import { AssistantCards } from '../components/Assistant';
 import { GuideStrip } from '../components/GuideStrip';
 import { Term } from '../components/Glossary';
@@ -138,15 +138,11 @@ export default function Rotation() {
   return (
     <>
       <GuideStrip step="rotation" keep="Keep these five" />
-      {/* the hero: the minutes the targets add up to, and who runs the rotation */}
+      {/* who runs the rotation, and the minutes the targets add up to in one line: on a phone the starters stay on the first screen */}
       <section className="card tm-rhero" aria-label="Your rotation">
-        <Statline
-          items={[
-            { k: 'Targets', v: total, s: total === 240 ? 'min' : 'scaled to 240' },
-            { k: 'Starters', v: startMin, s: 'min' },
-            { k: 'Bench', v: total - startMin, s: 'min' },
-          ]}
-        />
+        <div className="tm-rsum-line small num">
+          <b>{total}</b> min{total === 240 ? '' : ', scaled to 240'} · starters <b>{startMin}</b> · bench <b>{total - startMin}</b>
+        </div>
         {injuredMin > 0 && <div className="tm-rsum-note warn">{injuredMin} injured minutes go to the healthy players.</div>}
         <div className="tm-auto">
           <Toggle

@@ -816,10 +816,12 @@ export function offerBlockedReason(league: League, p: Player, amount: number, ye
   const season = contractSeason(league);
   const max = rosterMaxNow(league);
   const pending = pendingOffers(league, p.pid);
+  // (in the offseason it's the camp's 21 that's full, not opening night's 15)
+  const which = max > CAP.rosterMax ? 'offseason roster' : 'roster';
   if (standardRoster(league, tid).length + pending >= max)
     return pending
-      ? `Your roster is full (${max}) counting your ${pending} pending offer${pending > 1 ? 's' : ''}. Release or trade someone, or withdraw an offer.`
-      : `Your roster is full (${max}). Release or trade someone first.`;
+      ? `Your ${which} is full (${max}) counting your ${pending} pending offer${pending > 1 ? 's' : ''}. Release or trade someone, or withdraw an offer.`
+      : `Your ${which} is full (${max}). Release or trade someone first.`;
   const cap0 = CAP_FOR(league, season);
   const frozen = freezeSigningReason(league, amount, p.experience >= 3 ? cap0.vetMin : cap0.minContract);
   if (frozen) return frozen;
@@ -1159,6 +1161,37 @@ export function bidStanding(
   const need = Math.max(floor, Math.ceil((amount * Math.pow(best.utility / mine, 1 / prefs.money)) / 50) * 50);
   const max = CAP_FOR(league, contractSeason(league)).maxContract(p.experience);
   return { offers, leads: amount >= floor && mine >= best.utility, toLead: need <= max ? need : null };
+}
+
+/** The most the user can offer a free agent over `years`, and how it's paid for (null: not even his minimum). */
+export interface Payable {
+  amount: number;
+  route: SigningRoute | null;
+}
+
+/**
+ * The most the user can offer `p` over `years` as things stand (cap space, an exception that allows
+ * the length, the minimum; his pending offers committed, the owner's freeze), in $50K steps: what
+ * offerBlockedReason lets through. Advice that names a figure (BidPanel's "Lead with") checks it
+ * against this first, so it never recommends an offer the user can't make.
+ */
+export function mostPayable(league: League, p: Player, years: number): Payable {
+  const season = contractSeason(league);
+  const cap = CAP_FOR(league, season);
+  const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
+  const ok = (a: number) => !offerBlockedReason(league, p, a, years);
+  if (!ok(min)) return { amount: 0, route: null };
+  // payable is a ceiling (space, or an exception's room): the largest step under it
+  let lo = Math.ceil(min / 50);
+  let hi = Math.floor(playerMax(league, p, season) / 50);
+  if (ok(hi * 50)) lo = hi;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (ok(mid * 50)) lo = mid;
+    else hi = mid;
+  }
+  const amount = lo * 50 <= min ? min : lo * 50;
+  return { amount, route: offerRoute(league, p, amount, season, years) };
 }
 
 /**

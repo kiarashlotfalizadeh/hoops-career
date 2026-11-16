@@ -191,6 +191,28 @@ export function pickMoments(fresh: Moment[]): Moment[] {
   return stories.slice(0, 1);
 }
 
+/**
+ * Screens where the user is at work (a game's report, the draft, a deal being made): a moment queued
+ * elsewhere (a live game, the screen before) doesn't take the screen over that work, nor does a
+ * night's or a player's moment (MINOR, a story) even as the screen's landing. Each holds until he's
+ * on another screen, except the job's own and that work's own result (his pick, his signing).
+ */
+const WORK: { at: string; own: MomentKind[] }[] = [
+  { at: '/game/', own: [] },
+  { at: '/office/draft', own: ['draft'] },
+  { at: '/office/trade', own: ['signing'] },
+  { at: '/office/free-agents', own: ['signing'] },
+  { at: '/office/resign', own: ['signing'] },
+];
+
+/** Whether moment `m`, queued on screen `landed`, can take the screen at `path` now (see WORK). */
+export function momentFits(m: Moment, path: string, landed: string | undefined): boolean {
+  const work = WORK.find((w) => path.startsWith(w.at));
+  if (!work || JOB_MOMENTS.has(m.kind) || work.own.includes(m.kind)) return true;
+  // (on the screen it landed on: only a moment of the season's own size, a title or a series)
+  return landed === path && m.kind !== 'story' && !MINOR.has(m.kind);
+}
+
 /** Moments of a night or a player rather than of the season: they don't take the screen beside the job's own, and wait. */
 const MINOR: ReadonlySet<MomentKind> = new Set<MomentKind>(['allStar', 'record', 'milestone', 'jersey', 'farewell']);
 /**

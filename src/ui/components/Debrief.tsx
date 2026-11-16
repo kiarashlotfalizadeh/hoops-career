@@ -11,7 +11,7 @@ import { Link } from 'react-router-dom';
 import { Check, ChevronDown, ChevronRight } from 'lucide-react';
 import type { GameResult, League } from '../../core/types';
 import type { GameReport } from '../../core/analysis/gameReport';
-import { debrief, nightLine, sameChange, seasonCoachingLine, type DebriefAdvice, type PlanGrade } from '../../core/analysis/debrief';
+import { debrief, nightLine, sameChange, seasonCoachingLine, togetherLine, type DebriefAdvice, type PlanGrade } from '../../core/analysis/debrief';
 import { measuringNight } from '../live/tonight';
 import { leadAssistant } from '../../core/ai/assistant';
 import { applyPatch } from '../../core/sim/tactics';
@@ -70,6 +70,8 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
   const season = night ? seasonCoachingLine(league, res.season) : null;
   // (the move that mattered most and the season's, a tap down when there's either)
   const nightMore = [night?.detail, season && `${season}.`].filter(Boolean).join(' ');
+  // the night put together: the schemes, the shooting luck and your moves, read against each other
+  const together = togetherLine(res, res.home.tid === me ? 0 : 1, report, d.plan);
   return (
     <div className="gd-debrief">
       <AssistantHead name={assistant.name} initials={assistant.initials} read={d.headline} />
@@ -97,6 +99,12 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
             What decided it <ChevronRight size={14} aria-hidden="true" />
           </Link>
         </div>
+      )}
+
+      {together && (
+        <p className="gd-together small">
+          <b>Put together:</b> {together}
+        </p>
       )}
 
       {d.hurt && (
