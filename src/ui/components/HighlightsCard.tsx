@@ -80,7 +80,11 @@ export function HighlightsCard({ league, res }: { league: League; res: GameResul
               onLook={(v) => edit((l) => void (l.settings.courtLook = v))}
               cam={league.settings.courtCam}
               onCam={(v) => edit((l) => void (l.settings.courtCam = v))}
-              body={(pid) => bodyOf(league.players[pid]?.heightIn ?? 78, league.players[pid]?.weightLb ?? 215, league.players[pid]?.ratings.str)}
+              body={(pid) => {
+                const p = league.players[pid];
+                const r = p?.ratings;
+                return bodyOf(p?.heightIn ?? 78, p?.weightLb ?? 215, r?.str, r && { spd: r.spd, ath: r.ath, hnd: r.hnd, sht: Math.max(r.tp, r.mid) });
+              }}
               script={sc}
               speed={league.settings.liveSpeed || 1}
               paused={false}

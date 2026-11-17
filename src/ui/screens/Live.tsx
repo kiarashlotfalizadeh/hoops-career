@@ -317,7 +317,8 @@ export default function Live() {
   const jersey = (pid: number) => league.players[pid]?.jersey || '0';
   const body = (pid: number) => {
     const p = league.players[pid];
-    return bodyOf(p?.heightIn ?? 78, p?.weightLb ?? 215, p?.ratings.str);
+    const r = p?.ratings;
+    return bodyOf(p?.heightIn ?? 78, p?.weightLb ?? 215, r?.str, r && { spd: r.spd, ath: r.ath, hnd: r.hnd, sht: Math.max(r.tp, r.mid) });
   };
   // whose floor: the home team's, or a neutral one for the Cup final
   const floor = courtFloor(home, kits[0], neutral, game.game.cup === 'final' ? 'NBA Cup' : '');

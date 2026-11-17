@@ -1672,8 +1672,14 @@ export class CourtScene {
       f.ball = hands.has(f) ? ball : null;
       f.pup.arms(hands.has(f) ? ball : null, onFloor, hands.has(f) || pid === taking ? null : LOOSE);
       if (swapping) continue;
-      if (f === has && hands.has(f)) this.inHands(f, own);
-      else if (f === has) this.heldMs = 0;
+      if (f === has && hands.has(f)) {
+        this.inHands(f, own);
+        // (and never through his own leg from one frame to the next: round it, his hands with it)
+        TMP2.x = ball.x;
+        TMP2.y = ball.y;
+        TMP2.z = ball.z;
+        if (f.pup.keepRound(ball)) f.pup.carried(TMP2, ball);
+      } else if (f === has) this.heldMs = 0;
     }
     if (swapping && this.swap && hands.size) this.swapHands(this.swap);
     else if (!swapping) this.swap = null;

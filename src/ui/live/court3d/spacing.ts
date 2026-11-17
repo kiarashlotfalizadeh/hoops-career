@@ -98,6 +98,8 @@ export function reach(ux: number, uz: number, wide: number, deep: number, yaw: n
 const SKIN = 0.08;
 /** Two who meet are drawn this far (ft) toward each other at most: a man left farther off by the play goes round. */
 const MEET_MOST = 3;
+/** Two drawn together are let go of this fast (ft a second). */
+const MEET_LET = 5;
 
 /** The men kept apart from frame to frame: each one's step aside is eased, so a push that changes its mind never throws him. */
 export class Spacing {
@@ -105,6 +107,14 @@ export class Spacing {
   private readonly was = new Map<number, [number, number]>();
   private readonly plan = new Float32Array(40);
   private readonly eased = new Float32Array(40);
+  /** The plan's own spots this frame, and how far each man is drawn off his by a meet (see MEET_LET). */
+  private readonly raw = new Float32Array(40);
+  private readonly drawn = new Map<number, [number, number]>();
+  /** The plan put man `j` somewhere new this frame (a new end of the floor, a skip): nothing is eased from where he was. */
+  private jumped(j: number, pid: number): boolean {
+    const was = this.was.get(pid);
+    return !!was && Math.hypot(this.raw[j * 2] - was[0], this.raw[j * 2 + 1] - was[1]) > CUT;
+  }
 
   /**
    * `at`: where the plan has each of `pids` (x, z each), overwritten with where he is drawn.
@@ -118,6 +128,9 @@ export class Spacing {
   place(at: Float32Array, go: Float32Array, pids: readonly number[], own: number, ease = own, cut = false, meets: readonly Meet[] = [], build?: Float32Array): Float32Array {
     const n = pids.length;
     const plan = this.plan;
+    // (where the plan itself has them, before anyone is drawn to anyone)
+    plan.set(at.subarray(0, n * 2));
+    this.raw.set(at.subarray(0, n * 2));
     // (two who meet are drawn to each other: the man the move is on takes his share of the way, the other the rest)
     for (const m of meets) {
       const dx = at[m.j * 2] - at[m.i * 2];
@@ -129,6 +142,26 @@ export class Spacing {
       at[m.j * 2 + 1] -= (dz / d) * pull * m.share;
       at[m.i * 2] += (dx / d) * pull * (1 - m.share);
       at[m.i * 2 + 1] += (dz / d) * pull * (1 - m.share);
+    }
+    // (how far each was drawn is let go of no faster than MEET_LET: a box-out's two, drawn together, were let go the frame
+    // the next possession began, and each hopped half a foot back to his spot)
+    const let_ = (MEET_LET * ease) / 1000;
+    for (let j = 0; j < n; j++) {
+      const dx = at[j * 2] - plan[j * 2];
+      const dz = at[j * 2 + 1] - plan[j * 2 + 1];
+      let w = this.drawn.get(pids[j]);
+      if (!w) this.drawn.set(pids[j], (w = [dx, dz]));
+      else if (cut || this.jumped(j, pids[j])) [w[0], w[1]] = [dx, dz];
+      else {
+        const far = Math.hypot(dx - w[0], dz - w[1]);
+        // (drawn farther: as the meet itself comes on; less: eased)
+        const grows = dx * dx + dz * dz >= w[0] * w[0] + w[1] * w[1];
+        const k = grows || far <= let_ ? 1 : let_ / far;
+        w[0] += (dx - w[0]) * k;
+        w[1] += (dz - w[1]) * k;
+      }
+      at[j * 2] = plan[j * 2] + w[0];
+      at[j * 2 + 1] = plan[j * 2 + 1] + w[1];
     }
     const met = (i: number, j: number) => meets.find((m) => (m.i === i && m.j === j) || (m.i === j && m.j === i));
     plan.set(at.subarray(0, n * 2));
@@ -144,9 +177,9 @@ export class Spacing {
       const was = this.was.get(pids[j]);
       // (a man new to the floor, or to this end of it, is put where he goes)
       if (!o) this.off.set(pids[j], (o = [wx, wz]));
-      else if (cut || (was && Math.hypot(plan[j * 2] - was[0], plan[j * 2 + 1] - was[1]) > CUT)) [o[0], o[1]] = [wx, wz];
-      if (was) [was[0], was[1]] = [plan[j * 2], plan[j * 2 + 1]];
-      else this.was.set(pids[j], [plan[j * 2], plan[j * 2 + 1]]);
+      else if (cut || this.jumped(j, pids[j])) [o[0], o[1]] = [wx, wz];
+      if (was) [was[0], was[1]] = [this.raw[j * 2], this.raw[j * 2 + 1]];
+      else this.was.set(pids[j], [this.raw[j * 2], this.raw[j * 2 + 1]]);
       const far = Math.hypot(wx - o[0], wz - o[1]);
       if (far <= most) [o[0], o[1]] = [wx, wz];
       else {
@@ -200,6 +233,7 @@ export class Spacing {
         if (!pids.includes(pid)) {
           this.off.delete(pid);
           this.was.delete(pid);
+          this.drawn.delete(pid);
         }
     return at;
   }

@@ -130,7 +130,8 @@ const props = {
   jersey: (pid: number) => league.players[pid]?.jersey || '0',
   body: (pid: number) => {
     const p = league.players[pid];
-    return bodyOf(p?.heightIn ?? 78, p?.weightLb ?? 215, p?.ratings.str);
+    const r = p?.ratings;
+    return bodyOf(p?.heightIn ?? 78, p?.weightLb ?? 215, r?.str, r && { spd: r.spd, ath: r.ath, hnd: r.hnd, sht: Math.max(r.tp, r.mid) });
   },
   names: nameOf,
   board: kits[0].color,
@@ -363,9 +364,12 @@ const footSlid = (a: readonly (number | boolean)[], b: readonly (number | boolea
 };
 
 /** The whole game at a speed chip, measured. */
-function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only = '', hold = 3000, final = false } = {}) {
+function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only = '', hold = 3000, final = false, from = 0, upto = Infinity, most = 5 } = {}) {
+  void most;
   const c = new Clock(speed, calm, breaks);
-  c.tipMs = 0;
+  // (`from`, `upto`: only those possessions, for a quick look)
+  if (from > 0) c.k = from;
+  else c.tipMs = 0;
   [knocked.n, knocked.hard, knocked.at] = [0, 0, []];
   stamp = () => `k${c.k} t${Math.round(c.t)}`;
   // bodies and the ball inside each other (spacing.ts's shapes), pops (a bone that changes how fast it turns by
@@ -637,7 +641,7 @@ function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only =
   let fast = 0;
   cutNow = false;
   for (;;) {
-    if (!c.step(FRAME, hold)) break;
+    if (!c.step(FRAME, hold) || c.k >= upto) break;
     // (`final`: only the end of the game, from the buzzer on, held `hold` ms: see ?occasion)
     if (final && c.finalMs < 0) continue;
     frames++;
@@ -1275,9 +1279,10 @@ const POSE_POP = 0.25;
  * an even speed; how much of a cut's turn is made over a planted foot; and the head's and the whole pose's pops (a
  * frame's turn bigger than both its neighbours': see `popped`), with the worst of each as `k t pid clip act`, to film.
  */
-function gait({ speed = 2, only = '' } = {}) {
+function gait({ speed = 2, only = '', from = 0, upto = Infinity } = {}) {
   const c = new Clock(speed);
-  c.tipMs = 0;
+  if (from > 0) c.k = from;
+  else c.tipMs = 0;
   const own = FRAME * speed;
   const sec = own / 1000;
   const bins = GAIT_BINS.map(() => ({ frames: 0, steps: 0, len: 0, cad: 0, ratio: 0, off: 0 }));
@@ -1294,6 +1299,9 @@ function gait({ speed = 2, only = '' } = {}) {
   let cutYawDown = 0;
   let cutFrames = 0;
   let cutAir = 0;
+  let pushAll = 0;
+  let pushDown = 0;
+  const velWas = new Map<number, [number, number, number]>();
   const pops = { head: 0, pose: 0 };
   // (what he was in when it popped: his clip, and the one before if he has just changed)
   const popWhy = { head: new Map<string, number>(), pose: new Map<string, number>() };
@@ -1346,7 +1354,7 @@ function gait({ speed = 2, only = '' } = {}) {
   const BD = new Float32Array(BONES.length * 3);
   cutNow = false;
   for (;;) {
-    if (!c.step()) break;
+    if (!c.step() || c.k >= upto) break;
     const figs = [...inner.figs.entries()];
     const cut = cutNow || figs.some(([pid, f]) => (men.has(pid) ? Math.hypot(f.pup.x - men.get(pid)!.x, f.pup.z - men.get(pid)!.z) > 2.5 : false));
     cutNow = false;
@@ -1412,6 +1420,17 @@ function gait({ speed = 2, only = '' } = {}) {
           r.lean += p.pose[I.lean];
           r.hip += p.j[J.hips * 3 + 1] / (HIP * s) - 1;
         }
+        // (a body's way changes only through a foot on the floor: how much of a runner's change of velocity, from one
+        // frame to the next, is made with one down, and how much in the air between two strides. A frame's change of
+        // velocity spans two frames' travel, so a foot down in this one or the last counts)
+        const was = velWas.get(pid);
+        const footDown = p.feet.some((ft) => !ft.swing);
+        if (was && m.ok >= 2 && v > CUT_FROM && !p.one && !air) {
+          const dv = Math.hypot(dx / sec - was[0], dz / sec - was[1]);
+          pushAll += dv;
+          if (footDown || was[2]) pushDown += dv;
+        }
+        velWas.set(pid, [dx / sec, dz / sec, footDown ? 1 : 0]);
         // (a cut: his path turning fast at a run; how much of his body's turn is made with a foot down under him)
         const hv = Math.atan2(dx, dz);
         if (v > CUT_FROM && m.ok >= 2) {
@@ -1550,7 +1569,7 @@ function gait({ speed = 2, only = '' } = {}) {
         return [k, { frames: r.f, lean: r2(r.lean / Math.max(1, r.f)), hips: r2(r.hip / Math.max(1, r.f)), steps: r.n, stepVsEven: r2(w / Math.max(1, n)) }];
       }),
     ),
-    cuts: { frames: cutFrames, yawOverFootPct: pct(cutYawDown, cutYaw), airPct: pct(cutAir, cutFrames) },
+    cuts: { frames: cutFrames, yawOverFootPct: pct(cutYawDown, cutYaw), airPct: pct(cutAir, cutFrames), pushOverFootPct: pct(pushDown, pushAll) },
     popWhy: Object.fromEntries(Object.entries(popWhy).map(([k, m]) => [k, Object.fromEntries([...m].sort((x, y) => y[1] - x[1]).slice(0, 14))])),
     pops: { head: pops.head, headPer1k: r2((pops.head / Math.max(1, pf)) * 1000), pose: pops.pose, posePer1k: r2((pops.pose / Math.max(1, pf)) * 1000) },
     worst: Object.fromEntries([...worst].map(([k, l]) => [k, l.map((x) => `${x.at} ${x.mag.toFixed(2)}`)])),
@@ -3661,7 +3680,37 @@ function finishes() {
   return out;
 }
 
+/** A measure's numbers in short, as one line: for a quick look at a change (`from`, `upto`: only those possessions). */
+function quick(o: Parameters<typeof measure>[0] = {}) {
+  const m = measure({ speed: 1, ...o }) as unknown as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const top = (w: Record<string, number>, n = 10) =>
+    Object.fromEntries(
+      Object.entries(w)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, n),
+    );
+  const L = m.limbs;
+  return JSON.stringify({
+    frames: m.frames,
+    hand: { n: L.hand.n, max: L.hand.max, why: top(L.hand.why, 12) },
+    knee: { n: L.knee.n, kinks: L.knee.kinks, why: top(L.knee.why, 8) },
+    hips: { n: L.hips.n, why: top(L.hips.why, 4) },
+    inside: [L.inside.arms, L.inside.armsMeet, L.inside.legs],
+    lasting: [L.lasting.frames, L.lasting.over2, L.lasting.over5],
+    catch: L.catch,
+    arms: { fast: L.arms.fast, wrong: L.arms.wrong, shut: L.arms.shut, own: L.arms.own, back: L.arms.back, why: top(L.arms.why, 14) },
+    pops: [m.pops.n, m.pops.steady, m.pops.max],
+    popWhy: top(m.popWhy, 16),
+    yaw: [m.pops.yawN, top(m.yawWhy, 4)],
+    ball: m.hits.ball,
+    ballWhy: top(m.ballWhy, 6),
+    slides: m.slides,
+    worst: Object.fromEntries(Object.entries(m.worst as Record<string, string[]>).map(([k, v]) => [k, v.slice(0, o.most ?? 5)])),
+  });
+}
+
 (window as unknown as { lab: unknown }).lab = {
+  quick,
   weight,
   support,
   pairs,
