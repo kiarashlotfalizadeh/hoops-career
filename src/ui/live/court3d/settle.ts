@@ -95,10 +95,12 @@ export class Follow {
 
   /**
    * One frame on: the path is at (ax, ay, az), it is wanted at (wx, wy, wz). `sec`: the body's time (s); `drawn`: the
-   * drawn frame's (s), for Pace.frame; `scale`: the body's size (Pace and JUMP_LEAST are the 6 ft 6 puppet's). Returns
-   * where it is (also `this.at`).
+   * drawn frame's (s), for Pace.frame; `scale`: the body's size (Pace and JUMP_LEAST are the 6 ft 6 puppet's). `held`:
+   * its path is a thing it has hold of (a hand on a ball that is itself followed): it goes where that goes, however
+   * that moves, and a jump in it is not carried (a hand is not left behind the ball it holds). Returns where it is
+   * (also `this.at`).
    */
-  step(ax: number, ay: number, az: number, wx: number, wy: number, wz: number, sec: number, drawn: number, pace: Pace, scale = 1): P3 {
+  step(ax: number, ay: number, az: number, wx: number, wy: number, wz: number, sec: number, drawn: number, pace: Pace, scale = 1, held = false): P3 {
     const O = this.off;
     const V = this.v;
     const W = this.was;
@@ -130,7 +132,7 @@ export class Follow {
       if (moved > (TELEPORT + PATH_SPEED * sec) * scale) {
         WV.fill(0);
         this.fresh = true;
-      } else if (moved > fastest || (!fresh && dev > Math.max(JUMP_LEAST * scale, 0.5 * PATH_ACC * scale * sec * sec))) {
+      } else if (!held && (moved > fastest || (!fresh && dev > Math.max(JUMP_LEAST * scale, 0.5 * PATH_ACC * scale * sec * sec)))) {
         O[0] += px - ax;
         O[1] += py - ay;
         O[2] += pz - az;
@@ -206,6 +208,22 @@ export class Follow {
       V[2] -= nz * into;
     }
     return far * k;
+  }
+
+  /**
+   * It is here (x, y, z) now, whatever its path: a thing put in its keeping from somewhere else (a ball taken out of
+   * another man's hands) goes on from where it was taken, and comes on to its own path from there like any offset.
+   */
+  put(x: number, y: number, z: number) {
+    if (!this.on) return;
+    const A = this.path;
+    this.off[0] = x - A[0];
+    this.off[1] = y - A[1];
+    this.off[2] = z - A[2];
+    this.v.fill(0);
+    this.at.x = x;
+    this.at.y = y;
+    this.at.z = z;
   }
 
   /** It is moved with its path by (dx, dy, dz) and nothing carries over (the path's frame of reference changed under it). */

@@ -52,6 +52,7 @@ import { ballSize, lit as ledLit } from './ballskin';
 import { DUNK_AT, isDunk, type ClipId, type Gesture } from './clips';
 import { blocked, clearSeat, clutter, fenced, Operator, shot as newShot, TALL, type CamKind, type View } from './cameras';
 import { BIG_WORD, Director, INTRO_MS, WIPE_MS, type BigKind } from './director';
+import { Exchange, offerAt, POCKET_SIDE } from './exchange';
 import { Fig, figureGeo, type Geo } from './figure';
 import { air, arenaLight, HAZE_COLOR, HAZE_DENSITY, Lens, varnish, woodOf, type FloorKnobs } from './lens';
 import { Marks, SHOT_LATE } from './marks';
@@ -234,18 +235,12 @@ const SKULL = 0.42;
 const GIVE = 0.4;
 /** What the ball has given way to a body is let go of over this long (ms) once he is out of its way (see give). */
 const BEND_MS = 80;
-/** A hand-off whose taker's hands never got hold of it is his anyway from this far through its move to its end. */
 /** A man with the ball going at the man he runs into faster than this (ft a second) drives into him (see knocks). */
 const DRIVE_INTO = 4;
-const HANDOFF_LATE = 0.6;
-/** And it is drawn in to the taker as it becomes his over about this long (ms, the bodies' time). */
-const HANDOFF_DRAW_MS = 70;
+/** From this long (the play's ms) before a hand-off's moment the two men's arms are about the one ball: they are not moved apart for it (see unclash). */
+const SWAP_NEAR_MS = 160;
 /** Each man is told where the plan takes him this far on (ms, the bodies' time): see Drive.ahead. */
 const AHEAD_MS = 150;
-/** Two men's holds of a hand-off nearer each other than this (ft) are hands on it together; twice as far apart, it is in one man's. */
-const HANDOFF_TOGETHER = 0.2;
-/** The taker's hold of a hand-off is a hold from this far on (see swapHands): short of it, it is still the giver's. */
-const HANDOFF_HOLD = 0.65;
 /** A loose ball is moved off a body at this speed at most, ft a second: it rolls off him, it doesn't jump. */
 const BALL_PUSH = 14;
 /** A ball in a man's hands gives way to a body by it no faster than this (ft a second): from where it is, so never to his far side. */
@@ -416,6 +411,16 @@ const WORDS_CLOSE = 0.93;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const smooth = (u: number) => u * u * (3 - 2 * u);
 /** A point on the court, in the scene: x along the floor, z across it (toward the camera). */
+/**
+ * How far a ball held out to a man is one for his hands to go to (0..1): all of it within TAKE_NEAR ft of his middle
+ * (on the 6 ft 6 puppet), none of it from TAKE_FAR: he reaches for what he can get to, he doesn't point at it.
+ */
+const TAKE_NEAR = 3;
+const TAKE_FAR = 5;
+const within = (p: Puppet, ball: { x: number; z: number }) => {
+  const u = clamp((TAKE_FAR * p.body.s - Math.hypot(ball.x - p.x, ball.z - p.z)) / ((TAKE_FAR - TAKE_NEAR) * p.body.s), 0, 1);
+  return u * u * (3 - 2 * u);
+};
 const sx = (p: Pt) => p.y - MID;
 const sz = (p: Pt) => -p.x;
 
@@ -488,12 +493,6 @@ const FOREARM_R = 0.16;
 const THIGH_R = 0.24;
 const SHIN_R = 0.17;
 const LEGS_UP = 4;
-/** A dribble moved off his own legs is let go of over this long (ms, the bodies' time: see ownLegs). */
-const OWN_LET = 140;
-/** And is pushed off a leg come into it no faster than this (ft a second): from where it is, so never to the leg's far side. */
-const OWN_PUSH = 20;
-/** The dribbles a man's own legs are kept out of (see ownLegs): a crossover, across in front of his shins. */
-const DRIBBLE_CLIPS = new Set(['crossover']);
 const LEG_JOINTS = [
   [J.jl, J.kl, J.fl],
   [J.jr, J.kr, J.fr],
@@ -1060,7 +1059,8 @@ export class CourtScene {
     let near = 0;
     let backspin = false;
     let passing = false;
-    let swapping = false;
+    /** A hand-off not yet taken this frame: its exchange, the play's ms to its moment, its taker, and whether its move is over. */
+    let untaken: { ex: Exchange; tx: number; taker: Fig; last: boolean } | null = null;
     let hanger: Fig | null = null;
     /** The building gets up for a basket: all of it for the home side's big ones, a stir for the visitors'. */
     const roar = (home: boolean, big: boolean) => this.arena.cheer(home ? (big || p.clutch ? 1 : line ? 0.25 : 0.42) : big ? 0.22 : 0.12);
@@ -1130,6 +1130,59 @@ export class CourtScene {
         while (k > 0 && sc.frames[k - 1].act[j] === b.act[j]) k--;
         return k;
       });
+      // a hand-off, in this move or the next: one exchange between the two men (see exchange.ts), from the run in to
+      // the giver's hands coming off it
+      const hk = b.handoff ? bi : sc.frames[bi + 1]?.handoff && play.i < sc.frames.length ? bi + 1 : -1;
+      const gj = hk > 0 ? (sc.frames[hk - 1].hold ?? -1) : -1;
+      const tj = hk > 0 ? (sc.frames[hk].hold ?? -1) : -1;
+      let hand: { ex: Exchange; tx: number; gj: number; tj: number; has: boolean } | null = null;
+      if (gj >= 0 && tj >= 0 && gj !== tj && p.final === undefined) {
+        // (the play's ms until the plan has it change hands)
+        const tx = hk === bi ? HANDOFF_AT * b.dur - play.ms : play.dur - play.ms + HANDOFF_AT * sc.frames[hk].dur;
+        if (!this.swap || this.swap.n !== this.scriptN || this.swap.k !== hk || cut)
+          this.swap = { n: this.scriptN, k: hk, ex: new Exchange(tx), a: null, b: null, on: false, set: false, px: 0, pz: 0 };
+        const ex = this.swap.ex;
+        ex.tick(dt, own, hk === bi || carried === gj);
+        this.swap.a = this.figs.get(pids[gj])?.pup ?? null;
+        this.swap.b = this.figs.get(pids[tj])?.pup ?? null;
+        // (their hands are on the one ball, or all but: from the taker's reach to the giver's letting go)
+        this.swap.on = tx <= SWAP_NEAR_MS && (!ex.taken || ex.grip > 0.05);
+        // (the giver has it to hold out: in the move before, only once it is in his hands)
+        hand = { ex, tx, gj, tj, has: hk === bi || carried === gj };
+        const G = this.figs.get(pids[gj])?.pup;
+        const T = this.figs.get(pids[tj])?.pup;
+        if (G?.placed && T?.placed) {
+          // (held out toward where the taker will be as it changes hands: where he is, and as far on as the plan takes
+          // him by then; past that moment, where he is)
+          const then = tx > 0 ? pose(sc, this.scriptAt + tx, true) : play;
+          const at = (q: typeof play) => toWorld(tj < nO ? q.o[tj] : q.d[tj - nO], sc.dir);
+          const [n0, n1] = [at(play), at(then)];
+          const [ex0, ez0] = [T.x + sx(n1) - sx(n0), T.z + sz(n1) - sz(n0)];
+          // (and into his pocket as he gets there: beside him on the giver's side of the line he runs out on, square to
+          // it: a place that goes with him, whichever way his body is still turning. Settled before it is put there)
+          const sw = this.swap;
+          if (!sw.set || ex.mesh(tx) <= 0) {
+            const [r0, r1] = [
+              toWorld(tj < nO ? sc.frames[hk - 1].o[tj] : sc.frames[hk - 1].d[tj - nO], sc.dir),
+              toWorld(tj < nO ? sc.frames[hk].o[tj] : sc.frames[hk].d[tj - nO], sc.dir),
+            ];
+            let [ux, uz] = [sx(r1) - sx(r0), sz(r1) - sz(r0)];
+            const ul = Math.hypot(ux, uz);
+            let [nx, nz] = [G.x - ex0, G.z - ez0];
+            if (ul > 0.5) {
+              [ux, uz] = [ux / ul, uz / ul];
+              const along = nx * ux + nz * uz;
+              // (square to his run, unless the giver is dead ahead of him or behind: then straight at him)
+              if (Math.hypot(nx - ux * along, nz - uz * along) > 0.6) [nx, nz] = [nx - ux * along, nz - uz * along];
+            }
+            const nl = Math.hypot(nx, nz) || 1;
+            sw.px = (nx / nl) * POCKET_SIDE * T.body.s;
+            sw.pz = (nz / nl) * POCKET_SIDE * T.body.s;
+            sw.set = true;
+          }
+          offerAt(G.x, G.z, G.body.s, ex0, ez0, T.body.s, T.x + sw.px, T.z + sw.pz, ex.mesh(tx), this.offer);
+        } else hand.has = false;
+      } else this.swap = null;
       // (where the plan has each man a beat from now, with the play's clock running: see Drive.ahead)
       const soon = dt > 0 && own > 0 && p.final === undefined ? [1, 2].map((n) => pose(sc, this.scriptAt + (n * AHEAD_MS * dt) / own, true)) : null;
       pids.forEach((pid, j) => {
@@ -1159,7 +1212,13 @@ export class CourtScene {
             // (at the buzzer the man with the ball lets it go: his arms are up, or his head is down, like everyone's;
             // the man a referee gives it to, to throw it in, has his hands up for it as it comes, and the man at the
             // line has it for his routine once the referee has let go of it)
-            ball: (j === carried || (b.hold === j && a.hold !== j && said === 'hold' && (nb?.act[j] === 'inbound' || (nb?.act[j] === 'ft' && !this.refBall)))) && said === b.act[j],
+            // (nor while it is still a referee's, to be handed to him: a man told to dribble it then dribbled nothing, and it
+            // was put into the middle of a bounce when it came; he waits for it, and has it from his hands)
+            ball:
+              ((j === carried && !(this.refBall && !b.act.includes('ft') && !b.act.includes('inbound'))) ||
+                (b.hold === j && a.hold !== j && said === 'hold' && (nb?.act[j] === 'inbound' || (nb?.act[j] === 'ft' && !this.refBall)))) &&
+              said === b.act[j],
+            waits: j === carried && this.refBall && !b.act.includes('ft') && !b.act.includes('inbound'),
             aim: AIMED.has(act) ? rim : undefined,
             cut,
             // (at the buzzer, a man with a teammate to go up with or hold looks him in the eye)
@@ -1181,9 +1240,14 @@ export class CourtScene {
             // (his shot won't go down: the move it lands in is a miss, or a hand gets to it)
             fails: ((o) => (o?.swat !== undefined ? 'block' : o?.fx === 'miss' ? 'miss' : undefined))(said === 'release' ? b : SHOTS.has(said) ? nb : undefined),
             fake: b.fake === j,
-            // (his pass in this move, or the next, goes from his hands to the other's: see Frame.handoff)
-            handoff: (!!b.handoff && b.act[j] === 'pass') || (!!nb?.handoff && nb.act[j] === 'pass'),
-            take: !!b.handoff && b.act[j] === 'catch',
+            // (either end of a hand-off: see Frame.handoff and exchange.ts)
+            swap: !hand
+              ? undefined
+              : j === hand.tj
+                ? { give: false, tau: hand.ex.tau(hand.tx) }
+                : j === hand.gj && hand.has
+                  ? { give: true, tau: hand.ex.tau(hand.tx), at: this.offer, w: hand.ex.taken ? 0 : hand.ex.offer(hand.tx) }
+                  : undefined,
             tape,
             k: bi,
             k0: runs[j],
@@ -1243,8 +1307,14 @@ export class CourtScene {
       } else if (carried >= 0) {
         holder = figs[carried];
         set(ball, holder.pup.bounced(holder.pup.carry(TMP)));
-        this.give(holder, null, ease);
-        this.ownLegs(holder, own);
+        // (about to hand it off: the man coming by for it has his hands out to it where it is held)
+        const taker = hand && hand.has && carried === hand.gj ? figs[hand.tj] : null;
+        this.give(holder, taker, ease);
+        holder.pup.legsOff(ball);
+        if (taker) {
+          hands.add(taker);
+          taker.pup.taking(hand!.ex.reach(hand!.tx) * within(taker.pup, ball));
+        }
       } else if (b.fx) {
         const one = was?.pup.one;
         const dunking = !!was && !!one && isDunk(one.id);
@@ -1390,34 +1460,31 @@ export class CourtScene {
           }
         }
       } else if (this.swatted && !next) free = true;
-      else if (b.handoff && was && next && was !== next) {
-        // a hand-off: hand to hand, never in the air. The taker's hands go onto it in the giver's (his catch closes on it
-        // HANDOFF_AT through the move), the giver's open after; it goes from one man's hold to the other's as their grips
-        // trade (see swapHands), and is the taker's once his hold is the surer
-        if (this.swap?.k !== bi || this.swap.a !== was) this.swap = { k: bi, a: was, b: next, share: 0, drawn: 0 };
-        const sw = this.swap;
-        // (and is his by the end of its move whatever: a hand that can't get to it doesn't keep it in the air)
-        sw.share = Math.max(sw.share, smooth(clamp((lu - HANDOFF_LATE) / (1 - HANDOFF_LATE), 0, 1)));
-        // (drawn in to him eased, not in the steps his grip closes by: the hands on it go with it, they don't chase it)
-        sw.drawn += (sw.share - sw.drawn) * (1 - Math.exp(-ease / HANDOFF_DRAW_MS));
-        const w = sw.drawn;
-        // (out where the giver holds it, drawn in to the taker as it becomes his: both men's hands on it on the way)
-        const c1 = was.pup.carry(TMP);
-        const [x1, y1, z1] = [c1.x, c1.y, c1.z];
-        const c2 = next.pup.carry(TMP);
-        ball.set(x1 + (c2.x - x1) * w, y1 + (c2.y - y1) * w, z1 + (c2.z - z1) * w);
+      else if (b.handoff && was && next && was !== next && hand) {
+        // a hand-off: hand to hand, never in the air (see exchange.ts). It is where the giver holds it out until the
+        // taker's hands are on it and both have had it a beat; then it is the taker's, and goes on from where it was
+        // taken (Puppet.seize) as the giver's hands come off it
+        const ex = hand.ex;
+        if (ex.taken) {
+          set(ball, next.pup.carry(TMP));
+          next.pup.taking(1);
+          was.pup.giving(ex.grip, false);
+          holder = next;
+        } else {
+          set(ball, was.pup.carry(TMP));
+          next.pup.taking(ex.reach(hand.tx) * within(next.pup, ball));
+          was.pup.giving(1);
+          holder = was;
+          untaken = { ex, tx: hand.tx, taker: next, last: play.ms >= play.dur };
+        }
         this.give(was, next, ease);
-        swapping = true;
-        // (his hands out to it as the giver holds it out, all the way on it before his grip closes)
-        next.pup.taking(smooth(clamp(lu / (HANDOFF_AT * 0.7), 0, 1)));
-        was.pup.giving();
-        holder = sw.share >= 0.5 ? next : was;
       } else if (!was && next && this.refGave && b.act[figs.indexOf(next)] === 'hold' && Math.hypot(ball.x - next.pup.x, ball.z - next.pup.z) < GIVEN_FT) {
         // a referee has given it to the man waiting for it before the move is out: it is in his hands, not on its way
         // from where the move began
         holder = next;
         set(ball, next.pup.bounced(next.pup.carry(TMP)));
         this.give(next, null, ease);
+        next.pup.legsOff(ball);
       } else {
         // a pass (to where his hands will be), or the ball loose on the floor
         const end = toWorld(b.ball, sc.dir);
@@ -1559,6 +1626,7 @@ export class CourtScene {
         hands.add(holder);
         set(ball, holder.pup.bounced(holder.pup.carry(TMP)));
         this.give(holder, null, ease);
+        holder.pup.legsOff(ball);
       } else {
         if (had && had.side === p.final && (p.occasion ?? 'win') !== 'win') this.toss();
         this.heldBy = null;
@@ -1667,14 +1735,18 @@ export class CourtScene {
       if (!seen.has(pid)) continue;
       f.ball = hands.has(f) ? ball : null;
       f.pup.arms(hands.has(f) ? ball : null, onFloor, hands.has(f) || pid === taking ? null : LOOSE);
-      if (swapping) continue;
       // (the ball where his hands have it: they are on it as his ball follows his move, kept out of his body where it is:
       // see Puppet.settleBall)
       if (f === has && hands.has(f)) this.inHands(f, own);
       else if (f === has) this.heldMs = 0;
     }
-    if (swapping && this.swap && hands.size) this.swapHands(this.swap);
-    else if (!swapping) this.swap = null;
+    // (a hand-off not yet taken: the taker's hands as they are drawn, on it or not, are what takes it)
+    if (untaken && hands.size) {
+      const T = untaken.taker.pup;
+      const sure = T.holds(TMP);
+      const gap = sure > 0 ? Math.hypot(TMP.x - ball.x, TMP.y - ball.y, TMP.z - ball.z) / T.body.s : Infinity;
+      if (untaken.ex.touch(untaken.tx, sure, gap, own, untaken.last)) T.seize(ball);
+    }
     if (!has) this.heldMs = 0;
     // (and again with their arms where they are drawn this frame: an arm, a trunk or a leg still in a man moves them
     // apart now, not next frame; a man with the ball in his hands stays where it is)
@@ -2458,7 +2530,7 @@ export class CourtScene {
         let lx = 0;
         // (two with their hands on the ball together, a hand-off: their arms are in each other's by design, like a hug's)
         const sw = this.swap;
-        const hug = (a.clip === 'hug' && b.clip === 'hug') || (!!sw && ((sw.a.pup === a && sw.b.pup === b) || (sw.a.pup === b && sw.b.pup === a)));
+        const hug = (a.clip === 'hug' && b.clip === 'hug') || (!!sw && sw.on && ((sw.a === a && sw.b === b) || (sw.a === b && sw.b === a)));
         for (let pass = 0; pass < CLASH_PASSES; pass++) {
           const [ja, jb] = [jointsOf(a, JA), jointsOf(b, JB)];
           const gap = clearance(ja, a.body.s, a.body.bulk, jb, b.body.s, b.body.bulk, false);
@@ -3061,45 +3133,6 @@ export class CourtScene {
     ball.z = z + dz * k;
   }
   /**
-   * A dribble low by his own legs (a crossover in front of his shins, one at his side as he goes) goes by them, out in
-   * front of him, not through them: his hand on it goes with it (his arms are solved after this).
-   */
-  private ownLegs(f: Fig, ms: number) {
-    const ball = this.ball;
-    const p = f.pup;
-    // (what its move's own place needed to be clear of them is let go of over OWN_LET; from where the ball *is* then, it
-    // is pushed out of a leg come into it, as fast as a hand moves it and no faster. Put back where its move has it and
-    // pushed out from there, it went to the leg's front one frame and its back the next as the shin swung through it)
-    const O = this.ownOff;
-    const let_ = Math.exp(-Math.max(0, ms) / OWN_LET);
-    O.x *= let_;
-    O.z *= let_;
-    const [x0, z0] = [ball.x, ball.z];
-    ball.x = x0 + O.x;
-    ball.z = z0 + O.z;
-    if (!DRIBBLE_CLIPS.has(p.clip) || ball.y > LEGS_UP * 0.65 * p.body.s) return;
-    const j = p.j;
-    const s = p.body.s;
-    const way = { x: Math.sin(p.yaw), z: Math.cos(p.yaw) };
-    const [qx, qz] = [ball.x, ball.z];
-    for (const [hip, knee, ankle] of LEG_JOINTS) {
-      const l0 = p.world(j[hip * 3], j[hip * 3 + 1], j[hip * 3 + 2], TMP);
-      const l1 = p.world(j[knee * 3], j[knee * 3 + 1], j[knee * 3 + 2], TMP2);
-      clearOf(ball, l0, l1, THIGH_R * s * Math.sqrt(p.body.bulk) + BALL_R, 0, way);
-      const l2 = p.world(j[ankle * 3], j[ankle * 3 + 1], j[ankle * 3 + 2], TMP);
-      clearOf(ball, l1, l2, SHIN_R * s + BALL_R, 0, way);
-    }
-    let [mx, mz] = [ball.x - qx, ball.z - qz];
-    const far = Math.hypot(mx, mz);
-    const most = (OWN_PUSH * Math.max(0, ms)) / 1000;
-    if (far > most) [mx, mz] = [(mx * most) / far, (mz * most) / far];
-    O.x += mx;
-    O.z += mz;
-    ball.x = x0 + O.x;
-    ball.z = z0 + O.z;
-  }
-  private readonly ownOff = { x: 0, z: 0 };
-  /**
    * The ball, in a man's hands or on its way between two, gives way to the bodies by it (all but `a` and
    * `b`, whose hands it is in): eased, so it is carried and passed round a man, never hopped off him, and
    * what it has given way is kept from one move to the next. `on` false: nothing to give way to, and what
@@ -3130,39 +3163,10 @@ export class CourtScene {
     ball.x = px + this.bend.x;
     ball.z = pz + this.bend.z;
   }
-  /** A hand-off under way: the script frame it is in, from whom to whom, and how far it has gone to the taker (0..1). */
-  private swap: { k: number; a: Fig; b: Fig; share: number; drawn: number } | null = null;
-  /**
-   * A hand-off, with both men's arms drawn this frame: the ball is where the hands on it hold it (Puppet.holds), the
-   * surer grip counting the more, and goes on to the taker as far as his grip is the surer (it never goes back).
-   */
-  private swapHands(sw: NonNullable<CourtScene['swap']>) {
-    const ball = this.ball;
-    const wa = sw.a.pup.holds(TMP);
-    const [ax, ay, az] = [TMP.x, TMP.y, TMP.z];
-    const wb = sw.b.pup.holds(TMP2);
-    // (the giver's hands off it: it is the taker's, and is drawn in to him, whether or not his hands have got to it yet;
-    // it is never left in the air between them)
-    if (wa <= HOLD_FROM) sw.share = Math.max(sw.share, 0.5);
-    let qa = wa * wa;
-    let qb = wb * wb;
-    if (qa + qb <= 1e-4) return;
-    // (hands that aren't on it together, an arm that can't get to where the other man has it, a body behind its plan
-    // at a fast speed: it is in one man's hands, not in the air between the two. The giver's until the taker's get
-    // to it there or his own let go; then the taker's)
-    if (qa > 0 && qb > 0) {
-      const apart = smooth(clamp((Math.hypot(ax - TMP2.x, ay - TMP2.y, az - TMP2.z) - HANDOFF_TOGETHER) / HANDOFF_TOGETHER, 0, 1));
-      if (wa >= HOLD_SURE && sw.share < 0.5) qb *= 1 - apart;
-      else qa *= 1 - apart;
-    }
-    // (and it is his once his hold is the surer and is a hold: not while his hands are still closing on it)
-    sw.share = Math.max(sw.share, wb >= HANDOFF_HOLD ? qb / (qa + qb) : Math.min(0.49, qb / (qa + qb)));
-    const x = (ax * qa + TMP2.x * qb) / (qa + qb);
-    const y = (ay * qa + TMP2.y * qb) / (qa + qb);
-    const z = (az * qa + TMP2.z * qb) / (qa + qb);
-    const k = smooth(clamp((Math.max(wa, wb) - HOLD_FROM) / (HOLD_SURE - HOLD_FROM), 0, 1));
-    ball.set(ball.x + (x - ball.x) * k, ball.y + (y - ball.y) * k, ball.z + (z - ball.z) * k);
-  }
+  /** A hand-off under way (see exchange.ts): the possession and the script frame it is in. */
+  private swap: { n: number; k: number; ex: Exchange; a: Puppet | null; b: Puppet | null; on: boolean; set: boolean; px: number; pz: number } | null = null;
+  /** Where its giver holds it out (the scene's point). */
+  private readonly offer: V3 = { x: 0, y: 0, z: 0 };
   /** How far the ball is off where its move has it, for the bodies by it (x, z). */
   private readonly bend = { x: 0, z: 0 };
   /** The ball was in the air between two men last frame (a pass, a rebound): whoever has it now has just caught it. */

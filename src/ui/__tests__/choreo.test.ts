@@ -1765,8 +1765,9 @@ describe('live court choreography', () => {
               m.world(m.j[q * 3], m.j[q * 3 + 1], m.j[q * 3 + 2], v);
               [w[q * 3], w[q * 3 + 1], w[q * 3 + 2]] = [v.x, v.y, v.z];
             }
-            // (a crossover down by his legs is taken round them by the scene, eased (ownLegs): the motion lab counts those)
-            const held = j === carried ? m.bounced(m.carry(v)) : null;
+            // (as the scene has it: where his move has it, then out of his own legs (legsOff), eased; a crossover down by
+            // his legs is still coming round them for a frame or two: the motion lab counts those)
+            const held = j === carried ? m.legsOff(m.bounced(m.carry(v))) : null;
             if (held && !(m.clip === 'crossover' && held.y <= OWN_LEGS_UP * m.body.s) && ballIn(held, w, m.body.s, m.body.bulk, BALL_R, false) > 0.1) mine++;
           });
           for (let i = 0; i < 10; i++)
