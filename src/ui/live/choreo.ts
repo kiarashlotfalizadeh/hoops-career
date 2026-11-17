@@ -539,6 +539,12 @@ const FT_DEF: Pt[] = [
  * run the floor. Without it (the opening tip, a highlight, after a break) the court cuts to the
  * offense coming over half court.
  */
+/** A number in 0..1 from two others, the same for the same two (no Math.random: a possession drawn twice is drawn the same). */
+function jitter(a: number, b: number): number {
+  const x = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
+  return x - Math.floor(x);
+}
+
 export function buildScript(
   log: PossLog,
   info: (pid: number) => PInfo,
@@ -1325,12 +1331,14 @@ export function buildScript(
       case 'reb': {
         // no pid: a team rebound (out of bounds, or the ball loose after a free throw)
         const pid = st.pid;
-        let pt = { x: (Math.random() - 0.5) * 8, y: 7 + Math.random() * 4 };
+        // (where it comes off is the same every time this possession is drawn: a replay, a skip back, the lab)
+        const rnd = (k: number) => jitter(log.q * 7919 + log.clockStart * 131 + log.score[0] * 17 + log.score[1] * 29 + steps.indexOf(st) * 3, k);
+        let pt = { x: (rnd(1) - 0.5) * 8, y: 7 + rnd(2) * 4 };
         // (it comes off the rim his way: he steps in toward it and goes up for it, he doesn't run the lane to it)
         const from = pid === undefined ? undefined : (o.get(pid) ?? d.get(pid));
         if (from) {
-          const r = clamp(dist(from, BASKET) - REB_STEP, REB_NEAR, REB_FAR) + (Math.random() - 0.5) * 1.5;
-          const a = Math.atan2(from.y - BASKET.y, from.x - BASKET.x) + (Math.random() - 0.5) * 0.3;
+          const r = clamp(dist(from, BASKET) - REB_STEP, REB_NEAR, REB_FAR) + (rnd(3) - 0.5) * 1.5;
+          const a = Math.atan2(from.y - BASKET.y, from.x - BASKET.x) + (rnd(4) - 0.5) * 0.3;
           pt = { x: BASKET.x + Math.cos(a) * r, y: Math.max(BASKET.y + 1, BASKET.y + Math.sin(a) * r) };
         }
         const offensive = pid !== undefined && o.has(pid);

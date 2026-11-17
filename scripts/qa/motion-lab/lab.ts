@@ -628,6 +628,10 @@ function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only =
   const hipPop = { n: 0, raw: 0, tooFast: 0, why: new Map<string, number>() };
   const stride = { n: 0, why: new Map<string, number>() };
   const inside = { arms: 0, armsMeet: 0, legs: 0, heads: 0, deepest: 0, why: new Map<string, number>() };
+  // (how long two stay inside each other once they are: each run of frames a pair has a limb in the other (an arm or a
+  // leg in his trunk or head, or, not meeting, any limb in any limb), from its first frame to the first frame clear)
+  const lasting = { n: 0, frames: 0, over2: 0, over5: 0, longest: 0, at: '', why: new Map<string, number>(), lens: [] as number[] };
+  const runsOf = new Map<string, { n: number; at: string; why: string }>();
   const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
   let cuts = 0;
   let fast = 0;
@@ -1034,6 +1038,7 @@ function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only =
       }
     }
     // (who meets whom this frame: the scene's own list)
+    const clashing = new Set<string>();
     const met = new Set<string>();
     if (sc) for (const m of meeting) if (m.w > 0.2) met.add(`${[...sc.oPids, ...sc.dPids][m.i]}:${[...sc.oPids, ...sc.dPids][m.j]}`);
     for (let a = 0; a < figs.length; a++)
@@ -1073,6 +1078,13 @@ function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only =
             top('head in head', head, where, `${c.k}:${figs[a][0]}:${figs[b][0]}`);
           }
           inside.deepest = Math.max(inside.deepest, arm, leg, head);
+          if (!walking && (arm > HIT || leg > HIT || head > HIT || !meeting)) {
+            const key = `${figs[a][0]}:${figs[b][0]}`;
+            clashing.add(key);
+            const r = runsOf.get(key);
+            if (r && !cut) r.n++;
+            else runsOf.set(key, { n: 1, at: where, why: `${arm > HIT ? 'arm' : leg > HIT ? 'leg' : head > HIT ? 'head' : 'limb'} ${pair}` });
+          }
         }
         if (meeting) {
           if (trunk > HIT) hit.trunkMeet++;
@@ -1098,6 +1110,20 @@ function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only =
             `k${c.k} t${Math.round(c.t)} i${play?.i} ${figs[a][0]}/${figs[b][0]} ${why} ${sc && play ? [figs[a][0], figs[b][0]].map((q) => play.b.act[[...sc.oPids, ...sc.dPids].indexOf(q)]).join('/') : ''} ${deep.toFixed(2)}${trunk > HIT ? ' trunk' : ''}`,
           );
       }
+    // (a pair clear this frame: its run is over)
+    for (const [key, r] of runsOf) {
+      if (clashing.has(key)) continue;
+      runsOf.delete(key);
+      lasting.n++;
+      lasting.frames += r.n;
+      lasting.lens.push(r.n);
+      if (r.n > 2) lasting.over2++;
+      if (r.n > 5) {
+        lasting.over5++;
+        bump(lasting.why, r.why);
+      }
+      if (r.n > lasting.longest) [lasting.longest, lasting.at] = [r.n, r.at];
+    }
     for (let a = 0; a < figs.length; a++)
       for (let b = a + 1; b < figs.length; b++) {
         const pa = figs[a][1].pup;
@@ -1183,6 +1209,19 @@ function measure({ speed = 2, calm = false, slide = 0.05, breaks = false, only =
       hips: { n: hipPop.n, raw: hipPop.raw, tooFast: hipPop.tooFast, why: Object.fromEntries([...hipPop.why].sort((x, y) => y[1] - x[1]).slice(0, 10)) },
       stride: { n: stride.n, why: Object.fromEntries([...stride.why].sort((x, y) => y[1] - x[1]).slice(0, 12)) },
       inside: { ...inside, deepest: Math.round(inside.deepest * 100) / 100, why: Object.fromEntries([...inside.why].sort((x, y) => y[1] - x[1]).slice(0, 16)) },
+      // (each time two were inside each other: how many times, how many frames in all, how many lasted more than 2 and
+      // more than 5 frames (and what those were), the median and 90th-percentile run, the longest and where it began)
+      lasting: {
+        n: lasting.n,
+        frames: lasting.frames,
+        over2: lasting.over2,
+        over5: lasting.over5,
+        p50: lasting.lens.sort((x, y) => x - y)[Math.floor(lasting.lens.length / 2)] ?? 0,
+        p90: lasting.lens[Math.floor(lasting.lens.length * 0.9)] ?? 0,
+        longest: lasting.longest,
+        at: lasting.at,
+        why: Object.fromEntries([...lasting.why].sort((x, y) => y[1] - x[1]).slice(0, 12)),
+      },
       // (each catch: hands farther than CATCH_LATE off it a beat before it came (and how far on average), catches snapped
       // onto (and how fast the hands went, on average, ft a second), hands not on it as it came)
       catch: {
@@ -3032,6 +3071,589 @@ function weight({ speed = 1, from = 8 } = {}) {
   );
 }
 
+/**
+ * Two inside each other for more than `over` frames running (see measure's `lasting`): each such run, where it began,
+ * how long, the deepest part of one in which part of the other (SHAPES names), how deep at most, and how fast each man
+ * was going on average (ft a second, the bodies' time), to see what keeps them in each other.
+ */
+const SHAPE_NAMES = ['trunk', 'shoulders', 'pelvis', 'head', 'uarmL', 'farmL', 'uarmR', 'farmR', 'thighL', 'shinL', 'thighR', 'shinR'];
+function lasts({ speed = 1, over = 5, most = 30 } = {}) {
+  const c = new Clock(speed);
+  c.tipMs = 0;
+  const wa = new Float32Array(45);
+  const wb = new Float32Array(45);
+  const put = (f: Fig, out: Float32Array) => {
+    for (let k = 0; k < 15; k++) {
+      f.pup.world(f.pup.j[k * 3], f.pup.j[k * 3 + 1], f.pup.j[k * 3 + 2], V);
+      [out[k * 3], out[k * 3 + 1], out[k * 3 + 2]] = [V.x, V.y, V.z];
+    }
+  };
+  const meeting = (scene as unknown as { meeting: { i: number; j: number; w: number }[] }).meeting ?? [];
+  type Run = { n: number; at: string; parts: Map<string, number>; deep: number; va: number; vb: number; clips: string };
+  const runs = new Map<string, Run>();
+  const out: Run[] = [];
+  const was = new Map<number, [number, number]>();
+  const sec = (FRAME * speed) / 1000;
+  const byParts = new Map<string, number>();
+  while (c.step()) {
+    const sc = c.stage.script;
+    const play = c.stage.play;
+    if (cutNow) {
+      cutNow = false;
+      runs.clear();
+    }
+    const figs = [...inner.figs.entries()];
+    const met = new Set<string>();
+    if (sc) for (const m of meeting) if (m.w > 0.2) met.add(`${[...sc.oPids, ...sc.dPids][m.i]}:${[...sc.oPids, ...sc.dPids][m.j]}`);
+    const now = new Set<string>();
+    for (let a = 0; a < figs.length; a++)
+      for (let b = a + 1; b < figs.length; b++) {
+        const [fa, fb] = [figs[a][1], figs[b][1]];
+        if (Math.hypot(fa.pup.x - fb.pup.x, fa.pup.z - fb.pup.z) > 5) continue;
+        put(fa, wa);
+        put(fb, wb);
+        const [A, B] = [fa.pup.body, fb.pup.body];
+        const meet = met.has(`${figs[a][0]}:${figs[b][0]}`) || met.has(`${figs[b][0]}:${figs[a][0]}`);
+        let best = 0;
+        let bp = '';
+        for (let i = 0; i < SHAPES.length; i++)
+          for (let k = 0; k < SHAPES.length; k++) {
+            // (a trunk on a trunk of two meeting is what they are for; a limb in anything is not)
+            if (meet && i < 4 && k < 4) continue;
+            const d = into(wa, A.s, A.bulk, wb, B.s, B.bulk, [i], [k]);
+            if (d > best) [best, bp] = [d, `${SHAPE_NAMES[i]}>${SHAPE_NAMES[k]}`];
+          }
+        if (best <= HIT) continue;
+        const key = `${figs[a][0]}:${figs[b][0]}`;
+        now.add(key);
+        const wA = was.get(figs[a][0]);
+        const wB = was.get(figs[b][0]);
+        const va = wA ? Math.hypot(fa.pup.x - wA[0], fa.pup.z - wA[1]) / sec : 0;
+        const vb = wB ? Math.hypot(fb.pup.x - wB[0], fb.pup.z - wB[1]) / sec : 0;
+        let r = runs.get(key);
+        if (!r) {
+          const act = (pid: number) => (sc && play ? play.b.act[[...sc.oPids, ...sc.dPids].indexOf(pid)] : '-');
+          r = {
+            n: 0,
+            at: `k${c.k} t${Math.round(c.t)} ${key} ${act(figs[a][0])}/${act(figs[b][0])}${meet ? ' meet' : ''}`,
+            parts: new Map(),
+            deep: 0,
+            va: 0,
+            vb: 0,
+            clips: `${fa.pup.clip}+${fb.pup.clip}`,
+          };
+          runs.set(key, r);
+        }
+        r.n++;
+        r.parts.set(bp, (r.parts.get(bp) ?? 0) + 1);
+        r.deep = Math.max(r.deep, best);
+        r.va += va;
+        r.vb += vb;
+      }
+    for (const [key, r] of runs) {
+      if (now.has(key)) continue;
+      runs.delete(key);
+      if (r.n <= over) continue;
+      out.push(r);
+      const top = [...r.parts].sort((x, y) => y[1] - x[1])[0][0];
+      byParts.set(top, (byParts.get(top) ?? 0) + 1);
+    }
+    for (const [pid, f] of figs) was.set(pid, [f.pup.x, f.pup.z]);
+  }
+  return {
+    n: out.length,
+    byParts: Object.fromEntries([...byParts].sort((x, y) => y[1] - x[1])),
+    worst: out
+      .sort((x, y) => y.n - x.n)
+      .slice(0, most)
+      .map(
+        (r) =>
+          `${r.at} ${r.clips} ${r.n}f ${[...r.parts]
+            .sort((x, y) => y[1] - x[1])
+            .slice(0, 2)
+            .map(([k, v]) => `${k}:${v}`)
+            .join(',')} deep ${r.deep.toFixed(2)} v ${(r.va / r.n).toFixed(1)}/${(r.vb / r.n).toFixed(1)}`,
+      ),
+  };
+}
+
+/**
+ * Each wrist as the body draws it (figure.ts's bones, what the viewer sees), over the whole game: the hand
+ * against its forearm as a forearm's turn (pronation, palm down or back, over 0; supination under) and a wrist's bend
+ * (toward the palm over 0) and its tilt to the thumb's or the little finger's side. Held (a hand on
+ * the ball) and free apart, by clip: their 5th, 50th and 95th centiles (degrees), and how many frames are past what a
+ * forearm turns (PRON_DEG either way of the palm facing in), a wrist bends (FLEX_DEG, EXT_DEG) or tilts (DEV_DEG).
+ * `worst`: the worst of each, to film.
+ */
+const PRON_DEG = 85;
+const FLEX_DEG = 75;
+const EXT_DEG = 65;
+const DEV_DEG = 35;
+function wrists({ speed = 1, most = 8, only = '' } = {}) {
+  const c = new Clock(speed);
+  c.tipMs = 0;
+  type Row = { n: number; pron: number[]; flex: number[]; dev: number[]; past: number };
+  const by = new Map<string, Row>();
+  const worst = new Map<string, { m: number; at: string }[]>();
+  const past = { pron: 0, flex: 0, ext: 0, dev: 0, n: 0 };
+  const Q1 = new Quaternion();
+  const Q2 = new Quaternion();
+  const F = new Vector3();
+  const U = new Vector3();
+  const L = new Vector3();
+  const deg = (r: number) => (r * 180) / Math.PI;
+  const note = (kind: string, m: number, at: string) => {
+    const l = worst.get(kind) ?? [];
+    if (!worst.has(kind)) worst.set(kind, l);
+    l.push({ m, at });
+    l.sort((x, y) => y.m - x.m);
+    if (l.length > most * 4) l.length = most * 4;
+  };
+  while (c.step()) {
+    const sc = c.stage.script;
+    const play = c.stage.play;
+    if (!sc || !play) continue;
+    for (const [pid, f] of inner.figs) {
+      const bones = (f as unknown as { bones: Bone[] }).bones;
+      if (bones.length < 9) continue;
+      const p = f.pup;
+      for (const k of [0, 1] as const) {
+        const way = k ? 1 : -1;
+        const [ua, fa, ha] = k ? [6, 7, 8] : [3, 4, 5];
+        Q1.copy(bones[fa].quaternion).invert().multiply(bones[ha].quaternion);
+        // (the turn about the forearm, then what is left: the wrist's)
+        const tw = Math.hypot(Q1.y, Q1.w) || 1;
+        const twist = 2 * Math.atan2(Q1.y / tw, Q1.w / tw);
+        Q2.set(0, Q1.y / tw, 0, Q1.w / tw)
+          .invert()
+          .multiply(Q1);
+        F.set(0, -1, 0).applyQuaternion(Q2);
+        const pron = deg(Math.atan2(Math.sin(way * twist), Math.cos(way * twist)));
+        const flex = deg(Math.atan2(way * F.x, -F.y));
+        const dev = deg(Math.atan2(F.z, -F.y));
+        // (the elbow: the forearm's line against the upper arm's, folded the way its hinge folds it, or past straight)
+        U.set(0, -1, 0).applyQuaternion(bones[ua].quaternion);
+        L.set(0, -1, 0).applyQuaternion(bones[fa].quaternion);
+        const held = p.pose[k ? I.gr : I.gl] > 0.3;
+        const key = `${held ? 'held' : 'free'} ${p.clip}`;
+        let r = by.get(key);
+        if (!r) by.set(key, (r = { n: 0, pron: [], flex: [], dev: [], past: 0 }));
+        r.n++;
+        if (r.pron.length < 20000) {
+          r.pron.push(pron);
+          r.flex.push(flex);
+          r.dev.push(dev);
+        }
+        past.n++;
+        const at = `k${c.k} t${Math.round(c.t)} p${pid} ${k ? 'R' : 'L'} ${key} ${play.b.act[[...sc.oPids, ...sc.dPids].indexOf(pid)]}`;
+        let bad = false;
+        if (Math.abs(pron) > PRON_DEG) {
+          past.pron++;
+          bad = true;
+          note(pron > 0 ? 'pronated' : 'supinated', Math.abs(pron), at);
+        }
+        if (flex > FLEX_DEG) {
+          past.flex++;
+          bad = true;
+          note('flexed', flex, at);
+        }
+        if (flex < -EXT_DEG) {
+          past.ext++;
+          bad = true;
+          note('extended', -flex, at);
+        }
+        if (Math.abs(dev) > DEV_DEG) {
+          past.dev++;
+          bad = true;
+          note('tilted', Math.abs(dev), at);
+        }
+        if (bad) r.past++;
+      }
+    }
+  }
+  const cent = (l: number[], q: number) => {
+    const s2 = [...l].sort((x, y) => x - y);
+    return Math.round(s2[Math.floor((s2.length - 1) * q)] ?? 0);
+  };
+  return {
+    past,
+    clips: Object.fromEntries(
+      [...by]
+        .filter(([k, r]) => r.n > 300 && (!only || k.startsWith(only)))
+        .sort((x, y) => y[1].past - x[1].past)
+        .slice(0, 30)
+        .map(([k, r]) => [
+          k,
+          `n${r.n} past${Math.round((r.past / r.n) * 100)}% pron ${cent(r.pron, 0.05)}/${cent(r.pron, 0.5)}/${cent(r.pron, 0.95)} flex ${cent(r.flex, 0.05)}/${cent(r.flex, 0.5)}/${cent(r.flex, 0.95)} dev ${cent(r.dev, 0.05)}/${cent(r.dev, 0.5)}/${cent(r.dev, 0.95)}`,
+        ]),
+    ),
+    worst: Object.fromEntries(
+      [...worst].map(([k, l]) => [
+        k,
+        l
+          .filter((x, i) => l.findIndex((y) => y.at.split(' ')[0] === x.at.split(' ')[0]) === i)
+          .slice(0, most)
+          .map((x) => `${x.at} ${Math.round(x.m)}`),
+      ]),
+    ),
+  };
+}
+
+/**
+ * His weight on his feet, on the ground and in no move of his own, from 2 ft a second: `over`, in the frames one foot is
+ * down, how far his hips are from the middle of his feet toward that foot (a share of the way to it: 0 none, 1 right over
+ * it), by speed; `list`, how his hips tip with it (the hip over the foot that is down higher than the other, ft, on
+ * average, and the share of frames it is); and `absorb`, each foot put down while he is slowing harder than ABSORB_ACC
+ * (ft a second squared, from his path): how far his hips sink over the next ABSORB_MS against just before (ft), on
+ * average by how hard he was slowing, and how well the one goes with the other (r).
+ */
+const ABSORB_ACC = 10;
+const ABSORB_MS = 160;
+function support({ speed = 1 } = {}) {
+  const c = new Clock(speed);
+  c.tipMs = 0;
+  const own = FRAME * speed;
+  const bins = [2, 6, 12, 20, 40];
+  const over = bins.slice(1).map(() => ({ n: 0, sum: 0 }));
+  const list = { n: 0, sum: 0, right: 0 };
+  type Was = {
+    x: number;
+    z: number;
+    vx: number;
+    vz: number;
+    ax: number;
+    az: number;
+    down: boolean[];
+    hips: number[];
+    strikes: { t: number; acc: number; y0: number; low: number }[];
+  };
+  const was = new Map<number, Was>();
+  const absorbs: { acc: number; drop: number }[] = [];
+  let t = 0;
+  while (c.step() && c.finalMs < 0) {
+    t += own;
+    const sec = own / 1000;
+    for (const [pid, f] of inner.figs) {
+      const p = f.pup;
+      const j = p.j;
+      const air = p.pose[I.air] > 0.2 || !!p.one;
+      let w = was.get(pid);
+      if (!w || cutNow) {
+        was.set(pid, (w = { x: p.x, z: p.z, vx: 0, vz: 0, ax: 0, az: 0, down: p.feet.map((x) => !x.swing), hips: [], strikes: [] }));
+        continue;
+      }
+      const vx = (p.x - w.x) / sec;
+      const vz = (p.z - w.z) / sec;
+      // (his path's change of speed, eased over a few frames)
+      const k = 1 - Math.exp(-own / 50);
+      w.ax += ((vx - w.vx) / sec - w.ax) * k;
+      w.az += ((vz - w.vz) / sec - w.az) * k;
+      const sp = Math.hypot(vx, vz);
+      const along = sp > 1 ? (w.ax * vx + w.az * vz) / sp : 0;
+      [w.x, w.z, w.vx, w.vz] = [p.x, p.z, vx, vz];
+      const hy = j[J.hips * 3 + 1];
+      w.hips.push(hy);
+      if (w.hips.length > 40) w.hips.shift();
+      // (each strike's sink, once its time is up)
+      for (let i = w.strikes.length - 1; i >= 0; i--) {
+        const st = w.strikes[i];
+        st.low = Math.min(st.low, hy);
+        if (t - st.t >= ABSORB_MS) {
+          absorbs.push({ acc: st.acc, drop: st.y0 - st.low });
+          w.strikes.splice(i, 1);
+        }
+      }
+      const down = p.feet.map((x) => !x.swing);
+      if (!air && sp > 2) {
+        p.feet.forEach((_, n) => {
+          if (down[n] && !w!.down[n] && -along > ABSORB_ACC) w!.strikes.push({ t, acc: -along, y0: w!.hips[Math.max(0, w!.hips.length - 3)], low: hy });
+        });
+        if (down[0] !== down[1]) {
+          const n = down[0] ? 0 : 1;
+          // (in his frame: his hips, his feet)
+          const lx = (wx: number, wz: number) => (wx - p.x) * Math.cos(p.yaw) - (wz - p.z) * Math.sin(p.yaw);
+          const fx = lx(p.feet[n].x, p.feet[n].z);
+          const mx = (fx + lx(p.feet[1 - n].x, p.feet[1 - n].z)) / 2;
+          const hx = j[J.hips * 3];
+          if (Math.abs(fx - mx) > 0.1) {
+            const b = bins.findIndex((v, i) => sp >= v && sp < bins[i + 1]);
+            if (b >= 0) {
+              over[b].n++;
+              over[b].sum += (hx - mx) / (fx - mx);
+            }
+          }
+          // (the hip over the foot that is down: the left's is J.jl)
+          const up = j[(n ? J.jr : J.jl) * 3 + 1] - j[(n ? J.jl : J.jr) * 3 + 1];
+          list.n++;
+          list.sum += up;
+          if (up > 0.005) list.right++;
+        }
+      }
+      w.down = down;
+    }
+    cutNow = false;
+  }
+  const r2 = (x: number) => Math.round(x * 100) / 100;
+  const r3 = (x: number) => Math.round(x * 1000) / 1000;
+  const n = absorbs.length;
+  const ma = absorbs.reduce((a, x) => a + x.acc, 0) / Math.max(1, n);
+  const md = absorbs.reduce((a, x) => a + x.drop, 0) / Math.max(1, n);
+  const cov = absorbs.reduce((a, x) => a + (x.acc - ma) * (x.drop - md), 0);
+  const va = absorbs.reduce((a, x) => a + (x.acc - ma) ** 2, 0);
+  const vd = absorbs.reduce((a, x) => a + (x.drop - md) ** 2, 0);
+  const accBins = [10, 20, 35, 60, 999];
+  return {
+    over: Object.fromEntries(over.map((o, i) => [`${bins[i]}-${bins[i + 1]}`, { n: o.n, share: r2(o.sum / Math.max(1, o.n)) }])),
+    list: { n: list.n, ft: r3(list.sum / Math.max(1, list.n)), rightPct: Math.round((list.right / Math.max(1, list.n)) * 100) },
+    absorb: {
+      n,
+      r: r2(cov / Math.sqrt(Math.max(1e-9, va * vd))),
+      byAcc: Object.fromEntries(
+        accBins.slice(0, -1).map((lo, i) => {
+          const l = absorbs.filter((x) => x.acc >= lo && x.acc < accBins[i + 1]);
+          const m = l.reduce((a, x) => a + x.drop, 0) / Math.max(1, l.length);
+          const sd = Math.sqrt(l.reduce((a, x) => a + (x.drop - m) ** 2, 0) / Math.max(1, l.length));
+          return [`${lo}-${accBins[i + 1]}`, { n: l.length, dropFt: r3(m), sd: r3(sd) }];
+        }),
+      ),
+    },
+  };
+}
+
+/**
+ * Two bodies meeting as one: each knock (Puppet.hit, the two of a pair in one frame) over the next PAIR_MS of the bodies'
+ * time: how far each went along the line from the first to the second (ft, at most, past 0 toward the second's side),
+ * and how far the room between them opened at most (ft): two knocked off each other as one go the same way and stay
+ * on each other; two who react apart bounce off, the room between them opening. By kind. And for two leaning on each
+ * other (a screen, a box-out: the scene's meetings), how their hips go along that line frame to frame: `r` how well
+ * each one's goes with the other's (two pushing and giving as one: over 0).
+ */
+const PAIR_MS = 300;
+function pairs({ speed = 1 } = {}) {
+  const c = new Clock(speed);
+  c.tipMs = 0;
+  type Hit = { p: Puppet; dx: number; dz: number; power: number; kind: string };
+  let now: Hit[] = [];
+  const hitNow = Puppet.prototype.hit;
+  Puppet.prototype.hit = function (this: Puppet, ...args: Parameters<Puppet['hit']>) {
+    const [dx, dz, power, kind] = args;
+    now.push({ p: this, dx, dz, power, kind: kind ?? 'bump' });
+    hitNow.apply(this, args);
+  };
+  type Pair = {
+    a: Puppet;
+    b: Puppet;
+    nx: number;
+    nz: number;
+    a0: [number, number];
+    b0: [number, number];
+    d0: number;
+    t: number;
+    aMost: number;
+    bMost: number;
+    open: number;
+    kind: string;
+    power: number;
+  };
+  const live: Pair[] = [];
+  const done: Pair[] = [];
+  const meeting = (scene as unknown as { meeting: { i: number; j: number; w: number }[] }).meeting ?? [];
+  const planAt = (scene as unknown as { planAt: Map<number, [number, number]> }).planAt;
+  const was = new Map<Puppet, [number, number]>();
+  const xs: number[] = [];
+  const ys: number[] = [];
+  let t = 0;
+  const own = FRAME * speed;
+  while (c.step() && c.finalMs < 0) {
+    t += own;
+    // (the two hits of a pair come in one frame, one each way)
+    for (let i = 0; i + 1 < now.length; i++) {
+      const [h1, h2] = [now[i], now[i + 1]];
+      if (h1.dx * h2.dx + h1.dz * h2.dz >= 0) continue;
+      const n = Math.hypot(h2.dx, h2.dz) || 1;
+      const [nx, nz] = [h2.dx / n, h2.dz / n];
+      const off0 = (P: Puppet) => {
+        const at = planAt.get((P as unknown as { who: number }).who);
+        return at ? (P.x - at[0]) * nx + (P.z - at[1]) * nz : 0;
+      };
+      live.push({
+        a: h1.p,
+        b: h2.p,
+        nx,
+        nz,
+        a0: [off0(h1.p), 0],
+        b0: [off0(h2.p), 0],
+        d0: Math.hypot(h2.p.x - h1.p.x, h2.p.z - h1.p.z),
+        t,
+        aMost: 0,
+        bMost: 0,
+        open: 0,
+        kind: h1.kind === h2.kind ? h1.kind : `${h1.kind}/${h2.kind}`,
+        power: Math.max(h1.power, h2.power),
+      });
+      i++;
+    }
+    now = [];
+    for (let i = live.length - 1; i >= 0; i--) {
+      const q = live[i];
+      // (off his plan's spot: what the knock and the bodies did to him, not where the play took him)
+      const off = (P: Puppet) => {
+        const at = planAt.get((P as unknown as { who: number }).who);
+        return at ? (P.x - at[0]) * q.nx + (P.z - at[1]) * q.nz : 0;
+      };
+      const da = off(q.a) - q.a0[0];
+      const db = off(q.b) - q.b0[0];
+      if (Math.abs(da) > Math.abs(q.aMost)) q.aMost = da;
+      if (Math.abs(db) > Math.abs(q.bMost)) q.bMost = db;
+      q.open = Math.max(q.open, Math.hypot(q.b.x - q.a.x, q.b.z - q.a.z) - q.d0);
+      if (t - q.t >= PAIR_MS || cutNow) {
+        done.push(q);
+        live.splice(i, 1);
+      }
+    }
+    // (two leaning on each other: each one's hips along the line between them, this frame)
+    const sc = c.stage.script;
+    if (sc && !cutNow)
+      for (const m of meeting) {
+        if (m.w < 0.6) continue;
+        const pids = [...sc.oPids, ...sc.dPids];
+        const A = inner.figs.get(pids[m.i])?.pup;
+        const B = inner.figs.get(pids[m.j])?.pup;
+        if (!A || !B) continue;
+        const wa = was.get(A);
+        const wb = was.get(B);
+        const d = Math.hypot(B.x - A.x, B.z - A.z) || 1;
+        const [nx, nz] = [(B.x - A.x) / d, (B.z - A.z) / d];
+        if (wa && wb) {
+          // (each man's own hips in his body, along the line: the pose's sway and surge, put in the scene)
+          const hip = (P: Puppet) => {
+            const V0 = { x: 0, y: 0, z: 0 };
+            P.world(P.j[J.hips * 3], 0, P.j[J.hips * 3 + 2], V0);
+            return (V0.x - P.x) * nx + (V0.z - P.z) * nz;
+          };
+          xs.push(hip(A) - wa[0]);
+          ys.push(hip(B) - wb[0]);
+        }
+      }
+    was.clear();
+    if (sc)
+      for (const m of meeting) {
+        const pids = [...sc.oPids, ...sc.dPids];
+        for (const k of [m.i, m.j]) {
+          const P = inner.figs.get(pids[k])?.pup;
+          const O = inner.figs.get(pids[k === m.i ? m.j : m.i])?.pup;
+          if (!P || !O) continue;
+          const d = Math.hypot(O.x - P.x, O.z - P.z) || 1;
+          const [nx, nz] = k === m.i ? [(O.x - P.x) / d, (O.z - P.z) / d] : [(P.x - O.x) / d, (P.z - O.z) / d];
+          const V0 = { x: 0, y: 0, z: 0 };
+          P.world(P.j[J.hips * 3], 0, P.j[J.hips * 3 + 2], V0);
+          was.set(P, [(V0.x - P.x) * nx + (V0.z - P.z) * nz, 0]);
+        }
+      }
+    cutNow = false;
+  }
+  Puppet.prototype.hit = hitNow;
+  const r2 = (x: number) => Math.round(x * 100) / 100;
+  const kinds = new Map<string, Pair[]>();
+  for (const q of done) {
+    const l = kinds.get(q.kind) ?? [];
+    if (!kinds.has(q.kind)) kinds.set(q.kind, l);
+    l.push(q);
+  }
+  const mx = xs.reduce((a, x) => a + x, 0) / Math.max(1, xs.length);
+  const my = ys.reduce((a, x) => a + x, 0) / Math.max(1, ys.length);
+  let sxy = 0;
+  let sxx = 0;
+  let syy = 0;
+  xs.forEach((x, i) => {
+    sxy += (x - mx) * (ys[i] - my);
+    sxx += (x - mx) ** 2;
+    syy += (ys[i] - my) ** 2;
+  });
+  return {
+    knocks: Object.fromEntries(
+      [...kinds].map(([k, l]) => {
+        const avg = (f: (q: Pair) => number) => r2(l.reduce((a, q) => a + f(q), 0) / Math.max(1, l.length));
+        return [
+          k,
+          {
+            n: l.length,
+            power: avg((q) => q.power),
+            first: avg((q) => q.aMost),
+            second: avg((q) => q.bMost),
+            sameWayPct: Math.round((l.filter((q) => q.aMost * q.bMost > 0).length / Math.max(1, l.length)) * 100),
+            opened: avg((q) => q.open),
+          },
+        ];
+      }),
+    ),
+    leaning: { frames: xs.length, r: r2(sxy / Math.sqrt(Math.max(1e-12, sxx * syy))) },
+  };
+}
+
+/**
+ * How much each man moves as himself: in his gathers, releases, dribbles and stance, a few things a viewer sees (in his
+ * own frame, on the 6 ft 6 puppet's scale): for each, the spread of the men's own averages against how much one man's
+ * frames spread about his own (`ratio`: over 1, men are told apart by it; near 0, one template for all), and how many men.
+ */
+function identity({ speed = 1 } = {}) {
+  const c = new Clock(speed);
+  c.tipMs = 0;
+  type Acc = Map<number, number[]>;
+  const feats = new Map<string, Acc>();
+  const add = (f: string, pid: number, v: number) => {
+    let m = feats.get(f);
+    if (!m) feats.set(f, (m = new Map()));
+    const l = m.get(pid) ?? [];
+    if (!m.has(pid)) m.set(pid, l);
+    if (l.length < 4000) l.push(v);
+  };
+  const DR = new Set(['dribble', 'dribbleRun', 'dribbleWalk', 'dribbleBack']);
+  while (c.step() && c.finalMs < 0) {
+    for (const [pid, f] of inner.figs) {
+      const p = f.pup;
+      const j = p.j;
+      const s = p.body.s;
+      const one = p.one;
+      const y = (k: number) => j[k * 3 + 1] / s;
+      const x = (k: number) => j[k * 3] / s;
+      const z = (k: number) => j[k * 3 + 2] / s;
+      if (DR.has(p.clip)) {
+        add('dribble hips', pid, y(J.hips));
+        add('dribble lean', pid, z(J.chest) - z(J.hips));
+        add('dribble off hand', pid, Math.min(y(J.hl), y(J.hr)) === y(J.hl) ? y(J.hr) : y(J.hl));
+      }
+      if (p.clip === 'stance' || p.clip === 'shuffle') {
+        add('stance hips', pid, y(J.hips));
+        add('stance feet', pid, Math.hypot(x(J.fl) - x(J.fr), z(J.fl) - z(J.fr)));
+        add('stance hands', pid, (y(J.hl) + y(J.hr)) / 2);
+      }
+      if (one && (one.id === 'layup' || one.id === 'floater') && one.tau > -440 && one.tau < -140) {
+        add('gather ball', pid, p.pose[I.by]);
+        add('gather side', pid, Math.abs(p.pose[I.bx]));
+        add('gather hips', pid, y(J.hips));
+      }
+      if (one && (one.id === 'jumper' || one.id === 'freeThrow') && one.tau > 60 && one.tau < 300) {
+        add('release guide hand', pid, x(J.hl) - x(J.sl));
+        add('release knees', pid, (y(J.kl) + y(J.kr)) / 2 - y(J.hips));
+      }
+      if (one && one.id === 'jumper' && one.tau > -200 && one.tau < 0) add('set elbow', pid, x(J.er) - x(J.sr));
+    }
+    cutNow = false;
+  }
+  const out: Record<string, { ratio: number; men: number }> = {};
+  for (const [f, m] of feats) {
+    const men = [...m.values()].filter((l) => l.length >= 20);
+    if (men.length < 3) continue;
+    const means = men.map((l) => l.reduce((a, v) => a + v, 0) / l.length);
+    const mu = means.reduce((a, v) => a + v, 0) / means.length;
+    const between = Math.sqrt(means.reduce((a, v) => a + (v - mu) ** 2, 0) / means.length);
+    const within = men.reduce((a, l, i) => a + Math.sqrt(l.reduce((b, v) => b + (v - means[i]) ** 2, 0) / l.length), 0) / men.length;
+    out[f] = { ratio: Math.round((between / Math.max(1e-6, within)) * 100) / 100, men: men.length };
+  }
+  return out;
+}
+
 /** The possessions whose shot has a finish of its own (choreo's Finish), by finish. */
 function finishes() {
   const out: Record<string, number[]> = {};
@@ -3041,6 +3663,11 @@ function finishes() {
 
 (window as unknown as { lab: unknown }).lab = {
   weight,
+  support,
+  pairs,
+  identity,
+  lasts,
+  wrists,
   facing,
   handoffs,
   dunks,
@@ -3073,5 +3700,7 @@ function finishes() {
   inner,
   winner,
   teams,
+  Clock,
+  props,
 };
 document.title = 'Motion lab ready';

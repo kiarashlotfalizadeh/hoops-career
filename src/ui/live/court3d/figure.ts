@@ -1116,6 +1116,57 @@ interface Points {
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 /**
+ * As far as a forearm turns and a wrist bends on a hand that is told where to lie (on the ball, by its palm and its
+ * fingers): ARM_PRON palm down or back, ARM_SUP palm up or forward (radians from the palm facing in); the wrist
+ * WRIST_FLEX toward the palm, WRIST_EXT back (a shooter's cocked wrist), WRIST_DEV to either side. Past them a hand
+ * put on the ball by its palm was wrung right round its forearm (a palm on the leather, a forearm turned a half turn
+ * under it), or bent back flat: it lies on the ball as far as a wrist lets it.
+ */
+const ARM_PRON = 1.45;
+const ARM_SUP = 1.5;
+const WRIST_FLEX = 1.25;
+const WRIST_EXT = 1.35;
+const WRIST_DEV = 0.55;
+const LW_T = new Quaternion();
+const LW_S = new Quaternion();
+const LW_W = new Quaternion();
+const LW_F = new Vector3();
+const LW_D = new Vector3(0, -1, 0);
+/**
+ * The hand (`hand`, its bone's turn) against its forearm (`fore`), kept to a forearm's and a wrist's (see ARM_PRON):
+ * its turn split into the part about the forearm's own line (the forearm's: pronation, `way` 1 the right hand's, -1 the
+ * left's) and the rest (the wrist's: its fingers off the forearm's line, toward the palm (the bone's x on the right
+ * hand, -x on the left) or back, and to the side), each held to its own, and put back together. In place.
+ */
+function limitWrist(fore: Quaternion, hand: Quaternion, way: number) {
+  const q = LW_S.copy(fore).invert().multiply(hand);
+  const tl = Math.hypot(q.y, q.w);
+  if (tl < 1e-6) return;
+  const turn = 2 * Math.atan2(q.y / tl, q.w / tl);
+  const pron = Math.atan2(Math.sin(turn), Math.cos(turn)) * way;
+  // (the wrist's part: what is left once the forearm's turn is taken off, as where it points the fingers)
+  LW_T.set(0, q.y / tl, 0, q.w / tl);
+  const swing = LW_W.copy(LW_T).invert().multiply(q);
+  const fg = LW_F.set(0, -1, 0).applyQuaternion(swing);
+  const along = Math.max(-1, Math.min(1, -fg.y));
+  const bent = Math.acos(along);
+  const side = Math.hypot(fg.x, fg.z);
+  let fx = 0;
+  let fz = 0;
+  if (side > 1e-6) [fx, fz] = [fg.x / side, fg.z / side];
+  // (toward the palm, or back; and to the side: as far as each goes, in between as an ellipse does)
+  const toPalm = fx * way;
+  const lx = toPalm >= 0 ? WRIST_FLEX : WRIST_EXT;
+  const k = Math.hypot((bent * toPalm) / lx, (bent * fz) / WRIST_DEV);
+  const pr = Math.max(-ARM_SUP, Math.min(ARM_PRON, pron));
+  if (k <= 1 && pr === pron) return;
+  const b2 = k > 1 ? bent / k : bent;
+  fg.set(fx * Math.sin(b2), -Math.cos(b2), fz * Math.sin(b2));
+  swing.setFromUnitVectors(LW_D, fg);
+  LW_T.setFromAxisAngle(UP, pr * way);
+  hand.copy(fore).multiply(LW_T).multiply(swing);
+}
+/**
  * The shots whose shooting hand (his right) follows through: its wrist bent down FLICK radians after the release,
  * in over FLICK_IN ms, held to FLICK_HOLD and let go of over FLICK_OUT.
  */
@@ -4315,7 +4366,8 @@ export class Fig {
         pron += (PASS_PRON - pron) * e;
       }
       if (!left && one && FLICKED.has(one.id) && one.tau > 0) {
-        const u = clamp01(one.tau / FLICK_IN) * (1 - clamp01((one.tau - FLICK_HOLD) / FLICK_OUT));
+        // (held as long as his own follow-through is: some hold it up there, some drop it at once)
+        const u = clamp01(one.tau / FLICK_IN) * (1 - clamp01((one.tau - FLICK_HOLD * p.followHold) / FLICK_OUT));
         const e = u * u * (3 - 2 * u);
         flex += (FLICK - flex) * e;
         pron += (toFront - pron) * e;
@@ -4387,6 +4439,8 @@ export class Fig {
           this.bones[h].quaternion.multiply(Q.setFromAxisAngle(ZA, way * bend));
         }
       }
+      // (whatever turned it, on the ball or off it: no further than a forearm turns and a wrist bends, see limitWrist)
+      limitWrist(this.bones[f].quaternion, this.bones[h].quaternion, way);
       // his forearm turns with his hand: the part of the hand's turn that is about the forearm's own line, most of it
       // (the rest is the wrist's)
       const fw = this.bones[left ? B.fwl : B.fwr];

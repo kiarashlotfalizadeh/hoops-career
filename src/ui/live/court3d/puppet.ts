@@ -133,6 +133,8 @@ const CHECK_K = 0.75;
 const LEAN_HANDS = 0.85;
 /** A hand after something (see guard) is kept at least this far from its shoulder (ft, on the 6 ft 6 puppet). */
 const AIM_NEAR = 1.3;
+/** A hand on the ball is never nearer its shoulder than this (ft, the 6 ft 6 puppet's): its elbow bent no tighter than about 45 degrees. */
+const HOLD_NEAR = 0.85;
 /** The ball crosses this far (ft) to his other side before the hand on its side changes (see guard). */
 const SIDE_SWAP = 0.45;
 /** A hand let hang from its shoulder (ft, out to its side, up, ahead): where a move that holds the ball has his hands while it isn't his. */
@@ -302,6 +304,8 @@ const HIP_MEAN = new Map<ClipId, number>();
 const BOB_FAST = 0.35;
 /** And his chest turns against his hips this much less at that speed. */
 const TWIST_FAST = 0.5;
+/** At 4x a foot backing up or sliding comes up no higher than this (ft, the 6 ft 6 puppet's): see step. */
+const BACK_LIFT_FAST = 0.3;
 const BOB_FROM_MS = 17;
 const BOB_FAST_MS = 67;
 /** Round a bend he leans into it: radians for each ft a second squared across his path, and at most. */
@@ -350,6 +354,9 @@ const BEATEN_MS = 130;
 const CONTACT_SIT = 0.12;
 const CONTACT_MS = 110;
 const SHOVE_RATE = 0.012;
+/** Two pushing and giving as one (see contact): how far each one's hips go along the line to the other (on the pose's scale) and how much more he leans into him as he gives (radians). */
+const SHOVE_GO = 0.06;
+const SHOVE_LEAN = 0.04;
 /**
  * A knock (Puppet.hit) throws his trunk at up to JOLT_V ft a second, and it comes back as a spring of JOLT_W radians a
  * second, JOLT_DAMP of the way to not overshooting (a little under: it rocks back past once): about a sixth of a ft
@@ -380,10 +387,16 @@ const HAND_R = 0.13;
 const ARM_R = 0.15;
 /** His fingers, past the wrist, are this thick (ft, the same): for keeping them off the ball (see clearArm). */
 const FINGERS_R = 0.1;
-/** An arm drawn back off another man comes to it over about this long (ms), and lets go over the same. */
+/** An arm drawn back off another man lets go of it over about this long (ms); out of him it comes no faster than PULL_IN (ft a second, the 6 ft 6 puppet's). */
 const PULL_MS = 70;
+/** Played faster than this (his own ms a drawn frame: past 1.5x), a free hand goes no farther than HAND_FRAME ft (the 6 ft 6 puppet's) in a frame: see toward. */
+const HAND_FRAME_FROM = 25;
+const HAND_FRAME = 0.75;
+const PULL_IN = 20;
 /** His elbow and forearm looked at again, and the hand drawn back off a man, up to this many times a frame. */
 const ARM_PASSES = 3;
+/** Where along his forearm it is looked at for another man (0 the elbow, 1 the wrist). */
+const PULL_AT = [0, 0.5, 1] as const;
 /** The first joint of each of SHAPES's arm bones (a shoulder, an elbow): a hand rests on a man's arm, not in it. */
 const ARM_SHAPE = new Set([3, 4, 6, 7]);
 /**
@@ -595,7 +608,39 @@ const DRIVE_RATE = 0.4;
 const DRIVE_UNTIL = 14;
 const DOWN_DROP_MS = 260;
 const BRAKE_LEAN = 0.2;
-const BRAKE_SIT = 0.14;
+const BRAKE_SIT = 0.07;
+/**
+ * His weight on his feet (see weigh): it goes onto a foot put down over TRANSFER_MS (ms), onto the one he has down over
+ * WEIGH_MS, and back onto both as he stands over STAND_WEIGH_MS. His hips go over to it WEIGH_OVER of the way (at a walk;
+ * less at a run), no farther than WEIGH_MOST (ft); the hip over it higher by WEIGH_LIST (radians); turned forward with the
+ * leg ahead WEIGH_PYAW (radians a ft, at most WEIGH_PYAW_MOST). At 4x WEIGH_FAST less of it all.
+ */
+const TRANSFER_MS = 70;
+const WEIGH_MS = 50;
+/** ...and his hips swing over to it over this long (ms). */
+const WEIGH_EASE_MS = 35;
+const STAND_WEIGH_MS = 260;
+const WEIGH_OVER = 0.4;
+const WEIGH_MOST = 0.3;
+const WEIGH_LIST = 0.06;
+const WEIGH_PYAW = 0.07;
+const WEIGH_PYAW_MOST = 0.12;
+const WEIGH_FAST = 0.6;
+/** How much of a captured stride's own hips (over and tipped) his feet's weight takes the place of; how his slowing is eased (ms). */
+const WEIGH_OWN = 0.75;
+/** Body to body (see contact), this much less of it. */
+const WEIGH_FELT = 0.8;
+const SLOWING_MS = 60;
+/**
+ * A foot put down from ABSORB_FROM ft a second takes him (his hips sink into it, on the pose's scale): ABSORB_RUN at a
+ * run, and ABSORB_BRAKE more pulling up at ABSORB_FULL ft a second squared; into it over ABSORB_IN ms, out over ABSORB_OUT.
+ */
+const ABSORB_FROM = 3;
+const ABSORB_RUN = 0.025;
+const ABSORB_BRAKE = 0.14;
+const ABSORB_FULL = 30;
+const ABSORB_IN = 90;
+const ABSORB_OUT = 200;
 /** Pulling up hard, his free arms' swing is this much (0..1) gone. */
 const BRAKE_ARMS = 0.5;
 /**
@@ -825,7 +870,7 @@ export interface Drive {
   /** Whose body this is (his player id): what differs from man to man (a dunk, how he stands, a celebration) is his own. */
   who?: number;
   /** A man meeting him body to body (a screen, a box-out: the scene's point), and how far into it (0..1). */
-  touch?: { x: number; z: number; w: number };
+  touch?: { x: number; z: number; w: number; who?: number };
   /** A shot he is going up for or has let go: what its name says of how it is made (choreo's Finish). None: a plain one. */
   how?: Finish;
   /** He shows the ball through this move and brings it back down (a shot fake). */
@@ -911,6 +956,11 @@ const ARM_AT = [I.lx, I.ly, I.lz, I.rx, I.ry, I.rz];
 /** Clips he holds still in: what breathing shows on. */
 const STILL = new Set<ClipId>([...STANDING, 'ready', 'stance', 'hold', 'slump', 'rue', 'screen', 'boxout', 'postUp', 'crash', 'inbound']);
 /** A number from 0 to 1 for a man and a count: the same every time (his own way of doing a thing). */
+/** How much of a foot's sink (see weigh) is on him `t` ms after it was put down (0..1): quickly into it, then out over its time down. */
+function absorbed(t: number): number {
+  return t < ABSORB_IN ? smooth(t / ABSORB_IN) : 1 - smooth(clamp((t - ABSORB_IN) / ABSORB_OUT, 0, 1));
+}
+
 export function hash(a: number, b: number): number {
   let h = Math.imul(a | 0, 374761393) ^ Math.imul(b | 0, 668265263);
   h = Math.imul(h ^ (h >>> 13), 1274126177);
@@ -926,6 +976,10 @@ function spring(x: number, v: number, to: number, w: number, sec: number): [numb
 }
 /** The clips with the ball in one hand: they flip when it's in his left. */
 const HANDED = new Set<ClipId>(['dribble', 'dribbleRun', 'dribbleWalk', 'dribbleBack', 'crossover', 'hesi']);
+/** His off arm's own way over a dribble (see style) comes in over this long (ms) once he dribbles in the one hand. */
+const OFF_IN_MS = 350;
+/** The dribbles whose ball goes from hand to hand in their own loop. */
+const CROSSES = new Set<ClipId>([...HANDED].filter((id) => bounces(CLIPS[id]).some((b) => b.cross)));
 /** The dribbles. */
 const DRIBBLES = new Set<ClipId>(['dribble', 'dribbleRun', 'dribbleWalk', 'dribbleBack']);
 /** A man guarding him nearer than PRESS_NEAR (ft) is on him; farther than PRESS_FAR he is left alone. The ball is kept this far (ft, on the 6 ft 6 puppet) from that man's middle. */
@@ -1256,6 +1310,32 @@ export class Puppet {
   private hopper = true;
   private landK = 1;
   private landW = 1;
+  /**
+   * And what is his own in his moves, the same every night (see style): how often his jumper kicks a leg out and how
+   * often he euro-steps; his gather (the ball ripped up to his chin or carried low, out to his outside hip or in at his
+   * middle, and how deep he sits into the step); his release (his guide hand flying off it or still, his shooting
+   * elbow in under the ball or flared, his knees up in the air or his legs hanging, his follow-through held long or
+   * short); his dribble (how low he sits over it, how far forward, his off arm up as a bar or down); and how he guards
+   * (his stance's width and depth, his hands up or low, how often he swipes, how long his slide's step is).
+   */
+  private kickLike = 0.3;
+  private euroLike = 0.3;
+  private gatherHi = 0;
+  private gatherSide = 0;
+  private gatherLow = 0.05;
+  private guideK = 0;
+  private elbowSet = 0;
+  private tuckK = 0;
+  private followK = 1;
+  private dribLow = 0;
+  private dribLean = 0;
+  private offArm = 0;
+  private offW = 0;
+  private standW = 0;
+  private standLow = 0;
+  private handsUp = 0;
+  private swipeK = 1;
+  private slideK = 1;
   private styled = -1;
   /** His speed, eased (what the blend of gaits goes by), which way he was going a beat ago, and the bank that gives. */
   private spLag = 0;
@@ -1480,6 +1560,10 @@ export class Puppet {
   private how: Finish | undefined;
   /** The move of the script he was last in (Drive.k), and whether he has shown this move's fake. */
   private kWas = -1;
+  /** The shot he last went up with (a jumper, a floater, a layup, a dunk...): what its release is, see update. */
+  private lastShot: ClipId | null = null;
+  /** Cut into a replay on a frame with no time: what the tape puts back is still to be put back (see update). */
+  private reload = false;
   /** The possession's time last frame (Drive.t), the hand the ball was in, and the possession it was (see Tape). */
   private tWas = 0;
   private handWas = false;
@@ -1508,6 +1592,23 @@ export class Puppet {
   private freed = 0;
   /** How fast he is getting going (ft a second squared, eased: less than none pulling up), his speed a frame ago, how quick his turn is for his feet (see TURN_DOWN), and how hard his path is turning (ft a second squared, to his right). */
   private acc = 0;
+  /**
+   * His weight on his feet (see weigh): the share of it on his left foot (0..1, eased); each foot down last frame and how
+   * long since it was put down (ms, his own); and the sink of the foot last put down into it (on the 6 ft 6 puppet's
+   * scale, as the pose's hip) and how long since (ms).
+   */
+  /** The man he last met body to body (his player id; -1 none): see contact. */
+  private mate = -1;
+  private loadL = 0.5;
+  private downWas = [true, true];
+  private strikeMs = [1e9, 1e9];
+  private absorbK = 0;
+  private absorbT = 1e9;
+  private absorbK0 = 0;
+  private absorbT0 = 1e9;
+  private slowing = 0;
+  private spW = 0;
+  private overW = 0;
   private accBody = 0;
   private spWas = 0;
   private gate = 1;
@@ -1711,6 +1812,11 @@ export class Puppet {
       if (this.pivotK >= 0 && this.setOn) this.orbit(wrap(this.yaw - yaw0));
     }
     this.ownMs = Math.max(0, own);
+    // (a replay cut into, or a body first put on the floor in one: what it puts back from the tape, the hand the ball was in
+    // and a crossover he was in the middle of, is put back on the first frame with time in it, not lost with a frame
+    // that has none, nor skipped for a body that was never placed)
+    if (!d.tape?.again) this.reload = false;
+    else if (cut || !this.placed) this.reload = true;
     if (own <= 0 && this.placed && !jumped) return;
     this.placed = true;
     if (jumped) this.gripped = false;
@@ -1777,12 +1883,19 @@ export class Puppet {
     const t = d.t ?? 0;
     const due = (from: number): { t: number; id: ClipId } | undefined =>
       (T?.takes.get(`${this.who}:own`) as { t: number; id: ClipId }[] | undefined)?.find((x) => x.t > from && x.t <= t);
-    if (T?.again && cut) {
+    if (T?.again && (cut || this.reload)) {
+      this.reload = false;
       let hand = false;
       for (const h of (T.takes.get(`${this.who}:hands`) as { t: number; lefty: boolean }[] | undefined) ?? []) if (h.t <= t) hand = h.lefty;
       this.lefty = hand;
-      const mid = d.ball ? due(t - span(CLIPS.crossover)[1]) : undefined;
+      // (the last he began before here: one after another, the first of two in its time is long over)
+      const mid = d.ball
+        ? (T.takes.get(`${this.who}:own`) as { t: number; id: ClipId }[] | undefined)?.filter((x) => x.t > t - span(CLIPS.crossover)[1] && x.t <= t).pop()
+        : undefined;
       if (mid && t - mid.t < span(CLIPS[mid.id])[1]) this.one = { id: mid.id, tau: t - mid.t };
+      // (and the tape's crossovers to come are the ones after here: not one he had done and finished before the cut,
+      // played again from its start off a clock left from wherever he was before)
+      this.tWas = t;
     }
     this.kWas = d.k ?? -1;
     const shoots = d.act === 'dunk' || d.act === 'jumper' || d.act === 'floater' || d.act === 'layup';
@@ -1815,7 +1928,8 @@ export class Puppet {
         const how = d.how;
         return {
           fade: how === 'fade' ? 0.75 + 0.3 * r : how === 'turn' ? 0.4 + 0.2 * r : 0,
-          kick: r > 0.7 || how === 'fade' ? 1 : 0,
+          // (whether he kicks a leg out is his: some men on every one, most hardly ever)
+          kick: hash(this.who, 85 + this.shots) < this.kickLike || how === 'fade' ? 1 : 0,
           // (off the dribble he steps back for it; off the catch he hops into it)
           stepBack: how === 'stepBack' ? 1 : 0,
           // (and only if he is a man who hops into it: others set their feet as it comes)
@@ -1843,7 +1957,7 @@ export class Puppet {
         return {
           south: side > LAYUP_SIDE * s,
           // (a step across on his way up: a drop step's and an up-and-under's always; his own, now and then, on a plain one)
-          euro: how === 'step' || how === 'under' ? (r < 0.5 ? 1 : -1) : !how && r < 0.3 ? (r < 0.15 ? 1 : -1) : 0,
+          euro: how === 'step' || how === 'under' ? (r < 0.5 ? 1 : -1) : !how && r < this.euroLike ? (r < this.euroLike / 2 ? 1 : -1) : 0,
           put,
           // (under the rim and back over his head only when that is what it was)
           reverse: !put && how === 'reverse' ? 1 : 0,
@@ -1860,6 +1974,14 @@ export class Puppet {
     this.at = d.ms;
     if (!d.over) this.bumped = false;
     const ms = d.ms + this.over;
+    // (a crossover that ends within the time this frame covers is over, the ball in his other hand, before whatever
+    // starts in it: a move begun on that frame took its place and left the ball in the hand it was leaving, or not, by
+    // where the frames fell, live one way and played again the other)
+    const cr = this.one;
+    if (cr?.id === 'crossover' && cr.tau + (dt > 0 ? dt : own) > span(CLIPS.crossover)[1]) {
+      this.lefty = !this.lefty;
+      this.one = null;
+    }
     const one = ONE[d.act];
     if (one) {
       const id =
@@ -1876,6 +1998,7 @@ export class Puppet {
                   : one[0];
       // (a move shorter than the clip's lead-in plays the lead-in quicker, up to LEAD_IN times: a shooter still
       // gathers and dips before he rises, he doesn't start halfway up)
+      if (shoots) this.lastShot = id;
       const lead = -span(CLIPS[id])[0];
       // (an alley-oop: he is up in the air as the lob gets to him, not leaving the floor: his dunk is that much ahead of its move)
       // (a hand-off's catch: the ball is in his hands HANDOFF_AT through the move, out of the other man's)
@@ -1883,7 +2006,11 @@ export class Puppet {
       const tau = one[1] === 'end' ? ms - end + (this.how === 'oop' ? OOP_EARLY : 0) : ms;
       this.one = { id, tau: tau < 0 && end > 0 ? Math.max(-lead, tau * clamp(lead / end, 1, LEAD_IN)) : tau };
     } else if (d.act === 'release' || d.act === 'land')
-      this.one = { id: this.one?.id ?? (d.act === 'release' ? 'jumper' : 'contest'), tau: Math.max(this.one?.tau ?? 0, ms + (this.how === 'oop' ? OOP_EARLY : 0)) };
+      // (after the shot, the shot he took: a floater's or a layup's man isn't put into a jumper because his move ran out first)
+      this.one = {
+        id: this.one?.id ?? (d.act === 'release' ? (this.lastShot ?? 'jumper') : 'contest'),
+        tau: Math.max(this.one?.tau ?? 0, ms + (this.how === 'oop' ? OOP_EARLY : 0)),
+      };
     // (a shot fake: up with it and back down, once in its move)
     else if (d.fake && d.ball && !this.faked) {
       this.one = { id: 'pump', tau: 0 };
@@ -2004,6 +2131,7 @@ export class Puppet {
     // of his dribble, a landing's give, a held follow-through, a gesture, his breath and his hands
     P.set(this.want);
     this.manner(id);
+    this.sign(id);
     this.shoot(id);
     this.shield(d, id, own);
     this.ride(id);
@@ -2057,6 +2185,7 @@ export class Puppet {
     this.gaze(d, ease, sp);
 
     this.step(own, sp);
+    this.weigh(own, sp);
     this.sinkFrom = jumped ? 0 : this.sink;
     this.solve(vf, vs, own);
     this.trails(own);
@@ -2341,6 +2470,31 @@ export class Puppet {
     this.loopT = (u < 1 ? b.off + (b.on - b.off) * u : b.on + 0.01) * to.dur;
   }
 
+  /** His own way over his dribble and in his stance (see style): laid on the clip's, which is every man's. */
+  private sign(id: ClipId) {
+    const P = this.pose;
+    const ground = 1 - clamp(P[I.air], 0, 1);
+    if (DRIBBLES.has(id)) {
+      // (how low and how far forward he sits over it; his off arm up between him and the man, or down by him)
+      P[I.hip] -= this.dribLow * ground;
+      P[I.lean] += this.dribLean * ground;
+      // (his off arm: see arms, which knows which hand the ball is in as they are solved)
+    } else if (id === 'stance' || id === 'ready' || id === 'shuffle' || id === 'closeout') {
+      // (his stance: wider or narrower, deeper or taller; his hands up and busy or low)
+      P[I.wide] += this.standW * ground;
+      P[I.hip] -= this.standLow * ground;
+      if (id !== 'ready') {
+        if (P[I.gl] <= 0.5) P[I.ly] += this.handsUp * 0.5;
+        if (P[I.gr] <= 0.5) P[I.ry] += this.handsUp * 0.5;
+      }
+    }
+  }
+
+  /** How long his follow-through is held, against everyone's (see figure.ts FLICK_HOLD): his own, the same every night. */
+  get followHold(): number {
+    return this.followK;
+  }
+
   /** His body rides his dribble: the shoulder over the ball dips as he pushes it down and comes up with it, his hips give a little each bounce. */
   private ride(id: ClipId) {
     if (!DRIBBLES.has(id)) return;
@@ -2374,6 +2528,25 @@ export class Puppet {
       const e = smooth(clamp((one.tau + 260) / 200, 0, 1)) * (1 - smooth(clamp((one.tau - 40) / 160, 0, 1)));
       P[I.by] += this.setPt * e;
       P[I.bx] += this.pocket * e;
+      // (his shooting elbow in under it or out; and once it has gone, his guide hand flying off to the side or staying)
+      P[I.rsw] += this.elbowSet * e;
+      const after = smooth(clamp(one.tau / 90, 0, 1)) * (1 - smooth(clamp((one.tau - 260 * this.followK) / 220, 0, 1)));
+      if (P[I.gl] <= 0.5) {
+        P[I.lx] += this.guideK * after;
+        P[I.lz] -= 0.12 * this.guideK * after;
+      }
+      // (in the air: his knees drawn up a little, or his legs hanging long)
+      const air = clamp(P[I.air], 0, 1);
+      P[I.flu] += this.tuckK * air;
+      P[I.fru] += this.tuckK * air;
+    }
+    if ((id === 'layup' || id === 'floater') && !this.reverse && !this.put) {
+      // (his gather, over his last two steps: the ball ripped up toward his chin or carried low, out by his outside hip or
+      // in at his middle, his knees bending into it as far as he sits into a gather)
+      const e = smooth(clamp((one.tau + 460) / 160, 0, 1)) * (1 - smooth(clamp((one.tau + 120) / 140, 0, 1)));
+      P[I.by] += this.gatherHi * e;
+      P[I.bx] += this.gatherSide * (this.south ? -1 : 1) * e;
+      P[I.hip] -= this.gatherLow * e * (1 - clamp(P[I.air], 0, 1));
     }
     if (id === 'jumper' && this.stepBack > 0) {
       // (leaning in ahead of his spot as if to go by, then a hop back onto it and up)
@@ -2677,8 +2850,10 @@ export class Puppet {
     const side = this.lefty ? 1 : -1;
     // (the man is on the ball's side: it is going across, as soon as his hand has it. Nothing else first)
     this.across = lx * side > 0.4 && w > 0.5;
-    if (this.across && !this.one && this.switched > 900 && this.drib.phase >= 1) {
-      this.one = { id: 'crossover', tau: 0 };
+    // (kept with the possession like any crossover of his own: played again, it comes from the tape where it came, and
+    // the man on him then doesn't start another; see Tape)
+    if (this.across && !this.one && this.switched > 900 && this.drib.phase >= 1 && !d.tape?.again) {
+      this.own(d, 'crossover');
       this.switched = 0;
     }
     if (lx * side > 0) return;
@@ -2741,7 +2916,7 @@ export class Puppet {
     this.knock(own);
     this.braced(id, own);
     const t = d.touch;
-    if (t) [this.tx, this.tz] = [t.x, t.z];
+    if (t) [this.tx, this.tz, this.mate] = [t.x, t.z, t.who ?? -1];
     this.felt += ((t ? t.w : 0) - this.felt) * (1 - Math.exp(-own / CONTACT_MS));
     const w = this.felt * (1 - clamp(P[I.air] / 0.3, 0, 1));
     if (w < 0.01) return;
@@ -2749,13 +2924,20 @@ export class Puppet {
     const far = Math.hypot(lx, lz) || 1;
     const ahead = lz / far;
     const aside = lx / far;
-    const shove = Math.sin(this.loopT * SHOVE_RATE + this.who);
+    // (the two push and give as one, on the pair's own beat (the possession's clock, the same for both): as one's hips
+    // go into the other the other's go back from him, and then the other way; each leans into it, harder as he gives
+    // ground. Not each on a beat of his own, two shoving at nothing)
+    const m = this.mate;
+    const pair = m >= 0 ? hash(Math.min(this.who, m), Math.max(this.who, m) + 7) : hash(this.who, 9);
+    const into = m < 0 || this.who < m ? 1 : -1;
+    const shove = Math.sin((d.t !== undefined ? d.t * 2 : this.loopT) * SHOVE_RATE + pair * Math.PI * 2) * into;
     P[I.hip] -= CONTACT_SIT * w;
     P[I.wide] += 0.14 * w;
-    P[I.lean] += (ahead > 0 ? 0.12 * ahead : -0.04 * ahead) * w + 0.025 * shove * w;
-    P[I.surge] += (ahead > 0 ? 0.08 * ahead : 0.16 * ahead) * w + 0.05 * shove * ahead * w;
+    P[I.lean] += (ahead > 0 ? 0.12 * ahead : -0.04 * ahead) * w + SHOVE_LEAN * Math.max(0, -shove) * Math.sign(ahead) * w;
+    // (his hips along the line to him: toward him as he drives, back as he gives)
+    P[I.surge] += (ahead > 0 ? 0.08 * ahead : 0.16 * ahead) * w + SHOVE_GO * shove * ahead * w;
+    P[I.sway] += 0.07 * aside * w + SHOVE_GO * shove * aside * w;
     P[I.tilt] += 0.11 * aside * w;
-    P[I.sway] += 0.07 * aside * w;
     if (ahead > 0.25 && !d.ball && id !== 'screen' && !this.one) {
       const [ax, ay, az] = aside >= 0 ? [I.lx, I.ly, I.lz] : [I.rx, I.ry, I.rz];
       const k = w * Math.min(1, ahead * 1.3) * 0.85;
@@ -2983,6 +3165,26 @@ export class Puppet {
     this.hopper = hash(w, 41) < 0.55;
     this.landK = 0.75 + hash(w, 40) * 0.5;
     this.landW = 0.6 + hash(w, 42) * 0.8;
+    // (his moves: a few men kick a leg out on nearly every jumper and euro-step most layups, most hardly ever; a big man
+    // sits less over his dribble and stands taller in his stance; each the same every night)
+    const r = (k: number) => hash(w, k);
+    this.kickLike = r(43) < 0.3 ? 0.75 + 0.2 * r(44) : 0.04 + 0.14 * r(44);
+    this.euroLike = r(45) < 0.25 ? 0.45 + 0.3 * r(46) : 0.04 + 0.14 * r(46);
+    this.gatherHi = (r(47) - 0.4) * 0.9;
+    this.gatherSide = (r(48) - 0.3) * 0.6;
+    this.gatherLow = 0.03 + r(49) * 0.14;
+    this.guideK = r(50) < 0.35 ? 0.35 + 0.35 * r(51) : 0.06 * r(51);
+    this.elbowSet = (r(54) - 0.5) * 0.8;
+    this.tuckK = (r(52) - 0.5) * 0.5;
+    this.followK = 0.6 + 0.9 * r(53);
+    this.dribLow = clamp(0.03 + r(55) * 0.18 - 0.06 * big, 0, 0.22);
+    this.dribLean = (r(56) - 0.3) * 0.14;
+    this.offArm = (r(58) - 0.4) * 0.5;
+    this.standW = (r(59) - 0.5) * 0.3 - 0.04 * big;
+    this.standLow = clamp(0.02 + r(60) * 0.15 - 0.04 * big, 0, 0.17);
+    this.handsUp = (r(61) - 0.4) * 0.7;
+    this.swipeK = 0.6 + r(62) * 0.9;
+    this.slideK = 0.85 + r(63) * 0.3;
     // (what would be chance is his own too: each starts on his own beat, and the same one every time the game is played)
     this.loopT = hash(w, 26) * 2000;
     this.fidgetIn = FIDGET_EVERY * (0.4 + hash(w, 27));
@@ -3447,8 +3649,10 @@ export class Puppet {
       f.heel = 0;
       f.lift = 0;
     });
-    // (put somewhere new: how fast his hips were going is no rise of his)
+    // (put somewhere new: how fast his hips were going is no rise of his, nor how fast he went a stop to take; his weight is on both feet)
     this.hipWas = Number.NaN;
+    [this.spW, this.slowing, this.loadL, this.overW, this.absorbK, this.absorbK0] = [0, 0, 0.5, 0, 0, 0];
+    this.downWas = [true, true];
   }
 
   /**
@@ -3519,7 +3723,7 @@ export class Puppet {
     // (backing up or sliding he takes short quick steps: a long one would cross his feet or turn his hips)
     // (sliding, shorter and quicker still: a slide's step is a push and a close, see SLIDE_REACH)
     const slides = !ahead && !back && Math.abs(this.vs) > Math.abs(this.vf);
-    const reachOf = ahead ? Infinity : (back ? 2.4 : slides ? SLIDE_REACH : 2) * s;
+    const reachOf = ahead ? Infinity : (back ? 2.4 : slides ? SLIDE_REACH * this.slideK : 2) * s;
     // (a step round his pivot, or into his load, goes when its foot is any way out of place: there is no time to wait)
     const awayAt = (this.pivotK >= 0 || this.gathering ? CONTACT_AWAY : 0.5 + (CONTACT_AWAY - 0.5) * held) * s;
     const away = (f: Foot, k: number) => !kept(k) && (k === this.catchK || Math.hypot(f.x - homeX(k), f.z - homeZ(k)) > awayAt || twisted(f, k));
@@ -3596,7 +3800,9 @@ export class Puppet {
     // (and as high as his own stride takes it: some men's knees come up more than others')
     // (at 4x, where a stride is four frames, the take's own height: lower, his knee straightens and folds in a frame)
     const lifts = (0.25 + soon * 0.026) * this.kneeK + (0.28 + soon * 0.03 - (0.25 + soon * 0.026) * this.kneeK) * fast4;
-    const liftTo = ahead ? clamp(lifts + Math.max(0, soon - 20) * 0.045, 0.28, 1.6) : clamp(0.3 + sp * 0.022, 0.3, 0.8);
+    // (backing up or sliding his foot comes up as his speed takes it; at 4x, where his stride is four frames, little
+    // higher than a slide's: lifted as high as a run's back step, the knee was straight one frame and folded the next)
+    const liftTo = ahead ? clamp(lifts + Math.max(0, soon - 20) * 0.045, 0.28, 1.6) : clamp(0.3 + sp * 0.022, 0.3, 0.8 - (0.8 - BACK_LIFT_FAST) * fast4);
     this.liftE += ((liftTo + (Math.min(liftTo, CONTACT_LIFT) - liftTo) * held) * s - this.liftE) * ke;
     const pace = this.paceE;
     const lift = this.liftE;
@@ -3781,6 +3987,70 @@ export class Puppet {
     if (this.catchLand) [this.catchK, this.catchLand] = [-1, false];
   }
 
+  /**
+   * His weight on his feet, after they are stepped (see step) and before he is solved on them. It is on the foot he has
+   * down, and goes over to the one he puts down as it is put down (TRANSFER_MS), onto both as he stands: his hips go over
+   * to it (WEIGH_OVER, less at a run, whose feet come down near under him), the hip over it a little higher than the
+   * other's (WEIGH_LIST), turned forward with the leg that is forward (WEIGH_PYAW). Each foot put down at a run takes him
+   * a little; one put down while he is pulling up takes as much more as he is slowing (ABSORB_*): his hips sink into it
+   * fast and come back up over the rest of its time down. At 4x, where a frame is a quarter of a stride, less of it.
+   */
+  private weigh(own: number, sp: number) {
+    const P = this.pose;
+    const { s } = this.body;
+    const ground = 1 - clamp(P[I.air] / 0.3, 0, 1);
+    const down = [!this.feet[0].swing, !this.feet[1].swing];
+    // (how hard he is slowing now, his own travel's: what the foot put down has to take)
+    if (own > 0) this.slowing += (((this.spW - sp) * 1000) / own - this.slowing) * (1 - Math.exp(-own / SLOWING_MS));
+    this.spW = sp;
+    for (const k of [0, 1]) {
+      const put = down[k] && !this.downWas[k];
+      this.strikeMs[k] = put ? 0 : this.strikeMs[k] + own;
+      if (put && ground > 0.5 && sp > ABSORB_FROM) {
+        const brake = clamp(Math.max(this.slowing, -this.acc) / ABSORB_FULL, 0, 1.3);
+        const k2 = ABSORB_RUN * clamp(sp / 20, 0, 1) + ABSORB_BRAKE * brake;
+        // (the last's sink goes on, and he is no higher than it has him until this one is deeper: one foot after another
+        // each takes him on from where the last has him, never up out of it as the next comes down)
+        [this.absorbK0, this.absorbT0] = [this.absorbK, this.absorbT];
+        [this.absorbK, this.absorbT] = [k2, 0];
+      }
+    }
+    this.downWas = down;
+    let want = this.loadL;
+    let tau = WEIGH_MS;
+    if (down[0] !== down[1]) want = down[0] ? 1 : 0;
+    else if (down[0]) {
+      const last = this.strikeMs[0] <= this.strikeMs[1] ? 0 : 1;
+      const still = sp < 1.5 && Math.min(...this.strikeMs) > TRANSFER_MS * 2;
+      want = still ? 0.5 : last ? 0 : 1;
+      tau = still ? STAND_WEIGH_MS : TRANSFER_MS;
+    }
+    if (own > 0) this.loadL += (want - this.loadL) * (1 - Math.exp(-own / tau));
+    const fast = clamp((this.ownMs - BOB_FROM_MS) / (BOB_FAST_MS - BOB_FROM_MS), 0, 1);
+    // (body to body his weight is on the other man as much as on his feet: see contact)
+    const k = ground * (1 - WEIGH_FAST * fast) * (1 - WEIGH_FELT * clamp(this.felt, 0, 1));
+    if (k <= 0.01) return;
+    // (each foot in his frame: to his left, ahead)
+    const [hx, hz, sx, sz] = this.dirs();
+    const lx = (f: Foot) => -((f.x - this.x) * sx + (f.z - this.z) * sz);
+    const lz = (f: Foot) => (f.x - this.x) * hx + (f.z - this.z) * hz;
+    const [a, b] = this.feet;
+    const over = WEIGH_OVER * (1 - 0.6 * clamp(sp / 20, 0, 1));
+    const to = clamp(over * (this.loadL * lx(a) + (1 - this.loadL) * lx(b)), -WEIGH_MOST * s, WEIGH_MOST * s);
+    // (his hips swing over, they aren't put over: eased as a body's weight goes from foot to foot)
+    if (own > 0) this.overW += (to - this.overW) * (1 - Math.exp(-own / WEIGH_EASE_MS));
+    const at = this.overW;
+    // (a captured stride's own hips went over its own man's feet, not his: in a stride they go over his, in place of most of the take's)
+    const mine = CLIPS[this.clip].kind === 'gait' && FORWARD.has(this.clip) ? WEIGH_OWN * k : 0;
+    P[I.sway] += (at / s) * k - P[I.sway] * mine;
+    P[I.proll] += WEIGH_LIST * (2 * this.loadL - 1) * k - P[I.proll] * mine;
+    P[I.pyaw] -= clamp((WEIGH_PYAW * (lz(a) - lz(b))) / s, -WEIGH_PYAW_MOST, WEIGH_PYAW_MOST) * k * clamp(sp / 4, 0, 1);
+    // (the foot put down taking him)
+    this.absorbT += own;
+    this.absorbT0 += own;
+    P[I.hip] -= Math.max(this.absorbK * absorbed(this.absorbT), this.absorbK0 * absorbed(this.absorbT0)) * k;
+  }
+
   /** Hips, chest, head, legs: everything but the arms (they wait for the ball). `dt`: the bodies' ms gone by (none, solved again in the same frame). */
   private solve(vf: number, vs: number, dt = 0) {
     const { s } = this.body;
@@ -3930,12 +4200,16 @@ export class Puppet {
       const dz = z - j[k + 2];
       const d = Math.hypot(dx, dy, dz);
       const max = (UARM + FARM) * s * 0.97 - (hold === 'under' ? PALM : 0);
-      if (d > max) {
+      // (nor so near his shoulder that the arm holding it folds shut: a ball held in at his chest or up by his ear is
+      // out from it as far as an elbow bent HOLD_NEAR's way puts it)
+      const min = HOLD_NEAR * s;
+      if (d > max || (d < min && d > 1e-3)) {
         // (as far as the hand has taken hold of it: a ball he is only now taking isn't pulled up to his hand in a frame)
         const w = smooth(clamp((g - 0.5) / REACH_TAKE, 0, 1));
-        x += (j[k] + (dx / d) * max - by - x) * w;
-        y += (j[k + 1] + (dy / d) * max - top - y) * w;
-        z += (j[k + 2] + (dz / d) * max - z) * w;
+        const to = d > max ? max : min;
+        x += (j[k] + (dx / d) * to - by - x) * w;
+        y += (j[k + 1] + (dy / d) * to - top - y) * w;
+        z += (j[k + 2] + (dz / d) * to - z) * w;
       }
     } else if (DRIBBLES.has(this.clip) || this.clip === 'crossover' || this.clip === 'hesi') {
       // (a dribble between touches: where it will come back to his hand is no lower than his hand can go)
@@ -4058,6 +4332,27 @@ export class Puppet {
     out.x = x + H[k + 12];
     out.y = y + H[k + 13];
     out.z = z + H[k + 14];
+    // (played fast, a free hand goes no farther in a drawn frame than HAND_FRAME: at 4x a layup's hand let go of the ball
+    // went from up at the rim to down by his hip in one, its forearm thrown round. What it is held back by it carries on
+    // with, and it gets there a frame or two later)
+    if (this.gripped && !fixed && held < 0.5 && dt > HAND_FRAME_FROM) {
+      const sw = side > 0 ? 0 : 3;
+      const ex = out.x - this.swung[sw];
+      const ey = out.y - this.swung[sw + 1];
+      const ez = out.z - this.swung[sw + 2];
+      const far = Math.hypot(ex, ey, ez);
+      const most = HAND_FRAME * this.body.s;
+      if (far > most) {
+        const c = most / far;
+        out.x = this.swung[sw] + ex * c;
+        out.y = this.swung[sw + 1] + ey * c;
+        out.z = this.swung[sw + 2] + ez * c;
+        H[k + 12] = out.x - x;
+        H[k + 13] = out.y - y;
+        H[k + 14] = out.z - z;
+        for (let a = 0; a < 3; a++) H[k + 18 + a] = ((H[k + 12 + a] - WAS3[a]) * 1000) / dt;
+      }
+    }
     // (a free hand goes round his shoulder, no faster than an arm turns: what it is held back by it carries on with)
     if (this.gripped && !fixed && held < 0.5 && dt > 0 && this.round(side, out, dt)) {
       H[k + 12] = out.x - x;
@@ -4396,7 +4691,7 @@ export class Puppet {
         const bs = this.bside;
         if (id === 'stance' && loose.at.y < SWIPE_LOW * s && Math.hypot(lx, lz) < SWIPE_NEAR * s && (this.swipeIn -= own) <= 0) {
           this.swipeT = 0;
-          this.swipeIn = SWIPE_EVERY * (0.6 + hash(this.who, 400 + this.standN++));
+          this.swipeIn = (SWIPE_EVERY * (0.6 + hash(this.who, 400 + this.standN++))) / this.swipeK;
         }
         const swipe = this.swipeT < SWIPE_MS ? Math.sin((Math.PI * this.swipeT) / SWIPE_MS) : 0;
         for (const side of SIDES) {
@@ -4523,6 +4818,9 @@ export class Puppet {
     const grip = CLIPS[this.clip].grip;
     // (a dribble in the air: the hand it left, and past halfway the hand it is going to, stays over it)
     const dr = ball && grip === 'top' ? this.dribble : null;
+    // (his off arm's own way, only as he dribbles in the one hand: it is gone at once for a crossover, back in its time)
+    const steady = !!dr && DRIBBLES.has(this.clip) && !this.one && !CROSSES.has(this.clip);
+    this.offW = steady ? this.offW + (1 - this.offW) * (1 - Math.exp(-this.ownMs / OFF_IN_MS)) : 0;
     const over = dr && dr.phase < 1 ? (dr.phase > 0.5 ? dr.to : dr.hand) : 0;
     this.overBall = dr ? (over === 0 ? dr.hand : over) : 0;
     this.push = !dr ? -1 : dr.phase < 1 ? 1 + dr.phase : dr.touch;
@@ -4590,6 +4888,14 @@ export class Puppet {
         x += (j[sh] + (l.x * HANG[0] * side + f.x * HANG[2]) * s - x) * empty;
         y += (j[sh + 1] + HANG[1] * s - y) * empty;
         z += (j[sh + 2] + (l.z * HANG[0] * side + f.z * HANG[2]) * s - z) * empty;
+      }
+      // (dribbling, the arm off the ball his own way: up between him and the man as a bar, or down by him (see style); only
+      // in a dribble that stays in the one hand: one that goes from hand to hand has that hand back for it)
+      if (dr && side !== dr.hand && this.offW > 0.01 && P[side > 0 ? I.gl : I.gr] <= 0.5) {
+        const k = this.offArm * this.offW;
+        y += k * 0.6 * s;
+        x += f.x * k * 0.25 * s;
+        z += f.z * k * 0.25 * s;
       }
       const ai = side > 0 ? 0 : 4;
       const aw = A[ai + 3];
@@ -4709,12 +5015,20 @@ export class Puppet {
         if (this.rest(HAND, HAND_R * s, near, true) > 0) [ox2, oy2, oz2] = [HAND.x - x, HAND.y - y, HAND.z - z];
       }
       if (this.gripped && this.ownMs > 0) {
-        const far = Math.hypot(ox2 - RO[ro], oy2 - RO[ro + 1], oz2 - RO[ro + 2]);
+        // (as far as it is in him past where it was moved last frame, it comes out now: a hand is never left in a man.
+        // What is left, a rest moved over him or let off him, slides)
+        let [rx, ry, rz] = [RO[ro], RO[ro + 1], RO[ro + 2]];
+        const need = Math.hypot(ox2, oy2, oz2);
+        if (need > 1e-6) {
+          const short = Math.min(need - (rx * ox2 + ry * oy2 + rz * oz2) / need, (PULL_IN * s * this.ownMs) / 1000);
+          if (short > 0) [rx, ry, rz] = [rx + (ox2 / need) * short, ry + (oy2 / need) * short, rz + (oz2 / need) * short];
+        }
+        const far = Math.hypot(ox2 - rx, oy2 - ry, oz2 - rz);
         const most = (REST_SLIDE * s * this.ownMs) / 1000;
         const k = far > most ? most / far : 1;
-        ox2 = RO[ro] + (ox2 - RO[ro]) * k;
-        oy2 = RO[ro + 1] + (oy2 - RO[ro + 1]) * k;
-        oz2 = RO[ro + 2] + (oz2 - RO[ro + 2]) * k;
+        ox2 = rx + (ox2 - rx) * k;
+        oy2 = ry + (oy2 - ry) * k;
+        oz2 = rz + (oz2 - rz) * k;
       }
       [RO[ro], RO[ro + 1], RO[ro + 2]] = [ox2, oy2, oz2];
       x += ox2;
@@ -4729,24 +5043,27 @@ export class Puppet {
       reach(j, side > 0 ? J.sl : J.sr, el, ha, UARM * s, FARM * s, pole.x, pole.y, pole.z);
       // (his elbow or his forearm in the ball's way: the hand is moved off it as far as they must go, and the arm solved again)
       if (this.clearArm(side, el, ha, dodging ? loose : null)) reach(j, side > 0 ? J.sl : J.sr, el, ha, UARM * s, FARM * s, pole.x, pole.y, pole.z);
-      // (his elbow or his forearm in another man: the hand is drawn back off him by as much this frame, and the arm
-      // solved again (an arm is never seen in a man for a frame); kept drawn back next frame, and let go of eased)
+      // (his elbow, his forearm or his wrist in another man, his trunk, his thighs or his arms: the hand is drawn back off
+      // him by as much this frame, and the arm solved again (an arm is never seen in a man for a frame); kept drawn back
+      // next frame, and let go of eased. Two arms crossed are parted here, each its own, never by moving the men: see
+      // the scene's unclash. Two hugging have their arms round each other by design)
       let dx = 0;
       let dy = 0;
       let dz = 0;
+      const arms = this.clip !== 'hug';
       if (free)
         for (let pass = 0; pass < ARM_PASSES; pass++) {
           let px = 0;
           let py = 0;
           let pz = 0;
-          for (const u of [0, 0.5]) {
+          for (const u of PULL_AT) {
             HAND.x = j[el * 3] + (j[ha * 3] - j[el * 3]) * u;
             HAND.y = j[el * 3 + 1] + (j[ha * 3 + 1] - j[el * 3 + 1]) * u;
             HAND.z = j[el * 3 + 2] + (j[ha * 3 + 2] - j[el * 3 + 2]) * u;
             const [x0, y0, z0] = [HAND.x, HAND.y, HAND.z];
-            if (this.rest(HAND, ARM_R * s, near) > 0) {
+            if (this.rest(HAND, ARM_R * s, near, arms) > 0) {
               // (moving the hand moves the middle of the forearm half as far)
-              const m = u > 0 ? 2 : 1;
+              const m = u === 0.5 ? 2 : 1;
               const [mx, my, mz] = [(HAND.x - x0) * m, (HAND.y - y0) * m, (HAND.z - z0) * m];
               if (Math.hypot(mx, my, mz) > Math.hypot(px, py, pz)) [px, py, pz] = [mx, my, mz];
             }
@@ -4758,6 +5075,18 @@ export class Puppet {
           reach(j, side > 0 ? J.sl : J.sr, el, ha, UARM * s, FARM * s, pole.x, pole.y, pole.z);
           [dx, dy, dz] = [dx + px, dy + py, dz + pz];
         }
+      // (out of him as fast as a hand is snatched back, PULL_IN, not in a frame: a crossed arm comes out of the other over
+      // a frame or two, never hops out of it)
+      const pulled = Math.hypot(dx, dy, dz);
+      const cap = (PULL_IN * s * this.ownMs) / 1000;
+      if (pulled > cap && this.ownMs > 0) {
+        const k = 1 - cap / pulled;
+        j[ha * 3] -= dx * k;
+        j[ha * 3 + 1] = Math.max(0.2 * s, j[ha * 3 + 1] - dy * k);
+        j[ha * 3 + 2] -= dz * k;
+        reach(j, side > 0 ? J.sl : J.sr, el, ha, UARM * s, FARM * s, pole.x, pole.y, pole.z);
+        [dx, dy, dz] = [dx * (1 - k), dy * (1 - k), dz * (1 - k)];
+      }
       const ke = 1 - Math.exp(-this.ownMs / PULL_MS);
       if (dx || dy || dz) [H[pu], H[pu + 1], H[pu + 2]] = [H[pu] + dx, H[pu + 1] + dy, H[pu + 2] + dz];
       else [H[pu], H[pu + 1], H[pu + 2]] = [H[pu] * (1 - ke), H[pu + 1] * (1 - ke), H[pu + 2] * (1 - ke)];

@@ -61,7 +61,7 @@ import { buildProps } from './props';
 import { Rig } from './rig';
 import { BALL_R, HANDOFF_AT, hash, J, type Body, type Contact, type Puppet, type Tape, type V3 } from './puppet';
 import { Sideline } from './sideline';
-import { BODY_GAP, clearance, clearOf, into, PARTS, passPath, reach as reachTo, Spacing, sunk, swerve, type Meet, type PassPath } from './spacing';
+import { BODY_GAP, clearance, clearOf, into, PARTS, passPath, reach as reachTo, Spacing, swerve, type Meet, type PassPath } from './spacing';
 
 export interface SceneProps {
   kits: [MatchKit, MatchKit];
@@ -518,8 +518,14 @@ const CLASH_PASSES = 9;
  * (a leg left behind over a planted foot, an arm round the other man) is undone, and they are left as near as they came.
  */
 const CLASH_GAIN = 0.15;
-/** How far a man is moved out of another changes no faster than this from frame to frame (ft a second): see parted. */
+/**
+ * How far a man is moved out of another changes no faster than CLASH_SLIDE from frame to frame (ft a second), as he
+ * comes back toward his spot; out of a man he goes at up to CLASH_IN (a hop off him at the very worst): see parted.
+ */
 const CLASH_SLIDE = 7;
+const CLASH_IN = 60;
+/** An arm or a leg (SHAPES): what of one man is looked for in the other's legs (see unclash). */
+const LIMBS_LEGS = [...PARTS.arms, ...PARTS.legs];
 const NEAR_MIN = 0.75;
 const NEAR_MAX = 3.2;
 /** What a lean or a sit changes of that, at most either way (ft), learnt only from two this near (ft): farther, their trunks are not what's nearest. */
@@ -549,6 +555,15 @@ const KNOCK_FAST = 40;
 /** The ground a man gives to a knock: thrown at up to GIVE_V ft a second, and back as a spring of GIVE_W radians a second (about a third of a ft at the hardest). */
 const GIVE_V = 4.8;
 const GIVE_W = 7;
+/**
+ * Two knocked off each other go on together (see knocks): as fast as what is left of their way into each other carries
+ * them, at most KNOCK_CARRY of GIVE_V; a man set for it (going slower than KNOCK_SET ft a second, as a driver comes in)
+ * as heavy as KNOCK_ANCHOR men; and KNOCK_BACK of how fast they came together parts them.
+ */
+const KNOCK_CARRY = 1.3;
+const KNOCK_SET = 3;
+const KNOCK_ANCHOR = 3;
+const KNOCK_BACK = 0.15;
 const JA = new Float32Array(45);
 const JB = new Float32Array(45);
 const RV: V3 = { x: 0, y: 0, z: 0 };
@@ -2177,6 +2192,14 @@ export class CourtScene {
         // (the lighter man takes more of it)
         const ma = A.body.s * A.body.s * A.body.bulk;
         const mb = B.body.s * B.body.s * B.body.bulk;
+        // (and the two go as one. The plan has already stopped them at each other (spacing.ts): what is left of how fast
+        // they came together carries both on the way the stronger of them was going, the same for each, as two bodies
+        // that meet and don't bounce do; a man set for it (a screener, a man sat in a box-out, a man stood as a driver
+        // comes in) is set on the floor, as heavy as KNOCK_ANCHOR men. Only KNOCK_BACK of it parts them, each his share)
+        const ux = dx / d;
+        const uz = dz / d;
+        const vaN = va[0] * ux + va[1] * uz;
+        const vbN = vb[0] * ux + vb[1] * uz;
         // (what kind of meeting it is: each takes it his own way, see Puppet.hit)
         const clips = [A.clip, B.clip];
         // (a man with the ball run into the man on him, going at him: a drive's shoulder, not a bump)
@@ -2188,9 +2211,15 @@ export class CourtScene {
             : drives(A, va[0], va[1], dx / d, dz / d) || drives(B, vb[0], vb[1], -dx / d, -dz / d)
               ? 'drive'
               : 'bump';
-        for (const [P, sign, share] of [
-          [A, -1, mb / (ma + mb)],
-          [B, 1, ma / (ma + mb)],
+        const set = (P: Puppet, v: number[]) =>
+          (kind === 'screen' && P.clip === 'screen') || (kind === 'seal' && P.clip === 'boxout') || (kind === 'drive' && !P.carrying && Math.hypot(v[0], v[1]) < KNOCK_SET);
+        const MA = ma * (set(A, va) ? KNOCK_ANCHOR : 1);
+        const MB = mb * (set(B, vb) ? KNOCK_ANCHOR : 1);
+        const vc = clamp((MA * vaN + MB * vbN) / (MA + MB), -GIVE_V * KNOCK_CARRY, GIVE_V * KNOCK_CARRY);
+        const back = Math.min(GIVE_V, Math.max(0, vaN - vbN)) * KNOCK_BACK;
+        for (const [P, sign, share, apart] of [
+          [A, -1, mb / (ma + mb), MB / (MA + MB)],
+          [B, 1, ma / (ma + mb), MA / (MA + MB)],
         ] as const) {
           const k = clamp(2 * share, 0.5, 1.3) * power;
           P.hit((sign * dx) / d, (sign * dz) / d, k, kind);
@@ -2202,8 +2231,9 @@ export class CourtScene {
           if (P.floored >= 0) continue;
           let g = this.gives.get(pids[P === A ? a : b]);
           if (!g) this.gives.set(pids[P === A ? a : b], (g = new Float32Array(4)));
-          g[2] += ((sign * dx) / d) * GIVE_V * k;
-          g[3] += ((sign * dz) / d) * GIVE_V * k;
+          const go = vc + sign * back * apart;
+          g[2] += ux * go;
+          g[3] += uz * go;
         }
       }
     }
@@ -2381,13 +2411,25 @@ export class CourtScene {
       const dz = p.z - a[1];
       const w = kept.get(pid);
       if (!w || cut) return void kept.set(pid, [dx, dz]);
+      // (as far as this frame's move takes him out of a man past where he was already moved, he goes now, up to
+      // CLASH_IN: a man is never left in another to be eased out of him. What is left, a move grown less or turned, is
+      // eased at CLASH_SLIDE: he comes back toward his spot as slowly as he slides along a man)
+      const need = Math.hypot(dx, dz);
+      if (need > 1e-6) {
+        const short = need - (w[0] * dx + w[1] * dz) / need;
+        if (short > 0) {
+          const go = Math.min(short, (CLASH_IN * Math.max(0, own)) / 1000);
+          w[0] += (dx / need) * go;
+          w[1] += (dz / need) * go;
+        }
+      }
       const far = Math.hypot(dx - w[0], dz - w[1]);
       if (far > most) {
         const k = most / far;
         w[0] += (dx - w[0]) * k;
         w[1] += (dz - w[1]) * k;
-        p.nudge(w[0] - dx, w[1] - dz);
       } else [w[0], w[1]] = [dx, dz];
+      if (w[0] !== dx || w[1] !== dz) p.nudge(w[0] - dx, w[1] - dz);
     });
   }
   private readonly partedBy: [Map<number, [number, number]>, Map<number, [number, number]>] = [new Map(), new Map()];
@@ -2431,8 +2473,15 @@ export class CourtScene {
           const arms = hug
             ? 0
             : Math.max(into(ja, a.body.s, a.body.bulk, jb, b.body.s, b.body.bulk, PARTS.arms), into(jb, b.body.s, b.body.bulk, ja, a.body.s, a.body.bulk, PARTS.arms));
-          // (and any limb in any limb: two crossing side by side, an arm swinging through the other's arm or thigh)
-          const limbs = hug ? 0 : sunk(ja, a.body.s, a.body.bulk, jb, b.body.s, b.body.bulk, true);
+          // (and a leg in a leg, or an arm in a leg: two crossing side by side, an arm swinging through the other's thigh.
+          // Two arms crossed are each arm's to part, not the men's (see Puppet.arms): a forearm through a forearm moved
+          // two men a foot apart, their knees and hands with them)
+          const limbs = hug
+            ? 0
+            : Math.max(
+                into(ja, a.body.s, a.body.bulk, jb, b.body.s, b.body.bulk, LIMBS_LEGS, PARTS.legs),
+                into(jb, b.body.s, b.body.bulk, ja, a.body.s, a.body.bulk, LIMBS_LEGS, PARTS.legs),
+              );
           const deep = Math.max(-gap, legs - LEG_GRAZE, arms - ARM_GRAZE, limbs - LIMB_GRAZE);
           if (deep <= 0) break;
           if (was - deep < CLASH_GAIN * lx) {
@@ -2451,10 +2500,10 @@ export class CourtScene {
     }
   }
   /** The man meeting him (see meets): where he is, and how far into it. */
-  private touched(j: number): { x: number; z: number; w: number } | undefined {
+  private touched(j: number): { x: number; z: number; w: number; who: number } | undefined {
     const t = this.touch[j];
     const o = t && this.figs.get(t.pid)?.pup;
-    return t && o?.placed ? { x: o.x, z: o.z, w: t.w } : undefined;
+    return t && o?.placed ? { x: o.x, z: o.z, w: t.w, who: t.pid } : undefined;
   }
   /** Where each of the ten goes his own way this frame (see aside), each man's trunk (see builds), and who meets whom (see meets). */
   private ways = new Float32Array(10);
