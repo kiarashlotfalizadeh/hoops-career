@@ -250,7 +250,7 @@ const swing = (id: ClipId, base: PoseKey, a: PoseKey, b: PoseKey): Clip =>
     [1, a],
   ]);
 
-const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 'dribbleBack' | 'jump' | 'stop' | 'closeout' | 'start'>, Clip> = {
+const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 'dribbleBack' | 'jump' | 'closeout' | 'start'>, Clip> = {
   // --- standing and getting around (the legs are the gait's; these are the rest of him) ---
   idle: clip('idle', 'loop', 2600, {}, [
     [0, {}],
@@ -281,6 +281,15 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
     [0, { hip: -0.3 }],
     [0.5, { hip: -0.36 }],
     [1, { hip: -0.3 }],
+  ]),
+  // (pulling up out of a run: the braking plant. His hips drop and stay back behind his lead foot, his chest goes back
+  // against it and his arms out in front of him for balance, his head on forward a beat; he sinks into it, and comes up
+  // into his ready stance. The legs are the gait's: a long last step, wide)
+  stop: clip('stop', 'shot', 0, {}, [
+    [0, { hip: -0.12, lean: 0.2, wide: 0.2, lx: 0.45, ly: -1.2, lz: 0.75, rx: 0.45, ry: -1.2, rz: 0.75 }],
+    [55, { hip: -0.42, lean: -0.08, surge: -0.22, wide: 0.42, nod: 0.12, lx: 0.85, ly: -0.95, lz: 1.05, rx: 0.85, ry: -0.95, rz: 1.05 }],
+    [150, { hip: -0.48, lean: 0.02, surge: -0.1, wide: 0.42, nod: 0.05, lx: 0.95, ly: -1.05, lz: 0.85, rx: 0.95, ry: -1.05, rz: 0.85 }],
+    [330, { hip: -0.3, lean: 0.13, wide: 0.35, lx: 1.05, ly: -1.15, lz: 0.6, rx: 1.05, ry: -1.15, rz: 0.6 }],
   ]),
 
   // --- with the ball ---
@@ -1415,7 +1424,6 @@ export const CLIPS: Record<ClipId, Clip> = {
   idle2: KEYED.idle,
   idle3: KEYED.idle,
   jog: KEYED.run,
-  stop: KEYED.ready,
   closeout: KEYED.ready,
   start: KEYED.run,
   dribbleWalk: KEYED.dribble,

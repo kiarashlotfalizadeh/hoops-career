@@ -2950,7 +2950,7 @@ function handoffs({ speed = 1, most = 20 } = {}) {
       const u = pl.dur > 0 ? pl.ms / pl.dur : 1;
       if (!owned && held === rp) owned = `u${u.toFixed(2)} grip ${rg.toFixed(2)} gap ${Number.isFinite(rd) ? rd.toFixed(2) : '-'} giver ${gg.toFixed(2)}`;
       trail.push(
-        `u${u.toFixed(2)} g${gg.toFixed(2)}/${Number.isFinite(gd) ? gd.toFixed(2) : '-'} r${rg.toFixed(2)}/${Number.isFinite(rd) ? rd.toFixed(2) : '-'}${held === rp ? ' R' : held === gp ? ' G' : ''} d${Math.hypot(G.x - R.x, G.z - R.z).toFixed(2)} rgl${Math.max((R as unknown as { pose: number[] }).pose[I.gl], (R as unknown as { pose: number[] }).pose[I.gr]).toFixed(2)} ${R.clip} yaw${(((Math.atan2(ball.x - R.x, ball.z - R.z) - R.yaw + 9 * Math.PI) % (2 * Math.PI)) - Math.PI).toFixed(2)} bd${Math.hypot(ball.x - R.x, ball.z - R.z).toFixed(2)} by${ball.y.toFixed(2)} off${((scene as unknown as { swap: { off: Vector3 } | null }).swap?.off.length() ?? 0).toFixed(2)} cy${(((c2) => Math.atan2(c2.x - R.x, c2.z - R.z) - R.yaw)(R.carry({ x: 0, y: 0, z: 0 })) % (2 * Math.PI)).toFixed(2)} cd${((c2) => Math.hypot(c2.x - R.x, c2.z - R.z))(R.carry({ x: 0, y: 0, z: 0 })).toFixed(2)}`,
+        `u${u.toFixed(2)} g${gg.toFixed(2)}/${Number.isFinite(gd) ? gd.toFixed(2) : '-'} r${rg.toFixed(2)}/${Number.isFinite(rd) ? rd.toFixed(2) : '-'}${held === rp ? ' R' : held === gp ? ' G' : ''} d${Math.hypot(G.x - R.x, G.z - R.z).toFixed(2)} rgl${Math.max((R as unknown as { pose: number[] }).pose[I.gl], (R as unknown as { pose: number[] }).pose[I.gr]).toFixed(2)} ${R.clip} yaw${(((Math.atan2(ball.x - R.x, ball.z - R.z) - R.yaw + 9 * Math.PI) % (2 * Math.PI)) - Math.PI).toFixed(2)} bd${Math.hypot(ball.x - R.x, ball.z - R.z).toFixed(2)} by${ball.y.toFixed(2)} cy${(((c2) => Math.atan2(c2.x - R.x, c2.z - R.z) - R.yaw)(R.carry({ x: 0, y: 0, z: 0 })) % (2 * Math.PI)).toFixed(2)} cd${((c2) => Math.hypot(c2.x - R.x, c2.z - R.z))(R.carry({ x: 0, y: 0, z: 0 })).toFixed(2)}`,
       );
     }
     out.push({ k, i, frames, float, before, gap: Math.round(gap * 100) / 100, owned, trail });
@@ -3674,6 +3674,128 @@ function identity({ speed = 1 } = {}) {
 }
 
 /** The possessions whose shot has a finish of its own (choreo's Finish), by finish. */
+/**
+ * Each hand's step from one drawn frame to the next, from its own shoulder in his own frame (what a viewer sees as the
+ * hand moving on the body, whatever the body does), over the whole game at a speed chip: how many steps are longer than
+ * each tenth of a foot, the longest, and every step longer than `over` ft with where it was. Cuts (a replay in and out,
+ * a man put on a new spot) are not steps. Runs in slices (a game at 1x is longer than one call may take): returns at
+ * once, and the result fills in; `done` once the buzzer has been held.
+ */
+function snaps({ speed = 1, over = 0.6, from = 0, upto = Infinity } = {}) {
+  const c = new Clock(speed);
+  if (from > 0) c.k = from;
+  else c.tipMs = 0;
+  // (and each step much longer than both its neighbours, as `measure` counts a hand's pop: see popped)
+  const out = {
+    done: false,
+    frames: 0,
+    steps: 0,
+    longest: 0,
+    hist: new Array(30).fill(0) as number[],
+    over: [] as { ft: number; at: string }[],
+    spikes: 0,
+    worstSpike: 0,
+    spiked: [] as { ft: number; at: string }[],
+  };
+  const was = new Map<number, { k: number; l: number[]; r: number[]; x: number; z: number; clip: string }>();
+  const runs = new Map<string, { ft: number; at: string }[]>();
+  const rel = (j: Float32Array, h: number, sh: number) => [j[h * 3] - j[sh * 3], j[h * 3 + 1] - j[sh * 3 + 1], j[h * 3 + 2] - j[sh * 3 + 2]];
+  const slice = () => {
+    const t0 = performance.now();
+    while (performance.now() - t0 < 200) {
+      cutNow = false;
+      if (!c.step() || c.k > upto) {
+        out.done = true;
+        out.over.sort((a, b) => b.ft - a.ft);
+        out.spiked.sort((a, b) => b.ft - a.ft);
+        return;
+      }
+      out.frames++;
+      const cut = cutNow || (scene as unknown as { director: { onAir: boolean } }).director.onAir;
+      for (const [pid, f] of inner.figs) {
+        const p = f.pup;
+        if (!p.placed) continue;
+        const now = { k: c.k, l: rel(p.j, J.hl, J.sl), r: rel(p.j, J.hr, J.sr), x: p.x, z: p.z, clip: p.clip };
+        const w = was.get(pid);
+        was.set(pid, now);
+        if (!w || w.k !== c.k || cut || Math.hypot(now.x - w.x, now.z - w.z) > 3) {
+          runs.delete(`${pid}L`);
+          runs.delete(`${pid}R`);
+          continue;
+        }
+        for (const [side, a, b] of [
+          ['L', w.l, now.l],
+          ['R', w.r, now.r],
+        ] as const) {
+          const ft = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+          out.steps++;
+          out.hist[Math.min(29, Math.floor(ft * 10))]++;
+          out.longest = Math.max(out.longest, ft);
+          const at = `k${c.k} t${Math.round(c.t)} p${pid} ${side} ${w.clip}>${now.clip}${p.one ? `(${p.one.id}@${Math.round(p.one.tau)})` : ''} ${actOfPid(c, pid)} root${Math.hypot(now.x - w.x, now.z - w.z).toFixed(2)}`;
+          if (ft > over) out.over.push({ ft: Math.round(ft * 100) / 100, at });
+          let r = runs.get(`${pid}${side}`);
+          if (!r) runs.set(`${pid}${side}`, (r = []));
+          r.push({ ft, at });
+          if (r.length > 3) r.shift();
+          if (r.length === 3) {
+            const spike = popped(r[1].ft, r[0].ft, r[2].ft, HAND_POP * speed);
+            if (spike > 0) {
+              out.spikes++;
+              out.worstSpike = Math.max(out.worstSpike, spike);
+              out.spiked.push({ ft: Math.round(spike * 100) / 100, at: r[1].at });
+            }
+          }
+        }
+      }
+    }
+    setTimeout(slice, 0);
+  };
+  slice();
+  return out;
+}
+
+/**
+ * One man's hand through possession k (play ms `from` to `to`), frame by frame: his clip and move, his clip's grip,
+ * his dribble, the hand from its shoulder (his frame), how far it is laid off its path (see settle.ts), the ball (his
+ * frame) and his own followed ball. `lead`: possessions played before it (the whole game before it: k + 1).
+ */
+function handTrace({ k = 0, pid = -1, side = 'R', from = 0, to = Infinity, speed = 1, lead = 2 } = {}) {
+  const c = new Clock(speed);
+  if (lead >= k) c.tipMs = 0;
+  c.k = Math.max(0, k - lead);
+  while (c.k < k && c.finalMs < 0) c.step();
+  const out: string[] = [];
+  const f2 = (x: number) => x.toFixed(2);
+  const [h, sh] = side === 'R' ? [J.hr, J.sr] : [J.hl, J.sl];
+  while (c.k === k && c.finalMs < 0) {
+    c.step();
+    if (c.k !== k || c.t < from || c.t > to) continue;
+    const f = inner.figs.get(pid >= 0 ? pid : scripts[k].oPids[0]);
+    if (!f) continue;
+    const p = f.pup;
+    const q = p as unknown as {
+      handF: { off: Float64Array }[];
+      ballAt: { x: number; y: number; z: number };
+      drib: { phase: number; hand: number; to: number };
+      has: boolean;
+      blend: number;
+    };
+    const j = p.j;
+    const P = p.pose;
+    const s = p.body.s;
+    const b = inner.ball;
+    const [sn, cs] = [Math.sin(p.yaw), Math.cos(p.yaw)];
+    const [dx, dz] = [b.x - p.x, b.z - p.z];
+    const lb = [dx * cs - dz * sn, b.y, dx * sn + dz * cs];
+    const R = [j[h * 3] - j[sh * 3], j[h * 3 + 1] - j[sh * 3 + 1], j[h * 3 + 2] - j[sh * 3 + 2]];
+    const cl = side === 'R' ? [I.rx, I.ry, I.rz] : [I.lx, I.ly, I.lz];
+    out.push(
+      `${Math.round(c.t)} ${p.clip}${p.one ? `(${p.one.id}@${Math.round(p.one.tau)})` : ''} b${f2(q.blend)} has${q.has ? 1 : 0} g${f2(P[side === 'R' ? I.gr : I.gl])} dr${f2(q.drib.phase)}/${q.drib.hand}>${q.drib.to} ov${p.overBall} hand(${R.map(f2)}) clip(${cl.map((i) => f2(P[i] * s)).join(',')}) off(${[...q.handF[side === 'R' ? 1 : 0].off].map(f2)}) ball(${lb.map(f2)}) mine(${f2(q.ballAt.x)},${f2(q.ballAt.y)},${f2(q.ballAt.z)})`,
+    );
+  }
+  return out;
+}
+
 function finishes() {
   const out: Record<string, number[]> = {};
   scripts.forEach((sc, k) => sc.frames.forEach((f) => f.how && !(out[f.how] ??= []).includes(k) && out[f.how].push(k)));
@@ -3711,6 +3833,8 @@ function quick(o: Parameters<typeof measure>[0] = {}) {
 
 (window as unknown as { lab: unknown }).lab = {
   quick,
+  snaps,
+  handTrace,
   weight,
   support,
   pairs,
