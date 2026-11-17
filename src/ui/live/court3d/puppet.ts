@@ -566,6 +566,20 @@ const SPRINT_FROM = 18;
  * lower (GO_SIT ft); pulling up he leans back against it (BRAKE_LEAN) and sits (BRAKE_SIT).
  */
 const GAIN_MS = 80;
+/** His speed is read off his travel eased over this long (ms). */
+const VEL_MS = 70;
+/**
+ * Where the plan takes him next is known (see Drive.ahead): his getting going and pulling up are read from that, not
+ * from where he has been, and so is the bend his trunk leans into. A step round a man is a push one way and back in a
+ * fifth of a second: leaned into after the fact, his trunk rocked the wrong way behind it. His feet still answer it:
+ * the bend they plant for is this much the plan's, the rest his travel's.
+ */
+const LED_BEND = 0.5;
+/** And the lean of it, forward or back: radians for each ft a second squared he is about to gain, toward the way he faces. */
+const LED_LEAN = 0.22;
+/** Round a bend his lean comes over about this long (ms): led, it is over as his path turns; not, it follows the turn. */
+const BANK_MS = 200;
+const BANK_LED_MS = 110;
 /** What his body does with it (the lean, the sit) is eased again over this long (ms): it gathers and gives up its lean as a body does, never in a frame. */
 const GAIN_BODY_MS = 110;
 const GAIN_FULL = 22;
@@ -832,6 +846,11 @@ export interface Drive {
   k0?: number;
   /** How far into the possession it is (the script's ms, from its first frame). */
   t?: number;
+  /**
+   * How far the plan takes him over the next `ms` of his own time, and over twice that (ft, the scene's axes): his
+   * weight goes where he is about to go (the lean of a start or a stop, the bank of a bend), as it comes and not after it.
+   */
+  ahead?: { x: number; z: number; x2: number; z2: number; ms: number };
 }
 
 /**
@@ -866,6 +885,8 @@ const HEAD_WHIP = 13;
 const HEAD_GIVE = 0.3;
 /** A defender off the ball has the arm nearer it out in the passing lane: this far up and out (ft from his shoulder). */
 const DENY: [number, number, number] = [1.25, -0.3, 0.7];
+/** A free hand resting on a man is moved over him, or let off him, no faster than this (ft a second). */
+const REST_SLIDE = 9;
 /** A dribbler rides the bounce: his shoulder dips with the push (radians) and his hips give (ft). */
 const RIDE_TILT = 0.045;
 const RIDE_HIP = 0.05;
@@ -1271,7 +1292,7 @@ export class Puppet {
   /** A knock (see hit): how far his trunk is thrown (ft, his frame: to his left, ahead) and how fast that is going (ft a second); then his head's, which follows it late. */
   private readonly jolt = new Float32Array(8);
   /** The last knock, for how he meets it (see braced): its kind, the way it pushed him (his frame), how hard, and how long ago (ms). */
-  private met2: { kind: Contact; hx: number; hz: number; k: number; t: number } | null = null;
+  private met2: { kind: Contact; hx: number; hz: number; k: number; t: number; stood: boolean } | null = null;
   /** A hard knock's step to take it (see hit): which foot (-1 none), how far out of its place it goes (the scene's ft), and how long it has to be taken (ms). */
   private catchK = -1;
   private catchX = 0;
@@ -1497,6 +1518,11 @@ export class Puppet {
   effort = 0;
   breath = 0;
   private vfLag = 0;
+  /** Where he is about to go is known this frame (Drive.ahead), and how hard it will push him the way he faces (ft a second squared, eased). */
+  private led = false;
+  private urge = 0;
+  /** And how hard the plan's path is about to turn to his right (ft a second squared, eased). */
+  private curve = 0;
   private leanGo = 0;
   /** A little reset in a stance: when the next one comes (ms), and how far into one he is. */
   private resetIn = 1500;
@@ -1637,7 +1663,7 @@ export class Puppet {
       this.settle();
     } else if (own > 0) {
       // (how fast the plan has him going: where he was moved off its spot last frame (see nudge) is no step of his)
-      const k = 1 - Math.exp(-own / 70);
+      const k = 1 - Math.exp(-own / VEL_MS);
       this.vx += ((rx - this.x + nx) / own - this.vx) * k;
       this.vz += ((rz - this.z + nz) / own - this.vz) * k;
       this.x = rx;
@@ -1694,12 +1720,33 @@ export class Puppet {
     const vf = (this.vx * fx + this.vz * fz) * 1000;
     const vs = (this.vx * sx + this.vz * sz) * 1000;
     // how fast he is getting going or pulling up, and how hard his path is turning to his right (ft a second squared, eased on his own time)
-    if (jumped) this.acc = this.accBody = this.bend = 0;
+    if (jumped) this.acc = this.accBody = this.bend = this.urge = this.curve = 0;
     else if (own > 0) {
       const k = 1 - Math.exp(-own / GAIN_MS);
-      this.acc += (((sp - this.spWas) * 1000) / own - this.acc) * k;
+      let acc = ((sp - this.spWas) * 1000) / own;
+      let bend = (((this.vx - this.bvx) * sx + (this.vz - this.bvz) * sz) * 1e6) / own;
+      let urge = 0;
+      let curve = 0;
+      // (what is coming, with what has been: a body shifts its weight to make a start, a stop or a cut, so it is on its
+      // way over before his path shows it. What he does that the plan doesn't know of, a step round a man, is still felt)
+      const a = d.ahead;
+      this.led = !!a && a.ms > 0 && !cut;
+      if (a && this.led) {
+        // (how his travel changes from the beat coming to the one after it: ft a second squared, a beat ahead of him,
+        // which is about as long as his body takes to answer it)
+        const h = a.ms / 1000;
+        const ax = (a.x2 - 2 * a.x) / (h * h);
+        const az = (a.z2 - 2 * a.z) / (h * h);
+        acc = (Math.hypot(a.x2 - a.x, a.z2 - a.z) - Math.hypot(a.x, a.z)) / (h * h);
+        curve = ax * sx + az * sz;
+        bend += (curve - bend) * LED_BEND;
+        urge = ax * fx + az * fz;
+      }
+      this.acc += (acc - this.acc) * k;
       this.accBody += (this.acc - this.accBody) * (1 - Math.exp(-own / GAIN_BODY_MS));
-      this.bend += ((((this.vx - this.bvx) * sx + (this.vz - this.bvz) * sz) * 1e6) / own - this.bend) * k;
+      this.bend += (bend - this.bend) * k;
+      this.urge += (urge - this.urge) * k;
+      this.curve += (curve - this.curve) * k;
     }
     this.spWas = sp;
     this.bvx = this.vx;
@@ -1756,7 +1803,7 @@ export class Puppet {
     // (thrown in from out of bounds, it comes from over his head, where he has it)
     if ((winds && !this.winding) || (d.act === 'pass' && this.act !== 'pass' && !this.winding))
       this.passId = took('pass', d.act === 'pass' ? d.k0 : d.k === undefined ? undefined : d.k + 1, () =>
-        d.handoff ? 'handoff' : d.act === 'inbound' || this.act === 'inbound' ? 'passOver' : this.passOf(),
+        d.handoff ? 'handoff' : d.act === 'inbound' || this.act === 'inbound' ? 'passOver' : this.passOf(d.act === 'pass' ? this.act : d.act),
       );
     this.winding = winds || (this.winding && d.act === 'pass');
     // (each shot is one of his, as far as its name leaves it to him: a jumper fades, steps back or turns only when it is
@@ -2222,11 +2269,38 @@ export class Puppet {
     this.takeW = clamp(w, 0, 1);
   }
   private takeW = 0;
+  /** How far each free hand is moved off the man it rests on, after its way there (the left's, then the right's: x, y, z in his frame). */
+  private readonly rests = new Float64Array(6);
   /** A hand-off he is giving (this frame only): his hands that still hold it are on it, wherever it is drawn. */
   giving() {
     this.giveW = true;
   }
   private giveW = false;
+
+  /**
+   * The ball was moved after his arms were drawn (a hand-off kept out of a body): the hands that have hold of it go
+   * with it, their elbows as they were, so it isn't seen off his palms for the frame.
+   */
+  regrip(ball: V3) {
+    if (this.onRim) return;
+    const { s } = this.body;
+    const P = this.pose;
+    const j = this.j;
+    const [bx, bz] = this.local(ball.x, ball.z);
+    const E = this.elbows;
+    for (const side of SIDES) {
+      const w = smooth(clamp((P[side > 0 ? I.gl : I.gr] - 0.5) / 0.3, 0, 1));
+      if (w <= 0) continue;
+      const go = side > 0 ? 0 : 3;
+      const sh = side > 0 ? J.sl : J.sr;
+      const ha = (side > 0 ? J.hl : J.hr) * 3;
+      j[ha] += (bx + this.grips[go] - j[ha]) * w;
+      j[ha + 1] = Math.max(0.2 * s, j[ha + 1] + (ball.y + this.grips[go + 1] - j[ha + 1]) * w);
+      j[ha + 2] += (bz + this.grips[go + 2] - j[ha + 2]) * w;
+      reach(j, sh, side > 0 ? J.el : J.er, ha / 3, UARM * s, FARM * s, E[go], E[go + 1], E[go + 2]);
+      for (let a = 0; a < 3; a++) this.swung[go + a] = j[ha + a] - j[sh * 3 + a];
+    }
+  }
 
   /** Where the scene has put the ball in his hands (`holds`), ft up: a dribble's next push goes down from there. */
   heldAt(y: number) {
@@ -2423,7 +2497,9 @@ export class Puppet {
     this.jolt[2] += hx * v;
     this.jolt[3] += hz * v;
     // (and he meets it as that kind of meeting is met: see braced)
-    this.met2 = { kind, hx, hz, k, t: 0 };
+    // (a body into a body with neither set for it: the one stood still sits wider into it, and steps only to a hard one)
+    const stood = kind === 'bump' && !this.has && this.spLag < STAND_SET && this.pose[I.air] < 0.3;
+    this.met2 = { kind, hx, hz, k, t: 0, stood };
     // (set for it, his feet stay where they are and go wider under him as he sits into it (braced); the man who runs
     // into him, or is held off, gives ground with a step, sooner for it than for a plain bump: their feet answer each other)
     const holds = set < 1 || (kind === 'drive' && !this.has && this.spLag < STAND_SET);
@@ -2552,6 +2628,16 @@ export class Puppet {
       P[I.hip] -= 0.05 * e;
       arm(1, 0.2, -0.75, 1.05, 0.8 * e);
       arm(-1, 0.2, -0.75, 1.05, 0.8 * e);
+    } else if (m.kind === 'bump') {
+      // (two bodies come together, neither set: each takes the other on the near shoulder, turned into him, that
+      // forearm up between them if he is in front, his knees giving under it; the one stood still sits wider
+      // into it. Both do it, each from his own side, so the two answer each other)
+      const front = smooth(clamp(oz * 1.5 + 0.5, 0, 1));
+      P[I.twist] += 0.2 * near * e * front;
+      P[I.tilt] += 0.06 * near * e;
+      P[I.hip] -= (m.stood ? 0.1 : 0.06) * e;
+      if (m.stood) P[I.wide] += 0.12 * e;
+      arm(near, 0.2, -0.6, 0.75, 0.6 * e * front);
     }
   }
 
@@ -2867,10 +2953,11 @@ export class Puppet {
    * to, a one-handed push off the bounce: never taken up over his head from his hip in the time a dribble gives him);
    * held, any of his, the one he likes the most often.
    */
-  private passOf(): ClipId {
+  private passOf(act: Act): ClipId {
     const r = hash(this.who, 40 + ++this.passes);
     const likes = hash(this.who, 33);
-    if (DRIBBLES.has(this.clip) || this.clip === 'crossover' || this.clip === 'hesi') return r < 0.1 + 0.25 * likes ? 'passOne' : 'pass';
+    // (the move he throws it out of, not the clip he is still in: a drive begun off the catch is a dribble already)
+    if (act === 'drive' || act === 'dribble' || DRIBBLES.has(this.clip) || this.clip === 'crossover' || this.clip === 'hesi') return r < 0.1 + 0.25 * likes ? 'passOne' : 'pass';
     // (held: his own favourite half the time, any of them the rest)
     return r < 0.5 ? PASSES[Math.floor(likes * PASSES.length)] : PASSES[Math.floor(((r - 0.5) / 0.5) * PASSES.length)];
   }
@@ -3205,8 +3292,10 @@ export class Puppet {
       P[I.hip] -= 0.08 * Math.sin((Math.PI * Math.min(340, this.resetT)) / 340);
     }
     // (starting he leans into it, stopping back against it; not in a shot or in the air)
-    const gain = vf - this.vfLag;
-    this.vfLag += gain * (1 - Math.exp(-own / 220));
+    const gained = vf - this.vfLag;
+    this.vfLag += gained * (1 - Math.exp(-own / 220));
+    // (as much as he is about to gain, where the plan says: into his first step as he takes it, back before he has slowed)
+    const gain = this.led ? this.urge * LED_LEAN : gained;
     // (no more than his speed gives him: a man stepping off leans a little, one setting off at a run a lot)
     // (and as much as the speed he is getting up to gives him: one setting off hard leans into his very first step)
     const cap = LEAN_MAX * clamp(Math.max(sp, this.spLag, this.going(sp)) / LEAN_FULL, 0.25, 1);
@@ -3217,7 +3306,7 @@ export class Puppet {
     let bank = 0;
     if (own > 0 && sp > 6 && !this.one && P[I.air] < 0.2) {
       const [, , sx, sz] = this.dirs();
-      const across = (((this.vx - this.pvx) * sx + (this.vz - this.pvz) * sz) * 1e6) / own;
+      const across = this.led ? this.curve : (((this.vx - this.pvx) * sx + (this.vz - this.pvz) * sz) * 1e6) / own;
       bank = clamp(-across * BANK, -BANK_MAX, BANK_MAX);
     }
     // (a hard cut at a run: he plants his outside foot and sinks over it, his head still on the way he was going for a beat)
@@ -3231,7 +3320,7 @@ export class Puppet {
     }
     this.pvx = this.vx;
     this.pvz = this.vz;
-    this.bank += (bank - this.bank) * (1 - Math.exp(-own / 200));
+    this.bank += (bank - this.bank) * (1 - Math.exp(-own / (this.led ? BANK_LED_MS : BANK_MS)));
     P[I.tilt] += this.bank;
     P[I.proll] += this.bank * 0.4;
     if (this.plantT < PLANT_MS) {
@@ -4608,12 +4697,29 @@ export class Puppet {
       y = j[sh + 1] + fw.y;
       z = j[sh + 2] + fw.z;
       // (and still out of him on its way there, and out of the ball where it is now)
+      // (moved off him no faster than a hand slides on a man: where it rests jumps as the part of him nearest it changes,
+      // his trunk, then his thigh, and the hand went with it in a frame)
+      const ro = side > 0 ? 0 : 3;
+      const RO = this.rests;
+      let [ox2, oy2, oz2] = [0, 0, 0];
       if (free) {
         HAND.x = x;
         HAND.y = y;
         HAND.z = z;
-        if (this.rest(HAND, HAND_R * s, near, true) > 0) [x, y, z] = [HAND.x, HAND.y, HAND.z];
+        if (this.rest(HAND, HAND_R * s, near, true) > 0) [ox2, oy2, oz2] = [HAND.x - x, HAND.y - y, HAND.z - z];
       }
+      if (this.gripped && this.ownMs > 0) {
+        const far = Math.hypot(ox2 - RO[ro], oy2 - RO[ro + 1], oz2 - RO[ro + 2]);
+        const most = (REST_SLIDE * s * this.ownMs) / 1000;
+        const k = far > most ? most / far : 1;
+        ox2 = RO[ro] + (ox2 - RO[ro]) * k;
+        oy2 = RO[ro + 1] + (oy2 - RO[ro + 1]) * k;
+        oz2 = RO[ro + 2] + (oz2 - RO[ro + 2]) * k;
+      }
+      [RO[ro], RO[ro + 1], RO[ro + 2]] = [ox2, oy2, oz2];
+      x += ox2;
+      y += oy2;
+      z += oz2;
       j[ha * 3] = x;
       j[ha * 3 + 1] = Math.max(0.2 * s, y);
       j[ha * 3 + 2] = z;

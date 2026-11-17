@@ -26,7 +26,7 @@ import {
   type WebGLRenderTarget,
 } from 'three';
 import { BASKET, COURT_LEN, faceWorld, toWorld, type Act, type Flash, type Frame, type Pt, type Script } from '../choreo';
-import { FLOOR_L, FLOOR_W, type GameInfo, type Stage } from '../Court';
+import { FLOOR_L, FLOOR_W, pose, type GameInfo, type Stage } from '../Court';
 import type { MatchKit, Venue } from '../../teamColors';
 import type { Occasion } from '../occasion';
 import { Arena } from './arena';
@@ -245,9 +245,15 @@ const HANDOFF_DRAW_MS = 70;
 /** What their bodies have pushed it off where it is drawn to is kept, up to this far (ft). */
 const HANDOFF_OFF = 0.8;
 const HANDOFF_OFF_MS = 200;
+/** Each man is told where the plan takes him this far on (ms, the bodies' time): see Drive.ahead. */
+const AHEAD_MS = 150;
+/** Two men's holds of a hand-off nearer each other than this (ft) are hands on it together; twice as far apart, it is in one man's. */
+const HANDOFF_TOGETHER = 0.2;
 const BEND_TURN_FROM = 0.15;
 /** A loose ball is moved off a body at this speed at most, ft a second: it rolls off him, it doesn't jump. */
 const BALL_PUSH = 14;
+/** A ball in a man's hands gives way to a body by it no faster than this (ft a second). */
+const GIVE_PUSH = 20;
 /**
  * A hand this far onto the ball (Puppet.holds, 0..1) has it: the ball is where that hand is drawn; from HOLD_FROM to
  * there, part of the way (hands only closing on it meet it on its way; they don't pull it to them).
@@ -512,6 +518,8 @@ const CLASH_PASSES = 9;
  * (a leg left behind over a planted foot, an arm round the other man) is undone, and they are left as near as they came.
  */
 const CLASH_GAIN = 0.15;
+/** How far a man is moved out of another changes no faster than this from frame to frame (ft a second): see parted. */
+const CLASH_SLIDE = 7;
 const NEAR_MIN = 0.75;
 const NEAR_MAX = 3.2;
 /** What a lean or a sit changes of that, at most either way (ft), learnt only from two this near (ft): farther, their trunks are not what's nearest. */
@@ -1110,9 +1118,13 @@ export class CourtScene {
         while (k > 0 && sc.frames[k - 1].act[j] === b.act[j]) k--;
         return k;
       });
+      // (where the plan has each man a beat from now, with the play's clock running: see Drive.ahead)
+      const soon = dt > 0 && own > 0 && p.final === undefined ? [1, 2].map((n) => pose(sc, this.scriptAt + (n * AHEAD_MS * dt) / own, true)) : null;
       pids.forEach((pid, j) => {
         const side = (j < nO ? sc.off : 1 - sc.off) as 0 | 1;
         const f = this.fig(pid, side, p);
+        const then = soon && soon.map((at) => toWorld(j < nO ? at.o[j] : at.d[j - nO], sc.dir));
+        const now = this.planAt.get(pid);
         // (his face on the possession's clock before anything this frame comes to it: see Fig.when)
         f.when(sc, this.scriptAt, this.director.onAir);
         const said = over(pid, side, b.act[j]);
@@ -1164,6 +1176,7 @@ export class CourtScene {
             k: bi,
             k0: runs[j],
             t: this.scriptAt,
+            ahead: then && now && !end.act ? { x: sx(then[0]) - now[0], z: sz(then[0]) - now[1], x2: sx(then[1]) - now[0], z2: sz(then[1]) - now[1], ms: AHEAD_MS } : undefined,
           },
           dt,
           own,
@@ -1175,7 +1188,7 @@ export class CourtScene {
       });
       figs.forEach((f, j) => CONTESTS.has(b.act[j]) && contest.add(f));
       // (two who meet: how near they came, for how near they are drawn next frame)
-      this.feel(pids, own);
+      this.parted(0, pids, own, cut, () => this.feel(pids, own));
       // a possession that doesn't pick up where the last ended: the ball is where it starts
       const key = `${this.scriptN}:${bi}`;
       if (key !== this.moveKey) {
@@ -1369,7 +1382,7 @@ export class CourtScene {
         // a hand-off: hand to hand, never in the air. The taker's hands go onto it in the giver's (his catch closes on it
         // HANDOFF_AT through the move), the giver's open after; it goes from one man's hold to the other's as their grips
         // trade (see swapHands), and is the taker's once his hold is the surer
-        if (this.swap?.k !== bi || this.swap.a !== was) this.swap = { k: bi, a: was, b: next, share: 0, drawn: 0, at: new Vector3(), off: new Vector3() };
+        if (this.swap?.k !== bi || this.swap.a !== was) this.swap = { k: bi, a: was, b: next, share: 0, drawn: 0, at: new Vector3(), off: new Vector3(), pushed: false };
         const sw = this.swap;
         // (and is his by the end of its move whatever: a hand that can't get to it doesn't keep it in the air)
         sw.share = Math.max(sw.share, smooth(clamp((lu - HANDOFF_LATE) / (1 - HANDOFF_LATE), 0, 1)));
@@ -1380,7 +1393,7 @@ export class CourtScene {
         const c1 = was.pup.carry(TMP);
         const [x1, y1, z1] = [c1.x, c1.y, c1.z];
         const c2 = next.pup.carry(TMP);
-        sw.off.multiplyScalar(Math.exp(-ease / HANDOFF_OFF_MS));
+        if (!sw.pushed) sw.off.multiplyScalar(Math.exp(-ease / HANDOFF_OFF_MS));
         ball.set(x1 + (c2.x - x1) * w + sw.off.x, y1 + (c2.y - y1) * w + sw.off.y, z1 + (c2.z - z1) * w + sw.off.z);
         this.give(was, next, ease);
         swapping = true;
@@ -1652,10 +1665,8 @@ export class CourtScene {
     if (!has) this.heldMs = 0;
     // (and again with their arms where they are drawn this frame: an arm, a trunk or a leg still in a man moves them
     // apart now, not next frame; a man with the ball in his hands stays where it is)
-    this.unclash(
-      order.filter(([pid]) => seen.has(pid)).map(([pid]) => pid),
-      hands,
-    );
+    const there = order.filter(([pid]) => seen.has(pid)).map(([pid]) => pid);
+    this.parted(1, there, own, false, () => this.unclash(there, hands));
     for (const [pid, f] of order) {
       if (!seen.has(pid)) {
         this.drop(pid, f);
@@ -2348,6 +2359,38 @@ export class CourtScene {
    * one is in the other, they are moved apart now along the line between them, the lighter the more (a man hanging on
    * the ring stays where he is), until they touch at most. An arm of one in the other's trunk or head moves them too.
    */
+  /**
+   * What moves bodies out of each other this frame (`run`: feel, unclash) is found afresh each frame from where the
+   * plan has them, and comes and goes with a limb's swing: a man was thrown half a foot one frame and back the next,
+   * his knees and hands with him. So how far each is moved is carried from frame to frame, and changes no faster
+   * than CLASH_SLIDE: he is eased off a man and eased back, a little into him on the way rather than hopped off him.
+   */
+  private parted(site: 0 | 1, pids: readonly number[], own: number, cut: boolean, run: () => void) {
+    const at = pids.map((pid) => {
+      const p = this.figs.get(pid)?.pup;
+      return p?.placed ? [p.x, p.z] : null;
+    });
+    run();
+    const kept = this.partedBy[site];
+    const most = (CLASH_SLIDE * Math.max(0, own)) / 1000;
+    pids.forEach((pid, i) => {
+      const p = this.figs.get(pid)?.pup;
+      const a = at[i];
+      if (!p || !a) return void kept.delete(pid);
+      const dx = p.x - a[0];
+      const dz = p.z - a[1];
+      const w = kept.get(pid);
+      if (!w || cut) return void kept.set(pid, [dx, dz]);
+      const far = Math.hypot(dx - w[0], dz - w[1]);
+      if (far > most) {
+        const k = most / far;
+        w[0] += (dx - w[0]) * k;
+        w[1] += (dz - w[1]) * k;
+        p.nudge(w[0] - dx, w[1] - dz);
+      } else [w[0], w[1]] = [dx, dz];
+    });
+  }
+  private readonly partedBy: [Map<number, [number, number]>, Map<number, [number, number]>] = [new Map(), new Map()];
   private unclash(pids: readonly number[], pinned?: ReadonlySet<Fig>) {
     for (let i = 0; i < pids.length; i++) {
       const a = this.figs.get(pids[i])?.pup;
@@ -3011,8 +3054,18 @@ export class CourtScene {
     O.z += (nz - O.z) * k;
     ball.x = x0 + O.x;
     ball.z = z0 + O.z;
-    // (and never in them for a frame while that is taken up: what is still short of clear is made up at once)
-    if (legs()) [O.x, O.z] = [ball.x - x0, ball.z - z0];
+    // (and not left in them while that is taken up: what is still short of clear is made up, as fast as a hand moves
+    // it and no faster. Round to a leg's other side it is carried there over a few frames, not thrown a foot in one)
+    const [ex, ez] = [O.x, O.z];
+    if (legs()) {
+      const [mx, mz] = [ball.x - x0 - ex, ball.z - z0 - ez];
+      const most = (BALL_PUSH * Math.max(0, ms)) / 1000;
+      const far = Math.hypot(mx, mz);
+      const q = far > most ? most / far : 1;
+      [O.x, O.z] = [ex + mx * q, ez + mz * q];
+      ball.x = x0 + O.x;
+      ball.z = z0 + O.z;
+    }
   }
   private readonly ownOff = { x: 0, z: 0 };
   /**
@@ -3033,14 +3086,19 @@ export class CourtScene {
     // (but turned round to the other side of a man, across his middle: quickly, eased; it goes round him, it doesn't hop
     // from one side of him to the other in a frame)
     const turned = grow && tx * this.bend.x + tz * this.bend.z < 0 && Math.hypot(this.bend.x, this.bend.z) > BEND_TURN_FROM;
-    const k = grow && !turned ? 1 : 1 - Math.exp(-ease / (turned ? BEND_TURN_MS : BEND_MS));
+    let k = grow && !turned ? 1 : 1 - Math.exp(-ease / (turned ? BEND_TURN_MS : BEND_MS));
+    // (and taken no faster than a hand moves it: a body stepping into its way has it carried off him over a frame or
+    // two, not thrown off him in one)
+    const far = Math.hypot(tx - this.bend.x, tz - this.bend.z) * k;
+    const most = (GIVE_PUSH * ease) / 1000;
+    if (far > most) k *= most / far;
     this.bend.x += (tx - this.bend.x) * k;
     this.bend.z += (tz - this.bend.z) * k;
     ball.x = px + this.bend.x;
     ball.z = pz + this.bend.z;
   }
   /** A hand-off under way: the script frame it is in, from whom to whom, and how far it has gone to the taker (0..1). */
-  private swap: { k: number; a: Fig; b: Fig; share: number; drawn: number; at: Vector3; off: Vector3 } | null = null;
+  private swap: { k: number; a: Fig; b: Fig; share: number; drawn: number; at: Vector3; off: Vector3; pushed: boolean } | null = null;
   /**
    * A hand-off, with both men's arms drawn this frame: the ball is where the hands on it hold it (Puppet.holds), the
    * surer grip counting the more, and goes on to the taker as far as his grip is the surer (it never goes back).
@@ -3050,9 +3108,17 @@ export class CourtScene {
     const wa = sw.a.pup.holds(TMP);
     const [ax, ay, az] = [TMP.x, TMP.y, TMP.z];
     const wb = sw.b.pup.holds(TMP2);
-    const qa = wa * wa;
-    const qb = wb * wb;
+    let qa = wa * wa;
+    let qb = wb * wb;
     if (qa + qb <= 1e-4) return;
+    // (hands that aren't on it together, an arm that can't get to where the other man has it, a body behind its plan
+    // at a fast speed: it is in one man's hands, not in the air between the two. The giver's until the taker's get
+    // to it there or his own let go; then the taker's)
+    if (qa > 0 && qb > 0) {
+      const apart = smooth(clamp((Math.hypot(ax - TMP2.x, ay - TMP2.y, az - TMP2.z) - HANDOFF_TOGETHER) / HANDOFF_TOGETHER, 0, 1));
+      if (wa >= HOLD_SURE && sw.share < 0.5) qb *= 1 - apart;
+      else qa *= 1 - apart;
+    }
     sw.share = Math.max(sw.share, qb / (qa + qb));
     const x = (ax * qa + TMP2.x * qb) / (qa + qb);
     const y = (ay * qa + TMP2.y * qb) / (qa + qb);
@@ -3067,6 +3133,14 @@ export class CourtScene {
     sw.off.x += ball.x - sw.at.x;
     sw.off.y += ball.y - sw.at.y;
     sw.off.z += ball.z - sw.at.z;
+    // (and isn't let go of while they still push: eased off a frame at a time it would be pushed again by as much, the
+    // ball off his hands by that every frame, the more the longer the frame)
+    sw.pushed = ball.distanceTo(sw.at) > 0.01;
+    // (and the hands on it go with it this frame)
+    if (sw.pushed) {
+      sw.a.pup.regrip(ball);
+      sw.b.pup.regrip(ball);
+    }
     if (sw.off.length() > HANDOFF_OFF) sw.off.setLength(HANDOFF_OFF);
   }
   /** How far the ball is off where its move has it, for the bodies by it (x, z). */

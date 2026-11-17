@@ -2892,7 +2892,7 @@ function handoffs({ speed = 1, most = 20 } = {}) {
       const u = pl.dur > 0 ? pl.ms / pl.dur : 1;
       if (!owned && held === rp) owned = `u${u.toFixed(2)} grip ${rg.toFixed(2)} gap ${Number.isFinite(rd) ? rd.toFixed(2) : '-'} giver ${gg.toFixed(2)}`;
       trail.push(
-        `u${u.toFixed(2)} g${gg.toFixed(2)}/${Number.isFinite(gd) ? gd.toFixed(2) : '-'} r${rg.toFixed(2)}/${Number.isFinite(rd) ? rd.toFixed(2) : '-'}${held === rp ? ' R' : held === gp ? ' G' : ''} d${Math.hypot(G.x - R.x, G.z - R.z).toFixed(2)} rgl${Math.max((R as unknown as { pose: number[] }).pose[I.gl], (R as unknown as { pose: number[] }).pose[I.gr]).toFixed(2)} ${R.clip} yaw${(((Math.atan2(ball.x - R.x, ball.z - R.z) - R.yaw + 9 * Math.PI) % (2 * Math.PI)) - Math.PI).toFixed(2)} bd${Math.hypot(ball.x - R.x, ball.z - R.z).toFixed(2)} by${ball.y.toFixed(2)}`,
+        `u${u.toFixed(2)} g${gg.toFixed(2)}/${Number.isFinite(gd) ? gd.toFixed(2) : '-'} r${rg.toFixed(2)}/${Number.isFinite(rd) ? rd.toFixed(2) : '-'}${held === rp ? ' R' : held === gp ? ' G' : ''} d${Math.hypot(G.x - R.x, G.z - R.z).toFixed(2)} rgl${Math.max((R as unknown as { pose: number[] }).pose[I.gl], (R as unknown as { pose: number[] }).pose[I.gr]).toFixed(2)} ${R.clip} yaw${(((Math.atan2(ball.x - R.x, ball.z - R.z) - R.yaw + 9 * Math.PI) % (2 * Math.PI)) - Math.PI).toFixed(2)} bd${Math.hypot(ball.x - R.x, ball.z - R.z).toFixed(2)} by${ball.y.toFixed(2)} off${((scene as unknown as { swap: { off: Vector3 } | null }).swap?.off.length() ?? 0).toFixed(2)} cy${(((c2) => Math.atan2(c2.x - R.x, c2.z - R.z) - R.yaw)(R.carry({ x: 0, y: 0, z: 0 })) % (2 * Math.PI)).toFixed(2)} cd${((c2) => Math.hypot(c2.x - R.x, c2.z - R.z))(R.carry({ x: 0, y: 0, z: 0 })).toFixed(2)}`,
       );
     }
     out.push({ k, i, frames, float, before, gap: Math.round(gap * 100) / 100, owned, trail });
@@ -2949,6 +2949,89 @@ function facing({ speed = 1 } = {}) {
   return Object.fromEntries(Object.entries(out).map(([k, o]) => [k, { n: o.n, mean: Math.round((o.sum / o.n) * 100) / 100, offPct: Math.round((o.off / o.n) * 100) }]));
 }
 
+/**
+ * His weight against his travel: at a run, how his trunk's lean to the side follows his path's bending (`bank`) and its
+ * lean forward follows his getting going and pulling up (`lean`). For each, the lag (ms) at which the two go together
+ * best (past 0: the body after the path; before: leading it) and how well they do there and at no lag.
+ */
+function weight({ speed = 1, from = 8 } = {}) {
+  const c = new Clock(speed);
+  c.tipMs = 0;
+  type Row = { x: number; z: number; yaw: number; bank: number; lean: number; bend: number; px: number; pz: number };
+  const runs = new Map<number, Row[]>();
+  const W = 4;
+  const LAGS = 24;
+  const sums = (['bank', 'lean', 'bend', 'plan'] as const).map(() => Array.from({ length: LAGS * 2 + 1 }, () => ({ n: 0, a: 0, b: 0, aa: 0, bb: 0, ab: 0 })));
+  const ms = FRAME;
+  const close = (rows: Row[]) => {
+    if (rows.length < 2 * (W + LAGS) + 8) return;
+    const sec = (W * ms) / 1000;
+    for (let i = 2 * W + LAGS; i < rows.length - 2 * W - LAGS; i++) {
+      const r = rows[i];
+      const ax = (rows[i + W].x - 2 * r.x + rows[i - W].x) / (sec * sec);
+      const az = (rows[i + W].z - 2 * r.z + rows[i - W].z) / (sec * sec);
+      const sp = Math.hypot(rows[i + W].x - rows[i - W].x, rows[i + W].z - rows[i - W].z) / (2 * sec);
+      if (sp < from) continue;
+      const s = Math.sin(r.yaw);
+      const co = Math.cos(r.yaw);
+      const want = [-(ax * -co + az * s), ax * s + az * co, -(ax * -co + az * s), -(ax * -co + az * s)];
+      for (let l = -LAGS; l <= LAGS; l++) {
+        const o = rows[i + l];
+        const o1 = rows[i + l + W];
+        const o0 = rows[i + l - W];
+        const pax = (o1.px - 2 * o.px + o0.px) / (sec * sec);
+        const paz = (o1.pz - 2 * o.pz + o0.pz) / (sec * sec);
+        [o.bank, o.lean, -o.bend, -(pax * -co + paz * s)].forEach((v, k) => {
+          const q = sums[k][l + LAGS];
+          const a = want[k];
+          q.n++;
+          q.a += a;
+          q.b += v;
+          q.aa += a * a;
+          q.bb += v * v;
+          q.ab += a * v;
+        });
+      }
+    }
+  };
+  let kWas = -1;
+  while (c.step() && c.finalMs < 0) {
+    const cut = cutNow || c.k !== kWas;
+    cutNow = false;
+    kWas = c.k;
+    for (const [pid, f] of inner.figs) {
+      const p = f.pup as unknown as { x: number; z: number; yaw: number; bank: number; bend: number; pose: Float32Array; one: unknown };
+      let rows = runs.get(pid);
+      const air = p.pose[I.air] > 0.2 || !!p.one;
+      if (!rows || cut || air) {
+        if (rows) close(rows);
+        runs.set(pid, (rows = []));
+        if (air) continue;
+      }
+      const at = (scene as unknown as { planAt: Map<number, [number, number]> }).planAt.get(pid) ?? [p.x, p.z];
+      rows.push({ x: p.x, z: p.z, yaw: p.yaw, bank: p.bank, lean: p.pose[I.lean], bend: p.bend, px: at[0], pz: at[1] });
+    }
+  }
+  for (const rows of runs.values()) close(rows);
+  return Object.fromEntries(
+    (['bank', 'lean', 'bend', 'plan'] as const).map((name, k) => {
+      const r = sums[k].map((q) => (q.n * q.ab - q.a * q.b) / Math.sqrt(Math.max(1e-9, (q.n * q.aa - q.a * q.a) * (q.n * q.bb - q.b * q.b))));
+      let best = 0;
+      r.forEach((v, i) => v > r[best] && (best = i));
+      return [
+        name,
+        {
+          curve: r.filter((_, i) => i % 3 === 0).map((v) => Math.round(v * 100)),
+          n: sums[k][LAGS].n,
+          lagMs: Math.round((best - LAGS) * ms * speed),
+          r: Math.round(r[best] * 100) / 100,
+          r0: Math.round(r[LAGS] * 100) / 100,
+        },
+      ];
+    }),
+  );
+}
+
 /** The possessions whose shot has a finish of its own (choreo's Finish), by finish. */
 function finishes() {
   const out: Record<string, number[]> = {};
@@ -2957,6 +3040,7 @@ function finishes() {
 }
 
 (window as unknown as { lab: unknown }).lab = {
+  weight,
   facing,
   handoffs,
   dunks,
