@@ -2160,17 +2160,49 @@ describe('live court choreography', () => {
           expect(Math.max(Math.abs(p.x), Math.abs(p.y))).toBeLessThan(1);
         }
       }
-      // and with the ball out on the floor, across from it, in a phone's wide picture, it turns from the basket's padded
-      // arm and base beside it rather than holding them up its side (they were half the picture's side): the ball stays in it
-      const op = new Operator();
-      const s = shot();
-      for (let i = 0; i < 300; i++) op.aim('low', { ball: { x: rimX - 20, y: 4, z: -12 }, men: set, n: 10, end: 1, aspect: 2.3, near: 0, tight: 0 }, 16, false, s);
-      expect(Math.abs(seen(s, 2.3, rimX - 20, 4, -12).x)).toBeLessThan(0.5);
-      for (const [b, y] of [
-        [10.75, 2.2],
-        [11.4, 3.7],
-      ])
-        expect(Math.abs(seen(s, 2.3, rimX + b, y, 0).x), `arm at ${b}`).toBeGreaterThan(1.5);
+      // and a shot from anywhere in the half, the corners first: the shooter head to foot, the ball from his gather to
+      // over his head and the rim are all in the picture, moving and with reduced motion, in every shape of frame, and
+      // the picture is an ordinary one (the camera stood beside the basket: the near corner and the rim were a right
+      // angle apart from it, 140 to 158 degrees top to bottom when it held them, and its still did not hold them)
+      const across = (fov: number, aspect: number) => (2 * Math.atan(Math.tan((fov * Math.PI) / 360) * aspect) * 180) / Math.PI;
+      const spots = [
+        [rimX + 2.7, 22.3],
+        [rimX + 4.2, 23.5],
+        [rimX + 2.7, -22.3],
+        [rimX + 4.2, -23.5],
+        [rimX - 6, 22.3],
+        [rimX - 15, 17],
+        [rimX - 15, -17],
+        [rimX - 24, 0],
+        [rimX - 2, 14],
+        [rimX - 4, 2],
+      ];
+      for (const aspect of [2.16, 1.78, 1.3, 1])
+        for (const [x, z] of spots)
+          for (const calm of [false, true]) {
+            const op = new Operator();
+            const s = shot();
+            const far = Math.hypot(rimX - x, z);
+            const men = [x, z, x + ((rimX - x) / far) * 3.5, z - (z / far) * 3.5, ...set.slice(4)];
+            for (const by of [4, 9.5]) {
+              for (let i = 0; i < 240; i++) op.aim('low', { ball: { x, y: by, z }, men, n: 10, end: 1, aspect, near: 0, tight: 0 }, 16, calm, s);
+              for (const [px, py, pz] of [
+                [x, 0, z],
+                [x, 7, z],
+                [x, by, z],
+                [rimX, 10, 0],
+              ]) {
+                const p = seen(s, aspect, px, py, pz);
+                expect(p.d).toBeGreaterThan(4);
+                expect(Math.max(Math.abs(p.x), Math.abs(p.y)), `${aspect} ${calm ? 'still' : 'moving'}: shot from ${x}, ${z} holds ${px}, ${py}, ${pz}`).toBeLessThan(1);
+              }
+              expect(s.fov, `${aspect} ${calm ? 'still' : 'moving'}: shot from ${x}, ${z}`).toBeLessThan(aspect < 1.2 && calm ? 70 : 56);
+              expect(across(s.fov, aspect)).toBeLessThan(96);
+            }
+            // (and the rim is seen beside its board, not through the board's pads; he is never right at the lens)
+            expect(fenced(s.px, s.py, s.pz, rimX, 10, 0)).toBe(false);
+            expect(Math.hypot(s.px - x, s.pz - z)).toBeGreaterThan(12);
+          }
     }
     // the ball's flight: every shot starts in the hand, a make ends under the net and a miss never goes down through the
     // ring, whichever way it ends; a jumper spins back; the rim rings and comes to rest

@@ -7,7 +7,8 @@
 //   and the stands over it; on a break it goes with the ball and looks ahead of it, wider.
 // - Sideline: lower and closer, on a dolly along the near side, on the men round the ball.
 // - End zone: high behind the offense's own basket, the play going away from it (the coach's view).
-// - Baseline: on the floor behind the baseline of the end being attacked, beside the basket, the play coming at it.
+// - Baseline: on the floor in the near corner of the end being attacked, just past its baseline, looking along it:
+//   every place a shot is taken from and the rim it is taken at are in front of it, none of them beside it.
 // - Overhead: over the floor, nearly straight down.
 //
 // Each frames what it is shown (`View`: the ball, the men, the end being attacked): the picture that holds
@@ -19,6 +20,7 @@
 // And where a close camera (a cut-in, a replay's) may stand: where nobody is in front of its man (`blocked`,
 // `clearSeat`) and no part of a basket's unit, its arm, its board's frame and pads, its shot clock (`fenced`).
 import { BASKET, COURT_LEN } from '../choreo';
+import { HALF_W } from '../Court';
 
 export type CamKind = 'tv' | 'side' | 'end' | 'low' | 'top';
 export const CAM_KINDS: readonly CamKind[] = ['tv', 'side', 'end', 'low', 'top'];
@@ -62,6 +64,8 @@ const RIM_X = MID - BASKET.y;
 /** A man's head (ft), with room over it; the top of a backboard, and its clocks. */
 const HEAD = 7.6;
 const BOARD_TOP = 14.2;
+/** A ball over a shooter's head as it leaves his hand (ft). */
+const RELEASE = 10.5;
 /** A frame this shape or squarer is a phone held upright: its cameras stand higher and frame tighter. */
 export const TALL = 1.5;
 /**
@@ -79,17 +83,17 @@ const TALL_SKY = -0.2;
  */
 const THIN = 0.3;
 /**
- * The floor's camera stands this far along the floor from the middle (ft: in the photographers' row, sideline.ts, between
- * two of them), this high (over their heads, the board over it and the play in one picture), this far off the middle across.
+ * The floor's camera stands this far along the floor from the middle, this high, this far across (ft): the near corner,
+ * past the baseline and the end of the chairs along the near side (bowl.ts leaves that place free). A stand beside the
+ * basket has the near corner on one side of it and the rim on the other, a right angle apart: a shot from that corner
+ * was a fish-eye or was not in the picture. From here the whole half is in front of the lens: a shooter anywhere in it
+ * and the rim are under 45 degrees apart, he is never nearer than 12 ft (head to foot with the ball over him is 40
+ * degrees at most), the rim is seen beside its board, not through the board's pads, and the basket's arm is in front of
+ * next to nothing a man shoots from (choreo.test.ts holds it to all of that).
  */
-const LOW = [MID + 7.5, 6, 14.3];
+export const LOW = [MID + 4, 6, 35.3];
 /** A backboard's half width (ft): the picture holds its top corners. */
 const BOARD_HALF = 3;
-/**
- * But a tall picture from there holds the board only this high (ft: its rim, and a little over it), by the time it is
- * TALL_SPAN squarer than TALL: the whole board right over the lens, with the men across it, is a picture of the roof.
- */
-const LOW_TALL = 11;
 /** The near side's seats end here (z), this high with the people in them: past them there is nothing built. */
 export const NEAR_EDGE = 42.5;
 export const NEAR_TOP = 8.5;
@@ -117,7 +121,7 @@ const RIGS: Record<CamKind, Rig> = {
   tv: { reach: [27, 54], rim: [36, 58], cover: [50, 112], coverTall: [40, 104], pad: [0.07, 0.16, 0.1], sky: 0.45, ball: 0.5, follow: 0.5, zoom: 1.3 },
   side: { reach: [17, 36], rim: [23, 34], cover: [36, 80], coverTall: [29, 70], pad: [0.12, 0.2, 0.2], sky: 0.3, ball: 0.7, follow: 0.42, zoom: 1.1 },
   end: { reach: [60, 110], rim: [80, 120], cover: [56, 70], coverTall: [50, 62], pad: [0.08, 0.14, 0.08], sky: 0.2, ball: 0.3, follow: 0.7, zoom: 1.6 },
-  low: { reach: [15, 34], rim: [24, 38], cover: [20, 60], coverTall: [16, 50], pad: [0.16, 0.22, 0.1], sky: 0.4, ball: 0.7, follow: 0.4, zoom: 1.1 },
+  low: { reach: [15, 34], rim: [34, 48], cover: [20, 60], coverTall: [16, 50], pad: [0.1, 0.04, 0.08], sky: 0, ball: 0.7, follow: 0.4, zoom: 1.1 },
   top: { reach: [27, 54], rim: [36, 58], cover: [52, 100], coverTall: [42, 96], pad: [0.08, 0.06, 0.06], sky: 0, ball: 0, follow: 0.6, zoom: 1.4 },
 };
 
@@ -173,19 +177,18 @@ export function gather(kind: CamKind, v: View, lead: number, pts: number[]): num
   const room = round ? 4 : 7;
   put(b.x - room, 0, b.z);
   put(b.x + room, 0, b.z);
-  // (a shot's flight is the high cameras' to follow: from the floor it would be a picture of the roof)
-  put(b.x, Math.min(b.y, kind === 'low' ? 11 : 19) + 0.8, b.z);
+  // (the ball's flight too. And the floor's camera always has room for the ball over the head of whoever has it: a shot
+  // is up and gone in a third of a second, sooner than a picture widens, and from 12 ft that was its top edge. From its
+  // corner a shot flies away from it, so its arc is little higher in the picture than its release was)
+  put(b.x, Math.max(kind === 'low' ? RELEASE : 0, Math.min(b.y, 19) + 0.8), b.z);
   if (lead) put(clamp(b.x + lead, -MID, MID), 3, b.z);
   if (v.end) {
     const rx = v.end * RIM_X;
     const far = round ? Math.hypot(rx - b.x, b.z) : Math.abs(rx - b.x);
     const w = 1 - smooth(clamp((far - rig.rim[0]) / (rig.rim[1] - rig.rim[0]), 0, 1));
-    // (the floor's camera, under the board, in a tall picture: only up to the rim, not the board over it, LOW_TALL)
-    const top = kind === 'low' ? BOARD_TOP + (LOW_TALL - BOARD_TOP) * smooth(clamp((TALL - v.aspect) / TALL_SPAN, 0, 1)) : BOARD_TOP;
-    put(b.x + (rx - b.x) * w, 3 + (top - 3) * w, b.z * (1 - w) - BOARD_HALF * w);
-    put(b.x + (rx - b.x) * w, 3 + (top - 3) * w, b.z * (1 - w) + BOARD_HALF * w);
-    // (and the baseline under it: the picture ends past the basket, not on it; the floor's camera is past it already, and
-    // the floor at its feet would turn it down onto the photographers by it)
+    put(b.x + (rx - b.x) * w, 3 + (BOARD_TOP - 3) * w, b.z * (1 - w) - BOARD_HALF * w);
+    put(b.x + (rx - b.x) * w, 3 + (BOARD_TOP - 3) * w, b.z * (1 - w) + BOARD_HALF * w);
+    // (and the baseline under it: the picture ends past the basket, not on it; the floor's camera looks along it already)
     if (kind !== 'low') put(b.x + (v.end * (MID + 1.5) - b.x) * w, 3 - 3 * w, b.z * (1 - w));
   }
   return n;
@@ -194,7 +197,7 @@ export function gather(kind: CamKind, v: View, lead: number, pts: number[]): num
 /**
  * The picture from (px, py, pz) that holds the `n` numbers of `pts` with the rig's room round them, no
  * tighter and no wider than it goes. `bx`, `bz`: where the ball is on the floor (the spare room across
- * goes to it).
+ * goes to it). `whole`: all of them, however wide that is (a still: nobody is let go of out at its sides).
  */
 export function fit(
   kind: CamKind,
@@ -208,6 +211,7 @@ export function fit(
   bz: number,
   squeeze: number,
   out: Shot,
+  whole = false,
 ): Shot {
   const rig = RIGS[kind];
   const tall = aspect < TALL;
@@ -264,14 +268,13 @@ export function fit(
   const least = (lo * thin * (1 - 0.1 * squeeze)) / 2 / depth / aspect;
   const most = hi / 2 / depth / aspect;
   // (the most only ever lets go of men out to the sides: what it holds up and down, the ball's flight, a head, is never cut)
-  const tanV = Math.max(least, halfY, Math.min(halfX / aspect, Math.max(least, most)));
+  const tanV = Math.max(least, halfY, whole ? halfX / aspect : Math.min(halfX / aspect, Math.max(least, most)));
   // the spare room: across, toward the ball; up and down, over the play or under it
   const spareX = Math.max(0, tanV * aspect - halfX);
   const spareY = Math.max(0, tanV - halfY);
   const cx = (x0 + x1) / 2;
   const cy = (y0 + y1) / 2;
-  // (the floor's camera keeps the play in the middle of a tall one: under it is the floor at its feet and the
-  // photographers by it, over it the roof)
+  // (the floor's camera keeps the play in the middle of a tall one: under it is the floor at its feet, over it the roof)
   turn(cx + clamp((tx - cx) * rig.ball, -spareX, spareX), cy + spareY * (!tall ? rig.sky : kind === 'low' ? 0 : TALL_SKY));
   measure();
   // (never under the near side's seats, where nothing is built: the picture's foot stays on them)
@@ -575,14 +578,35 @@ function halfPts(half: -1 | 1, pts: number[]): number {
 }
 
 /**
- * The floor's camera stands beside the half it shoots, a few feet from its corners: a picture that held those corners
- * would be a fish-eye (163 degrees top to bottom on a phone, the men a strip across it). Its still is the picture it
- * settles on for a set half court instead, its own framing: the ball at the top of the key, five out and five on
- * them (ft from the middle of the floor along it, across), the rim and its board.
+ * The floor's camera's still of its own half: everywhere a shot is taken from in it (out to this far from the rim, ft,
+ * and to this near the sidelines and the baseline), a man there head to foot with the ball over his head, and the rim
+ * and its board. From its corner (LOW) that is one picture of ordinary width, so with reduced motion no shooter, no
+ * release and no rim is ever outside it.
  */
-const STILL_SET = [20, 0, 30, 20, 30, -20, 44, 22, 40, -6, 24, 0, 33, 16, 33, -16, 42, 17, 41, -3];
-const STILL_MEN = new Float32Array(STILL_SET.length);
-const STILL_VIEW: View = { ball: { x: 0, y: 4, z: 0 }, men: STILL_MEN, n: STILL_SET.length / 2, end: 1, aspect: 1, near: 0, tight: 0 };
+const GROUND = [28, HALF_W - 1, 1.5];
+function groundPts(half: -1 | 1, pts: number[]): number {
+  let n = 0;
+  const man = (x: number, z: number) => {
+    for (const y of [0, RELEASE]) {
+      pts[n++] = half * x;
+      pts[n++] = y;
+      pts[n++] = z;
+    }
+  };
+  // (its edge: round the arc from one corner to the other, and along the baseline between them)
+  for (let i = 0; i <= 16; i++) {
+    const a = (i / 16 - 0.5) * Math.PI;
+    const z = clamp(Math.sin(a) * GROUND[0], -GROUND[1], GROUND[1]);
+    man(Math.min(RIM_X - Math.cos(a) * GROUND[0], MID - GROUND[2]), z);
+    man(MID - GROUND[2], z);
+  }
+  for (const z of [-BOARD_HALF, BOARD_HALF]) {
+    pts[n++] = half * (RIM_X + 1.25);
+    pts[n++] = BOARD_TOP;
+    pts[n++] = z;
+  }
+  return n;
+}
 /** And no still is ever wider than this top to bottom (degrees), whatever it was asked to hold. */
 const STILL_WIDEST = 80;
 
@@ -599,76 +623,6 @@ const CALM_OVER = 5;
  * sides for a second, and a game paused at the time would keep that picture).
  */
 const RESHAPE = 0.02;
-
-/**
- * The floor's camera keeps its picture's side this far (a share of the half picture across) clear of a basket's arm,
- * and the ball no farther out than this toward it (it has room to go on into), the rim and its board's corners this.
- */
-const ARM_CLEAR = 0.04;
-const KEEP_IN = [0.5, 0.72];
-/** And turns at most this far (radians) to do it. */
-const ARM_TURN = 0.6;
-// (the arm and its base as points, x, y, z each, and where they are in the picture: see clearArm)
-const ARM_PTS: number[] = [];
-
-/**
- * The floor's camera stands beside a basket's post: the play out on the floor (a ball brought up, men spread
- * wide) is a wide picture with the padded arm and base up its side. The picture turns away from them (`s`, in
- * place) as far as the ball, and the rim while the ball is near it, can go and stay inside it: what is behind the
- * arm is not seen anyway, and the picture is the play's, not the steel's.
- */
-function clearArm(s: Shot, aspect: number, b: { x: number; y: number; z: number }, end: -1 | 1) {
-  let n = 0;
-  for (let i = 0; i <= 4; i++) {
-    const t = (ARM.long * i) / 4;
-    ARM_PTS[n++] = end * (RIM_X + ARM.b + ARM.db * t);
-    ARM_PTS[n++] = ARM.y + ARM.dy * t;
-    ARM_PTS[n++] = 0;
-  }
-  for (const k of [UNIT[0][0], UNIT[0][1]]) [ARM_PTS[n++], ARM_PTS[n++], ARM_PTS[n++]] = [end * (RIM_X + k), UNIT[0][3], 0];
-  // (which side of the picture the unit is on, and the nearest of it to the middle; and the farthest toward it of the
-  // ball and, with the ball near it, the rim and its board's top corners, which stay in)
-  const [fx, fz] = [s.lx - s.px, s.lz - s.pz];
-  const T = TURNED;
-  Object.assign(T, s);
-  const rim = Math.hypot(end * RIM_X - b.x, b.z) < RIGS.low.rim[0] + 8;
-  const at = (yaw: number, side: number) => {
-    T.lx = s.px + fx * Math.cos(yaw) - fz * Math.sin(yaw);
-    T.lz = s.pz + fx * Math.sin(yaw) + fz * Math.cos(yaw);
-    let [near, keep] = [Infinity, -Infinity];
-    for (let i = 0; i < n; i += 3) {
-      const p = seen(T, aspect, ARM_PTS[i], ARM_PTS[i + 1], ARM_PTS[i + 2]);
-      if (p.d > 0 && Math.abs(p.y) < 1.2 && Math.abs(p.x) < Math.abs(near)) near = p.x;
-    }
-    const k = (x: number, y: number, z: number, most: number) => {
-      const p = seen(T, aspect, x, y, z);
-      if (p.d > 0) keep = Math.max(keep, side * p.x - most);
-    };
-    k(b.x, b.y, b.z, KEEP_IN[0]);
-    k(b.x, 0, b.z, KEEP_IN[0]);
-    if (rim) for (const z of [-BOARD_HALF, 0, BOARD_HALF]) k(end * (RIM_X + 1.25), z ? BOARD_TOP - 0.7 : 10, z, KEEP_IN[1]);
-    return [near, keep];
-  };
-  const [near] = at(0, 1);
-  if (!Number.isFinite(near) || Math.abs(near) >= 1 + ARM_CLEAR) return;
-  const side = Math.sign(near);
-  // (the way to turn that moves the unit out of the picture's side)
-  const way = Math.abs(at(0.01, side)[0]) > Math.abs(near) ? 1 : -1;
-  // the least turn that clears it, and no more than keeps the ball (and the rim) in: halving the step each time
-  let [lo, hi] = [0, ARM_TURN];
-  if (at(way * hi, side)[1] <= 0 && side * at(way * hi, side)[0] < 1 + ARM_CLEAR) lo = hi;
-  else
-    for (let i = 0; i < 12; i++) {
-      const mid = (lo + hi) / 2;
-      const [x, keep] = at(way * mid, side);
-      if (keep <= 0 && side * x < 1 + ARM_CLEAR) lo = mid;
-      else hi = mid;
-    }
-  if (lo <= 0) return;
-  if (at(way * lo, side)[1] > 0) return;
-  [s.lx, s.lz] = [T.lx, T.lz];
-}
-const TURNED = shot();
 
 /** The operator on the camera the user chose: he is shown the play each frame and says where the camera is. */
 export class Operator {
@@ -714,14 +668,9 @@ export class Operator {
       if (half !== this.half) cut = true;
       this.half = half;
       const w = mount(kind, v.aspect, half * 24, end, this.want);
-      if (kind === 'low' && half === end) {
-        // (its own half: the set half court as it frames one, see STILL_SET)
-        const set = STILL_VIEW;
-        for (let i = 0; i < STILL_SET.length; i += 2) [STILL_MEN[i], STILL_MEN[i + 1]] = [half * STILL_SET[i], STILL_SET[i + 1]];
-        [set.ball.x, set.end, set.aspect] = [half * STILL_SET[0], half, v.aspect];
-        fit(kind, w.px, w.py, w.pz, this.pts, gather(kind, set, 0, this.pts), v.aspect, set.ball.x, 0, 0, out);
-        clearArm(out, v.aspect, set.ball, half);
-      } else fit(kind, w.px, w.py, w.pz, this.pts, halfPts(half, this.pts), v.aspect, half * 24, 0, 0, out);
+      // (the floor's camera, its own half: all of the ground a shot is taken from, see groundPts)
+      if (kind === 'low' && half === end) fit(kind, w.px, w.py, w.pz, this.pts, groundPts(half, this.pts), v.aspect, half * 30, 0, 0, out, true);
+      else fit(kind, w.px, w.py, w.pz, this.pts, halfPts(half, this.pts), v.aspect, half * 24, 0, 0, out);
       out.fov = Math.min(out.fov, STILL_WIDEST);
       this.on = false;
       this.still = true;
@@ -738,7 +687,6 @@ export class Operator {
     this.px.v = cut ? 0 : this.px.v;
     const n = gather(kind, v, Math.abs(lead) > 1.5 ? lead : 0, this.pts);
     fit(kind, this.px.x, w.py, w.pz, this.pts, n, v.aspect, b.x, b.z, clamp(v.near + v.tight * 0.8, 0, 1.6) - 3 * clamp((Math.abs(this.vx) - 8) / 22, 0, 1), w);
-    if (kind === 'low') clearArm(w, v.aspect, b, end);
     if (!cut && Math.hypot(w.lx - this.lx.x, w.lz - this.lz.x) > JUMP) cut = true;
     if (cut) {
       [this.lx.x, this.ly.x, this.lz.x, this.fov.x] = [w.lx, w.ly, w.lz, w.fov];

@@ -57,6 +57,7 @@ import { I } from '../../../src/ui/live/court3d/clips';
 import { Fig, type Geo } from '../../../src/ui/live/court3d/figure';
 import { BALL, BALL_R, bodyOf, elbowPole, HEEL, HIP, J, Puppet, type Drive, type V3 } from '../../../src/ui/live/court3d/puppet';
 import type { Gesture } from '../../../src/ui/live/court3d/clips';
+import { LOW } from '../../../src/ui/live/court3d/cameras';
 import { CourtScene, loadModels } from '../../../src/ui/live/court3d/scene';
 import { ballIn, clearance, into, PARTS, SHAPES, sunk } from '../../../src/ui/live/court3d/spacing';
 import { matchKits } from '../../../src/ui/teamColors';
@@ -1687,8 +1688,9 @@ async function film({
   lead = 2,
   world = null as number[] | null,
   faced = false,
+  calm = false,
 } = {}) {
-  const c = new Clock(speed);
+  const c = new Clock(speed, calm);
   // (`lead`: how many possessions before it are played first; all of them, from the tip, and it is the game as `measure` and `when` play it)
   if ((tip && k === 0) || lead >= k) c.tipMs = 0;
   const start = Math.max(0, k - lead);
@@ -4301,7 +4303,7 @@ function rimSight({ speed = 1, near = 2.4, round = 5, view = 'tv', only = '' } =
       if (k === 0) c.tipMs = 0;
       // (where each camera stands: cameras.ts mount())
       const end = w({ x: 0, y: 5.25 }, sc.dir).y < 47 ? -1 : 1;
-      const cam = view === 'low' ? [end * 54.5, 6, 14.3] : view === 'side' ? [end * 30, 13, 50] : view === 'end' ? [-end * 77, 36, 0] : [0, 36, 81];
+      const cam = view === 'low' ? [end * LOW[0], LOW[1], LOW[2]] : view === 'side' ? [end * 30, 13, 50] : view === 'end' ? [-end * 77, 36, 0] : [0, 36, 81];
       let hid = 0;
       let seen = 0;
       let crowdHere = 0;
@@ -4375,6 +4377,77 @@ function rimSight({ speed = 1, near = 2.4, round = 5, view = 'tv', only = '' } =
     }
   });
   out.ring = Math.round((out.ring / Math.max(1, out.after)) * 100) / 100;
+  return out;
+}
+
+/**
+ * Every jump shot of the game as the camera `view` shows it in a picture `w` by `h` (`calm`: reduced motion), from the
+ * frame he goes up in to the ball a third of the way through its flight: the frames in which his feet, his head, the ball or the
+ * rim is outside the picture (`out`, by which), the shots with any such frame, and how wide the picture went (degrees
+ * top to bottom and across). By where he shot from: the camera's own corner (`near`), the other (`far`), elsewhere.
+ */
+function shotSight({ view = 'low', calm = false, w: pw = 844, h: ph = 390, speed = 1 } = {}) {
+  const zone = () => ({ shots: 0, lost: 0, frames: 0, out: 0, by: {} as Record<string, number>, fov: 0, across: 0, worst: [] as string[] });
+  const out = { near: zone(), far: zone(), rest: zone() };
+  const cam = inner.camera as PerspectiveCamera;
+  const at = new Vector3();
+  scene.size(pw, ph, 1);
+  const was = (props as { cam?: string }).cam;
+  (props as { cam?: string }).cam = view;
+  scripts.forEach((sc, k) => {
+    const pids = [...sc.oPids, ...sc.dPids];
+    for (let i = 1; i < sc.frames.length; i++) {
+      const j = sc.frames[i - 1].act.findIndex((a) => a === 'jumper');
+      if (j < 0 || !sc.frames[i].fx) continue;
+      const c = new Clock(speed, calm);
+      c.k = Math.max(0, k - 1);
+      if (k === 0) c.tipMs = 0;
+      const end = w({ x: 0, y: 5.25 }, sc.dir).y < 47 ? -1 : 1;
+      let z: ReturnType<typeof zone> | null = null;
+      let bad = 0;
+      while (c.k <= k && c.finalMs < 0) {
+        c.step();
+        if (c.k !== k) continue;
+        const pl = c.stage.play;
+        const me = inner.figs.get(pids[j]);
+        if (!pl || !me || !(pl.i === i - 1 || (pl.i === i && pl.u < 0.3))) continue;
+        // (the camera that follows the play, not a cut-in or a replay)
+        if ((inner as unknown as { shot: string }).shot !== 'main') continue;
+        if (!z) {
+          z = Math.abs(me.pup.z) > 19 && end * me.pup.x > 30 ? (me.pup.z > 0 ? out.near : out.far) : out.rest;
+          z.shots++;
+        }
+        cam.updateMatrixWorld();
+        const head = me.pup.world(me.pup.j[J.head * 3], me.pup.j[J.head * 3 + 1], me.pup.j[J.head * 3 + 2], new Vector3());
+        const what: [string, number, number, number][] = [
+          ['feet', me.pup.x, 0.2, me.pup.z],
+          ['head', head.x, head.y, head.z],
+          ['ball', inner.ball.x, inner.ball.y, inner.ball.z],
+          ['rim', end * 41.75, 10, 0],
+        ];
+        z.frames++;
+        let lost = false;
+        for (const [name, x, y, zz] of what) {
+          at.set(x, y, zz).project(cam);
+          if (Math.abs(at.x) > 1 || Math.abs(at.y) > 1 || at.z > 1) {
+            z.by[name] = (z.by[name] ?? 0) + 1;
+            lost = true;
+          }
+        }
+        if (lost) {
+          z.out++;
+          bad++;
+        }
+        const across = (2 * Math.atan(Math.tan((cam.fov * Math.PI) / 360) * cam.aspect) * 180) / Math.PI;
+        if (cam.fov > z.fov) [z.fov, z.across] = [Math.round(cam.fov * 10) / 10, Math.round(across * 10) / 10];
+      }
+      if (z && bad) {
+        z.lost++;
+        if (z.worst.length < 6) z.worst.push(`k${k} i${i} p${pids[j]} ${bad}`);
+      }
+    }
+  });
+  (props as { cam?: string }).cam = was;
   return out;
 }
 
@@ -4484,6 +4557,7 @@ function brief(o: Parameters<typeof measure>[0] = {}) {
   quick,
   brief,
   rimSight,
+  shotSight,
   replayFilm,
   snaps,
   dribbles,
