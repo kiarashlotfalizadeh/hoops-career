@@ -4387,13 +4387,17 @@ function rimSight({ speed = 1, near = 2.4, round = 5, view = 'tv', only = '' } =
  * top to bottom and across). By where he shot from: the camera's own corner (`near`), the other (`far`), elsewhere.
  */
 function shotSight({ view = 'low', calm = false, w: pw = 844, h: ph = 390, speed = 1 } = {}) {
-  const zone = () => ({ shots: 0, lost: 0, frames: 0, out: 0, by: {} as Record<string, number>, fov: 0, across: 0, worst: [] as string[] });
+  const zone = () => ({ shots: 0, lost: 0, frames: 0, out: 0, by: {} as Record<string, number>, fov: 0, across: 0, worst: [] as string[], held: 0, zoomStep: 0, turnStep: 0 });
   const out = { near: zone(), far: zone(), rest: zone() };
   const cam = inner.camera as PerspectiveCamera;
   const at = new Vector3();
   scene.size(pw, ph, 1);
   const was = (props as { cam?: string }).cam;
   (props as { cam?: string }).cam = view;
+  // (how hard the picture moved between two frames: its zoom (degrees) and its look (degrees); and the operator's hold)
+  const op = (inner as unknown as { op: { holds: number } }).op;
+  const look = new Vector3();
+  const lookWas = new Vector3();
   scripts.forEach((sc, k) => {
     const pids = [...sc.oPids, ...sc.dPids];
     for (let i = 1; i < sc.frames.length; i++) {
@@ -4405,7 +4409,9 @@ function shotSight({ view = 'low', calm = false, w: pw = 844, h: ph = 390, speed
       const end = w({ x: 0, y: 5.25 }, sc.dir).y < 47 ? -1 : 1;
       let z: ReturnType<typeof zone> | null = null;
       let bad = 0;
+      let fovWas = -1;
       while (c.k <= k && c.finalMs < 0) {
+        const holds = op.holds;
         c.step();
         if (c.k !== k) continue;
         const pl = c.stage.play;
@@ -4418,6 +4424,14 @@ function shotSight({ view = 'low', calm = false, w: pw = 844, h: ph = 390, speed
           z.shots++;
         }
         cam.updateMatrixWorld();
+        if (op.holds > holds) z.held++;
+        cam.getWorldDirection(look);
+        if (fovWas >= 0) {
+          z.zoomStep = Math.max(z.zoomStep, Math.round(Math.abs(cam.fov - fovWas) * 100) / 100);
+          z.turnStep = Math.max(z.turnStep, Math.round(((look.angleTo(lookWas) * 180) / Math.PI) * 100) / 100);
+        }
+        fovWas = cam.fov;
+        lookWas.copy(look);
         const head = me.pup.world(me.pup.j[J.head * 3], me.pup.j[J.head * 3 + 1], me.pup.j[J.head * 3 + 2], new Vector3());
         const what: [string, number, number, number][] = [
           ['feet', me.pup.x, 0.2, me.pup.z],

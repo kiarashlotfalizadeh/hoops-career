@@ -12,10 +12,15 @@
 // - Overhead: over the floor, nearly straight down.
 //
 // Each frames what it is shown (`View`: the ball, the men, the end being attacked): the picture that holds
-// them with room round them (`fit`), no tighter and no wider than that camera goes. The operator then
-// gets there as a hand does: he eases in and settles (a spring with no bounce in it), widens at once and
-// tightens slowly, and is never asked to jump (a man who leaves the play is let go of gradually, not
-// dropped). Reduced motion: no pans at all, each half of the floor its own still picture and a cut between.
+// them with room round them (`fit`), no tighter and no wider than that camera goes. Some of it is never let go
+// of (`musts`): the ball, where the play is taking it next (a shot's flight from before it is up), the man with
+// it and, from the floor, the rim. The others are let go of at a picture's sides when they are too far apart for
+// it; those never are. The operator then gets there as a hand does: he eases in and settles (a spring with no
+// bounce in it), widens at once and tightens slowly, and is never asked to jump (a man who leaves the play is let
+// go of gradually, not dropped). His time is the play's, not the clock's: at 2x the picture is the 1x one played
+// twice as fast, never one that trails the play twice as far. And whatever the easing, the picture he gives holds
+// what it must, inside its edges (`hold`): a ball that would go out of it turns it, or opens it out, that frame.
+// Reduced motion: no pans at all, each half of the floor its own still picture and a cut between.
 //
 // And where a close camera (a cut-in, a replay's) may stand: where nobody is in front of its man (`blocked`,
 // `clearSeat`) and no part of a basket's unit, its arm, its board's frame and pads, its shot clock (`fenced`).
@@ -57,12 +62,22 @@ export interface View {
   /** 0..1: the ball is at the basket (the picture comes in a little), and clutch time (a little more). */
   near: number;
   tight: number;
+  /**
+   * Where the play takes the ball next (x, y, z each, `pathN` numbers): its way over the next little while, a shot's
+   * flight from before it leaves his hand. A shot is up and gone sooner than a picture opens out; this one is there first.
+   */
+  path?: ArrayLike<number>;
+  pathN?: number;
+  /** Whom the picture never lets go of (x, y, z each, `keepN` numbers): the man with the ball, a shooter until his shot is down; his feet and his head. */
+  keep?: ArrayLike<number>;
+  keepN?: number;
 }
 
 const MID = COURT_LEN / 2;
 const RIM_X = MID - BASKET.y;
-/** A man's head (ft), with room over it; the top of a backboard, and its clocks. */
+/** A man's head (ft), with room over it; the rim; the top of a backboard, and its clocks. */
 const HEAD = 7.6;
+const RIM_Y = 10;
 const BOARD_TOP = 14.2;
 /** A ball over a shooter's head as it leaves his hand (ft). */
 const RELEASE = 10.5;
@@ -94,6 +109,16 @@ const THIN = 0.3;
 export const LOW = [MID + 4, 6, 35.3];
 /** A backboard's half width (ft): the picture holds its top corners. */
 const BOARD_HALF = 3;
+/** The ball is held with this much room over and under its middle (ft): all of it, not half of it at an edge. */
+const BALL_ROOM = 0.8;
+/**
+ * What a picture must hold is framed inside this share of it from its middle to each edge (`fit`), and whatever the
+ * easing, never let outside this share (`hold`: the rest is the hand on a carried camera); the room between is what the
+ * operator may lag by before the hold has to act. To hold it, a picture opens out to this at the most (degrees top to bottom).
+ */
+const ROOM = 0.78;
+const HOLD = 0.9;
+const HOLD_MOST = 100;
 /** The near side's seats end here (z), this high with the people in them: past them there is nothing built. */
 export const NEAR_EDGE = 42.5;
 export const NEAR_TOP = 8.5;
@@ -147,22 +172,51 @@ export function mount(kind: CamKind, aspect: number, x: number, end: -1 | 0 | 1,
 }
 
 /**
- * The points a camera is to hold (x, y, z each, into `pts`; how many numbers): each man's feet and head,
- * the ball and the floor under it, the floor `lead` ft ahead of it, the basket being attacked and the top
- * corners of its board. A man far from the ball counts for less the farther he is (he is drawn in toward it), so
- * nobody enters or leaves the picture's sums in one frame.
+ * What a picture must hold, into `pts` from `n` on (x, y, z each; how far it got): the ball with room over and under
+ * it, whom it keeps (View.keep) and, from the floor, the rim being attacked while the play is anywhere near it (drawn
+ * in toward the ball as the play goes away from it, so it never leaves the sums in one frame).
  */
-export function gather(kind: CamKind, v: View, lead: number, pts: number[]): number {
-  const rig = RIGS[kind];
-  // (a picture taller than it is wide holds the men nearer the ball, THIN)
-  const thin = 1 - THIN * clamp((1 - v.aspect) / 0.5, 0, 1);
+export function musts(kind: CamKind, v: View, pts: number[], n = 0): number {
   const b = v.ball;
-  let n = 0;
   const put = (x: number, y: number, z: number) => {
     pts[n++] = x;
     pts[n++] = y;
     pts[n++] = z;
   };
+  put(b.x, b.y + BALL_ROOM, b.z);
+  put(b.x, Math.max(0, b.y - BALL_ROOM), b.z);
+  const keep = v.keep ?? [];
+  for (let i = 0; i + 2 < (v.keepN ?? 0); i += 3) put(keep[i], keep[i + 1], keep[i + 2]);
+  if (kind === 'low' && v.end) {
+    const rig = RIGS.low;
+    const rx = v.end * RIM_X;
+    const w = 1 - smooth(clamp((Math.hypot(rx - b.x, b.z) - rig.rim[0]) / (rig.rim[1] - rig.rim[0]), 0, 1));
+    put(b.x + (rx - b.x) * w, b.y + (RIM_Y - b.y) * w, b.z * (1 - w));
+  }
+  return n;
+}
+
+/**
+ * The points a camera is to hold (x, y, z each, into `pts`; how many numbers in all, `got.n`, the first `got.m` of
+ * them what it must: `musts`, and where the ball is going, View.path): each man's feet and head, the floor either
+ * side of the ball, the floor `lead` ft ahead of it, the basket being attacked and the top corners of its board. A
+ * man far from the ball counts for less the farther he is (he is drawn in toward it), so nobody enters or leaves the
+ * picture's sums in one frame.
+ */
+export function gather(kind: CamKind, v: View, lead: number, pts: number[], got: { n: number; m: number }) {
+  const rig = RIGS[kind];
+  // (a picture taller than it is wide holds the men nearer the ball, THIN)
+  const thin = 1 - THIN * clamp((1 - v.aspect) / 0.5, 0, 1);
+  const b = v.ball;
+  let n = musts(kind, v, pts);
+  const put = (x: number, y: number, z: number) => {
+    pts[n++] = x;
+    pts[n++] = y;
+    pts[n++] = z;
+  };
+  const path = v.path ?? [];
+  for (let i = 0; i + 2 < (v.pathN ?? 0); i += 3) put(path[i], path[i + 1], path[i + 2]);
+  got.m = n;
   // (the sideline's and the floor's cameras are on the men round the ball; the others on where it is along the floor)
   const round = kind === 'side' || kind === 'low';
   for (let i = 0; i < v.n; i++) {
@@ -177,10 +231,8 @@ export function gather(kind: CamKind, v: View, lead: number, pts: number[]): num
   const room = round ? 4 : 7;
   put(b.x - room, 0, b.z);
   put(b.x + room, 0, b.z);
-  // (the ball's flight too. And the floor's camera always has room for the ball over the head of whoever has it: a shot
-  // is up and gone in a third of a second, sooner than a picture widens, and from 12 ft that was its top edge. From its
-  // corner a shot flies away from it, so its arc is little higher in the picture than its release was)
-  put(b.x, Math.max(kind === 'low' ? RELEASE : 0, Math.min(b.y, 19) + 0.8), b.z);
+  // (and from the floor, room for the ball over the head of whoever has it, shot coming or not)
+  if (kind === 'low') put(b.x, RELEASE, b.z);
   if (lead) put(clamp(b.x + lead, -MID, MID), 3, b.z);
   if (v.end) {
     const rx = v.end * RIM_X;
@@ -191,13 +243,14 @@ export function gather(kind: CamKind, v: View, lead: number, pts: number[]): num
     // (and the baseline under it: the picture ends past the basket, not on it; the floor's camera looks along it already)
     if (kind !== 'low') put(b.x + (v.end * (MID + 1.5) - b.x) * w, 3 - 3 * w, b.z * (1 - w));
   }
-  return n;
+  got.n = n;
 }
 
 /**
  * The picture from (px, py, pz) that holds the `n` numbers of `pts` with the rig's room round them, no
  * tighter and no wider than it goes. `bx`, `bz`: where the ball is on the floor (the spare room across
- * goes to it). `whole`: all of them, however wide that is (a still: nobody is let go of out at its sides).
+ * goes to it). `whole`: all of them, however wide that is (a still: nobody is let go of out at its sides);
+ * the first `m` numbers are, whatever (`musts`): the picture opens out for them, and slides to keep them in.
  */
 export function fit(
   kind: CamKind,
@@ -212,6 +265,7 @@ export function fit(
   squeeze: number,
   out: Shot,
   whole = false,
+  m = 0,
 ): Shot {
   const rig = RIGS[kind];
   const tall = aspect < TALL;
@@ -225,6 +279,8 @@ export function fit(
   let [fx, fy, fz] = [0, 0, 0];
   for (let i = 0; i < n; i += 3) [fx, fy, fz] = [fx + pts[i] - px, fy + pts[i + 1] - py, fz + pts[i + 2] - pz];
   let [x0, x1, y0, y1, depth] = [0, 0, 0, 0, 1];
+  // (what it must hold: across, and up and down)
+  let [m0, m1, n0, n1] = [0, 0, 0, 0];
   let [rx, rz, ux, uy, uz] = [1, 0, 0, 1, 0];
   let tx = 0;
   const turn = (cx: number, cy: number) => {
@@ -239,12 +295,13 @@ export function fit(
     const flat = Math.hypot(fx, fz);
     [rx, rz] = flat > 1e-3 ? [-fz / flat, fx / flat] : [1, 0];
     [ux, uy, uz] = [-rz * fy, rz * fx - rx * fz, rx * fy];
-    [x0, x1, y0, y1, depth] = [Infinity, -Infinity, Infinity, -Infinity, 0];
+    [x0, x1, y0, y1, depth, m0, m1, n0, n1] = [Infinity, -Infinity, Infinity, -Infinity, 0, Infinity, -Infinity, Infinity, -Infinity];
     for (let i = 0; i < n; i += 3) {
       const [dx, dy, dz] = [pts[i] - px, pts[i + 1] - py, pts[i + 2] - pz];
       const d = Math.max(2, dx * fx + dy * fy + dz * fz);
       const [x, y] = [(dx * rx + dz * rz) / d, (dx * ux + dy * uy + dz * uz) / d];
       [x0, x1, y0, y1] = [Math.min(x0, x), Math.max(x1, x), Math.min(y0, y), Math.max(y1, y)];
+      if (i < m) [m0, m1, n0, n1] = [Math.min(m0, x), Math.max(m1, x), Math.min(n0, y), Math.max(n1, y)];
       depth += d;
     }
     depth /= Math.max(1, n / 3);
@@ -267,15 +324,30 @@ export function fit(
   // (how much of the floor it holds across, where it looks: between the rig's least, less a little at the basket and late, and its most)
   const least = (lo * thin * (1 - 0.1 * squeeze)) / 2 / depth / aspect;
   const most = hi / 2 / depth / aspect;
-  // (the most only ever lets go of men out to the sides: what it holds up and down, the ball's flight, a head, is never cut)
-  const tanV = Math.max(least, halfY, whole ? halfX / aspect : Math.min(halfX / aspect, Math.max(least, most)));
+  // (the most only ever lets go of men out to the sides: what it holds up and down, the ball's flight, a head, is never
+  // cut; nor across, what it must hold, and that with ROOM round it)
+  const must = m > 0 && m1 >= m0;
+  const tanV = Math.max(
+    least,
+    halfY,
+    whole ? halfX / aspect : Math.min(halfX / aspect, Math.max(least, most)),
+    must ? (m1 - m0) / 2 / ROOM / aspect : 0,
+    must ? (n1 - n0) / 2 / ROOM : 0,
+  );
   // the spare room: across, toward the ball; up and down, over the play or under it
   const spareX = Math.max(0, tanV * aspect - halfX);
   const spareY = Math.max(0, tanV - halfY);
   const cx = (x0 + x1) / 2;
   const cy = (y0 + y1) / 2;
+  // (and a picture that lets men go at its sides lets go of them, not of what it must hold: it slides to keep that in)
+  let ax = cx + clamp((tx - cx) * rig.ball, -spareX, spareX);
   // (the floor's camera keeps the play in the middle of a tall one: under it is the floor at its feet, over it the roof)
-  turn(cx + clamp((tx - cx) * rig.ball, -spareX, spareX), cy + spareY * (!tall ? rig.sky : kind === 'low' ? 0 : TALL_SKY));
+  let ay = cy + spareY * (!tall ? rig.sky : kind === 'low' ? 0 : TALL_SKY);
+  if (must) {
+    ax = clamp(ax, m1 - ROOM * tanV * aspect, m0 + ROOM * tanV * aspect);
+    ay = clamp(ay, n1 - ROOM * tanV, n0 + ROOM * tanV);
+  }
+  turn(ax, ay);
   measure();
   // (never under the near side's seats, where nothing is built: the picture's foot stays on them)
   let fov = 2 * Math.atan(tanV);
@@ -640,7 +712,11 @@ export class Operator {
   private vx = 0;
   private aspect = 0;
   private readonly pts: number[] = [];
+  private readonly got = { n: 0, m: 0 };
+  private readonly must: number[] = [];
   private readonly want = shot();
+  /** How many frames `hold` has had to turn or open out his picture (the motion lab counts them: easing got there late). */
+  holds = 0;
 
   /** The next picture is his first: he is there, not on his way (the picture has been somewhere else). */
   reset() {
@@ -648,12 +724,13 @@ export class Operator {
   }
 
   /**
-   * One frame, `real` ms after the last: the picture, into `out`. True when it cut (a new camera, the play
+   * One frame, `ms` of the play's own time after the last (the bodies' time: twice the clock's at 2x, none while the
+   * game is stopped in the middle of a move): the picture, into `out`. True when it cut (a new camera, the play
    * somewhere else altogether, the floor's camera changing ends, a new still with reduced motion, a new shape: RESHAPE).
    */
-  aim(kind: CamKind, v: View, real: number, calm: boolean, out: Shot): boolean {
+  aim(kind: CamKind, v: View, ms: number, calm: boolean, out: Shot): boolean {
     const rig = RIGS[kind];
-    const sec = real / 1000;
+    const sec = ms / 1000;
     const b = v.ball;
     let cut = !(calm ? this.still : this.on) || kind !== this.kind || Math.abs(v.aspect / (this.aspect || v.aspect) - 1) > RESHAPE;
     this.kind = kind;
@@ -679,14 +756,15 @@ export class Operator {
     // how fast the ball is going along the floor, eased (a pass is over before he has heard of it; a break is not)
     const vx = sec > 0 && !cut ? clamp((b.x - this.ballX) / sec, -70, 70) : 0;
     this.ballX = b.x;
-    this.vx = cut ? 0 : this.vx + (vx - this.vx) * (1 - Math.exp(-real / 320));
+    this.vx = cut ? 0 : this.vx + (vx - this.vx) * (1 - Math.exp(-ms / 320));
     const lead = clamp(this.vx * LEAD, -LEAD_MOST, LEAD_MOST);
     const w = mount(kind, v.aspect, b.x + lead, end, this.want);
     if (cut) this.px.x = w.px;
     else if (sec > 0) ease(this.px, w.px, 0.9, sec);
     this.px.v = cut ? 0 : this.px.v;
-    const n = gather(kind, v, Math.abs(lead) > 1.5 ? lead : 0, this.pts);
-    fit(kind, this.px.x, w.py, w.pz, this.pts, n, v.aspect, b.x, b.z, clamp(v.near + v.tight * 0.8, 0, 1.6) - 3 * clamp((Math.abs(this.vx) - 8) / 22, 0, 1), w);
+    gather(kind, v, Math.abs(lead) > 1.5 ? lead : 0, this.pts, this.got);
+    const squeeze = clamp(v.near + v.tight * 0.8, 0, 1.6) - 3 * clamp((Math.abs(this.vx) - 8) / 22, 0, 1);
+    fit(kind, this.px.x, w.py, w.pz, this.pts, this.got.n, v.aspect, b.x, b.z, squeeze, w, false, this.got.m);
     if (!cut && Math.hypot(w.lx - this.lx.x, w.lz - this.lz.x) > JUMP) cut = true;
     if (cut) {
       [this.lx.x, this.ly.x, this.lz.x, this.fov.x] = [w.lx, w.ly, w.lz, w.fov];
@@ -699,6 +777,7 @@ export class Operator {
       ease(this.lz, w.lz, T, sec);
       ease(this.fov, w.fov, w.fov > this.fov.x ? rig.zoom / 3 : rig.zoom, sec);
     }
+    this.hold(kind, v, kind === 'top' ? this.lx.x : this.px.x, w.py, w.pz);
     this.on = true;
     this.still = false;
     out.px = kind === 'top' ? this.lx.x : this.px.x;
@@ -709,5 +788,52 @@ export class Operator {
     out.lz = this.lz.x;
     out.fov = this.fov.x;
     return cut;
+  }
+
+  /**
+   * The picture he gives, from (px, py, pz), holds what it must (`musts`) inside HOLD of its edges, whatever his
+   * easing was: what would go out of it turns it by as little as keeps it in, and opens it out if it is more than the
+   * picture holds (the overhead, which never turns, only opens out). Into his eased look and zoom: he goes on from there.
+   */
+  private hold(kind: CamKind, v: View, px: number, py: number, pz: number) {
+    const n = musts(kind, v, this.must);
+    const a = v.aspect;
+    const top = kind === 'top';
+    const most = Math.tan((HOLD_MOST * Math.PI) / 360);
+    for (let pass = 0; pass < 3; pass++) {
+      let [fx, fy, fz] = [this.lx.x - px, this.ly.x - py, this.lz.x - pz];
+      const far = Math.hypot(fx, fy, fz) || 1;
+      [fx, fy, fz] = [fx / far, fy / far, fz / far];
+      const flat = Math.hypot(fx, fz);
+      const [rx, rz] = flat > 1e-3 ? [-fz / flat, fx / flat] : [1, 0];
+      const [ux, uy, uz] = [-rz * fy, rz * fx - rx * fz, rx * fy];
+      let [x0, x1, y0, y1] = [Infinity, -Infinity, Infinity, -Infinity];
+      for (let i = 0; i < n; i += 3) {
+        const [dx, dy, dz] = [this.must[i] - px, this.must[i + 1] - py, this.must[i + 2] - pz];
+        const d = dx * fx + dy * fy + dz * fz;
+        // (at the lens or behind it: no turn of it holds that)
+        if (d < 1) continue;
+        const [x, y] = [(dx * rx + dz * rz) / d, (dx * ux + dy * uy + dz * uz) / d];
+        [x0, x1, y0, y1] = [Math.min(x0, x), Math.max(x1, x), Math.min(y0, y), Math.max(y1, y)];
+      }
+      if (x1 < x0) return;
+      const t = Math.tan((this.fov.x * Math.PI) / 360);
+      const wide = top ? Math.max(-x0, x1) / HOLD / a : (x1 - x0) / 2 / HOLD / a;
+      const high = top ? Math.max(-y0, y1) / HOLD : (y1 - y0) / 2 / HOLD;
+      const need = Math.min(most, Math.max(t, wide, high));
+      const sx = top ? 0 : clamp(0, x1 - HOLD * need * a, x0 + HOLD * need * a);
+      const sy = top ? 0 : clamp(0, y1 - HOLD * need, y0 + HOLD * need);
+      if (need <= t && sx === 0 && sy === 0) return;
+      if (pass === 0) this.holds++;
+      if (need > t) {
+        this.fov.x = deg(2 * Math.atan(need));
+        this.fov.v = Math.max(0, this.fov.v);
+      }
+      // (the point (sx, sy) of the picture is its middle now: as far off as it looked)
+      let [gx, gy, gz] = [fx + rx * sx + ux * sy, fy + uy * sy, fz + rz * sx + uz * sy];
+      const gl = Math.hypot(gx, gy, gz) || 1;
+      [gx, gy, gz] = [gx / gl, gy / gl, gz / gl];
+      [this.lx.x, this.ly.x, this.lz.x] = [px + gx * far, py + gy * far, pz + gz * far];
+    }
   }
 }

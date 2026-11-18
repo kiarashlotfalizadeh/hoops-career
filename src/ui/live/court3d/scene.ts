@@ -26,7 +26,7 @@ import {
   type WebGLRenderTarget,
 } from 'three';
 import { BASKET, COURT_LEN, faceWorld, toWorld, type Act, type Flash, type Frame, type Pt, type Script } from '../choreo';
-import { FLOOR_L, FLOOR_W, pose, type GameInfo, type Stage } from '../Court';
+import { FLOOR_L, FLOOR_W, pose, type GameInfo, type Pose, type Stage } from '../Court';
 import type { MatchKit, Venue } from '../../teamColors';
 import type { Occasion } from '../occasion';
 import { Arena } from './arena';
@@ -162,6 +162,18 @@ const TOUCH_FT = 2.2;
 const DRIBBLES = new Set(['dribble', 'dribbleRun', 'crossover']);
 /** Acts that go at the rim. */
 const AIMED = new Set<Act>(['layup', 'dunk', 'floater', 'jumper', 'release']);
+/**
+ * The camera that follows the play is told where the ball will be over this much of the bodies' time ahead (s), at
+ * this many moments in it (cameras.ts View.path): a shot's flight from before he is up with it, a pass's way. A
+ * moment counts in full this near (s), and less the farther off it is after that, drawn in toward the ball (nothing
+ * comes into the picture's sums in one frame).
+ */
+const AHEAD = 1.2;
+const AHEAD_N = 8;
+const AHEAD_FULL = 0.6;
+/** A shot leaves his hand about this high (ft), as the camera is told it before he is up with it; the top of a head over its joint (ft). */
+const RELEASE_AT = 9.6;
+const HEAD_TOP = 0.45;
 /** A body into a body the play calls for (see bump): only two this near (ft), this far through its move (and a whistle's own), the man going in leaning into it this much of the move before. */
 const BUMP_REACH = 4.4;
 const BUMP_AT = 0.62;
@@ -671,7 +683,22 @@ export class CourtScene {
   private rimHit = 1;
   // the camera that follows the play (cameras.ts): its operator, what he is shown, his picture; how far it has come in for the clutch
   private readonly op = new Operator();
-  private readonly view: View = { ball: { x: 0, y: 0, z: 0 }, men: new Float32Array(20), n: 0, end: 0, aspect: 1.5, near: 0, tight: 0 };
+  private readonly view: View = {
+    ball: { x: 0, y: 0, z: 0 },
+    men: new Float32Array(20),
+    n: 0,
+    end: 0,
+    aspect: 1.5,
+    near: 0,
+    tight: 0,
+    path: new Float32Array(AHEAD_N * 3),
+    pathN: 0,
+    keep: new Float32Array(6),
+    keepN: 0,
+  };
+  // (the shot the camera is told is coming, planned once a move: see foresee; and where a pass in the air is going)
+  private coming: { key: string; shot: Shot } | null = null;
+  private readonly goingTo = new Vector3();
   private readonly pic = newShot();
   private camCut = false;
   private readonly spin = new Vector3();
@@ -1569,6 +1596,7 @@ export class CourtScene {
         // (the opening tip with no referee to throw it up: it rises between the two who jump for it)
         if (!next && b.act.includes('tip')) ball.y = this.from.y + (TIP_H - this.from.y) * Math.sin((lu * Math.PI) / 2);
         passing = true;
+        this.goingTo.set(to.x, to.y, to.z);
         // (kept out of the bodies it goes by, eased: the two men's hands go with it; once it is off the passer's
         // hands, out of him too: a pass thrown back past him goes round him, not through him)
         this.give(lu < PASS_OFF ? was : null, next, ease);
@@ -1578,6 +1606,10 @@ export class CourtScene {
         }
       }
       this.heldBy = holder ? (sc.oPids.concat(sc.dPids)[figs.indexOf(holder)] ?? null) : null;
+      // (what the camera that follows the play is told: where the ball is going, and whom it keeps: the man with it, a
+      // shooter until his shot is down)
+      this.foresee(sc, play, bi, rim, pace, passing);
+      this.keepOn(holder ?? (b.fx && !this.landed && !this.swatted ? was : null));
       this.react(sc, play, figs, holder, line, lu, own);
       this.bump(b, figs, key, lu);
 
@@ -1651,6 +1683,8 @@ export class CourtScene {
         if (stage.ball && Math.hypot(ball.x - sx(stage.ball), ball.z - sz(stage.ball)) > 14) ball.set(sx(stage.ball), BALL_R, sz(stage.ball));
         free = true;
       }
+      this.view.pathN = 0;
+      this.keepOn(holder);
     }
     // loose, it falls and bounces, and rolls the way it was going
     // (it is where it is: nothing more is owed to a body it went by)
@@ -1995,7 +2029,7 @@ export class CourtScene {
     this.was.pos.copy(cam.position);
     this.was.dir.copy(cam.quaternion);
     this.was.fov = cam.fov;
-    this.aim(stage, real, calm, line, near, quiet, !!p.clutch, p.cam ?? 'tv', p.final);
+    this.aim(stage, real, own, calm, line, near, quiet, !!p.clutch, p.cam ?? 'tv', p.final);
     // (the lens shifted to the middle of the part that is seen: see seenPart)
     const mid = this.span[0] + this.span[1] - 1;
     const offset = mid ? -mid * Math.tan((cam.fov * Math.PI) / 360) * cam.aspect * cam.getFilmWidth() : 0;
@@ -3325,6 +3359,99 @@ export class CourtScene {
   private benchLit = 1;
 
   /**
+   * Where the ball is going over the next AHEAD s of the bodies' time, for the camera that follows the play (cameras.ts
+   * View.path): a shot in the air, the rest of its flight; a pass or a loose ball, its way to where this move takes it;
+   * and a shot coming in a move that starts within that, its flight from his hand, planned as it will be (the same
+   * draws; from where the play has him then, at RELEASE_AT). A moment past AHEAD_FULL is drawn in toward the ball.
+   */
+  private foresee(sc: Script, play: Pose, bi: number, rim: { x: number; z: number }, pace: number, passing: boolean) {
+    const v = this.view;
+    const out = v.path as Float32Array;
+    const ball = this.ball;
+    let n = 0;
+    // (the play's ms that AHEAD of the bodies' time is)
+    const span = AHEAD * 1000 * pace;
+    const put = (p: V3, ms: number) => {
+      const w = 1 - smooth(clamp((ms / 1000 / pace - AHEAD_FULL) / (AHEAD - AHEAD_FULL), 0, 1));
+      out[n++] = ball.x + (p.x - ball.x) * w;
+      out[n++] = ball.y + (p.y - ball.y) * w;
+      out[n++] = ball.z + (p.z - ball.z) * w;
+    };
+    const b = play.b;
+    const dur = Math.max(1, play.dur);
+    const lu = clamp(play.ms / dur, 0, 1);
+    if (b.fx && this.flight && !this.landed && !this.swatted) {
+      for (let k = 1; k <= AHEAD_N; k++) {
+        const ms = (span * k) / AHEAD_N;
+        put(shotAt(this.flight, Math.min(1, lu + ms / dur), TMP), ms);
+      }
+    } else if (passing && lu < 1) {
+      // (a straight line is enough: the picture has room round the ball, and it is held whatever: cameras.ts hold)
+      const g = this.goingTo;
+      for (const k of [AHEAD_N / 2, AHEAD_N]) {
+        const ms = (span * k) / AHEAD_N;
+        const u = Math.min(1, ms / ((1 - lu) * dur));
+        TMP.x = ball.x + (g.x - ball.x) * u;
+        TMP.y = ball.y + (g.y - ball.y) * u;
+        TMP.z = ball.z + (g.z - ball.z) * u;
+        put(TMP, ms);
+      }
+    } else if (!b.fx) {
+      // the next move with a shot in it, if it starts no further off than that: who has the ball as it starts throws it
+      let k = bi + 1;
+      let at = Math.max(0, play.dur - play.ms);
+      for (; k < sc.frames.length && at < span && !sc.frames[k].fx; k++) at += sc.frames[k].dur;
+      const f = sc.frames[k];
+      const g = sc.frames[k - 1];
+      const j = g?.hold ?? -1;
+      if (f?.fx && at < span && j >= 0 && f.swat === undefined) {
+        const key = `${this.scriptN}:${k}`;
+        if (this.coming?.key !== key) {
+          const nO = sc.oPids.length;
+          const spot = toWorld(j < nO ? g.o[j] : g.d[j - nO], sc.dir);
+          const kind: ShotKind = this.ftAt.includes(k - 1)
+            ? 'ft'
+            : f.how === 'tip'
+              ? 'layup'
+              : ((['layup', 'floater', 'jumper'] as const).find((x) => g.act.includes(x)) ?? 'jumper');
+          const made = f.fx === 'make';
+          const nf = made ? undefined : sc.frames[k + 1];
+          const to = nf && toWorld(nf.ball, sc.dir);
+          this.coming = {
+            key,
+            shot: planShot({
+              from: { x: sx(spot), y: RELEASE_AT, z: sz(spot) },
+              rim,
+              kind,
+              made,
+              secs: f.dur / 1000 / pace,
+              next: to ? { x: sx(to), y: 0, z: sz(to) } : null,
+              r: [hash(this.seed, k), hash(this.seed, k + 50), hash(this.seed, k + 7)],
+            }),
+          };
+        }
+        for (let s = 1; s <= AHEAD_N; s++) {
+          const ms = (span * s) / AHEAD_N;
+          if (ms >= at) put(shotAt(this.coming.shot, Math.min(1, (ms - at) / Math.max(1, f.dur)), TMP), ms);
+        }
+      }
+    }
+    v.pathN = n;
+  }
+
+  /** Whom the camera that follows the play never lets go of (cameras.ts View.keep): his feet and the top of his head. */
+  private keepOn(f: Fig | null) {
+    const v = this.view;
+    const out = v.keep as Float32Array;
+    v.keepN = 0;
+    if (!f?.pup.placed) return;
+    const j = f.pup.j;
+    const h = f.pup.world(j[J.head * 3], j[J.head * 3 + 1], j[J.head * 3 + 2], TMP);
+    [out[0], out[1], out[2], out[3], out[4], out[5]] = [f.pup.x, 0, f.pup.z, h.x, h.y + HEAD_TOP, h.z];
+    v.keepN = 6;
+  }
+
+  /**
    * The broadcast: the main camera high on the near sideline, turning with the ball and pushing in as it
    * gets to the basket, an operator's hand on it; a low camera past the baseline for free throws; the
    * whole building from a corner when there is nothing to follow, and from across it at a timeout;
@@ -3334,7 +3461,7 @@ export class CourtScene {
    * the winners at the final buzzer; the instant replays (director.ts). It cuts between them, never more
    * often than HOLD_MS. Reduced motion: one camera, the whole floor, held still.
    */
-  private aim(stage: Stage, real: number, calm: boolean, line: boolean, near: number, quiet: boolean, clutch: boolean, kind: CamKind, final?: 0 | 1) {
+  private aim(stage: Stage, real: number, own: number, calm: boolean, line: boolean, near: number, quiet: boolean, clutch: boolean, kind: CamKind, final?: 0 | 1) {
     const cam = this.camera;
     const aspect = this.shape;
     const fov = (across: number) => (2 * Math.atan(Math.tan((across * Math.PI) / 360) / aspect) * 180) / Math.PI;
@@ -3630,7 +3757,8 @@ export class CourtScene {
     const s = this.pic;
     // (a cut of his own, a new camera or the floor's changing ends, dissolves as any cut does; not his first picture after another shot's)
     const first = this.shotMs === 0 || !this.aimed;
-    this.camCut = this.op.aim(kind, v, real, false, s) && !first && !reshaped;
+    // (on the play's own time: at 2x his picture is the 1x one, played twice as fast)
+    this.camCut = this.op.aim(kind, v, own, false, s) && !first && !reshaped;
     this.aimed = true;
     // (a hand on it: the gantry's and the end zone's are on heads and only their frame wanders; the others are carried,
     // and the rim taking a dunk is felt in all of them)

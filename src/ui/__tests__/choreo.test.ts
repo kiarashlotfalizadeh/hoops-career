@@ -2203,6 +2203,58 @@ describe('live court choreography', () => {
             expect(fenced(s.px, s.py, s.pz, rimX, 10, 0)).toBe(false);
             expect(Math.hypot(s.px - x, s.pz - z)).toBeGreaterThan(12);
           }
+      // and a corner three is in the picture all the way: the ball from his hip to the rim, the shooter head to foot and
+      // the rim, every frame, in every shape, at 1x and at 2x (the operator's time is the play's: at 2x the frames are
+      // further apart, not the picture behind). Told the flight before he is up (View.path, as the scene tells it) the
+      // picture opens out ahead of the ball and the hold has almost nothing to do; told nothing, it holds them anyway
+      // (it was the ball out over the top as it left his hand, and the shooter out at a phone's side)
+      {
+        const [x, z] = [rimX + 2.7, 22.3];
+        const flight = planShot({ from: { x, y: 9.6, z }, rim: { x: rimX, z: 0 }, kind: 'jumper', made: true, secs: 1.1, next: null, r: [0.3, 0.6, 0.2] });
+        const men = [x, z, x - 3, z - 2.5, ...set.slice(4)];
+        const at = { x: 0, y: 0, z: 0 };
+        const to = { x: 0, y: 0, z: 0 };
+        for (const aspect of [2.16, 1.3, 1])
+          for (const told of [true, false])
+            for (const speed of [1, 2]) {
+              const op = new Operator();
+              const s = shot();
+              const path = new Float32Array(24);
+              const keep = new Float32Array(6);
+              const v: View = { ball: at, men, n: 10, end: 1, aspect, near: 0, tight: 0, path, pathN: 0, keep, keepN: 6 };
+              const ms = 16 * speed;
+              let frames = 0;
+              // (a second's gather, the ball from his hip to over his head as he goes up, then 1.1 s of flight)
+              for (let t = 0; t < 2100; t += ms) {
+                const up = Math.min(1, t / 1000);
+                const u = (t - 1000) / 1100;
+                if (u < 0) [at.x, at.y, at.z] = [x, 3.5 + 6.1 * up, z];
+                else shotAt(flight, Math.min(1, u), at);
+                const jump = u < 0 ? (2 * Math.max(0, up - 0.7)) / 0.3 : Math.max(0, 2 - u * 6);
+                keep.set([x, jump, z, x, 7.1 + jump, z]);
+                v.pathN = 0;
+                for (let k = 1; told && k <= 8; k++) {
+                  const fu = (t + 150 * k - 1000) / 1100;
+                  if (fu < 0) continue;
+                  shotAt(flight, Math.min(1, fu), to);
+                  path.set([to.x, to.y, to.z], v.pathN);
+                  v.pathN += 3;
+                }
+                op.aim('low', v, ms, false, s);
+                frames++;
+                for (const [px, py, pz] of [
+                  [at.x, at.y, at.z],
+                  [x, jump, z],
+                  [x, 7.1 + jump, z],
+                  [rimX, 10, 0],
+                ]) {
+                  const p = seen(s, aspect, px, py, pz);
+                  expect(Math.max(Math.abs(p.x), Math.abs(p.y)), `${aspect} ${speed}x ${told ? 'told' : 'not told'} at ${t} ms: ${px}, ${py}, ${pz}`).toBeLessThan(1);
+                }
+              }
+              if (told) expect(op.holds / frames, `${aspect} ${speed}x`).toBeLessThan(0.05);
+            }
+      }
     }
     // the ball's flight: every shot starts in the hand, a make ends under the net and a miss never goes down through the
     // ring, whichever way it ends; a jumper spins back; the rim rings and comes to rest
