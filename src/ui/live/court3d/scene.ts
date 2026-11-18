@@ -267,6 +267,14 @@ const ASIDE_PACE = 1.5;
 /** A possession whose first spot for a man is this far (ft) from where the last frame had him doesn't pick up from it: everyone is put on his spot. */
 const FRESH = 2.5;
 /**
+ * A hand-off's two men are no farther apart than this as it changes hands (ft, on the 6 ft 6 puppet: as far as the giver
+ * holds it out and the taker's pocket is from him): the man coming for it doesn't run on past a ball he hasn't got,
+ * whatever the plan or the men round them made of his way by. And once it is his he is back on the plan's way at
+ * TUG_BACK ft a second (the bodies').
+ */
+const SWAP_REACH = 3.0;
+const TUG_BACK = 9;
+/**
  * How soft a close-up's building goes behind its man (lens.focus), and a replay's at most: a replay is sharp over
  * all of its play (SHARP_NEAR) and its surroundings soften only a little.
  */
@@ -573,6 +581,8 @@ function jointsOf(p: { j: Float32Array; world(x: number, y: number, z: number, o
   }
   return out;
 }
+/** Two men as one number, whichever way round. */
+const pairKey = (a: number, b: number) => Math.min(a, b) * 100003 + Math.max(a, b);
 /** How far two men's trunks reach toward each other along a way from the first to the second (spacing.ts reach). */
 function reaches(ux: number, uz: number, a: Puppet | undefined, b: Puppet | undefined): number {
   const one = (p: Puppet | undefined) => {
@@ -1140,13 +1150,15 @@ export class CourtScene {
         // (the play's ms until the plan has it change hands)
         const tx = hk === bi ? HANDOFF_AT * b.dur - play.ms : play.dur - play.ms + HANDOFF_AT * sc.frames[hk].dur;
         if (!this.swap || this.swap.n !== this.scriptN || this.swap.k !== hk || cut)
-          this.swap = { n: this.scriptN, k: hk, ex: new Exchange(tx), a: null, b: null, on: false, set: false, px: 0, pz: 0 };
+          this.swap = { n: this.scriptN, k: hk, ex: new Exchange(tx), a: null, b: null, on: false, set: false, px: 0, pz: 0, gj, tj, w: 0 };
         const ex = this.swap.ex;
-        ex.tick(dt, own, hk === bi || carried === gj);
+        ex.tick(dt, own, hk === bi || carried === gj, tx);
         this.swap.a = this.figs.get(pids[gj])?.pup ?? null;
         this.swap.b = this.figs.get(pids[tj])?.pup ?? null;
         // (their hands are on the one ball, or all but: from the taker's reach to the giver's letting go)
         this.swap.on = tx <= SWAP_NEAR_MS && (!ex.taken || ex.grip > 0.05);
+        // (and the taker is kept by the giver until he has it: see tug)
+        this.swap.w = ex.keep(tx);
         // (the giver has it to hold out: in the move before, only once it is in his hands)
         hand = { ex, tx, gj, tj, has: hk === bi || carried === gj };
         const G = this.figs.get(pids[gj])?.pup;
@@ -1161,7 +1173,7 @@ export class CourtScene {
           // (and into his pocket as he gets there: beside him on the giver's side of the line he runs out on, square to
           // it: a place that goes with him, whichever way his body is still turning. Settled before it is put there)
           const sw = this.swap;
-          if (!sw.set || ex.mesh(tx) <= 0) {
+          if (!sw.set || ex.meshed <= 0) {
             const [r0, r1] = [
               toWorld(tj < nO ? sc.frames[hk - 1].o[tj] : sc.frames[hk - 1].d[tj - nO], sc.dir),
               toWorld(tj < nO ? sc.frames[hk].o[tj] : sc.frames[hk].d[tj - nO], sc.dir),
@@ -1180,7 +1192,7 @@ export class CourtScene {
             sw.pz = (nz / nl) * POCKET_SIDE * T.body.s;
             sw.set = true;
           }
-          offerAt(G.x, G.z, G.body.s, ex0, ez0, T.body.s, T.x + sw.px, T.z + sw.pz, ex.mesh(tx), this.offer);
+          offerAt(G.x, G.z, G.body.s, ex0, ez0, T.body.s, this.offer);
         } else hand.has = false;
       } else this.swap = null;
       // (where the plan has each man a beat from now, with the play's clock running: see Drive.ahead)
@@ -1309,6 +1321,7 @@ export class CourtScene {
         set(ball, holder.pup.bounced(holder.pup.carry(TMP)));
         // (about to hand it off: the man coming by for it has his hands out to it where it is held)
         const taker = hand && hand.has && carried === hand.gj ? figs[hand.tj] : null;
+        if (taker) this.pocket(taker.pup);
         this.give(holder, taker, ease);
         holder.pup.legsOff(ball);
         if (taker) {
@@ -1472,10 +1485,12 @@ export class CourtScene {
           holder = next;
         } else {
           set(ball, was.pup.carry(TMP));
+          this.pocket(next.pup);
           next.pup.taking(ex.reach(hand.tx) * within(next.pup, ball));
           was.pup.giving(1);
           holder = was;
-          untaken = { ex, tx: hand.tx, taker: next, last: play.ms >= play.dur };
+          // (the move's last drawn frame: the next is past it, and it is his then whatever)
+          untaken = { ex, tx: hand.tx, taker: next, last: play.ms + dt >= play.dur };
         }
         this.give(was, next, ease);
       } else if (!was && next && this.refGave && b.act[figs.indexOf(next)] === 'hold' && Math.hypot(ball.x - next.pup.x, ball.z - next.pup.z) < GIVEN_FT) {
@@ -1598,6 +1613,7 @@ export class CourtScene {
       this.aside(who, at, this.going, own, cut);
       this.touch.fill(undefined);
       this.meeting.length = 0;
+      this.metPairs.clear();
       this.spacing.place(at, this.going, who, own, aside, cut, NO_MEETS, this.builds(who));
       const had = stage.standers.find((st) => st.pid === this.heldBy);
       for (let j = 0; j < n; j++) {
@@ -1751,7 +1767,7 @@ export class CourtScene {
     // (and again with their arms where they are drawn this frame: an arm, a trunk or a leg still in a man moves them
     // apart now, not next frame; a man with the ball in his hands stays where it is)
     const there = order.filter(([pid]) => seen.has(pid)).map(([pid]) => pid);
-    this.parted(1, there, own, false, () => this.unclash(there, hands));
+    this.parted(1, there, own, false, () => this.unclash(there, hands, true));
     for (const [pid, f] of order) {
       if (!seen.has(pid)) {
         this.drop(pid, f);
@@ -2173,6 +2189,7 @@ export class CourtScene {
     const meets = this.meets(play, pids, at);
     const spots = this.spacing.place(at, go, pids, own, aside, cut, meets, this.builds(pids));
     this.given(pids, spots, own, cut);
+    this.tug(pids, spots, own, cut);
     return spots;
   }
 
@@ -2366,6 +2383,7 @@ export class CourtScene {
   private meets(play: NonNullable<Stage['play']>, pids: readonly number[], at: Float32Array): Meet[] {
     const out = this.meeting;
     out.length = 0;
+    this.metPairs.clear();
     if (this.touch.length !== pids.length) this.touch = new Array(pids.length);
     this.touch.fill(undefined);
     const lu = play.dur > 0 ? clamp(play.ms / play.dur, 0, 1) : 1;
@@ -2396,6 +2414,7 @@ export class CourtScene {
       const pj = this.figs.get(pids[j])?.pup;
       const near = clamp(reaches(dx / d, dz / d, pi, pj) + (this.holds.get(k) ?? 0), NEAR_MIN, NEAR_MAX);
       out.push({ i, j, w, near, share: box ? BOX_SHARE : SCREEN_SHARE });
+      if (w >= 0.5) this.metPairs.add(pairKey(pids[i], pids[j]));
       this.touch[i] = { pid: pids[j], w };
       this.touch[j] = { pid: pids[i], w };
     }
@@ -2502,8 +2521,10 @@ export class CourtScene {
       if (w[0] !== dx || w[1] !== dz) p.nudge(w[0] - dx, w[1] - dz);
     });
   }
+  /** The pairs the play has meet in full this frame (see meets), by who they are (pairKey). */
+  private readonly metPairs = new Set<number>();
   private readonly partedBy: [Map<number, [number, number]>, Map<number, [number, number]>] = [new Map(), new Map()];
-  private unclash(pids: readonly number[], pinned?: ReadonlySet<Fig>) {
+  private unclash(pids: readonly number[], pinned?: ReadonlySet<Fig>, drawn = false) {
     for (let i = 0; i < pids.length; i++) {
       const a = this.figs.get(pids[i])?.pup;
       if (!a?.placed) continue;
@@ -2514,7 +2535,13 @@ export class CourtScene {
         const fa = this.figs.get(pids[i])!;
         const pa = !!pinned?.has(fa);
         const pb = !!pinned?.has(fb!);
-        if (this.meeting.some((m) => m.w >= 0.5 && ((pids[m.i] === pids[i] && pids[m.j] === pids[k]) || (pids[m.i] === pids[k] && pids[m.j] === pids[i])))) continue;
+        // (two the play has meet are `feel`'s: by who they are, not where they stand in `pids`. This is called with the
+        // script's ten and again with the men as they are drawn, in another order; read as places in that, a box-out's
+        // or a screen's two were not found, and were thrown off each other for an arm or a stepping leg)
+        // (...and once their arms are drawn they are looked at here too, as any two: a leg stepped into the other man, a
+        // limb through a limb, an arm in him)
+        const meet = this.metPairs.has(pairKey(pids[i], pids[k]));
+        if (meet && !drawn) continue;
         const d = Math.hypot(b.x - a.x, b.z - a.z);
         if (d > CLASH_FAR * Math.max(a.body.s, b.body.s)) continue;
         const [ux, uz] = d < 1e-3 ? [0, 1] : [(b.x - a.x) / d, (b.z - a.z) / d];
@@ -2552,7 +2579,10 @@ export class CourtScene {
                 into(ja, a.body.s, a.body.bulk, jb, b.body.s, b.body.bulk, LIMBS_LEGS, PARTS.legs),
                 into(jb, b.body.s, b.body.bulk, ja, a.body.s, a.body.bulk, LIMBS_LEGS, PARTS.legs),
               );
-          const deep = Math.max(-gap, legs - LEG_GRAZE, arms - ARM_GRAZE, limbs - LIMB_GRAZE);
+          // (two who meet are held leg to leg as near as LEG_GRAZE by `feel`, which lets them be to SLACK past it: looked
+          // at here to LEG_GRAZE alone, a seat in a thigh as it is meant to be was a leg in a man, and the two were
+          // knocked off each other and let fall back, over and over)
+          const deep = Math.max(-gap, legs - LEG_GRAZE - (meet ? SLACK : 0), arms - ARM_GRAZE, limbs - LIMB_GRAZE - (meet ? SLACK : 0));
           if (deep <= 0) break;
           if (was - deep < CLASH_GAIN * lx) {
             a.nudge(ux * lx * (1 - share), uz * lx * (1 - share));
@@ -2570,10 +2600,10 @@ export class CourtScene {
     }
   }
   /** The man meeting him (see meets): where he is, and how far into it. */
-  private touched(j: number): { x: number; z: number; w: number; who: number } | undefined {
+  private touched(j: number): { x: number; z: number; w: number; who: number; feet: Puppet['feet'] } | undefined {
     const t = this.touch[j];
     const o = t && this.figs.get(t.pid)?.pup;
-    return t && o?.placed ? { x: o.x, z: o.z, w: t.w, who: t.pid } : undefined;
+    return t && o?.placed ? { x: o.x, z: o.z, w: t.w, who: t.pid, feet: o.feet } : undefined;
   }
   /** Where each of the ten goes his own way this frame (see aside), each man's trunk (see builds), and who meets whom (see meets). */
   private ways = new Float32Array(10);
@@ -3163,8 +3193,73 @@ export class CourtScene {
     ball.x = px + this.bend.x;
     ball.z = pz + this.bend.z;
   }
+  /**
+   * A hand-off's ball, in the giver's hands, on its way into the taker's pocket: as far as the exchange has it there
+   * (Exchange.meshed), to a place on the taker as he is drawn this frame. So it goes with him, at any speed the game is
+   * played at; the giver's hands are on it as far as his arms go (see inHands), and the taker's come onto a ball that
+   * is still in front of them.
+   */
+  private pocket(T: Puppet) {
+    const sw = this.swap;
+    const m = sw?.ex.meshed ?? 0;
+    if (!sw || !sw.set || m <= 0) return;
+    const ball = this.ball;
+    ball.set(ball.x + (T.x + sw.px - ball.x) * m, ball.y + (this.offer.y - ball.y) * m, ball.z + (T.z + sw.pz - ball.z) * m);
+  }
   /** A hand-off under way (see exchange.ts): the possession and the script frame it is in. */
-  private swap: { n: number; k: number; ex: Exchange; a: Puppet | null; b: Puppet | null; on: boolean; set: boolean; px: number; pz: number } | null = null;
+  private swap: {
+    n: number;
+    k: number;
+    ex: Exchange;
+    a: Puppet | null;
+    b: Puppet | null;
+    on: boolean;
+    set: boolean;
+    px: number;
+    pz: number;
+    gj: number;
+    tj: number;
+    w: number;
+  } | null = null;
+  /** The man a hand-off is coming to, and how far he is held off his spot toward the man giving it (x, z, ft): see tug. */
+  private readonly tugged = { pid: -1, x: 0, z: 0 };
+  /**
+   * A hand-off's taker stays in reach of the ball until it is his (SWAP_REACH): where the plan, or the men he stepped
+   * round, would have him farther from the giver than hands can pass a ball, his spot is that much nearer. He doesn't
+   * run off without it, at any speed; with it, he is let back onto the plan's way no faster than a man makes up ground.
+   */
+  private tug(pids: readonly number[], spots: Float32Array, own: number, cut: boolean) {
+    const T = this.tugged;
+    if (cut) T.pid = -1;
+    const sw = this.swap;
+    let [wx, wz] = [0, 0];
+    let pid = T.pid;
+    if (sw && sw.n === this.scriptN && sw.w > 0 && sw.gj < pids.length && sw.tj < pids.length) {
+      pid = pids[sw.tj];
+      const [gx, gz] = [spots[sw.gj * 2], spots[sw.gj * 2 + 1]];
+      const [dx, dz] = [gx - spots[sw.tj * 2], gz - spots[sw.tj * 2 + 1]];
+      const d = Math.hypot(dx, dz);
+      const most = SWAP_REACH * 0.5 * ((sw.a?.body.s ?? 1) + (sw.b?.body.s ?? 1));
+      if (d > most) [wx, wz] = [(dx / d) * (d - most) * sw.w, (dz / d) * (d - most) * sw.w];
+    }
+    if (pid < 0) return;
+    if (pid !== T.pid) [T.pid, T.x, T.z] = [pid, 0, 0];
+    const j = pids.indexOf(pid);
+    if (j < 0) {
+      T.pid = -1;
+      return;
+    }
+    if (sw && sw.w > 0 && !sw.ex.taken) [T.x, T.z] = [wx, wz];
+    else {
+      // (let go: back to the plan's way)
+      const far = Math.hypot(T.x, T.z);
+      const k = far > 1e-6 ? Math.max(0, far - (TUG_BACK * own) / 1000) / far : 0;
+      [T.x, T.z] = [T.x * k, T.z * k];
+      if (!k) T.pid = sw && sw.w > 0 ? T.pid : -1;
+    }
+    spots[j * 2] += T.x;
+    spots[j * 2 + 1] += T.z;
+  }
   /** Where its giver holds it out (the scene's point). */
   private readonly offer: V3 = { x: 0, y: 0, z: 0 };
   /** How far the ball is off where its move has it, for the bodies by it (x, z). */

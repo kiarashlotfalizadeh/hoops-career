@@ -8,7 +8,11 @@
 //           the taker's hands are out for it from his run in. As he gets there the giver puts it in his pocket: in by
 //           his near hip, a place that goes with the taker. A man running by a ball held still has it in reach for a
 //           tenth of a second, and at 4x that is less than a frame; a ball put in his pocket is in front of his hands
-//           for as long as the giver's arms can follow him, which is how a hand-off is given to a man at a run
+//           for as long as the giver's arms can follow him, which is how a hand-off is given to a man at a run.
+//           "Goes with the taker" is meant exactly: the ball is `meshed` of the way from the giver's hold to the pocket,
+//           and the pocket is a place on the taker as he is drawn this frame. It is not a point in the giver's frame
+//           sent after him (played at 4x a man goes a foot a drawn frame, more than a hand or a held ball is let move
+//           in one, so neither the ball nor the hands after it ever caught him up)
 //   both    the taker's hands are on it, as they are drawn, in the giver's: four hands on one ball, for a beat that is
 //           at least a drawn frame at any speed the game is played at
 //   taken   only then is it his: it goes on with his hands, and only now do the giver's open and come off it
@@ -40,6 +44,8 @@ const HAD_MS = 150;
 /** The giver takes it from where he holds it out to the taker's pocket from MESH_FROM ms of the play before the plan's moment, all the way there by MESH_BY. */
 const MESH_FROM = 150;
 const MESH_BY = 20;
+/** ...and over no fewer than MESH_FRAMES drawn frames, however late he got it or fast the game is played: it is carried there, not put there. */
+const MESH_FRAMES = 3;
 /**
  * The taker's hands are on it once his hold of it (Puppet.holds, 0..1: how far his hands have got to it) is ON or
  * more and that hold is within GAP_ON ft of where the ball is (on the 6 ft 6 puppet); they are off it again under OFF.
@@ -47,6 +53,8 @@ const MESH_BY = 20;
 const ON = 0.72;
 const OFF = 0.4;
 const GAP_ON = 0.32;
+/** The taker is kept in reach of the giver from this long (the play's ms) before the plan's moment: see Exchange.keep. */
+const HOLD_FROM = 110;
 /** Both men have it for BOTH_MS (the bodies' ms) and BOTH_FRAMES drawn frames after the one their hands met in, at the least. */
 const BOTH_MS = 50;
 const BOTH_FRAMES = 1;
@@ -59,13 +67,12 @@ const MISSED_MS = 90;
 /**
  * Where it is held out: on the line from the giver to where the taker will be as it changes hands, TAKE_IN ft from the
  * taker's middle, no farther from the giver's than OFFER_MOST nor nearer than OFFER_LEAST. The taker's pocket: POCKET_SIDE
- * ft to the giver's side of him, no farther from the giver's middle than OFFER_FAR (his arms' length: past it the
- * taker reaches back the rest). OFFER_Y ft up. All on the 6 ft 6 puppet (each scaled by its own man).
+ * ft to the giver's side of him (as far toward it as the giver's arms go: his hands are on it, and it is where they
+ * are). OFFER_Y ft up. All on the 6 ft 6 puppet (each scaled by its own man).
  */
 const TAKE_IN = 1.3;
 const OFFER_LEAST = 0.95;
 const OFFER_MOST = 1.45;
-const OFFER_FAR = 1.8;
 const OFFER_Y = 4.0;
 export const POCKET_SIDE = 1.2;
 
@@ -89,6 +96,7 @@ export class Exchange {
    */
   constructor(tx: number) {
     if (tx < -MISSED_MS) {
+      this.m = 1;
       this.phase = 'taken';
       this.since = -tx;
       this.let = RELEASE_MS;
@@ -105,15 +113,29 @@ export class Exchange {
     return this.phase !== 'offer' ? 1 : smooth(clamp((REACH_FROM - tx) / (REACH_FROM - REACH_BY), 0, 1));
   }
 
+  /**
+   * How far the taker is kept by the giver (0..1): from HOLD_FROM ms of the play before the plan's moment, in full at
+   * it, until it is his. He runs in as the plan has him; he doesn't run out without it.
+   */
+  keep(tx: number): number {
+    return this.phase === 'taken' ? 0 : smooth(clamp((HOLD_FROM - tx) / HOLD_FROM, 0, 1));
+  }
+
   /** How far the giver has it held out for him (0..1). */
   offer(tx: number): number {
     return smooth(clamp((OFFER_FROM - tx) / (OFFER_FROM - OFFER_BY), 0, 1));
   }
 
-  /** How far the giver has put it from where he held it out into the taker's pocket (0..1). */
-  mesh(tx: number): number {
+  /** How far the giver would have it from where he held it out into the taker's pocket by now (0..1), by the plan's clock. */
+  private mesh(tx: number): number {
     return smooth(clamp((MESH_FROM - tx) / (MESH_FROM - MESH_BY), 0, 1));
   }
+
+  /** How far he has it there (0..1): by the plan's clock, once he has it, and no quicker than over MESH_FRAMES drawn frames. */
+  get meshed(): number {
+    return this.m;
+  }
+  private m = 0;
 
   /** The giver's hold of it (1 until it is the taker's, then let go of: see RELEASE_MS). */
   get grip(): number {
@@ -133,9 +155,14 @@ export class Exchange {
   /** How long the giver has had it in his hands (the bodies' ms). */
   private had = 0;
 
-  /** A frame on: `dt` the play's ms, `own` the bodies'; `has`: the giver has it in his hands. Before the bodies are moved. */
-  tick(dt: number, own: number, has: boolean) {
+  /**
+   * A frame on: `dt` the play's ms, `own` the bodies'; `has`: the giver has it in his hands; `tx` the play's ms to the
+   * plan's moment. Before the bodies are moved.
+   */
+  tick(dt: number, own: number, has: boolean, tx: number) {
     this.had = has ? this.had + own : 0;
+    // (carried to the pocket only once it is in his own hands: see HAD_MS)
+    if (dt > 0 || own > 0) this.m += clamp((this.had >= HAD_MS ? this.mesh(tx) : 0) - this.m, -1 / MESH_FRAMES, 1 / MESH_FRAMES);
     if (this.phase !== 'taken') return;
     this.since += dt;
     this.let += own;
@@ -178,24 +205,17 @@ export class Exchange {
 }
 
 /**
- * Where the giver holds it (into `out`, the scene's x and z, y up): held out from his middle (gx, gz; his size gs)
- * toward where the taker will be as it changes hands (ex, ez; his size ts), and `mesh` of the way from there into the
- * taker's pocket (px, pz: see POCKET_SIDE), as near that as the giver's arms go.
+ * Where the giver holds it out (into `out`, the scene's x and z, y up): from his middle (gx, gz; his size gs) toward
+ * where the taker will be as it changes hands (ex, ez; his size ts). From there it is carried into the taker's pocket
+ * (see Exchange.meshed), which is the scene's to place: it is a place on the taker.
  */
-export function offerAt(gx: number, gz: number, gs: number, ex: number, ez: number, ts: number, px: number, pz: number, mesh: number, out: { x: number; y: number; z: number }) {
+export function offerAt(gx: number, gz: number, gs: number, ex: number, ez: number, ts: number, out: { x: number; y: number; z: number }) {
   const dx = ex - gx;
   const dz = ez - gz;
   const far = Math.hypot(dx, dz) || 1;
   const r = clamp(far - TAKE_IN * ts, Math.min(OFFER_LEAST * gs, far * 0.5), OFFER_MOST * gs);
-  const ox = gx + (dx / far) * r;
-  const oz = gz + (dz / far) * r;
-  let mx = px - gx;
-  let mz = pz - gz;
-  const out2 = Math.hypot(mx, mz);
-  const most = OFFER_FAR * gs;
-  if (out2 > most) [mx, mz] = [(mx * most) / out2, (mz * most) / out2];
-  out.x = ox + (gx + mx - ox) * mesh;
-  out.z = oz + (gz + mz - oz) * mesh;
+  out.x = gx + (dx / far) * r;
+  out.z = gz + (dz / far) * r;
   out.y = OFFER_Y * (gs + ts) * 0.5;
   return out;
 }

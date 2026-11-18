@@ -2089,6 +2089,58 @@ function knees({ speed = 2, only = 'run', most = 30, from = 0, to = Infinity } =
 }
 
 /**
+ * A knee that folds and opens again across three drawn frames (a V: shut by more than `down` radians in one frame,
+ * open again by more than `back` in the next), at a speed chip: a leg seen to flick. By clip, with the frames.
+ */
+function kinks({ speed = 4, down = 0.7, back = 0.45, most = 12, from = 0, upto = Infinity, only = '' } = {}) {
+  const c = new Clock(speed);
+  if (from > 0) c.k = from;
+  else c.tipMs = 0;
+  type Fr = { bend: number[]; x: number; z: number; s: string; clip: string };
+  const hist = new Map<number, Fr[]>();
+  const by: Record<string, number> = {};
+  const out: string[] = [];
+  let n = 0;
+  let worst = 0;
+  while (c.step() && c.k < upto) {
+    for (const [pid, f] of inner.figs) {
+      const p = f.pup;
+      const raw = p as unknown as { feet: { swing: boolean; up: number; x: number; z: number }[]; one: { id: string } | null; felt: number };
+      const j = p.j;
+      const bend = [0, 1].map((k) => {
+        const [hj, kj, fj] = k ? [J.jr, J.kr, J.fr] : [J.jl, J.kl, J.fl];
+        HL.set(j[hj * 3] - j[kj * 3], j[hj * 3 + 1] - j[kj * 3 + 1], j[hj * 3 + 2] - j[kj * 3 + 2]);
+        HR.set(j[fj * 3] - j[kj * 3], j[fj * 3 + 1] - j[kj * 3 + 1], j[fj * 3 + 2] - j[kj * 3 + 2]);
+        return HL.angleTo(HR);
+      });
+      let h = hist.get(pid);
+      if (!h || Math.hypot(p.x - h[h.length - 1].x, p.z - h[h.length - 1].z) > 3) hist.set(pid, (h = []));
+      const lz = (ft: { x: number; z: number }) => ((ft.x - p.x) * Math.sin(p.yaw) + (ft.z - p.z) * Math.cos(p.yaw)).toFixed(1);
+      const lx = (ft: { x: number; z: number }) => ((ft.x - p.x) * Math.cos(p.yaw) - (ft.z - p.z) * Math.sin(p.yaw)).toFixed(1);
+      h.push({
+        bend,
+        x: p.x,
+        z: p.z,
+        clip: p.clip,
+        s: `${p.clip}${raw.one ? '(' + raw.one.id + ')' : ''} vf${p.vf.toFixed(1)} vs${p.vs.toFixed(1)} felt${(raw.felt ?? 0).toFixed(2)} ${raw.feet.map((ft) => `${ft.swing ? 'S' : '-'}${ft.up.toFixed(2)}@${lx(ft)},${lz(ft)}`).join(' ')} hip${(j[J.hips * 3 + 1] / p.body.s).toFixed(2)} kn${bend.map((b) => Math.round(b * 57.3)).join('/')}`,
+      });
+      if (h.length > 3) h.shift();
+      if (h.length < 3 || !h[1].clip.includes(only)) continue;
+      for (const k of [0, 1]) {
+        const d1 = h[1].bend[k] - h[0].bend[k];
+        const d2 = h[2].bend[k] - h[1].bend[k];
+        if (d1 > -down || d2 < back) continue;
+        n++;
+        worst = Math.max(worst, Math.min(-d1, d2));
+        by[h[1].clip] = (by[h[1].clip] ?? 0) + 1;
+        if (out.length < most) out.push(`k${c.k} t${Math.round(c.t)} p${pid} ${k ? 'R' : 'L'}\n  ${h.map((x) => x.s).join('\n  ')}`);
+      }
+    }
+  }
+  return { n, worst: Math.round(worst * 57.3), by: Object.fromEntries(Object.entries(by).sort((x, y) => y[1] - x[1])), out };
+}
+
+/**
  * Hard starts from a stand (the bodies' time): a man stood (under STOOD ft a second) for a beat who is past
  * GOT_GOING within a second. His first three swings: how long each foot was up (ms), how far it went (ft, on a
  * 6 ft 6 man) and how fast he was going as it landed; with how far he leans over them. `worst`: the longest first swings.
@@ -2287,6 +2339,61 @@ function meetLegs({ speed = 2, most = 12, k = -1 } = {}) {
       .filter((x, i, l) => k >= 0 || l.findIndex((y) => y.s.split(' ')[0] === x.s.split(' ')[0]) === i)
       .slice(0, k >= 0 ? 400 : most)
       .map((x) => x.s),
+  };
+}
+
+/**
+ * Two men the play has meet in full (a box-out, a screen): how far apart their middles are from one drawn frame to the
+ * next. Leaning on each other they stay as they are; `n` counts the frames they moved more than `step` ft toward or
+ * away from each other, `big` more than `hop` (thrown off each other, or fallen back together), by the pair's clips.
+ */
+function meetHops({ speed = 1, step = 0.06, hop = 0.15 } = {}) {
+  const c = new Clock(speed);
+  c.tipMs = 0;
+  const meeting = (scene as unknown as { meeting: { i: number; j: number; w: number }[] }).meeting ?? [];
+  const last = new Map<string, number>();
+  const by: Record<string, number> = {};
+  let [frames, n, big] = [0, 0, 0];
+  while (c.step()) {
+    const sc = c.stage.script;
+    if (!sc || !c.stage.play) {
+      last.clear();
+      continue;
+    }
+    const pids = [...sc.oPids, ...sc.dPids];
+    const seen = new Set<string>();
+    for (const m of meeting) {
+      if (m.w < 0.99) continue;
+      const a = inner.figs.get(pids[m.i])?.pup;
+      const b = inner.figs.get(pids[m.j])?.pup;
+      if (!a || !b) continue;
+      const key = `${pids[m.i]}:${pids[m.j]}:${c.k}`;
+      seen.add(key);
+      const d = Math.hypot(a.x - b.x, a.z - b.z);
+      const was = last.get(key);
+      frames++;
+      if (was !== undefined) {
+        const st = Math.abs(d - was) / speed;
+        if (st > step) n++;
+        if (st > hop) {
+          big++;
+          const pair = [a.clip, b.clip].sort().join('+');
+          by[pair] = (by[pair] ?? 0) + 1;
+        }
+      }
+      last.set(key, d);
+    }
+    for (const k of [...last.keys()]) if (!seen.has(k)) last.delete(k);
+  }
+  return {
+    frames,
+    n,
+    big,
+    by: Object.fromEntries(
+      Object.entries(by)
+        .sort((x, y) => y[1] - x[1])
+        .slice(0, 8),
+    ),
   };
 }
 
@@ -2903,10 +3010,11 @@ function handoffs({ speed = 1, most = 20 } = {}) {
   const FLOAT_FT = 0.3;
   const out: { k: number; i: number; frames: number; float: number; before: number; gap: number; owned: string; forced: boolean; both: number; trail: string[] }[] = [];
   const v = { x: 0, y: 0, z: 0 };
-  for (let k = 0; k < scripts.length && out.length < most; k++) {
+  // (every hand-off of every possession: one may have two, and the second is as much a hand-off as the first)
+  const each = scripts.flatMap((sc, k) => sc.frames.flatMap((f, i) => (f.handoff && i >= 1 ? [[k, i]] : [])));
+  for (const [k, i] of each) {
+    if (out.length >= most) break;
     const sc = scripts[k];
-    const i = sc.frames.findIndex((f) => f.handoff);
-    if (i < 1) continue;
     const a = sc.frames[i - 1];
     const b = sc.frames[i];
     if (a.hold === undefined || b.hold === undefined || a.hold < 0 || b.hold < 0) continue;
@@ -2928,7 +3036,8 @@ function handoffs({ speed = 1, most = 20 } = {}) {
     const trail: string[] = [];
     while (c.k === k && c.finalMs < 0) {
       c.step();
-      const ex = (scene as unknown as { swap: { ex: { forced: boolean; phase: string } } | null }).swap?.ex;
+      const sw = (scene as unknown as { swap: { k: number; ex: { forced: boolean; phase: string } } | null }).swap;
+      const ex = sw?.k === i ? sw.ex : undefined;
       forced ||= !!ex?.forced;
       const pl = c.stage.play;
       if (!pl || pl.i < i - 1 || pl.i > i) continue;
@@ -3976,6 +4085,7 @@ function brief(o: Parameters<typeof measure>[0] = {}) {
   wrists,
   facing,
   handoffs,
+  kinks,
   dunks,
   replays,
   finishes,
@@ -3987,6 +4097,10 @@ function brief(o: Parameters<typeof measure>[0] = {}) {
   ballArms,
   knockLook,
   meetLegs,
+  meetHops,
+  into,
+  PARTS,
+  J,
   spins,
   starts,
   knees,
