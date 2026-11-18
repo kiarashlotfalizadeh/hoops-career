@@ -1856,6 +1856,20 @@ describe('live court choreography', () => {
           const still = { ...calm };
           expect(op.aim(kind, view(aspect, 9), 16, true, calm)).toBe(false);
           expect(calm).toEqual(still);
+          // (a picture of the play, not a fish-eye: the floor's camera stands beside that half's corners and held them, 163
+          // degrees on a phone held sideways; the rim and the top of the key are in it)
+          for (const wide of [aspect, 2.16]) {
+            const lens = shot();
+            new Operator().aim(kind, view(wide, 20), 16, true, lens);
+            expect(lens.fov, `${kind} ${wide} still`).toBeLessThan(81);
+            for (const [x, y, z] of [
+              [47 - 5.25, 10, 0],
+              [22, 3, 0],
+            ]) {
+              const p = seen(lens, wide, x, y, z);
+              expect(Math.max(Math.abs(p.x), Math.abs(p.y)), `${kind} ${wide} still holds ${x}`).toBeLessThan(1);
+            }
+          }
           expect(op.aim(kind, view(aspect, -9), 16, true, calm)).toBe(true);
           expect(calm).not.toEqual(still);
           // the device turned (the picture another shape): laid out again at once, as a fresh operator has it, not panned to

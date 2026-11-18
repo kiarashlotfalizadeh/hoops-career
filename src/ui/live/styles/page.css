@@ -27,6 +27,10 @@
   padding: 0 var(--gut-r) calc(var(--lq-h) + var(--safe-b)) var(--gut-l);
   gap: 0;
   overflow: hidden;
+  /* (clipped, not hidden, where the browser can: a hidden box still scrolls when something in what it hides is
+     focused or scrolled into view, and sideways this one hides the console's drawer, parked 336 px past its right
+     edge. A key or a script reaching into the shut drawer slid the whole page left, and nothing slid it back) */
+  overflow: clip;
 }
 /* (the top bar gives way while a game is on: the scorebug says who's playing and has the way out) */
 :root[data-gameday] .app main.page.lv {
@@ -41,6 +45,8 @@
 .lv-stage {
   position: relative;
   overflow: hidden;
+  /* (as the page: the replay's wipe is wider than the court, and nothing may scroll the court to it) */
+  overflow: clip;
   /* (what sits over the court fits its width: court.css) */
   container: lv-stage / inline-size;
   /* (the letterbox around a floor that doesn't fill its box is the building, in ink) */

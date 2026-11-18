@@ -37,7 +37,7 @@ import type { PerspectiveCamera, Vector3 } from 'three';
 import { BASKET, COURT_LEN, toWorld, type Pt, type Script } from '../choreo';
 import { HALF_W, pose, SIDE, type Stage } from '../Court';
 import { planShot, shotAt, type Shot } from './ballistics';
-import { blocked, clearSeat, clutter, fenced, SEAT_X, SEAT_Z, TALL } from './cameras';
+import { blocked, clearSeat, clutter, fenced, NEAR_EDGE, NEAR_TOP, SEAT_X, SEAT_Z, TALL } from './cameras';
 import { DUNK_AT } from './clips';
 import type { V3 } from './puppet';
 
@@ -108,6 +108,9 @@ const SIDE_Y = [11.5, 17];
 const SIDE_Z = 31;
 const SIDE_NEAR = 13;
 
+/** The people under the gantry on their feet, arms up: this much over their seats' top (ft) is kept out of its long lens's picture too. */
+const GANTRY_ROOM = 2.5;
+
 /** What makes a play worth seeing again, and which is kept when a possession has two. */
 export type BigKind = 'winner' | 'buzzer' | 'and1' | 'dunk' | 'three' | 'block';
 const RANK: Record<BigKind, number> = { winner: 6, buzzer: 5, and1: 4.5, dunk: 4, three: 2, block: 1 };
@@ -119,7 +122,7 @@ export const BIG_WORD: Record<BigKind, string> = { winner: 'Game winner', buzzer
  * the camera's side than what it looks at: behind the near sideline there are three rows of seats
  * and the dark over them, so nothing looks that way.
  */
-type ReelCam = 'base' | 'side' | 'tight' | 'rim' | 'floor' | 'slash';
+type ReelCam = 'base' | 'side' | 'tight' | 'rim' | 'floor' | 'slash' | 'end';
 const CAMS: Record<BigKind, ReelCam[]> = {
   winner: ['side', 'slash'],
   buzzer: ['side', 'slash'],
@@ -132,7 +135,14 @@ const CAMS: Record<BigKind, ReelCam[]> = {
 const AT_RIM: ReadonlySet<ReelCam> = new Set(['base', 'rim', 'floor']);
 const RIM_NEAR = 16;
 /** The widest each camera goes (degrees top to bottom, in a wide frame): any wider and it is not that camera's shot, so another is taken. */
-const WIDEST: Record<ReelCam, number> = { base: 50, side: 46, tight: 44, rim: 54, floor: 62, slash: 32 };
+const WIDEST: Record<ReelCam, number> = { base: 50, side: 46, tight: 44, rim: 54, floor: 62, slash: 32, end: 22 };
+/**
+ * A man this near the near side (z, ft) is right over the heads of the people under the gantry from its long lens (they
+ * were the bottom half of his replay), and too near the near side's own cameras: he is seen from high behind the far
+ * basket instead (the End zone camera's platform, cameras.ts mount()), down the floor, a long lens.
+ */
+const END_FROM = 9;
+const END_SEAT = [MID + 30, 36];
 /**
  * What a replay's picture keeps clear of: the lower third (bottom left) and the Replay bug (top left) as
  * court3d.css sizes them (px across and up, with a little room), and this much of each edge (a share of
@@ -183,17 +193,18 @@ const RUN_BY = 12;
  * not that camera's: the next is taken. Short of it, a seat costs this much more for all of its picture so taken
  * (against 1 for needing to go as wide as the camera goes): of two that hold the play, the cleaner picture.
  */
-const MESS_MOST = 0.2;
-const MESS_COST = 4;
+const MESS_MOST = 0.1;
+const MESS_COST = 8;
 /** A man is by the lens when he is nearer it than this share of the way to the man the replay is on, and this much (ft) nearer; or this near it whatever. */
 const FORE = [0.8, 4, 6];
 /**
  * Where else the fixed cameras may stand, from their own seat (ft; `seatFor` takes the cleanest picture of them):
- * behind the basket, farther along the baseline and farther back; over the board, higher and off to the near side
+ * behind the basket, farther along the baseline and nearer it (on the line itself: never farther back, in the
+ * photographers' row with the basket's arm and base up the side of its picture); over the board, higher and off to the near side
  * (not out over the floor: over a man running under it, the picture would whip round); under it, along the baseline
  * either way.
  */
-const BASE_TRY = { z: [0, 5, 10], x: [0, 2.5] };
+const BASE_TRY = { z: [0, 5, 10], x: [0, -1.5] };
 const RIM_TRY = { y: [0, 2.5], z: [0, 3] };
 const FLOOR_TRY = { z: [0, 3, -3], x: [0, -2] };
 /** Until a replay has been drawn, its picture is taken to be a phone's (the tighter safe area): width over height, and px high. */
@@ -580,7 +591,9 @@ export class Director {
     this.moment(r);
     // the camera whose turn it is, if it sees this play and its seat can hold what must be seen at the moment; else the next that can
     const turn = this.n % cams.length;
-    for (const c of [...cams.slice(turn), ...cams.slice(0, turn), 'side', 'tight', 'slash'] as ReelCam[]) if (this.take(c, r)) break;
+    // (the far end's long lens is asked before the gantry's, wherever its turn comes: it takes only what the gantry sees badly)
+    const order = ([...cams.slice(turn), ...cams.slice(0, turn), 'side', 'tight', 'slash'] as ReelCam[]).flatMap((c): ReelCam[] => (c === 'slash' ? ['end', 'slash'] : [c]));
+    for (const c of order) if (this.take(c, r)) break;
     r.next = twice ? (r.cam === 'tight' ? 'slash' : 'tight') : null;
     this.reel = r;
     this.big = null;
@@ -682,7 +695,7 @@ export class Director {
           // (from the end of the move before the moment's: the ball is in a man's hands there, and leaves them as it did)
           r.t = r.t0 = Math.max(r.t0, startOf(r.sc, r.k) - 8);
           this.moment(r);
-          if (!this.take(r.next, r)) this.take('slash', r);
+          if (!this.take(r.next, r) && !this.take('end', r)) this.take('slash', r);
           r.next = null;
           r.slow = SLOW_2;
           r.rate = Math.max(1, this.runs(r.t0, r.t1, r.at, SLOW_2) / REEL_2_MOST);
@@ -743,6 +756,7 @@ export class Director {
   private take(cam: ReelCam, r: Reel): boolean {
     if (AT_RIM.has(cam) && Math.hypot(r.x - r.rim.x, r.z - r.rim.z) > RIM_NEAR) return false;
     if (cam === 'side' && (Math.abs(this.sideSeat(r.x, r.rim.x < 0 ? -1 : 1).x) > MID + 3 || SIDE_Z - r.z < SIDE_NEAR)) return false;
+    if (cam === 'end' && Math.max(r.z, r.from?.z ?? r.z) < END_FROM) return false;
     const seat = this.seatFor(cam, r);
     const { need, mess } = this.judge(seat, cam, r);
     if (cam !== 'slash' && (need > this.widest(cam, r.back) || this.fenced(seat) || mess > MESS_MOST)) return false;
@@ -988,6 +1002,7 @@ export class Director {
       );
     // (as high as the main camera, beside it: lower, its picture would take in the side of the platform's cut in the stands)
     if (cam === 'slash') return { x: e * 6, y: 36, z: 81 };
+    if (cam === 'end') return { x: -e * END_SEAT[0], y: END_SEAT[1], z: 0 };
     const others = this.men;
     // (he went at the basket: his face is toward it, and so is the camera's first choice; but not from behind the
     // basket's unit, its arm or its board across him, and nobody in front of him)
@@ -1168,8 +1183,9 @@ export class Director {
       F.y = (RIM_H + Math.max(5, s.y)) / 2 + 0.5;
       F.z = r.rim.z + (s.z - r.rim.z) * 0.5;
       F.span = clamp(Math.hypot(s.x - r.rim.x, s.z - r.rim.z) * 0.9 + 11, 11, 20);
-    } else if (cam === 'slash') {
-      // (the gantry's second camera, a long lens: the man and the basket he is going at, the lane between them)
+    } else if (cam === 'slash' || cam === 'end') {
+      // (the gantry's second camera, a long lens: the man and the basket he is going at, the lane between them; and the
+      // far end's, the same picture down the floor)
       F.x = s.x + (r.rim.x - s.x) * 0.4;
       F.y = 4.5 + Math.max(0, ball.y - 9) * 0.3;
       F.z = s.z + (r.rim.z - s.z) * 0.4;
@@ -1262,7 +1278,17 @@ export class Director {
     const hand = r.cam === 'tight' || r.cam === 'floor' ? 1 : r.cam === 'rim' ? 0 : 0.4;
     cam.fov = this.fov;
     cam.position.set(r.seat.x + this.hand(0, 0.1 * hand), r.seat.y + this.hand(1, 0.07 * hand) - this.bump(r.cam === 'rim' ? 0.5 : 0.3), r.seat.z + this.hand(2, 0.1 * hand));
-    cam.lookAt(L.x + this.hand(3, 0.05 * hand), L.y + this.hand(4, 0.04 * hand), L.z);
+    // (the gantry's long lens never sees under the near side's seats, as the main camera beside it never does: a man on the
+    // near side had the people under the cameras up the bottom half of his replay. It looks up by what it is under)
+    let up = 0;
+    if (r.seat.z > NEAR_EDGE + 4 && r.seat.y > NEAR_TOP) {
+      const flat = Math.hypot(L.x - r.seat.x, L.z - r.seat.z) || 1;
+      // (how far off the seats' edge is the way it looks: farther, looking along the floor)
+      const edge = ((r.seat.z - NEAR_EDGE) * flat) / Math.max(1, r.seat.z - L.z);
+      const under = -Math.atan2(r.seat.y - NEAR_TOP - GANTRY_ROOM, edge) - (Math.atan2(L.y - r.seat.y, flat) - (this.fov * Math.PI) / 360);
+      if (under > 0) up = flat * Math.tan(Math.atan2(L.y - r.seat.y, flat) + under) - (L.y - r.seat.y);
+    }
+    cam.lookAt(L.x + this.hand(3, 0.05 * hand), L.y + up + this.hand(4, 0.04 * hand), L.z);
     cam.updateProjectionMatrix();
   }
 

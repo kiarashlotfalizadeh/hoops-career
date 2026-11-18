@@ -160,8 +160,15 @@ function thighUnder(hip: Vector3, kn: Vector3, wrist: Vector3): { at: Vector3; w
   return { at, w: w * w * (3 - 2 * w) };
 }
 
+/** How much a man's hands are his own (see bonesOf): how much more shut or open than the pose's (0..1 of shut), and each finger's joints by this much (radians). */
+const HAND_OWN = [0.3, 0.3] as const;
+const ownOf = (a: number, b: number) => {
+  const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
+  return v - Math.floor(v);
+};
+
 /** Every bone's place for a pose (the body's own frame: x to his left, y up from where his ankles' floor is, z the way he faces). */
-function bonesOf(p: Pose): Map<string, Matrix4> {
+function bonesOf(p: Pose, own = 0): Map<string, Matrix4> {
   const rot = new Matrix4().makeRotationX(p.lean);
   const hips = v3(p.hips);
   const at = (x: number, y: number, z: number) => new Vector3(x, y, z).applyMatrix4(rot);
@@ -191,7 +198,10 @@ function bonesOf(p: Pose): Map<string, Matrix4> {
     // his hand: on his thigh where it is down by it (its palm on the top of his thigh, its fingers on toward his knee
     // and a little in, over it), else let go at the wrist as a player's hangs (bent a little toward the palm), unless
     // it is shut
-    const c = typeof p.curl === 'number' ? p.curl : (p.curl?.[i] ?? 0.3);
+    // (each man's hands his own, `own`: a little more shut or open than the pose has them, his left not his right's
+    // mirror: a bench of men in one pose had one pair of hands between them. A fist stays a fist)
+    const c0 = typeof p.curl === 'number' ? p.curl : (p.curl?.[i] ?? 0.3);
+    const c = own ? Math.max(0, Math.min(1, c0 + (ownOf(own, i * 31 + 1) - 0.5) * HAND_OWN[0] * (c0 > 0.85 ? 0.25 : 1))) : c0;
     const hand = fa.clone().setPosition(ha);
     const hip = hips.clone().add(new Vector3(s * HIP_W, 0, 0));
     const kn = toward(hip, p.knees?.[i] ?? hip.clone().add(new Vector3(0, -THIGH, 0)), THIGH);
@@ -213,6 +223,12 @@ function bonesOf(p: Pose): Map<string, Matrix4> {
     // his fingers and thumb, as a player's are turned (figure.ts): let hang, each a little more curled than the one
     // before it and the thumb by the index, closed round something, or shut
     const shape = handOf(c);
+    // (and his fingers not one comb: each a little more or less bent than the shape's, spread a little more or less)
+    if (own) {
+      const loose = 1 - 0.7 * c;
+      for (let d = 0; d < 8; d++) shape[d] = Math.max(0, shape[d] + (ownOf(own, i * 31 + 3 + d) - 0.5) * HAND_OWN[1] * loose);
+      shape[8] *= 0.5 + ownOf(own, i * 31 + 12);
+    }
     HAND_DIGITS.forEach(([j1, j2], d) => {
       const name = DIGIT_NAMES[d];
       digitTurns(shape, 0, d, s > 0, Q1, Q2);
@@ -347,8 +363,8 @@ const POSES: Record<string, Pose> = {
   hips: up(0.02, both([1.28, 4.22, -0.12]), both([0.56, 3.5, 0.12]), { look: -0.04, curl: 0.5 }),
   cheer: up(-0.1, both([1.25, 6.05, 0.2]), both([1.05, 7.4, 0.35]), { look: -0.12, curl: 0.95 }),
   cheer2: up(-0.02, both([1.3, 5.5, 0.45]), both([0.9, 6.5, 0.8]), { look: -0.05, curl: 0.95 }),
-  clap: up(0.04, both([0.86, 4.3, 0.42]), both([0.07, 4.95, 1.12]), { curl: 0.05 }),
-  clap2: up(0.02, both([1.0, 4.3, 0.36]), both([0.52, 4.9, 1.05]), { curl: 0.05 }),
+  clap: up(0.04, both([0.86, 4.3, 0.42]), both([0.07, 4.95, 1.12]), { curl: [0.12, 0.18] }),
+  clap2: up(0.02, both([1.0, 4.3, 0.36]), both([0.52, 4.9, 1.05]), { curl: [0.2, 0.14] }),
   towel: up(
     -0.06,
     [
@@ -634,7 +650,8 @@ const CAST_GRAIN_COLOR = /* glsl */ `
  * (aPart) and where on him it is as built; the rest is worked out where it is drawn, and gone before it is finer than
  * the picture's dots. For a material's `onBeforeCompile`, after its own: `declared` says its vertex shader has aPart already.
  */
-const PPL_FOLDS = { loose: 0.055, suit: 0.018 };
+/** (Shallower and less even than they were, as the players' kit is: a bench's white shorts were corrugated.) */
+const PPL_FOLDS = { loose: 0.032, suit: 0.014 };
 function peopleShade(sh: { vertexShader: string; fragmentShader: string }, declared: boolean) {
   const f = (v: number) => v.toFixed(1);
   sh.vertexShader = sh.vertexShader
@@ -684,11 +701,11 @@ function peopleShade(sh: { vertexShader: string; fragmentShader: string }, decla
     if (seen > 0.0) {
       float tailored = vPplPart > ${f(PART.suit - 0.5)} && vPplPart < ${f(PART.lapel + 0.5)} || abs(vPplPart - ${f(PART.tie)}) < 0.5 ? 1.0 : 0.0;
       float warp = pplNoise(vPplAt * 1.3 + 4.0) - 0.5;
-      vec3 q = vec3(vPplAt.x * 5.6 + warp * 2.0, vPplAt.y * 1.1 + 0.5 * abs(vPplAt.x), vPplAt.z * 5.6 - warp * 2.0);
+      vec3 q = vec3(vPplAt.x * 4.4 + warp * 3.4, vPplAt.y * 1.1 + 0.5 * abs(vPplAt.x), vPplAt.z * 4.4 - warp * 3.4);
       float a = pplNoise(q);
-      float fold = 0.4 * a + 0.3 * pplNoise(q * 2.4 + 3.3) + 0.6 * abs(2.0 * a - 1.0);
+      float fold = 0.55 * a + 0.4 * pplNoise(q * 2.4 + 3.3) + 0.3 * abs(2.0 * a - 1.0);
       pplH = mix(${PPL_FOLDS.loose}, ${PPL_FOLDS.suit}, tailored) * seen * fold;
-      diffuseColor.rgb *= 1.0 - 0.4 * seen * (1.0 - smoothstep(0.0, 0.55, fold));
+      diffuseColor.rgb *= 1.0 - 0.22 * seen * (1.0 - smoothstep(0.0, 0.55, fold));
     }
   } else if (pplHair > 0.5) {
     // (hair is lumps of it and a grain over them, darker down between)
@@ -860,9 +877,9 @@ function fleshOf(thing: Thing, props: Prop[]): Flesh {
 }
 
 /** A body in a pose (and what it carries): each point where its bones put it. */
-function bake(thing: Thing, pose: Pose, props: Prop[] = []): Baked {
+function bake(thing: Thing, pose: Pose, props: Prop[] = [], own = 0): Baked {
   if (!thing.bones) throw new Error(`people.glb: ${thing.name} has no bones`);
-  const bones = bonesOf(pose);
+  const bones = bonesOf(pose, own);
   const lift = new Matrix4().makeTranslation(0, -FLOOR, pose.shift ?? 0);
   const mats = thing.bones.map((b) => {
     const at = bones.get(b.name);
@@ -1709,7 +1726,10 @@ export class Sideline {
     let b = this.baked.get(key);
     if (!b) {
       const made = props(carries, pose, POSES[pose]);
-      b = bake(this.things.get(body)!, made.spec, made.props);
+      // (his hands his own, by his body: not a hand that holds something, which is shaped to it)
+      let own = 0;
+      if (!carries) for (let i = 0; i < body.length; i++) own = (own * 31 + body.charCodeAt(i)) % 9973;
+      b = bake(this.things.get(body)!, made.spec, made.props, carries ? 0 : own + 1);
       for (const p of made.props) p.geo.dispose();
       this.baked.set(key, b);
     }

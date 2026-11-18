@@ -417,6 +417,8 @@ const BESIDE = 3.2;
 const DUNK_OFF = 2;
 const DUNK_OPEN = 1.5;
 const LAND = 3.1;
+/** A putback goes up out of the crowd that went for the board: they give him this much (ft) to come down in, not LAND (they were on him as he landed, and through his first steps after). */
+const LAND_PUT = 4.3;
 /** The quickest anyone crosses the floor, in feet a millisecond at 1× (a broadcast's pace, not a stopwatch's). */
 const PACE = 0.085;
 /**
@@ -1232,12 +1234,13 @@ export function buildScript(
           const ol = Math.hypot(out.x, out.y) || 1;
           const off = how === 'dunk' ? DUNK_OFF : Math.min(toRim, 1);
           const land = { x: BASKET.x + (out.x / ol) * off, y: BASKET.y + (out.y / ol) * off };
+          const room = fin === 'putback' || fin === 'tip' ? LAND_PUT : LAND;
           for (const [who, spot] of [...o, ...d]) {
             const gap = dist(spot, land);
-            if (who === pid || gap >= LAND) continue;
+            if (who === pid || gap >= room) continue;
             const [ax, ay] = gap > 0.01 ? [(spot.x - land.x) / gap, (spot.y - land.y) / gap] : [1, 0];
-            spot.x = land.x + ax * LAND;
-            spot.y = land.y + ay * LAND;
+            spot.x = land.x + ax * room;
+            spot.y = land.y + ay * room;
           }
         };
         clearLanding();

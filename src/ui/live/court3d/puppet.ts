@@ -242,6 +242,14 @@ const STUFFED = 0.5;
 const CUT = 14;
 /** One pose eases into the next over this long (ms): longer into the buzzer's (arms going up are not thrown up). */
 const BLEND_MS = 130;
+/**
+ * And a blend goes by his own time only up to this many times the clock's (his pose time: `soft` in update): played at
+ * 4x a frame is 67 ms of his time, and a blend of 130 was over in two of them (a pose thrown, not eased: dribble to pass,
+ * rebound to outlet, slide to run). The stride's mix by his speed, a slide's flip and a brace go by it too (the mix: a
+ * fifth fewer pops in a steady gait at 4x, for a few more of his head's). Not what decides what he does (a braking
+ * step, a push-off: on it, men braked out of a walk), nor his lean into a start.
+ */
+const BLEND_PACE = 2;
 const BLEND_SLOW = 380;
 const BLEND_GAIT = 220;
 /** A hand with more than ARM_FAR (ft) to go into a stance or a stride takes BLEND_FT ms more for each ft over, up to BLEND_FAR ms in all. */
@@ -1530,6 +1538,8 @@ export interface Trail {
 }
 
 export class Puppet {
+  /** This frame's pose time (ms): see BLEND_PACE. */
+  private softMs = 0;
   readonly body: Body;
   x = 0;
   z = 0;
@@ -1655,6 +1665,8 @@ export class Puppet {
   private styled = -1;
   /** His speed, eased (what the blend of gaits goes by), which way he was going a beat ago, and the bank that gives. */
   private spLag = 0;
+  /** His speed as his stride's mix has it: eased on his pose time (see BLEND_PACE). */
+  private spPose = 0;
   private pvx = 0;
   private pvz = 0;
   private bank = 0;
@@ -1915,6 +1927,10 @@ export class Puppet {
   private standN = 0;
   /** Whose body this is (see Drive.who), the dunk he's going up for, and how many he has. */
   private who = 0;
+  /** Whose body this is (his player id; 0: not said): what is his own, a hand's shape, goes by it. */
+  get me(): number {
+    return this.who;
+  }
   private dunk: ClipId = 'dunk';
   /** The shot he is going up with won't go down (see Drive.fails). */
   private fails: 'miss' | 'block' | undefined;
@@ -2061,6 +2077,9 @@ export class Puppet {
   update(d: Drive, dt: number, own = dt, ease = own, turn = ease) {
     const { s } = this.body;
     const P = this.pose;
+    // (what one pose eases into another by: his own time, up to BLEND_PACE times the clock's)
+    const soft = Math.min(own, ease * BLEND_PACE);
+    this.softMs = soft;
     // a new possession from fresh spots (a highlight, a skip, a quarter that ended on his dunk): he is put there, and
     // whatever he was in the middle of is dropped. (A leap is measured from the rim: left running, it would hold
     // him at the old basket and walk him the length of the floor.)
@@ -2565,7 +2584,10 @@ export class Puppet {
     // (each man's stance ticks over at his own rate: ten of them never breathe as one)
     this.loopT += own * this.beat;
     this.spLag += (sp - this.spLag) * (1 - Math.exp(-own / 160));
-    if (FORWARD.has(id)) this.stride(this.spLag, this.want);
+    // (the stride he is shown in comes round to his speed on his pose time: what he does by how fast he was going, a
+    // braking step, a push-off, goes by his own, as it did)
+    this.spPose = jumped ? sp : this.spPose + (sp - this.spPose) * (1 - Math.exp(-soft / 160));
+    if (FORWARD.has(id)) this.stride(this.spPose, this.want);
     else sample(c, c.kind === 'shot' ? acting!.tau : c.kind === 'gait' ? this.phase : this.loopT / c.dur, this.want);
     // (a jump shot is taken in his own rhythm: see rhythm)
     if (id === 'jumper' && acting) this.rhythm(c, acting.tau);
@@ -2575,7 +2597,7 @@ export class Puppet {
     // (into a slide or out of one, the new pose is the one blended to: a flip fading under some other clip would swing its arms across him)
     const flipTo = id === 'shuffle' && vs > 0 ? 1 : 0;
     if (this.fresh) this.flip = flipTo;
-    else this.flip += (flipTo - this.flip) * (1 - Math.exp(-own / 110));
+    else this.flip += (flipTo - this.flip) * (1 - Math.exp(-soft / 110));
     if (this.flip > 0.01) {
       FLIP.set(this.want);
       mirror(FLIP);
@@ -2634,7 +2656,7 @@ export class Puppet {
       if (up > 0 && !this.slow) this.blendMs = Math.max(this.blendMs, Math.min(BLEND_UP, BLEND_MS + up * BLEND_HIP));
     }
     if (this.blend < 1) {
-      this.blend = Math.min(1, this.blend + (this.slow ? ease : own) / this.blendMs);
+      this.blend = Math.min(1, this.blend + (this.slow ? ease : soft) / this.blendMs);
       const w = smooth(this.blend);
       for (let i = 0; i < N; i++) P[i] += this.off[i] * (1 - w);
       // (a hand going from his side to over his head goes round in front of him: straight up it would pass
@@ -3549,7 +3571,7 @@ export class Puppet {
       [lx, lz] = this.local(d.press.x, d.press.z);
       want = clamp((PRESS_FAR * this.body.s - Math.hypot(lx, lz)) / ((PRESS_FAR - PRESS_NEAR) * this.body.s), 0, 1);
     }
-    this.pressed += (want - this.pressed) * (1 - Math.exp(-own / 160));
+    this.pressed += (want - this.pressed) * (1 - Math.exp(-this.softMs / 160));
     this.switched += own;
     const w = this.pressed;
     if (w < 0.02 || !DRIBBLES.has(id)) {
@@ -3817,7 +3839,7 @@ export class Puppet {
     }
     // (braced across his way to stop: his feet a little wider under him while he does: see brakes)
     this.braceMs -= own;
-    this.brace += ((this.braceMs > 0 ? 1 : 0) - this.brace) * (1 - Math.exp(-own / 110));
+    this.brace += ((this.braceMs > 0 ? 1 : 0) - this.brace) * (1 - Math.exp(-this.softMs / 110));
     P[I.wide] += 0.1 * this.brace;
     this.loading = two && (left < LOAD_MS || this.hopU >= 0);
     this.gathering = this.loading && left > GATHER_LEFT && this.hopU < 0;

@@ -91,8 +91,8 @@ const BOARD_HALF = 3;
  */
 const LOW_TALL = 11;
 /** The near side's seats end here (z), this high with the people in them: past them there is nothing built. */
-const NEAR_EDGE = 42.5;
-const NEAR_TOP = 8.5;
+export const NEAR_EDGE = 42.5;
+export const NEAR_TOP = 8.5;
 
 interface Rig {
   /** How far from the ball (ft) a man still counts in full, and where he no longer counts at all. */
@@ -574,6 +574,18 @@ function halfPts(half: -1 | 1, pts: number[]): number {
   return n;
 }
 
+/**
+ * The floor's camera stands beside the half it shoots, a few feet from its corners: a picture that held those corners
+ * would be a fish-eye (163 degrees top to bottom on a phone, the men a strip across it). Its still is the picture it
+ * settles on for a set half court instead, its own framing: the ball at the top of the key, five out and five on
+ * them (ft from the middle of the floor along it, across), the rim and its board.
+ */
+const STILL_SET = [20, 0, 30, 20, 30, -20, 44, 22, 40, -6, 24, 0, 33, 16, 33, -16, 42, 17, 41, -3];
+const STILL_MEN = new Float32Array(STILL_SET.length);
+const STILL_VIEW: View = { ball: { x: 0, y: 4, z: 0 }, men: STILL_MEN, n: STILL_SET.length / 2, end: 1, aspect: 1, near: 0, tight: 0 };
+/** And no still is ever wider than this top to bottom (degrees), whatever it was asked to hold. */
+const STILL_WIDEST = 80;
+
 /** The ball goes this fast along the floor (ft a second) on a break: the operator looks this far ahead of it for each, and at most (ft). */
 const LEAD = 0.42;
 const LEAD_MOST = 13;
@@ -702,7 +714,15 @@ export class Operator {
       if (half !== this.half) cut = true;
       this.half = half;
       const w = mount(kind, v.aspect, half * 24, end, this.want);
-      fit(kind, w.px, w.py, w.pz, this.pts, halfPts(half, this.pts), v.aspect, half * 24, 0, 0, out);
+      if (kind === 'low' && half === end) {
+        // (its own half: the set half court as it frames one, see STILL_SET)
+        const set = STILL_VIEW;
+        for (let i = 0; i < STILL_SET.length; i += 2) [STILL_MEN[i], STILL_MEN[i + 1]] = [half * STILL_SET[i], STILL_SET[i + 1]];
+        [set.ball.x, set.end, set.aspect] = [half * STILL_SET[0], half, v.aspect];
+        fit(kind, w.px, w.py, w.pz, this.pts, gather(kind, set, 0, this.pts), v.aspect, set.ball.x, 0, 0, out);
+        clearArm(out, v.aspect, set.ball, half);
+      } else fit(kind, w.px, w.py, w.pz, this.pts, halfPts(half, this.pts), v.aspect, half * 24, 0, 0, out);
+      out.fov = Math.min(out.fov, STILL_WIDEST);
       this.on = false;
       this.still = true;
       return cut;

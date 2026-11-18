@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import type { ShotRecord } from '../../core/types';
+import { spread } from '../spread';
 import { periodLabel } from '../stats';
 import { wpText } from '../../core/analysis/winProb';
 import { reducedMotion } from '../motion';
@@ -422,6 +423,12 @@ export function ShotChart({ shots, color = 'var(--accent)', size = 320, keyed = 
   const seen = useInView(el);
   // the shots arrive in the order they were taken, the whole game inside 0.7s
   const when = (i: number) => along(shots.length > 1 ? i / (shots.length - 1) : 0, 700);
+  // (a dozen at the rim were one blot: eased apart until each reads, none far from where it was taken)
+  const at = spread(
+    shots.map((s) => ({ x: sx(s.x), y: sy(s.y) })),
+    8.5,
+    26,
+  );
   return (
     <div className={chartCls(seen, 'shot-chart')} ref={setEl}>
       <svg viewBox={`0 0 ${size} ${h}`} style={{ maxWidth: size * 1.4 }} role="img" aria-label={`Shot chart: ${made} of ${shots.length} shots made`}>
@@ -440,11 +447,11 @@ export function ShotChart({ shots, color = 'var(--accent)', size = 320, keyed = 
         </g>
         {shots.map((s, i) =>
           s.made ? (
-            <circle key={i} className="ch-dot" style={when(i)} cx={sx(s.x)} cy={sy(s.y)} r={4} fill={color} stroke="var(--bg-2)" strokeWidth={1.25} />
+            <circle key={i} className="ch-dot" style={when(i)} cx={at[i].x} cy={at[i].y} r={4} fill={color} stroke="var(--bg-2)" strokeWidth={1.25} />
           ) : (
             <g key={i} className="ch-miss" style={when(i)} stroke={MISS} strokeWidth={1.4} strokeLinecap="round" opacity={0.75}>
-              <line x1={sx(s.x) - 3} y1={sy(s.y) - 3} x2={sx(s.x) + 3} y2={sy(s.y) + 3} />
-              <line x1={sx(s.x) - 3} y1={sy(s.y) + 3} x2={sx(s.x) + 3} y2={sy(s.y) - 3} />
+              <line x1={at[i].x - 3} y1={at[i].y - 3} x2={at[i].x + 3} y2={at[i].y + 3} />
+              <line x1={at[i].x - 3} y1={at[i].y + 3} x2={at[i].x + 3} y2={at[i].y - 3} />
             </g>
           ),
         )}

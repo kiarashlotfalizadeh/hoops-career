@@ -4257,6 +4257,163 @@ function dribbles({ speed = 1, over = 0.7, from = 0, upto = Infinity } = {}) {
   return out;
 }
 
+/**
+ * Shots at the rim (a dunk, a layup, a putback) as the main camera has them: over the last of the move up and the
+ * first of the release, the drawn frames in which another man's trunk or head stands on the line from the gantry to the
+ * ball (`hidden`, by what that man is doing), and after it (the release and the move that follows) how near the nearest
+ * man's middle is to the shooter's (`crowd`: frames under `near` ft; `ring`: men within `round` ft, on average).
+ */
+function rimSight({ speed = 1, near = 2.4, round = 5, view = 'tv', only = '' } = {}) {
+  const out = {
+    shots: 0,
+    frames: 0,
+    hidden: 0,
+    shotsHidden: 0,
+    by: {} as Record<string, number>,
+    after: 0,
+    crowd: 0,
+    ring: 0,
+    worst: [] as string[],
+    kinds: {} as Record<string, number[]>,
+  };
+  const seg = (a: number[], c: number[]) => {
+    const u = [a[3] - a[0], a[4] - a[1], a[5] - a[2]];
+    const v = [c[3] - c[0], c[4] - c[1], c[5] - c[2]];
+    const ww = [a[0] - c[0], a[1] - c[1], a[2] - c[2]];
+    const dot = (x: number[], y: number[]) => x[0] * y[0] + x[1] * y[1] + x[2] * y[2];
+    const [uu, uv, vv, uw, vw] = [dot(u, u), dot(u, v), dot(v, v), dot(u, ww), dot(v, ww)];
+    const den = uu * vv - uv * uv;
+    const cl = (x: number) => Math.max(0, Math.min(1, x));
+    let sA = den > 1e-9 ? cl((uv * vw - vv * uw) / den) : 0;
+    const t = cl((uv * sA + vw) / (vv || 1));
+    sA = cl((uv * t - uw) / (uu || 1));
+    return Math.hypot(ww[0] + u[0] * sA - v[0] * t, ww[1] + u[1] * sA - v[1] * t, ww[2] + u[2] * sA - v[2] * t);
+  };
+  scripts.forEach((sc, k) => {
+    const pids = [...sc.oPids, ...sc.dPids];
+    for (let i = 1; i < sc.frames.length; i++) {
+      const j = sc.frames[i - 1].act.findIndex((a) => a === 'dunk' || a === 'layup');
+      if (j < 0 || !sc.frames[i].fx) continue;
+      const kind = `${sc.frames[i - 1].act[j]}${sc.frames[i].how ? ' ' + sc.frames[i].how : ''}${sc.frames[i].swat !== undefined ? ' blocked' : ''}`;
+      if (only && !kind.includes(only)) continue;
+      const c = new Clock(speed);
+      c.k = Math.max(0, k - 1);
+      if (k === 0) c.tipMs = 0;
+      // (where each camera stands: cameras.ts mount())
+      const end = w({ x: 0, y: 5.25 }, sc.dir).y < 47 ? -1 : 1;
+      const cam = view === 'low' ? [end * 54.5, 6, 14.3] : view === 'side' ? [end * 30, 13, 50] : view === 'end' ? [-end * 77, 36, 0] : [0, 36, 81];
+      let hid = 0;
+      let seen = 0;
+      let crowdHere = 0;
+      while (c.k <= k && c.finalMs < 0) {
+        c.step();
+        if (c.k !== k) continue;
+        const pl = c.stage.play;
+        if (!pl) continue;
+        const me = inner.figs.get(pids[j]);
+        if (!me) continue;
+        if ((pl.i === i - 1 && pl.u > 0.6) || (pl.i === i && pl.u < 0.3)) {
+          const b = inner.ball;
+          const ray = [cam[0], cam[1], cam[2], b.x, b.y, b.z];
+          // (short of the ball itself)
+          const L = Math.hypot(b.x - cam[0], b.y - cam[1], b.z - cam[2]);
+          for (let q = 3; q < 6; q++) ray[q] = cam[q - 3] + ((ray[q] - cam[q - 3]) * (L - 0.6)) / L;
+          seen++;
+          out.frames++;
+          let who = '';
+          for (const [pid, f] of inner.figs) {
+            if (f === me) continue;
+            const p = f.pup;
+            const W = (n: number) => {
+              p.world(p.j[n * 3], p.j[n * 3 + 1], p.j[n * 3 + 2], V);
+              return [V.x, V.y, V.z];
+            };
+            const body = [...W(J.hips), ...W(J.head)];
+            const act = sc.frames[Math.min(pl.i, sc.frames.length - 1)].act[pids.indexOf(pid)] ?? 'other';
+            if (seg(ray, body) < 0.62 * p.body.s * p.body.bulk) who = act;
+            // (or an arm of his: shoulder to elbow to hand)
+            else
+              for (const [a, b2] of [
+                [J.sl, J.el],
+                [J.el, J.hl],
+                [J.sr, J.er],
+                [J.er, J.hr],
+              ])
+                if (seg(ray, [...W(a), ...W(b2)]) < 0.28 * p.body.s) who = `${act} arm`;
+          }
+          if (who) {
+            hid++;
+            out.hidden++;
+            out.by[who] = (out.by[who] ?? 0) + 1;
+          }
+        }
+        if ((pl.i === i && pl.u >= 0.3) || pl.i === i + 1) {
+          out.after++;
+          let nearest = Infinity;
+          for (const f of inner.figs.values()) {
+            if (f === me) continue;
+            const far = Math.hypot(f.pup.x - me.pup.x, f.pup.z - me.pup.z);
+            nearest = Math.min(nearest, far);
+            if (far < round) out.ring++;
+          }
+          if (nearest < near) {
+            out.crowd++;
+            crowdHere++;
+          }
+        }
+      }
+      out.shots++;
+      const K = (out.kinds[kind] ??= [0, 0, 0, 0]);
+      K[0]++;
+      K[1] += seen;
+      K[2] += hid;
+      K[3] += crowdHere;
+      if (hid > seen * 0.4) {
+        out.shotsHidden++;
+        out.worst.push(`k${k} i${i} p${pids[j]} ${kind} ${hid}/${seen}`);
+      }
+    }
+  });
+  out.ring = Math.round((out.ring / Math.max(1, out.after)) * 100) / 100;
+  return out;
+}
+
+/**
+ * Possession k's instant replay as the broadcast shows it, into #strip: every `every`th frame of it, in a picture
+ * `w` by `h`. `turn`: which of the play's cameras has the turn (director.ts CAMS). Says which camera it took.
+ */
+async function replayFilm({ k = 0, turn = 0, every = 10, w = 480, h = 270, cols = 4, most = 16, speed = 1 } = {}) {
+  const c = new Clock(speed);
+  c.k = Math.max(0, k - 1);
+  if (k === 0) c.tipMs = 0;
+  scene.size(w, h, 1);
+  while (c.k <= k && c.finalMs < 0) c.step();
+  const dir = (inner as unknown as { director: { onAir: boolean; n: number; reel: { cam: string; kind: string; seat: V3 } | null } }).director;
+  dir.n = turn;
+  if (!scene.replay(scripts[k])) return { cells: 0, why: 'no replay due' };
+  const cells: ImageBitmap[] = [];
+  const cams: string[] = [];
+  let n = 0;
+  let guard = 0;
+  while (!scene.released && guard++ < 4000 && cells.length < most) {
+    drawing = dir.onAir && n % every === 0;
+    scene.frame(c.stage, props, 0, FRAME, false, FRAME * speed);
+    if (drawing) {
+      cells.push(await createImageBitmap(canvas));
+      cams.push(dir.reel ? `${dir.reel.cam}@${dir.reel.seat.x.toFixed(0)},${dir.reel.seat.y.toFixed(0)},${dir.reel.seat.z.toFixed(0)}` : '-');
+    }
+    drawing = false;
+    if (dir.onAir) n++;
+  }
+  scene.endReplay();
+  const strip = document.getElementById('strip') as HTMLCanvasElement;
+  strip.width = Math.min(cols, cells.length) * w;
+  strip.height = Math.ceil(cells.length / cols) * h;
+  const g = strip.getContext('2d')!;
+  cells.forEach((b, i) => g.drawImage(b, (i % cols) * w, Math.floor(i / cols) * h));
+  return { cells: cells.length, cams: [...new Set(cams)] };
+}
+
 function finishes() {
   const out: Record<string, number[]> = {};
   scripts.forEach((sc, k) => sc.frames.forEach((f) => f.how && !(out[f.how] ??= []).includes(k) && out[f.how].push(k)));
@@ -4326,6 +4483,8 @@ function brief(o: Parameters<typeof measure>[0] = {}) {
 (window as unknown as { lab: unknown }).lab = {
   quick,
   brief,
+  rimSight,
+  replayFilm,
   snaps,
   dribbles,
   handTrace,

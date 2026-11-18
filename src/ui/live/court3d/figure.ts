@@ -236,6 +236,8 @@ const R_HAIR: Rect = [832, 992, 192, 32];
 const WRAP = 0.06;
 /** The vest's picture is the model's own uv: round him from his left side, and up it in 2 ft from 3.6 ft; it reaches this high (in those units). */
 const VEST_TOP = 1.1;
+/** A vest's side panels start here on its picture (px down the old frame): at the foot of the armhole, under its trim. */
+const PANEL_TOP = 74;
 /** His hand's skin (a little rougher and paler) comes in over his wrist, from the first of these down his arm's strip to the second (ft). */
 const HAND_FROM = [2.04, 2.22] as const;
 /** How far down an arm and a leg its strip reaches, ft (shoulder to fingertips, hip to sole, on the 6 ft 6 body). */
@@ -1243,6 +1245,34 @@ const OPEN = shape([0.06, 0.06, 0.08, 0.1], [0.08, 0.08, 0.1, 0.12], 0.22, 0, 0.
 const FLAT = shape([0.04, 0.04, 0.05, 0.06], [0.04, 0.04, 0.05, 0.06], -0.03, 0.05, 0.05, 0.05);
 /** A defender's: open and apart and a little bent, ready to take a swipe or get a hand on a pass. */
 const ACTIVE = shape([0.22, 0.27, 0.32, 0.38], [0.3, 0.35, 0.4, 0.45], 0.26, 0.1, 0.45, 0.15);
+/** Open and easy: the fingers a little bent and not held apart, the thumb let be (a hand up in the air, a hand out to a man: nobody's is a starfish). */
+const EASY = shape([0.14, 0.2, 0.27, 0.36], [0.2, 0.28, 0.36, 0.46], 0.08, 0.12, 0.38, 0.14);
+/** A fist not clenched white: shut, a little loose (a pumped fist, held a while). */
+const FIST_EASY = shape([1.2, 1.3, 1.36, 1.38], [1.45, 1.55, 1.6, 1.6], -0.02, 0.1, -0.3, 0.6);
+/**
+ * The buzzer's hands, each man's own of these (his left's, his right's): both fists, a fist and an open hand, a
+ * finger up, both hands open. Ten men with both fists shut was a drill.
+ */
+const PARTY_HANDS: readonly (readonly [Shape, Shape])[] = [
+  [FIST, FIST],
+  [FIST_EASY, EASY],
+  [EASY, FIST],
+  [FIST, POINT],
+  [EASY, EASY],
+  [FIST_EASY, FIST_EASY],
+];
+/**
+ * A free hand is its man's own: each finger's joints this much more or less bent than the shape has them (radians, at
+ * the most; less the more shut it is), and alive: they work this much (radians) every HAND_LIFE_MS or so, each hand in
+ * its own time.
+ */
+const HAND_OWN = 0.16;
+const HAND_LIFE = 0.07;
+const HAND_LIFE_MS = 2600;
+const ownHand = (a: number, b: number) => {
+  const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
+  return v - Math.floor(v);
+};
 /** Closed round something (a board, his shorts, the rim, another man's hand). */
 const GRAB = shape([1.05, 1.1, 1.15, 1.2], [1.15, 1.2, 1.25, 1.3], 0, 0.15, -0.2, 0.5);
 /** Out for a pass: open, apart, the thumbs wide (toward each other, with his palms to it: see CATCH_UP). */
@@ -1310,10 +1340,10 @@ const CLIP_HANDS: Partial<Record<ClipId, Shape | readonly [Shape, Shape]>> = {
   rebound: OPEN,
   boxout: OPEN,
   postUp: OPEN,
-  hug: OPEN,
+  hug: EASY,
   floor: OPEN,
   stumble: OPEN,
-  rue: OPEN,
+  rue: EASY,
   bump: OPEN,
   celebrate: FIST,
   cheer: FIST,
@@ -1417,6 +1447,8 @@ const rgbOf = (c: string): Rgb => {
   return [k.r, k.g, k.b];
 };
 
+/** A hairline thins out to his skin over this many times each style's own width (in a portrait it was a line across his forehead). */
+const HAIR_EDGE = 1.8;
 /**
  * His hairline, round his head: how high it is (as the height of a unit direction from the head's
  * middle) by how far round from the front he is (radians): across his forehead, back at the temples,
@@ -1731,7 +1763,7 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
           sstep(0.58, 0.8, ax);
         const high = sstep(0.04 * stub, -0.14 * stub, ny - 0.25 * (nz + 0.1));
         const cheek = Math.max(
-          (look.beard === 1 ? sstep(0.2, -0.32, line + 0.25 * ax * ax) : sstep(0.1, -0.12, line + 0.2 * (ax - 0.5) * (ax - 0.5))) * under * high,
+          (look.beard === 1 ? sstep(0.2, -0.32, line + 0.25 * ax * ax) : sstep(0.17, -0.2, line + 0.2 * (ax - 0.5) * (ax - 0.5))) * under * high,
           burn * (look.beard === 2 || look.beard === 5 ? 0 : 1),
         );
         // (where a shaved beard's shadow is: a little further up than any beard)
@@ -1812,7 +1844,7 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
         // does, a few short hairs ahead of it; but for a line-up, cut crisp)
         const wisp = noise(nx * 13 + nz * 7, ny * 13 - nz * 5);
         const over = (soft: number) => {
-          const k = soft * (1 - 0.72 * lined);
+          const k = soft * HAIR_EDGE * (1 - 0.72 * lined);
           return sstep(-0.9 * k, 1.5 * k, line + (fine() - 0.5) * k * 1.1 + (wisp - 0.5) * k * 1.6);
         };
         // (how far up his sides and back: a fade is skin there and hair by the crown, never at his forehead. Each man's
@@ -2407,25 +2439,28 @@ function paint(kit: MatchKit, num: string, name: string, mark: string, gear: Gea
     (ctx, pick) => {
       ctx.fillStyle = pick(fill, 'vest');
       ctx.fillRect(-4, -40, 520, 340);
-      // a panel down each side, piped in the trim
+      // a panel down each side, piped in the trim: from the foot of the armhole down. (The picture goes round him by
+      // angle, and the top of a shoulder is as far round as his side is: a panel run to the picture's top crossed each
+      // strap, its two lines of piping beside the armhole's own trim, a strap trimmed twice)
       for (const x of [0, 256, 512]) {
+        const [y0, y1] = [PANEL_TOP, 300];
         ctx.fillStyle = pick(panel, 'vest');
-        ctx.fillRect(x - 15, -40, 30, 340);
+        ctx.fillRect(x - 15, y0, 30, y1 - y0);
         ctx.fillStyle = pick(ring, 'rib');
-        for (const e of [-1, 1]) ctx.fillRect(x + e * 15 - 1.25, -40, 2.5, 340);
+        for (const e of [-1, 1]) ctx.fillRect(x + e * 15 - 1.25, y0, 2.5, y1 - y0);
         // (sewn in: a row of stitches either side of the panel, and the seam down its middle)
         ctx.strokeStyle = pick(seam, 'vest');
         ctx.lineWidth = 0.7;
         ctx.setLineDash([2.4, 1.6]);
         for (const e of [-19, 19]) {
           ctx.beginPath();
-          ctx.moveTo(x + e, -40);
-          ctx.lineTo(x + e, 300);
+          ctx.moveTo(x + e, y0);
+          ctx.lineTo(x + e, y1);
           ctx.stroke();
         }
         ctx.setLineDash([]);
         ctx.fillStyle = pick(seam, 'vest');
-        ctx.fillRect(x - 0.4, -40, 0.8, 340);
+        ctx.fillRect(x - 0.4, y0, 0.8, y1 - y0);
       }
       ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';
@@ -2598,9 +2633,10 @@ function paint(kit: MatchKit, num: string, name: string, mark: string, gear: Gea
   return sh;
 }
 
+/** (Shallower and less even than they were: on a light kit, close up, they were deep stripes a hand apart.) */
 /** The folds his kit hangs in (see foldsOf): how deep a vest's are, his shorts', and the short ones where cloth is pulled or bunched (ft); how dark the bottom of one is (a share). */
-const FOLDS = ['0.06', '0.06', '0.035'] as const;
-const FOLD_SHADE = '0.3';
+const FOLDS = ['0.036', '0.042', '0.026'] as const;
+const FOLD_SHADE = '0.18';
 /** Where his vest's picture and his shorts' are on the sheet (uv). */
 const ON_VEST = (uv: string) => `( ${uv}.y > ${(1 - (R_VEST[1] + R_VEST[3]) / SHEET).toFixed(4)} )`;
 const ON_SHORTS = (uv: string) =>
@@ -2650,7 +2686,7 @@ float foldsOf( vec3 p, float shorts ) {
   if ( shorts > 0.5 ) {
     float leg = abs( p.x ) - 0.34;
     float hang = 0.35 + 0.65 * smoothstep( 3.75, 2.9, p.y );
-    vec3 q = vec3( p.x * 5.2 + warp * 1.6, p.y * 0.75 - 0.9 * abs( leg ), p.z * 5.2 - warp * 1.2 );
+    vec3 q = vec3( p.x * 4.4 + warp * 2.8, p.y * 0.75 - 0.9 * abs( leg ), p.z * 4.4 - warp * 2.2 );
     float a = noise3( q );
     float b = noise3( q * 2.3 + 7.1 );
     float pull = noise3( vec3( ( p.y - 3.1 + abs( p.x ) * 0.9 ) * 6.5, p.z * 1.2, 3.0 + sign( p.x ) ) );
@@ -2658,11 +2694,11 @@ float foldsOf( vec3 p, float shorts ) {
     return ${FOLDS[1]} * hang * ( a + 0.4 * b - 0.3 * abs( 2.0 * a - 1.0 ) ) + ${FOLDS[2]} * cross * pull;
   }
   float hang = smoothstep( 5.3, 4.15, p.y );
-  vec3 q = vec3( p.x * 6.4 + warp * 2.2, p.y * 0.7 + 0.6 * abs( p.x ), p.z * 6.4 - warp * 2.2 );
+  vec3 q = vec3( p.x * 4.8 + warp * 3.6, p.y * 0.7 + 0.6 * abs( p.x ), p.z * 4.8 - warp * 3.6 );
   float a = noise3( q );
   float b = noise3( q * 2.4 + 3.3 );
   float bunch = smoothstep( 4.3, 3.85, p.y ) * noise3( vec3( p.x * 1.6 + warp, p.y * 8.0, p.z * 1.6 ) );
-  return ${FOLDS[0]} * ( 0.45 + 0.55 * hang ) * ( 0.4 * a + 0.3 * b + 0.6 * abs( 2.0 * a - 1.0 ) ) + ${FOLDS[2]} * 0.7 * bunch;
+  return ${FOLDS[0]} * ( 0.45 + 0.55 * hang ) * ( 0.55 * a + 0.4 * b + 0.3 * abs( 2.0 * a - 1.0 ) ) + ${FOLDS[2]} * 0.7 * bunch;
 }
 float noise3( vec3 x ) {
   vec3 i = floor( x );
@@ -2700,7 +2736,7 @@ const THROUGH = '0.8';
  * much of his skin the point is (set where his colour is worked out).
  */
 /** The sharper shine over his skin's own (its oil, his sweat): how much smoother than his skin it is (a share of its roughness), and how much of it a dry light skin has, the darkest more by, a wet one more by. */
-const SKIN_OIL = ['0.66', '0.17', '0.09', '0.9'] as const;
+const SKIN_OIL = ['0.82', '0.11', '0.06', '0.9'] as const;
 /** How much of the building's own shine his skin goes without (a share). */
 const SKIN_ROOF = '0.5';
 /** His hair's two bands of shine: how far each is shifted along the strand (toward its root, toward its tip), and how tight each is. */
@@ -2729,7 +2765,7 @@ void RE_Direct_Skin( const in IncidentLight directLight, const in vec3 geometryP
   // it, which is what a lamp overhead puts along a shoulder, a brow, the bridge of a nose)
   if ( skinGloss > 0.0 ) {
     PhysicalMaterial oil = material;
-    oil.roughness = max( 0.13, material.roughness * ${SKIN_OIL[0]} );
+    oil.roughness = max( 0.22, material.roughness * ${SKIN_OIL[0]} );
     reflectedLight.directSpecular += skinGloss * saturate( nl ) * directLight.color * BRDF_GGX( directLight.direction, geometryViewDir, geometryNormal, oil );
   }
   // (hair's shine runs across its strands, not round a ball: a band of the lamp's own white where the strands turn
@@ -3552,7 +3588,10 @@ function stuffMaterial(map: CanvasTexture, stuff: CanvasTexture, told: Told, pla
             // (each lock its own tilt: the band is broken along it, not a ring round a ball)
             float lock = noise3( vec3( vRest.x * 150.0, vRest.y * 24.0, vRest.z * 150.0 ) ) - 0.5;
             hairAlong = normalize( hairAlong + normal * 0.35 * lock );
-            hairShine = hairK * ${HAIR_SHINE} * ( 1.0 - smoothstep( 0.8, 0.97, stuff.r ) ) * ( 0.6 + 0.8 * ( lock + 0.5 ) );
+            // (and broken in clumps over his head: one even band of light from temple to temple is a helmet's)
+            float clump = noise3( vRest * 11.0 + 5.0 );
+            hairShine = hairK * ${HAIR_SHINE} * ( 1.0 - smoothstep( 0.8, 0.97, stuff.r ) ) * ( 0.3 + 1.4 * ( lock + 0.5 ) ) * ( 0.35 + 1.3 * clump );
+            diffuseColor.rgb *= 0.86 + 0.28 * clump;
             hairTint = diffuseColor.rgb * 2.6 + 0.012;
           }
         }`,
@@ -3904,6 +3943,8 @@ export class Fig {
   private readonly wrists = new Float32Array([WRIST_LOOSE, WRIST_PRON, WRIST_LOOSE, WRIST_PRON]);
   /** Each hand's shape as it is now (see Shape: the left's, then the right's), eased toward what he is doing. */
   private readonly digits = Float32Array.from([...LOOSE, ...LOOSE]);
+  /** His hands' own clock (ms): see HAND_LIFE. */
+  private handMs = 0;
   readonly shadow: Mesh;
   readonly ring: Mesh;
   private readonly own: { dispose(): void }[] = [];
@@ -4335,6 +4376,8 @@ export class Fig {
       if (!free) {
         const c = CLIP_HANDS[p.clip];
         free = !c ? LOOSE : c instanceof Float32Array ? c : c[left ? 0 : 1];
+        // (the buzzer's: his own pair of them)
+        if (p.clip === 'celebrate' || p.clip === 'cheer') free = PARTY_HANDS[Math.floor(ownHand(p.me, 31) * PARTY_HANDS.length) % PARTY_HANDS.length][left ? 0 : 1];
         if (p.overBall && !drib) free = OPEN;
         if (one && one.tau > 0 && PASSED.has(one.id)) free = OPEN;
         if (one && one.tau > 0 && FLICKED.has(one.id)) free = left ? OPEN : GOOSE;
@@ -4457,7 +4500,16 @@ export class Fig {
       const st = this.digits;
       const o = left ? 0 : SHAPE_N;
       const se = 1 - Math.exp(-p.frameMs / SHAPE_MS);
-      for (let i = 0; i < SHAPE_N; i++) st[o + i] += (free[i] + (on[i] - free[i]) * holds - st[o + i]) * se;
+      // (a free hand his own and alive: see HAND_OWN. Not a hand on the ball, nor one a gesture has shaped)
+      this.handMs += p.frameMs / 2;
+      const own = gest ? 0 : 1 - holds;
+      const work = Math.sin((this.handMs / HAND_LIFE_MS) * 6.283 * (0.8 + 0.4 * ownHand(p.me, o + 40)) + 6.283 * ownHand(p.me, o + 41));
+      for (let i = 0; i < SHAPE_N; i++) {
+        // (his fingers' joints only: less the more shut they are, a fist stays one)
+        const loose = i < 8 ? own * Math.max(0.15, 1 - free[i] / 1.4) : 0;
+        const mine = loose * ((ownHand(p.me, o + i) - 0.5) * 2 * HAND_OWN + work * HAND_LIFE * (0.5 + ownHand(p.me, o + i + 20)));
+        st[o + i] += (Math.max(0, free[i] + mine) + (on[i] - free[i]) * holds - st[o + i]) * se;
+      }
       this.fingers(left);
     }
     // (each foot points where the puppet has it on the floor, which isn't always the way he faces: a planted foot keeps

@@ -17,6 +17,7 @@ import { BASKET, COURT_LEN, tangents, toWorld, type Frame, type Pt, type Script 
 import type { ShotRecord, Team } from '../../core/types';
 import { FRANCHISES, type FranchiseDef } from '../../core/teams';
 import { inkOn, neutralVenue, venueLook, type MatchKit, type Venue } from '../teamColors';
+import { spread } from '../spread';
 
 /**
  * The floor the game is played on: maple, with the home team's colour painted in both keys and the
@@ -223,6 +224,27 @@ export function courtFit(w: number, h: number): { wide: boolean; k: number } {
   return { wide, k: !wide ? w / FLOOR_W : Math.min(w / FLOOR_L, h / FLOOR_W) };
 }
 
+/** A point on the screen back on the floor (project's other way). */
+const unproject = (v: View, p: Pt): Pt =>
+  v.wide ? { x: HALF_W + SIDE - (p.y - v.oy) / v.k, y: (p.x - v.ox) / v.k - END } : { x: p.x / v.k - HALF_W - SIDE, y: p.y / v.k + v.top };
+/**
+ * Men drawn at the least a disc goes (a phone's court: bodyR's floor) are bigger than the room the play gives them:
+ * five in the lane were one pile of rings, the ball somewhere on it. They are eased apart on the screen until each
+ * disc shows (DISC_GAP of two discs' radii between middles), none more than DISC_MOVE of a disc from his spot. Discs
+ * drawn to the floor's scale are left where they are.
+ */
+const DISC_GAP = 0.9;
+const DISC_MOVE = 1.15;
+function apart(view: View, at: Pt[]): Pt[] {
+  const r = bodyR(view.k);
+  if (r <= BODY * view.k * 1.01) return at;
+  return spread(
+    at.map((p) => project(view, p)),
+    2 * r * DISC_GAP,
+    r * DISC_MOVE,
+  ).map((p) => unproject(view, p));
+}
+
 const project = (v: View, p: Pt): Pt =>
   v.wide ? { x: v.ox + (p.y + END) * v.k, y: v.oy + (HALF_W + SIDE - p.x) * v.k } : { x: (p.x + HALF_W + SIDE) * v.k, y: (p.y - v.top) * v.k };
 
@@ -372,7 +394,11 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
       } else if (p.idle?.kind === 'chart') drawChart(ctx, view, p.idle.shots, p.kits, p.abbrevs, paints);
       else {
         const who = tip ?? standers;
-        for (const st of who) drawPlayer(ctx, view, st.at, p.kits[st.side], p.jersey(st.pid), false, !!p.hot?.has(st.pid), paints);
+        const where = apart(
+          view,
+          who.map((st) => st.at),
+        );
+        who.forEach((st, i) => drawPlayer(ctx, view, where[i], p.kits[st.side], p.jersey(st.pid), false, !!p.hot?.has(st.pid), paints));
         const b = p.idle?.kind === 'tip' ? { x: 0, y: COURT_LEN / 2 } : ballAt;
         if (b) drawBall(ctx, view, b, 0, 0, paints);
       }
@@ -412,8 +438,10 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
       // defense first (under), then offense; the man with the ball last, ringed and named
       const hold = u >= 0.5 ? b.hold : a.hold;
       const nO = sc.oPids.length;
-      const dW = play.d.map(W);
-      const oW = play.o.map(W);
+      // (on a phone's court, eased apart until each disc shows: see apart)
+      const all = apart(view, [...play.o, ...play.d].map(W));
+      const oW = all.slice(0, nO);
+      const dW = all.slice(nO);
       sc.dPids.forEach((pid, j) => drawPlayer(ctx, view, dW[j], kitD, p.jersey(pid), hold === nO + j, !!p.hot?.has(pid), paints));
       sc.oPids.forEach((pid, j) => drawPlayer(ctx, view, oW[j], kitO, p.jersey(pid), hold === j, !!p.hot?.has(pid), paints));
       if (p.names && hold !== undefined && hold >= 0) {
@@ -425,8 +453,10 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
       const from = W(a.ball);
       const to = W(b.ball);
       let bw = W(play.ball);
-      // (in a man's hands it's held out toward the basket he's going at, off his number)
+      // (in a man's hands it's held out toward the basket he's going at, off his number: from where his disc is drawn)
       if (play.carried) {
+        const j = a.hold;
+        if (typeof j === 'number' && j >= 0 && all[j]) bw = all[j];
         const rim = W(BASKET);
         const away = Math.hypot(rim.x - bw.x, rim.y - bw.y) || 1;
         const reach = (bodyR(view.k) * 0.95) / view.k;
@@ -1182,8 +1212,8 @@ function drawChart(ctx: CanvasRenderingContext2D, view: View, shots: ShotRecord[
   const order = [...shots.filter((sh) => !sh.made), ...shots.filter((sh) => sh.made)];
   const at = spread(
     order.map((sh) => project(view, toWorld({ x: sh.x, y: sh.y }, dirOf(sh.t)))),
-    r * 1.75,
-    r * 5,
+    r * 2.1,
+    r * 8,
   );
   ctx.lineCap = 'round';
   order.forEach((sh, i) => {
@@ -1240,44 +1270,7 @@ function drawChart(ctx: CanvasRenderingContext2D, view: View, shots: ShotRecord[
   chip(ctx, view, mid.x, foot, '', px, 'key', paints);
 }
 
-/**
- * Marks that land on one another (a dozen at the rim), eased apart: each pair closer than `gap` px is
- * pushed apart along the line between them, a few times over, and none ends up more than `most` px from
- * where it was. Two on the very same spot start a hair apart, each its own way round, so the same shots
- * always land in the same places.
- */
-export function spread(pts: Pt[], gap: number, most: number): Pt[] {
-  const out = pts.map((p, i) => ({ x: p.x + Math.cos(i * 2.39996) * gap * 0.02, y: p.y + Math.sin(i * 2.39996) * gap * 0.02 }));
-  for (let pass = 0; pass < 14; pass++) {
-    let moved = false;
-    for (let i = 0; i < out.length; i++) {
-      for (let j = i + 1; j < out.length; j++) {
-        const dx = out[j].x - out[i].x;
-        const dy = out[j].y - out[i].y;
-        const d = Math.hypot(dx, dy);
-        if (d >= gap || d === 0) continue;
-        const push = (gap - d) / 2;
-        out[i].x -= (dx / d) * push;
-        out[i].y -= (dy / d) * push;
-        out[j].x += (dx / d) * push;
-        out[j].y += (dy / d) * push;
-        moved = true;
-      }
-    }
-    // (never far from where it was taken)
-    out.forEach((p, i) => {
-      const dx = p.x - pts[i].x;
-      const dy = p.y - pts[i].y;
-      const d = Math.hypot(dx, dy);
-      if (d > most) {
-        p.x = pts[i].x + (dx / d) * most;
-        p.y = pts[i].y + (dy / d) * most;
-      }
-    });
-    if (!moved) break;
-  }
-  return out;
-}
+export { spread };
 
 /**
  * A chart's label: an ink pill at (x, y), its `anchor` edge there (or centered), a team's count with a dot
