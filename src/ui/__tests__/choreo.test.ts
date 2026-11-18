@@ -1709,7 +1709,7 @@ describe('live court choreography', () => {
       const space = new Spacing();
       const men = new Map<number, Puppet>();
       const world = new Map<number, Float32Array>();
-      const [at, go, build] = [new Float32Array(20), new Float32Array(20), new Float32Array(30)];
+      const [at, go, build, soon] = [new Float32Array(20), new Float32Array(20), new Float32Array(30), new Float32Array(20)];
       const v = { x: 0, y: 0, z: 0 };
       const scene = (p: Pt, dir: 1 | -1) => {
         const w = toWorld(p, dir);
@@ -1724,8 +1724,12 @@ describe('live court choreography', () => {
         const rim = scene(BASKET, sc.dir);
         for (let t = 0; t <= total; t += 16) {
           const play = pose(sc, t, false);
+          // (and where the plan has them a beat on, as the scene gives it: 300 ms of the bodies' time, half that of the play's)
+          const then = pose(sc, t + 150, false);
           const carried = play.carried ? play.a.hold! : -1;
           pids.forEach((pid, j) => {
+            const ahead = scene(j < 5 ? then.o[j] : then.d[j - 5], sc.dir);
+            [soon[j * 2], soon[j * 2 + 1]] = [ahead.x, ahead.z];
             const now = scene(j < 5 ? play.o[j] : play.d[j - 5], sc.dir);
             const a = scene(j < 5 ? play.a.o[j] : play.a.d[j - 5], sc.dir);
             const b = scene(j < 5 ? play.b.o[j] : play.b.d[j - 5], sc.dir);
@@ -1734,7 +1738,7 @@ describe('live court choreography', () => {
             const k = m ? m.body.s * Math.sqrt(m.body.bulk) : 1;
             [build[j * 3], build[j * 3 + 1], build[j * 3 + 2]] = [1.12 * k, 0.48 * k, m?.placed ? m.yaw : NaN];
           });
-          space.place(at, go, pids, 32, 16, t === 0, [], build);
+          space.place(at, go, pids, 32, 16, t === 0, [], build, t === 0 ? undefined : soon);
           frames++;
           pids.forEach((pid, j) => {
             let m = men.get(pid);

@@ -6,12 +6,8 @@
 export const BODY_GAP = 2.7;
 /** Each is sent at least this far (ft) to his own side of the crossing. */
 const BIAS = 0.7;
-/** A step round another man is taken at this speed at most, ft a second: never in one frame. */
-const SLIDE = 12;
-/** Eased, a step aside can lag two men closing fast. They are never drawn nearer than this (ft), whatever the easing says: the bodies don't meet. */
+/** Two bodies' middles are never drawn nearer than this (ft), whoever they are, unless they meet. */
 const BODY_MIN = 2.3;
-/** And that last step is taken at this speed at most, ft a second. */
-const SHOVE = 21;
 /** A plan spot this far (ft) from the last frame's is a new start whoever says so: his step aside starts again there. */
 const CUT = 14;
 /** A pass that would go through a defender goes over him: this high (ft) where it passes him, and no arc taller than LOB_MAX. */
@@ -98,108 +94,88 @@ export function reach(ux: number, uz: number, wide: number, deep: number, yaw: n
 const SKIN = 0.08;
 /** Two who meet are drawn this far (ft) toward each other at most: a man left farther off by the play goes round. */
 const MEET_MOST = 3;
-/** Two drawn together are let go of this fast (ft a second). */
-const MEET_LET = 5;
+/**
+ * Each man's step aside is a body's: where it has him and how fast it is taking him there, carried from frame to frame.
+ * It goes after where it is wanted as a spring that comes to rest without swinging past (STEP_W, a second's), no faster
+ * than STEP_V ft a second, and gathers or gives up that speed no quicker than STEP_A ft a second each second (a man's
+ * push off a foot): his path bends round another man, it never kinks. On the bodies' own time, so a game played fast
+ * shows the same path, a quarter of the frames of it at 4x.
+ */
+const STEP_W = 15;
+const STEP_V = 15;
+const STEP_A = 60;
+/** Followed in slices no longer than this (s): a 4x frame is one spring, not four of them stacked. */
+const STEP_SLICE = 1 / 120;
+/**
+ * Two trunks the following has left further into each other than this (ft, past where they touch) are put apart at
+ * once, no faster than SHOVE ft a second: what a step taken in time can't spare. With where the plan has them a beat
+ * on looked at (see place's `soon`), that is a man the plan puts on another's spot with no warning.
+ */
+const SHOVE_SLACK = 0.04;
+const SHOVE = 21;
 
-/** The men kept apart from frame to frame: each one's step aside is eased, so a push that changes its mind never throws him. */
+/** The men kept apart from frame to frame: each one's step aside is followed as a body moves, so a push that changes its mind never throws him. */
 export class Spacing {
-  private readonly off = new Map<number, [number, number]>();
-  private readonly was = new Map<number, [number, number]>();
-  private readonly plan = new Float32Array(40);
-  private readonly eased = new Float32Array(40);
-  /** The plan's own spots this frame, and how far each man is drawn off his by a meet (see MEET_LET). */
-  private readonly raw = new Float32Array(40);
-  private readonly drawn = new Map<number, [number, number]>();
-  /** The plan put man `j` somewhere new this frame (a new end of the floor, a skip): nothing is eased from where he was. */
-  private jumped(j: number, pid: number): boolean {
-    const was = this.was.get(pid);
-    return !!was && Math.hypot(this.raw[j * 2] - was[0], this.raw[j * 2 + 1] - was[1]) > CUT;
-  }
+  /** Each man's step aside: where it has him (x, z, ft), how fast it is taking him (x, z, ft a second), and where his plan had him (x, z). */
+  private readonly state = new Map<number, Float32Array>();
+  private readonly work = new Float32Array(40);
+  private readonly want = new Float32Array(40);
+  private readonly then = new Float32Array(40);
+  /** How many times a man has been put apart at once (see SHOVE_SLACK), for the motion lab. */
+  shoves = 0;
 
   /**
    * `at`: where the plan has each of `pids` (x, z each), overwritten with where he is drawn.
-   * `own`: the bodies' time since the last frame, ms (none: everyone stays as he was). `ease`: the time
-   * the steps aside are taken on (near the clock's, so they are little bigger a frame when the game is played fast).
+   * `own`: the bodies' time since the last frame, ms (none: everyone stays as he was). `ease`: the time the last
+   * resort's shove is taken on (near the clock's, so it is little bigger a frame when the game is played fast).
    * `cut`: the men have been put on fresh spots (a highlight, a skip), so every step aside starts again.
    * `meets`: the men who come body to body this move (see Meet): drawn together, and kept from going through each
    * other no further than touching. `build`: each man's trunk as `reach` measures it (wide, deep, heading: three a
-   * man), so two big men side by side are kept as far apart as their shoulders need.
+   * man), so two big men side by side are kept as far apart as their shoulders need. `soon`: where the plan has them
+   * a beat from now: a step aside that will be wanted then is begun now.
    */
-  place(at: Float32Array, go: Float32Array, pids: readonly number[], own: number, ease = own, cut = false, meets: readonly Meet[] = [], build?: Float32Array): Float32Array {
+  place(
+    at: Float32Array,
+    go: Float32Array,
+    pids: readonly number[],
+    own: number,
+    ease = own,
+    cut = false,
+    meets: readonly Meet[] = [],
+    build?: Float32Array,
+    soon?: Float32Array,
+  ): Float32Array {
     const n = pids.length;
-    const plan = this.plan;
-    // (where the plan itself has them, before anyone is drawn to anyone)
-    plan.set(at.subarray(0, n * 2));
-    this.raw.set(at.subarray(0, n * 2));
-    // (two who meet are drawn to each other: the man the move is on takes his share of the way, the other the rest)
-    for (const m of meets) {
-      const dx = at[m.j * 2] - at[m.i * 2];
-      const dz = at[m.j * 2 + 1] - at[m.i * 2 + 1];
-      const d = Math.hypot(dx, dz);
-      if (d < 1e-3 || m.w <= 0) continue;
-      const pull = Math.min(d - m.near, MEET_MOST) * m.w;
-      at[m.j * 2] -= (dx / d) * pull * m.share;
-      at[m.j * 2 + 1] -= (dz / d) * pull * m.share;
-      at[m.i * 2] += (dx / d) * pull * (1 - m.share);
-      at[m.i * 2 + 1] += (dz / d) * pull * (1 - m.share);
+    const want = this.want;
+    this.wanted(at, go, n, meets, build, want);
+    // (a step aside wanted a beat from now, if it is more of one than now's: begun before they meet, let go of as now has it.
+    // Not for two who meet: how far into it they are is the play's, now, and they are drawn together as it comes on)
+    if (soon) {
+      const then = this.then;
+      this.wanted(soon, go, n, meets, build, then);
+      for (let j = 0; j < n; j++)
+        if (!meets.some((m) => m.w > 0 && (m.i === j || m.j === j)) && Math.hypot(then[j * 2], then[j * 2 + 1]) > Math.hypot(want[j * 2], want[j * 2 + 1])) {
+          want[j * 2] = then[j * 2];
+          want[j * 2 + 1] = then[j * 2 + 1];
+        }
     }
-    // (how far each was drawn is let go of no faster than MEET_LET: a box-out's two, drawn together, were let go the frame
-    // the next possession began, and each hopped half a foot back to his spot)
-    const let_ = (MEET_LET * ease) / 1000;
+    const sec = Math.max(0, own) / 1000;
     for (let j = 0; j < n; j++) {
-      const dx = at[j * 2] - plan[j * 2];
-      const dz = at[j * 2 + 1] - plan[j * 2 + 1];
-      let w = this.drawn.get(pids[j]);
-      if (!w) this.drawn.set(pids[j], (w = [dx, dz]));
-      else if (cut || this.jumped(j, pids[j])) [w[0], w[1]] = [dx, dz];
-      else {
-        const far = Math.hypot(dx - w[0], dz - w[1]);
-        // (drawn farther: as the meet itself comes on; less: eased)
-        const grows = dx * dx + dz * dz >= w[0] * w[0] + w[1] * w[1];
-        const k = grows || far <= let_ ? 1 : let_ / far;
-        w[0] += (dx - w[0]) * k;
-        w[1] += (dz - w[1]) * k;
-      }
-      at[j * 2] = plan[j * 2] + w[0];
-      at[j * 2 + 1] = plan[j * 2 + 1] + w[1];
+      let s = this.state.get(pids[j]);
+      // (a man new to the floor, or put somewhere new, is put where he goes: nothing is followed from where he was)
+      const fresh = !s || cut || Math.hypot(at[j * 2] - s[4], at[j * 2 + 1] - s[5]) > CUT;
+      if (!s) this.state.set(pids[j], (s = new Float32Array(6)));
+      if (fresh) s.set([want[j * 2], want[j * 2 + 1], 0, 0]);
+      else follow(s, want[j * 2], want[j * 2 + 1], sec);
+      s[4] = at[j * 2];
+      s[5] = at[j * 2 + 1];
+      at[j * 2] += s[0];
+      at[j * 2 + 1] += s[1];
     }
-    const met = (i: number, j: number) => meets.find((m) => (m.i === i && m.j === j) || (m.i === j && m.j === i));
-    plan.set(at.subarray(0, n * 2));
-    apart(at, go, n, (i, j) => {
-      const m = met(i, j);
-      return m ? BODY_GAP + (Math.min(BODY_GAP, m.near) - BODY_GAP) * m.w : BODY_GAP;
-    });
-    const most = (SLIDE * ease) / 1000;
-    for (let j = 0; j < n; j++) {
-      const wx = at[j * 2] - plan[j * 2];
-      const wz = at[j * 2 + 1] - plan[j * 2 + 1];
-      let o = this.off.get(pids[j]);
-      const was = this.was.get(pids[j]);
-      // (a man new to the floor, or to this end of it, is put where he goes)
-      if (!o) this.off.set(pids[j], (o = [wx, wz]));
-      else if (cut || this.jumped(j, pids[j])) [o[0], o[1]] = [wx, wz];
-      if (was) [was[0], was[1]] = [this.raw[j * 2], this.raw[j * 2 + 1]];
-      else this.was.set(pids[j], [this.raw[j * 2], this.raw[j * 2 + 1]]);
-      const far = Math.hypot(wx - o[0], wz - o[1]);
-      if (far <= most) [o[0], o[1]] = [wx, wz];
-      else {
-        o[0] += ((wx - o[0]) / far) * most;
-        o[1] += ((wz - o[1]) / far) * most;
-      }
-      at[j * 2] = plan[j * 2] + o[0];
-      at[j * 2 + 1] = plan[j * 2 + 1] + o[1];
-    }
-    // what the easing left of two bodies meeting is taken up along the line between them: a short step back, never
-    // a change of side. As far apart as their trunks reach toward each other (BODY_MIN at least); two who meet, touching
-    const least = (i: number, j: number, ux: number, uz: number) => {
-      let gap = BODY_MIN;
-      if (build) gap = Math.max(gap, reach(ux, uz, build[i * 3], build[i * 3 + 1], build[i * 3 + 2]) + reach(ux, uz, build[j * 3], build[j * 3 + 1], build[j * 3 + 2]) + SKIN);
-      const m = met(i, j);
-      return m ? gap + (Math.min(gap, m.near) - gap) * m.w : gap;
-    };
-    const eased = this.eased;
-    eased.set(at.subarray(0, n * 2));
-    if (own > 0)
+    // the last resort: two trunks further into each other than SHOVE_SLACK are put back to it along the line between
+    // them, a short step back, never a change of side; and that is where each one's step aside has him from here
+    if (own > 0) {
+      const shove = cut ? Infinity : (SHOVE * ease) / 1000;
       for (let pass = 0; pass < 2; pass++)
         for (let i = 0; i < n; i++)
           for (let j = i + 1; j < n; j++) {
@@ -208,34 +184,100 @@ export class Spacing {
             let d = Math.hypot(dx, dz);
             if (d >= BODY_MIN * 1.3) continue;
             if (d < 1e-3) [dx, dz, d] = [0, 1, 1];
-            const want = least(i, j, dx / d, dz / d);
-            if (d >= want) continue;
-            const push = (want - d) / 2;
-            at[i * 2] -= (dx / d) * push;
-            at[i * 2 + 1] -= (dz / d) * push;
-            at[j * 2] += (dx / d) * push;
-            at[j * 2 + 1] += (dz / d) * push;
+            const least = this.least(i, j, dx / d, dz / d, meets, build) - SHOVE_SLACK;
+            if (d >= least) continue;
+            const push = Math.min((least - d) / 2, shove);
+            this.shoves++;
+            for (const [k, sign] of [
+              [i, -1],
+              [j, 1],
+            ] as const) {
+              at[k * 2] += ((sign * dx) / d) * push;
+              at[k * 2 + 1] += ((sign * dz) / d) * push;
+              const s = this.state.get(pids[k])!;
+              s[0] += ((sign * dx) / d) * push;
+              s[1] += ((sign * dz) / d) * push;
+              // (and he isn't still going back into the other man as he is put off him)
+              const into = -(s[2] * dx + s[3] * dz) * sign;
+              if (into > 0) {
+                s[2] += ((sign * dx) / d / d) * into;
+                s[3] += ((sign * dz) / d / d) * into;
+              }
+            }
           }
-    // (on fresh spots there is no last frame to step from: they are put apart)
-    const shove = cut ? Infinity : (SHOVE * ease) / 1000;
-    for (let j = 0; j < n; j++) {
-      const far = Math.hypot(at[j * 2] - eased[j * 2], at[j * 2 + 1] - eased[j * 2 + 1]);
-      if (far > shove) {
-        at[j * 2] = eased[j * 2] + ((at[j * 2] - eased[j * 2]) / far) * shove;
-        at[j * 2 + 1] = eased[j * 2 + 1] + ((at[j * 2 + 1] - eased[j * 2 + 1]) / far) * shove;
-      }
-      const o = this.off.get(pids[j])!;
-      o[0] = at[j * 2] - plan[j * 2];
-      o[1] = at[j * 2 + 1] - plan[j * 2 + 1];
     }
-    if (this.off.size > n)
-      for (const pid of [...this.off.keys()])
-        if (!pids.includes(pid)) {
-          this.off.delete(pid);
-          this.was.delete(pid);
-          this.drawn.delete(pid);
-        }
+    if (this.state.size > n) for (const pid of [...this.state.keys()]) if (!pids.includes(pid)) this.state.delete(pid);
     return at;
+  }
+
+  /** How near two trunks come before they touch, along a way from `i` to `j` (ft): as far as each reaches (BODY_MIN at least); two who meet, touching. */
+  private least(i: number, j: number, ux: number, uz: number, meets: readonly Meet[], build?: Float32Array): number {
+    let gap = BODY_MIN;
+    if (build) gap = Math.max(gap, reach(ux, uz, build[i * 3], build[i * 3 + 1], build[i * 3 + 2]) + reach(ux, uz, build[j * 3], build[j * 3 + 1], build[j * 3 + 2]) + SKIN);
+    const m = meets.find((m) => (m.i === i && m.j === j) || (m.i === j && m.j === i));
+    return m ? gap + (Math.min(gap, m.near) - gap) * m.w : gap;
+  }
+
+  /**
+   * Where each man in `spots` is wanted off his spot (x, z each, into `out`): two who meet drawn together, the rest
+   * round each other (see apart) and never nearer than their trunks reach.
+   */
+  private wanted(spots: Float32Array, go: Float32Array, n: number, meets: readonly Meet[], build: Float32Array | undefined, out: Float32Array) {
+    const w = this.work;
+    w.set(spots.subarray(0, n * 2));
+    // (two who meet are drawn to each other: the man the move is on takes his share of the way, the other the rest)
+    for (const m of meets) {
+      const dx = w[m.j * 2] - w[m.i * 2];
+      const dz = w[m.j * 2 + 1] - w[m.i * 2 + 1];
+      const d = Math.hypot(dx, dz);
+      if (d < 1e-3 || m.w <= 0) continue;
+      const pull = Math.min(d - m.near, MEET_MOST) * m.w;
+      w[m.j * 2] -= (dx / d) * pull * m.share;
+      w[m.j * 2 + 1] -= (dz / d) * pull * m.share;
+      w[m.i * 2] += (dx / d) * pull * (1 - m.share);
+      w[m.i * 2 + 1] += (dz / d) * pull * (1 - m.share);
+    }
+    const met = (i: number, j: number) => meets.find((m) => (m.i === i && m.j === j) || (m.i === j && m.j === i));
+    apart(w, go, n, (i, j) => {
+      const m = met(i, j);
+      return m ? BODY_GAP + (Math.min(BODY_GAP, m.near) - BODY_GAP) * m.w : BODY_GAP;
+    });
+    // (and what that leaves of two bodies meeting taken up along the line between them: a short step back, never a change of side)
+    for (let pass = 0; pass < 2; pass++)
+      for (let i = 0; i < n; i++)
+        for (let j = i + 1; j < n; j++) {
+          let dx = w[j * 2] - w[i * 2];
+          let dz = w[j * 2 + 1] - w[i * 2 + 1];
+          let d = Math.hypot(dx, dz);
+          if (d >= BODY_MIN * 1.3) continue;
+          if (d < 1e-3) [dx, dz, d] = [0, 1, 1];
+          const least = this.least(i, j, dx / d, dz / d, meets, build);
+          if (d >= least) continue;
+          const push = (least - d) / 2;
+          w[i * 2] -= (dx / d) * push;
+          w[i * 2 + 1] -= (dz / d) * push;
+          w[j * 2] += (dx / d) * push;
+          w[j * 2 + 1] += (dz / d) * push;
+        }
+    for (let k = 0; k < n * 2; k++) out[k] = w[k] - spots[k];
+  }
+}
+
+/** One man's step aside after where it is wanted (x, z), for `sec` seconds of his own time: see STEP_W. */
+function follow(s: Float32Array, tx: number, tz: number, sec: number) {
+  for (let left = sec; left > 1e-6;) {
+    const h = Math.min(left, STEP_SLICE);
+    left -= h;
+    let ax = STEP_W * STEP_W * (tx - s[0]) - 2 * STEP_W * s[2];
+    let az = STEP_W * STEP_W * (tz - s[1]) - 2 * STEP_W * s[3];
+    const a = Math.hypot(ax, az);
+    if (a > STEP_A) [ax, az] = [(ax * STEP_A) / a, (az * STEP_A) / a];
+    s[2] += ax * h;
+    s[3] += az * h;
+    const v = Math.hypot(s[2], s[3]);
+    if (v > STEP_V) [s[2], s[3]] = [(s[2] * STEP_V) / v, (s[3] * STEP_V) / v];
+    s[0] += s[2] * h;
+    s[1] += s[3] * h;
   }
 }
 

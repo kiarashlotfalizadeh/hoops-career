@@ -241,6 +241,8 @@ const DRIVE_INTO = 4;
 const SWAP_NEAR_MS = 160;
 /** Each man is told where the plan takes him this far on (ms, the bodies' time): see Drive.ahead. */
 const AHEAD_MS = 150;
+/** Men step round each other for where the plan has them this far on (ms, the bodies' time) as well as where it has them now: see Spacing.place's `soon`. */
+const SPACE_AHEAD = 300;
 /** A loose ball is moved off a body at this speed at most, ft a second: it rolls off him, it doesn't jump. */
 const BALL_PUSH = 14;
 /** A ball in a man's hands gives way to a body by it no faster than this (ft a second): from where it is, so never to his far side. */
@@ -1125,7 +1127,7 @@ export class CourtScene {
           const w = toWorld(j < nO ? f0.o[j] : f0.d[j - nO], sc.dir);
           return !!was && Math.hypot(sx(w) - was[0], sz(w) - was[1]) > FRESH;
         });
-      const spots = this.apart(sc, play, own, aside, cut);
+      const spots = this.apart(sc, play, own, aside, cut, dt);
       // a dead ball (the line, a whistle, a timeout, everyone waiting): men stand up out of their stance and may rest
       const dead = line || b.flash?.kind === 'foul' || !!b.flash?.text.startsWith('Timeout') || b.act.every((x) => x === 'stand' || x === 'hold');
       const late = sc.q >= 4 && play.clock <= LATE_S;
@@ -2168,15 +2170,23 @@ export class CourtScene {
    * other. The plan keeps them apart at its keyframes, not on the way between: two whose paths cross
    * step round each other (see spacing.ts).
    */
-  private apart(sc: NonNullable<Stage['script']>, play: NonNullable<Stage['play']>, own: number, aside: number, cut: boolean): Float32Array {
+  private apart(sc: NonNullable<Stage['script']>, play: NonNullable<Stage['play']>, own: number, aside: number, cut: boolean, dt: number): Float32Array {
     const nO = sc.oPids.length;
     const n = nO + sc.dPids.length;
     const at = this.spotsFor(n);
     const go = this.going;
+    // (and where the plan has them a beat on, the play's clock running: see SPACE_AHEAD)
+    const then = dt > 0 && own > 0 && !cut ? pose(sc, this.scriptAt + (SPACE_AHEAD * dt) / own, true) : null;
+    const soon = then ? this.soonFor(n) : undefined;
     for (let j = 0; j < n; j++) {
       const w = toWorld(j < nO ? play.o[j] : play.d[j - nO], sc.dir);
       at[j * 2] = sx(w);
       at[j * 2 + 1] = sz(w);
+      if (then && soon) {
+        const t = toWorld(j < nO ? then.o[j] : then.d[j - nO], sc.dir);
+        soon[j * 2] = sx(t);
+        soon[j * 2 + 1] = sz(t);
+      }
       // (how far the move takes him, for which side he passes on)
       const a = toWorld(j < nO ? play.a.o[j] : play.a.d[j - nO], sc.dir);
       const b = toWorld(j < nO ? play.b.o[j] : play.b.d[j - nO], sc.dir);
@@ -2187,7 +2197,7 @@ export class CourtScene {
     pids.forEach((pid, j) => this.planAt.set(pid, [at[j * 2], at[j * 2 + 1]]));
     this.aside(pids, at, go, own, cut);
     const meets = this.meets(play, pids, at);
-    const spots = this.spacing.place(at, go, pids, own, aside, cut, meets, this.builds(pids));
+    const spots = this.spacing.place(at, go, pids, own, aside, cut, meets, this.builds(pids), soon);
     this.given(pids, spots, own, cut);
     this.tug(pids, spots, own, cut);
     return spots;
@@ -3292,6 +3302,11 @@ export class CourtScene {
   private heldMs = 0;
   /** Where the plan had each man last frame (x, z), before anyone stepped aside. */
   private readonly planAt = new Map<number, [number, number]>();
+  private soon = new Float32Array(0);
+  private soonFor(n: number): Float32Array {
+    if (this.soon.length !== n * 2) this.soon = new Float32Array(n * 2);
+    return this.soon;
+  }
   private spotsFor(n: number): Float32Array {
     if (this.spots.length !== n * 2) {
       this.spots = new Float32Array(n * 2);
