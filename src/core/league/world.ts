@@ -1,4 +1,5 @@
-// The world around the games: the press, the staff's development watch and the user's legacy,
+// The world around the games: the press, the staff's development watch, the user's legacy and his
+// locker room's pulse,
 // called from the season's calendar (season.ts) at four points. Each part reads the league as it
 // stands and writes news, mail and its own state. None of them draws from the league's random
 // stream: anything random is seeded from the day, the game or the season (see `worldRng`), so the
@@ -9,6 +10,7 @@ import { mediaDay, mediaGame, mediaSeasonEnd, mediaSeasonStart } from './media';
 import { storyGame } from '../analysis/gameStory';
 import { devDay, devSeasonEnd } from './devWatch';
 import { legacyDay, legacyGame, legacySeasonEnd } from './legacy';
+import { pulseDay } from './pulse';
 
 /** A random stream of the world's own for one occasion ("power", season, day): the same occasion always draws the same. */
 export function worldRng(league: League, ...keys: (string | number)[]): Rng {
@@ -27,6 +29,7 @@ export function worldDay(league: League) {
   mediaDay(league);
   devDay(league);
   legacyDay(league);
+  pulseDay(league);
 }
 
 /** On opening night, once rosters, rotations and the owner's goals are set. */

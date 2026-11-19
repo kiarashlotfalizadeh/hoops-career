@@ -14,6 +14,8 @@ import { buildGameReport } from '../../core/analysis/gameReport';
 import { Empty, PageHeader } from '../components/ui';
 import { GameRecap } from '../components/GameRecap';
 import { boardColors, FinalSlab } from '../components/FinalSlab';
+import { ShareButton } from '../share/ShareButton';
+import { gamePosterOf, posterFile } from '../share/specs';
 import { HighlightsCard } from '../components/HighlightsCard';
 import { TabBar, useQueryParam } from '../league/shared';
 import { WhyTab } from './report/WhyTab';
@@ -70,11 +72,20 @@ export default function GameReport() {
         title="Game report"
         backTo="/games"
         right={
-          opp !== undefined && (
-            <Link to={`/games/${opp}`} className="card-link">
-              Matchup <ChevronRight size={14} aria-hidden="true" />
-            </Link>
-          )
+          <span className="row" style={{ gap: 10 }}>
+            {/* the final as a picture, one tap: the result, its headline and the player of the game */}
+            <ShareButton
+              className="btn xs ghost"
+              spec={() => gamePosterOf(league, g)}
+              file={posterFile(`${league.teams[g.away.tid].abbrev} ${league.teams[g.home.tid].abbrev} ${g.gid}`)}
+              title="The final"
+            />
+            {opp !== undefined && (
+              <Link to={`/games/${opp}`} className="card-link">
+                Matchup <ChevronRight size={14} aria-hidden="true" />
+              </Link>
+            )}
+          </span>
         }
       />
       {/* the night's story leads the first tab; on the others the board is one line, so the tab's own content starts on the first screen */}

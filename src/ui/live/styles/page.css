@@ -8,8 +8,11 @@
    (live/Court.tsx picks the view from the box it gets). A phone gets the sideways layout instead
    unless Settings keep it upright (side.css). */
 :root {
-  /* the bench bar's row */
+  /* the bench bar's row, and the bar with the room it keeps under the row: the home bar's inset, or a
+     few px where there is none (a label's descenders once sat on the glass's edge and were cut by it) */
   --lq-h: 58px;
+  --lv-bar-pad: max(6px, var(--safe-b));
+  --lv-bar-h: calc(var(--lq-h) + 2px + var(--lv-bar-pad));
 }
 :root[data-gameday] .bottomnav,
 :root[data-gameday] .topbar {
@@ -24,7 +27,7 @@
   position: relative;
   max-width: 820px;
   height: calc(100dvh - var(--top-h) - var(--safe-t) - 1px);
-  padding: 0 var(--gut-r) calc(var(--lq-h) + var(--safe-b)) var(--gut-l);
+  padding: 0 var(--gut-r) var(--lv-bar-h) var(--gut-l);
   gap: 0;
   overflow: hidden;
   /* (clipped, not hidden, where the browser can: a hidden box still scrolls when something in what it hides is
@@ -50,7 +53,7 @@
   /* (what sits over the court fits its width: court.css) */
   container: lv-stage / inline-size;
   /* (the letterbox around a floor that doesn't fill its box is the building, in ink) */
-  background: var(--ink);
+  background: var(--plate);
 }
 .lv-stage .court-cv {
   height: var(--court-h, auto);
@@ -59,7 +62,7 @@
 /* the plates text sits on in the broadcast's graphics: ink (the app's signals lifted to read on it) */
 .lv {
   --lv-plate: rgba(18, 18, 18, 0.88);
-  --lv-plate-hi: var(--ink);
+  --lv-plate-hi: var(--plate);
 }
 
 /* phones: the scorebug, the call bar and the court edge to edge, like a broadcast */

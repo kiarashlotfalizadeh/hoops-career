@@ -159,8 +159,24 @@
     align-items: center;
   }
 }
+/* a desktop: the board as big as its card goes, the grades and the bench in a column beside it */
+@media (min-width: 1100px) {
+  .tx-tactic {
+    grid-template-columns: minmax(0, 600px) minmax(0, 1fr);
+    gap: var(--gap-page) 36px;
+  }
+  .tx-tactic-main {
+    position: sticky;
+    top: calc(var(--top-h) + var(--safe-t) + 64px);
+  }
+}
 /* the board: one card, the formation's pickers over the floor and the row to the bench under it.
    The floor runs edge to edge in it */
+/* the floor runs to the card's own edges (the card's hairline border once left a white frame round
+   it), and the card clips it to its corners */
+.tx-boardcard {
+  border: 0;
+}
 .tx-boardcard .tx-floor {
   max-width: none;
   border-radius: 0;

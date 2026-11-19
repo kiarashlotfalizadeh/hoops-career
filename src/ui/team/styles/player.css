@@ -15,10 +15,11 @@
    the name and his line a game; two marks at most sit under it. (The ink and signals are read here,
    outside the slab, so the OVR's white card can print in them.) */
 .tm-hero {
-  --tm-ink: var(--text);
-  --tm-dim: var(--text-dim);
-  --tm-good: var(--good);
-  --tm-bad: var(--bad);
+  /* (the OVR's card is white card stock on the slab by day and by night: its ink is the day's) */
+  --tm-ink: #121212;
+  --tm-dim: #645f55;
+  --tm-good: #106e40;
+  --tm-bad: #8e121e;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -130,7 +131,7 @@
   min-width: 104px;
   padding: 10px 12px 10px;
   border-radius: var(--radius);
-  background: var(--paper-ink);
+  background: #ffffff;
   color: var(--tm-ink);
   text-align: left;
   transition: transform var(--dur-fast) var(--ease-out);
@@ -206,7 +207,12 @@
 .tm-tags {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
+}
+/* his card as a picture: at the row's end */
+.tm-tags > .tm-share {
+  margin-left: auto;
 }
 /* his tier, with its badge's colour as a dot */
 .tm-tier i {

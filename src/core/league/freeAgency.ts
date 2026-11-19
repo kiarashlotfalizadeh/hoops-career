@@ -93,6 +93,7 @@ import {
 } from './rfa';
 import { logMove } from './transactions';
 import { money, moneyExact } from '../format';
+import { askedOutReason } from './pulse';
 
 export { FA_DAYS };
 
@@ -1471,6 +1472,9 @@ export function userResign(league: League, pid: number, amount: number, years: n
   if (!p || (p.tid !== league.userTid && !rfa)) return { ok: false, reason: 'Not on your team.' };
   if (rfa && p.rfa!.sheet) return { ok: false, reason: `${playerName(p)} has signed an offer sheet with the ${league.teams[p.rfa!.sheet.tid].name}: match it or let him go.` };
   if (contractExp(p.contract) > league.season) return { ok: false, reason: `${playerName(p)} is still under contract.` };
+  // (he asked for a trade and never got his role back: he leaves, see pulse.ts)
+  const out = askedOutReason(league, p);
+  if (out) return { ok: false, reason: out };
   // a new deal takes one of next season's 21 spots, like any other signing (pending offers and sheets hold theirs)
   if (resignRoster(league) >= OFFSEASON_ROSTER_MAX)
     return {

@@ -305,3 +305,24 @@ button.listrow {
   letter-spacing: -0.05em;
   line-height: 1.2;
 }
+
+/* the draft desk: under a desktop's width the rail and the main column are the page's own blocks;
+   on a desktop the clock or the poster sits in the rail and the board has the rest. Without a rail
+   (the lottery, a finished draft) the views keep the reading width, centred. */
+.fo-draft {
+  display: contents;
+}
+@media (min-width: 1100px) {
+  .fo-draft.rail-page {
+    display: grid;
+    --rail-w: 400px;
+  }
+  .fo-draft:not(.rail-page) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-page);
+    width: 100%;
+    max-width: 788px;
+    margin: 0 auto;
+  }
+}

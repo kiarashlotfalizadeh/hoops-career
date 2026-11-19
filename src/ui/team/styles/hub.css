@@ -94,28 +94,51 @@
   max-width: 100%;
 }
 /* the poster, its tabs and the first block under them read as one group */
-.tm-hub > .tm-hh + .lg-tabs {
+.tm-hub .tm-rail:has(.tm-hh) + .tm-main > .lg-tabs {
   margin-top: -12px;
 }
-.tm-hub > .lg-tabs + * {
+.tm-hub .tm-main > .lg-tabs + * {
   margin-top: -8px;
 }
 /* five sections fit a phone's width without paging: a step tighter between tabs than other hubs' */
 @media (max-width: 440px) {
-  .tm-hub > .lg-tabs .seg.tabs {
+  .tm-hub .tm-main > .lg-tabs .seg.tabs {
     gap: 0;
   }
-  .tm-hub > .lg-tabs .seg.tabs button {
+  .tm-hub .tm-main > .lg-tabs .seg.tabs button {
     padding: 0 7px;
   }
-  .tm-hub > .lg-tabs .seg.tabs button:first-child {
+  .tm-hub .tm-main > .lg-tabs .seg.tabs button:first-child {
     padding-left: 12px;
   }
-  .tm-hub > .lg-tabs .seg.tabs button.on::before {
+  .tm-hub .tm-main > .lg-tabs .seg.tabs button.on::before {
     left: 7px;
     right: 7px;
   }
-  .tm-hub > .lg-tabs .seg.tabs button.on:first-child::before {
+  .tm-hub .tm-main > .lg-tabs .seg.tabs button.on:first-child::before {
     left: 12px;
+  }
+}
+
+/* A phone: the poster, the tabs, then the locker room's row and the section (the rail and the main
+   column are the page's own blocks there: layout.css). A desktop: the poster and the locker room in
+   the rail, the tabs heading the main column. */
+/* (the section's own blocks keep the default order, whatever wraps them: a fieldset that vanishes
+   hands its children to the page, and they come last without being told to) */
+.tm-rail > * {
+  order: -3;
+}
+.tm-main > .lg-tabs {
+  order: -2;
+}
+.tm-rail > .tm-pulse {
+  order: -1;
+}
+@media (min-width: 1100px) {
+  .tm-hub.rail-page {
+    --rail-w: 380px;
+  }
+  .tm-hub.rail-page .tm-main > .lg-tabs {
+    margin-top: 0;
   }
 }

@@ -46,6 +46,8 @@ import { QuickSearch } from './components/QuickSearch';
 import { applyAccent } from './teamColors';
 import { useToastHost } from './toastHost';
 import { haptic } from '../native';
+import { armSound, sfx } from './sound';
+import { useTheme } from './theme';
 import { useChanged, useIndicator } from './motion';
 import { TABS, tabFor, type TabId } from './nav';
 import { AgendaList, pendingConfirm } from './components/Agenda';
@@ -122,7 +124,9 @@ function Boot({ children }: { children: ReactNode }) {
   }, []);
   // the user's team colours: a new team, or god mode recolouring this one (a new array), restyles the app
   const colors = useStore((s) => s.league?.teams[s.league.userTid]?.colors);
-  useEffect(() => applyAccent(colors ?? null), [colors]);
+  // (and the look: the accent is darkened to read on paper by day, lightened for the dark stock by night)
+  const theme = useTheme();
+  useEffect(() => applyAccent(colors ?? null), [colors, theme]);
   if (failed) {
     return (
       <main className="page standalone" role="alert" style={{ paddingTop: 'max(48px, calc(var(--safe-t) + 8px))' }}>
@@ -656,6 +660,8 @@ function ScrollTop() {
 function GameShell() {
   const league = useStore((s) => s.league);
   const loc = useLocation();
+  // (read here so the screen on show draws again when the look changes: team colours worked out in script follow it)
+  useTheme();
   if (!league) return <Navigate to="/start" replace />;
   return (
     <div className="app">
@@ -682,7 +688,27 @@ function GameShell() {
   );
 }
 
+/**
+ * The interface's sounds, for every screen at once: a tick under a control that answers a tap, a
+ * switch going over. One listener on the document, so no button has to know (Settings turns it on).
+ */
+function useUiSound() {
+  useEffect(() => {
+    armSound();
+    const onClick = (e: MouseEvent) => {
+      const el = e.target instanceof Element ? e.target.closest<HTMLElement>('button, a[href], [role="radio"], [role="tab"], [role="switch"], summary') : null;
+      if (!el || (el as HTMLButtonElement).disabled || el.getAttribute('aria-disabled') === 'true') return;
+      if (el.getAttribute('role') === 'switch') sfx(el.getAttribute('aria-checked') === 'true' ? 'toggleOff' : 'toggleOn');
+      else sfx('tap');
+    };
+    // (capture: heard before the control's own handler swaps the screen out from under it)
+    document.addEventListener('click', onClick, { capture: true, passive: true });
+    return () => document.removeEventListener('click', onClick, { capture: true });
+  }, []);
+}
+
 export function App() {
+  useUiSound();
   return (
     <HashRouter>
       <ErrorBoundary>

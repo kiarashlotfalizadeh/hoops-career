@@ -291,3 +291,52 @@
 .tm-views .chips::-webkit-scrollbar {
   display: none;
 }
+
+/* ------------------------------------------------------------------ the locker room's pulse
+   One row over the roster: how tight the core is, and whether anyone is short of his minutes. */
+.tm-pulse {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--row-min);
+  padding: 11px var(--row-px);
+  text-align: left;
+  transition: scale var(--dur-fast) var(--ease-out);
+}
+.tm-pulse:active {
+  scale: 0.99;
+}
+.tm-pulse-t {
+  display: block;
+  font-size: 15px;
+  font-weight: 560;
+  color: var(--text-2);
+}
+.tm-pulse-t b {
+  font-weight: 720;
+  color: var(--text);
+}
+.tm-pulse-l {
+  display: block;
+  margin-top: 1px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.tm-pulse-l.warn {
+  color: var(--warn);
+}
+.tm-pulse-l.bad {
+  color: var(--bad);
+}
+.tm-pulse-k {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+/* a player's row in the sheet: his name over what he expects and plays */
+.tm-pulse-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}

@@ -3,6 +3,19 @@
 // and each home team's building as the live game draws it (venueLook).
 
 const DEFAULT_ACCENT = '#2f6fde';
+
+/**
+ * Night Court is on (ui/theme.ts says so): colours worked out here for the page's ground are then
+ * lightened to read on the dark stock instead of darkened to read on paper. The slabs, the kits and
+ * the building are the same by day and by night.
+ */
+let isNight = false;
+export function setNight(on: boolean) {
+  isNight = on;
+}
+/** The night's grounds a colour has to read on as text: the page, card stock and a pressed row. */
+const NIGHT_GROUNDS = ['#171512', '#22201c', '#33302a'];
+const NIGHT_INK = '#f6f1e7';
 /** --surface-2, the darkest paper surface team-coloured text sits on. */
 const SURFACE_2 = '#e7e1d4';
 /** --ink: text, and the dock's ground. */
@@ -161,6 +174,10 @@ export function teamLook(colors: [string, string, string]): TeamLook {
 /** A colour as text: darkened until it reads on the paper and its surfaces (4.5:1). */
 function onPaper(color: string): string {
   let text = color;
+  if (isNight) {
+    for (let t = 0.1; NIGHT_GROUNDS.some((g) => contrast(text, g) < 4.5) && t <= 1; t += 0.1) text = mix(color, '#ffffff', t);
+    return text;
+  }
   for (let t = 0.1; [SURFACE_2, RAISED, BG].some((g) => contrast(text, g) < 4.5) && t <= 1; t += 0.1) text = mix(color, '#000000', t);
   return text;
 }
@@ -224,17 +241,19 @@ export function applyAccent(colors: [string, string, string] | null) {
   root.setProperty('--team-slab', l.slab);
   // links: the team's readable colour, unless it's grey or reads as the body text (navy); then its most
   // vivid readable colour that stands apart; a team with none (the Nets, the Spurs) gets ink, underlined
-  const reads = (c: string) => chroma(c) >= VIVID && contrast(c, INK) >= APART;
+  // (by night the body text is bone: a link has to stand apart from that instead)
+  const body = isNight ? NIGHT_INK : INK;
+  const reads = (c: string) => chroma(c) >= VIVID && contrast(c, body) >= APART;
   const link = reads(l.text)
     ? l.text
     : colors
         .map(onPaper)
         .filter(reads)
         .sort((a, b) => chroma(b) - chroma(a))[0];
-  root.setProperty('--team-text', link ?? INK);
+  root.setProperty('--team-text', link ?? body);
   root.setProperty('--team-link-line', link ? 'none' : 'underline');
   // a switch that's on: the team colour, or ink when it's a grey (the Spurs' silver would look switched off)
-  const fill = chroma(accentFill(team)) >= VIVID ? accentFill(team) : INK;
+  const fill = chroma(accentFill(team)) >= VIVID ? accentFill(team) : body;
   root.setProperty('--team-fill', fill);
   root.setProperty('--team-fill-ink', inkOn(fill));
   // the play button sits on the ink dock: the team's most vivid colour, lightened until it stands out there
@@ -248,6 +267,10 @@ export function applyAccent(colors: [string, string, string] | null) {
 /** A team colour as a fill on the paper (a switch that's on, a progress bar): darkened until it stands out from the page (3:1). */
 export function accentFill(color: string): string {
   let fill = color;
+  if (isNight) {
+    for (let t = 0.08; contrast(fill, NIGHT_GROUNDS[1]) < 3 && t <= 1; t += 0.08) fill = mix(color, '#ffffff', t);
+    return fill;
+  }
   for (let t = 0.08; contrast(fill, BG) < 3 && t <= 1; t += 0.08) fill = mix(color, '#000000', t);
   return fill;
 }

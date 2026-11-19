@@ -124,7 +124,7 @@ export default function Draft() {
   const myRemaining = league.phase === 'draft' ? draftOrder(league).filter((d) => d.tid === user) : [];
 
   return (
-    <main className="page fo-page">
+    <main className="page fo-page wide">
       <PageHeader
         title="Draft"
         sub={
@@ -167,47 +167,53 @@ export default function Draft() {
         }
       />
 
-      {league.phase === 'draft' && (
-        <OnTheClock
-          league={league}
-          hasPicks={myRemaining.length > 0}
-          busy={busy}
-          canTrade={canTrade}
-          onAuto={autoPick}
-          onNext={nextOne}
-          onTrade={setTradePick}
-          onSimToMine={simToMine}
-          onSimToEnd={() => (myRemaining.length ? setConfirmSim(true) : void finish())}
-          onFinish={() => void finish()}
-        />
-      )}
+      {/* a desktop: the clock or your picks' poster in a rail that stays in view, the board beside it */}
+      <div className={`fo-draft${league.phase === 'draft' || (league.phase !== 'draftLottery' && !after) ? ' rail-page' : ''}`}>
+        <div className="rail-side">
+          {league.phase === 'draft' && (
+            <OnTheClock
+              league={league}
+              hasPicks={myRemaining.length > 0}
+              busy={busy}
+              canTrade={canTrade}
+              onAuto={autoPick}
+              onNext={nextOne}
+              onTrade={setTradePick}
+              onSimToMine={simToMine}
+              onSimToEnd={() => (myRemaining.length ? setConfirmSim(true) : void finish())}
+              onFinish={() => void finish()}
+            />
+          )}
 
-      {/* before the lottery the desk's poster is your first pick; the lottery and draft night bring their own */}
-      {league.phase !== 'draft' && league.phase !== 'draftLottery' && !after && <PicksPoster league={league} />}
-
-      {views.length > 1 && <TabBar value={view} onChange={setView} options={views} label="Draft sections" />}
-
-      {view === 'live' && league.phase === 'draft' && (
-        <LiveView league={league} cls={cls} mock={mock} onClock={onClock} onOpen={setDetail} onDraft={setConfirmPick} onTrade={canTrade ? setTradePick : undefined} />
-      )}
-      {view === 'lottery' && <LotteryView league={league} onTrade={canTrade ? setTradePick : undefined} />}
-      {view === 'board' && <BoardList league={league} list={cls} mock={mock} onOpen={setDetail} onDraft={onClock ? setConfirmPick : undefined} />}
-      {view === 'mock' && <MockView league={league} mock={mock} onOpen={setDetail} />}
-      {view === 'combine' && <CombineView league={league} list={cls} onOpen={setDetail} />}
-      {view === 'mine' && <MyPicks league={league} />}
-      {view === 'results' && <Results league={league} />}
-
-      {/* how draft night runs: with the order (the lottery) and on the night, at the foot of the views that hold them (the poster and the order come first) */}
-      {(view === 'lottery' || view === 'live') && (league.phase === 'draftLottery' || (league.phase === 'draft' && nextPick(league))) && (
-        <div className="card tight">
-          <Toggle
-            on={!!league.settings.draftPause}
-            onChange={setPause}
-            label="Stop before every pick"
-            help="Off, it runs to your next pick. On, it waits before each team's, so a trade for the pick on the clock stays open."
-          />
+          {/* before the lottery the desk's poster is your first pick; the lottery and draft night bring their own */}
+          {league.phase !== 'draft' && league.phase !== 'draftLottery' && !after && <PicksPoster league={league} />}
         </div>
-      )}
+        <div className="rail-main">
+          {views.length > 1 && <TabBar value={view} onChange={setView} options={views} label="Draft sections" />}
+
+          {view === 'live' && league.phase === 'draft' && (
+            <LiveView league={league} cls={cls} mock={mock} onClock={onClock} onOpen={setDetail} onDraft={setConfirmPick} onTrade={canTrade ? setTradePick : undefined} />
+          )}
+          {view === 'lottery' && <LotteryView league={league} onTrade={canTrade ? setTradePick : undefined} />}
+          {view === 'board' && <BoardList league={league} list={cls} mock={mock} onOpen={setDetail} onDraft={onClock ? setConfirmPick : undefined} />}
+          {view === 'mock' && <MockView league={league} mock={mock} onOpen={setDetail} />}
+          {view === 'combine' && <CombineView league={league} list={cls} onOpen={setDetail} />}
+          {view === 'mine' && <MyPicks league={league} />}
+          {view === 'results' && <Results league={league} />}
+
+          {/* how draft night runs: with the order (the lottery) and on the night, at the foot of the views that hold them (the poster and the order come first) */}
+          {(view === 'lottery' || view === 'live') && (league.phase === 'draftLottery' || (league.phase === 'draft' && nextPick(league))) && (
+            <div className="card tight">
+              <Toggle
+                on={!!league.settings.draftPause}
+                onChange={setPause}
+                label="Stop before every pick"
+                help="Off, it runs to your next pick. On, it waits before each team's, so a trade for the pick on the clock stays open."
+              />
+            </div>
+          )}
+        </div>
+      </div>
 
       <ProspectSheet pid={detail} onClose={() => setDetail(null)} canDraft={onClock} onDraft={(pid) => setConfirmPick(pid)} />
       <PickTradeSheet dpid={tradePick} onClose={() => setTradePick(null)} />

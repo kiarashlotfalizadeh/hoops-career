@@ -164,7 +164,7 @@
 .ok-chip.t-star,
 .ok-sw.t-elite,
 .ok-sw.t-star {
-  color: #fff;
+  color: var(--on-tier);
   background: var(--tier);
 }
 .ok-chip.t-low,

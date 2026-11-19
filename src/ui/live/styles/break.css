@@ -20,10 +20,27 @@
   color: var(--text);
   animation: lv-bd-in 0.3s var(--ease-out);
 }
+/* The board and everything on it arrive by moving, never by fading: white figures at half strength
+   on the ink plate read as dark on black for the length of the fade (the line score flashed in a
+   timeout), and the plate itself at half strength is a grey slab over the paper. */
 @keyframes lv-bd-in {
   from {
-    opacity: 0;
-    transform: translateY(8px);
+    translate: 0 8px;
+  }
+}
+@keyframes lv-bd-rise {
+  from {
+    translate: 0 5px;
+  }
+}
+@keyframes lv-bd-slide {
+  from {
+    translate: -12px 0;
+  }
+}
+@keyframes lv-bd-slam {
+  from {
+    scale: 1.18;
   }
 }
 /* the board stands clear of the court over it and of the report under it */
@@ -41,31 +58,28 @@
 /* its parts arrive in order: the title, the line score's rows, then the team numbers, whose bars
    grow out from the seam between the two sides */
 .lv-bd-title {
-  animation: slide-r var(--dur-slow) var(--ease-out) 0.08s backwards;
-}
-.lv-bd-lead {
-  animation: fade var(--dur-slow) ease 0.3s backwards;
+  animation: lv-bd-slide var(--dur-slow) var(--ease-out) backwards;
 }
 .lv-bd-ls tbody tr {
-  animation: rise-sm var(--dur-slow) var(--ease-out) 0.14s backwards;
+  animation: lv-bd-rise var(--dur-slow) var(--ease-out) 0.06s backwards;
 }
 .lv-bd-ls tbody tr + tr {
-  animation-delay: 0.2s;
+  animation-delay: 0.12s;
 }
 .lv-bd-ls tbody .t {
-  animation: slam 0.45s var(--ease-out) 0.34s backwards;
+  animation: lv-bd-slam 0.45s var(--ease-out) 0.2s backwards;
 }
 .lv-bd-cmp {
-  animation: rise-sm var(--dur-slow) var(--ease-out) 0.2s backwards;
+  animation: lv-bd-rise var(--dur-slow) var(--ease-out) 0.12s backwards;
 }
 .lv-bd-cmp:nth-child(2) {
-  animation-delay: 0.24s;
+  animation-delay: 0.16s;
 }
 .lv-bd-cmp:nth-child(3) {
-  animation-delay: 0.28s;
+  animation-delay: 0.2s;
 }
 .lv-bd-cmp:nth-child(4) {
-  animation-delay: 0.32s;
+  animation-delay: 0.24s;
 }
 .lv-bd-bar > i {
   transform-origin: 100% 50%;

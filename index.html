@@ -13,11 +13,23 @@
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Hoops Career</title>
-    <!-- paper from the first frame: no flash while the app's stylesheet loads -->
+    <!-- the look this device keeps (Hardwood or Night Court, or the system's own), on the page before
+         anything is drawn: no flash of paper at night while the app's stylesheet loads (ui/theme.ts) -->
+    <script>
+      try {
+        var p = JSON.parse(localStorage.getItem('hc:device') || '{}');
+        var t = p.theme === 'light' || p.theme === 'dark' ? p.theme : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
     <style>
       html,
       body {
         background: #f3efe7;
+      }
+      html[data-theme='dark'],
+      html[data-theme='dark'] body {
+        background: #171512;
       }
     </style>
   </head>

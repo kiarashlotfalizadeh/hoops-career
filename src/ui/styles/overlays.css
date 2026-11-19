@@ -3,9 +3,9 @@
 .sheet-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(24, 18, 8, 0.42);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  /* a scrim that dims by itself: no blur behind it (a blurred layer drew the page pale instead of
+     dimmed on some GPUs, and the page read through the sheet's own fade) */
+  background: var(--scrim);
   z-index: 80;
   animation: fade 0.24s ease;
   /* a drag on the dimmed page doesn't scroll it behind the sheet (iOS ignores the body's overflow) */
@@ -88,22 +88,20 @@
   background: var(--surface-3);
   margin: 4px auto 14px;
 }
+/* (the sheet is opaque from its first frame: it slides, the page never shows through it) */
 @keyframes sheet-up {
   from {
-    transform: translateY(min(38%, 240px));
-    opacity: 0;
+    transform: translateY(min(60%, 420px));
   }
 }
 @keyframes sheet-down {
   to {
-    transform: translateY(min(30%, 180px));
-    opacity: 0;
+    transform: translateY(100%);
   }
 }
 @keyframes dialog-in {
   from {
-    transform: translateY(14px) scale(0.96);
-    opacity: 0;
+    transform: translateY(18px) scale(0.96);
   }
 }
 /* what a sheet holds arrives a beat after the sheet: its title, then its content (and inside a
@@ -181,10 +179,10 @@ body.sheet-open .toasts {
   min-height: 46px;
   padding: 11px 16px 11px 14px;
   border-radius: var(--radius-md);
-  background: var(--ink);
+  background: var(--plate);
   border: none;
   box-shadow: var(--shadow-float);
-  color: #fff;
+  color: var(--plate-ink);
   font-size: 14px;
   font-weight: 580;
   line-height: 1.3;
@@ -214,7 +212,7 @@ body.sheet-open .toasts {
   color: rgba(255, 255, 255, 0.6);
 }
 .toast:active {
-  background: var(--ink-2);
+  background: var(--plate-2);
   scale: 0.98;
 }
 @keyframes toast-in {

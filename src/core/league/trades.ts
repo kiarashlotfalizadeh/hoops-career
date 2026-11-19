@@ -71,6 +71,27 @@ export interface TradeOffer {
   b: TradeSide; // counterparty
 }
 
+/**
+ * One leg of a deal: what team `tid` sends to team `to`. A two-team offer is two legs (a to b, b to
+ * a); a three-team deal has up to six. Every rule and every team's verdict reads a deal as its legs,
+ * so a team's side of a deal is everything it sends, to anyone, against everything it gets, from anyone.
+ */
+export interface TradeLeg extends TradeSide {
+  to: number;
+}
+
+/** A two-team offer as its legs. */
+export const legsOf = (offer: TradeOffer): TradeLeg[] => [
+  { ...offer.a, to: offer.b.tid },
+  { ...offer.b, to: offer.a.tid },
+];
+
+/** The teams in a deal, in the order its legs name them. */
+export const dealTeams = (legs: TradeLeg[]): number[] => [...new Set(legs.flatMap((l) => [l.tid, l.to]))];
+
+/** Does a leg move anything? */
+const moves = (l: TradeSide) => l.pids.length > 0 || l.dpids.length > 0 || (l.swaps?.length ?? 0) > 0 || (l.cash ?? 0) > 0;
+
 export interface TradeEval {
   ok: boolean;
   errors: string[];
@@ -703,8 +724,6 @@ export function capSalary(league: League, pid: number, s = contractSeason(league
   return !p || p.contract.twoWay ? 0 : salaryFor(p, s);
 }
 
-const sideSalary = (league: League, side: TradeSide, s = contractSeason(league)) => side.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
-
 /**
  * Next season's luxury tax a deal adds (or saves) counts at this share of this season's: a contract
  * that runs on keeps a team in the tax next season too unless it sheds salary over the summer, which
@@ -845,24 +864,36 @@ function judge(league: League, offer: TradeOffer, tid: number): Verdict {
   const mine = offer.a.tid === tid ? offer.a : offer.b;
   const other = mine === offer.a ? offer.b : offer.a;
   const aiDeal = offer.a.tid !== league.userTid && offer.b.tid !== league.userTid;
-  const incoming = sideViews(league, other, mine.tid, tid, true, aiDeal);
-  const outgoing = sideViews(league, mine, other.tid, tid, false, aiDeal);
+  return judgeLegs(league, tid, [{ ...other, to: mine.tid }], [{ ...mine, to: other.tid }], aiDeal);
+}
+
+/**
+ * A team's verdict on a deal read as its legs: everything coming to it (`ins`, from one team or two)
+ * against everything it sends (`outs`). A two-team offer is one leg each way.
+ */
+function judgeLegs(league: League, tid: number, ins: TradeLeg[], outs: TradeLeg[], aiDeal: boolean): Verdict {
+  const incoming = ins.flatMap((l) => sideViews(league, l, tid, tid, true, aiDeal));
+  const outgoing = outs.flatMap((l) => sideViews(league, l, l.to, tid, false, aiDeal));
+  const inPids = ins.flatMap((l) => l.pids);
+  const outPids = outs.flatMap((l) => l.pids);
+  const outDpids = outs.flatMap((l) => l.dpids);
   const values = (xs: AssetView[], kind: (a: AssetView) => boolean) => xs.filter(kind).map((x) => x.value);
   const isPlayer = (a: AssetView) => a.kind === 'player';
   const isCash = (a: AssetView) => a.kind === 'cash';
-  const depthApplied = other.pids.length > mine.pids.length;
+  const depthApplied = inPids.length > outPids.length;
   const playersIn = weighted(values(incoming, isPlayer), depthApplied ? DEPTH : null);
   const picksIn = weighted(values(incoming, pickLike), PICK_DEPTH);
-  const playersOut = weighted(values(outgoing, isPlayer), mine.pids.length > other.pids.length ? DEPTH : null);
+  const playersOut = weighted(values(outgoing, isPlayer), outPids.length > inPids.length ? DEPTH : null);
   const picksOut = weighted(values(outgoing, pickLike), null);
   // cash isn't salary: it neither matches nor counts against the cap, and it adds up dollar for dollar
   const cashIn = values(incoming, isCash).reduce((a, v) => a + v, 0);
   const cashOut = values(outgoing, isCash).reduce((a, v) => a + v, 0);
-  const salaryIn = sideSalary(league, other);
-  const salaryOut = sideSalary(league, mine);
+  const salaryOf = (pids: number[], season = contractSeason(league)) => pids.reduce((a, pid) => a + capSalary(league, pid, season), 0);
+  const salaryIn = salaryOf(inPids);
+  const salaryOut = salaryOf(outPids);
   const next = contractSeason(league) + 1;
-  const inNext = sideSalary(league, other, next);
-  const outNext = sideSalary(league, mine, next);
+  const inNext = salaryOf(inPids, next);
+  const outNext = salaryOf(outPids, next);
   const money = moneyCost(league, tid, salaryIn, salaryOut, inNext, outNext);
   // (the tax and room it saves count up to what shedding that salary costs on the market, see
   // reliefCap; getting back under the tax line or an apron counts on top)
@@ -873,18 +904,18 @@ function judge(league: League, offer: TradeOffer, tid: number): Verdict {
   if (reliefFull !== undefined) money.value = money.lines - most;
   // (with the user, all of it no more than a discount on the good players it sends: see userReliefCap)
   if (!aiDeal && money.value < 0) {
-    const cap = userReliefCap(league, mine.pids);
+    const cap = userReliefCap(league, outPids);
     if (-money.value > cap) {
       reliefFull ??= -money.value;
       reliefKind = 'discount';
       money.value = -cap;
     }
   }
-  const cut = cutCost(league, tid, mine.pids, other.pids);
+  const cut = cutCost(league, tid, outPids, inPids);
   const valueIn = playersIn + picksIn + cashIn - (money.value + cut.value);
   const valueOut = playersOut + picksOut + cashOut;
   const delta = valueIn - valueOut;
-  const tooManyFirsts = mine.dpids.filter((d) => findPick(league, d)?.round === 1).length > MAX_FIRSTS_OUT;
+  const tooManyFirsts = outDpids.filter((d) => findPick(league, d)?.round === 1).length > MAX_FIRSTS_OUT;
   const parts: VerdictParts = {
     incoming,
     outgoing,
@@ -1020,18 +1051,22 @@ export function matchInfo(
   offer: TradeOffer,
   side: 'a' | 'b',
 ): { inSal: number; outSal: number; after: number; overCap: boolean; apron1: boolean; apron2: boolean; tpe: number; room: number; limit: number } {
-  const mine = offer[side];
-  const other = offer[side === 'a' ? 'b' : 'a'];
+  return matchInfoOf(league, offer[side].tid, offer[side].pids, offer[side === 'a' ? 'b' : 'a'].pids);
+}
+
+/** A team's salary in a deal of any shape: what it sends (`out`) against everything it takes in (see matchInfo). */
+export function matchInfoOf(league: League, tid: number, out: number[], inc: number[]): ReturnType<typeof matchInfo> {
   const s = contractSeason(league);
   const cap = CAP_FOR(league, s);
-  const outSal = sideSalary(league, mine);
-  const inSal = sideSalary(league, other);
-  const before = capPayroll(league, mine.tid, s);
+  const sum = (pids: number[]) => pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
+  const outSal = sum(out);
+  const inSal = sum(inc);
+  const before = capPayroll(league, tid, s);
   const after = before - outSal + inSal;
   const apron1 = after > cap.firstApron;
   const apron2 = after > cap.secondApron;
   // a traded player exception absorbs salary only for a team that stays under the first apron
-  const tpe = apron1 ? 0 : bestTpe(league, mine.tid);
+  const tpe = apron1 ? 0 : bestTpe(league, tid);
   // (room never takes a team past the cap by more than the buffer, so never near an apron)
   const room = before < cap.salaryCap ? outSal + cap.salaryCap - before + matchBuffer(league, s) : 0;
   return { inSal, outSal, after, overCap: after > cap.salaryCap, apron1, apron2, tpe, room, limit: Math.max(room, tradeMatchLimit(league, outSal, s, apron1) + tpe) };
@@ -1046,7 +1081,11 @@ export const assetName = (league: League, a: Player | DraftPick) => ('pid' in a 
  * the season and free agency.
  */
 export function salaryMatchGap(league: League, offer: TradeOffer, side: 'a' | 'b'): number {
-  const m = matchInfo(league, offer, side);
+  return matchGap(league, matchInfo(league, offer, side));
+}
+
+/** The same from a team's salary in a deal of any shape (see matchInfoOf). */
+export function matchGap(league: League, m: ReturnType<typeof matchInfo>): number {
   if (!m.overCap || m.inSal <= m.limit) return 0;
   const byMatch = Math.max(0, matchNeeds(league, m.inSal - m.tpe, contractSeason(league), m.apron1) - m.outSal);
   // (a team with room can instead send the rest dollar for dollar)
@@ -1058,8 +1097,14 @@ export function salaryMatchGap(league: League, offer: TradeOffer, side: 'a' | 'b
  * drafts (only checked for teams sending firsts, so inherited gaps don't block other deals).
  */
 export function stepienError(league: League, offer: TradeOffer, side: TradeSide): string | null {
-  if (!side.dpids.some((d) => findPick(league, d)?.round === 1)) return null;
-  const moves = new Map<number, number>([...offer.a.dpids.map((d) => [d, offer.b.tid] as const), ...offer.b.dpids.map((d) => [d, offer.a.tid] as const)]);
+  return stepienOf(league, legsOf(offer), side.tid, side.dpids);
+}
+
+/** The Stepien rule for one team in a deal read as its legs: `sent` are the picks it sends, to anyone. */
+function stepienOf(league: League, legs: TradeLeg[], tid: number, sent: number[]): string | null {
+  if (!sent.some((d) => findPick(league, d)?.round === 1)) return null;
+  const side = { tid };
+  const moves = new Map<number, number>(legs.flatMap((l) => l.dpids.map((d) => [d, l.to] as const)));
   const firsts = league.draftPicks.filter((d) => d.round === 1 && !(d.season === league.season && league.phase === 'draft'));
   const years = new Set(firsts.map((d) => d.season));
   const owns = (y: number, after: boolean) => firsts.some((d) => d.season === y && (after ? (moves.get(d.dpid) ?? d.tid) : d.tid) === side.tid);
@@ -1080,17 +1125,39 @@ export function tradingClosedReason(league: League): string | null {
 }
 
 export function validateTrade(league: League, offer: TradeOffer): string[] {
+  return validateDeal(league, legsOf(offer));
+}
+
+/** One team's side of a deal read as its legs: everything it sends (its cash added up) and everything it gets. */
+function sidesOf(legs: TradeLeg[], tid: number): { mine: TradeSide; other: { pids: number[]; dpids: number[] }; outs: TradeLeg[] } {
+  const outs = legs.filter((l) => l.tid === tid);
+  const ins = legs.filter((l) => l.to === tid);
+  const cash = outs.reduce((a, l) => a + (l.cash ?? 0), 0);
+  return {
+    mine: { tid, pids: outs.flatMap((l) => l.pids), dpids: outs.flatMap((l) => l.dpids), ...(cash > 0 ? { cash } : {}) },
+    other: { pids: ins.flatMap((l) => l.pids), dpids: ins.flatMap((l) => l.dpids) },
+    outs,
+  };
+}
+
+/**
+ * What the rules say about a deal of two teams or three, read as its legs (see TradeLeg): each
+ * team's roster, salary matching, aprons, hard cap and picks are checked on everything it sends
+ * against everything it gets, whoever from; a leg's own terms (a protection, a swap, cash) between
+ * the two teams it joins.
+ */
+export function validateDeal(league: League, legs: TradeLeg[]): string[] {
   const errors: string[] = [];
-  if (league.fired && (offer.a.tid === league.userTid || offer.b.tid === league.userTid)) errors.push('You were fired: take over another team to make trades.');
+  const tids = dealTeams(legs);
+  if (league.fired && tids.includes(league.userTid)) errors.push('You were fired: take over another team to make trades.');
   const closed = tradingClosedReason(league);
   if (closed) errors.push(closed);
   const twoWay = (pid: number) => !!league.players[pid]?.contract.twoWay;
   const maxSize = rosterMaxNow(league);
   const s = contractSeason(league);
-  for (const [key, mine, other] of [
-    ['a', offer.a, offer.b],
-    ['b', offer.b, offer.a],
-  ] as const) {
+  const moving = new Set(legs.flatMap((l) => l.dpids));
+  for (const tid of tids) {
+    const { mine, other, outs } = sidesOf(legs, tid);
     const abbrev = league.teams[mine.tid].abbrev;
     for (const pid of mine.pids) {
       const p = league.players[pid];
@@ -1132,9 +1199,9 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
     // (after the season, as on the standard roster, only next season's two-way deals hold a slot)
     const twAfter = twoWayRoster(league, mine.tid).filter((p) => contractExp(p.contract) >= s).length - mine.pids.filter(twoWay).length + twIn;
     if (twIn > 0 && twAfter > TWO_WAY_MAX) errors.push(`${abbrev} would have ${twAfter} two-way players. The most is ${TWO_WAY_MAX}.`);
-    const m = matchInfo(league, offer, key);
+    const m = matchInfoOf(league, mine.tid, mine.pids, other.pids);
     const { inSal, outSal } = m;
-    if (salaryMatchGap(league, offer, key) > 0) errors.push(`Salary doesn't match: ${abbrev} takes in ${money(inSal)} against a ${matchLimitText(league, m)}.`);
+    if (matchGap(league, m) > 0) errors.push(`Salary doesn't match: ${abbrev} takes in ${money(inSal)} against a ${matchLimitText(league, m)}.`);
     // the user's budget frozen by his owner (see books.ts): no taking on salary, no cash out
     if (mine.tid === league.userTid) {
       const frozen = freezeTradeReason(league, inSal, outSal, mine.cash ?? 0);
@@ -1159,18 +1226,26 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
     const line = hardCapLine(league, mine.tid, s);
     if (line && inSal > outSal && m.after > line.amount)
       errors.push(`${abbrev} used the ${line.what} this season, so it's hard-capped at the ${line.name}, ${money(line.amount)}. This trade would take it past.`);
-    const stepien = stepienError(league, offer, mine);
+    const stepien = stepienOf(league, legs, mine.tid, mine.dpids);
     if (stepien) errors.push(stepien);
-    errors.push(...termErrors(league, offer, mine, other));
+    // each leg's own terms, between the two teams it joins; its cash against all the team sends
+    for (const leg of outs) errors.push(...termErrors(league, moving, leg, leg.to, mine.cash ?? 0));
+    // a third team is in the deal for something: it sends or it gets
+    if (tids.length > 2 && !mine.pids.length && !mine.dpids.length && !other.pids.length && !other.dpids.length && !outs.some(moves) && !legs.some((l) => l.to === tid && moves(l)))
+      errors.push(`${abbrev} sends nothing and gets nothing: take it out of the deal.`);
   }
-  const something = (x: TradeSide) => x.pids.length || x.dpids.length || x.swaps?.length || (x.cash ?? 0) > 0;
-  if (!something(offer.a) && !something(offer.b)) errors.push('The trade is empty.');
+  if (!legs.some(moves)) errors.push('The trade is empty.');
   // (a deep link can name a player twice: the AI would count him twice, and he'd move twice)
-  const pids = [...offer.a.pids, ...offer.b.pids];
-  const dpids = [...offer.a.dpids, ...offer.b.dpids];
+  const pids = legs.flatMap((l) => l.pids);
+  const dpids = legs.flatMap((l) => l.dpids);
   if (new Set(pids).size < pids.length || new Set(dpids).size < dpids.length) errors.push('A player or pick is in the deal twice.');
-  if ((offer.a.cash ?? 0) > 0 && (offer.b.cash ?? 0) > 0) errors.push('Cash can only go one way in a deal.');
-  for (const y of offer.a.swaps ?? []) if (offer.b.swaps?.includes(y)) errors.push(`The ${y} firsts can only be swapped one way: one swap per pick.`);
+  // between any two teams, cash and a draft's swap right go one way
+  for (const x of legs) {
+    const back = legs.find((l) => l !== x && l.tid === x.to && l.to === x.tid);
+    if (!back) continue;
+    if ((x.cash ?? 0) > 0 && (back.cash ?? 0) > 0) errors.push('Cash can only go one way in a deal.');
+    for (const y of x.swaps ?? []) if (back.swaps?.includes(y)) errors.push(`The ${y} firsts can only be swapped one way: one swap per pick.`);
+  }
   return [...new Set(errors)];
 }
 
@@ -1210,7 +1285,8 @@ export function frozenFirst(league: League, tid: number): DraftPick | undefined 
  * per pick), and neither may change hands in the same deal. Cash stays within what each team can
  * still send and receive this season (see cashRoom).
  */
-function termErrors(league: League, offer: TradeOffer, mine: TradeSide, other: TradeSide): string[] {
+function termErrors(league: League, moving: Set<number>, mine: TradeSide, to: number, cashOut = mine.cash ?? 0): string[] {
+  const other = { tid: to };
   const errors: string[] = [];
   const abbrev = league.teams[mine.tid].abbrev;
   for (const [k, n] of Object.entries(mine.protect ?? {})) {
@@ -1221,7 +1297,6 @@ function termErrors(league: League, offer: TradeOffer, mine: TradeSide, other: T
     else if (dp.pick !== undefined) errors.push(`The ${dp.season} draft order is set: the ${pickLabel(league, dp)} can't be protected now.`);
     else if (inSwap(league, dp)) errors.push(`The ${pickLabel(league, dp)} is part of a pick swap, so it can't be protected.`);
   }
-  const moving = new Set([...offer.a.dpids, ...offer.b.dpids]);
   const seasons = mine.swaps ?? [];
   if (new Set(seasons).size < seasons.length) errors.push('A swap is in the deal twice.');
   for (const y of seasons) {
@@ -1240,7 +1315,8 @@ function termErrors(league: League, offer: TradeOffer, mine: TradeSide, other: T
       const s = seasonLabel(contractSeason(league));
       const out = cashRoom(league, mine.tid);
       const into = cashRoom(league, other.tid);
-      if (c > out.send)
+      // (a team sending cash to two teams in one deal: all of it against what it may still send)
+      if (Math.max(c, cashOut) > out.send)
         errors.push(`${abbrev} can send ${out.send > 0 ? `at most ${moneyExact(out.send)} more` : 'no more'} in cash in trades for ${s} (${moneyExact(out.limit)} a season).`);
       if (c > into.receive)
         errors.push(
@@ -1276,6 +1352,61 @@ function evaluate(league: League, offer: TradeOffer): TradeEval {
   else message = `${valueVerdict({ delta, valueOut }).label}.`;
   const ev = { ok: errors.length === 0, errors, delta, valueIn, valueOut, accept, message, parts };
   return { ...ev, notes: tradeNotes(league, offer, ev) };
+}
+
+/** One team's answer to a deal of three teams (see evaluateDeal). */
+export interface DealVerdict {
+  tid: number;
+  /** It would do the deal, the rules aside. */
+  accept: boolean;
+  delta: number;
+  valueIn: number;
+  valueOut: number;
+  /** How its GM puts it: "They'd take it", "Close: add a little more". */
+  message: string;
+  parts: VerdictParts;
+}
+
+export interface DealEval {
+  ok: boolean;
+  errors: string[];
+  /** Every team but the user's, in the deal's order. */
+  teams: DealVerdict[];
+  /** The rules allow it and every other team says yes. */
+  accept: boolean;
+}
+
+/**
+ * A deal of three teams as its other GMs see it: the rules on the whole deal, then each team's own
+ * verdict on everything it gets against everything it sends, whoever from and to. All of them must
+ * say yes. A team in a deal with the user judges it as it judges any deal with him (see judge).
+ */
+export function evaluateDeal(league: League, legs: TradeLeg[]): DealEval {
+  return withHoldsMemo(() => {
+    const errors = validateDeal(league, legs);
+    const tids = dealTeams(legs);
+    const aiDeal = !tids.includes(league.userTid);
+    const teams = tids
+      .filter((tid) => tid !== league.userTid)
+      .map((tid): DealVerdict => {
+        const v = judgeLegs(
+          league,
+          tid,
+          legs.filter((l) => l.to === tid),
+          legs.filter((l) => l.tid === tid),
+          aiDeal,
+        );
+        const message = v.tooManyFirsts
+          ? `No more than ${MAX_FIRSTS_OUT} firsts out in one deal`
+          : v.accept
+            ? v.delta > Math.abs(v.valueOut) * 0.25
+              ? "They'd jump at it"
+              : "They'd take it"
+            : valueVerdict(v).label;
+        return { tid, accept: v.accept, delta: v.delta, valueIn: v.valueIn, valueOut: v.valueOut, message, parts: v.parts };
+      });
+    return { ok: errors.length === 0, errors, teams, accept: errors.length === 0 && teams.length > 0 && teams.every((t) => t.accept) };
+  });
 }
 
 // ---------------------------------------------------------------- why: notes on a verdict
@@ -1439,11 +1570,48 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
 }
 
 export function executeTrade(league: League, offer: TradeOffer) {
+  executeDeal(league, legsOf(offer));
+}
+
+/** What a leg sends, in words: players first, then picks, swap rights and cash. */
+const legWords = (league: League, leg: TradeSide) => [
+  ...leg.pids.map((pid) => playerName(league.players[pid])),
+  ...leg.dpids.map((dpid) => pickLabel(league, findPick(league, dpid)!)),
+  ...(leg.swaps ?? []).map((y) => `the right to swap ${y} firsts`),
+  ...((leg.cash ?? 0) > 0 ? [`${moneyExact(leg.cash!)} in cash`] : []),
+];
+
+/**
+ * A three-team deal in words, by what each team ends up with: "the Thunder get Anthony Davis from
+ * the Mavericks. The Mavericks get Lu Dort from the Thunder and a 2029 1st (PHX) from the Suns. ..."
+ * Read after the deal is done (a pick's label is its new holder's).
+ */
+export function dealHeadline(league: League, legs: TradeLeg[]): string {
+  const name = (tid: number) => league.teams[tid].name;
+  return dealTeams(legs)
+    .map((tid) => {
+      const from = legs.filter((l) => l.to === tid && moves(l)).map((l) => `${andList(legWords(league, l))} from the ${name(l.tid)}`);
+      return from.length ? `the ${name(tid)} get ${andList(from)}` : '';
+    })
+    .filter(Boolean)
+    .map((x, i) => (i ? x.charAt(0).toUpperCase() + x.slice(1) : x))
+    .join('. ');
+}
+
+/** Make a deal of two teams or three, read as its legs (see TradeLeg): everything moves at once. */
+export function executeDeal(league: League, legs: TradeLeg[]) {
+  const tids = dealTeams(legs);
+  const sides = tids.map((tid) => sidesOf(legs, tid));
   // (logged before anything moves: each pick is named as its sender held it, "2027 1st" for its
   // own, with the protection it goes with)
-  logTrade(league, [offer.a, offer.b], (dpid, side) => pickLabel(league, findPick(league, dpid)!, { protection: side.protect?.[dpid] }));
+  const protection = (dpid: number) => legs.find((l) => l.dpids.includes(dpid))?.protect?.[dpid];
+  logTrade(
+    league,
+    sides.map((x) => ({ ...x.mine, swaps: x.outs.flatMap((l) => l.swaps ?? []) })),
+    (dpid) => pickLabel(league, findPick(league, dpid)!, { protection: protection(dpid) }),
+  );
   // traded player exceptions, read before anything moves
-  const books = (['a', 'b'] as const).map((k) => ({ tid: offer[k].tid, m: matchInfo(league, offer, k) }));
+  const books = sides.map((x) => ({ tid: x.mine.tid, m: matchInfoOf(league, x.mine.tid, x.mine.pids, x.other.pids) }));
   const move = (pids: number[], to: number) => {
     for (const pid of pids) {
       const p = league.players[pid];
@@ -1467,44 +1635,37 @@ export function executeTrade(league: League, offer: TradeOffer) {
       if (n && to !== dp.originalTid) dp.protection = n;
     }
   };
-  move(offer.a.pids, offer.b.tid);
-  move(offer.b.pids, offer.a.tid);
-  // the arrivals take numbers nobody there wears (nor has retired)
-  if (offer.b.pids.length) numberTeam(league, offer.a.tid);
-  if (offer.a.pids.length) numberTeam(league, offer.b.tid);
-  movePicks(offer.a, offer.b.tid);
-  movePicks(offer.b, offer.a.tid);
-  for (const [side, to] of [
-    [offer.a, offer.b.tid],
-    [offer.b, offer.a.tid],
-  ] as const) {
+  for (const leg of legs) move(leg.pids, leg.to);
+  // the arrivals take numbers nobody there wears (nor has retired); the user's side first, as ever
+  for (const x of sides) if (x.other.pids.length) numberTeam(league, x.mine.tid);
+  for (const leg of legs) movePicks(leg, leg.to);
+  for (const leg of legs) {
     // a swap right rides on the other team's own first of that draft
-    for (const y of side.swaps ?? []) {
-      const sp = swapPicks(league, side.tid, to, y);
+    for (const y of leg.swaps ?? []) {
+      const sp = swapPicks(league, leg.tid, leg.to, y);
       if (sp) sp.right.swap = sp.subject.dpid;
     }
-    payCash(league, side, to);
+    payCash(league, leg, leg.to);
   }
   // a player the user marked untouchable is unmarked when he leaves
   if (league.untouchable) league.untouchable = league.untouchable.filter((pid) => league.players[pid]?.tid === league.userTid);
   for (const { tid, m } of books) settleTpes(league, tid, m);
-  const ta = league.teams[offer.a.tid];
-  const tb = league.teams[offer.b.tid];
-  const desc = (side: TradeSide) => [
-    ...side.pids.map((pid) => playerName(league.players[pid])),
-    ...side.dpids.map((dpid) => pickLabel(league, findPick(league, dpid)!)),
-    ...(side.swaps ?? []).map((y) => `the right to swap ${y} firsts`),
-    ...((side.cash ?? 0) > 0 ? [`${moneyExact(side.cash!)} in cash`] : []),
-  ];
-  addNews(league, {
-    kind: 'trade',
-    text: sentence(`Trade: ${tradeHeadline(ta.name, desc(offer.a), offer.a.pids.length, tb.name, desc(offer.b), offer.b.pids.length)}`),
-    tids: [ta.tid, tb.tid],
-    pids: [...offer.a.pids, ...offer.b.pids],
-  });
+  const pids = legs.flatMap((l) => l.pids);
+  if (tids.length === 2) {
+    const none = (tid: number): TradeSide => ({ tid, pids: [], dpids: [] });
+    const a = legs.find((l) => l.tid === tids[0]) ?? none(tids[0]);
+    const b = legs.find((l) => l.tid === tids[1]) ?? none(tids[1]);
+    const ta = league.teams[a.tid];
+    const tb = league.teams[b.tid];
+    addNews(league, {
+      kind: 'trade',
+      text: sentence(`Trade: ${tradeHeadline(ta.name, legWords(league, a), a.pids.length, tb.name, legWords(league, b), b.pids.length)}`),
+      tids: [ta.tid, tb.tid],
+      pids,
+    });
+  } else addNews(league, { kind: 'trade', text: sentence(`Three-team trade: ${dealHeadline(league, legs)}`), tids, pids });
   // an AI team over 15 waives its end of the bench (the user's rosters are held to the limit)
-  waiveForTrade(league, offer.a.tid);
-  waiveForTrade(league, offer.b.tid);
+  for (const tid of tids) waiveForTrade(league, tid);
 }
 
 /** "the Hornets'", "the Magic's": a team name in the possessive. */

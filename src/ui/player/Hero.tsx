@@ -24,6 +24,9 @@ import { baseLabel, devBase, devTag, ovrChange } from '../../core/league/devWatc
 import { DevDelta, DevTagChip } from './dev';
 import { careerInSave } from '../../core/league/media/history';
 import { careerOnRecord } from '../../core/analysis/milestones';
+import { ShareButton } from '../share/ShareButton';
+import { playerPosterOf, posterFile } from '../share/specs';
+import { roleRead } from '../../core/league/pulse';
 
 /** A slab for a player with no team (a free agent, a prospect, a retired player): the neutral kit's colours. */
 const NO_TEAM: [string, string, string] = ['#2a3441', '#8a94a4', '#c4cfdc'];
@@ -59,6 +62,8 @@ export function usePlayerTags(league: League, p: Player): { key: string; node: R
     return awardRaces(league, 5);
   }, [league]);
   const dev = p.tid >= 0 ? devTag(league, p) : null;
+  // how he stands with his role, when he isn't content with it (your players only: pulse.ts)
+  const role = roleRead(league, p);
   const inRaces = races
     ? RACES.flatMap(([k, label]) => {
         const i = races[k].findIndex((x) => x.c.p.pid === p.pid);
@@ -78,6 +83,7 @@ export function usePlayerTags(league: League, p: Player): { key: string; node: R
           },
         ]
       : []),
+    ...(role && role.word !== 'Content' ? [{ key: 'role', node: <Tag tone={role.tone === 'bad' ? 'bad' : 'warn'}>{role.word}</Tag> }] : []),
     ...inRaces.map((r) => ({
       key: r,
       node: (
@@ -212,15 +218,20 @@ function ActiveHero({ league, p }: { league: League; p: Player }) {
         </div>
       </div>
       {/* two marks at most; the rest, his particulars and where his career stands are on his Overview */}
-      {tags.length > 0 && (
-        <div className="tm-tags">
-          {tags.map((t) => (
-            <span key={t.key} className="tm-tagw">
-              {t.node}
-            </span>
-          ))}
-        </div>
-      )}
+      <div className="tm-tags">
+        {tags.map((t) => (
+          <span key={t.key} className="tm-tagw">
+            {t.node}
+          </span>
+        ))}
+        {/* his card as a picture, one tap */}
+        <ShareButton
+          className="btn xs ghost tm-share"
+          spec={() => playerPosterOf(league, p)}
+          file={posterFile(`${p.firstName} ${p.lastName}`)}
+          title={`${p.firstName} ${p.lastName}'s card`}
+        />
+      </div>
     </section>
   );
 }
@@ -302,15 +313,20 @@ function RetiredHero({ league, p }: { league: League; p: Player }) {
           </div>
         </div>
       </div>
-      {tags.length > 0 && (
-        <div className="tm-tags">
-          {tags.map((t) => (
-            <span key={t.key} className="tm-tagw">
-              {t.node}
-            </span>
-          ))}
-        </div>
-      )}
+      <div className="tm-tags">
+        {tags.map((t) => (
+          <span key={t.key} className="tm-tagw">
+            {t.node}
+          </span>
+        ))}
+        {/* his card as a picture, one tap */}
+        <ShareButton
+          className="btn xs ghost tm-share"
+          spec={() => playerPosterOf(league, p)}
+          file={posterFile(`${p.firstName} ${p.lastName}`)}
+          title={`${p.firstName} ${p.lastName}'s card`}
+        />
+      </div>
     </section>
   );
 }

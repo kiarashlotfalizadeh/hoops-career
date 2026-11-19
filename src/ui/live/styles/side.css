@@ -63,7 +63,7 @@
     'bug call bar'
     'stage stage bar';
   gap: 0;
-  background: var(--ink);
+  background: var(--plate);
   /* (a narrow one, a small phone or one with a notch, slims the strip's scorebug: below) */
   container: lv-side / inline-size;
 }
@@ -223,12 +223,23 @@
   flex-direction: column;
   gap: 2px;
 }
+/* (a short rail, a small phone or a browser's bars taking the height: the buttons give up height
+   before any of them leaves the rail, and under 300px their words go, the icons staying whole) */
+.lv.side .lv-bar {
+  container: lv-rail / size;
+}
 .lv.side .lv-bb-btn {
-  height: 54px;
-  flex: none;
+  height: auto;
+  flex: 0 1 54px;
+  min-height: 40px;
+}
+@container lv-rail (max-height: 300px) {
+  .lv-bb-btn .lv-bb-l {
+    display: none;
+  }
 }
 .lv.side .lv-bb-to {
-  height: 58px;
+  flex-basis: 58px;
   border-radius: var(--radius-md);
 }
 /* the badge of timeouts left sits inside the rail's edge */
@@ -237,7 +248,9 @@
 }
 /* at a stop, the way on: the icon over its word, a solid ink block */
 .lv.side .lv-bb-go {
-  height: 64px;
+  height: auto;
+  flex: 0 1 64px;
+  min-height: 48px;
   flex-direction: column;
   gap: 3px;
   padding: 0 2px;
@@ -327,6 +340,39 @@
   color: var(--paper-ink);
   cursor: pointer;
   transition: scale var(--dur-fast) ease;
+}
+/* the game's sound, in the court's other foot corner: the same ink button */
+.lv-snd {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--lv-plate);
+  color: var(--paper-ink);
+  cursor: pointer;
+  transition: scale var(--dur-fast) ease;
+}
+.lv-snd[aria-pressed='false'] {
+  color: color-mix(in srgb, var(--paper-ink) 62%, transparent);
+}
+.lv-snd::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+.lv-snd:active {
+  scale: 0.92;
+}
+.lv-snd:focus-visible {
+  outline: 2px solid var(--paper-ink);
+  outline-offset: 2px;
 }
 .lv-turn::after {
   content: '';

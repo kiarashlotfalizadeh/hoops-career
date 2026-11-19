@@ -24,7 +24,7 @@
    grey figure with a hairline, the fringe a light grey figure on its own */
 .ovr.t-elite,
 .ovr.t-star {
-  color: #fff;
+  color: var(--on-tier);
   background: var(--tier);
   box-shadow: none;
 }

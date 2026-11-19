@@ -21,8 +21,13 @@ import {
   cashRoom,
   cashValueFor,
   dealTerms,
+  dealTeams,
+  evaluateDeal,
   evaluateTrade,
+  executeDeal,
   executeTrade,
+  legsOf,
+  matchInfoOf,
   neutralSplit,
   pickLabel,
   pickRange,
@@ -40,9 +45,11 @@ import {
   tradeMatchLimit,
   tradeRoster,
   untradeableReason,
+  validateDeal,
   validateTrade,
   CORNERSTONE,
   USER_RELIEF_SHARE,
+  type TradeLeg,
   type TradeOffer,
   type TradeSide,
 } from '../league/trades';
@@ -863,6 +870,73 @@ it('the rules: back-to-back firsts, protections going home, no trading straight 
     // sending one of yours fixes it, so "what would make this work?" is worth asking
     expect(validateTrade(l, o)).toHaveLength(1);
     expect(canMakeWork(l, o)).toBe(true);
+  }
+
+  // three-team deals: a deal is its legs, and every team is judged on all it sends against all it gets
+  {
+    const l = termsLeague();
+    const [mine, ...restU] = standardRoster(l, U);
+    const [theirs] = standardRoster(l, AI);
+    const [third, third2] = standardRoster(l, THIRD);
+    for (const p of [mine, theirs, third]) shape(l, p, 78, 26, 20000);
+    shape(l, third2, 60, 30, 2000);
+    // a two-team offer read as legs says what the offer says
+    const two = offer([mine.pid], [theirs.pid]);
+    expect(validateDeal(l, legsOf(two))).toEqual(validateTrade(l, two));
+    expect(dealTeams(legsOf(two))).toEqual([U, AI]);
+    const ev2 = evaluateTrade(l, two);
+    const ed2 = evaluateDeal(l, legsOf(two));
+    expect(ed2.teams.map((t) => t.tid)).toEqual([AI]);
+    expect(ed2.teams[0].delta).toBeCloseTo(ev2.delta, 9);
+    expect(ed2.accept).toBe(ev2.accept);
+    // a triangle of equal players at equal pay: each team sends one and gets one, so the salaries match all round
+    const leg = (tid: number, to: number, x: Partial<TradeSide> = {}): TradeLeg => ({ tid, to, pids: [], dpids: [], ...x });
+    const ring = [leg(U, AI, { pids: [mine.pid] }), leg(AI, THIRD, { pids: [theirs.pid] }), leg(THIRD, U, { pids: [third.pid] })];
+    expect(dealTeams(ring)).toEqual([U, AI, THIRD]);
+    expect(validateDeal(l, ring)).toEqual([]);
+    const ring3 = evaluateDeal(l, ring);
+    expect(ring3.teams.map((t) => t.tid)).toEqual([AI, THIRD]);
+    // (each AI team takes in the player the leg into it carries, and sends its own)
+    expect(ring3.teams[0].parts.incoming.map((a) => a.id)).toEqual([mine.pid]);
+    expect(ring3.teams[0].parts.outgoing.map((a) => a.id)).toEqual([theirs.pid]);
+    expect(ring3.teams[1].parts.incoming.map((a) => a.id)).toEqual([theirs.pid]);
+    // a team that only gives is told so by its verdict: all three must say yes
+    const robbed = [leg(U, AI, { pids: [mine.pid] }), leg(AI, U, { pids: [theirs.pid] }), leg(THIRD, U, { pids: [third.pid] })];
+    const bad = evaluateDeal(l, robbed);
+    expect(bad.teams.find((t) => t.tid === THIRD)!.accept).toBe(false);
+    expect(bad.accept).toBe(false);
+    // salary is matched on a team's whole side: the user takes in two $20M players for one
+    expect(matchInfoOf(l, U, [mine.pid], [theirs.pid, third.pid])).toMatchObject({ inSal: 40000, outSal: 20000 });
+    expect(bad.teams.find((t) => t.tid === THIRD)!.parts).toMatchObject({ salaryIn: 0, salaryOut: 20000 });
+    // a third team with nothing to do is told to leave; an asset can't go two ways
+    expect(validateDeal(l, [leg(U, AI, { pids: [mine.pid] }), leg(AI, U, { pids: [theirs.pid] }), leg(THIRD, U)])).toContain(
+      `${l.teams[THIRD].abbrev} sends nothing and gets nothing: take it out of the deal.`,
+    );
+    expect(validateDeal(l, [...ring, leg(U, THIRD, { pids: [mine.pid] })])).toContain('A player or pick is in the deal twice.');
+    // the Stepien rule follows a pick to wherever its leg sends it
+    const f1 = own(l, U, l.season + 1);
+    const f2 = own(l, U, l.season + 2);
+    expect(
+      validateDeal(l, [leg(U, AI, { dpids: [f1.dpid] }), leg(U, THIRD, { dpids: [f2.dpid] }), leg(AI, U, { pids: [theirs.pid] })]).some((e) => e.includes('back-to-back drafts')),
+    ).toBe(true);
+    // made: everyone lands where his leg sent him, the picks too, and the news tells it by who got what
+    const pick = own(l, THIRD, l.season + 3, 2);
+    const done = [...ring.slice(0, 2), leg(THIRD, U, { pids: [third.pid], dpids: [pick.dpid] })];
+    expect(validateDeal(l, done)).toEqual([]);
+    const txns = l.transactions?.length ?? 0;
+    executeDeal(l, done);
+    expect([mine.tid, theirs.tid, third.tid, pick.tid]).toEqual([AI, THIRD, U, U]);
+    expect(l.teams[U].rotation.order).toContain(third.pid);
+    expect(l.teams[U].rotation.order).not.toContain(mine.pid);
+    expect(mine.tradedFrom?.tid).toBe(U);
+    const news = l.news[l.news.length - 1];
+    expect(news.text.startsWith('Three-team trade: the ')).toBe(true);
+    expect(news.tids).toEqual([U, AI, THIRD]);
+    expect(news.text).toContain(`${mine.firstName} ${mine.lastName} from the ${l.teams[U].name}`);
+    expect((l.transactions?.length ?? 0) - txns).toBe(1);
+    expect(l.transactions![l.transactions!.length - 1].tids).toEqual([U, AI, THIRD]);
+    // (and nobody he sent away comes straight back through a third team)
+    expect(validateDeal(l, [leg(AI, U, { pids: [mine.pid] }), leg(U, AI, { pids: [restU[0].pid] })]).some((e) => e.includes("can't get him back until next season"))).toBe(true);
   }
 }, 120_000);
 

@@ -84,13 +84,30 @@ export function TabBar<T extends string>({ value, options, onChange, label }: { 
       window.removeEventListener('resize', update);
     };
   }, [options.length]);
+  // a tab chosen while the bar is stuck under the top bar: the new section starts at its top, under
+  // the bar, not wherever the last one was scrolled to (its first heading sat hidden behind the tabs)
+  const choose = (v: T) => {
+    const wrap = ref.current;
+    const stuckAt = wrap ? parseFloat(getComputedStyle(wrap).top) || 0 : 0;
+    const stuck = !!wrap && wrap.getBoundingClientRect().top <= stuckAt + 1 && window.scrollY > 0;
+    onChange(v);
+    if (!stuck || v === value) return;
+    // (after the new section is in the page: its height decides how far the page can scroll)
+    requestAnimationFrame(() => {
+      const mark = ref.current?.previousElementSibling ?? ref.current?.parentElement;
+      if (!mark || !ref.current) return;
+      // where the bar sits in the page when it isn't stuck: just under what comes before it
+      const rest = ref.current.previousElementSibling ? mark.getBoundingClientRect().bottom + window.scrollY : mark.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo({ top: Math.max(0, rest - stuckAt), behavior: 'auto' });
+    });
+  };
   const page = (dir: 1 | -1) => {
     const seg = ref.current?.querySelector<HTMLElement>('.seg');
     seg?.scrollBy({ left: dir * seg.clientWidth * 0.6, behavior: scrollBehavior() });
   };
   return (
     <div className="lg-tabs tabbar" ref={ref}>
-      <Segmented value={value} options={options} onChange={onChange} label={label} tabs />
+      <Segmented value={value} options={options} onChange={choose} label={label} tabs />
       {/* pointer-only: the tabs themselves are reachable by keyboard */}
       <button type="button" className="lg-tabs-more l" tabIndex={-1} aria-hidden="true" onClick={() => page(-1)}>
         <ChevronLeft size={16} />

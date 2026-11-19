@@ -7,6 +7,10 @@ import { initNative } from './native';
 import { useStore } from './state/store';
 import { noteStorageKept } from './state/backup';
 import { watchInstall } from './ui/components/InstallRow';
+import { initTheme } from './ui/theme';
+
+// the look (Hardwood or Night Court) is on the page before its first paint
+initTheme();
 
 // QA scripts drive the store directly in dev builds (save, inspect the league).
 if (import.meta.env.DEV || import.meta.env.VITE_QA === '1') (window as unknown as { __hc: unknown }).__hc = { store: useStore };

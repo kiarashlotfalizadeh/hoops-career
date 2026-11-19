@@ -1,0 +1,126 @@
+/* Night Court: Hardwood after dark. The same printed poster on dark stock: a warm charcoal page,
+   card stock a step lighter, bone ink, your team's colour still the one colour on the screen. Set by
+   `data-theme="dark"` on the root (ui/theme.ts: the device's choice, or the system's). Only tokens
+   turn over here; a screen's own styles read them and need no night rules of their own.
+
+   Two things stay as they are by day:
+   - A broadcast plate (the dock, a toast, the live game's scorebug, call bar, court and boards) is
+     ink in both looks: a step darker than the night page, so it still reads as the one black slab.
+     Inside one the controls' ink is pinned back to the day's (the plate's own styles derive their
+     white text from it).
+   - A team's slab is its colour, with white type and the day's badges on it. */
+:root[data-theme='dark'] {
+  /* grounds: the page, a recessed track, card stock, then pressed rows and tracks, lighter each step */
+  --bg: #171512;
+  --bg-2: #0f0e0c;
+  --raised: #22201c;
+  --surface: #2a2722;
+  --surface-2: #33302a;
+  --surface-3: #48433a;
+  --line: rgba(255, 244, 222, 0.1);
+  --line-2: rgba(255, 244, 222, 0.2);
+  --line-3: rgba(255, 248, 235, 0.62);
+  /* ink: bone, and two quieter steps; each keeps 4.5:1 on the page, card stock and --surface-2 */
+  --text: #f6f1e7;
+  --text-2: #d5cfc2;
+  --text-dim: #a9a294;
+  /* the controls' ink is bone on the dark stock: a primary pill is light with dark words */
+  --ink: #f6f1e7;
+  --ink-2: #ddd6c9;
+  --paper-ink: #151310;
+  --on: #f6f1e7;
+  --on-ink: #151310;
+  /* a plate: blacker than the page */
+  --plate: #0a0a09;
+  --plate-2: #1e1d1a;
+  --plate-ink: #ffffff;
+  /* what needs you: lifted to read as text on the dark stock, dark words on it as a badge */
+  --brand: #ff7b63;
+  --brand-ink: #1c0a06;
+  --accent-2: #e0a52e;
+  /* signals, lifted: 4.5:1 as text on every night ground and on their own 12% wash */
+  --good: #6fdc9c;
+  --bad: #ff9d90;
+  --warn: #ffc864;
+  --info: #8cbcff;
+  /* rating tiers, the same order by lightness and weight: gold > violet > blue > teal > grey > dim grey.
+     Light enough to read as a figure on the dark stock, so a solid badge carries a dark figure */
+  --tier-elite: #f0be4a;
+  --tier-star: #b7a4ff;
+  --tier-good: #6ec3f2;
+  --tier-avg: #5ed1c6;
+  --tier-low: #c4bfb4;
+  --tier-bad: #a39e94;
+  --on-tier: #15120c;
+  /* the floor under the tactics board and the 2D court: the same maple, a shade down for the night */
+  --maple: #cf9f69;
+  --maple-2: #c6955e;
+  /* depth: a card is lifted by its tone and a hair of light along its top; shadows are black */
+  --shadow-card: inset 0 1px 0 rgba(255, 246, 228, 0.05), 0 12px 28px -18px rgba(0, 0, 0, 0.9);
+  --shadow: 0 24px 48px -18px rgba(0, 0, 0, 0.85), 0 2px 8px rgba(0, 0, 0, 0.5);
+  --shadow-float: 0 16px 34px -10px rgba(0, 0, 0, 0.8), 0 2px 8px rgba(0, 0, 0, 0.5);
+  --scrim: rgba(0, 0, 0, 0.68);
+  color-scheme: dark;
+}
+
+/* ---------------------------------------------------------------- plates keep the day's ink
+   The dock, toasts, a chart's tip and the live game's graphics: inside, `--ink` is the plate and
+   `--paper-ink` white, as by day (their own styles and the 2D court's canvas read them). */
+:root[data-theme='dark'] :is(.bottomnav, .continue, .toast, .ch-tip, .lv-bug, .lv-call, .lv-stage, .lv-lb, .lv-cb, .lv-bd, .lv-ff, .lv-tk, .lv-intro, .moment) {
+  --ink: var(--plate);
+  --ink-2: var(--plate-2);
+  --paper-ink: #ffffff;
+  --on: #121212;
+  --on-ink: #ffffff;
+  --brand: #e2452f;
+  --brand-ink: #ffffff;
+}
+/* (the dock and a screen's own dock stand off the night page by a hair of light, as card stock does) */
+:root[data-theme='dark'] :is(.bottomnav, .continue, .dockbar, .fo-dock, .toast) {
+  box-shadow:
+    0 -1px 0 rgba(255, 244, 222, 0.12),
+    0 -14px 30px -18px rgba(0, 0, 0, 0.9);
+}
+:root[data-theme='dark'] body:has(.continue:not(.is-compact)) .bottomnav {
+  box-shadow: none;
+}
+:root[data-theme='dark'] .toast {
+  box-shadow:
+    0 0 0 1px rgba(255, 244, 222, 0.16),
+    var(--shadow-float);
+}
+/* a sheet is the page's stock over the dimmed page: a hair of light along its top says where it starts */
+:root[data-theme='dark'] .sheet {
+  box-shadow:
+    0 -1px 0 rgba(255, 244, 222, 0.14),
+    0 -20px 50px rgba(0, 0, 0, 0.6);
+}
+
+/* ---------------------------------------------------------------- slabs keep the day's badges
+   White type on the team's colour, and badges printed on white card stock in the day's tier inks. */
+:root[data-theme='dark'] .slab {
+  --paper-ink: #ffffff;
+  --tier-elite: #8d6300;
+  --tier-star: #442f8a;
+  --tier-good: #025d88;
+  --tier-avg: #00504f;
+  --tier-low: #5a5752;
+  --tier-bad: #6d6a67;
+  --on-tier: #ffffff;
+}
+
+/* ---------------------------------------------------------------- the few things a token can't say */
+/* a boxed switch: the option that's on is a lighter card on the recessed track (by day, white on paper) */
+:root[data-theme='dark'] .seg:not(.tabs) button.on,
+:root[data-theme='dark'] .seg:not(.tabs) > .seg-ind {
+  background: var(--surface-3);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+:root[data-theme='dark'] .seg.has-ind:not(.tabs) > button.on {
+  background: none;
+  box-shadow: none;
+}
+/* a switch's knob and a slider's thumb stay white; an off switch's track is a night surface */
+:root[data-theme='dark'] input[type='range']::-webkit-slider-thumb {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}

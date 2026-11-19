@@ -4,7 +4,7 @@
 // lowball, a rule) still went through as an action: talks remember it, so nothing is rolled back.
 import type { League } from '../../core/types';
 import { playerName } from '../../core/league/helpers';
-import { evaluateTrade, executeTrade, type TradeOffer } from '../../core/league/trades';
+import { dealTeams, evaluateDeal, evaluateTrade, executeDeal, executeTrade, type TradeLeg, type TradeOffer } from '../../core/league/trades';
 import { continueDraft, userDraftPick } from '../../core/league/season';
 import { releasePlayer, userBuyout } from '../../core/league/contracts';
 import { declineJob, takeJob } from '../../core/league/jobs';
@@ -57,6 +57,39 @@ export function makeTrade(league: League, o: TradeOffer, label = 'The trade'): b
   const got = [names.join(', '), picks ? (picks === 1 ? 'a pick' : `${picks} picks`) : ''].filter(Boolean).join(' and ');
   const now = useStore.getState().league;
   say(`Trade done with ${abbrev}${got ? `: ${got} join${names.length === 1 && !picks ? 's' : ''} you` : ''}.${now ? movedNeedText(now) : ''}`, 'good');
+  return true;
+}
+
+/**
+ * A three-team deal, if every other team still takes it (see evaluateDeal); a pick traded on draft
+ * night lets the draft carry on. Returns whether it went through.
+ */
+export function makeDeal(league: League, legs: TradeLeg[]): boolean {
+  const others = dealTeams(legs)
+    .filter((tid) => tid !== league.userTid)
+    .map((tid) => league.teams[tid].abbrev);
+  let msg = '';
+  let ok = false;
+  if (
+    !act('The three-team trade', (l) => {
+      const ev = evaluateDeal(l, legs);
+      if (!ev.accept) {
+        const no = ev.teams.find((t) => !t.accept);
+        msg = ev.errors[0] ?? (no ? `${l.teams[no.tid].abbrev}: ${no.message}.` : 'The deal is off.');
+        return;
+      }
+      executeDeal(l, legs);
+      if (l.phase === 'draft') continueDraft(l);
+      ok = true;
+    })
+  )
+    return false;
+  if (!ok) {
+    say(msg, 'bad');
+    return false;
+  }
+  const now = useStore.getState().league;
+  say(`Three-team trade done with ${others.join(' and ')}.${now ? movedNeedText(now) : ''}`, 'good');
   return true;
 }
 

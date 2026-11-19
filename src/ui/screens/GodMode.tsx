@@ -5,8 +5,10 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeftRight, ChevronRight, Pencil, Shield, TriangleAlert, UserPlus } from 'lucide-react';
 import { setOwnerConfidence } from '../../core/league/godMode';
+import { jobSecurity } from '../../core/league/jobSecurity';
+import { useForecast } from '../useForecast';
 import { edit } from '../../state/actions';
-import { useLeague, useStore } from '../../state/store';
+import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { Help, PageHeader, Section, Sheet, Slider, Toggle } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { PlayerPicker } from '../components/PlayerPicker';
@@ -25,15 +27,25 @@ export default function GodMode() {
   const [creating, setCreating] = useState(false);
   const [team, setTeam] = useState<number | null>(null);
   const [teamsOpen, setTeamsOpen] = useState(false);
-  // the slider shows the owner's mood as it is (a sim moves it) until it's dragged
+  // the slider shows the owner's standing as it is (a review moves it) until it's dragged
   const [draft, setDraft] = useState<number | null>(null);
   const owner = draft ?? league.ownerMood.total;
+  // The standing is what he carries from past reviews; the job-security meter (Office → Owner, Today)
+  // also counts how this season's goals are going. Both are shown, on the meter's 0-100 scale, so
+  // the number here is never a different one from the number there: the meter is worked out by the
+  // same jobSecurity(), with the standing as the slider has it.
+  const forecast = useForecast(league);
+  const seat = useLeagueMemo(
+    () => jobSecurity(owner === league.ownerMood.total ? league : { ...league, ownerMood: { ...league.ownerMood, total: owner } }, league.phase === 'regular' ? forecast : null),
+    [league, owner, forecast],
+  );
+  const standing = Math.round(50 + 50 * owner);
   const edits = league.godEdits ?? 0;
   const teams = [...league.teams].sort((a, b) => a.region.localeCompare(b.region) || a.name.localeCompare(b.name));
   const saveOwner = () => {
     if (!applyEdit((l) => setOwnerConfidence(l, owner))) return;
     setDraft(null);
-    useStore.getState().toast("The owner's confidence is set.", 'good');
+    useStore.getState().toast("The owner's standing is set.", 'good');
   };
   return (
     <main className="page">
@@ -56,6 +68,45 @@ export default function GodMode() {
               <div className="grow small">{block}</div>
             </div>
           )}
+          {/* first under the switch: the dock never covers it on a phone */}
+          <Section title="Owner">
+            <div className="card col god-owner">
+              <Slider
+                label={
+                  <span className="row" style={{ gap: 6 }}>
+                    Owner's standing
+                    <Help title="Owner's standing">
+                      <p>What he carries from past reviews, out of 100. Fifty means his goals were met exactly.</p>
+                      <p>Job security also counts this season's goals. With it on, a review that leaves the standing under 25 fires you after his grace period.</p>
+                    </Help>
+                  </span>
+                }
+                name="Owner's standing with you"
+                min={0}
+                max={100}
+                value={standing}
+                onChange={(v) => setDraft((v - 50) / 50)}
+                left="Ready to fire you"
+                right="Delighted"
+              />
+              {/* the meter every other screen shows, live: the standing above and this season's goals */}
+              <div className="god-seat" role="status">
+                <span className="god-seat-k">Job security now</span>
+                <span className={`god-seat-v num heat-${seat.heat}`}>{seat.score}</span>
+                <span className="god-seat-l">{seat.label}</span>
+                <Link to="/office/owner" className="god-seat-go">
+                  Owner
+                  <ChevronRight size={15} aria-hidden="true" />
+                </Link>
+              </div>
+              <div className="tiny dim">
+                {seat.score === standing ? 'The same as his standing: no season goals count yet.' : "His standing, moved by how this season's goals are going."}
+              </div>
+              <button className="btn sm god-save" disabled={!!block || owner === league.ownerMood.total} onClick={saveOwner}>
+                Save
+              </button>
+            </div>
+          </Section>
           {/* the editor's ways in, as one list: the teams in a sheet of their own */}
           <Section title="Edit">
             <div className="card flush list god-ways">
@@ -82,30 +133,6 @@ export default function GodMode() {
                 </span>
                 <ChevronRight size={18} className="dim" aria-hidden="true" />
               </Link>
-            </div>
-          </Section>
-
-          <Section title="Owner">
-            <div className="card col god-owner">
-              <Slider
-                label={
-                  <span className="row" style={{ gap: 6 }}>
-                    Owner's confidence in you
-                    <Help title="Owner's confidence">Your standing with him, from −100 to +100. With job security on, a review under −50 fires you after his grace period.</Help>
-                  </span>
-                }
-                name="Owner's confidence in you"
-                min={-100}
-                max={100}
-                value={Math.round(owner * 100)}
-                onChange={(v) => setDraft(v / 100)}
-                format={(v) => `${v > 0 ? '+' : ''}${v}`}
-                left="Ready to fire you"
-                right="Delighted"
-              />
-              <button className="btn sm god-save" disabled={!!block || owner === league.ownerMood.total} onClick={saveOwner}>
-                Save
-              </button>
             </div>
           </Section>
         </>

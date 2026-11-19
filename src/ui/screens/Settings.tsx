@@ -17,16 +17,23 @@ import { coachNameTaken, renameUserCoach } from '../../core/league/coaches';
 import { guideOpen, showGuide } from '../../core/league/agenda';
 import { edit } from '../../state/actions';
 import { loopSetting, useLeague, useStore, type LoopSettings } from '../../state/store';
-import { Help, More, PageHeader, Section, Segmented, Sheet, Toggle } from '../components/ui';
+import { Help, More, PageHeader, Section, Segmented, Sheet, Slider, Toggle } from '../components/ui';
 import { GlossarySheet } from '../components/Glossary';
 import { TabBar } from '../league/shared';
 import { BrandMark } from '../components/BrandMark';
 import { GLOSSARY } from '../glossary';
 import { LIVE_BREAKS, LIVE_SPEEDS, TEACHING_HELP, rememberTeaching } from '../settingsOptions';
 import { clutchSlowAlways, setClutchSlowAlways } from '../live/Atmos';
+import { setDevicePref, useDevice, type ThemePref } from '../device';
+import { sfx } from '../sound';
 import './settings.css';
 
 const SPEEDS = LIVE_SPEEDS.map((s) => ({ id: String(s.id), label: s.label }));
+const LOOKS: { id: ThemePref; label: string }[] = [
+  { id: 'auto', label: 'System' },
+  { id: 'light', label: 'Hardwood' },
+  { id: 'dark', label: 'Night Court' },
+];
 
 type Tab = 'game' | 'live' | 'league';
 const TABS: { id: Tab; label: string }[] = [
@@ -48,6 +55,8 @@ export default function Settings() {
   const [busy, setBusy] = useState(false);
   // (a setting of this device's, as the live screen's clutch-time offer keeps it)
   const [slowClose, setSlowClose] = useState(clutchSlowAlways);
+  // the look and the sound are this device's, whatever league is open (ui/device.ts)
+  const device = useDevice();
   // settings wait for a sim (it plays on a copy of the league); leaving or deleting mid-sim would strand it
   const simming = useStore((s) => !!s.sim);
   const saveProblem = useStore((s) => s.saveProblem);
@@ -151,6 +160,49 @@ export default function Settings() {
 
       {tab === 'game' && (
         <>
+          {/* this device's own: they hold for every league on it, and a sim doesn't hold them up */}
+          <Section title="Look and sound">
+            <div className="card flush set-list">
+              <div className="set-inline">
+                <span className="set-label row">
+                  Look
+                  <Help title="Look">Hardwood is the paper look. Night Court is the same on dark stock. System follows your device.</Help>
+                </span>
+                <Segmented label="Look" value={device.theme} onChange={(v) => setDevicePref('theme', v)} options={LOOKS} />
+              </div>
+              <Toggle
+                on={device.gameSound}
+                onChange={(v) => setDevicePref('gameSound', v)}
+                label="Game sounds"
+                help="The ball, the rim, the whistle, the horn and the crowd in a live game. The speaker on the court switches it too."
+              />
+              <Toggle
+                on={device.uiSound}
+                onChange={(v) => {
+                  setDevicePref('uiSound', v);
+                  // (heard at once: the switch's own answer)
+                  if (v) setTimeout(() => sfx('toggleOn'), 60);
+                }}
+                label="Interface sounds"
+                help="A soft tick under buttons and switches."
+              />
+              {(device.gameSound || device.uiSound) && (
+                <div className="set-vol">
+                  <Slider
+                    label="Volume"
+                    name="Volume"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={Math.round(device.volume * 100)}
+                    onChange={(v) => setDevicePref('volume', v / 100)}
+                    format={(v) => `${v}%`}
+                  />
+                </div>
+              )}
+            </div>
+          </Section>
+
           <Section title="Gameplay">
             <fieldset className="card flush set-list" disabled={simming}>
               <Toggle

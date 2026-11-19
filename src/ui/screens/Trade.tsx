@@ -33,6 +33,7 @@ import { DealCard } from '../trade/DealCard';
 import { AssetList } from '../trade/AssetList';
 import { Dock } from '../trade/Dock';
 import { TradingBlock } from '../trade/TradingBlock';
+import { ThreeTeam } from '../trade/ThreeTeam';
 
 const ids = (s: string | null) =>
   s
@@ -42,7 +43,7 @@ const ids = (s: string | null) =>
         .filter((n) => Number.isFinite(n))
     : [];
 
-type Tab = 'build' | 'find' | 'block' | 'offers';
+type Tab = 'build' | 'three' | 'find' | 'block' | 'offers';
 
 /** The finder's OVR floor from ?minOvr=N: the highest of its filter's steps at or under N. */
 const minOvrOf = (params: URLSearchParams) => [85, 80, 75, 70].find((x) => x <= Number(params.get('minOvr'))) ?? 0;
@@ -78,7 +79,16 @@ function readParams(
   const get: Sel = { pids: ids(params.get('get')), dpids: ids(params.get('getdp')) };
   // "Trade him" from the contracts list opens the trading block for that player
   const shop = w === null && give.pids.length === 1 && !give.dpids.length && !get.pids.length && !get.dpids.length ? give.pids[0] : null;
-  const tab: Tab = pr !== null || focus !== null || params.get('tab') === 'offers' ? 'offers' : shop !== null ? 'block' : params.get('tab') === 'find' ? 'find' : 'build';
+  const tab: Tab =
+    pr !== null || focus !== null || params.get('tab') === 'offers'
+      ? 'offers'
+      : shop !== null
+        ? 'block'
+        : params.get('tab') === 'find'
+          ? 'find'
+          : params.get('tab') === 'three'
+            ? 'three'
+            : 'build';
   return { partner, give, get, shop, focus, tab, minOvr: minOvrOf(params), pos: posOf(params) };
 }
 
@@ -285,7 +295,7 @@ export default function Trade() {
   };
 
   return (
-    <main className="page fo-page">
+    <main className={`page fo-page${tab === 'build' || tab === 'three' ? ' wide' : ''}`}>
       <PageHeader
         title="Trade"
         sub={[closed ? 'Closed' : deadlineLabel(league), s > league.season ? `${seasonLabel(s)} salaries` : ''].filter(Boolean).join(' · ') || undefined}
@@ -306,6 +316,15 @@ export default function Trade() {
         onChange={setTab}
         options={[
           { id: 'build', label: 'Build' },
+          {
+            id: 'three',
+            label: (
+              <>
+                <span aria-hidden="true">3-team</span>
+                <span className="sr-only">Three-team deal</span>
+              </>
+            ),
+          },
           { id: 'find', label: 'Find' },
           {
             id: 'block',
@@ -325,26 +344,33 @@ export default function Trade() {
 
       {tab === 'offers' ? null : tab === 'build' ? (
         <>
-          <PartnerSlab league={league} tid={partner} season={s} onPick={pickPartner} />
-          {ask && ask.tid === partner && <AskCallout league={league} ask={ask} onClose={() => setAsk(null)} />}
-          <DealCard league={league} partner={partner} offer={offer} give={cleanGive} get={cleanGet} onGive={setGive} onGet={setGet} onReset={reset} />
-          <div className="fo-only-sm">
-            <Segmented
-              label="Assets shown"
-              value={side}
-              onChange={setSide}
-              options={[
-                { id: 'theirs', label: `${pt.abbrev} assets${cleanGet.pids.length + cleanGet.dpids.length ? ` · ${cleanGet.pids.length + cleanGet.dpids.length}` : ''}` },
-                { id: 'mine', label: `Your assets${cleanGive.pids.length + cleanGive.dpids.length ? ` · ${cleanGive.pids.length + cleanGive.dpids.length}` : ''}` },
-              ]}
-            />
-          </div>
-          <div className="fo-split">
-            <div className={side === 'theirs' ? '' : 'fo-hide-sm'}>
-              <AssetList league={league} tid={partner} offer={offer} season={s} sel={cleanGet} onChange={setGet} title={`${pt.abbrev} send`} />
+          {/* a desktop: the partner and the deal in a rail that stays in view, both teams' assets beside it */}
+          <div className="rail-page fo-build">
+            <div className="rail-side">
+              <PartnerSlab league={league} tid={partner} season={s} onPick={pickPartner} />
+              {ask && ask.tid === partner && <AskCallout league={league} ask={ask} onClose={() => setAsk(null)} />}
+              <DealCard league={league} partner={partner} offer={offer} give={cleanGive} get={cleanGet} onGive={setGive} onGet={setGet} onReset={reset} />
             </div>
-            <div className={side === 'mine' ? '' : 'fo-hide-sm'}>
-              <AssetList league={league} tid={user} offer={offer} season={s} sel={cleanGive} onChange={setGive} title="You send" />
+            <div className="rail-main">
+              <div className="fo-only-sm">
+                <Segmented
+                  label="Assets shown"
+                  value={side}
+                  onChange={setSide}
+                  options={[
+                    { id: 'theirs', label: `${pt.abbrev} assets${cleanGet.pids.length + cleanGet.dpids.length ? ` · ${cleanGet.pids.length + cleanGet.dpids.length}` : ''}` },
+                    { id: 'mine', label: `Your assets${cleanGive.pids.length + cleanGive.dpids.length ? ` · ${cleanGive.pids.length + cleanGive.dpids.length}` : ''}` },
+                  ]}
+                />
+              </div>
+              <div className="fo-split">
+                <div className={side === 'theirs' ? '' : 'fo-hide-sm'}>
+                  <AssetList league={league} tid={partner} offer={offer} season={s} sel={cleanGet} onChange={setGet} title={`${pt.abbrev} send`} />
+                </div>
+                <div className={side === 'mine' ? '' : 'fo-hide-sm'}>
+                  <AssetList league={league} tid={user} offer={offer} season={s} sel={cleanGive} onChange={setGive} title="You send" />
+                </div>
+              </div>
             </div>
           </div>
           {/* (keyed: a new deal or partner starts with the dock folded) */}
@@ -361,6 +387,8 @@ export default function Trade() {
             onForce={forceIt}
           />
         </>
+      ) : tab === 'three' ? (
+        <ThreeTeam league={league} season={s} closed={closed} partner={partner} />
       ) : tab === 'find' ? (
         <TradeFinder league={league} state={finder} onChange={setFinder} onPick={pickTarget} />
       ) : (

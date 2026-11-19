@@ -57,6 +57,10 @@
 .set-inline .seg button {
   padding: 0 10px;
 }
+/* the volume: the slider fills the row */
+.set-vol .slider-label {
+  font-weight: 680;
+}
 /* a row that goes somewhere (or opens something): name and line, chevron */
 .set-link {
   display: flex;

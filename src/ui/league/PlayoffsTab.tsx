@@ -1,3 +1,5 @@
+import { ShareButton } from '../share/ShareButton';
+import { posterFile, titlePosterOf } from '../share/specs';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Trophy } from 'lucide-react';
@@ -222,6 +224,15 @@ function ChampionSlab({ league, season, tid, runnerUp, result, fmvp }: { league:
           </span>
         </>
       )}
+      {/* the title as a picture, one tap */}
+      <span className="lg-slab-share">
+        <ShareButton
+          className="btn xs"
+          spec={() => titlePosterOf(league, season, tid, { runnerUp, result, fmvp })}
+          file={posterFile(`${league.teams[tid].name} ${season} champions`)}
+          title={`The ${league.teams[tid].name}' title`}
+        />
+      </span>
     </TitleSlab>
   );
 }

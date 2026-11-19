@@ -15,7 +15,9 @@
 // coaching moves (live/coaching.ts). The game is a journal (state/live.ts): every move goes into it,
 // so the game picks up where it was after the app is closed.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RotateCcw, Smartphone, X } from 'lucide-react';
+import { RotateCcw, Smartphone, Volume2, VolumeX, X } from 'lucide-react';
+import { setDevicePref, useDevice } from '../device';
+import { GameSound } from '../live/SoundStage';
 import { useStore } from '../../state/store';
 import { edit } from '../../state/actions';
 import { neutralSite, userGameOnDay } from '../../core/league/games';
@@ -84,6 +86,7 @@ export default function Live() {
   const [picked, setPicked] = useState<number | undefined>();
   const { applyTactics, setKeep, substitute } = coachingMoves(s, () => setCview('lineup'));
   const conRef = useRef<HTMLDivElement>(null);
+  const device = useDevice();
   // a tap on the court brings the playback controls up in the call bar
   const [courtTap, setCourtTap] = useState(0);
 
@@ -549,6 +552,13 @@ export default function Live() {
       <div className="sr-only" aria-live="polite">
         {s.announce}
       </div>
+      <GameSound
+        level={crowd}
+        clutch={clutch}
+        atBreak={atBreak && !frozen}
+        final={frozen ? view.sides[0].score > view.sides[1].score : undefined}
+        run={nightRun ? { home: nightRun.side === 0, key: `${nightRun.side}:${nightRun.from}` } : null}
+      />
 
       <div className="lv-bug">
         <ScoreBug
@@ -660,6 +670,8 @@ export default function Live() {
           onReached={s.courtReached}
           onTick={(c, sc, shot) => s.ticker.set(c, sc, false, shot)}
           onBeat={s.beat.set}
+          // heard as well as seen: louder answers in clutch time and in a loud building
+          sound={Math.min(1, (clutch ? 0.5 : 0) + crowd / 8)}
           names={nameOf}
           abbrevs={[home.abbrev, away.abbrev]}
           game={() => ({ abbrevs: [home.abbrev, away.abbrev], ...s.ticker.get(), q: script?.q ?? view.q })}
@@ -686,6 +698,22 @@ export default function Live() {
         {tipUp && <CoachMark step={tip} onNext={nextTip} />}
         {/* the toasts' place while the game is on: the court's top edge, over the far stands (toastHost.ts) */}
         <div className="lv-toasts" ref={setToastHost} />
+        {/* the game's sound, on or off, in the court's other foot corner (a device setting: Settings has the rest) */}
+        {!frozen && !s.intro && (
+          <button
+            type="button"
+            className="lv-snd"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDevicePref('gameSound', !device.gameSound);
+            }}
+            aria-pressed={device.gameSound}
+            aria-label="Game sound"
+            title={device.gameSound ? 'Sound on' : 'Sound off'}
+          >
+            {device.gameSound ? <Volume2 size={16} aria-hidden="true" /> : <VolumeX size={16} aria-hidden="true" />}
+          </button>
+        )}
         {/* a phone: the way to the other layout, in the court's corner; turned, a word to turn the phone */}
         {(shape === 'turned' || shape === 'upright') && !frozen && !s.intro && (
           <button

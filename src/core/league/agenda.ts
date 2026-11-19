@@ -26,9 +26,10 @@ import { money, plural } from '../format';
 import { planByUser } from './gamePlans';
 import { ultimatumVerdict } from './jobSecurity';
 import { resolveCall, staffCalls, type CallAction, type CallChoice, type CallKind, type CallMeasure } from './calls';
+import { answerRequest, openRequests, roleRead } from './pulse';
 
 export type AgendaKind =
-  'fired' | 'cuts' | 'signings' | 'twoWays' | 'offerSheet' | 'draftPick' | 'tenDay' | 'tradeOffer' | 'jobOffers' | 'ultimatum' | 'deploy' | 'guide' | CallKind;
+  'fired' | 'cuts' | 'signings' | 'twoWays' | 'offerSheet' | 'draftPick' | 'tenDay' | 'tradeOffer' | 'jobOffers' | 'ultimatum' | 'deploy' | 'tradeRequest' | 'guide' | CallKind;
 
 /** The agenda's kinds that are the staff's calls (see calls.ts): Needs you puts them first, and the digest and the Play options show them. */
 export const CALL_KINDS: ReadonlySet<AgendaKind> = new Set<CallKind>(['injury', 'odds', 'floor', 'deadline', 'series', 'books', 'skid', 'week']);
@@ -47,6 +48,8 @@ export type AgendaAction =
   | { kind: 'proposal'; id: number; accept: boolean }
   | { kind: 'guide'; step: GuideStep }
   | { kind: 'hideGuide' }
+  /** A player's trade request, answered (shopped, given his minutes, or kept as he is): it leaves Needs you (see pulse.ts). */
+  | { kind: 'request'; pid: number }
   /** A staff call's choice (see calls.ts). */
   | { kind: 'call'; call: CallAction };
 
@@ -490,6 +493,28 @@ export function agenda(league: League): AgendaItem[] {
       to: '/office/owner',
     });
 
+  // a star who has asked for a trade (pulse.ts): shop him, play him, or keep him as he is
+  for (const p of openRequests(league)) {
+    const r = roleRead(league, p);
+    const done: AgendaAction = { kind: 'request', pid: p.pid };
+    items.push({
+      id: `tradeRequest:${p.pid}`,
+      kind: 'tradeRequest',
+      required: false,
+      title: `${playerName(p)} has asked for a trade`,
+      line: r ? `He expects ${r.expects} minutes a game and plays ${r.plays}. He won't re-sign while it stands.` : "He won't re-sign while it stands.",
+      detail: 'A few weeks at his minutes and he withdraws it. A trade settles it too. Left alone, he stays and leaves when his deal is up.',
+      tone: 'bad',
+      to: `/player/${p.pid}`,
+      pids: [p.pid],
+      choices: [
+        { label: 'Set his minutes', action: done, to: '/team/rotation' },
+        { label: 'Shop him', action: done, to: `/office/trade?give=${p.pid}` },
+        { label: 'He stays', action: done },
+      ],
+    });
+  }
+
   // a player brought in for a need, sitting out of a rotation he runs himself: place him (or not)
   if (league.phase === 'regular' || league.phase === 'preseason' || league.phase === 'playin' || league.phase === 'playoffs')
     for (const { txn, p } of needsDeploying(league)) {
@@ -583,6 +608,9 @@ export function resolveAgenda(league: League, a: AgendaAction): { ok: boolean; t
       league.onboarding = { done: league.onboarding?.done ?? [], hidden: true };
       return { ok: true, text: finished ? '' : 'Guide hidden. Bring it back from Today.' };
     }
+    case 'request':
+      answerRequest(league, a.pid);
+      return { ok: true, text: '' };
     case 'call':
       if (league.fired) return { ok: false, text: FIRED_REASON };
       return resolveCall(league, a.call);

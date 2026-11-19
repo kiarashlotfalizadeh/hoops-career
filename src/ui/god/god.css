@@ -146,6 +146,46 @@
 .god-save {
   align-self: flex-start;
 }
+/* the live meter under the slider: the figure the Owner desk and Today show */
+.god-seat {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.god-seat-k {
+  font-weight: 680;
+}
+.god-seat-v {
+  font-family: var(--mono);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+.god-seat-v.heat-secure,
+.god-seat-v.heat-steady {
+  color: var(--good);
+}
+.god-seat-v.heat-warm {
+  color: var(--warn);
+}
+.god-seat-v.heat-hot {
+  color: var(--bad);
+}
+.god-seat-l {
+  color: var(--text-2);
+  font-size: 13.5px;
+}
+.god-seat-go {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 13.5px;
+  font-weight: 680;
+  color: var(--accent-text);
+}
 
 /* the edits made, as the box score counts them */
 .god-switch > .tiny {

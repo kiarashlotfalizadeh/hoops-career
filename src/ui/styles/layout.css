@@ -22,6 +22,51 @@
 .page.full {
   max-width: 1100px;
 }
+/* A desktop (1100px and up): a screen that has a two-column layout takes a wider page, its side rail
+   beside its main column (.rail-page: the rail's blocks, then the main column's). Under that width the
+   two wrappers vanish (display: contents) and their blocks are the page's own, one column, as on a phone. */
+.rail-side,
+.rail-main {
+  display: contents;
+}
+@media (min-width: 1100px) {
+  .page.wide {
+    max-width: 1240px;
+  }
+  .rail-page {
+    display: grid;
+    grid-template-columns: var(--rail-w, 372px) minmax(0, 1fr);
+    column-gap: 36px;
+    align-items: start;
+  }
+  .rail-page > .rail-side,
+  .rail-page > .rail-main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-page);
+    min-width: 0;
+  }
+  /* the rail stays in view while the main column scrolls (when it is shorter than the window) */
+  .rail-page > .rail-side {
+    position: sticky;
+    top: calc(var(--top-h) + var(--safe-t) + 22px);
+    max-height: calc(100dvh - var(--top-h) - var(--safe-t) - var(--nav-h) - var(--cont-h) - 44px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    /* (room for the cards' shadows inside the scroller) */
+    margin: -8px -10px;
+    padding: 8px 10px;
+  }
+  /* a hub's sticky tabs head the main column, inside it */
+  .rail-page > .rail-main > .lg-tabs {
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .rail-page > .rail-main > .lg-tabs .seg.tabs {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
 
 .row {
   display: flex;

@@ -109,6 +109,13 @@
 .page > *:not(.no-rise, .dockbar, .fo-dock, :has(.dockbar, .fo-dock, .lv-bar, .lv-con-body)) {
   animation: rise var(--dur-page) var(--ease-out) backwards;
 }
+/* (a two-column page's blocks sit a level down, in its rail and its main column: they rise the same) */
+:is(.rail-side, .rail-main) > *:not(.no-rise, .dockbar, .fo-dock, :has(.dockbar, .fo-dock)) {
+  animation: rise var(--dur-page) var(--ease-out) backwards;
+}
+.rail-main > * {
+  animation-delay: calc(var(--stagger) * 2);
+}
 .page > :nth-child(2) {
   animation-delay: calc(var(--stagger) * 1);
 }

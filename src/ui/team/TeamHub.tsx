@@ -19,6 +19,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { CountUp, Fit } from '../components/ui';
 import { ordinal } from '../stats';
 import { useTeamEditWatch } from '../tactics/editWatch';
+import { LockerRoom } from './LockerRoom';
 
 const Roster = lazyRetry(() => import('../screens/Roster'));
 const Rotation = lazyRetry(() => import('../screens/Rotation'));
@@ -92,23 +93,31 @@ function TeamHeader({ league }: { league: League }) {
 
 export default function TeamHub() {
   const league = useLeague();
-  const { tab } = useParams();
+  const { tab, sub } = useParams();
   const nav = useNavigate();
   const section = SECTIONS.find((s) => s.id === tab)?.id ?? 'roster';
   const team = league.teams[league.userTid];
   // a change to the tactics or rotation is measured by the staff when the user leaves (or taps Done on Tactics)
   useTeamEditWatch();
   return (
-    <main className="page tm-hub">
-      {section === 'roster' ? <TeamHeader league={league} /> : <h1 className="sr-only">{`${team.name}: ${SECTIONS.find((s) => s.id === section)!.label}`}</h1>}
-      <TabBar value={section} options={SECTIONS} onChange={(s) => nav(s === 'roster' ? '/team' : `/team/${s}`, { replace: true })} label="Team sections" />
-      <Suspense fallback={null}>
-        {section === 'roster' && <Roster />}
-        {section === 'rotation' && <Rotation />}
-        {section === 'tactics' && <Tactics />}
-        {section === 'lineups' && <Lineups />}
-        {section === 'growth' && <Growth />}
-      </Suspense>
+    // A desktop: the roster has the team's poster and the locker room in a rail beside it; the
+    // rotation, the lineups and the tactics board take the wider page (Tactics' other sections are
+    // columns of controls, which read best at the phone's width).
+    <main className={`page tm-hub${section === 'roster' ? ' wide rail-page' : section === 'growth' || (section === 'tactics' && sub) ? '' : ' wide'}`}>
+      <div className="rail-side tm-rail">
+        {section === 'roster' ? <TeamHeader league={league} /> : <h1 className="sr-only">{`${team.name}: ${SECTIONS.find((s) => s.id === section)!.label}`}</h1>}
+        {section === 'roster' && <LockerRoom league={league} />}
+      </div>
+      <div className="rail-main tm-main">
+        <TabBar value={section} options={SECTIONS} onChange={(s) => nav(s === 'roster' ? '/team' : `/team/${s}`, { replace: true })} label="Team sections" />
+        <Suspense fallback={null}>
+          {section === 'roster' && <Roster />}
+          {section === 'rotation' && <Rotation />}
+          {section === 'tactics' && <Tactics />}
+          {section === 'lineups' && <Lineups />}
+          {section === 'growth' && <Growth />}
+        </Suspense>
+      </div>
     </main>
   );
 }

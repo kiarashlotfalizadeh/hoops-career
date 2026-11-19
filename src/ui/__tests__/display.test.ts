@@ -5,7 +5,7 @@ import type { League, Player, PlayerStats } from '../../core/types';
 import { blankStats } from '../../core/playerGen';
 import { f0, f1, finalLabel, fmtClock, gamesMemo, ordinal, ordinalSuffix, p0, p1, playerSeason, seasonLine, signed, startingFive, wholeMinutes } from '../stats';
 import { compareCells, fmtNum } from '../components/ui';
-import { applyAccent, contrast, lookDistance, matchKits, neutralVenue, venueLook } from '../teamColors';
+import { applyAccent, contrast, lookDistance, matchKits, neutralVenue, setNight, teamLook, venueLook } from '../teamColors';
 import { spread } from '../live/Court';
 import { FRANCHISES } from '../../core/teams';
 import { keepFigures } from '../../core/format';
@@ -233,6 +233,26 @@ describe('display helpers', () => {
       expect(tiers.map(([k]) => k)).toEqual(['elite', 'star', 'good', 'avg', 'low', 'bad']);
       for (const [k, c] of tiers) for (const ground of ['#ffffff', '#f3efe7']) expect(contrast(c, ground), `${k} on ${ground}`).toBeGreaterThanOrEqual(4.5);
       expect(keepFigures('won 107-98 to lead 1-0, 48-5 · a two-way deal')).toBe('won 107-\u206098 to lead 1-\u20600, 48-\u20605 · a two-way deal');
+      // Night Court (styles/night.css): the same ladder, lifted to read on the dark stock (the page, card
+      // stock, a pressed row), with a dark figure on a solid badge; the ink and the signals read there too
+      const night = fs.readFileSync(new URL('../styles/night.css', import.meta.url), 'utf8').split('}')[0];
+      const nightVar = (k: string) => night.match(new RegExp(`--${k}: (#[0-9a-f]{6});`))![1];
+      const grounds = ['bg', 'raised', 'surface-2'].map(nightVar);
+      const nightTiers = [...night.matchAll(/--tier-(\w+): (#[0-9a-f]{6});/g)].map((m) => [m[1], m[2]] as const);
+      expect(nightTiers.map(([k]) => k)).toEqual(['elite', 'star', 'good', 'avg', 'low', 'bad']);
+      for (const [k, c] of nightTiers) for (const ground of grounds) expect(contrast(c, ground), `night ${k} on ${ground}`).toBeGreaterThanOrEqual(4.5);
+      for (const k of ['elite', 'star']) expect(contrast(nightVar('on-tier'), nightVar(`tier-${k}`)), `night figure on ${k}`).toBeGreaterThanOrEqual(4.5);
+      for (const k of ['text', 'text-2', 'text-dim', 'good', 'bad', 'warn', 'info', 'brand'])
+        for (const ground of grounds) expect(contrast(nightVar(k), ground), `night ${k} on ${ground}`).toBeGreaterThanOrEqual(4.5);
+      // (a primary pill at night: dark words on bone; a count on the brand's badge)
+      expect(contrast(nightVar('paper-ink'), nightVar('ink'))).toBeGreaterThanOrEqual(7);
+      expect(contrast(nightVar('brand-ink'), nightVar('brand'))).toBeGreaterThanOrEqual(4.5);
+      // a team's colour as text follows the look: darkened for paper by day, lightened for the dark stock by night
+      const navy: [string, string, string] = ['#0c2340', '#236192', '#9ea2a2'];
+      setNight(true);
+      for (const ground of grounds) expect(contrast(teamLook(navy).text, ground)).toBeGreaterThanOrEqual(4.5);
+      setNight(false);
+      for (const ground of ['#ffffff', '#f3efe7']) expect(contrast(teamLook(navy).text, ground)).toBeGreaterThanOrEqual(4.5);
       // the signals read as text on every ground, and --bad, --warn and the elite gold stand apart by
       // lightness, the one thing every colour-blindness (and a grey screenshot) keeps: a red-green
       // colour-blind player saw --bad and --warn as one brown (ΔE2000 3.1 under deutan)

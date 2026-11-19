@@ -54,6 +54,10 @@ Rules that follow from it:
 - **Decisions have one list.** Anything the user must or may decide (cuts, offer sheets, offers,
   10-days, his pick, a new job) is an agenda item (`core/league/agenda.ts`, drawn with
   `AgendaList`/`AgendaRow`), settled in place. Required items hold the Continue bar.
+- **A three-team deal is its legs** (`TradeLeg` in `core/league/trades.ts`: what one team sends
+  another). The rules and every GM's verdict read any deal that way, two teams or three, so each
+  team is judged, and its salary matched, on all it sends against all it gets. Trade → 3-team
+  (`trade/ThreeTeam.tsx`) builds one: players and picks, each row with where it goes.
 - Routes from before the redesign redirect (`routes/legacy.tsx`); link to the new ones.
 - **Search finds everything.** The top bar's search (`components/QuickSearch.tsx`, ranking in
   `search.ts`; Ctrl/⌘ K or "/") reaches any player, team, screen or glossary word. A new screen
@@ -76,7 +80,8 @@ Rules that follow from it:
 
 The analysis is the depth; the world is the reason to press Continue. Every Continue should land on
 something new **about the user's team**, and the user's choices should come back to him through the
-world (no people layer: no morale, personalities or player conversations, by the user's choice).
+world. The one people signal is the locker room's pulse (below): no morale to manage, no
+personalities, no conversations and no promises.
 
 - **The press** (`core/league/media.ts`, `media/*`) writes stories with a headline (`head`), a dek
   (`text`) and a body, weighted 3 (front page), 2 (story) or 1 (brief). Front pages about the user's
@@ -92,6 +97,13 @@ world (no people layer: no morale, personalities or player conversations, by the
 - **Today is the front page** (`ui/today/FrontPage.tsx`, `front.ts`): the user's last result or top
   story, the next game's billing, form and pulse, the league's headlines; after a long sim, "While you
   were away" (`digest.ts`).
+- **The locker room has a pulse** (`core/league/pulse.ts`, read once a week): each player who expects
+  minutes against what he plays ("Wants more minutes", "Unhappy with his role"), and how tight the
+  five who play most are ("Strangers" to "Tight group": longer together and winning). A star short
+  for three weeks asks for a trade: front-page news, mail, a Needs-you item (Set his minutes, Shop
+  him, He stays), and he signs no new deal until he has his minutes back. One row on Team → Roster
+  (`team/LockerRoom.tsx`) opens it; a player's page carries his word as a tag. Signals only: it
+  changes nothing in the sim.
 - All of it reads the league and writes news, mail and its own state from `core/league/world.ts`,
   never from the league's random stream: the games play out the same with or without it.
 
@@ -168,6 +180,24 @@ world (no people layer: no morale, personalities or player conversations, by the
 | `--radius-xs` … `--radius-xl`, `--radius-pill`                                                                      | corners: xs 6 tags and badges, sm 10 level buttons, md 14 inputs and toasts, `--radius` 20 cards, lg 26 slabs and the dock, xl 30 sheets; pill for every button, chip and segment                   |
 | `--shadow-card` `--shadow` `--shadow-float`                                                                         | a card on the paper; a panel over the page; a bar floating over the dock (all warm, never black)                                                                                                    |
 | `--ease-out` `--ease-in` `--ease-move` `--ease-spring`, `--dur-fast` `--dur` `--dur-slow` `--dur-page`, `--stagger` | motion: arriving, leaving, moving, settling; 150ms state changes, 220ms entrances, 360ms a thing travelling, 340ms a screen's blocks, 32ms between them                                             |
+
+**Two looks, one set of tokens.** Hardwood is the day's; **Night Court** (`styles/night.css`, set by
+`data-theme="dark"` on the root from `ui/theme.ts`: the device's choice in Settings → Game, or the
+system's) turns the same tokens over: a warm charcoal page, card stock a step lighter, bone ink, the
+signals and tiers lifted to read there. A screen writes no night rules of its own. Three things hold:
+
+- **A plate stays ink** (`--plate`, `--plate-2`, `--plate-ink`): the dock, a toast, the live game's
+  scorebug, call bar, court and boards are black in both looks. Their own styles read `--ink` and
+  `--paper-ink`, so night.css pins those back to the day's inside them. A new plate uses `--plate`
+  for its ground and joins that list.
+- **`--ink` is the controls' ink, not "black"**: bone at night, with `--paper-ink` dark on it. Never
+  write `#fff` over `var(--ink)`; a figure on a solid tier is `--on-tier`, a count on the brand's
+  badge `--brand-ink`. White card stock that stays white on a slab (the OVR's card) sets its own ink.
+- **Colours worked out in script follow the look**: `teamLook().text`, `accentFill` and `applyAccent`
+  lighten for the dark stock (`setNight`). A screen that reads them draws again when the look changes
+  (`useTheme` in the shell).
+
+The look and the sound are the device's (`ui/device.ts`, `useDevice`), not the league's.
 
 Don't hard-code colours, spacing, corners or shadows that exist as tokens: screens read the density
 tokens so they tighten (or loosen) together. A control inside a padded box is concentric with it (the
@@ -309,6 +339,10 @@ Archivo, variable in width and weight, for words and big figures; IBM Plex Mono 
   required agenda item takes its place and opens in a sheet to be settled. On the screen the next
   step names, it shrinks to a round options button.
 - `.empty` for empty states: one line, what to do next; no icon or display headline.
+- `ShareButton` (`share/ShareButton.tsx`): one tap makes a 1080 × 1350 PNG poster (`share/poster.ts`
+  draws it on a canvas from a plain spec, `share/specs.ts` reads the league) and hands it to the
+  share sheet on a phone or saves it on a desktop: a player's card (his page), a game's final (its
+  report) and a title (the champions' slab). A new poster is a new spec and a draw function.
 
 ## Screen anatomy (phone)
 
@@ -318,7 +352,12 @@ Archivo, variable in width and weight, for words and big figures; IBM Plex Mono 
 4. Nothing important below a long list; filters above it.
 
 Spacing comes from the density tokens: `--gap-page` between sections, `--gap-sec` inside one, `--pad-card` inside a card, `--row-min` for a row. Phone
-first: wide screens get the same single column, centred, at most 788px. Grid columns are
+first: wide screens get the same single column, centred, at most 788px. **A desktop (1100px and up)
+gets two columns where a screen has two things to keep in view** (`.page.wide`, 1240px; `.rail-page`
+with a `.rail-side` that stays put and a `.rail-main`, `styles/layout.css`): Team → Roster (the
+poster and the locker room | the roster), Trade (the partner and the deal | both teams' assets),
+Draft (the clock or your picks | the board) and the tactics board (the floor | grades and bench).
+Under 1100px the two wrappers vanish and their blocks are the page's own, in the phone's order. Grid columns are
 `minmax(0, 1fr)`, never a bare `1fr` (a long line would push the page sideways).
 
 ## The live game
@@ -545,6 +584,19 @@ package (ink plates, white type); the console is paper and card stock like every
 - Two-team comparisons use `CompareBar`, which puts the winning figure in a pill of its side's
   colour (`higherBetter={false}` where lower wins, as for TOV%).
 - A highlights reel that plays on request is one header line with its button until it's played.
+
+## Sound
+
+- **Made on the device** (`ui/sound.ts`): every sound is oscillators and filtered noise shaped by an
+  envelope, through one limiter. No audio files. A touch opens it; a hidden tab is silent.
+- **The live game is heard as the court plays it** (`live/gameSound.ts`, from CourtView's beats): the
+  dribble, the net, the rim, a dunk, a block, the whistle on a foul, a dead-ball turnover or a
+  timeout; the home crowd cheers its baskets and groans at the visitors'. The building
+  (`live/SoundStage.tsx`): a murmur at the night's crowd level, the horn at a period's end and the
+  final, a roar on a home run and in clutch time. Nothing at 4×'s pace but the results.
+- **Two switches and a volume** in Settings → Game (the device's, not the league's): Game sounds
+  (on), Interface sounds (off: a tick under every control, from one listener in the shell). The
+  speaker in the court's foot corner mutes the game.
 
 ## Copy
 

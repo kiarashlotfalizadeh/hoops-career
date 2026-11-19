@@ -1604,6 +1604,8 @@ export interface League {
   untouchable?: number[];
   /** The transaction log, oldest first: every trade and the user's moves for good, other teams' moves for two seasons (see pruneTransactions). */
   transactions?: Txn[];
+  /** The locker room's pulse: how the user's players stand with their roles, and how tight the core is (see league/pulse.ts). */
+  pulse?: import('./league/pulse').PulseState;
   /** Id of the next transaction logged. */
   nextTxnId?: number;
   /** The user's live game in progress, journaled as it's played so it survives the app being closed. */

@@ -31,6 +31,7 @@ import { numberTeam } from './jerseys';
 import { logMove } from './transactions';
 import { money } from '../format';
 import { freezeSigningReason } from './books';
+import { askedOutReason } from './pulse';
 
 export type Strategy = Team['strategy'];
 
@@ -1592,6 +1593,9 @@ export function extensionAsk(league: League, p: Player): Ask {
  * contract season, so asking again gets the same answer until his interest changes.
  */
 export function extensionRefusal(league: League, p: Player): string | null {
+  // (a player who has asked the user for a trade signs nothing until his role is settled: see pulse.ts)
+  const out = askedOutReason(league, p);
+  if (out) return out;
   if (p.tid < 0 || rookieScaleDeal(p) || valueScore(league, p) < 80) return null;
   const appeal = teamAppeal(league, p.tid, p);
   if (appeal >= 0.94) return null;

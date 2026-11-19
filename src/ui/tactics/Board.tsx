@@ -253,7 +253,8 @@ export function Board({
                 onClick={() => onPick(r.p.pid)}
                 aria-label={`${nameOf(r.p.pid)}, ${spot.name}: ${role}, ${fit} of 5 for it${off ? `; suits ${bestName} better` : ''}`}
               >
-                <span className="tx-floor-n">
+                {/* (a long name takes the narrowest cut rather than lose its end: "Gilgeous-Alexan…") */}
+                <span className={`tx-floor-n${nameOf(r.p.pid).length > 12 ? ' long' : ''}`}>
                   <span className="ellipsis">{nameOf(r.p.pid)}</span>
                 </span>
                 {/* (keyed by the role: a new one, or the board's other end, fades in on the plate as it travels) */}

@@ -13,7 +13,7 @@
   font-weight: 600;
   line-height: 1;
   /* white on the tier colours (not your team's ink, which is black for a light team colour) */
-  color: #fff;
+  color: var(--on-tier);
 }
 .tx-grade.sm {
   min-width: 24px;
@@ -168,7 +168,7 @@
   /* (the second board a breath off the first: planks, not stripes) */
   --tx-maple-2: color-mix(in srgb, var(--maple) 45%, var(--maple-2));
   --tx-seam: var(--maple-seam);
-  --tx-court-line: var(--paper-ink);
+  --tx-court-line: #ffffff;
   /* the floor's height in hundredths of its width (the court and its apron: 108 by 92) */
   --tx-ar: 0.8519;
   position: relative;
@@ -249,6 +249,8 @@
   gap: 1px;
   width: max-content;
   max-width: 33cqw;
+  /* (never wider than the floor it stands on, whatever a font does to its words) */
+  overflow: hidden;
   padding: 0.36em 0.62em 0.42em;
   border-radius: var(--radius-sm);
   background: var(--raised);
@@ -317,6 +319,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+}
+/* a long name: the family's narrowest cut and a tighter fit, so it shows whole on a 390px phone */
+.tx-floor-n.long {
+  font-stretch: 62%;
+  letter-spacing: -0.02em;
 }
 /* the role and how he suits it on one line: the role gives way first, the figure stays whole (12px
    at the least, as every label on the board) */

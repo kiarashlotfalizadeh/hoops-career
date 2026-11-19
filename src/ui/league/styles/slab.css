@@ -305,3 +305,9 @@
   transform-origin: right bottom;
   animation: slam 0.4s var(--ease-out) 0.05s backwards;
 }
+
+/* a title as a picture: the button on its own line under the slab's words */
+.lg-slab-share {
+  display: block;
+  margin-top: 10px;
+}

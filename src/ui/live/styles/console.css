@@ -67,7 +67,7 @@
   right: 0;
   bottom: 0;
   z-index: 40;
-  padding: 0 max(8px, var(--safe-r)) var(--safe-b) max(8px, var(--safe-l));
+  padding: 2px max(8px, var(--safe-r)) var(--lv-bar-pad) max(8px, var(--safe-l));
   background: var(--raised);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   box-shadow:
@@ -83,8 +83,10 @@
   align-items: center;
   gap: 6px;
 }
+/* at a stop the way on takes the width its words need ("Start overtime" was once cut to fit a share
+   of the row); the views share what is left */
 .lv-bb.stopped {
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 4fr);
+  grid-template-columns: auto minmax(0, 1fr);
 }
 .lv-bb-views {
   display: grid;
@@ -151,6 +153,10 @@
 }
 .lv-bb-l {
   white-space: nowrap;
+  line-height: 1.15;
+}
+.lv-bb-btn {
+  min-width: 0;
 }
 .lv-bb-ic {
   position: relative;
@@ -220,7 +226,7 @@
   padding: 0 4px;
   border-radius: 9px;
   background: var(--brand);
-  color: #fff;
+  color: var(--brand-ink);
   font-family: var(--mono);
   font-stretch: normal;
   font-size: 12px;

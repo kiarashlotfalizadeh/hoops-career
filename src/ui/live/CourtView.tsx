@@ -15,6 +15,7 @@ import type { Cast } from './Court3D';
 import { CAM_KINDS, CAM_NAME, camKind, type CamKind } from './court3d/cameras';
 import type { Body } from './court3d/puppet';
 import { ShotClock } from './shotClock';
+import { beatSound, hushMoves } from './gameSound';
 import type { Occasion } from './occasion';
 import './styles/court3d.css';
 
@@ -63,9 +64,14 @@ export interface CourtViewProps extends CourtProps {
   onReached?: () => void;
   /** The game is over: what kind of win it is (the 3D picture celebrates it so). */
   occasion?: Occasion;
+  /**
+   * The court is heard as well as seen (the live game, never a highlight): how much the moment means
+   * to the building, 0..1 (see live/gameSound.ts).
+   */
+  sound?: number;
 }
 
-export function CourtView({ look, onLook, cam, onCam, bench, body, game, replays, onReached, occasion, ...court }: CourtViewProps) {
+export function CourtView({ look, onLook, cam, onCam, bench, body, game, replays, onReached, occasion, sound, ...court }: CourtViewProps) {
   const kind = camKind(cam);
   const stage = useRef(emptyStage());
   const [shotClock] = useState(() => new ShotClock());
@@ -111,6 +117,8 @@ export function CourtView({ look, onLook, cam, onCam, bench, body, game, replays
     }
     court.onDone();
   };
+  // paused, a new possession or the court gone: the bounces still due for the move that was playing are dropped
+  useEffect(() => hushMoves, [court.paused, court.script]);
   // the game stopped or sped up, or the picture went: the replay goes at once and the court goes on
   useEffect(() => {
     if (!may && held.current) {
@@ -158,6 +166,11 @@ export function CourtView({ look, onLook, cam, onCam, bench, body, game, replays
         stage={stage}
         mute={shown}
         onDone={onDone}
+        onBeat={(frame) => {
+          court.onBeat?.(frame);
+          // (heard at the pace the floor is played at: the 3D picture's is half the 2D floor's)
+          if (sound !== undefined && court.script && !court.paused) beatSound(court.script, frame, speed, sound);
+        }}
         onTick={
           court.onTick &&
           ((c, sc) => {

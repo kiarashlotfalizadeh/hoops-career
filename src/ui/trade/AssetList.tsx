@@ -128,7 +128,7 @@ export function AssetList({
  * his rating, this season's salary and when his deal ends. Whether his team would move him is the
  * list's grouping; a flag that doesn't fit beside his name wraps under it rather than cutting it off.
  */
-function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League; p: Player; name: string; season: number; on: boolean; onToggle: () => void }) {
+export function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League; p: Player; name: string; season: number; on: boolean; onToggle: () => void }) {
   const locked = untradeable(league, p);
   const flag = locked ? (
     <span className="fo-flag bad">{p.contract.tenDay ? '10-day' : { expiring: 'Expiring', option: 'Option', signed: 'Signed' }[locked.kind]}</span>
@@ -162,7 +162,7 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
 }
 
 /** A pick to tap into the deal, on one line: its name (the original team's mark, round, protection, swap) and where it projects. */
-function PickAsset({ league, dp, proj, on, onToggle }: { league: League; dp: DraftPick; proj?: string; on: boolean; onToggle: () => void }) {
+export function PickAsset({ league, dp, proj, on, onToggle }: { league: League; dp: DraftPick; proj?: string; on: boolean; onToggle: () => void }) {
   return (
     <button className={`fo-asset pick ${on ? 'on' : ''}`} onClick={onToggle} aria-pressed={on}>
       <span className="fo-check" aria-hidden="true">

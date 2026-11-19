@@ -81,7 +81,8 @@ export function useSeen(ref: RefObject<Element | null>, margin = '0px 0px -8% 0p
 
 /**
  * Where a chosen child sits inside its row, for an indicator that slides to it (Segmented's thumb).
- * Measures the child's content box (`inset` true) or its whole box, again whenever the row resizes.
+ * Measures the child's content box (`inset` true) or its whole box, again whenever the row or any of
+ * its options resizes and once the web fonts are in.
  */
 export function useIndicator(row: RefObject<HTMLElement | null>, selector: string, dep: unknown, inset = false): { x: number; w: number; ready: boolean } | null {
   const [box, setBox] = useState<{ x: number; w: number } | null>(null);
@@ -99,10 +100,21 @@ export function useIndicator(row: RefObject<HTMLElement | null>, selector: strin
       setBox((b) => (b && b.x === next.x && b.w === next.w ? b : next));
     };
     measure();
-    if (typeof ResizeObserver === 'undefined') return;
+    // the chosen child moves when any option's width does, with the row's own width unchanged: the web
+    // font arriving after the first paint, a label that changes, a count beside one. So every option
+    // is watched, not the row alone (a thumb measured in the fallback font once sat beside its option)
+    let live = true;
+    const again = () => live && measure();
+    void document.fonts?.ready.then(again);
+    if (typeof ResizeObserver === 'undefined') return () => void (live = false);
     const ro = new ResizeObserver(measure);
     ro.observe(el);
-    return () => ro.disconnect();
+    // (not the indicator itself: its width is what this sets)
+    for (const child of el.children) if (child.getAttribute('aria-hidden') !== 'true') ro.observe(child);
+    return () => {
+      live = false;
+      ro.disconnect();
+    };
   }, [row, selector, dep, inset]);
   // the first place is set without a slide; later ones glide
   useEffect(() => {
