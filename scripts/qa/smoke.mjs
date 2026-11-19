@@ -79,6 +79,13 @@ try {
     .click();
   await page.waitForTimeout(800);
 
+  // the 2D court for this run: headless Chromium draws the 3D one in software at 3-4 frames a second,
+  // too slow for clicks to land or the clock to move (the 3D picture has its own harnesses)
+  await page.goto(`${base}/#/settings?tab=live`);
+  const look3d = page.getByRole('switch', { name: '3D court' });
+  if ((await look3d.getAttribute('aria-checked')) === 'true') await look3d.click();
+  await page.goBack();
+
   // the opening-night game, live: the court plays, then sims to the final
   await clearMoments(page);
   await page.getByRole('button', { name: 'Play options', exact: true }).click();
@@ -93,6 +100,12 @@ try {
     await page.getByRole('button', { name: 'Play options', exact: true }).click();
   }
   await watch.click();
+  // a phone's first live game asks once whether to watch sideways, over the lineups: this run stays upright
+  await page
+    .getByRole('dialog', { name: 'Watch sideways?' })
+    .getByRole('button', { name: 'Keep upright', exact: true })
+    .click({ timeout: 10_000 })
+    .catch(() => fail.push('no watch-sideways question on the first live game'));
   // the starting lineups go up first: tip it off
   await page
     .getByRole('button', { name: 'Skip intro', exact: true })
