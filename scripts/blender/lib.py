@@ -225,15 +225,21 @@ def tri_count(obj):
 
 # --- shading baked into the mesh: how open to the sky each point is ---
 
-def bake_occlusion(obj, others=(), rays=48, reach=1.4, floor=None, low=0.42, name='Col', lift=0.03, blur=2):
+def bake_occlusion(obj, others=(), rays=48, reach=1.4, floor=None, low=0.42, name='Col', lift=0.03, blur=2, only=None, skip=()):
     """
     Writes each point's shade (1 open, `low` shut in) to the colour attribute: rays from just off the
     point over its outward half, against this mesh and `others`. `floor` (a height, game frame) also
     blocks. The shade is evened out over neighbours `blur` times (a bump in the mesh is not a hollow).
+    `only` (one flag a point): the points shaded, the rest left as they are. `skip`: the material slots
+    of this mesh whose faces don't block (what only some men wear).
     """
     from mathutils.bvhtree import BVHTree
     trees = []
     for o in (obj, *others):
+        if o is obj and skip:
+            world = [o.matrix_world @ v.co for v in o.data.vertices]
+            trees.append(BVHTree.FromPolygons(world, [list(p.vertices) for p in o.data.polygons if p.material_index not in skip]))
+            continue
         bm = bmesh.new()
         bm.from_mesh(o.data)
         bm.transform(o.matrix_world)
@@ -245,6 +251,8 @@ def bake_occlusion(obj, others=(), rays=48, reach=1.4, floor=None, low=0.42, nam
     me = obj.data
     shut = np.zeros(len(me.vertices))
     for v in me.vertices:
+        if only is not None and not only[v.index]:
+            continue
         n = v.normal
         p = v.co + n * lift
         hit = 0.0
@@ -278,6 +286,8 @@ def bake_occlusion(obj, others=(), rays=48, reach=1.4, floor=None, low=0.42, nam
             np.add.at(acc, ea[:, 0], shut[ea[:, 1]])
             np.add.at(acc, ea[:, 1], shut[ea[:, 0]])
             shut = np.where(deg > 0, 0.4 * shut + 0.6 * acc / np.maximum(deg, 1), shut)
+    if only is not None:
+        shut = np.where(np.asarray(only, dtype=bool), shut, 0.0)
     shade = 1 - (1 - low) * shut
     col = me.color_attributes.get(name) or me.color_attributes.new(name, 'FLOAT_COLOR', 'POINT')
     prev = np.ones(len(me.vertices) * 4)
@@ -319,6 +329,131 @@ def soften(obj, where, keep, name='Col'):
         if where[v.index] if isinstance(where, list) else where(v.co.x, v.co.z, -v.co.y):
             data[v.index, :3] = 1 - (1 - data[v.index, :3]) * keep
     col.data.foreach_set('color', data.ravel())
+
+
+# --- a picture laid in a mesh's uv (anatomy.py's map of his skin) ---
+
+def raster_uv(uv, attrs, size, chunk=4096):
+    """
+    Each texel of a size x size picture whose centre one of the triangles covers, and what that triangle has there:
+    `uv` (T, 3, 2) in the picture's own frame (u across, v DOWN from its top row: row r is v = (r + 0.5) / size),
+    `attrs` (T, 3, C) at the corners, straight between them. Says (values (size, size, C), hits (size, size): how
+    many triangles cover each texel; more than one is a uv laid twice).
+    """
+    uv = np.asarray(uv, dtype=np.float64) * size - 0.5
+    attrs = np.asarray(attrs, dtype=np.float64)
+    out = np.zeros((size * size, attrs.shape[2]), dtype=np.float64)
+    hits = np.zeros(size * size, dtype=np.int32)
+    lo = np.clip(np.ceil(uv.min(1)), 0, size - 1).astype(np.int64)
+    hi = np.clip(np.floor(uv.max(1)), 0, size - 1).astype(np.int64)
+    span = np.maximum(hi - lo + 1, 0)
+    # (a few thousand triangles at a time: each one's box of texels, every texel in it tried)
+    for at in range(0, len(uv), chunk):
+        sl = slice(at, at + chunk)
+        n = span[sl, 0] * span[sl, 1]
+        tri = np.repeat(np.arange(at, at + len(n)), n)
+        k = np.arange(n.sum()) - np.repeat(np.cumsum(n) - n, n)
+        x = lo[tri, 0] + k % span[tri, 0]
+        y = lo[tri, 1] + k // span[tri, 0]
+        a, b, c = uv[tri, 0], uv[tri, 1], uv[tri, 2]
+        d = (b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1]) - (c[:, 0] - a[:, 0]) * (b[:, 1] - a[:, 1])
+        ok = np.abs(d) > 1e-12
+        d = np.where(ok, d, 1.0)
+        l1 = ((x - a[:, 0]) * (c[:, 1] - a[:, 1]) - (c[:, 0] - a[:, 0]) * (y - a[:, 1])) / d
+        l2 = ((b[:, 0] - a[:, 0]) * (y - a[:, 1]) - (x - a[:, 0]) * (b[:, 1] - a[:, 1])) / d
+        l0 = 1 - l1 - l2
+        inside = ok & (l0 >= 0) & (l1 >= 0) & (l2 >= 0)
+        tri, x, y, l0, l1, l2 = tri[inside], x[inside], y[inside], l0[inside], l1[inside], l2[inside]
+        at_ = y * size + x
+        out[at_] = attrs[tri, 0] * l0[:, None] + attrs[tri, 1] * l1[:, None] + attrs[tri, 2] * l2[:, None]
+        np.add.at(hits, at_, 1)
+    return out.reshape(size, size, -1), hits.reshape(size, size)
+
+
+def dilate(img, mask, px=16):
+    """
+    The picture with the texels within `px` of `mask` (and not in it) filled from it, the rest as they were: pushed
+    down to ever coarser copies of what the mask holds (each texel the mean of the four under it that hold
+    something), then pulled back up wherever the finer copy holds nothing. A texel in the mask keeps its own.
+    """
+    img = np.asarray(img, dtype=np.float64)
+    flat = img.ndim == 2
+    v = img[..., None] if flat else img
+    w = np.asarray(mask, dtype=np.float64)
+    vs, ws = [v * w[..., None]], [w]
+    while max(ws[-1].shape) > 1:
+        a, b = vs[-1], ws[-1]
+        h, wd = (a.shape[0] + 1) // 2 * 2, (a.shape[1] + 1) // 2 * 2
+        a = np.pad(a, ((0, h - a.shape[0]), (0, wd - a.shape[1]), (0, 0)))
+        b = np.pad(b, ((0, h - b.shape[0]), (0, wd - b.shape[1])))
+        vs.append(a[0::2, 0::2] + a[1::2, 0::2] + a[0::2, 1::2] + a[1::2, 1::2])
+        ws.append(b[0::2, 0::2] + b[1::2, 0::2] + b[0::2, 1::2] + b[1::2, 1::2])
+    fill = vs[-1] / np.maximum(ws[-1], 1e-12)[..., None]
+    for a, b in zip(vs[-2::-1], ws[-2::-1]):
+        up = np.repeat(np.repeat(fill, 2, 0), 2, 1)[: a.shape[0], : a.shape[1]]
+        # (each coarse texel's four, eased into their neighbours': a quarter, a half, a quarter each way, so the fill is not blocks)
+        for axis in (0, 1):
+            e = np.concatenate([np.take(up, [0], axis), up, np.take(up, [-1], axis)], axis)
+            up = 0.25 * np.take(e, range(0, e.shape[axis] - 2), axis) + 0.5 * up + 0.25 * np.take(e, range(2, e.shape[axis]), axis)
+        fill = np.where((b > 0)[..., None], a / np.maximum(b, 1e-12)[..., None], up)
+    # (how far each texel is from the mask: grown a texel at a time, square, so `px` is a box round it)
+    near = np.asarray(mask, dtype=bool)
+    for _ in range(px):
+        g = near.copy()
+        g[1:] |= near[:-1]
+        g[:-1] |= near[1:]
+        near = g.copy()
+        near[:, 1:] |= g[:, :-1]
+        near[:, :-1] |= g[:, 1:]
+    out = np.where((near & ~np.asarray(mask, dtype=bool))[..., None], fill, v)
+    return out[..., 0] if flat else out
+
+
+def write_png(path, pixels):
+    """
+    A picture as a PNG (8 bits a channel: grey, grey and alpha, RGB or RGBA by how many channels it has), written the
+    same to the byte every time: its header, its pixels and its end, nothing else (no time, no text), each row
+    filtered the way that leaves it smallest by the format's usual test, at zlib's best.
+    """
+    import struct
+    import zlib
+
+    px = np.asarray(pixels)
+    if px.dtype != np.uint8:
+        raise ValueError('write_png: 8-bit pixels only')
+    if px.ndim == 2:
+        px = px[..., None]
+    h, w, c = px.shape
+    kind = {1: 0, 2: 4, 3: 2, 4: 6}[c]
+    row = px.reshape(h, w * c).astype(np.int16)
+    left = np.zeros_like(row)
+    left[:, c:] = row[:, :-c]
+    up = np.zeros_like(row)
+    up[1:] = row[:-1]
+    corner = np.zeros_like(row)
+    corner[1:, c:] = row[:-1, :-c]
+    # (Paeth: whichever of left, up and their corner is nearest left + up - corner)
+    p = left + up - corner
+    pa, pb, pc = np.abs(p - left), np.abs(p - up), np.abs(p - corner)
+    paeth = np.where((pa <= pb) & (pa <= pc), left, np.where(pb <= pc, up, corner))
+    tries = [row, row - left, row - up, row - (left + up) // 2, row - paeth]
+    tries = [(t % 256).astype(np.uint8) for t in tries]
+    # (the usual test: the least sum of each byte taken as a signed number)
+    cost = np.stack([np.abs(t.astype(np.int8).astype(np.int64)).sum(1) for t in tries])
+    best = cost.argmin(0)
+    raw = np.empty((h, w * c + 1), dtype=np.uint8)
+    raw[:, 0] = best
+    for k, t in enumerate(tries):
+        raw[best == k, 1:] = t[best == k]
+
+    def chunk(kind_, data):
+        return struct.pack('>I', len(data)) + kind_ + data + struct.pack('>I', zlib.crc32(kind_ + data) & 0xFFFFFFFF)
+
+    out = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, kind, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(raw.tobytes(), 9)) + chunk(b'IEND', b'')
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'wb') as f:
+        f.write(out)
+    return len(out)
 
 
 # --- out ---

@@ -3,9 +3,11 @@
 // ten figures standing), held still and seen from wherever you ask.
 //   /scripts/qa/scene-lab/?eye=0,33,60&at=0,0,-4&fov=30      a camera in the scene's feet (x along the floor, y up, z toward the near side)
 //   &shot=bench|coach|crowd|stands|basket|rim|table|board|players|player|ball|ft     a ready-made camera on one thing
-//   lab.bench() in the console: what a frame costs (ms, triangles, draw calls)
+//   lab.bench() in the console: what a frame costs (ms, the card's drawing waited for; triangles, draw calls, textures and programs on the card):
+//     the game's own camera's frame, or with &shot or &eye that camera's still (see bench)
 //   &cheer=1 (the crowd on its feet)  &away=1 (the visitors' paint)  &t=3 (seconds the crowd has swayed)
 //   &lite=n (a slow device's step: 1 the picture unfinished, 2 no shadows either, 3 no mirror nor fine wood either; &lite alone is 3)
+//   &ratio=0.75 (the step's share of the screen's dots, as Court3D takes it: a phone's is 0.75)  &maps=0 (the men's skin without its map)
 //   &game=1 (a game on the boards: Q4, 2:31 left, 88-85)  &call=three|dunk|andOne|block|steal|buzzer|timeout (a big moment, the home side's;
 //   &by=1 the visitors')  &def=1 (the home side on defence)  &ft=1 (a visitor at the line, the end behind it waving)  &clutch=1  &final=0|1 (who won)
 //   &final=0|1 (the game over, that side the winners: with no eye or shot, the broadcast's own camera finds them)
@@ -15,10 +17,12 @@
 //   &tip=1 (the ten lined up for the tip, the ball in the centre circle: with no eye or shot, the broadcast's opening camera)
 //   &home=BOS&vs=MIL (whose building, and who visits: abbreviations; Washington and Milwaukee by default)  &neutral=1 (the Cup final's floor)
 //   &flat=1 (no 3D: the floor as the 2D court paints it, sideways, for that building)
-import { PerspectiveCamera, type Scene, type WebGLRenderer } from 'three';
+//   &smooth=0 (no finer mesh for the men close to the camera)
+//   &face=3 (one man's face close, under the building's light: &d=2.4 ft off, &side=20 degrees round to his left, &up=0.05 ft over his eyes)
+import { type Object3D, PerspectiveCamera, type Scene, Vector3, type WebGLRenderer } from 'three';
 import { FRANCHISES } from '../../../src/core/teams';
 import { courtFloor, emptyStage, paintFloor, readPaints, venueOf, type Stage } from '../../../src/ui/live/Court';
-import { settleHeads } from '../../../src/ui/live/court3d/figure';
+import { B, settleHeads } from '../../../src/ui/live/court3d/figure';
 import { bodyOf } from '../../../src/ui/live/court3d/puppet';
 import { CourtScene, loadModels } from '../../../src/ui/live/court3d/scene';
 import { matchKits } from '../../../src/ui/teamColors';
@@ -57,7 +61,9 @@ const team = (abbrev: string) => {
 const home = team(q.get('home') ?? 'WAS');
 const away = team(q.get('vs') ?? 'MIL');
 const kits = matchKits(q.has('away') ? ['#0c2340', '#c8102e', '#ffffff'] : home.colors, away.colors);
-const scene = new CourtScene(canvas, paints.ball, paints.ballSeam, await loadModels());
+const models = await loadModels();
+if (q.get('maps') === '0') models.anat = undefined;
+const scene = new CourtScene(canvas, paints.ball, paints.ballSeam, models);
 scene.lite(q.has('lite') ? (Math.min(3, Number(q.get('lite')) || 3) as 1 | 2 | 3) : 0);
 // (the app's face, which the lab's page doesn't load itself: the floor's lettering and the boards' are in it)
 const face = new FontFace('Archivo Variable', 'url(/node_modules/@fontsource-variable/archivo/files/archivo-latin-wdth-normal.woff2)', {
@@ -132,6 +138,8 @@ type Lab = {
 const inner = scene as unknown as { renderer: WebGLRenderer; scene: Scene; arena: Lab; rig: { mood(to: number, ms: number): void; drama: number } };
 if (q.has('def') || q.has('ft')) inner.arena.boards.house.pretend = { off: 1, line: q.has('ft'), end: -1, shot: q.has('ft') ? null : 11.2 };
 if (q.has('play')) inner.arena.boards.house.pretend = { off: 0, line: false, end: 1, shot: 14 };
+// (&smooth=0: the men close to the camera keep the model's own mesh, not their finer one: see CourtScene.closeUp)
+if (q.get('smooth') === '0') (scene as unknown as { closeUp(): void }).closeUp = () => {};
 const [eye0, at0, fov0] = SHOTS[q.get('shot') ?? 'main'] ?? SHOTS.main;
 const eye = vec('eye', eye0);
 const at = vec('at', at0);
@@ -155,7 +163,7 @@ function draw() {
     ctx.drawImage(flat, Math.round((w - flat.width) / 2), Math.round((h - flat.height) / 2));
     return;
   }
-  scene.size(w, h, Math.min(2, devicePixelRatio));
+  scene.size(w, h, Math.max(1, Math.min(2, devicePixelRatio) * num('ratio', 1)));
   // (a few frames so the figures settle where they stand and the crowd is where `t` and `cheer` put it)
   for (let i = 0; i < 30; i++) {
     // (a still wants the men's finished heads, which a game paints between frames)
@@ -177,35 +185,69 @@ function draw() {
   cam.aspect = w / h;
   cam.position.set(eye[0], eye[1], eye[2]);
   cam.lookAt(at[0], at[1], at[2]);
+  if (q.has('face')) {
+    // (one man's face, under the building's own light: &face=his id, &d=how far off (ft), &side=how far round to his left (degrees), &up=how far over his eyes)
+    const fig = (scene as unknown as { figs: Map<number, { bones: Object3D[] }> }).figs.get(num('face', 1));
+    const head = fig?.bones[B.head];
+    if (head) {
+      head.updateWorldMatrix(true, false);
+      const mid = new Vector3(0, num('y', -0.06), 0.12).applyMatrix4(head.matrixWorld);
+      const front = new Vector3(0, 0, 1).transformDirection(head.matrixWorld).setY(0).normalize();
+      const turn = (num('side', 20) * Math.PI) / 180;
+      const way = front.applyAxisAngle(new Vector3(0, 1, 0), turn);
+      cam.position
+        .copy(mid)
+        .addScaledVector(way, num('d', 2.4))
+        .setY(mid.y + num('up', 0.05));
+      cam.lookAt(mid);
+    }
+  }
   cam.updateProjectionMatrix();
   cam.updateMatrixWorld();
   if (q.has('mood')) {
     inner.rig.mood(num('mood', 1), 1e9);
     scene.lens.drama = inner.rig.drama;
   }
-  if (q.has('shot') || q.has('eye')) scene.still(cam);
+  if (q.has('shot') || q.has('eye') || q.has('face')) scene.still(cam);
   // (kept for a screenshot: the renderer clears its picture once the page has shown it)
   const still = document.getElementById('still') as HTMLCanvasElement;
   still.width = canvas.width;
   still.height = canvas.height;
   still.getContext('2d')!.drawImage(canvas, 0, 0);
 }
-/** What a frame costs: its time (ms, the drawing finished), and the triangles and draw calls of every pass in it. */
+/**
+ * What a frame costs: its time (ms, the card's drawing included: each run starts and ends on a pixel read back, which
+ * waits for it, where gl.finish() returns early on some (ANGLE on Metal), so timed the CPU alone), the triangles and
+ * draw calls of every pass in it, and the textures and programs it keeps on the card. Which camera it draws: with
+ * &shot or &eye, that one (the still the page shows, the men held as they stand), else the game's own, a frame played
+ * on as the court plays it (the page's camera is then not drawn at all). `camera` says which.
+ */
 function bench(n = 60) {
+  const own = q.has('shot') || q.has('eye') || q.has('face');
   const info = inner.renderer.info;
   const gl = inner.renderer.getContext();
+  const px = new Uint8Array(4);
   info.autoReset = false;
-  gl.finish();
+  gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
   const t0 = performance.now();
   for (let i = 0; i < n; i++) {
     info.reset();
-    scene.frame(stage, props, 16, 16, false, 16);
+    if (own) scene.still(cam);
+    else scene.frame(stage, props, 16, 16, false, 16);
   }
-  gl.finish();
+  gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
   const ms = (performance.now() - t0) / n;
   const { triangles, calls } = info.render;
   info.autoReset = true;
-  return { ms: Math.round(ms * 100) / 100, triangles, calls, pixels: [canvas.width, canvas.height] };
+  return {
+    ms: Math.round(ms * 100) / 100,
+    camera: own ? `still: ${q.get('shot') ?? (q.has('face') ? `face ${q.get('face')}` : 'eye')}` : "game's own",
+    triangles,
+    calls,
+    pixels: [canvas.width, canvas.height],
+    textures: info.memory.textures,
+    programs: info.programs?.length ?? 0,
+  };
 }
 draw();
 addEventListener('resize', draw);

@@ -24,15 +24,15 @@ const root = join(here, '..', '..');
 export const MODELS_DIR = join(root, 'src/ui/live/court3d/models');
 /** Each model, and the scripts here it is built from: its own, and the ones that one imports. */
 export const SOURCES: Record<string, string[]> = {
-  figure: ['figure.py', 'lib.py', 'mh.py', 'mhbody.py'],
+  figure: ['figure.py', 'lib.py', 'mh.py', 'mhbody.py', 'anatomy.py'],
   people: ['people.py', 'figure.py', 'lib.py', 'mh.py', 'mhbody.py'],
   arena: ['arena.py', 'lib.py', 'figure.py', 'mh.py', 'mhbody.py'],
 };
 const MODELS = Object.keys(SOURCES);
-/** What a model's script writes beside its .glb, for the app to read with it. */
-export const EXTRAS: Record<string, string[] | undefined> = { figure: ['faces.bin'] };
+/** What a model's script writes beside its .glb, for the app to read with it (the figure's faces, and his skin's map and a phone's half of it: see anatomy.py). */
+export const EXTRAS: Record<string, string[] | undefined> = { figure: ['faces.bin', 'skin-anat.png', 'skin-anat-1024.png', 'anat.json'] };
 /** Which way of packing wrote a file. Raise it when pack() changes what it writes: the test then asks for a rebuild. */
-export const PACK = 2;
+export const PACK = 3;
 /**
  * A point is kept to this fine a grid (ft: a 4096th, some 0.07 mm). Nothing is drawn that fine, and a
  * float that ends in zeros is what the web's compression can do something with: the files are a seventh
@@ -41,13 +41,16 @@ export const PACK = 2;
 export const GRID = 1 / 4096;
 /** The materials the app paints a picture on (a kit's number, the table's LED front): only their parts keep a uv. */
 const PAINTED = new Set(['jersey', 'board']);
+/** The materials his skin's map is laid on (figure.py's second uv, the file's TEXCOORD_1): only their parts keep that one. */
+const BAKED = new Set(['skin', 'ear']);
 
-/** What the manifest keeps of a model: its scripts' hash, how it was packed, the Blender that built it, its size. */
+/** What the manifest keeps of a model: its scripts' hash, how it was packed, the Blender that built it, its size, and each file it writes beside itself (EXTRAS) by its size and hash. */
 export interface Built {
   sources: string;
   pack: number;
   blender: string;
   bytes: number;
+  extras?: Record<string, { bytes: number; sha256: string }>;
 }
 export type Manifest = Record<string, Built | undefined>;
 
@@ -90,7 +93,9 @@ const up4 = (n: number) => (n + 3) & ~3;
  *  - a normal is three bytes (floats before), a colour three bytes (four 16-bit numbers before: the
  *    fourth said nothing), a point's bone weights four bytes that add up to 255;
  *  - a uv stays only on a part the app paints a picture on (PAINTED), as it was: a vest's runs past 1
- *    where the picture wraps round his side;
+ *    where the picture wraps round his side; a second uv (his skin's map's: TEXCOORD_1) only on his skin
+ *    and ears (BAKED), in 16 bits, as `_UV1` (the format has no TEXCOORD_1 on a part without a TEXCOORD_0,
+ *    and his skin has none); any other uv goes;
  *  - points that are now the same in every list become one, points no triangle uses go, and triangles
  *    count their points in the smallest whole number that holds them;
  *  - the JSON is written without spaces.
@@ -160,13 +165,18 @@ export function pack(file: Uint8Array, notes: string[] = []): Uint8Array {
       const n = json.accessors?.[prim.attributes.POSITION]?.count ?? 0;
       const cols: { key: string; data: Numbers; type: string; normalized: boolean }[] = [];
       for (const [key, i] of Object.entries(prim.attributes)) {
-        if (key.startsWith('TEXCOORD_') && !PAINTED.has(material)) {
+        if (key === 'TEXCOORD_0' && !PAINTED.has(material)) {
           bare.add(material);
           continue;
         }
+        if (key.startsWith('TEXCOORD_') && !(key === 'TEXCOORD_0' || (key === 'TEXCOORD_1' && BAKED.has(material)))) continue;
         const { array, raw, size: comps } = numbers(json, bin, i);
         if (array.length !== n * comps) throw bad(`has ${array.length / comps} of ${key} for ${n} points`);
-        if (key === 'POSITION' && raw instanceof Float32Array) {
+        if (key === 'TEXCOORD_1') {
+          // (a texel of a 2048 map is 32 steps of 16 bits)
+          for (let k = 0; k < array.length; k++) if (!(array[k] >= 0 && array[k] <= 1)) throw bad(`has its map's uv off the map (${array[k]}, at point ${Math.floor(k / 2)})`);
+          cols.push({ key: '_UV1', data: Uint16Array.from(array, (v) => Math.round(v * 65535)), type: 'VEC2', normalized: true });
+        } else if (key === 'POSITION' && raw instanceof Float32Array) {
           cols.push({ key, data: Float32Array.from(raw, (v) => Math.round(v / GRID) * GRID), type: 'VEC3', normalized: false });
         } else if (key === 'NORMAL' && !(raw instanceof Int8Array)) {
           const q = new Int8Array(n * 3);
@@ -298,6 +308,7 @@ export function same(before: Uint8Array, after: Uint8Array): void {
         const [la, lb] = [pa.geo.getAttribute(attr), pb.geo.getAttribute(attr)];
         if (!lb) {
           if (attr === 'uv' && !PAINTED.has(pa.material)) continue;
+          if (attr === 'uv1' && !BAKED.has(pa.material)) continue;
           bad(`${tag} lost its ${attr}`);
         }
         if (attr === 'skinIndex') continue;
@@ -320,7 +331,7 @@ export function same(before: Uint8Array, after: Uint8Array): void {
             const [wa, wb] = [weights(pa.geo, va), weights(pb.geo, vb)];
             for (const bone of new Set([...wa.keys(), ...wb.keys()])) if (Math.abs((wa.get(bone) ?? 0) - (wb.get(bone) ?? 0)) > STEP) bad(at);
           } else {
-            const slack = attr === 'color' ? STEP : attr === 'position' ? GRID / 2 + 1e-6 : 0;
+            const slack = attr === 'color' ? STEP : attr === 'position' ? GRID / 2 + 1e-6 : attr === 'uv1' ? 0.5 / 65535 + 1e-7 : 0;
             for (let j = 0; j < size; j++) if (!(Math.abs(la.getComponent(va, j) - lb.getComponent(vb, j)) <= slack)) bad(at);
           }
         }
@@ -430,24 +441,35 @@ async function main(argv: string[]): Promise<number> {
         const after = pack(before, notes);
         same(before, after);
         put(join(out, `${m}.glb`), after);
-        // (and what a model writes beside itself: the figure's faces.bin, see figure.py faces_bin)
+        // (and what a model writes beside itself: the figure's faces.bin, see figure.py faces_bin, and his skin's map; each told in the manifest by its size and hash)
+        const extras: NonNullable<Built['extras']> = {};
         for (const extra of EXTRAS[m] ?? []) {
           const at = join(packOnly ? out : raw, extra);
           if (!existsSync(at)) throw new Error(`${m}.py wrote no ${extra}`);
-          if (!packOnly) put(join(out, extra), readFileSync(at));
+          const data = readFileSync(at);
+          if (!packOnly) put(join(out, extra), data);
+          extras[extra] = { bytes: data.length, sha256: createHash('sha256').update(data).digest('hex') };
         }
         console.log(`[${m}] packed ${kB(before.length)} to ${kB(after.length)}${notes.length ? ` (${notes.join('; ')})` : ''}, ${secs()}`);
-        return { m, bytes: after.length, line: `${m.padEnd(7)}${secs().padStart(8)}  ${kB(before.length).padStart(7)} to ${kB(after.length)}` };
+        return { m, bytes: after.length, extras, line: `${m.padEnd(7)}${secs().padStart(8)}  ${kB(before.length).padStart(7)} to ${kB(after.length)}` };
       } catch (e) {
         console.error(`[${m}] ${(e as Error).message}`);
-        return { m, bytes: 0, line: `${m.padEnd(7)}${secs().padStart(8)}  FAILED (see above)` };
+        return { m, bytes: 0, extras: {}, line: `${m.padEnd(7)}${secs().padStart(8)}  FAILED (see above)` };
       }
     }),
   );
 
   // the manifest: only the models built just now change in it (read again here: another build may have written its own meanwhile)
   const manifest = readManifest(out);
-  for (const b of built) if (b.bytes) manifest[b.m] = { sources: sources.get(b.m)!, pack: PACK, blender: version || manifest[b.m]?.blender || 'unknown', bytes: b.bytes };
+  for (const b of built)
+    if (b.bytes)
+      manifest[b.m] = {
+        sources: sources.get(b.m)!,
+        pack: PACK,
+        blender: version || manifest[b.m]?.blender || 'unknown',
+        bytes: b.bytes,
+        ...(Object.keys(b.extras).length && { extras: b.extras }),
+      };
   const known = Object.keys(manifest).sort((x, y) => (MODELS.indexOf(x) + 1 || 99) - (MODELS.indexOf(y) + 1 || 99) || x.localeCompare(y));
   if (built.some((b) => b.bytes)) put(join(out, 'manifest.json'), `${JSON.stringify(Object.fromEntries(known.map((k) => [k, manifest[k]])), null, 2)}\n`);
   for (const b of built) console.log(`[models] ${b.line}`);

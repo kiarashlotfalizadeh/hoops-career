@@ -58,8 +58,22 @@ const ARRAY: Record<number, (new (bytes: ArrayBuffer) => Numbers) | undefined> =
   5125: Uint32Array,
   5126: Float32Array,
 };
-/** What three calls each of a mesh's lists. A list of the file's own (`_PART`) becomes `aPart`. */
-const NAMES: Record<string, string> = { POSITION: 'position', NORMAL: 'normal', TEXCOORD_0: 'uv', COLOR_0: 'color', JOINTS_0: 'skinIndex', WEIGHTS_0: 'skinWeight' };
+/**
+ * What three calls each of a mesh's lists. A list of the file's own (`_PART`) becomes `aPart`. His skin's map's uv
+ * (a second uv: TEXCOORD_1 as Blender writes it, `_UV1` as the build packs it, see scripts/blender/run.ts) is three's
+ * second, `uv1`, the way up the file has it (v down: unlike `uv`, never turned over, because the map is uploaded
+ * from its first row with nothing flipped).
+ */
+const NAMES: Record<string, string> = {
+  POSITION: 'position',
+  NORMAL: 'normal',
+  TEXCOORD_0: 'uv',
+  TEXCOORD_1: 'uv1',
+  _UV1: 'uv1',
+  COLOR_0: 'color',
+  JOINTS_0: 'skinIndex',
+  WEIGHTS_0: 'skinWeight',
+};
 const own = (key: string) => `a${key[1]}${key.slice(2).toLowerCase()}`;
 
 /** A .glb's two halves: what it holds (its JSON) and its numbers (its BIN), wherever in the file each chunk sits. */

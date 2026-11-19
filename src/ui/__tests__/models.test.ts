@@ -2,10 +2,15 @@
 // app does with it (live/court3d). The .glb files in the repo are read as the app reads them; a name,
 // a bone or a list the app relies on, a file older than its script, or a file the reader should have
 // turned away, fails here and not as a blank court on someone's phone.
+import { DataTexture, RGFormat, ShaderLib, Texture, Vector3, type CanvasTexture } from 'three';
 import { describe, expect, it } from 'vitest';
-import { figureGeo, readFaces } from '../live/court3d/figure';
+import { ANAT_MM, anatOf } from '../live/court3d/anat';
+import { knitTile, LAYERS, ribTile, skinTile, TILE } from '../live/court3d/detail';
+import { figureGeo, readFaces, RELIEF_MARK, seamSlopes, stuffMaterial, type Detail } from '../live/court3d/figure';
 import { merged, placed, readGlb, type Thing } from '../live/court3d/glb';
 import { lookOf, STYLES } from '../live/court3d/look';
+import { decodePng } from '../live/court3d/png';
+import { smoothed } from '../live/court3d/smooth';
 import { PARTS, POSE_NAMES, posed } from '../live/court3d/sideline';
 
 /** The bones the puppet drives, then the leaves only the figure turns: each finger's and thumb's two joints, his jaw, his nose (court3d/figure.ts keeps the same names in its `B`; it is not exported). */
@@ -118,13 +123,14 @@ function model(parts: { material: string; lists: Record<string, List>; index: nu
   return wrap(json, bin);
 }
 
-/** A part's lists for `n` points in a row along x: a normal that leans, a colour, a uv that runs past 1, two bones (their weights told short of one). */
+/** A part's lists for `n` points in a row along x: a normal that leans, a colour, a uv that runs past 1 and a second (his skin's map's) that doesn't, two bones (their weights told short of one). */
 function lists(n: number, bone = 1): Record<string, List> {
   const each = (per: number[]) => Array.from({ length: n }, () => per).flat();
   return {
     POSITION: { data: Float32Array.from({ length: n * 3 }, (_v, k) => (k % 3 === 0 ? k / 3 : k % 3 === 1 ? ((k - 1) / 3) % 2 : 0)), type: 'VEC3' },
     NORMAL: { data: Float32Array.from(each([0.6, 0, 0.8])), type: 'VEC3' },
     TEXCOORD_0: { data: Float32Array.from(each([1.25, 0.25])), type: 'VEC2' },
+    TEXCOORD_1: { data: Float32Array.from(each([0.3, 0.7])), type: 'VEC2' },
     COLOR_0: { data: Uint16Array.from(each([65535, 32768, 0, 65535])), type: 'VEC4', normalized: true },
     JOINTS_0: { data: Uint8Array.from(each([0, bone, 0, 0])), type: 'VEC4' },
     WEIGHTS_0: { data: Float32Array.from(each([0.5, 0.25, 0, 0])), type: 'VEC4' },
@@ -132,14 +138,18 @@ function lists(n: number, bone = 1): Record<string, List> {
 }
 
 const most = (of: ArrayLike<number>) => Array.from(of).reduce((m, v) => Math.max(m, v), -Infinity);
+
 const triangles = (thing: Thing) => thing.parts.reduce((n, p) => n + (p.geo.index?.count ?? p.geo.getAttribute('position').count) / 3, 0);
 
 describe("the 3D court's models", () => {
   it('are what the app expects of them, what the scripts on disk build, and read by a reader that turns a bad file away', async () => {
     const fs = (await import('node:fs' as string)) as { readFileSync: (path: URL) => Uint8Array; existsSync: (path: URL) => boolean };
+    const { createHash } = (await import('node:crypto' as string)) as { createHash: (kind: string) => { update: (data: Uint8Array) => { digest: (as: string) => string } } };
     const run = (await import('../../../scripts/blender/run' as string)) as {
       PACK: number;
+      GRID: number;
       SOURCES: Record<string, string[]>;
+      EXTRAS: Record<string, string[] | undefined>;
       sourceHash: (model: string) => string;
       pack: (file: Uint8Array) => Uint8Array;
       same: (before: Uint8Array, after: Uint8Array) => void;
@@ -160,6 +170,10 @@ describe("the 3D court's models", () => {
       expect(() => run.same(raw, packed)).not.toThrow();
       // (packing a packed file changes nothing)
       expect([...run.pack(packed)]).toEqual([...packed]);
+      // (a map's uv off the map is no uv: packing says so)
+      const off = lists(3);
+      off.TEXCOORD_1.data[3] = 1.5;
+      expect(() => run.pack(model([{ material: 'skin', lists: off, index: [0, 1, 2] }]))).toThrow(/off the map/);
       // (a chunk of some other kind in the middle of the file is stepped over)
       const walked = wrap(
         JSON.parse(new TextDecoder().decode(raw.subarray(20, 20 + new DataView(raw.buffer).getUint32(12, true)))),
@@ -198,6 +212,10 @@ describe("the 3D court's models", () => {
         expect(list('skinWeight').getX(v) + list('skinWeight').getY(v) + list('skinWeight').getZ(v) + list('skinWeight').getW(v)).toBeCloseTo(1, 6);
         // (only a part the app paints a picture on keeps its uv when packed; as one shape the rest have zeros)
         expect(!!man.parts[1].geo.getAttribute('uv')).toBe(file !== packed);
+        // (and only skin keeps its map's uv, in 16 bits: the vest's goes; neither is turned over)
+        expect(!!geo.getAttribute('uv1')).toBe(file !== packed);
+        const uv1 = man.parts[1].geo.getAttribute('uv1');
+        expect(Math.max(Math.abs(uv1.getX(2) - 0.3), Math.abs(uv1.getY(2) - 0.7))).toBeLessThanOrEqual(1 / 65535);
         expect(placed(man)[1].geo.getAttribute('position').getY(0)).toBe(2);
         const one = merged(man);
         expect(one.geo.groups.length).toBe(2);
@@ -239,7 +257,7 @@ describe("the 3D court's models", () => {
     {
       const manifest = (fs.existsSync(at('manifest.json')) ? JSON.parse(new TextDecoder().decode(fs.readFileSync(at('manifest.json')))) : {}) as Record<
         string,
-        { sources: string; pack: number; blender: string; bytes: number } | undefined
+        { sources: string; pack: number; blender: string; bytes: number; extras?: Record<string, { bytes: number; sha256: string }> } | undefined
       >;
       for (const m of ['figure', 'people', 'arena']) {
         const built = manifest[m];
@@ -252,6 +270,13 @@ describe("the 3D court's models", () => {
           .soft(fs.readFileSync(at(`${m}.glb`)).length, `${m}.glb is not the file the build wrote (a model changes in its .py, never by hand or by Blender alone): ${again}`)
           .toBe(built.bytes);
         expect(built.blender).toMatch(/\S/);
+        // (and what it writes beside itself, by its size and hash: his skin's map is no more to be painted by hand than the model)
+        for (const extra of run.EXTRAS[m] ?? []) {
+          const data = Uint8Array.from(fs.readFileSync(at(extra)));
+          expect
+            .soft(built.extras?.[extra], `${extra} is not the file ${m}'s build wrote: ${again}`)
+            .toEqual({ bytes: data.length, sha256: createHash('sha256').update(data).digest('hex') });
+        }
       }
     }
 
@@ -303,6 +328,12 @@ describe("the 3D court's models", () => {
         for (let i = 0; i < by.count; i++) off = Math.max(off, Math.abs(by.getX(i) + by.getY(i) + by.getZ(i) + by.getW(i) - 1));
         expect(off, `figure (${p.material}): weights that do not add up to one`).toBeLessThan(0.02);
       }
+      // (his skin's map's uv, on his skin and ears and nothing else (as the file has it: one shape gives every part each list), every point of them on the map)
+      for (const p of fig.parts) {
+        const uv1 = p.geo.getAttribute('uv1');
+        expect(!!uv1, `figure (${p.material}): its map's uv`).toBe(p.material === 'skin' || p.material === 'ear');
+        if (uv1) expect(Math.min(...Array.from(uv1.array)) >= 0 && most(uv1.array) <= 1, `figure (${p.material}): a point off its map`).toBe(true);
+      }
       // (the vest's picture, his number, goes on by its uv; as one shape every part has one)
       expect(fig.parts.find((p) => p.material === 'jersey')!.geo.getAttribute('uv')).toBeTruthy();
       expect(merged(fig).geo.getAttribute('uv').count).toBe(fig.parts.reduce((n, p) => n + p.geo.getAttribute('position').count, 0));
@@ -332,6 +363,55 @@ describe("the 3D court's models", () => {
       // (the widest of one picture's own are the few small ones round the very top of his head, where its picture meets at a point: under a quarter of the sheet)
       expect(wide, 'a triangle stretched across the sheet').toBeLessThan(0.24);
       expect(geo.shorts[1] - geo.shorts[0]).toBeGreaterThan(1);
+      // (and that uv on every point of him (where none is laid, zeros), his points few enough to be counted in 16 bits)
+      expect(geo.body.getAttribute('uv1').count).toBe(geo.body.getAttribute('position').count);
+      expect(geo.body.getAttribute('position').count).toBeLessThan(65_536);
+      expect(geo.body.index!.array).toBeInstanceOf(Uint16Array);
+      // (seen close he is split finer (smooth.ts): every triangle in four, his points as they were left where they were,
+      // the two sides of a seam on one curve (no crack down it), each new point's bones' weights coming to one; and his
+      // outline rounder: a new point over the top of his skull further out from its middle than the straight edge's is)
+      {
+        const fine = smoothed(geo.body);
+        const [was, now] = [geo.body.getAttribute('position'), fine.getAttribute('position')];
+        const [old, idx] = [geo.body.index!.array, fine.index!.array];
+        expect(idx.length).toBe(old.length * 4);
+        expect(was.array.every((v, i) => now.array[i] === v)).toBe(true);
+        const place = (v: number) => [0, 1, 2].map((c) => Math.round(was.getComponent(v, c) / 1e-4)).join();
+        const mids = new Map<string, number[]>();
+        const crown = { n: 0, out: 0 };
+        const top = new Vector3(0, 0, 0);
+        let tops = 0;
+        for (let v = 0; v < was.count; v++)
+          if (was.getY(v) > 6.1) {
+            top.add(new Vector3().fromBufferAttribute(was, v));
+            tops++;
+          }
+        top.divideScalar(tops).setY(top.y - 0.25);
+        for (let t = 0; t < old.length / 3; t++)
+          for (const [k, j, m] of [
+            [0, 1, 1],
+            [1, 2, 5],
+            [2, 0, 2],
+          ]) {
+            const [a, b, ab] = [old[t * 3 + k], old[t * 3 + j], idx[t * 12 + m]];
+            const key = [place(a), place(b)].sort().join('|');
+            const p = [0, 1, 2].map((c) => now.getComponent(ab, c));
+            const seen = mids.get(key);
+            if (seen) expect(seen, `a seam's two sides at ${key}`).toEqual(p);
+            else mids.set(key, p);
+            if (was.getY(a) > 6.2 && was.getY(b) > 6.2) {
+              const flat = new Vector3().fromBufferAttribute(was, a).add(new Vector3().fromBufferAttribute(was, b)).multiplyScalar(0.5);
+              crown.n++;
+              if (new Vector3().fromBufferAttribute(now, ab).distanceTo(top) > flat.distanceTo(top) + 1e-6) crown.out++;
+            }
+          }
+        expect(crown.n, 'edges over his crown').toBeGreaterThan(100);
+        expect(crown.out / crown.n, 'his crown rounder').toBeGreaterThan(0.9);
+        const w = fine.getAttribute('skinWeight');
+        let off = 0;
+        for (let v = was.count; v < w.count; v++) off = Math.max(off, Math.abs(w.getX(v) + w.getY(v) + w.getZ(v) + w.getW(v) - 1));
+        expect(off, "a new point's bones' weights, off one").toBeLessThan(1e-5);
+      }
       // (his hair's fuzz: his scalp again in layers (six: enough that close up his hair has depth), the last all the
       // way out, some tens of thousands of triangles; over his hairline and where a beard grows, so none of it is on
       // his eyes, his brows or his nose)
@@ -343,12 +423,260 @@ describe("the 3D court's models", () => {
       let onFace = 0;
       for (let i = 0; i < fp.count; i++) if (fp.getZ(i) > 0.25 && Math.abs(fp.getX(i)) < 0.2 && fp.getY(i) > 6.11 && fp.getY(i) < 6.27) onFace++;
       expect(onFace, 'fuzz on his eyes, brows or nose').toBe(0);
+      // (a head of curls that is a shape of its own: how far each of its points near his scalp stands off it, so its
+      // coils are none at its edge, where it comes down onto his hairline, and their whole length where it stands off
+      // him (farther than a few centimetres: far, one); his scalp's own fuzz is far, all of it)
+      {
+        const afro = geo.fuzzFor('afro');
+        const stand = Array.from(afro.getAttribute('stand').array);
+        const curls = afro.getAttribute('uv');
+        const ofCurls = stand.filter((_s, i) => curls.getX(i) > 0.8125 && curls.getY(i) < 0.032);
+        expect(ofCurls.length, 'the afro').toBeGreaterThan(1000);
+        expect(ofCurls.filter((s) => s < 0.025).length, 'its edge, down on his scalp').toBeGreaterThan(30);
+        expect(ofCurls.filter((s) => s === 1).length / ofCurls.length, 'the most of it, well off his scalp').toBeGreaterThan(0.5);
+        expect(Array.from(fuzz.getAttribute('stand').array).every((s) => s === 1)).toBe(true);
+      }
+      // (each twist laid down itself and round itself (sheetUv's twist): its points across its own quarter of the hair's
+      // picture from its root to its end, and how far round it each is a turn's cosine and sine, in his skin map's uv)
+      {
+        const tw = geo.wearing('twists');
+        const [uvT, roundT] = [tw.getAttribute('uv'), tw.getAttribute('uv1')];
+        const mine = new Set<number>();
+        const idx = tw.index!.array;
+        for (let i = geo.body.index!.count; i < idx.length; i++) mine.add(idx[i]);
+        const along = [...mine].map((v) => (uvT.getX(v) * 1024 - (832 + 0.02 * 192)) / (0.22 * 192));
+        expect(mine.size, 'twists').toBeGreaterThan(400);
+        expect([Math.min(...along) > -0.01, Math.max(...along) < 1.01, Math.max(...along) - Math.min(...along) > 0.8], 'along each, root to end').toEqual([true, true, true]);
+        expect(
+          [...mine].every((v) => Math.abs(Math.hypot(roundT.getX(v), roundT.getY(v)) - 1) < 1e-4),
+          'round each, a turn',
+        ).toBe(true);
+        // (and each its own number (up its quarter): so no two are wound alike)
+        expect(new Set([...mine].map((v) => uvT.getY(v).toFixed(5))).size, 'each twist its own').toBeGreaterThan(60);
+      }
       // (and faces.bin: MakeHuman's shapes of a face, each found on his head and moving it a little, none a long way)
       const shapes = readFaces(Uint8Array.from(fs.readFileSync(at('faces.bin'))).buffer, merged(fig).geo);
       expect(shapes.names.length).toBeGreaterThan(30);
       for (const [t, name] of shapes.names.entries()) {
         expect(shapes.at[t].length, `the ${name} shape moves no point of his`).toBeGreaterThan(0);
         expect(Math.max(...shapes.by[t].map(Math.abs)), `the ${name} shape`).toBeLessThan(0.1);
+      }
+      // (and his skin's map: the heights of his anatomy, in that uv (the file's way up: row 0 is v 0), flat at texel
+      // (0, 0), small enough; the points anat.json tells found where it says, with the uv it says (a uv lost, turned
+      // over or swapped on the way would not be), his left like his right, his veins on his arms and not his face)
+      {
+        const anat = JSON.parse(new TextDecoder().decode(fs.readFileSync(at('anat.json')))) as {
+          size: number;
+          formMM: number;
+          veinMM: number;
+          probes: { name: string; pos: number[]; uv1: number[] }[];
+        };
+        const file = Uint8Array.from(fs.readFileSync(at('skin-anat.png')));
+        expect(file.length, 'skin-anat.png is too big').toBeLessThanOrEqual(anat.size > 1024 ? 800_000 : 300_000);
+        // (read as the app reads it, png.ts, which turns away what is no picture of these)
+        await expect(decodePng(file.slice(0, 40).buffer)).rejects.toThrow(/png/);
+        await expect(decodePng(fs.readFileSync(at('faces.bin')).slice().buffer)).rejects.toThrow(/not one/);
+        const map = await decodePng(file.buffer);
+        const n = anat.size;
+        expect([map.w, map.h, map.channels]).toEqual([n, n, 2]);
+        expect([...map.data.subarray(0, 2)]).toEqual([128, 0]);
+        // (a phone's copy: the same heights at half the size, taken down before they were put in bytes, so within a step of the big one's)
+        const small = await decodePng(Uint8Array.from(fs.readFileSync(at('skin-anat-1024.png'))).buffer);
+        expect([small.w, small.channels]).toEqual([n / 2, 2]);
+        let off = 0;
+        for (let y = 0; y < n / 2; y++)
+          for (let x = 0; x < n / 2; x++)
+            for (let c = 0; c < 2; c++) {
+              const big = (k: number, j: number) => map.data[((2 * y + k) * n + 2 * x + j) * 2 + c];
+              off = Math.max(off, Math.abs(small.data[(y * (n / 2) + x) * 2 + c] - (big(0, 0) + big(0, 1) + big(1, 0) + big(1, 1)) / 4));
+            }
+        expect(off, "a phone's map against the big one").toBeLessThanOrEqual(1);
+        expect([...ANAT_MM], 'the heights the app reads it in, against the ones it was baked in').toEqual([anat.formMM, anat.veinMM]);
+        // (and the maps every man's skin reads, made from it: level where his skin has no map (every point that isn't his
+        // skin is at its corner), a shade no darker than skin gets, slopes as steep as a muscle's and a vein's are)
+        const geo = figureGeo((o) => o, figure, undefined, anatOf(map));
+        const maps = geo.maps!;
+        const [slopes, shade] = [maps.anat.image.data as Uint8Array, maps.cav.image.data as Uint8Array];
+        expect([maps.size, maps.anat.image.width, maps.cav.image.width]).toEqual([n, n, n / 2]);
+        expect(figureGeo((o) => o, figure, undefined, anatOf(small)).maps!.cav.image.width).toBe(n / 4);
+        // (and they go on his normal in his plain material (a phone's) as in his full one, before the mark the full one's
+        // folds and knit go on after: a chunk renamed, or the relief moved past the plain one's end, would lose either.
+        // His fine grain (Detail) is the full one's alone: a phone's plain one is drawn as it was. `vert`: the last one's
+        // vertex shader)
+        {
+          let vert = '';
+          const made = (plain: boolean, relief = true, detail = true, seams: Detail['seams'] = null) => {
+            const sh = { uniforms: {}, vertexShader: ShaderLib.physical.vertexShader, fragmentShader: ShaderLib.physical.fragmentShader };
+            const told = {} as Parameters<typeof stuffMaterial>[2];
+            stuffMaterial(
+              new Texture() as CanvasTexture,
+              new Texture() as CanvasTexture,
+              told,
+              plain,
+              false,
+              relief ? { maps, k: { value: new Vector3(1, 1, 1) } } : null,
+              detail ? { ...geo.detail, seams } : null,
+            ).onBeforeCompile(sh as never, undefined as never);
+            vert = sh.vertexShader;
+            return sh.fragmentShader;
+          };
+          const [plain, plainV] = [made(true), vert];
+          const [full, fullV] = [made(false), vert];
+          const none = made(false, false);
+          expect(full.indexOf('grainAt( layer'), "his kit's knit, after the mark").toBeGreaterThan(full.indexOf(RELIEF_MARK));
+          // (and his skin's grain, laid on him by the way his skin faces as built: which the full one's vertex shader
+          // hands on from where his normal is first had, and a phone's has no use for)
+          expect(full.indexOf('grainAt( 0.0'), "his skin's grain, after the mark").toBeGreaterThan(full.indexOf(RELIEF_MARK));
+          expect(fullV.indexOf('#include <beginnormal_vertex>')).toBeGreaterThan(-1);
+          expect(fullV.indexOf('vRestN = objectNormal'), 'the way his skin faces as built, handed on').toBeGreaterThan(fullV.indexOf('#include <beginnormal_vertex>'));
+          expect(plainV).not.toContain('vRestN');
+          expect(full).toContain('uDetail');
+          expect(plain).not.toContain('uDetail');
+          expect(made(false, true, false)).not.toContain('uDetail');
+          for (const f of [plain, full]) {
+            expect(f.split(RELIEF_MARK).length, 'the mark, once').toBe(2);
+            // (his skin's roughness off his head his own, in both: not his sheet's, whose pictures of his skin meet at his triangles' edges)
+            expect(f.indexOf('mix( stuffR, 0.55, shut )'), "his skin's own roughness").toBeGreaterThan(f.indexOf('float stuffR'));
+            expect(f.indexOf('anatDx'), 'his anatomy, before the mark').toBeGreaterThan(-1);
+            expect(f.indexOf('anatDx')).toBeLessThan(f.indexOf(RELIEF_MARK));
+            expect(f).toContain('anatC');
+          }
+          // (his skin's roughness off his head his own, blended from his sheet's; the surface's steps across the screen,
+          // which every bump on him is turned by, taken once before any of them, as a screen's steps must be: a bump is
+          // often put on inside a branch. In the full one, his folds' steps are taken before the branch they're used in,
+          // and each band of his trunk's trim is laid round its own middle)
+          for (const f of [plain, full]) {
+            expect(f).toContain('mix( stuff.r, skinR, skinK )');
+            expect(f.indexOf('knitSx = dFdx'), "the surface's steps, before any bump").toBeGreaterThan(-1);
+            expect(f.indexOf('knitSx = dFdx')).toBeLessThan(f.indexOf('normal = knitNormal('));
+            expect(f).not.toContain('dFdx( surf_pos');
+          }
+          expect(full.indexOf('dFdx( fh )'), "his folds' steps, before the branch").toBeGreaterThan(-1);
+          expect(full.indexOf('dFdx( fh )')).toBeLessThan(full.indexOf('if ( onKit )'));
+          expect([full.includes('uTube[ 7 ]'), full.includes('band.z > 0.0')], 'his trim bands').toEqual([true, true]);
+          expect(plain).not.toContain('onVest');
+          expect(full.indexOf('onVest'), "the full one's folds and knit, after his anatomy").toBeGreaterThan(full.indexOf(RELIEF_MARK));
+          expect(none).not.toContain('anatDx');
+          expect(none.indexOf('onVest')).toBeGreaterThan(none.indexOf(RELIEF_MARK));
+          // (his kit's seams (see kitSeams): none drawn where there is no page to draw them on, as here; given them, the
+          // full one puts them on after its folds and before his grain's normal is turned, and asks for them as it is made;
+          // a phone's plain one neither)
+          {
+            expect(geo.detail.seams).toBeNull();
+            let asked = 0;
+            const seams = () => (asked++, new DataTexture(new Uint8Array(8), 2, 2, RGFormat));
+            const [sewn, sewnPlain] = [made(false, true, true, seams), made(true, true, true, seams)];
+            expect(asked, 'the seams, asked for by the full one only').toBe(1);
+            expect(full).not.toContain('uSeams');
+            expect(sewnPlain).not.toContain('uSeams');
+            expect(sewn.indexOf('printAt( vMapUv'), 'the seams and the print edge, after his folds').toBeGreaterThan(sewn.indexOf('foldsOf( vRest'));
+            expect(sewn.indexOf('printAt( vMapUv')).toBeLessThan(sewn.indexOf('normal = knitNormal( normal, grainD'));
+            // (their heights as slopes: level where the cloth is, a seam's two sides as steep as each other the two ways,
+            // level along it and at its middle, a step no steeper than the bytes hold)
+            const [w, h] = [9, 5];
+            const heights = new Uint8Array(w * h).fill(128);
+            for (let y = 0; y < h; y++) heights[y * w + 4] = 68;
+            const slopes = seamSlopes(heights, w, h);
+            const at = (x: number, y: number, c: 0 | 1) => slopes[(y * w + x) * 2 + c];
+            for (let y = 0; y < h; y++) {
+              expect([at(0, y, 0), at(8, y, 0), at(4, y, 0), at(4, y, 1)]).toEqual([128, 128, 128, 128]);
+              expect(at(3, y, 0) + at(5, y, 0), 'a seam, the same either side').toBe(256);
+              expect(at(3, y, 0)).toBeLessThan(128);
+            }
+            expect(seamSlopes(new Uint8Array(w * h).fill(200), w, h).every((v) => v === 128)).toBe(true);
+            const cliff = new Uint8Array(w * h).fill(0);
+            for (let y = 0; y < h; y++) cliff.fill(255, y * w + 5, y * w + w);
+            const steep = seamSlopes(cliff, w, h);
+            expect([Math.max(...steep), Math.min(...steep)], 'a cliff: as steep as the bytes hold, and no steeper').toEqual([255, 128]);
+          }
+        }
+        // (his fine grain's pictures, detail.ts's: the same bytes every time they are made, the ones the court is given; and
+        // each repeats with no seam, every channel each way: a step across its edge, its last texel to its first, no
+        // bigger on average than half as big again as a step inside it)
+        {
+          const [a, b] = [new Uint8Array(TILE * TILE * 4 * LAYERS), new Uint8Array(TILE * TILE * 4 * LAYERS)];
+          for (const out of [a, b]) [skinTile, knitTile, ribTile].forEach((tile) => tile(out));
+          const same = (x: Uint8Array, y: Uint8Array) => x.length === y.length && x.every((v, i) => v === y[i]);
+          expect(same(a, b), 'made twice').toBe(true);
+          expect(same(a, geo.detail.tiles().image.data as Uint8Array), "the court's").toBe(true);
+          for (let k = 0; k < LAYERS; k++)
+            for (let c = 0; c < 4; c++) {
+              const at = (x: number, y: number) => a[((k * TILE + y) * TILE + x) * 4 + c];
+              const steps = [0, 0, 0, 0];
+              for (let i = 0; i < TILE; i++) {
+                steps[0] += Math.abs(at(0, i) - at(TILE - 1, i));
+                steps[1] += Math.abs(at(i, 0) - at(i, TILE - 1));
+                for (let j = 0; j < TILE - 1; j++) {
+                  steps[2] += Math.abs(at(j + 1, i) - at(j, i));
+                  steps[3] += Math.abs(at(i, j + 1) - at(i, j));
+                }
+              }
+              for (const w of [0, 1])
+                expect(steps[w] / TILE, `layer ${k}, channel ${c}, ${w ? 'up' : 'across'}: across its edge`).toBeLessThanOrEqual((1.5 * steps[w + 2]) / (TILE * (TILE - 1)));
+            }
+          // (laid on him as big as they are: his vest's picture a few feet a uv round him and up him; his arms' tubes run
+          // down and out from his shoulders, his legs' down)
+          const [vest, arm, leg] = [geo.detail.cloth[0], geo.detail.tubes[3], geo.detail.tubes[5]];
+          for (const ft of [vest.x, vest.y]) expect(ft > 3 && ft < 6, `${ft} ft a uv`).toBe(true);
+          expect([arm.x > 0.4, arm.y < -0.5, leg.y < -0.9]).toEqual([true, true, true]);
+          // (and each band of his trim round his trunk as far round as it is: his collar the least, then his waistband, his armholes the most)
+          const [armholes, collar, waist] = [geo.detail.tubes[0].w, geo.detail.tubes[6].z, geo.detail.tubes[7].z];
+          expect([collar > 0.25, collar < waist, waist < armholes, armholes < 0.9], `bands ${collar} ${waist} ${armholes}`).toEqual([true, true, true, true]);
+          // (and the lines the bands are told apart by run clear of his trim, a few mm or more: his collar's all nearer his
+          // middle than its line, his armholes' all further out, his waistband's all well under the vest's. A neckline or a
+          // strap moved in figure.py would put a piece of one band round another's middle, and its ribs would jump)
+          {
+            const [collarX, vestY] = [geo.detail.tubes[6].w, geo.detail.tubes[7].w];
+            let [nearX, nearY] = [Infinity, Infinity];
+            for (const p of fig.parts.filter((q) => q.material === 'trim')) {
+              const at = p.geo.getAttribute('position');
+              for (let v = 0; v < at.count; v++) {
+                nearY = Math.min(nearY, Math.abs(at.getY(v) - vestY));
+                if (at.getY(v) > vestY) nearX = Math.min(nearX, Math.abs(Math.abs(at.getX(v)) - collarX));
+              }
+            }
+            expect(nearX, "his collar's line, ft clear of his trim").toBeGreaterThan(0.015);
+            expect(nearY, "his vest's line, ft clear of his trim").toBeGreaterThan(0.1);
+          }
+        }
+        expect([...slopes.subarray(0, 4), shade[0]]).toEqual([128, 128, 128, 128, 255]);
+        expect(shade.reduce((m, v) => Math.min(m, v), 255)).toBeGreaterThanOrEqual(0.75 * 255);
+        expect(maps.scale.x * 304.8, 'his muscles and tendons, mm a texel at their steepest').toBeGreaterThan(0.05);
+        expect(maps.scale.x * 304.8).toBeLessThan(2);
+        expect(maps.scale.y * 304.8, 'his veins, mm a texel at their steepest').toBeGreaterThan(0.05);
+        expect(maps.scale.y * 304.8).toBeLessThan(2);
+        const skin = fig.parts.find((p) => p.material === 'skin')!.geo;
+        const [pos, uv1] = [skin.getAttribute('position'), skin.getAttribute('uv1')];
+        const key = (x: number, y: number, z: number) => [x, y, z].map((c) => Math.round(c / run.GRID)).join();
+        const where = new Map<string, number[]>();
+        for (let i = 0; i < pos.count; i++) where.set(key(pos.getX(i), pos.getY(i), pos.getZ(i)), [...(where.get(key(pos.getX(i), pos.getY(i), pos.getZ(i))) ?? []), i]);
+        expect(anat.probes.length).toBeGreaterThanOrEqual(12);
+        for (const probe of anat.probes) {
+          const found = where.get(key(probe.pos[0], probe.pos[1], probe.pos[2])) ?? [];
+          expect(found.length, `anat.json's ${probe.name} is on no point of his skin`).toBeGreaterThan(0);
+          const off = Math.min(...found.map((i) => Math.max(Math.abs(uv1.getX(i) - probe.uv1[0]), Math.abs(uv1.getY(i) - probe.uv1[1]))));
+          expect(off, `his skin's uv at anat.json's ${probe.name}`).toBeLessThanOrEqual(2 / 65535);
+        }
+        const texel = (i: number) => (Math.min(n - 1, Math.floor(uv1.getY(i) * n)) * n + Math.min(n - 1, Math.floor(uv1.getX(i) * n))) * 2;
+        const pairs: [number, number][] = [];
+        for (let i = 0; i < pos.count; i++) {
+          const twin = pos.getX(i) > 0.25 ? where.get(key(-pos.getX(i), pos.getY(i), pos.getZ(i))) : undefined;
+          if (twin) pairs.push([map.data[texel(i)], map.data[texel(twin[0])]]);
+        }
+        expect(pairs.length, 'his left mirrored in his right').toBeGreaterThan(2000);
+        const mean = (k: 0 | 1) => pairs.reduce((s, p) => s + p[k], 0) / pairs.length;
+        const [ma, mb] = [mean(0), mean(1)];
+        const [ab, aa, bb] = pairs.reduce(([s, sa, sb], [a, b]) => [s + (a - ma) * (b - mb), sa + (a - ma) ** 2, sb + (b - mb) ** 2], [0, 0, 0]);
+        expect(ab / Math.sqrt(aa * bb), "his left's relief against his right's").toBeGreaterThan(0.8);
+        const veins = (pick: (x: number, y: number, z: number) => boolean) => {
+          let [sum, count] = [0, 0];
+          for (let i = 0; i < pos.count; i++) if (pick(Math.abs(pos.getX(i)), pos.getY(i), pos.getZ(i))) [sum, count] = [sum + map.data[texel(i) + 1], count + 1];
+          expect(count).toBeGreaterThan(100);
+          return sum / count;
+        };
+        const [forearm, face] = [veins((x) => x > 1.55 && x < 2.15), veins((x, y, z) => x < 0.2 && y > 5.85 && z > 0.2)];
+        expect(forearm, 'veins on his forearms').toBeGreaterThan(0);
+        expect(forearm, 'more veins on his face than his forearms').toBeGreaterThan(4 * face);
       }
       // and the men he is dressed as: each the same man every time, every way of wearing hair turning up over a league,
       // and two men picked at random hardly ever the same at a glance (his hair, his beard, his skin within a shade)

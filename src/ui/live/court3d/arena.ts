@@ -72,7 +72,7 @@ export const LAMPS: readonly (readonly [number, number, number])[] = [
 ];
 const LED_WHITE = new Color('#ffffff');
 /** How much of the light the crowd keeps while it sits. */
-const SAT = 0.8;
+const SAT = 0.66;
 /** The most pools of dark the floor can take: two feet and a body for every figure on it, one under everyone sat round it. */
 const TOUCHES = 96;
 /** One seat in this many has a camera or a phone up when something happens. */
@@ -110,7 +110,7 @@ const WIN_SHOW = 0.5;
  * While a play is on, how much of their light the stands give up (the people, and the steps and walls), the lit
  * faces round the bowl and the boards: the players are the brightest things in the picture.
  */
-const LIVE_STANDS = 0.2;
+const LIVE_STANDS = 0.28;
 const LIVE_LIT = 0.18;
 const LIVE_LED = 0.16;
 /**
@@ -184,7 +184,7 @@ const SHEEN = {
     uSize: { value: null },
     tFloor: { value: null },
     uWood: { value: null },
-    strength: { value: 0.74 },
+    strength: { value: 0.85 },
   },
   vertexShader: /* glsl */ `
     uniform mat4 textureMatrix;
@@ -239,11 +239,11 @@ const SHEEN = {
       c += (lit(uv + r * vec2(-0.6, 0.55), lod) + lit(uv - r * vec2(-0.6, 0.55), lod)) * 0.12;
       c += (lit(uv + r * vec2(0.15, 0.95), lod) + lit(uv - r * vec2(0.15, 0.95), lod)) * 0.1;
       c = sqrt(c);
-      // (a clear coat mirrors as glass does: a twentieth of what is over it from above, most of it looked along;
-      // from the broadcast's seat, some 30 degrees down, that is the men standing faintly in the wood)
+      // (a game floor's coat is poured thick and buffed: from the broadcast's seat, some 30 degrees down, the men
+      // stand in the wood as a broadcast shows them, soft but plain, a fifth of what is over it; more looked along)
       float graze = pow(1.0 - clamp(normalize(vView).y, 0.0, 1.0), 5.0);
       // (and fainter the higher what it shows: a varnish is not a mirror, the roof is a blur in it)
-      gl_FragColor = vec4(c, strength * coat * (0.06 + 0.94 * graze) / (1.0 + high * 0.03));
+      gl_FragColor = vec4(c, strength * coat * (0.2 + 0.8 * graze) / (1.0 + high * 0.015));
     }`,
 };
 

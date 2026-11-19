@@ -359,12 +359,13 @@ describe('live court choreography', () => {
       expect(rig.key.intensity).toBe(lamp);
       rig.mood(0, 1e9);
       expect(rig.sky.intensity).toBeCloseTo(sky);
-      // the stands sit under the floor's light, less of it every row up: by the floor most of a stop down, the back rows two
+      // the stands sit under the floor's light, less of it every row up: by the floor most of a stop down, the back rows near
+      // three (a broadcast's upper bowl all but black), never black
       const rows = Array.from({ length: ROWS }, (_, i) => lit(i));
       expect(rows[0]).toBeLessThan(0.75);
       expect(rows[0]).toBeGreaterThan(0.5);
-      expect(rows[ROWS - 1]).toBeLessThan(rows[0] / 2);
-      expect(rows[ROWS - 1]).toBeGreaterThan(0.15);
+      expect(rows[ROWS - 1]).toBeLessThan(rows[0] / 3);
+      expect(rows[ROWS - 1]).toBeGreaterThan(0.1);
       for (let i = 1; i < ROWS; i++) expect(rows[i]).toBeLessThan(rows[i - 1]);
       // (a material no shadow falls on carries none of the lamps' shadow maps)
       const sh = { vertexShader: 'void main() {}', fragmentShader: 'void main() {}' };

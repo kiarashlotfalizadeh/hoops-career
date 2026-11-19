@@ -55,7 +55,7 @@ const MOOD_MS = 900;
 /** How many of the lamps throw shadows at each step down (Court3D's STEPS, scene.lite). */
 const CASTERS = [4, 2, 0, 0];
 /** How much of the lamps' light the stands have (a share of the floor's: the banks are aimed at the floor, and a broadcast's crowd sits a stop under it). */
-const SPILL = 0.42;
+const SPILL = 0.3;
 
 /**
  * A material nothing's shadow falls on (the people in the stands, their seats, the steps): its shader goes

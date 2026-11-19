@@ -11,3 +11,8 @@ declare module '*.bin?url' {
   const url: string;
   export default url;
 }
+/** And a picture it built beside one (the figure's skin map, see scripts/blender/anatomy.py). */
+declare module '*.png?url' {
+  const url: string;
+  export default url;
+}

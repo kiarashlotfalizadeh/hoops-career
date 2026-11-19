@@ -4567,7 +4567,62 @@ function brief(o: Parameters<typeof measure>[0] = {}) {
   });
 }
 
+/**
+ * The broadcast picture's own motion over possessions `from`..`to` (the live page's pace, `speed`): how fast its look
+ * turns (deg/s of real time), how hard that changes from frame to frame (deg/s², a jolt), and its zoom (fov deg/s);
+ * medians, 95th and the most, and how many frames jolt past `jolt` deg/s² (a hand on a camera never does).
+ */
+function camPath({ view = 'tv', from = 0, to = 12, speed = 1, w: pw = 844, h: ph = 390, jolt = 400 } = {}) {
+  const cam = inner.camera as PerspectiveCamera;
+  scene.size(pw, ph, 1);
+  const was = (props as { cam?: string }).cam;
+  (props as { cam?: string }).cam = view;
+  const c = new Clock(speed);
+  c.k = Math.max(0, from - 1);
+  if (from === 0) c.tipMs = 0;
+  const dir = new Vector3();
+  const prev = new Vector3();
+  let fovWas = -1;
+  let vWas = -1;
+  const turn: number[] = [];
+  const acc: number[] = [];
+  const zoom: number[] = [];
+  const worst: string[] = [];
+  const dt = FRAME / 1000;
+  while (c.k <= to && c.finalMs < 0) {
+    c.step();
+    if (c.k < from) continue;
+    cam.getWorldDirection(dir);
+    if (fovWas >= 0) {
+      const a = (Math.acos(Math.min(1, Math.max(-1, dir.dot(prev)))) * 180) / Math.PI / dt;
+      turn.push(a);
+      zoom.push(Math.abs(cam.fov - fovWas) / dt);
+      if (vWas >= 0) {
+        const j = Math.abs(a - vWas) / dt;
+        acc.push(j);
+        if (j > jolt && worst.length < 12) worst.push(`k${c.k} t${Math.round(c.t)} ${a.toFixed(0)}deg/s`);
+      }
+      vWas = a;
+    }
+    prev.copy(dir);
+    fovWas = cam.fov;
+  }
+  (props as { cam?: string }).cam = was;
+  const q = (xs: number[], p: number) => {
+    const s = [...xs].sort((a, b) => a - b);
+    return Math.round(s[Math.min(s.length - 1, Math.floor(p * s.length))] ?? 0);
+  };
+  return {
+    frames: turn.length,
+    turn: { p50: q(turn, 0.5), p95: q(turn, 0.95), max: q(turn, 1) },
+    jolt: { p50: q(acc, 0.5), p95: q(acc, 0.95), max: q(acc, 1), over: acc.filter((x) => x > jolt).length },
+    zoom: { p50: q(zoom, 0.5), p95: q(zoom, 0.95), max: q(zoom, 1) },
+    worst,
+  };
+}
+
 (window as unknown as { lab: unknown }).lab = {
+  camPath,
   quick,
   brief,
   rimSight,

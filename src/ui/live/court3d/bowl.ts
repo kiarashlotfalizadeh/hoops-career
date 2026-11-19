@@ -154,18 +154,18 @@ const P = (s: Side, u: number, y: number, d: number): V3 => {
 /**
  * How much of the floor's light reaches a row. The lamps are aimed at the floor and a camera is exposed for
  * it: the rows by the floor sit in their spill, most of a stop under the floor, and it falls away up the
- * bowl to two stops under by the walkway (the upper deck's picture and the lit fronts over it go on down
+ * bowl to near three stops under by the walkway (a broadcast's upper bowl is all but black behind its lit boards) (the upper deck's picture and the lit fronts over it go on down
  * from there: DECK_GLOW and the rest). The steps, the seats and the people in them all take this one number,
  * so they darken together.
  */
-const LIT_FRONT = 0.66;
-const LIT_BACK = 0.27;
-export const lit = (row: number) => LIT_BACK + (LIT_FRONT - LIT_BACK) * (1 - Math.min(1, row / (ROWS - 1))) ** 1.25;
+const LIT_FRONT = 0.62;
+const LIT_BACK = 0.15;
+export const lit = (row: number) => LIT_BACK + (LIT_FRONT - LIT_BACK) * (1 - Math.min(1, row / (ROWS - 1))) ** 1.5;
 /** Those stood at the rail behind the top row, the upper deck's picture at its front row, and the lit fronts behind and over the walkway: under the lower bowl's, not over it. */
-const RAIL_LIT = 0.3;
-const DECK_GLOW = 0.36;
-const SUITE_GLOW = 0.5;
-const SHOP_GLOW = 0.42;
+const RAIL_LIT = 0.16;
+const DECK_GLOW = 0.15;
+const SUITE_GLOW = 0.36;
+const SHOP_GLOW = 0.26;
 const DOOR_GLOW = 0.55;
 const SIGN_GLOW = 0.8;
 /** The building's colour on its walls' padded tops and its seats' picture: this far toward grey, and this much of it (paint under a dimmed house is not a lit sign). */

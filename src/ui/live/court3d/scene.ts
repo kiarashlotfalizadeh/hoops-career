@@ -447,6 +447,14 @@ const sx = (p: Pt) => p.y - MID;
 const sz = (p: Pt) => -p.x;
 
 const A = new Vector3();
+const V = new Vector3();
+/**
+ * A man close enough for his finer mesh (see CourtScene.closeUp): his head this many of the screen's dots high (ft
+ * taken as his head's height), once he has it and before; and at most this many men at once.
+ */
+const HEAD_FT = 0.8;
+const CLOSE_PX = [110, 140] as const;
+const CLOSE_MEN = 4;
 const Q = new Quaternion();
 const AXIS_X = new Vector3(1, 0, 0);
 const HANDS: V3[] = [];
@@ -822,7 +830,9 @@ export class CourtScene {
     this.renderer.shadowMap.type = PCFShadowMap;
     this.lens = new Lens(this.renderer);
     const keep = <T extends { dispose(): void }>(o: T): T => (this.trash.push(o), o);
-    this.geo = figureGeo(keep, models.figure, models.faces);
+    this.geo = figureGeo(keep, models.figure, models.faces, models.anat);
+    // (his skin's maps up on the card now, not on the first frame a man is drawn: a hitch where the game starts)
+    if (this.geo.maps) for (const t of [this.geo.maps.anat, this.geo.maps.cav]) this.renderer.initTexture(t);
 
     // light: an arena's, from high over the floor (it throws the shadows), a little from behind for an edge,
     // and what comes back up off the wood onto the undersides of things (its colour is the floor's: see frame).
@@ -900,8 +910,11 @@ export class CourtScene {
     // (the building's extras: the roof's steel and the boards' rate from step 2, half the cameras and confetti at 3)
     this.arena.shed(level);
     this.arena.sideline.shed(level);
-    // (the players' plain material, no cloth sheen nor knit, once the shadows have gone too)
+    // (the players' plain material, no cloth sheen nor knit, once the shadows have gone too; till then their fine grain's
+    // pictures and their kit's seams go up on the card here, not on the first frame a man is drawn in his full one, see
+    // figure.ts Detail)
     this.figLite = level > 1;
+    if (!this.figLite) for (const t of [this.geo.detail.tiles(), this.geo.detail.seams?.()]) if (t) this.renderer.initTexture(t);
     for (const f of this.figs.values()) {
       f.lite(this.figLite);
       f.shadow.visible = this.figLite;
@@ -2179,6 +2192,7 @@ export class CourtScene {
     // (the house lights down for the open, a timeout, a home win: the building says how far)
     this.lens.exposure = (this.lit ??= this.lens.exposure) * this.arena.house;
     this.sizeBall();
+    this.closeUp(this.camera);
     this.lens.render(this.scene, this.camera, real);
     return labels;
   }
@@ -3968,7 +3982,30 @@ export class CourtScene {
 
   /** The scene as it is now from another camera (the scene lab's), finished as the picture is. */
   still(camera: PerspectiveCamera) {
+    this.closeUp(camera, true);
     this.lens.render(this.scene, camera, 0);
+  }
+
+  /**
+   * The men the camera has close, on a device that draws them in full: the nearest few whose heads are a good many of
+   * the screen's dots high get their finer mesh (see Fig.near: their outlines round), the rest the model's own. One is
+   * made a frame (each takes some tens of ms), or all of them for a still; the few nearest keep theirs made.
+   */
+  private closeUp(cam: PerspectiveCamera, all = false) {
+    const seen: [Fig, number][] = [];
+    const k = this.renderer.domElement.height / 2 / Math.tan((cam.fov * Math.PI) / 360);
+    for (const f of this.figs.values()) {
+      const at = headOf(f);
+      seen.push([f, this.level > 0 ? 0 : (HEAD_FT / Math.max(0.5, cam.position.distanceTo(V.set(at.x, at.y, at.z)))) * k]);
+    }
+    seen.sort((a, b) => b[1] - a[1]);
+    let made = all ? Infinity : 1;
+    seen.forEach(([f, px], i) => {
+      const close = i < CLOSE_MEN && px > CLOSE_PX[f.smooth ? 0 : 1];
+      if (close && !f.smooth && made-- <= 0) return;
+      f.near(close);
+      if (!close && i >= CLOSE_MEN && f.smooth) f.farOff();
+    });
   }
 
   dispose() {

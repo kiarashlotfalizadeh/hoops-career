@@ -31,19 +31,32 @@ TWIST = (0.35, 0.85)
 PALM_THIN, PALM_OVER = 0.72, 0.016
 
 
+#: The groups whose faces keep their modellers' uv (his skin, and the balls of his eyes: see uv_of).
+UV_GROUPS = ('body', 'helper-l-eye', 'helper-r-eye')
+
+
 def read_obj():
-    """Their mesh: its points, each group's faces, and each face's uv (unused: the app lays its own)."""
-    verts, groups, g = [], {}, None
+    """
+    Their mesh: its points, each group's faces, and the uv their modellers laid on his skin and eyes: by a face's
+    points (a tuple of them, in its own order), the uv at each of its corners. The app lays its own picture on him
+    (figure.ts's sheet); this one is what his skin's map is painted in (anatomy.py).
+    """
+    verts, uvs, groups, uv_of, g = [], [], {}, {}, None
     with open(os.path.join(ROOT, 'base.obj')) as f:
         for line in f:
             if line.startswith('v '):
                 verts.append([float(x) for x in line.split()[1:4]])
+            elif line.startswith('vt '):
+                uvs.append((float(line.split()[1]), float(line.split()[2])))
             elif line.startswith('g '):
                 g = line.split()[1]
                 groups.setdefault(g, [])
             elif line.startswith('f '):
-                groups[g].append([int(t.split('/')[0]) - 1 for t in line.split()[1:]])
-    return np.array(verts), groups
+                corners = [t.split('/') for t in line.split()[1:]]
+                groups[g].append([int(t[0]) - 1 for t in corners])
+                if g in UV_GROUPS:
+                    uv_of[tuple(groups[g][-1])] = [uvs[int(t[1]) - 1] for t in corners]
+    return np.array(verts), groups, uv_of
 
 
 def read_target(path, n):
@@ -459,10 +472,12 @@ class Player:
 
         import mh
 
-        V, groups = read_obj()
+        V, groups, uv_of = read_obj()
         n = len(V)
         P = athlete(V)
         rig = Rig(P)
+        # (their athlete as he stands in their frame, before he is put on our puppet: where his skin's map is worked out, see anatomy.py)
+        self.P, self.uv_of = P, uv_of
         lm = Landmarks(P, groups, rig)
         s, o = mh.fit(ours, lm)
         log(f'[models] mh: head fit {np.round(s, 4)} {np.round(o, 4)}')
@@ -690,6 +705,11 @@ class Player:
         front = [f for f in eyes if np.mean([Q[i][2] for i in f]) > np.mean([Q[i][2] for g in eyes for i in g]) - 0.004]
         self.faces = keep
         self.eyes = front
+        # (every face of his skin keeps its modellers' uv: they are their faces, filtered, never re-made)
+        missed = [f for f in keep + front if tuple(f) not in uv_of]
+        log(f'[models] mh uv: {len(missed)} missed')
+        if missed:
+            raise RuntimeError(f'mh: {len(missed)} faces of his skin have no uv (the first on points {missed[0]})')
         self.eye = eye_v
         self.Q = Q
         # (his head's picture ends where figure.ts's painter lets it go: under his jaw, round the top of his neck; below

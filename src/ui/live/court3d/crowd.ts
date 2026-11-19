@@ -174,7 +174,7 @@ const HOME_TRIM = 0.16;
 /** The white a fan wears: off-white, well under a kit's on the floor (a stand full of pure white dots pulls the eye off the play). */
 const HOME_WHITE_WEAR = '#aeaba4';
 /** A team's colour as cloth: this far toward grey (a shirt is never a paint chip), more so its second colour. */
-const WORN = 0.42;
+const WORN = 0.55;
 /** The visitors' block: from x to x on the far side, rows this to that (most of its seats theirs). */
 const VISITORS = [24, 46, 3, 11];
 const WHITE = new Color('#ffffff');
@@ -190,7 +190,7 @@ const STALL_MOST = 0.22;
 /** A colour the lamps hardly reach has little colour left: how much of a cloth's is kept in the darkest rows (all of it by the floor). */
 const DIM_COLOUR = 0.55;
 /** And how much of it goes while a play is on (the stands sit back behind the floor). */
-const LIVE_GREY = 0.3;
+const LIVE_GREY = 0.45;
 /** A section of the stands for a cheer (ft across: see fanBlock): each is up a little before or after the next, and for its own while. */
 const BLOCK_FT = 22;
 /**

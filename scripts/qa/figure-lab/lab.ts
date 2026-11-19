@@ -20,6 +20,13 @@
 //   &kind=0..5 (everyone's head the kind's own, as look.ts's FACES has it: long, broad, square, narrow, heavy, soft)  &kinds=1 (each the next kind)
 //   &face=1 (his jaw open and his brows down, as in a roar)  &face=joy|shout|miss|stung|disbelief|stunned|wince|glare|exhale|blow (what a moment gives him: see Fig.feel, at its height)
 //   &gest=protest|call|talk|... (a gesture, his talk with it)  &at=520 (how far into it, ms of his own time)
+//   his skin's anatomy (figure.ts Maps): &maps=0 (none: his skin as it was before it had a map)  &lite=1 (his plain material, a phone's)
+//   &anat=only (grey skin under one raking lamp, &key=-75 degrees round from the camera (from its left; 75 its right): the relief
+//   and the shade in its hollows, read for bumps and dents)  &anat=uv (where each point of his skin is on its map: squares 1/16 of it,
+//   redder across, greener down; a blue spot on his left forearm, where anat.json says it is)  &probe=1 (a ring raised on the map round
+//   that spot: it must stand on his left forearm)  &k=1,1,1 (how much of it everyone shows: muscle and tendon, veins, the shade in the hollows)
+//   &micro=0 (none of his fine grain: his skin's, his kit's knit and rib close up, nor its seams, see figure.ts Detail)  &seams=0 (no relief
+//   on his kit's seams, piping, stitches and hems, nor the edge of his number: the grain and knit as they are)
 import {
   AmbientLight,
   Color,
@@ -38,11 +45,13 @@ import {
 } from 'three';
 import type { Act } from '../../../src/ui/live/choreo';
 import { GESTURES, type Gesture } from '../../../src/ui/live/court3d/clips';
-import { Fig, figureGeo, settleHeads, type Feel } from '../../../src/ui/live/court3d/figure';
+import { anatOf } from '../../../src/ui/live/court3d/anat';
+import { Fig, figureGeo, settleHeads, type Feel, type Geo } from '../../../src/ui/live/court3d/figure';
 import { arenaLight } from '../../../src/ui/live/court3d/lens';
 import { Rig } from '../../../src/ui/live/court3d/rig';
 import { BEARDS, FACES, lookOf, SKINS, STYLES } from '../../../src/ui/live/court3d/look';
-import { loadModels } from '../../../src/ui/live/court3d/models';
+import { anatFile, loadModels } from '../../../src/ui/live/court3d/models';
+import { decodePng } from '../../../src/ui/live/court3d/png';
 import { BALL_R, bodyOf, FARM, J, UARM, type Drive } from '../../../src/ui/live/court3d/puppet';
 import type { MatchKit } from '../../../src/ui/teamColors';
 
@@ -161,8 +170,18 @@ renderer.toneMapping = NeutralToneMapping;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = PCFSoftShadowMap;
 const scene = new Scene();
-// (the game's own lamps and its building's light, so a figure is seen here as it is on the floor; &studio=1: the old plain lights)
-if (q.has('studio')) {
+const ANAT = q.get('anat');
+// (the game's own lamps and its building's light, so a figure is seen here as it is on the floor; &studio=1: the old plain lights;
+// &anat=only: one lamp, low and from the side, set after the camera is)
+const raking = new DirectionalLight(0xffffff, 3.2);
+if (ANAT === 'only') {
+  scene.add(new HemisphereLight(0xffffff, 0x404040, 0.25), raking, raking.target);
+  raking.castShadow = true;
+  raking.shadow.mapSize.set(2048, 2048);
+  raking.shadow.bias = -0.0006;
+  raking.shadow.normalBias = 0.06;
+  Object.assign(raking.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, near: 1, far: 80 });
+} else if (q.has('studio')) {
   scene.add(new HemisphereLight(0xffffff, 0x9a7d5e, 1.5), new AmbientLight(0xffffff, 0.3));
   const key = new DirectionalLight(0xfff6ea, 2.1);
   key.position.set(8, 30, 14);
@@ -178,7 +197,10 @@ if (q.has('studio')) {
   scene.add(rim);
 } else {
   new Rig(scene);
-  scene.environment = arenaLight(renderer, new Color(0xc99a62)).texture;
+  // (the building's light off a floor of this wood, half grey: as the court gives it, see CourtScene's bounce)
+  const wood = new Color(0xc99a62);
+  const grey = wood.r * 0.2126 + wood.g * 0.7152 + wood.b * 0.0722;
+  scene.environment = arenaLight(renderer, wood.lerp(new Color(grey, grey, grey), 0.45)).texture;
   renderer.toneMappingExposure = 1.14;
 }
 const floor = new Mesh(new PlaneGeometry(200, 200), new MeshStandardMaterial({ color: 0xc99a62, roughness: 0.6 }));
@@ -187,7 +209,28 @@ floor.receiveShadow = true;
 scene.add(floor);
 
 const models = await loadModels();
-const geo = figureGeo((o) => o, models.figure, new URLSearchParams(location.search).get('shapes') === '0' ? undefined : models.faces);
+// (where anat.json says his left forearm is on his skin's map; &probe=1 raises a ring round it on the map, out of the way of anything of his)
+const probes = ((await (await fetch(new URL('../../../src/ui/live/court3d/models/anat.json', import.meta.url))).json()) as { probes: { name: string; uv1: number[] }[] }).probes;
+const forearm = probes.find((p) => p.name === 'forearm.L')!.uv1;
+if (q.has('probe') && models.anat) {
+  // (the map read again for it, the file models.ts reads on this device)
+  const pic = await decodePng(await (await fetch(anatFile())).arrayBuffer());
+  const { w, channels } = pic;
+  const [cx, cy] = [forearm[0] * w, forearm[1] * w];
+  for (let y = Math.floor(cy - 40); y < cy + 40; y++)
+    for (let x = Math.floor(cx - 40); x < cx + 40; x++) {
+      const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+      // (a ring, and a tail off it toward the map's right: which way round it lies shows too)
+      const up = Math.exp(-(((d - 22) / 3) ** 2)) + (x > cx + 22 && Math.abs(y + 0.5 - cy) < 3 ? 1 : 0);
+      const i = (y * w + x) * channels;
+      pic.data[i] = Math.min(255, pic.data[i] + Math.round(70 * up));
+    }
+  models.anat = anatOf(pic);
+}
+const geo = figureGeo((o) => o, models.figure, q.get('shapes') === '0' ? undefined : models.faces, q.get('maps') === '0' ? undefined : models.anat);
+// (&micro=0: no fine grain on his skin or knit on his kit close up, nor its seams, see figure.ts Detail; &seams=0: the grain and knit, but no seams)
+if (q.get('micro') === '0') (geo as { detail: Geo['detail'] | null }).detail = null;
+else if (q.get('seams') === '0') geo.detail = { ...geo.detail, seams: null };
 const kit = {
   color: '#1d428a',
   trim: '#ffc72c',
@@ -207,6 +250,7 @@ const figs = Array.from({ length: n }, (_, i) => {
   if (q.has('tones')) look.tone = i % SKINS.length;
   if (q.has('tone')) look.tone = num('tone', 0) % SKINS.length;
   look.skin = SKINS[look.tone];
+  if (ANAT === 'only') look.skin = '#9a9a9a';
   // (&real=0..1: how far his head is taken onto MakeHuman's; &mix=name:w,name:w sets shapes of a face, see look.ts shape)
   if (q.has('real')) look.shape.real = num('real', 1);
   for (const kv of (q.get('mix') ?? '').split(',').filter(Boolean)) look.shape[kv.split(':')[0]] = Number(kv.split(':')[1]);
@@ -240,6 +284,34 @@ const figs = Array.from({ length: n }, (_, i) => {
     String(q.get('mark') ?? 'NYK'),
     look,
   );
+  if (q.get('lite') === '1') f.lite(true);
+  // (&smooth=1: his finer mesh, as the game gives a man seen close: see Fig.near)
+  if (q.get('smooth') === '1') f.near(true);
+  // (&k=1,1,1: everyone's share of it, his own put aside: muscle and tendon, veins, the shade in the hollows)
+  const relief = (f as unknown as { relief: { k: { value: Vector3 } } | null }).relief;
+  if (q.has('k') && relief) relief.k.value.fromArray(q.get('k')!.split(',').map(Number));
+  // (his skin's map read straight: where each point of it is on the map, see &anat=uv)
+  if (ANAT === 'uv')
+    f.group.traverse((o) => {
+      const m = (o as Mesh).material as MeshStandardMaterial | undefined;
+      if (!m?.defines || !('SKIN_MAPS' in m.defines)) return;
+      const [compile, key] = [m.onBeforeCompile, m.customProgramCacheKey];
+      m.onBeforeCompile = (sh, r) => {
+        compile.call(m, sh, r);
+        sh.fragmentShader = sh.fragmentShader.replace(
+          '#include <alphamap_fragment>',
+          /* glsl */ `{
+            vec2 sq = floor( vAnatUv * 16.0 );
+            float on = 0.35 + 0.5 * mod( sq.x + sq.y, 2.0 );
+            vec3 uvc = vec3( on * ( 0.3 + 0.7 * vAnatUv.x ), on * ( 0.3 + 0.7 * vAnatUv.y ), 0.15 * on );
+            if ( length( vAnatUv - vec2( ${forearm[0].toFixed(6)}, ${forearm[1].toFixed(6)} ) ) < 0.006 ) uvc = vec3( 0.1, 0.3, 1.0 );
+            diffuseColor.rgb = mix( diffuseColor.rgb, uvc, skinK );
+          }
+          #include <alphamap_fragment>`,
+        );
+      };
+      m.customProgramCacheKey = () => `${key.call(m)}-uv`;
+    });
   scene.add(f.group);
   const ball = new Mesh(new SphereGeometry(BALL_R, 18, 14), new MeshStandardMaterial({ color: 0xc8642a, roughness: 0.6 }));
   ball.castShadow = true;
@@ -261,6 +333,18 @@ if (q.has('eye')) {
   cam.fov = num('fov', 28);
   cam.updateProjectionMatrix();
   cam.lookAt(at[0], at[1], at[2]);
+}
+// (the one lamp of &anat=only: &key degrees round from the camera about him, low, so a bump is lit on that side and a dent on the other)
+{
+  const look = new Vector3(0, num('lookY', 3.8), num('lookZ', 0));
+  const from = cam.position.clone().sub(look).setY(0).normalize();
+  const k = (num('key', -75) * Math.PI) / 180;
+  raking.position
+    .set(from.x * Math.cos(k) + from.z * Math.sin(k), 0.45, -from.x * Math.sin(k) + from.z * Math.cos(k))
+    .normalize()
+    .multiplyScalar(30)
+    .add(look);
+  raking.target.position.copy(look);
 }
 
 /** Arms put where a shoulder is hardest on a skin (each: the way the upper arm points, then the forearm, for his left; x out to his side, y up, z forward). */

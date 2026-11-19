@@ -172,6 +172,13 @@ const SHAPE_SPREAD: readonly (readonly [string, number, number?])[] = [
   ['temples', 0.5],
   ['slope', 0.45],
 ];
+/** Where every man's face starts from on some of those shapes (in their own units, before his spread): an athlete's. */
+const ATHLETE: readonly (readonly [string, number])[] = [
+  ['fat', -0.45],
+  ['cheekFull', -0.3],
+  ['cheekBone', 0.2],
+  ['jawBone', 0.15],
+];
 /** The head's outline (mh.py): a man's is one or two of these, some of the way. */
 const OUTLINES = ['oval', 'round', 'square', 'triangle', 'heart', 'diamond', 'oblong'];
 
@@ -203,6 +210,9 @@ function shapeOf(r: (salt: number) => number, tone: number, age: number): Record
   // (and a veteran's face has aged: fuller under the eyes, the lines from his nose deeper)
   // (the middling man's upper lip is thin: every man's a little fuller than that)
   out.upperLip = (out.upperLip ?? 0) + 0.5;
+  // (and his face is an athlete's, not the middling man's: little fat on it, the cheekbones standing out over hollower
+  // cheeks, the jaw's line clear. Each man's own spread is about that)
+  for (const [name, by] of ATHLETE) out[name] = (out[name] ?? 0) + by;
   out.age = 0.75 * age;
   out.bags = 0.6 * age + 0.25 * r(188);
   out.laugh = Math.max(out.laugh ?? 0, 0.5 * age);

@@ -234,8 +234,12 @@ const BUNDLE_TONE = 0.085;
 const BAND_TONE = 0.06;
 const LOT_TONE = 0.07;
 const PATCH = 0.07;
-/** The bare wood's colour under these lamps, of the canvas's: deeper and a little less red (a rich maple, not peach). */
-const WOOD_GRADE = [0.8, 0.81, 0.77];
+/**
+ * The bare wood's colour under these lamps, of the canvas's: a game floor's maple under an arena's white LEDs reads a
+ * pale blonde on a broadcast, not a honey: the canvas's stain kept only this much of its colour, then this shade of it.
+ */
+const WOOD_SAT = 0.74;
+const WOOD_GRADE = [0.9, 0.96, 0.88];
 /** How far a strip's face is off flat at most (radians): the lamps in the varnish break up along them. */
 const TILT = 0.011;
 /**
@@ -245,7 +249,7 @@ const TILT = 0.011;
 const PARQUET_STRIPS = 26;
 const PARQUET_TONE = 0.08;
 /** A lamp bank, as bright as it is (the floor shows a twentieth or so of it, more the flatter it is looked across). */
-const BANK_GLOW = new Color(1, 0.97, 0.92).multiplyScalar(21);
+const BANK_GLOW = new Color(1, 0.97, 0.92).multiplyScalar(34);
 /** A worn coat keeps this much of the lamps and the mirror a clear one shows (a broadcast floor: soft reflections, not a mirror). */
 const COAT_LEAST = 0.35;
 /**
@@ -472,10 +476,10 @@ const FLOOR_WOOD = /* glsl */ `
   float wBare = 1.0 - smoothstep(0.05, 0.16, length(wOff));
   float wStain = wBare + (1.0 - wBare) * step(wOff.r, 0.0) * step(wOff.b, 0.0) * step(0.02, diffuseColor.r - diffuseColor.b);
   diffuseColor.rgb *= mix(1.0 - (1.0 - wWood) * 0.45, wWood, wStain);
-  // (the bare wood as a camera exposed for the men on it has it: a deep honey, not the canvas's pale one, and
-  // the stained wood with it (a darker key, a two-tone arc, the apron), so a stain stays as much darker as it
-  // was painted; the lines and the paint keep their own brightness, and stand off it)
-  diffuseColor.rgb *= mix(vec3(1.0), WOOD_GRADE_, wStain);
+  // (the bare wood as a camera exposed for the men on it has it: a pale blonde under white light, and the
+  // stained wood with it (a darker key, a two-tone arc, the apron), so a stain stays as much darker as it
+  // was painted; the lines and the paint keep their own brightness and colour, and stand off it)
+  diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722))), diffuseColor.rgb, WOOD_SAT_) * WOOD_GRADE_, wStain);
   // the wear: the coat duller where the feet go most, the apron a satin, the paint's coats clearer (see WEAR)
   float wWorn;
   float fGloss = fGlossAt(vFloor.xz, wBare, wWorn);
@@ -639,6 +643,7 @@ export function varnish(mat: MeshStandardMaterial): FloorKnobs {
     SCUFF_SHARE_: glsl(SCUFF_SHARE),
     SCUFF_DARK_: glsl(SCUFF_DARK),
     WOOD_GRADE_: `vec3(${WOOD_GRADE.join(', ')})`,
+    WOOD_SAT_: glsl(WOOD_SAT),
     SHARP_: glsl(SPREAD_SHARP),
     SOFT_: glsl(SPREAD_SOFT),
     HAZE_S: glsl(SPREAD_HAZE),

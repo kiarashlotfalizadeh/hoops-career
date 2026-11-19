@@ -45,7 +45,8 @@ ARM_OUT = math.radians(38)
 
 # the clothes
 WAIST = HIP + 0.42
-HEM = KN_Y + 0.3
+# (a game's shorts today come down to the top of the knee, cut wide: the hem stops short of the kneecap so a bent knee doesn't push through it)
+HEM = KN_Y + 0.13
 # where the shorts' two legs part (lower than his own fork: they hang)
 FORK = HIP - 0.66
 TUCK = WAIST - 0.07
@@ -61,6 +62,8 @@ TRIM = 0.038
 # long, longer than it is deep), set forward on his neck as a head is
 HEAD_W, HEAD_H, HEAD_D = 0.3, 0.42, 0.37
 HEAD_C = (0, HEAD_Y + 0.045, 0.05)
+#: How far (ft) the rays that find a real face's own hollows go, and how dark a point is that all of them meet.
+FACE_REACH, FACE_LOW = 0.25, 0.45
 UNDER = 0.17
 # how many triangles his head is given (most of them his face's)
 HEAD_TRIS = 6040
@@ -1455,7 +1458,7 @@ def shorts_form(legs=None, folds=0.022):
     for s in (1, -1):
         # (the two legs are one cloth down to the fork, and part below it: seen from in front, an upturned V between them)
         # (cut wide, as the game's are: the legs flare a little to the hem, standing off his thighs all round)
-        low = legs or [(HEM - 0.25, 0.46, 0.392, 0.45, 0.46), (HEM, 0.455, 0.39, 0.45, 0.46), (FORK - 0.12, 0.42, 0.382, 0.435, 0.45)]
+        low = legs or [(HEM - 0.25, 0.47, 0.418, 0.47, 0.48), (HEM, 0.465, 0.414, 0.468, 0.478), (FORK - 0.12, 0.425, 0.39, 0.442, 0.455)]
         up = [(FORK + 0.04, 0.385, 0.392, 0.428, 0.445), (HIP - 0.3, 0.385, 0.4, 0.43, 0.45), (HIP - 0.05, 0.4, 0.37, 0.425, 0.45), (HIP + 0.12, 0.4, 0.29, 0.37, 0.4)]
         parts.append(solid([ring((s * cx, y, 0.012), rx, rzf, 28, rzb) for y, cx, rx, rzf, rzb in low + up], 'leg'))
     form = join(parts, 'shorts')
@@ -1646,12 +1649,20 @@ def real_player():
     return _real
 
 
-def real_skin(man, faces, name):
-    """Some of the real man's faces as a mesh, each point knowing which of theirs it is (`mhv`), what it is (`tag`) and its fingers' shares (`d_...`)."""
+def real_skin(man, faces, name, mh=False):
+    """
+    Some of the real man's faces as a mesh, each point knowing which of theirs it is (`mhv`), what it is (`tag`) and
+    its fingers' shares (`d_...`); with `mh`, each corner its modellers' uv too (`mhuv`: finish makes it his skin's
+    second uv). Only his skin as it is drawn takes that: Blender's thinning minds a uv, so a copy the clothes are cut
+    from (or a bench man's skin) would come out another shape with one.
+    """
     used = sorted({i for f in faces for i in f})
     to = {v: i for i, v in enumerate(used)}
     o = mesh_obj(name, [tuple(man.Q[i]) for i in used], [[to[i] for i in f] for f in faces])
     me = o.data
+    if mh:
+        # (polygon i is faces[i], its corners in their order: from_pydata keeps both)
+        me.attributes.new('mhuv', 'FLOAT2', 'CORNER').data.foreach_set('vector', [c for f in faces for t in man.uv_of[tuple(f)] for c in t])
     me.attributes.new('tag', 'INT', 'POINT').data.foreach_set('value', [FACE if man.is_head[i] else REAL for i in used])
     me.attributes.new('mhv', 'FLOAT', 'POINT').data.foreach_set('value', [float(i + 1) for i in used])
     me.attributes.new('ball', 'FLOAT', 'POINT').data.foreach_set('value', [1.0 if man.eye[i] or man.lip_edge[i] else 0.0 for i in used])
@@ -1712,7 +1723,7 @@ def dress_real(man):
     fix_normals(hi)
     mid = thin(hi, 44000)
 
-    body = real_skin(man, man.faces + man.eyes, 'body')
+    body = real_skin(man, man.faces + man.eyes, 'body', mh=True)
     ear = set(np.where(man.ear)[0])
     ears_at = [i for i, f in enumerate(man.faces + man.eyes) if all(v in ear for v in f)]
     body.data.materials.append(material(SKIN))
@@ -1823,6 +1834,13 @@ def finish(built, name='figure'):
     fig = join(built, name)
     # (join orders the slots as it meets them: the app wants them by name, so the order is free)
     me = fig.data
+    # (his skin's own uv, if real_skin gave it one, is taken off and put back after the vest's: the file numbers its
+    # uvs in the order they were made, and the app reads the vest's picture from the first)
+    mhuv = None
+    if 'mhuv' in me.attributes:
+        mhuv = np.zeros(len(me.loops) * 2, dtype=np.float32)
+        me.attributes['mhuv'].data.foreach_get('vector', mhuv)
+        me.attributes.remove(me.attributes['mhuv'])
 
     # the vest's picture: round him from his left side (the back a quarter of the way, the front three), bottom to top
     uv = me.uv_layers.new(name='UVMap')
@@ -1838,14 +1856,40 @@ def finish(built, name='figure'):
         for li, u in zip(poly.loop_indices, us):
             p = G(me.vertices[me.loops[li].vertex_index].co)
             uv.data[li].uv = (u, (p[1] - 3.6) / 2.0) if poly.material_index == jersey_slot else (0.5, 0.5)
+    if mhuv is not None:
+        # his skin's map's uv (the file's TEXCOORD_1): his skin and ears their modellers', everything else nothing
+        mat, start, tot = (np.zeros(len(me.polygons), dtype=np.int32) for _ in range(3))
+        me.polygons.foreach_get('material_index', mat)
+        me.polygons.foreach_get('loop_start', start)
+        me.polygons.foreach_get('loop_total', tot)
+        corner = np.repeat(start, tot) + np.arange(tot.sum()) - np.repeat(np.cumsum(tot) - tot, tot)
+        mhuv = mhuv.reshape(-1, 2)
+        mhuv[corner[~np.repeat(np.isin(mat, [names.index(m) for m in (SKIN, EAR) if m in names]), tot)]] = 0.0
+        me.uv_layers.new(name='BodyUV').data.foreach_set('uv', mhuv.ravel())
+        me.uv_layers.active = uv
+        uv.active_render = True
 
-    # shade: every hollow, and the face's
-    bake_occlusion(fig, floor=FLOOR, rays=64, reach=1.1, low=0.58)
-    # (a face is small: its baked shade is a hint, or its few points read as bruises)
+    # shade: every hollow, and the face's. (The pieces of hair only some men wear shade no one's head but their own:
+    # the rest of him is shaded as if none were there, and each piece by itself and him)
+    worn = [i for i, m in enumerate(names) if m in (BUN, TAIL, TWISTS, LOCS, BRAIDS, AFRO, HIGHTOP, CURLS)]
+    piece = np.zeros(len(me.vertices), dtype=bool)
+    for poly in me.polygons:
+        if poly.material_index in worn:
+            piece[list(poly.vertices)] = True
+    bake_occlusion(fig, floor=FLOOR, rays=64, reach=1.1, low=0.58, only=~piece, skip=worn)
+    if piece.any():
+        bake_occlusion(fig, floor=FLOOR, rays=64, reach=1.1, low=0.58, only=piece)
+    # (a face is small: the shade of all of him on it is a hint, or its few points read as bruises)
     soften(fig, lambda x, y, z: y > HEAD_C[1] - HEAD_H * 1.05, 0.55)
     # (an ear's back is hard against his head: left as dark as that makes it, it is a hole beside his face)
     soften(fig, lambda x, y, z: abs(x) > HEAD_W * 0.86 and abs(y - HEAD_C[1]) < 0.16 and z < HEAD_C[2] + 0.06, 0.15)
     paint(fig, face_shade)
+    if mhuv is not None:
+        # (and a real face's own hollows, close: his eyes' sockets, his nostrils and under his nose, his mouth's corners
+        # and the line of his lips, the folds beside his nose, round and in his ears, under his jaw. Rays from just off
+        # him and only a little way: the shade of all of him above starts too far off his skin to find them)
+        head = np.array([G(v.co)[1] > HEAD_C[1] - HEAD_H * 1.3 for v in me.vertices]) & ~piece
+        bake_occlusion(fig, rays=128, reach=FACE_REACH, low=FACE_LOW, lift=0.004, blur=1, only=head, skip=worn)
     # (and a shoulder moves: the shade of the grooves round it as he's built would stay behind as a painted crease)
     soften(fig, lambda x, y, z: (abs(x) - SHOULDER) ** 2 + (y - SH_Y) ** 2 + z * z < 0.62 ** 2 and y < CHEST_Y + 0.2, 0.25)
 
@@ -2152,7 +2196,7 @@ def hair_pieces(light=False):
     # short twists all over his scalp: each a wound lock a finger long, standing off his head where it grows and
     # falling over with its own weight, its end round; thick enough that they crowd one another and little scalp shows
     parts = []
-    for n in scalp_spots(74 if light else 165, rnd, power=0.68):
+    for n in scalp_spots(74 if light else 160, rnd, power=0.68):
         nv = Vector(n)
         lean = Vector((rnd.uniform(-0.5, 0.5), 0, rnd.uniform(-0.5, 0.5)))
         tall = rnd.uniform(0.11, 0.165)
@@ -2164,7 +2208,8 @@ def hair_pieces(light=False):
         p1 = p0 + nv * tall * 0.36
         p2 = p1 + (nv * 0.55 + fall * 0.6).normalized() * tall * 0.34
         p3 = p2 + (nv * 0.1 + fall).normalized() * tall * 0.3
-        parts.append(lock([p0, p1, p2, p3], rnd.uniform(0.036, 0.042) if light else rnd.uniform(0.03, 0.037), 4 if light else 5, 'twist', wind=0.5, tip=0.7))
+        # (round, not wound: the app draws its two strands winding down it, see figure.ts's TWIST)
+        parts.append(lock([p0, p1, p2, p3], rnd.uniform(0.036, 0.042) if light else rnd.uniform(0.03, 0.037), 4 if light else 6, 'twist', tip=0.7))
     out.append((join(parts, 'twists'), TWISTS))
     # locks from his crown down past his jaw, over his ears and down the back of his neck: each lies over his head from
     # where it grows, comes off it and hangs straight, thick as a finger, uneven along itself
@@ -2426,6 +2471,11 @@ if __name__ == '__main__':
     fig, arm_ob = build()
     report(fig)
     faces_bin_real(fig, _real, os.path.join(a['out'], 'faces.bin'))
+    # (and his skin's map, in its second uv: skin-anat.png and anat.json beside the model. Only here: the benches and
+    # the building import this file, and never draw a man close enough for it)
+    import anatomy
+
+    anatomy.write(fig, _real, a['out'])
     fig.data.attributes.remove(fig.data.attributes['mhv'])
     export_glb(os.path.join(a['out'], 'figure.glb'), [fig, arm_ob])
     save_blend(os.path.join(a['blend'], 'figure.blend'))
