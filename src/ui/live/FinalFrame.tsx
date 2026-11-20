@@ -1,8 +1,10 @@
 // The buzzer: the final score over the frozen court, for a beat before the final card. A light scrim
 // on the floor, an ink plate with the word, each team's block in its kit colour with its score slamming
 // in (away, then home), the winner's the heavier with its mark, the loser's still white on its block;
-// then on to the game report, by the button or by itself.
-import { useEffect, useRef, type CSSProperties } from 'react';
+// then on to the game report, by the button or by itself. How long it has before it goes by itself is drawn:
+// a rule along the foot of the button runs out as the hold does. And it goes as it came, faded out over a
+// beat with the plate settling, not cut to the report in a frame.
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { ChevronRight } from 'lucide-react';
 import type { Team } from '../../core/types';
 import type { MatchKit } from '../teamColors';
@@ -15,6 +17,9 @@ const HOLD_MS = 3500;
  * late winner, a playoff win, a series and a title have more to them than the handshakes of a win.
  */
 export const FINAL_HOLD: Record<Occasion, number> = { win: HOLD_MS, late: 5500, playoff: 5000, clinch: 7000, title: 9000 };
+/** How long the frame takes to go (ms: break.css's lv-ff-out is as long), and nothing at all where motion is turned down. */
+const OUT_MS = 240;
+const still = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export function FinalFrame({
   teams,
@@ -46,13 +51,20 @@ export function FinalFrame({
   useEffect(() => {
     latest.current = onDone;
   }, [onDone]);
+  // on its way out: faded for OUT_MS, then the report
+  const [leaving, setLeaving] = useState(false);
+  const out = useRef<ReturnType<typeof setTimeout>>(undefined);
   const go = () => {
     if (done.current) return;
     done.current = true;
-    latest.current();
+    if (still()) return latest.current();
+    setLeaving(true);
+    out.current = setTimeout(() => latest.current(), OUT_MS);
   };
+  useEffect(() => () => clearTimeout(out.current), []);
   useEffect(() => {
-    const t = setTimeout(go, hold);
+    // (the hold is to the report: the fade is the last of it, not added to it)
+    const t = setTimeout(go, Math.max(0, hold - (still() ? 0 : OUT_MS)));
     return () => clearTimeout(t);
     // (the frame's one timer, from when it goes up: the end it holds over doesn't change under it)
   }, [hold]);
@@ -72,7 +84,7 @@ export function FinalFrame({
     );
   };
   return (
-    <div className="lv-ff">
+    <div className={`lv-ff${leaving ? ' out' : ''}`} style={{ '--ff-hold': `${hold}ms` } as CSSProperties}>
       <div className="lv-ff-plate">
         {/* (said once, as a sentence; the blocks are the picture of it) */}
         <div role="status" className="sr-only">
@@ -88,6 +100,8 @@ export function FinalFrame({
         </div>
         <button type="button" className="lv-ff-go" onClick={go}>
           Game report <ChevronRight size={16} aria-hidden="true" />
+          {/* (how long before it goes on by itself: it runs out with the hold) */}
+          <span className="lv-ff-left" aria-hidden="true" />
         </button>
       </div>
     </div>

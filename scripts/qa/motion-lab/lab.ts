@@ -2961,9 +2961,9 @@ function footwork({ speed = 2, most = 10 } = {}) {
   const contact = { frames: 0, wide: 0, hips: 0 };
   const jumps: Record<string, number> = {};
   const worst: string[] = [];
-  const DRIB = new Set(['dribble', 'dribbleRun', 'dribbleWalk', 'dribbleBack', 'crossover', 'hesi']);
-  const SHOTS = new Set(['jumper', 'floater', 'layup', 'putback', 'hook', 'dunk', 'dunk1', 'dunkHang', 'freeThrow', 'rebound', 'tip', 'block', 'contest']);
-  const ONE = new Set(['layup', 'floater', 'hook', 'putback', 'dunk1']);
+  const DRIB = new Set(['dribble', 'dribbleRun', 'dribbleWalk', 'dribbleBack', 'crossover', 'hesi', 'inOut', 'pullBack']);
+  const SHOTS = new Set(['jumper', 'floater', 'layup', 'putback', 'hook', 'dunk', 'dunk1', 'dunkHang', 'dunkBack', 'dunkSide', 'freeThrow', 'rebound', 'tip', 'block', 'contest']);
+  const ONE = new Set(['layup', 'floater', 'hook', 'putback', 'dunk1', 'dunkSide']);
   cutNow = false;
   const close = (m: Man, at: string) => {
     if (!m.held) return;
@@ -4188,7 +4188,7 @@ function dribbles({ speed = 1, over = 0.7, from = 0, upto = Infinity } = {}) {
   if (from > 0) c.k = from;
   else c.tipMs = 0;
   const out = { done: false, frames: 0, steps: 0, longest: 0, over: [] as { ft: number; at: string }[], spikes: 0, spiked: [] as { ft: number; at: string }[] };
-  const DR = new Set(['dribble', 'dribbleRun', 'dribbleWalk', 'dribbleBack', 'crossover', 'hesi']);
+  const DR = new Set(['dribble', 'dribbleRun', 'dribbleWalk', 'dribbleBack', 'crossover', 'hesi', 'inOut', 'pullBack']);
   type Row = { k: number; pid: number; b: number[]; l: number[]; r: number[]; clip: string; one: string; x: number; z: number; ph: string; lefty: boolean };
   let was: Row | null = null;
   let run: { ball: number; l: number; r: number; at: string }[] = [];

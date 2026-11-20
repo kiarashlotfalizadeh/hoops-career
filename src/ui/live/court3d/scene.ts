@@ -49,7 +49,7 @@ import {
   type Spin,
 } from './ballistics';
 import { ballSize, lit as ledLit } from './ballskin';
-import { DUNK_AT, isDunk, type ClipId, type Gesture } from './clips';
+import { DUNK_AT, isDunk, MOVES, type ClipId, type Gesture } from './clips';
 import { blocked, clearSeat, clutter, fenced, Operator, shot as newShot, TALL, type CamKind, type View } from './cameras';
 import { BIG_WORD, Director, INTRO_MS, WIPE_MS, type BigKind } from './director';
 import { Exchange, offerAt, POCKET_SIDE } from './exchange';
@@ -159,7 +159,7 @@ const TOUCH_W = 0.62;
 const TOUCH_DARK = 0.55;
 const TOUCH_FT = 2.2;
 /** A dribbler's clips (the ball rolls forward off the floor). */
-const DRIBBLES = new Set(['dribble', 'dribbleRun', 'crossover']);
+const DRIBBLES = new Set<string>(['dribble', 'dribbleRun', ...MOVES.filter((id) => id !== 'hesi')]);
 /** Acts that go at the rim. */
 const AIMED = new Set<Act>(['layup', 'dunk', 'floater', 'jumper', 'release']);
 /**
@@ -821,7 +821,8 @@ export class CourtScene {
    */
   cutHook: (() => void) | null = null;
 
-  constructor(canvas: HTMLCanvasElement, ballFill: string, ballSeam: string, models: Models) {
+  /** `venue`: whose building it is, if that is known now (see Arena: it is built as its own, not as a plain one first). */
+  constructor(canvas: HTMLCanvasElement, ballFill: string, ballSeam: string, models: Models, venue?: Venue) {
     this.renderer = new WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'default' });
     this.renderer.setClearColor(0x0c0c0d);
     // (the tone curve is the materials', on every step: the lens finishes the picture after it, see lens.ts)
@@ -861,7 +862,7 @@ export class CourtScene {
     this.scene.add(floor);
     // what Blender built (scripts/blender): the baskets, the ball, the furniture, the people on the benches
     const props = buildProps(models.arena, keep);
-    this.arena = new Arena(keep, props, new Sideline(keep, props, models, this.geo));
+    this.arena = new Arena(keep, props, new Sideline(keep, props, models, this.geo), venue);
     this.scene.add(this.arena.group);
     // (the floor's mirror is drawn before each picture, from that picture's camera)
     this.lens.before = (cam) => this.arena.reflect(this.renderer, this.scene, cam);
@@ -4014,9 +4015,51 @@ export class CourtScene {
     for (const o of this.trash) o.dispose();
     this.floorTex?.dispose();
     this.envMap?.dispose();
+    // (and whatever is still in the scene that nobody listed: see release)
+    release(this.scene);
     this.lens.dispose();
     this.renderer.dispose();
   }
+}
+
+/**
+ * Everything under `root` gives back what it holds on the card: each shape, each material and the pictures it
+ * draws with, a mesh's own instances, a body's bones, a lamp's shadow. The list the scene keeps (trash) is what
+ * its makers remembered to put on it; this is what is there. The next game's renderer draws in the same GL
+ * context (the canvas's), so anything left here stays on the card for as long as the page is open. Given back
+ * twice costs nothing, and something another scene still draws with (the models' shapes) is sent up again the
+ * next time it is drawn.
+ */
+function release(root: Object3D) {
+  type Held = { dispose?: () => void };
+  const done = new Set<object>();
+  const give = (o: unknown) => {
+    const h = o as Held | null | undefined;
+    if (!h || typeof h !== 'object' || typeof h.dispose !== 'function' || done.has(h)) return;
+    done.add(h);
+    h.dispose();
+  };
+  const pictures = (bag: Record<string, unknown>) => {
+    for (const v of Object.values(bag)) {
+      const t = (v as { value?: unknown } | null)?.value ?? v;
+      if ((t as { isTexture?: boolean } | null)?.isTexture) give(t);
+    }
+  };
+  root.traverse((o) => {
+    const m = o as Object3D & { geometry?: unknown; material?: unknown; skeleton?: unknown; shadow?: unknown };
+    // (its own: an instanced mesh's instances, a mirror's picture, a lamp's shadow; a plain mesh has none)
+    give(m);
+    give(m.skeleton);
+    give(m.shadow);
+    give(m.geometry);
+    for (const mat of [m.material].flat()) {
+      if (!mat || typeof mat !== 'object') continue;
+      pictures(mat as Record<string, unknown>);
+      const u = (mat as { uniforms?: Record<string, unknown> }).uniforms;
+      if (u) pictures(u);
+      give(mat);
+    }
+  });
 }
 
 function set(v: Vector3, p: V3) {

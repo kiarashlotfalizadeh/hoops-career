@@ -318,12 +318,9 @@
     font-size: 24px;
   }
 }
-/* clutch time: the building's lights come down around the floor */
-.c3d-lights {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at center, rgba(8, 6, 4, 0) 45%, rgba(8, 6, 4, 0.55) 100%);
-}
+/* (clutch time's dark round the floor is the picture's own: the rig brings the house lights down and the lens
+   deepens its vignette with them, court3d/rig.ts and lens.ts. A plate of dark laid over the canvas as well was a
+   second vignette on the first, and it darkened the lower third and the tags with the stands.) */
 /* the camera: the broadcast picture, or the floor from straight above; and the chip that goes round the 3D picture's cameras */
 .court-cam.court-cam-kind {
   right: 48px;

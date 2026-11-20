@@ -13,9 +13,16 @@ const BALL = 0.39 + 0.012;
 /** A hand and wrist on the rim, for the cords (ft). */
 const HAND = 0.2;
 const NONE: readonly P3[] = [];
-/** A step of the cords' time (s), and the most of them in a frame: past that the net runs slow, it doesn't blow up. */
+/**
+ * A step of the cords' time (s), and the most of them in a frame. The most is a stall's guard, not a budget: it
+ * is the longest frame the scene ever hands over (100 ms of the page's time, at the two bodies' seconds a second
+ * that the game's 4x plays at) and a little over, a quarter of a second. Ten of them, as it was, is 42 ms: every
+ * frame at 4x, and any frame at 2x on a device drawing under 48 a second, was longer than that, and the rest of
+ * its time was dropped, so the net swung in slow motion under a ball going through it at full speed. A step is
+ * some hundreds of sums: sixty of them are nothing next to a frame.
+ */
 const STEP = 1 / 240;
-const MOST = 10;
+const MOST = 60;
 /** Times the cords' lengths are put right in a step. */
 const PASSES = 2;
 /** How much of a cord's stretch is taken up in a pass: under 1 it gives like cord, and springs back. */

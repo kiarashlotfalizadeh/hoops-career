@@ -32,7 +32,8 @@ import { Trouble } from './Trouble';
 import type { Drawn } from './drawn';
 import type { StaffAction, StaffNote } from './staff';
 import { keysShare } from './session';
-import { playOptions, readStatus, type PlayOption } from './plays';
+import { fitPlayers, playBoard, playOptions, readStatus, type PlayOption } from './plays';
+import { PlayBoard } from './PlayBoard';
 import { favoured, usePlayWorth, type PlayReading } from './usePlayWorth';
 
 interface Common {
@@ -251,7 +252,8 @@ function playLook(p: PlayOption, view: Drawn, side: 0 | 1, names: (pid: number) 
  * The late play call, at the top of a late huddle and of the last possession: built around your closer
  * (who he is, in a line), his isolation and his sets first, each play saying who it's for, the staff's
  * pick marked once it has one (the rest of the game played out against no call: usePlayWorth), the one
- * called lit; under it, when it runs.
+ * called lit; under it, when it runs, and the play on the board: the one called, or until one is, the staff's
+ * pick (the first of them while that is measured). Drawn from what the court will run (plays.ts playBoard).
  */
 function PlayCall({
   plays,
@@ -266,7 +268,9 @@ function PlayCall({
   defenderOf,
   foot,
   readings,
-}: Pick<Common, 'view' | 'side' | 'tactics' | 'names' | 'busy'> & {
+  league,
+  kits,
+}: Pick<Common, 'view' | 'side' | 'tactics' | 'names' | 'busy' | 'league' | 'kits'> & {
   plays: PlayOption[];
   closer: number;
   called: { set: CallId; pid: number | null } | null;
@@ -278,6 +282,9 @@ function PlayCall({
 }) {
   const goTo = tactics.manage.goTo;
   const pick = favoured(readings);
+  const five = view.sides[side].on;
+  const shown = plays.find((p) => called?.set === p.id && (called.pid === null || called.pid === p.pid)) ?? plays[pick ?? 0] ?? plays[0];
+  const board = useMemo(() => (shown ? playBoard(shown.id, fitPlayers(league, five, tactics), shown.pid, names) : null), [shown, league, five, tactics, names]);
   const who =
     goTo === closer
       ? `${names(closer)} is your go-to.`
@@ -309,6 +316,15 @@ function PlayCall({
         })}
       </div>
       <div className="lv-br-pc-foot">{foot}</div>
+      {board && shown && (
+        <figure className="lv-br-board">
+          <figcaption>
+            On the board: <b>{callLabel(shown.id, names(shown.pid))}</b>
+          </figcaption>
+          <PlayBoard board={board} label={callLabel(shown.id, names(shown.pid))} color={kits?.[side].color ?? 'var(--team)'} />
+          <div className="lv-br-board-key">1 has the ball. Arrow: cut. Bar: screen. Zigzag: dribble. Dashes: pass.</div>
+        </figure>
+      )}
     </Section>
   );
 }

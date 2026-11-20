@@ -512,6 +512,94 @@
 }
 /* the late play call: who it's built around, then a row a play (his isolation and sets first), the one
    called lit with its mark filled */
+/* the play on the board (PlayBoard): a coach's drawing of the one called, or the staff's pick until one is. The
+   half court from above, the basket at the top; the five as numbered rings, the man it is for filled in his colour;
+   an arrow for a cut, a bar for a screen, a zigzag for a dribble, dashes for a pass. */
+.lv-br-board {
+  margin: 10px 0 0;
+  padding: 10px 12px 10px;
+  border-radius: var(--radius);
+  background: var(--raised);
+  box-shadow: var(--shadow-card);
+}
+.lv-br-board figcaption {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.lv-br-board figcaption b {
+  color: var(--text);
+  font-weight: 700;
+}
+.lv-br-board-key {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-dim);
+}
+.lv-pb {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto;
+  color: var(--text);
+  overflow: visible;
+}
+.lv-pb path,
+.lv-pb rect,
+.lv-pb circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 0.34;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.lv-pb .lv-pb-floor path,
+.lv-pb .lv-pb-floor rect,
+.lv-pb .lv-pb-floor circle {
+  stroke: color-mix(in srgb, var(--text) 26%, transparent);
+  stroke-width: 0.24;
+}
+.lv-pb .lv-pb-floor .lv-pb-glass {
+  stroke-width: 0.5;
+}
+.lv-pb .lv-pb-head {
+  fill: currentColor;
+  stroke: none;
+}
+.lv-pb .lv-pb-pass path {
+  stroke-dasharray: 1 0.9;
+}
+.lv-pb .lv-pb-pass .lv-pb-hand {
+  stroke-dasharray: none;
+}
+.lv-pb .lv-pb-bar {
+  stroke-width: 0.5;
+}
+.lv-pb .lv-pb-man circle {
+  fill: var(--raised);
+  stroke-width: 0.3;
+}
+.lv-pb .lv-pb-man text {
+  fill: currentColor;
+  font-family: var(--mono);
+  font-size: 2.1px;
+  font-weight: 700;
+}
+/* (the man the play is for: his team's colour, his number in white) */
+.lv-pb .lv-pb-man.star circle:first-child {
+  fill: var(--pb-c, var(--text));
+  stroke: var(--pb-c, var(--text));
+}
+.lv-pb .lv-pb-man.star text {
+  fill: #fff;
+}
+.lv-pb .lv-pb-man .lv-pb-ball {
+  fill: #c8642a;
+  stroke: var(--raised);
+  stroke-width: 0.2;
+}
+
 .lv-br-pc-who {
   margin-top: -4px;
   font-size: 13.5px;
@@ -845,8 +933,57 @@
   cursor: pointer;
   transition: opacity var(--dur-fast) ease;
 }
+.lv-ff-go {
+  position: relative;
+  overflow: hidden;
+}
 .lv-ff-go:active {
   opacity: 0.85;
+}
+/* how long before it goes on by itself: a rule along the button's foot, running out as the hold does
+   (FinalFrame sets --ff-hold; the same clock as its timer, from when the frame goes up) */
+.lv-ff-left {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: color-mix(in srgb, var(--ink) 55%, transparent);
+  transform-origin: left center;
+  animation: lv-ff-left var(--ff-hold, 3500ms) linear forwards;
+}
+@keyframes lv-ff-left {
+  to {
+    transform: scaleX(0);
+  }
+}
+/* on its way to the report: the scrim and the plate go as they came, over a beat (FinalFrame's OUT_MS) */
+.lv-ff.out {
+  animation: lv-ff-out 0.24s var(--ease-in, ease-in) forwards;
+  pointer-events: none;
+}
+.lv-ff.out .lv-ff-plate {
+  animation: lv-ff-sink 0.24s var(--ease-in, ease-in) forwards;
+}
+@keyframes lv-ff-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes lv-ff-sink {
+  to {
+    transform: translateY(10px) scale(0.98);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* (nothing runs or fades: the rule is not drawn, and the frame goes at once) */
+  .lv-ff-left {
+    display: none;
+  }
+  .lv-ff.out,
+  .lv-ff.out .lv-ff-plate {
+    animation: none;
+  }
 }
 /* (a ring that reads on the ink plate: white, off the white button) */
 .lv-ff-go:focus-visible {

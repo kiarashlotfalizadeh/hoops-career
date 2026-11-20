@@ -25,7 +25,7 @@ import {
   SRGBColorSpace,
 } from 'three';
 import { COURT_LEN } from '../choreo';
-import { END, HALF_W, SIDE } from '../Court';
+import { END, FLOOR_L, FLOOR_W, HALF_W, SIDE } from '../Court';
 import type { Stands, Venue } from '../../teamColors';
 import { unshadowed } from './rig';
 
@@ -581,6 +581,8 @@ export class Bowl {
   private readonly concreteTone = new Color(1, 1, 1);
   private readonly houseTone = new Color(1, 1, 1);
   private readonly apron: MeshLambertMaterial;
+  /** The carpet round the hardwood (see build: the skirt), in the building's colour, deep. */
+  private readonly carpet: MeshLambertMaterial;
   private readonly glowFloor: MeshBasicMaterial;
   /** The lit pictures and how bright each is at full light. */
   private readonly lit: { mat: MeshBasicMaterial; glow: number }[] = [];
@@ -597,7 +599,15 @@ export class Bowl {
   private level: 0 | 1 | 2 = 0;
   private banded = false;
 
-  constructor(private readonly keep: Keep) {
+  /**
+   * `stands`: the building's own (Venue.stands), where it is known when the building is made. Built for a plain
+   * building first and for its own a frame later, every game made its stands, its seats and its whole crowd twice
+   * and threw the first away.
+   */
+  constructor(
+    private readonly keep: Keep,
+    stands: Stands = STANDS,
+  ) {
     const picture = (tex: CanvasTexture | null, glow: number) => {
       const mat = keep(new MeshBasicMaterial({ map: tex, vertexColors: true, side: DoubleSide }));
       this.lit.push({ mat, glow });
@@ -648,6 +658,7 @@ export class Bowl {
       spilt,
     };
     this.apron = keep(new MeshLambertMaterial({ color: 0x1d1e22 }));
+    this.carpet = keep(new MeshLambertMaterial({ color: 0x24262b, vertexColors: true }));
     this.glowFloor = keep(new MeshBasicMaterial({ vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false }));
     // the chairs on the floor: along the near side (not where the opening's camera starts from), and in the far corners past the benches
     for (let x = -47; x <= 47; x += 2.35) {
@@ -655,7 +666,7 @@ export class Bowl {
       this.chairs.push({ x, y: 0, z: COURT_Z, turn: Math.PI });
     }
     for (const e of [-1, 1]) for (let i = 0; i < 6; i++) this.chairs.push({ x: e * (42.5 + i * 2.35), y: 0, z: -(HALF_W + SIDE + 3.6), turn: 0 });
-    this.build(STANDS);
+    this.build(stands);
   }
 
   /**
@@ -1100,6 +1111,31 @@ export class Bowl {
     const [gx, gf, gn] = [ENDX + 0.5, -(FAR + 0.5), NEAR + 0.5];
     ground.quad([-gx, -0.012, gn], [gx, -0.012, gn], [gx, -0.012, gf], [-gx, -0.012, gf], '#ffffff');
     add(ground, this.apron);
+    // The skirt: a carpet laid round the hardwood out to the boards behind the baskets and along the far side, and
+    // under the chairs on the near one, with a pinstripe a little off the wood and a darker edge where it ends. The
+    // chairs on the near side sit a good way back (nearer, the heads in them would be over the sideline in the
+    // broadcast's picture), and from over the floor what lay between was bare dark ground with a cable on it: the
+    // one unfinished thing in the building. A real floor has a carpet there.
+    const skirt = new Soup();
+    const stripe = new Soup();
+    type Box = readonly [x: number, far: number, near: number];
+    // (the ground between two rectangles about the floor's middle, each half as long as `x` and from `far` to `near` across)
+    const ring = (to: Soup, i: Box, o: Box, y: number, shade: number) => {
+      to.quad([-o[0], y, o[2]], [o[0], y, o[2]], [i[0], y, i[2]], [-i[0], y, i[2]], '#ffffff', shade);
+      to.quad([-i[0], y, i[1]], [i[0], y, i[1]], [o[0], y, o[1]], [-o[0], y, o[1]], '#ffffff', shade);
+      to.quad([i[0], y, i[2]], [o[0], y, o[2]], [o[0], y, o[1]], [i[0], y, i[1]], '#ffffff', shade);
+      to.quad([-o[0], y, o[2]], [-i[0], y, i[2]], [-i[0], y, i[1]], [-o[0], y, o[1]], '#ffffff', shade);
+    };
+    const grown = (b: Box, by: number): Box => [b[0] + by, b[1] - by, b[2] + by];
+    const wood: Box = [FLOOR_L / 2, -FLOOR_W / 2, FLOOR_W / 2];
+    const edge: Box = [MID + END + 6.1, -(FAR - 1.9), COURT_Z + 1.5];
+    ring(skirt, wood, edge, 0.004, 1);
+    // (its edge, bound darker; and a pinstripe a hand's width, three quarters of a foot off the wood, in the building's
+    // trim: the colour of its walls' padded tops, so it shows on a black carpet as on a green one)
+    ring(skirt, grown(edge, -0.5), edge, 0.006, 0.55);
+    ring(stripe, grown(wood, 0.75), grown(wood, 0.97), 0.006, 1);
+    add(skirt, this.carpet);
+    add(stripe, this.trim);
     const glow = new Soup();
     const ex = MID + END + 6.1;
     for (const e of [-1, 1]) glow.quad([e * ex, 0.02, 22], [e * ex, 0.02, -22], [e * (ex - 7.5), 0.02, -22], [e * (ex - 7.5), 0.02, 22], '#ffffff', [0.3, 0.3, 0, 0]);
@@ -1129,6 +1165,11 @@ export class Bowl {
     c.lerp(new Color(grey, grey, grey), TRIM_GREY).multiplyScalar(TRIM_TONE);
     this.trim.color.copy(c).multiplyScalar(this.stands);
     this.apron.color.set('#1d1e22').lerp(new Color(board), 0.12);
+    // (the carpet: the building's colour taken deep and a little toward grey, as a carpet takes a colour; a pale or a
+    // grey building's is charcoal)
+    const pile = new Color(venue?.rail ?? board);
+    const pileGrey = Math.max(0.2126 * pile.r + 0.7152 * pile.g + 0.0722 * pile.b, 0.02);
+    this.carpet.color.copy(pile.lerp(new Color(pileGrey, pileGrey, pileGrey), 0.35).multiplyScalar(Math.min(1, 0.05 / pileGrey)));
     this.glowFloor.color.set(board).lerp(new Color('#ffffff'), 0.35);
     const seat = new Color(venue?.seats[2] ?? board);
     const seatGrey = Math.max(0.2126 * seat.r + 0.7152 * seat.g + 0.0722 * seat.b, 0.02);

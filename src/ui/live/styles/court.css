@@ -904,10 +904,11 @@
 .lv-tip.at-foot {
   bottom: 8px;
 }
-/* (sideways the court runs to the glass's foot: the card, the way to turn and the lower third sit over
-   the home bar's inset, not under it) */
+/* (sideways the court runs to the glass's foot: the card, the way to turn, the sound and the lower third
+   sit over the home bar's inset, not under it) */
 .lv.side .lv-tip.at-foot,
 .lv.side .lv-turn,
+.lv.side .lv-snd,
 .lv.side .c3d-third {
   bottom: calc(8px + var(--safe-b));
 }

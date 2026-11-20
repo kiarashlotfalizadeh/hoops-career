@@ -233,7 +233,7 @@ export default function Court3D(props: Court3DProps) {
     if (castRef) castRef.current = cast;
     const build = () => {
       scene?.dispose();
-      scene = new Scene!(canvas, paints.ball, paints.ballSeam, models!);
+      scene = new Scene!(canvas, paints.ball, paints.ballSeam, models!, venueOf(live.current.floor));
       scene.lite(STEPS[level][1]);
       stepping = false;
       sized = floorKey = '';
@@ -444,7 +444,6 @@ export default function Court3D(props: Court3DProps) {
         </span>
       ))}
       <span ref={flashRef} className="c3d-pill c3d-flash" />
-      {props.clutch && <div className="c3d-lights" />}
       <div ref={thirdRef} className="c3d-third">
         <b className="c3d-third-n" />
         <span className="c3d-third-t">

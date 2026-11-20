@@ -29,6 +29,28 @@
 .tablewrap::-webkit-scrollbar {
   display: none;
 }
+/* A mouse has no sideways swipe. Where the pointer is one, a table wider than its box shows a thin bar to drag
+   (a table that fits shows none). With the bar hidden everywhere, the columns past the edge could not be reached
+   with a mouse at all: the live game's box score in the console's column showed four of its twelve figures and
+   cut the fifth in half. */
+@media (hover: hover) and (pointer: fine) {
+  .tablewrap {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--text) 30%, transparent) transparent;
+  }
+  @supports not (scrollbar-width: thin) {
+    .tablewrap::-webkit-scrollbar {
+      display: block;
+      height: 8px;
+    }
+    .tablewrap::-webkit-scrollbar-thumb {
+      border-radius: 999px;
+      border: 2px solid transparent;
+      background: color-mix(in srgb, var(--text) 30%, transparent);
+      background-clip: content-box;
+    }
+  }
+}
 /* more columns to the right (StatTable sets .fr): the edge fades out, as the league's team tables do */
 .tablewrap-o {
   position: relative;

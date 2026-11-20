@@ -752,8 +752,21 @@ describe("the 3D court's models", () => {
           expect(Math.abs(box.min.y), `${name} in ${pose} is not on the floor (his lowest point is at y = ${box.min.y.toFixed(3)})`).toBeLessThan(0.12);
           expect(box.max.y, `${name} in ${pose}`).toBeLessThan(8.6);
           expect(Math.max(-box.min.x, box.max.x, -box.min.z, box.max.z), `${name} in ${pose}`).toBeLessThan(3.6);
-          const marks = new Set(Array.from(geo.getAttribute('aPart').array));
-          expect(marks.size).toBe(people.get(name)!.parts.length);
+          // (each part of the model its own mark, and one more made here: the whites of his eyes, which the model makes of
+          // his socks' white. An eye is not cloth: its points are the white part's on his head, every one over every sock's)
+          const part = geo.getAttribute('aPart');
+          const marks = new Set(Array.from(part.array));
+          const [eye, sock] = [PARTS.indexOf('ball'), PARTS.indexOf('white')];
+          let [lowEye, highSock] = [Infinity, -Infinity];
+          for (let i = 0; i < part.count; i++) {
+            if (part.getX(i) === eye) lowEye = Math.min(lowEye, at.getY(i));
+            if (part.getX(i) === sock) highSock = Math.max(highSock, at.getY(i));
+          }
+          // (everybody has eyes; a body in trousers and shoes has no socks, and its white part is all eyes)
+          expect(Number.isFinite(lowEye), `${name} in ${pose}`).toBe(true);
+          expect(marks.size).toBe(people.get(name)!.parts.length + (Number.isFinite(highSock) ? 1 : 0));
+          expect(lowEye, `${name} in ${pose}`).toBeGreaterThan(highSock);
+          expect(name.startsWith('bench') ? Number.isFinite(highSock) : true).toBe(true);
         }
     }
 

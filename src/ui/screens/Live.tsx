@@ -34,7 +34,7 @@ import { canGoBack } from '../nav';
 import { sealedGame, simDecided, skipChoices } from '../live/skip';
 import { courtFloor } from '../live/Court';
 import { CourtView } from '../live/CourtView';
-import { occasionOf } from '../live/occasion';
+import { occasionOf, postOf } from '../live/occasion';
 import { bodyOf } from '../live/court3d/puppet';
 import { drawnPlayer } from '../live/drawn';
 import { offPlan, resetToPlan } from '../live/pills';
@@ -323,8 +323,8 @@ export default function Live() {
     const r = p?.ratings;
     return bodyOf(p?.heightIn ?? 78, p?.weightLb ?? 215, r?.str, r && { spd: r.spd, ath: r.ath, hnd: r.hnd, sht: Math.max(r.tp, r.mid) });
   };
-  // whose floor: the home team's, or a neutral one for the Cup final
-  const floor = courtFloor(home, kits[0], neutral, game.game.cup === 'final' ? 'NBA Cup' : '');
+  // whose floor: the home team's, or a neutral one for the Cup final; in the playoffs, dressed for them (the Finals' own way)
+  const floor = courtFloor(home, kits[0], neutral, game.game.cup === 'final' ? 'NBA Cup' : '', postOf(league, game.game));
   const myView = view.sides[userSide];
   const abbrevs = { us: me.team.abbrev, them: sim.T[1 - userSide].team.abbrev };
   const teams: [typeof home, typeof away] = [home, away];
@@ -698,7 +698,7 @@ export default function Live() {
         {tipUp && <CoachMark step={tip} onNext={nextTip} />}
         {/* the toasts' place while the game is on: the court's top edge, over the far stands (toastHost.ts) */}
         <div className="lv-toasts" ref={setToastHost} />
-        {/* the game's sound, on or off, in the court's other foot corner (a device setting: Settings has the rest) */}
+        {/* the game's sound, on or off, in the court's foot corner beside the way to turn (a device setting: Settings has the rest) */}
         {!frozen && !s.intro && (
           <button
             type="button"

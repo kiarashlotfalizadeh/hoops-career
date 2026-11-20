@@ -173,6 +173,14 @@ const HOME_WHITE = 0.16;
 const HOME_TRIM = 0.16;
 /** The white a fan wears: off-white, well under a kit's on the floor (a stand full of pure white dots pulls the eye off the play). */
 const HOME_WHITE_WEAR = '#aeaba4';
+/**
+ * A postseason night's shirt (Venue.out), laid on every seat: all of the home side's people have it on, and this many
+ * of everyone else who isn't the visitors' (some came in a jacket and kept it on). A white one is this white: a shade
+ * up from a fan's own, because tonight the stands being white is the picture; a coloured one in shades this far apart.
+ */
+const OUT_SHARE = 0.86;
+const OUT_WHITE = '#c6c3bc';
+const OUT_SHADES = [0.86, 1.04] as const;
 /** A team's colour as cloth: this far toward grey (a shirt is never a paint chip), more so its second colour. */
 const WORN = 0.55;
 /** The visitors' block: from x to x on the far side, rows this to that (most of its seats theirs). */
@@ -1058,6 +1066,8 @@ export class Crowd {
   private away: [string, string] | null = null;
   /** Who wears the home colour (and how deep a shade of it, or its white), and who the visitors'. */
   private readonly fans: { who: number; shade: number; rank: number; home: number; own: number; wear: string; second: string }[] = [];
+  /** Everyone else who isn't the visitors': what each has on of his own, and what he would with a shirt over it (see OUT_SHARE). */
+  private readonly others: { who: number; tee: number; own: number; wear: string; second: string; keen: number }[] = [];
   private readonly visitors: { who: number; shade: number }[] = [];
   private towels!: InstancedMesh;
   private readonly towelMat: MeshBasicMaterial;
@@ -1186,7 +1196,8 @@ export class Crowd {
     }
     this.main.clear();
     if (this.blur) this.group.remove(this.blur);
-    for (const list of [this.people, this.fans, this.visitors, this.stalls, this.fine, this.plain, this.least, this.rest, this.restLow, this.restFar, this.seats]) list.length = 0;
+    for (const list of [this.people, this.fans, this.others, this.visitors, this.stalls, this.fine, this.plain, this.least, this.rest, this.restLow, this.restFar, this.seats])
+      list.length = 0;
     this.count = seats.length;
     this.first = seats[0];
     let n = 11;
@@ -1331,6 +1342,7 @@ export class Crowd {
         this.fans.push({ who: i, shade, rank: pt.rank, home: w.look + top + (cap < 0.16 ? CAP : 0), own: w.look + own, wear: w.wear, second: w.second });
         w.look += own;
       } else {
+        this.others.push({ who: i, tee: w.look + TOP.plain + (cap < 0.09 ? CAP : 0), own: w.look + own, wear: w.wear, second: w.second, keen: p[3] });
         w.look += own;
       }
     });
@@ -1542,14 +1554,23 @@ export class Crowd {
    * been wear their own. If the bowl has been built again since (a building with other stands: bowl.ts
    * Bowl.paint, which the building calls first), everyone sits again first, the visitors' fans in their colours.
    */
-  paint(board: string, trim: string, seats: readonly string[] = [board], mix: 'sections' | 'confetti' | 'fade' = 'sections', letters = '', share = HOME_SHARE) {
+  paint(
+    board: string,
+    trim: string,
+    seats: readonly string[] = [board],
+    mix: 'sections' | 'confetti' | 'fade' = 'sections',
+    letters = '',
+    share = HOME_SHARE,
+    /** A postseason night's shirt (Venue.out): nearly everyone who isn't the visitors' has it on, white or the colour it is. */
+    out?: string,
+  ) {
     if (this.source.length !== this.count || this.source[0] !== this.first) {
       this.build();
       this.board = '';
       this.shed(this.level);
       if (this.away) this.dress(...this.away);
     }
-    const key = `${board}|${trim}|${seats.join()}|${mix}|${letters}|${share}`;
+    const key = `${board}|${trim}|${seats.join()}|${mix}|${letters}|${share}|${out ?? ''}`;
     if (key === this.board) return;
     this.board = key;
     const c = new Color();
@@ -1571,7 +1592,27 @@ export class Crowd {
         .sub(c.set(trim))
         .toArray()
         .reduce((n, v) => n + v * v, 0) < 0.02;
+    // (the night's shirt: white, or its colour in a few shades of it, the other colour on it)
+    const shirt = new Color(out ?? '#ffffff');
+    const white = !!out && Math.min(shirt.r, shirt.g, shirt.b) > 0.8;
+    // (a shirt printed for the night keeps more of its colour than what people come in: a third of the way to grey, not most of it)
+    const tee = (own: number) =>
+      white
+        ? c.set(OUT_WHITE).multiplyScalar(0.94 + 0.06 * own)
+        : c
+            .copy(shirt)
+            .lerp(GREY.setScalar(0.2126 * shirt.r + 0.7152 * shirt.g + 0.0722 * shirt.b), 0.3)
+            .multiplyScalar(0.8 * (OUT_SHADES[0] + (OUT_SHADES[1] - OUT_SHADES[0]) * own));
+    const print = () => (white ? lift(d, board, 1) : d.set(OUT_WHITE));
+    for (const o of this.others) {
+      if (out && o.keen < OUT_SHARE) this.wear(o.who, tee(o.keen / OUT_SHARE), print(), o.tee);
+      else this.wear(o.who, c.set(o.wear), d.set(o.second), o.own);
+    }
     for (const f of this.fans) {
+      if (out) {
+        this.wear(f.who, tee(Math.abs(f.shade) % 1), print(), f.home);
+        continue;
+      }
       if (f.rank >= share) {
         this.wear(f.who, c.set(f.wear), d.set(f.second), f.own);
         continue;
@@ -1587,8 +1628,8 @@ export class Crowd {
       // (a pale colour's seats would be the brightest thing in the stands: no seat is lighter than this)
       return seat.lerp(GREY.setScalar(grey), STALL_GREY).multiplyScalar(Math.min(1, STALL_MOST / grey));
     });
-    c.set(board);
-    for (let i = 1; i < this.towels.count; i += 2) this.towels.setColorAt(i, c);
+    // (the towels: half white, half the building's colour; on a shirt's night, all the shirt's)
+    for (let i = 0; i < this.towels.count; i++) this.towels.setColorAt(i, out && !white ? c.copy(shirt) : !out && i % 2 ? c.set(board) : c.set('#f2f0ea'));
     if (this.towels.instanceColor) this.towels.instanceColor.needsUpdate = true;
     // (a seat's colour: its section's; or, mixed, one of the three by its own number; or, shading, the last more often the higher its row)
     const tone = (sec: number, row: number, own: number) =>

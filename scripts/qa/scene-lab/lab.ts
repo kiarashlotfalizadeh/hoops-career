@@ -17,6 +17,7 @@
 //   &tip=1 (the ten lined up for the tip, the ball in the centre circle: with no eye or shot, the broadcast's opening camera)
 //   &home=BOS&vs=MIL (whose building, and who visits: abbreviations; Washington and Milwaukee by default)  &neutral=1 (the Cup final's floor)
 //   &flat=1 (no 3D: the floor as the 2D court paints it, sideways, for that building)
+//   &post=playoffs|finals (a postseason night there: the round's words on the floor, the building in its shirt, white or its colour)
 //   &smooth=0 (no finer mesh for the men close to the camera)
 //   &face=3 (one man's face close, under the building's light: &d=2.4 ft off, &side=20 degrees round to his left, &up=0.05 ft over his eyes)
 import { type Object3D, PerspectiveCamera, type Scene, Vector3, type WebGLRenderer } from 'three';
@@ -63,7 +64,9 @@ const away = team(q.get('vs') ?? 'MIL');
 const kits = matchKits(q.has('away') ? ['#0c2340', '#c8102e', '#ffffff'] : home.colors, away.colors);
 const models = await loadModels();
 if (q.get('maps') === '0') models.anat = undefined;
-const scene = new CourtScene(canvas, paints.ball, paints.ballSeam, models);
+// (&post=playoffs|finals: a postseason night there, the floor's words and the building's shirt)
+const floor = courtFloor(home, kits[0], q.has('neutral'), 'NBA Cup', (q.get('post') as 'playoffs' | 'finals' | null) ?? undefined);
+const scene = new CourtScene(canvas, paints.ball, paints.ballSeam, models, venueOf(floor));
 scene.lite(q.has('lite') ? (Math.min(3, Number(q.get('lite')) || 3) as 1 | 2 | 3) : 0);
 // (the app's face, which the lab's page doesn't load itself: the floor's lettering and the boards' are in it)
 const face = new FontFace('Archivo Variable', 'url(/node_modules/@fontsource-variable/archivo/files/archivo-latin-wdth-normal.woff2)', {
@@ -72,7 +75,6 @@ const face = new FontFace('Archivo Variable', 'url(/node_modules/@fontsource-var
 });
 (document.fonts as unknown as { add(f: FontFace): void }).add(await face.load().catch(() => face));
 const floorCv = document.createElement('canvas');
-const floor = courtFloor(home, kits[0], q.has('neutral'), 'NBA Cup');
 paintFloor(floorCv, { wide: true, k: 14, w: 0, h: 0, top: 0, ox: 0, oy: 0 }, 1, floor, paints, true);
 scene.setFloor(floorCv);
 

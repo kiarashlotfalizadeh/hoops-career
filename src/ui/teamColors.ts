@@ -34,6 +34,20 @@ function luminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+/**
+ * The shirt a building gives out for a playoff night: its team's bright colour, if it has one (its paint or its
+ * trim: a gold, an orange, a sky blue, a red the stands would glow in), and white if it hasn't (a navy, a black, a
+ * forest green: a building in those is a dark building, and a white-out is what such a team does).
+ */
+export function outShirt(paint: string, trim: string): string {
+  const bright = [paint, trim].filter((hex) => {
+    const [r, g, b] = rgb(hex);
+    const l = luminance(hex);
+    return l > 0.2 && l < 0.8 && Math.max(r, g, b) - Math.min(r, g, b) > 0.4;
+  });
+  return bright.sort((a, b) => luminance(b) - luminance(a))[0] ?? '#ffffff';
+}
+
 /** WCAG contrast ratio between two colours. */
 export function contrast(a: string, b: string): number {
   const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
@@ -342,6 +356,11 @@ export interface Venue {
   boards: 0 | 1;
   /** The letters the fans' signs carry (the team's abbreviation; none on a neutral floor). */
   letters: string;
+  /**
+   * A postseason night: the shirt laid on every seat, which nearly the whole building has on (see outShirt): white
+   * for a white-out, or the team's bright colour for a gold-out. None on any other night.
+   */
+  out?: string;
   /** How its floor is drawn past its colours (see CourtLook). */
   court: CourtLook;
   /** Its roof, its catwalks and its scoreboard (see Roofing). */

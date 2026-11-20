@@ -7,6 +7,15 @@ import type { PossLog } from '../../core/sim/log';
 
 export type Occasion = 'win' | 'late' | 'playoff' | 'clinch' | 'title';
 
+/**
+ * A playoff night in a team's own building, and whether it is the Finals: the floor and the building are dressed
+ * for it (Court.tsx Postseason). Not the play-in, and not a neutral floor's game.
+ */
+export function postOf(league: Pick<League, 'playoffs'>, g: Pick<ScheduledGame, 'type' | 'seriesId'>): 'playoffs' | 'finals' | undefined {
+  if (g.type !== 'playoffs') return undefined;
+  return league.playoffs.find((s) => s.id === g.seriesId)?.round === 4 ? 'finals' : 'playoffs';
+}
+
 /** A lead taken for good with this little left (game seconds) in the last period is a late winner. */
 export const LATE_WINNER_S = 10;
 

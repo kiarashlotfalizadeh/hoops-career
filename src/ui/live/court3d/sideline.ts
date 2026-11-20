@@ -15,9 +15,11 @@
 //             for each part of him, or none where he doesn't have that part); a head turns to the ball and a
 //             trunk breathes in the shader too.
 // Each body comes twice (people.py): as built for a camera close by, and with a sixth of the triangles
-// (benchFar, staffFar, officialFar). A sitter is drawn in the far one unless he is big in the picture, and
-// only with the head of hair and the beard he wears (a cast is a body, two poses and a look: its corners
-// are those parts' and no others'). The far body is also what the floor's mirror shows of anyone, what
+// (benchFar, staffFar, officialFar). A sitter is drawn in the far one unless he is big in the picture. A cast
+// is a body and two poses, whatever its people look like: every part a body can have is in its shape, and the
+// parts one of them doesn't have (the hair he doesn't wear, a beard he hasn't got) are folded away to nothing
+// where they are drawn, by his row of the palette. (A cast for each look was a draw for nearly every person:
+// 58 of them for the 64 round the floor.) The far body is also what the floor's mirror shows of anyone, what
 // throws a walker's shadow, and the whole of a man off the bench on his way to the huddle.
 // The referees work the play from where they never stand between the broadcast camera and the ball: the
 // lead down the far side and behind the baseline, the slot along the far sideline, the trail behind the
@@ -44,7 +46,6 @@ import {
   InstancedMesh,
   Matrix4,
   Mesh,
-  MeshBasicMaterial,
   MeshStandardMaterial,
   NearestFilter,
   Object3D,
@@ -67,7 +68,7 @@ import { digitTurns, DIGIT_NAMES, DIGITS as HAND_DIGITS, Fig, handOf, type Geo }
 import { merged, type Thing } from './glb';
 import { lookOf, STYLES, type Look } from './look';
 import type { Props } from './props';
-import { ANKLE, BALL_R, FARM, hash, HEAD, HIP, HIP_W, J, Puppet, SHIN, SHOULDER, THIGH, TORSO, UARM, type Body, type V3 } from './puppet';
+import { ANKLE, BALL_R, FARM, hash, HEAD, HIP, HIP_W, J, SHIN, SHOULDER, THIGH, TORSO, UARM, type Body, type V3 } from './puppet';
 
 type Keep = <T extends { dispose(): void }>(o: T) => T;
 
@@ -451,7 +452,12 @@ const CARRIES: Record<string, 'towel' | 'camera' | 'rag' | 'drape' | undefined> 
 
 // ---------------------------------------------------------------- the palette: who wears what
 
-/** The parts a body is made of (people.py's materials), and two made here: a photographer's camera, a towel. */
+/**
+ * The parts a body is made of (people.py's materials), and three made here: a photographer's camera, a towel, and
+ * `ball`, the whites of his eyes. people.py makes those of the same white as his socks, one part; here every point of
+ * that part that hangs on his head is his eye's (see partAt), so the shader can tell an eye from a sock: an eye is
+ * wet and smooth, and drawn as cloth it was dulled and creased in folds.
+ */
 export const PARTS = [
   'skin',
   'hair',
@@ -468,6 +474,7 @@ export const PARTS = [
   'brow',
   'eye',
   'iris',
+  'ball',
   'lip',
   'beard',
   'goatee',
@@ -493,6 +500,13 @@ const PART = Object.fromEntries(PARTS.map((p, i) => [p, i])) as Record<PartName,
 /** The most people the palette holds. */
 const ROWS = 96;
 const WHITE = '#e9e7e1';
+/** The whites of an eye: not paper white, and a shade down (they sit back under his lids). */
+const EYE_WHITE = '#dcd8d0';
+/**
+ * Which part a point of a body is: its material's, but for the white of an eye (see PARTS: `ball`), which is the
+ * white part's points that hang on his head (`head`: how much of the point's weight is on the bones of his head).
+ */
+const partAt = (k: number, head: number) => (k === PART.white && head > 0.5 ? PART.ball : k);
 const SUITS = ['#2b2d35', '#1f2a3d', '#38383c', '#232326', '#3d362e', '#2a3038'];
 const SHIRTS = ['#e6e5e1', '#e6e5e1', '#cfd9e6', '#e8e0d2'];
 const CASUAL = ['#3b4a3a', '#39404f', '#4a3f36', '#2f3b40', '#4d4d52', '#5a3a36'];
@@ -520,6 +534,7 @@ function human(look: Look, woman = false): Wear {
     brow: mix(look.brows, '#15110e', 0.3),
     eye: '#15100d',
     iris: look.eyes,
+    ball: EYE_WHITE,
     lip: `#${lip.getHexString()}`,
     white: WHITE,
     towel: WHITE,
@@ -593,6 +608,7 @@ const REF_WEAR: Wear = { top: '#8f9299', trim: '#17181c', legs: '#151517', shoe:
 const CAST_HEAD = /* glsl */ `
   varying vec3 vCastAt;
   varying float vCastBeard;
+  float castHas;
   attribute float aPart;
   attribute float aFade;
   attribute float aHead;
@@ -617,7 +633,10 @@ const CAST_HEAD = /* glsl */ `
     return castSpin(castSpin(v, normalize(mix(uSide[0], uSide[1], aMix)), aLife.y * aHead), normalize(mix(uUp[0], uUp[1], aMix)), aLife.x * aHead);
   }`;
 const CAST_COLOR = /* glsl */ `
-  castWear = texelFetch(uPalette, ivec2(int(aPart + 0.5), int(aRow + 0.5)), 0).rgb;
+  vec4 castPart = texelFetch(uPalette, ivec2(int(aPart + 0.5), int(aRow + 0.5)), 0);
+  castWear = castPart.rgb;
+  // (whether he has this part at all: see CAST_MOVE)
+  castHas = castPart.a;
   // (a beard's edge: thinning out to his skin)
   castWear = mix(texelFetch(uPalette, ivec2(${PART.skin}, int(aRow + 0.5)), 0).rgb, castWear, aFade);
   vColor *= castWear;
@@ -720,7 +739,7 @@ function peopleShade(sh: { vertexShader: string; fragmentShader: string }, decla
       /* glsl */ `#include <roughnessmap_fragment>
   if (pplSkin > 0.5) roughnessFactor = 0.55 + 0.12 * (pplNoise(vPplAt * 7.0) - 0.5);
   else if (pplHair > 0.5) roughnessFactor = 0.86;
-  else if (abs(vPplPart - ${f((PART.eye + PART.iris) / 2)}) < 1.0) roughnessFactor = 0.12;
+  else if (vPplPart > ${f(PART.eye - 0.5)} && vPplPart < ${f(PART.ball + 0.5)}) roughnessFactor = abs(vPplPart - ${f(PART.ball)}) < 0.5 ? 0.22 : 0.12;
   else if (abs(vPplPart - ${f(PART.shoe)}) < 0.5) roughnessFactor = 0.5;
   else if (abs(vPplPart - ${f(PART.metal)}) < 0.5) roughnessFactor = 0.3;`,
     )
@@ -750,7 +769,9 @@ const CAST_MOVE = /* glsl */ `
   }
   float castHigh = max(0.0, transformed.y - mix(uHips[0], uHips[1], aMix));
   transformed.x += castHigh * (0.016 * sin(uTime * 0.9 + aLife.z * 40.0) + aLife.w * 0.05 * sin(uTime * 9.0 + aLife.z * 23.0));
-  transformed.z += castHigh * 0.013 * sin(uTime * 0.63 + aLife.z * 70.0);`;
+  transformed.z += castHigh * 0.013 * sin(uTime * 0.63 + aLife.z * 70.0);
+  // (a part he doesn't have: every point of it at one place, so none of its corners has any size and none is drawn)
+  if (castHas < 0.5) transformed = vec3(0.0);`;
 /** Two poses of one body (the same one twice: a pose held), as many times as there are people between them now. */
 interface Cast {
   mesh: InstancedMesh;
@@ -799,7 +820,7 @@ interface Baked {
   hand: Vector3;
 }
 
-/** What doesn't change with the pose: each point's baked shade, its part, how much of it is his head; the corners. */
+/** What doesn't change with the pose: each point's baked shade, its part, how much of it is his head; the corners of every part. */
 interface Flesh {
   color: BufferAttribute;
   part: BufferAttribute;
@@ -807,10 +828,6 @@ interface Flesh {
   fade: BufferAttribute;
   head: BufferAttribute;
   index: BufferAttribute;
-  /** Each part's corners: where they start in `index`, and how many (a part may have more than one run). */
-  runs: Map<number, [number, number][]>;
-  /** The corners of the parts one look has, by the look (see Sideline.corners). */
-  looks: Map<string, BufferAttribute>;
 }
 
 /**
@@ -828,32 +845,27 @@ function fleshOf(thing: Thing, props: Prop[]): Flesh {
   const fade: number[] = [];
   const head: number[] = [];
   const index: number[] = [];
-  const runs = new Map<number, [number, number][]>();
-  const run = (k: number, start: number) => runs.set(k, [...(runs.get(k) ?? []), [start, index.length - start]]);
   let from = 0;
   for (const p of thing.parts) {
     const k = (PART as Record<string, number | undefined>)[p.material];
     if (k === undefined) throw new Error(`people.glb: ${thing.name} has a part the app has no colour for (${p.material})`);
-    const start = index.length;
     const [pos, col, on, by] = ['position', 'color', 'skinIndex', 'skinWeight'].map((a) => p.geo.getAttribute(a));
     const faded = FADED.has(p.material);
     for (let i = 0; i < pos.count; i++) {
       color.push(col ? col.getX(i) : 1, col ? col.getY(i) : 1, col ? (faded ? col.getY(i) : col.getZ(i)) : 1);
       fade.push(col && faded ? col.getZ(i) : 1);
-      part.push(k);
       let h = 0;
       for (let c = 0; c < 4; c++) if (heads[on.getComponent(i, c)]) h += by.getComponent(i, c);
+      part.push(partAt(k, h));
       head.push(h);
     }
     const ix = p.geo.index!;
     for (let i = 0; i < ix.count; i++) index.push(from + ix.getX(i));
     from += pos.count;
-    run(k, start);
   }
   for (const prop of props) {
     const g = prop.geo.index ? prop.geo.toNonIndexed() : prop.geo;
     const count = g.getAttribute('position').count;
-    const start = index.length;
     for (let i = 0; i < count; i++) {
       color.push(1, 1, 1);
       fade.push(1);
@@ -861,7 +873,6 @@ function fleshOf(thing: Thing, props: Prop[]): Flesh {
       head.push(prop.head ? 1 : 0);
       index.push(from + i);
     }
-    run(PART[prop.part], start);
     from += count;
     if (g !== prop.geo) g.dispose();
   }
@@ -871,8 +882,6 @@ function fleshOf(thing: Thing, props: Prop[]): Flesh {
     fade: new BufferAttribute(new Float32Array(fade), 1),
     head: new BufferAttribute(new Float32Array(head), 1),
     index: new BufferAttribute(from > 65535 ? new Uint32Array(index) : new Uint16Array(index), 1),
-    runs,
-    looks: new Map(),
   };
 }
 
@@ -1036,6 +1045,8 @@ interface Suit {
   parts: { name: string; from: number; count: number; start: number; size: number }[];
   order: number[];
   inverse: Matrix4[];
+  /** How much of each point hangs on the bones of his head. */
+  head: Float32Array;
 }
 
 function suitOf(thing: Thing, slot: Map<string, number>): Suit {
@@ -1054,83 +1065,17 @@ function suitOf(thing: Thing, slot: Map<string, number>): Suit {
     if (k === undefined) throw new Error(`people.glb: ${thing.name} hangs on a bone the player doesn't have (${b.name})`);
     return k;
   });
-  return { geo, parts, order, inverse: thing.bones.map((b) => b.inverse) };
+  const heads = thing.bones.map((b) => OF_HEAD.has(b.name));
+  const [on, by] = [geo.getAttribute('skinIndex'), geo.getAttribute('skinWeight')];
+  const head = new Float32Array(on.count);
+  for (let i = 0; i < on.count; i++) for (let c = 0; c < 4; c++) if (heads[on.getComponent(i, c)]) head[i] += by.getComponent(i, c);
+  return { geo, parts, order, inverse: thing.bones.map((b) => b.inverse), head };
 }
 
-/** What the walkers are made with: the players' figure (its shadow's shape, its bones' count and names). */
+/** What the walkers are made with: the players' figure (its shadow's shape, its bones' names). */
 interface Kit {
   geo: Geo;
   slot: Map<string, number>;
-  count: number;
-}
-
-/**
- * The players' figure with no skin of its own: its puppet and its bones, placed by figure.ts's own `place`,
- * and nothing painted (a player's kit sheet is a 1024 px picture nobody would see under another skin). Made
- * by hand from what `place` reads; if the figure has since come to need something this doesn't give it, the
- * whole figure is made instead and its skin hidden, as before.
- */
-function bones(kit: Kit, body: Body, look: Look, id: number, dress: MatchKit): { fig: Fig; bones: Bone[] } {
-  try {
-    const fig = Object.create(Fig.prototype) as Fig;
-    const group = new Group();
-    const list = Array.from({ length: kit.count }, () => new Bone());
-    for (const b of list) group.add(b);
-    const dark = new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.05, depthWrite: false });
-    const shadow = new Mesh(kit.geo.blob, dark);
-    shadow.scale.setScalar(body.s * (0.9 + 0.2 * body.bulk));
-    shadow.renderOrder = 3;
-    Object.assign(fig, {
-      group,
-      pup: new Puppet(body),
-      side: 0,
-      mark: '',
-      bones: list,
-      hinge: [0, 1, 2, 3].map(() => new Vector3(1, 0, 0)),
-      lag: [0, 1].map(() => ({ at: new Vector3(), v: new Vector3(), set: false })),
-      last: 0,
-      shadow,
-      ring: new Object3D(),
-      own: [dark],
-      gone: false,
-      ball: null,
-      look,
-    });
-    // (his build and his face, as figure.ts sizes a player's bones)
-    const { s, bulk } = body;
-    const thick = s * (0.78 + 0.22 * bulk);
-    const deep = Math.sqrt(bulk) * s;
-    // (a real man's head for his height, as a player's is: figure.ts)
-    const hs = Math.sqrt(s);
-    const f = look.face;
-    const size = (names: string[], x: number, y: number, z: number) => {
-      for (const name of names) {
-        const k = kit.slot.get(name);
-        if (k !== undefined) list[k].scale.set(x, y, z);
-      }
-    };
-    size(['pelvis', 'chest', 'hem'], bulk * s, s, deep);
-    size(['head', 'hair'], hs * f.wide, hs * f.long, hs);
-    size(['jaw'], hs * f.wide * f.jaw, hs * f.long * f.chin, hs);
-    size(['nose'], hs * f.wide * f.nose, hs * f.long, hs * f.bridge);
-    size(['ual', 'fal', 'uar', 'far', 'thl', 'shl', 'thr', 'shr', 'hemL', 'hemR'], thick, s, thick);
-    size(['hal', 'har', 'ftl', 'ftr', ...DIGIT_NAMES.flatMap((d) => [1, 2].flatMap((k) => [`${d}${k}l`, `${d}${k}r`]))], s, s, s);
-    // (stood up once, here: what `place` needs and isn't given shows now, not in the middle of a game)
-    fig.pup.update({ x: 0, z: 0, yaw: 0, act: 'stand', ms: 0, dur: 0, ball: false, cut: true, who: id }, 0, 0, 0);
-    fig.pup.arms(null);
-    fig.place();
-    for (const b of list) if (!Number.isFinite(b.position.x + b.quaternion.w)) throw new Error('a bone nowhere');
-    fig.pup.placed = false;
-    return { fig, bones: list };
-  } catch {
-    const fig = new Fig(kit.geo, body, 0, dress, '', id, '', '', look);
-    const list: Bone[] = [];
-    for (const c of fig.group.children) {
-      if ((c as Bone).isBone) list.push(c as Bone);
-      else c.visible = false;
-    }
-    return { fig, bones: list };
-  }
 }
 
 /** Walkers go no faster than this toward their spot (ft a second of their own time), and are this near it before they stop. */
@@ -1160,16 +1105,18 @@ class Walker {
     private readonly kit: Kit,
     suit: Suit,
     body: Body,
-    dress: MatchKit,
     readonly id: number,
     look: Look,
     wear: Wear,
     mat: MeshStandardMaterial,
     low?: Suit,
   ) {
-    const made = bones(kit, body, look, id, dress);
-    this.fig = made.fig;
-    this.bones = made.bones;
+    // The players' figure with no skin of its own (figure.ts: a Fig with no kit): its puppet, its bones as its own
+    // `place` puts them, its face's moves. Whatever the players' body learns, these learn with it, because it is
+    // the same class and not a copy of what that class read once.
+    this.fig = new Fig(kit.geo, body, 0, null, '', id, '', '', look);
+    this.fig.sealed = true;
+    this.bones = this.fig.bones;
     const skin = (suit: Suit) => {
       const geo = new BufferGeometry();
       for (const name of ['position', 'normal', 'skinIndex', 'skinWeight']) geo.setAttribute(name, suit.geo.getAttribute(name));
@@ -1188,9 +1135,11 @@ class Walker {
         c.set(hex);
         // (a beard's edge thins out to his skin: how much of it shows is its shade's blue, see FADED)
         const faded = FADED.has(part.name);
-        which.fill(PART[part.name as PartName] ?? PART.cloth, part.from, part.from + part.count);
+        const of = PART[part.name as PartName] ?? PART.cloth;
+        const ball = new Color(wear.ball ?? hex);
         for (let i = part.from; i < part.from + part.count; i++) {
-          const k = faded ? edge.copy(skinTone).lerp(c, shade.getZ(i)) : c;
+          which[i] = partAt(of, suit.head[i]);
+          const k = faded ? edge.copy(skinTone).lerp(c, shade.getZ(i)) : which[i] === PART.ball ? ball : c;
           col.set([k.r * shade.getX(i), k.g * shade.getY(i), k.b * (faded ? shade.getY(i) : shade.getZ(i))], i * 3);
         }
         for (let i = part.start; i < part.start + part.size; i++) corners.push(all[i]);
@@ -1617,7 +1566,7 @@ export class Sideline {
     const figure = models.figure.get('figure');
     if (!figure?.bones) throw new Error('figure.glb: no figure');
     const slot = new Map(figure.bones.map((b, i) => [b.name, geo.order[i]]));
-    this.kit = { geo, slot, count: Math.max(...geo.order) + 1 };
+    this.kit = { geo, slot };
     this.suits = {
       official: suitOf(thing('official'), slot),
       staff: suitOf(thing('staff'), slot),
@@ -1736,32 +1685,12 @@ export class Sideline {
     return b;
   }
 
-  /** The corners of the parts this look has (the hair he wears, his beard if he has one, his clothes), in a body's own order: made once for each look of each body. */
-  private corners(flesh: Flesh, wear: Wear): { key: string; index: BufferAttribute } {
-    const has = PARTS.map((part, k) => (wear[part] !== undefined && flesh.runs.has(k) ? k : -1)).filter((k) => k >= 0);
-    const key = has.join(',');
-    let index = flesh.looks.get(key);
-    if (!index) {
-      const all = flesh.index.array;
-      const runs = has.flatMap((k) => flesh.runs.get(k)!);
-      const out = new (all.constructor as Uint16ArrayConstructor | Uint32ArrayConstructor)(runs.reduce((n, r) => n + r[1], 0));
-      let at = 0;
-      for (const [start, count] of runs) {
-        out.set(all.subarray(start, start + count), at);
-        at += count;
-      }
-      index = new BufferAttribute(out, 1);
-      flesh.looks.set(key, index);
-    }
-    return { key, index };
-  }
-
   /**
-   * People of body `body` and one look between pose `a` and pose `b` (the same: held in it), made the first
-   * time someone is: one shape, drawn once for all who are in it. Its points are the body's (every cast of a
-   * body in a pose shares them); its corners are the look's parts only.
+   * People of body `body` between pose `a` and pose `b` (the same: held in it), made the first time someone
+   * is: one shape, drawn once for all who are in it, whatever each of them looks like (every part is in it: a
+   * part one of them doesn't have is folded away by his row of the palette, see CAST_MOVE).
    */
-  private cast(body: string, a: string, b: string, wear: Wear, seen: number): Cast {
+  private cast(body: string, a: string, b: string, seen: number): Cast {
     const thing = this.things.get(body);
     if (!thing) throw new Error(`people.glb has no ${body}`);
     const carries = CARRIES[a] ?? CARRIES[b];
@@ -1773,8 +1702,7 @@ export class Sideline {
       for (const p of made.props) p.geo.dispose();
       this.flesh.set(fkey, flesh);
     }
-    const look = this.corners(flesh, wear);
-    const key = `${body}/${a}>${b}/${look.key}/${seen}`;
+    const key = `${body}/${a}>${b}/${seen}`;
     let c = this.casts.get(key);
     if (c) return c;
     const [from, to] = [this.pose(body, a, carries), this.pose(body, b, carries)];
@@ -1787,7 +1715,7 @@ export class Sideline {
     geo.setAttribute('aPart', flesh.part);
     geo.setAttribute('aFade', flesh.fade);
     geo.setAttribute('aHead', flesh.head);
-    geo.setIndex(look.index);
+    geo.setIndex(flesh.index);
     const mat = this.keep(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.82, vertexColors: true, side: DoubleSide }));
     if (this.castMats.length) mat.color.copy(this.castMats[0].color);
     const uniforms = {
@@ -1811,7 +1739,7 @@ export class Sideline {
         .replace('#include <color_fragment>', `#include <color_fragment>${CAST_GRAIN_COLOR}`);
       peopleShade(sh, true);
     };
-    mat.customProgramCacheKey = () => 'cast4';
+    mat.customProgramCacheKey = () => 'cast5';
     this.castMats.push(mat);
     const row = new InstancedBufferAttribute(new Float32Array(ROWS), 1);
     const life = new InstancedBufferAttribute(new Float32Array(ROWS * 4), 4);
@@ -1837,8 +1765,8 @@ export class Sideline {
   }
 
   /** A walker of this body. */
-  private walker(suit: Suit, body: Body, dress: MatchKit, id: number, look: Look, wear: Wear, mat: MeshStandardMaterial, low?: Suit): Walker {
-    const w = new Walker(this.kit, suit, body, dress, id, look, wear, mat, low);
+  private walker(suit: Suit, body: Body, id: number, look: Look, wear: Wear, mat: MeshStandardMaterial, low?: Suit): Walker {
+    const w = new Walker(this.kit, suit, body, id, look, wear, mat, low);
     this.walkers.add(w.fig.group, w.fig.shadow);
     return w;
   }
@@ -1868,13 +1796,13 @@ export class Sideline {
       const id = 7001 + i * 13;
       const woman = lady(id);
       const body = { s: (0.88 + 0.05 * hash(id, 3)) * (woman ? 0.94 : 1), bulk: (0.96 + 0.14 * hash(id, 5)) * (woman ? 0.86 : 1) };
-      return this.walker(this.suits.official, body, kits[0], id, lookOf(id), { ...human(lookOf(id), woman), ...REF_WEAR }, this.refMat, this.suits.officialFar);
+      return this.walker(this.suits.official, body, id, lookOf(id), { ...human(lookOf(id), woman), ...REF_WEAR }, this.refMat, this.suits.officialFar);
     });
     this.coaches = ([0, 1] as const).map((side) => {
       const id = 7101 + side * 17;
       const woman = lady(id);
       const body = { s: (0.9 + 0.05 * hash(id, 3)) * (woman ? 0.94 : 1), bulk: (1 + 0.16 * hash(id, 5)) * (woman ? 0.84 : 1) };
-      const w = this.walker(this.suits.staff, body, kits[side], id, lookOf(id), suitWear(lookOf(id), id, kits[side]), this.coachMat, this.suits.staffFar);
+      const w = this.walker(this.suits.staff, body, id, lookOf(id), suitWear(lookOf(id), id, kits[side]), this.coachMat, this.suits.staffFar);
       // (his board: a white sheet on a dark clip board, in his left hand)
       const board = new Mesh(
         this.keep(new BoxGeometry(0.72, 0.95, 0.035)),
@@ -2272,7 +2200,7 @@ export class Sideline {
     if (!live && this.level < 2 && !a.calm && this.bodyOf) {
       const s = this.bench.find((b) => b.kind === 'bench' && b.body === 'bench' && !b.w);
       if (s) {
-        s.w = this.walker(this.suits.benchFar, this.bodyOf(s.id), this.kits[s.side ?? 0], s.id, lookOf(s.id), s.wear, this.benchMat);
+        s.w = this.walker(this.suits.benchFar, this.bodyOf(s.id), s.id, lookOf(s.id), s.wear, this.benchMat);
         s.w.show(false);
       }
     }
@@ -2639,10 +2567,9 @@ export class Sideline {
         if (s.pose === feet && !s.next) {
           if (walk && this.kits) {
             if (!s.w) {
-              const kit = this.kits[s.side ?? 0];
               const body = s.kind === 'bench' && this.bodyOf ? this.bodyOf(s.id) : { s: s.size[1], bulk: s.size[0] / s.size[1] };
               // (a few seconds on his way along the far side: the far body is all of him the broadcast shows)
-              s.w = this.walker(this.suits.benchFar, body, kit, s.id, lookOf(s.id), s.wear, this.benchMat);
+              s.w = this.walker(this.suits.benchFar, body, s.id, lookOf(s.id), s.wear, this.benchMat);
             }
             const w = s.w;
             if (!s.walking) {
@@ -2740,8 +2667,8 @@ export class Sideline {
       s.near = this.level < 2 && tall > (s.near ? off : on);
       // (only the benches are ever in the floor's mirror: the rest are behind the boards and the table)
       const mirrored = s.kind === 'bench' || s.kind === 'aide';
-      if (s.near) put(s, this.cast(s.body, s.pose, s.to, s.wear, SEEN.camera));
-      if (!s.near || mirrored) put(s, this.cast(`${s.body}Far`, s.pose, s.to, s.wear, !s.near ? (mirrored ? SEEN.both : SEEN.camera) : SEEN.mirror));
+      if (s.near) put(s, this.cast(s.body, s.pose, s.to, SEEN.camera));
+      if (!s.near || mirrored) put(s, this.cast(`${s.body}Far`, s.pose, s.to, !s.near ? (mirrored ? SEEN.both : SEEN.camera) : SEEN.mirror));
     }
     for (const c of this.casts.values()) {
       c.mesh.count = c.n;

@@ -16,7 +16,7 @@ import { useEffect, useRef, type MutableRefObject } from 'react';
 import { BASKET, COURT_LEN, tangents, toWorld, type Frame, type Pt, type Script } from './choreo';
 import type { ShotRecord, Team } from '../../core/types';
 import { FRANCHISES, type FranchiseDef } from '../../core/teams';
-import { inkOn, neutralVenue, venueLook, type MatchKit, type Venue } from '../teamColors';
+import { inkOn, neutralVenue, outShirt, venueLook, type MatchKit, type Venue } from '../teamColors';
 import { spread } from '../spread';
 
 /**
@@ -26,8 +26,16 @@ import { spread } from '../spread';
  * keys, the apron, the circle, the words, and round the 3D floor the stands.
  */
 export type CourtFloor =
-  | { kind: 'home'; abbrev: string; name: string; colors: [string, string, string]; paint: string; trim: string; mark: FranchiseDef['mark']; venue?: Venue }
+  | { kind: 'home'; abbrev: string; name: string; colors: [string, string, string]; paint: string; trim: string; mark: FranchiseDef['mark']; venue?: Venue; post?: Postseason }
   | { kind: 'neutral'; name: string; venue?: Venue };
+
+/**
+ * A postseason night in a team's own building: the floor wears the round's words (paintFloor), and the building
+ * its shirt (Venue.out: a white-out, or its colour's). The Finals have their own words.
+ */
+export type Postseason = 'playoffs' | 'finals';
+/** What the floor says, each side of the centre circle. */
+const POST_WORDS: Record<Postseason, string> = { playoffs: 'PLAYOFFS', finals: 'THE FINALS' };
 
 /** A floor's building (a plain neutral one for no floor). */
 export function venueOf(floor: CourtFloor | undefined): Venue {
@@ -35,10 +43,12 @@ export function venueOf(floor: CourtFloor | undefined): Venue {
   return floor?.kind === 'home' ? venueLook(floor.colors, floor.paint, floor.trim, floor.abbrev, floor.name, '') : neutralVenue(floor?.name ?? '');
 }
 
-/** The floor of a game at `home`'s arena in tonight's colours (`kit`), or a neutral one; `neutralName` goes along the baselines there. */
-export function courtFloor(home: Pick<Team, 'tid' | 'abbrev' | 'name' | 'region' | 'colors'>, kit: MatchKit, neutral: boolean, neutralName = ''): CourtFloor {
+/** The floor of a game at `home`'s arena in tonight's colours (`kit`), or a neutral one; `neutralName` goes along the baselines there. `post`: a playoff night there (see Postseason). */
+export function courtFloor(home: Pick<Team, 'tid' | 'abbrev' | 'name' | 'region' | 'colors'>, kit: MatchKit, neutral: boolean, neutralName = '', post?: Postseason): CourtFloor {
   if (neutral) return { kind: 'neutral', name: neutralName, venue: neutralVenue(neutralName) };
+  const venue = venueLook(home.colors, kit.color, kit.trim, home.abbrev, home.name, home.region);
   return {
+    ...(post && { post }),
     kind: 'home',
     abbrev: home.abbrev,
     name: home.name,
@@ -46,7 +56,7 @@ export function courtFloor(home: Pick<Team, 'tid' | 'abbrev' | 'name' | 'region'
     paint: kit.color,
     trim: kit.trim,
     mark: FRANCHISES[home.tid]?.mark ?? 'circle',
-    venue: venueLook(home.colors, kit.color, kit.trim, home.abbrev, home.name, home.region),
+    venue: post ? { ...venue, out: outShirt(kit.color, kit.trim) } : venue,
   };
 }
 
@@ -791,7 +801,9 @@ export function paintFloor(cv: HTMLCanvasElement, asked: View, dpr: number, floo
     }
     ctx.stroke();
     for (const side of [-1, 1]) ctx.fillRect(side > 0 ? 8 : -8.7, 7.6, 0.7, 1);
-    // the backboard, the rim and its net (seen from above: a ring inside the ring)
+    // the backboard, the rim and its net (seen from above: a ring inside the ring). Not on the 3D
+    // court's floor: its baskets stand over it, and a rim painted on the wood under each is a second one
+    if (bare) return;
     ctx.strokeStyle = paints.line;
     ctx.lineWidth = Math.max(px(2), 0.3);
     ctx.beginPath();
@@ -852,6 +864,25 @@ export function paintFloor(cv: HTMLCanvasElement, asked: View, dpr: number, floo
   words(v.baselines[0], { x: 0, y: -END / 2 - 0.25 }, size, wide);
   words(v.baselines[1], { x: 0, y: COURT_LEN + END / 2 + 0.25 }, size, wide);
   if (bare) for (const side of [-1, 1]) words(v.sideline, { x: side * (HALF_W + SIDE / 2 + 0.05), y: COURT_LEN / 2 }, SIDE * k * 0.62, !wide);
+  // the postseason's words, each side of the centre circle on the broadcast's side of the floor (the sideways floor's
+  // foot): in the paint, edged in the trim, a rule under them (in a building whose centre court is its name across the
+  // floor, further out: clear of it)
+  if (home?.post) {
+    ctx.globalAlpha = bare ? 0.92 : 0.5;
+    const out = court.centre === 'word' ? 26 : 17.5;
+    for (const side of [-1, 1]) {
+      const p = { x: -14.5, y: COURT_LEN / 2 + side * out };
+      words(POST_WORDS[home.post], p, 2.5 * k, !wide, v.paint, court.trim, 13 * k);
+      const q = at(p);
+      ctx.save();
+      ctx.translate(q.x, q.y);
+      if (!wide) ctx.rotate(-Math.PI / 2);
+      ctx.fillStyle = court.trim;
+      ctx.fillRect(-5.6 * k, 1.75 * k, 11.2 * k, Math.max(1, 0.22 * k));
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
   const c = at({ x: 0, y: COURT_LEN / 2 });
   ctx.globalAlpha = bare ? 1 : 0.55;
   // centre court: the name across it in big letters (the paint, edged in the trim), or the mark, and the name round it

@@ -324,7 +324,8 @@
 /* ------------------------------------------------------------------ the other layout, a word to turn
    On a phone, the court's foot corner has the way to the other layout (an ink button, as the camera's);
    turned, a plate over the court says to turn the phone for a moment, with the way to keep it upright. */
-.lv-turn {
+.lv-turn,
+.lv-snd {
   position: absolute;
   right: 8px;
   bottom: 8px;
@@ -341,48 +342,33 @@
   cursor: pointer;
   transition: scale var(--dur-fast) ease;
 }
-/* the game's sound, in the court's other foot corner: the same ink button */
-.lv-snd {
-  position: absolute;
-  left: 8px;
-  bottom: 8px;
-  z-index: 2;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: var(--lv-plate);
-  color: var(--paper-ink);
-  cursor: pointer;
-  transition: scale var(--dur-fast) ease;
+/* the game's sound: the same ink button in the same corner, beside the way to turn where there is one.
+   Never the other foot corner: a cut-in's and a replay's lower third comes up there (court3d.css). */
+.lv-stage:has(.lv-turn) .lv-snd {
+  right: 48px;
 }
 .lv-snd[aria-pressed='false'] {
   color: color-mix(in srgb, var(--paper-ink) 62%, transparent);
 }
+.lv-turn::after,
 .lv-snd::after {
   content: '';
   position: absolute;
   inset: -6px;
 }
+/* (side by side their reach meets halfway, neither's over the other) */
+.lv-stage:has(.lv-turn) .lv-snd::after {
+  right: -4px;
+}
+.lv-stage:has(.lv-snd) .lv-turn::after {
+  left: -4px;
+}
+.lv-turn:active,
 .lv-snd:active {
   scale: 0.92;
 }
+.lv-turn:focus-visible,
 .lv-snd:focus-visible {
-  outline: 2px solid var(--paper-ink);
-  outline-offset: 2px;
-}
-.lv-turn::after {
-  content: '';
-  position: absolute;
-  inset: -6px;
-}
-.lv-turn:active {
-  scale: 0.92;
-}
-.lv-turn:focus-visible {
   outline: 2px solid var(--paper-ink);
   outline-offset: 2px;
 }

@@ -3,7 +3,7 @@
 // and the captions call the play.
 import { PerspectiveCamera, Scene, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { courtFit, FLOOR_L, FLOOR_W, pose, type Stage } from '../live/Court';
+import { courtFit, courtFloor, FLOOR_L, FLOOR_W, pose, venueOf, type Stage } from '../live/Court';
 import {
   attackDir,
   BASKET,
@@ -24,8 +24,9 @@ import { Director, REPLAY_GAP, type BigKind } from '../live/court3d/director';
 import { ballIn, into, PARTS, Spacing, sunk } from '../live/court3d/spacing';
 import { blocked, CAM_KINDS, camKind, clearSeat, clutter, fenced, Operator, seen, shot, type View } from '../live/court3d/cameras';
 import { captured, CHANNELS, CLIPS, DUNK_AT, DUNKS, GESTURES, I, mirror, N, PASSES, sample, span } from '../live/court3d/clips';
-import { occasionOf } from '../live/occasion';
-import { faceT, figureGeo, follow, handOf } from '../live/court3d/figure';
+import { occasionOf, postOf } from '../live/occasion';
+import { matchKits, outShirt } from '../teamColors';
+import { B, faceT, figureGeo, follow, handOf, kitStyle } from '../live/court3d/figure';
 import { readGlb } from '../live/court3d/glb';
 import arenaGlb from '../live/court3d/models/arena.glb?inline';
 import figureGlb from '../live/court3d/models/figure.glb?inline';
@@ -207,6 +208,169 @@ describe('live court choreography', () => {
       expect(rest).toHaveLength(zone);
       for (const p of rest) expect(Math.abs(p.x) <= 9 && p.y <= 20).toBe(true);
       expect(closest(f)).toBeGreaterThan(1.45);
+    }
+
+    // a ball screen is played as its coverage: 5 screens for 1 at the top (15 on 5, 11 on 1)
+    {
+      const far = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y);
+      const pnr = (coverage: PossLog['coverage'], more: PossStep[] = []) =>
+        buildScript({ ...log([{ k: 'advance', pid: 1 }, { k: 'screen', pid: 5, pid2: 1 }, ...more]), coverage }, info, undefined, undefined, names);
+      const beats = (s: Script) => {
+        const i = s.frames.findIndex((f) => f.cap?.startsWith('P5 screens for P1'));
+        return [s.frames[i - 1], s.frames[i], s.frames[i + 1]];
+      };
+      const [H, S, HD, SD] = [0, 4, 0, 4];
+      // drop: the big sinks under the ball, nearer the rim than his own man; the guard is behind the play
+      {
+        const [, use, turn] = beats(pnr('drop'));
+        for (const f of [use, turn]) {
+          expect(far(f.d[SD], BASKET)).toBeLessThan(far(f.o[H], BASKET) - 5);
+          // (between the ball and the rim: no farther off that line than a step)
+          const [bx, by] = [BASKET.x - f.o[H].x, BASKET.y - f.o[H].y];
+          const off = Math.abs((f.d[SD].x - f.o[H].x) * by - (f.d[SD].y - f.o[H].y) * bx) / Math.hypot(bx, by);
+          expect(off).toBeLessThan(3.2);
+          expect(far(f.d[HD], BASKET)).toBeGreaterThan(far(f.o[H], BASKET) - 1.5);
+        }
+      }
+      // hedge: the big shows out past the screen at the ball's level, then gets back to his man
+      {
+        const [, use, turn] = beats(pnr('hedge'));
+        expect(far(use.d[SD], use.o[H])).toBeLessThan(5);
+        expect(use.d[SD].y).toBeGreaterThan(use.o[S].y);
+        expect(far(turn.d[SD], turn.o[S])).toBeLessThan(far(turn.d[SD], turn.o[H]));
+      }
+      // blitz: two on the ball, trapping; he backs out of it, and somebody else has the roller
+      {
+        const [, use, turn] = beats(pnr('blitz'));
+        for (const f of [use, turn]) {
+          expect(f.act[5 + HD]).toBe('trap');
+          expect(f.act[5 + SD]).toBe('trap');
+          expect(far(f.d[HD], f.o[H])).toBeLessThan(3.6);
+          expect(far(f.d[SD], f.o[H])).toBeLessThan(3.6);
+        }
+        expect(turn.o[H].y).toBeGreaterThan(use.o[H].y);
+        expect(Math.min(...turn.d.filter((_, i) => i !== HD && i !== SD).map((p) => far(p, turn.o[S])))).toBeLessThan(7);
+      }
+      // ice: he is sent away from the screen, down the side; the guard on the screen's side of him, the big under him
+      {
+        const [set, use, turn] = beats(pnr('ice'));
+        const side = Math.sign(set.o[S].x - set.o[H].x);
+        expect(set.meet).toBeUndefined();
+        expect((turn.o[H].x - set.o[H].x) * side).toBeLessThan(-3);
+        expect(turn.o[H].y).toBeLessThan(use.o[H].y);
+        for (const f of [use, turn]) {
+          expect((f.d[HD].x - f.o[H].x) * side).toBeGreaterThan(1.5);
+          expect(far(f.d[SD], BASKET)).toBeLessThan(far(f.o[H], BASKET));
+        }
+      }
+      // switch: the big takes the ball and the guard the roller, and they keep them when the ball moves on
+      {
+        const sw = pnr('switch', [
+          { k: 'pass', pid: 1, pid2: 3 },
+          { k: 'pass', pid: 3, pid2: 1 },
+        ]);
+        const [, , turn] = beats(sw);
+        expect(far(turn.d[SD], turn.o[H])).toBeLessThan(far(turn.d[HD], turn.o[H]));
+        expect(far(turn.d[HD], turn.o[S])).toBeLessThan(far(turn.d[SD], turn.o[S]));
+        const end = sw.frames.at(-1)!;
+        expect(end.hold).toBe(H);
+        expect(far(end.d[SD], end.o[H])).toBeLessThan(5);
+        expect(far(end.d[HD], end.o[S])).toBeLessThan(far(end.d[HD], end.o[H]));
+        // (not switched, each is back on his own)
+        const drop = pnr('drop', [
+          { k: 'pass', pid: 1, pid2: 3 },
+          { k: 'pass', pid: 3, pid2: 1 },
+        ]).frames.at(-1)!;
+        expect(far(drop.d[HD], drop.o[H])).toBeLessThan(5);
+      }
+      // (whatever the coverage, nobody is drawn on anybody, and the handler has the ball as it is called)
+      for (const c of ['drop', 'hedge', 'blitz', 'ice', 'switch'] as const) {
+        const s = pnr(c);
+        for (const f of s.frames) expect(closest(f)).toBeGreaterThan(2.5);
+        expect(beats(s)[1].hold).toBe(H);
+        expect(s.frames.filter((f) => f.flash?.kind === 'info')).toHaveLength(1);
+      }
+    }
+
+    // a zone moves with the ball: to its side of the floor, its nearest man out on it, the far side in toward the lane
+    for (const scheme of ['zone23', 'zone32'] as const) {
+      const s = buildScript(
+        log(
+          [
+            { k: 'advance', pid: 1 },
+            { k: 'pass', pid: 1, pid2: 3 },
+          ],
+          scheme,
+        ),
+        info,
+      );
+      const top = s.frames.find((f) => f.hold === 0 && f.o[0].y < 30)!;
+      const end = s.frames.at(-1)!;
+      const ball = end.o[off.indexOf(3)];
+      const mean = (f: Frame) => f.d.reduce((n, p) => n + p.x, 0) / 5;
+      expect(Math.sign(mean(end) - mean(top))).toBe(Math.sign(ball.x));
+      expect(Math.abs(mean(end) - mean(top))).toBeGreaterThan(2);
+      expect(Math.min(...end.d.map((p) => Math.hypot(p.x - ball.x, p.y - ball.y)))).toBeLessThan(5);
+      // (and nobody is left out on the far side of the floor)
+      expect(Math.max(...end.d.map((p) => -p.x * Math.sign(ball.x)))).toBeLessThan(11);
+      for (const f of s.frames) expect(closest(f)).toBeGreaterThan(2.5);
+    }
+
+    // off the ball: on a drive one man fills in behind it and a shooter with the kick-out coming is where it will find him
+    {
+      // (4 is on the right wing: his three comes from the corner below it)
+      const spot = { x: 21, y: 12 };
+      const s = buildScript(
+        log([
+          { k: 'advance', pid: 1 },
+          { k: 'drive', pid: 1 },
+          { k: 'pass', pid: 1, pid2: 4 },
+          { k: 'shot', pid: 4, ...spot, zone: 'ab3', made: true, v: 3, pid2: 1, d: 'catch-and-shoot three' },
+        ]),
+        info,
+        undefined,
+        undefined,
+        names,
+      );
+      const i = s.frames.findIndex((f) => f.cap === 'P1 drives');
+      const [was, drive] = [s.frames[i - 1], s.frames[i]];
+      const shooter = drive.o[off.indexOf(4)];
+      expect(Math.hypot(shooter.x - spot.x, shooter.y - spot.y)).toBeLessThan(2);
+      // (so the pass goes straight to him: no dash to the spot first)
+      expect(s.frames[i + 1].cap).toBe('P1 finds P4');
+      // (somebody out on the floor is nearer where the driver left from than anybody was)
+      const left = was.o[0];
+      const near = (f: Frame) => Math.min(...f.o.slice(1).map((p) => Math.hypot(p.x - left.x, p.y - left.y)));
+      expect(near(drive)).toBeLessThan(near(was) - 3);
+      // (down the middle the corner holds his corner and the big his block: the two above the break are the ones who move)
+      const moved = [1, 2, 3, 4].filter((k) => Math.hypot(drive.o[k].x - was.o[k].x, drive.o[k].y - was.o[k].y) > 2);
+      expect(moved).toEqual([off.indexOf(3), off.indexOf(4)]);
+      // (from a wing, the corner the drive is coming at lifts out of it, and the big on that side goes across to the far block)
+      const wing = buildScript(
+        log([
+          { k: 'advance', pid: 1 },
+          { k: 'drive', pid: 4 },
+        ]),
+        info,
+        undefined,
+        undefined,
+        names,
+      );
+      const w = wing.frames.findIndex((f) => f.cap === 'P4 drives');
+      const corner = off.indexOf(2);
+      expect(wing.frames[w].o[corner].y).toBeGreaterThan(wing.frames[w - 1].o[corner].y + 3);
+      for (const f of s.frames) expect(closest(f)).toBeGreaterThan(2.5);
+      // a man who has passed doesn't stand where he threw it from
+      const swing = buildScript(
+        log([
+          { k: 'advance', pid: 1 },
+          { k: 'pass', pid: 1, pid2: 3 },
+          { k: 'pass', pid: 3, pid2: 2 },
+        ]),
+        info,
+      );
+      const [thrown, next] = [swing.frames.at(-2)!, swing.frames.at(-1)!];
+      expect(Math.hypot(next.o[0].x - thrown.o[0].x, next.o[0].y - thrown.o[0].y)).toBeGreaterThan(2.5);
     }
 
     // a set's off-ball screens: its name on the first, its man where the set sends him
@@ -792,6 +956,79 @@ describe('live court choreography', () => {
       expect([...geo.order].sort((x, y) => x - y)).toEqual(Array.from({ length: 49 }, (_, i) => i));
       // (no scalp of its own: his head is a real man's, one skin, and his hair is painted on its picture)
       expect(geo.wears).toEqual(expect.arrayContaining(['skin', 'jersey', 'trim', 'cloth', 'shoe', 'white']));
+      // the bands that stand off his limbs (a sock's top, a wristband): each goes round the limb where it is asked for,
+      // a little outside the skin it covers and never far off it, and hangs on one of that limb's own bones
+      {
+        expect(geo.cuffs([])).toBeNull();
+        const bands = [
+          { limb: 0, from: 1.87, to: 2.09, proud: 0.016, color: '#ffffff' },
+          { limb: 3, from: 2.4, to: 2.47, proud: 0.012, color: '#123456' },
+        ] as const;
+        const cuffs = geo.cuffs(bands)!;
+        const [at, on, by] = [cuffs.getAttribute('position'), cuffs.getAttribute('skinIndex'), cuffs.getAttribute('skinWeight')];
+        expect(at.count % bands.length).toBe(0);
+        expect(cuffs.index!.count).toBe(bands.length * 3 * (at.count / bands.length / 4) * 6);
+        expect(Array.from(at.array).every(Number.isFinite)).toBe(true);
+        const per = at.count / bands.length;
+        const body = geo.body.getAttribute('position');
+        const P = new Vector3();
+        bands.forEach((band, k) => {
+          const bones = new Set<number>();
+          const root = geo.order.indexOf([B.ual, B.uar, B.thl, B.thr][band.limb]);
+          for (let i = k * per; i < (k + 1) * per; i++) {
+            bones.add(on.getX(i));
+            expect(by.getX(i)).toBe(1);
+            // (in the limb's own frame: as far down it as asked, give or take the band's width)
+            P.fromBufferAttribute(at, i).applyMatrix4(geo.inverse[root]);
+            expect(-P.y).toBeGreaterThan(band.from - 0.01);
+            expect(-P.y).toBeLessThan(band.to + 0.01);
+            expect(Math.hypot(P.x, P.z)).toBeLessThan(0.45);
+          }
+          expect(bones.size).toBe(1);
+          // (and no point of the band is inside the limb: each is at least as far from the body's nearest point there
+          // as nothing, and within two inches of one)
+          let near = Infinity;
+          const Q = new Vector3();
+          P.fromBufferAttribute(at, k * per);
+          for (let v = 0; v < body.count; v += 3) near = Math.min(near, Q.fromBufferAttribute(body, v).distanceTo(P));
+          expect(near).toBeLessThan(0.17);
+        });
+      }
+      // a team's kit past its colours: the same for a team whichever kit it wears, every cut and every face of type
+      // worn by somebody in the league, and from the colours alone where the game has no letters
+      {
+        const kit = { color: '#123456', trim: '#fedcba' };
+        expect(kitStyle('BOS', kit)).toEqual(kitStyle('bos', { color: '#000000', trim: '#ffffff' }));
+        expect(kitStyle('', kit)).toEqual(kitStyle('', { ...kit }));
+        const all = 'ATL BOS BKN CHA CHI CLE DAL DEN DET GSW HOU IND LAC LAL MEM MIA MIL MIN NOP NYK OKC ORL PHI PHX POR SAC SAS TOR UTA WAS'
+          .split(' ')
+          .map((m) => kitStyle(m, kit));
+        expect(new Set(all.map((x) => x.cut)).size).toBe(4);
+        expect(new Set(all.map((x) => x.type)).size).toBe(4);
+      }
+      // a playoff night's shirt: a team with a bright colour wears it (its trim's, if that is the bright one), a dark
+      // team goes white; and only the playoffs dress the building, the Finals their own way
+      {
+        expect(outShirt('#552583', '#fdb927')).toBe('#fdb927');
+        expect(outShirt('#e56020', '#1d1160')).toBe('#e56020');
+        expect(outShirt('#0c2340', '#236192')).toBe('#ffffff');
+        expect(outShirt('#000000', '#c4ced4')).toBe('#ffffff');
+        const lg = {
+          playoffs: [
+            { id: 'f', round: 4 },
+            { id: 'r1', round: 1 },
+          ] as League['playoffs'],
+        };
+        expect(postOf(lg, { type: 'playoffs', seriesId: 'f' })).toBe('finals');
+        expect(postOf(lg, { type: 'playoffs', seriesId: 'r1' })).toBe('playoffs');
+        expect(postOf(lg, { type: 'regular' })).toBeUndefined();
+        expect(postOf(lg, { type: 'playin' })).toBeUndefined();
+        const home = { tid: 0, abbrev: 'LAL', name: 'Lakers', region: 'Los Angeles', colors: ['#552583', '#fdb927', '#000000'] as [string, string, string] };
+        const lal = matchKits(home.colors, ['#007a33', '#ba9653', '#ffffff'])[0];
+        expect(venueOf(courtFloor(home, lal, false)).out).toBeUndefined();
+        expect(venueOf(courtFloor(home, lal, false, '', 'finals')).out).toBe(outShirt(lal.color, lal.trim));
+        expect(courtFloor(home, lal, true, 'Cup', 'finals')).not.toHaveProperty('post');
+      }
       const w = geo.body.getAttribute('skinWeight');
       for (let i = 0; i < w.count; i += 37) expect(w.getX(i) + w.getY(i) + w.getZ(i) + w.getW(i)).toBeCloseTo(1, 3);
       // (his lower lip's edge goes with his jaw all the way in the middle of his mouth, less toward its corners: an open
@@ -2407,6 +2644,30 @@ describe('live court choreography', () => {
       let off = 0;
       for (let i = 0; i < rest.length; i++) off = Math.max(off, Math.abs(net.at[i] - rest[i]));
       expect(off).toBeLessThan(0.2);
+    }
+
+    // the net keeps the game's time whatever the frame: at 4x on a slow device (a fifteenth of a second a frame) a swish
+    // settles in the time it does at 1x (the cords' steps in a frame were capped at 42 ms, and the rest was dropped)
+    {
+      const settles = (dt: number) => {
+        const net = new NetSim();
+        net.step(dt, null, 0);
+        const rest = Float32Array.from(net.at);
+        for (let t = 0; t < 0.3; t += dt) net.step(dt, { x: 0, y: 0.7 - (t / 0.3) * 2.8, z: 0 }, 0);
+        const off = () => rest.reduce((m, v, i) => Math.max(m, Math.abs(net.at[i] - v)), 0);
+        expect(off()).toBeGreaterThan(0.08);
+        // (how long until it hangs within half an inch of where it hung, and stays there a quarter of a second)
+        let [t, calm] = [0, 0];
+        while (t < 6 && calm < 0.25) {
+          net.step(dt, null, 0);
+          t += dt;
+          calm = off() < 0.04 ? calm + dt : 0;
+        }
+        return t;
+      };
+      const [slow, fast] = [settles(1 / 60), settles(1 / 15)];
+      expect(slow).toBeLessThan(5);
+      expect(Math.abs(fast - slow) / slow).toBeLessThan(0.3);
     }
 
     // the end of a game: what kind of win it is (the 3D court celebrates each its own way)

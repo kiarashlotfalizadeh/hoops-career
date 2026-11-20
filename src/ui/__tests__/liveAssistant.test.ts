@@ -25,8 +25,8 @@ import { callCosts, callKey, worthLine } from '../../core/analysis/callWorth';
 import { CALL_DRAFTS, CALL_DRAFTS_CRUNCH, benchFor, callDrafts, callQuietLine, deadBall, nextStop, noStops, stopAfter } from '../live/calls';
 import { CALL_CONFIRM_MIN, PLAY_SPREAD, clearOf, measureCalls, measureChange, type LiveChoice } from '../../state/liveWorth';
 import { favoured, playReading } from '../live/usePlayWorth';
-import { fitPlayers, playOptions } from '../live/plays';
-import { SET_K, setFit } from '../../core/sim/sets';
+import { fitPlayers, playBoard, playOptions } from '../live/plays';
+import { SET_IDS, SET_K, setFit } from '../../core/sim/sets';
 import { subOptions } from '../live/session';
 import type { LiveGame } from '../../state/live';
 import { GRAPHIC_GAP, KEY_PRIORITY, graphicCandidates, nextGraphic, type Graphic, type GraphicInput, type PlayerBefore } from '../live/graphics';
@@ -647,6 +647,36 @@ describe('the live assistant and the bench', () => {
             fits.find((x) => x.pid === p.pid)!,
           ),
         ).toBeGreaterThanOrEqual(SET_K.fit);
+      // each play on the board (what the court will run, drawn): five men, one with the ball and one it is for, and the
+      // play's own marks: an isolation is the man's dribble, a set with a hand-off has one handed over, a Floppy's man
+      // starts under the basket, every play that screens ends a line in a bar
+      {
+        const fp = fitPlayers(g.league, five, go);
+        const names = (pid: number) => `P${pid}`;
+        for (const id of ['iso', ...SET_IDS] as const) {
+          const b = playBoard(id, fp, named, names)!;
+          expect(b, id).toBeTruthy();
+          expect(b.men.map((m) => m.n).sort()).toEqual([1, 2, 3, 4, 5]);
+          expect(b.men.filter((m) => m.ball)).toHaveLength(1);
+          expect(b.men.filter((m) => m.star).map((m) => m.pid)).toEqual([named]);
+          expect(b.men.find((m) => m.ball)!.n).toBe(1);
+          expect(b.marks.length, id).toBeGreaterThan(0);
+          expect(b.says.length, id).toBeGreaterThan(0);
+          for (const m of b.marks) for (const p of m.kind === 'pass' ? [m.from, m.to] : m.pts) expect(Math.abs(p.x) <= 25 && p.y >= 0 && p.y <= 47, id).toBe(true);
+          const lines = b.marks.filter((m) => m.kind !== 'pass');
+          if (id === 'iso') expect(lines.some((m) => m.kind === 'dribble' && m.pid === named)).toBe(true);
+          else if (id !== 'horns')
+            expect(
+              lines.some((m) => m.kind === 'cut' && m.screen !== undefined),
+              id,
+            ).toBe(true);
+          if (id === 'chicago') expect(b.marks.some((m) => m.kind === 'pass' && m.hand)).toBe(true);
+          if (id === 'floppy' && !b.men.find((m) => m.star)!.ball) expect(b.men.find((m) => m.star)!.at.y).toBeLessThan(5);
+          // (the same play asked twice is the same board)
+          expect(playBoard(id, fp, named, names)).toEqual(b);
+        }
+        expect(playBoard('iso', fp.slice(0, 4), named)).toBeNull();
+      }
       // on the bench, he isn't the closer: the best one on the floor is
       go.manage.goTo = t.players.find((p) => !p.on)!.pid;
       g.sim.setTactics(0, go);

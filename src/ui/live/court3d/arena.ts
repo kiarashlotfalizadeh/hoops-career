@@ -278,7 +278,7 @@ export class Arena {
   private showTo = 1;
   private tipped = false;
   /** The roof's steel and the lights on it (only a camera looking up sees them: the first thing a slow device gives up). */
-  private steel: Object3D[] = [];
+  private steel: InstancedMesh[] = [];
   /** Which roof is built (Venue.roof), what every roof is made of, and the frames of the banks of lights its steel carries. */
   private roofKey = '';
   private readonly roofKit: RoofKit;
@@ -330,6 +330,12 @@ export class Arena {
     props: Props,
     /** The people round the floor (sideline.ts): the benches, the coaches, the referees, the table's crew. */
     readonly sideline: Sideline,
+    /**
+     * Whose building it is, where the scene knows when it is made (the live game does): its stands, its crowd and
+     * its roof are built as its own from the start. Not said, a plain building is built, and `paint` builds the
+     * parts of another's that differ when it is told whose it is.
+     */
+    venue?: Venue,
   ) {
     keep(this.seatMat);
     keep(this.lamp);
@@ -356,7 +362,7 @@ export class Arena {
     this.boards.farSide(0, 1.58, -(FAR - 1.6) + 0.26, 2 * ENDX - 0.6, 2.5);
 
     // the bowl and the people in it; chairs on the floor along the near side and in the far corners
-    this.bowl = new Bowl(keep);
+    this.bowl = new Bowl(keep, venue?.stands);
     this.group.add(this.bowl.group);
     this.group.add(props.chairs(this.bowl.chairs, this.seatMat));
     this.crowd = new Crowd(keep, props.crowd(), this.bowl.seats);
@@ -374,7 +380,7 @@ export class Arena {
     pool.rotateX(-Math.PI / 2);
     this.dark.setUsage(DynamicDrawUsage);
     pool.setAttribute('aDark', this.dark);
-    this.pools = new InstancedMesh(pool, keep(new ShaderMaterial({ ...POOL, transparent: true, depthWrite: false })), TOUCHES);
+    this.pools = keep(new InstancedMesh(pool, keep(new ShaderMaterial({ ...POOL, transparent: true, depthWrite: false })), TOUCHES));
     this.pools.instanceMatrix.setUsage(DynamicDrawUsage);
     this.pools.count = 0;
     this.pools.frustumCulled = false;
@@ -407,16 +413,21 @@ export class Arena {
     };
     one(darks, dark);
     one(banks, this.lamp);
-    // the roof (each building's own: see roofed), and the banners on the far side's truss
+    // the roof (each building's own: see roofed), and the banners on the far side's truss. Its pictures are
+    // this arena's own, made here and given back with it: one kept by the module was the first game's to give
+    // back, and every game after drew with a picture it did not own and never gave back.
+    const [ribs, tiles] = [keep(ribbed()), keep(tiled())];
+    // (the steel is built again for each building: whichever is up at the end goes back with the rest)
+    keep({ dispose: () => this.steel.forEach((o) => o.dispose()) });
     this.roofKit = {
       unit: keep(new BoxGeometry(1, 1, 1)),
       // (the steel shows a little whatever the light: the lamps point down, and a roof is never quite black)
       steel: keep(new MeshLambertMaterial({ color: 0xffffff, emissive: 0x1e2025 })),
       glow: keep(new MeshBasicMaterial({ color: 0xfff1dc })),
-      deck: new Mesh(keep(new PlaneGeometry(310, 290)), keep(new MeshLambertMaterial({ map: ribbed(keep), emissiveMap: ribbed(keep), side: DoubleSide }))),
+      deck: new Mesh(keep(new PlaneGeometry(310, 290)), keep(new MeshLambertMaterial({ map: ribs, emissiveMap: ribs, side: DoubleSide }))),
       ceiling: new Mesh(
         keep(new PlaneGeometry(300, 280)),
-        keep(new MeshLambertMaterial({ color: CEILING_TONE, emissive: CEILING_GLOW, map: tiled(keep), emissiveMap: tiled(keep), side: DoubleSide })),
+        keep(new MeshLambertMaterial({ color: CEILING_TONE, emissive: CEILING_GLOW, map: tiles, emissiveMap: tiles, side: DoubleSide })),
       ),
     };
     for (const m of [this.roofKit.deck, this.roofKit.ceiling]) {
@@ -431,7 +442,7 @@ export class Arena {
       this.group.add(board);
     }
     this.flags = this.boards.banners(BANNERS);
-    const roof = this.roofed(ROOFING)!;
+    const roof = this.roofed(venue?.roof ?? ROOFING)!;
     this.boards.build();
     this.fasciaLeds = this.boards.fascia(this.bowl.fasciaRuns);
     this.group.add(this.boards.group);
@@ -506,7 +517,7 @@ export class Arena {
     // (asked every frame: the same building as the last, as a rule)
     if (board === this.board && (venue ?? null) === this.venue && this.painted) return;
     const key = venue
-      ? `${board}|${venue.seed}|${venue.seats.join()}|${venue.rail}|${venue.house}|${venue.pad}|${venue.fascia}|${venue.boards}|${venue.crowd}|${venue.aisles}`
+      ? `${board}|${venue.seed}|${venue.seats.join()}|${venue.rail}|${venue.house}|${venue.pad}|${venue.fascia}|${venue.boards}|${venue.crowd}|${venue.aisles}|${venue.out ?? ''}`
       : board;
     this.board = board;
     this.venue = venue ?? null;
@@ -522,7 +533,7 @@ export class Arena {
     this.roofed(venue?.roof ?? ROOFING);
     this.recam();
     this.sideline.paint(board);
-    this.crowd.paint(board, this.trim, venue?.seats, venue?.seatMix, venue?.letters, venue?.crowd);
+    this.crowd.paint(board, this.trim, venue?.seats, venue?.seatMix, venue?.letters, venue?.crowd, venue?.out);
     this.lights.colours(board);
     this.lampTone.set(venue?.house ?? 0xfff1dc);
     this.lamp.color.copy(this.lampTone);
@@ -545,7 +556,7 @@ export class Arena {
     const roof = new Roof(look);
     for (const o of this.steel) {
       this.group.remove(o);
-      (o as InstancedMesh).dispose();
+      o.dispose();
     }
     for (const r of this.rigs) roof.rig(r.wide, r.g, LAMP_Y);
     this.steel = roof.build(this.roofKit, this.group);
@@ -635,7 +646,7 @@ export class Arena {
     this.crowd.dress(kits[1].color, kits[1].trim);
     // (the home fans' second colour: on its own floor, the home side's)
     this.trim = kits[0].trim;
-    if (this.board) this.crowd.paint(this.board, this.trim, this.venue?.seats, this.venue?.seatMix, this.venue?.letters, this.venue?.crowd);
+    if (this.board) this.crowd.paint(this.board, this.trim, this.venue?.seats, this.venue?.seatMix, this.venue?.letters, this.venue?.crowd, this.venue?.out);
     this.sideline.dress(kits);
   }
 
@@ -1178,10 +1189,8 @@ function cameras(seats: readonly Seat[], high: readonly number[]): number[] {
   return cams;
 }
 
-/** The roof's deck from below: ribbed sheet between purlins. */
-let ribs: CanvasTexture | null = null;
-function ribbed(keep: Keep): CanvasTexture {
-  if (ribs) return ribs;
+/** The roof's deck from below: ribbed sheet between purlins (the caller's to give back). */
+function ribbed(): CanvasTexture {
   const cv = document.createElement('canvas');
   cv.width = cv.height = 64;
   const ctx = cv.getContext('2d')!;
@@ -1197,7 +1206,7 @@ function ribbed(keep: Keep): CanvasTexture {
   ctx.fillRect(0, 0, 64, 3);
   ctx.fillStyle = '#3c3c3c';
   ctx.fillRect(0, 3, 64, 2);
-  ribs = keep(new CanvasTexture(cv));
+  const ribs = new CanvasTexture(cv);
   ribs.colorSpace = SRGBColorSpace;
   ribs.wrapS = ribs.wrapT = RepeatWrapping;
   ribs.repeat.set(52, 14);
@@ -1205,10 +1214,8 @@ function ribbed(keep: Keep): CanvasTexture {
   return ribs;
 }
 
-/** A ceiling from below: square acoustic panels in a grid of joints, a panel here and there a shade off. */
-let tiles: CanvasTexture | null = null;
-function tiled(keep: Keep): CanvasTexture {
-  if (tiles) return tiles;
+/** A ceiling from below: square acoustic panels in a grid of joints, a panel here and there a shade off (the caller's to give back). */
+function tiled(): CanvasTexture {
   const cv = document.createElement('canvas');
   cv.width = cv.height = 64;
   const ctx = cv.getContext('2d')!;
@@ -1223,7 +1230,7 @@ function tiled(keep: Keep): CanvasTexture {
     ctx.fillRect(x, 0, 1, 64);
     ctx.fillRect(0, x, 64, 1);
   }
-  tiles = keep(new CanvasTexture(cv));
+  const tiles = new CanvasTexture(cv);
   tiles.colorSpace = SRGBColorSpace;
   tiles.wrapS = tiles.wrapT = RepeatWrapping;
   tiles.repeat.set(30, 28);
