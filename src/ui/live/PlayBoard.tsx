@@ -1,8 +1,10 @@
 // A play on the coach's board (plays.ts playBoard): the half court from above with the basket at the top, the
-// five as numbered rings (1 has the ball; the man the play is for is filled in his team's colour), and the
+// five as numbered rings (1 has the ball; the man the play is for is filled in his team's colour, his number in
+// whichever of white and ink reads on it), and the
 // play in a coach's own marks: a line with an arrow for a cut, a line ending in a bar for a screen, a zigzag
 // for a dribble, a dashed line for a pass (handed off, not thrown: two short strokes where it changes hands).
 import { useId } from 'react';
+import { inkOn } from '../teamColors';
 import type { Pt } from './choreo';
 import type { Board } from './plays';
 
@@ -58,7 +60,8 @@ function zigzag(pts: Pt[]): Pt[] {
 
 const path = (pts: Pt[]) => pts.map((p, i) => `${i ? 'L' : 'M'}${f(p.x)} ${f(p.y)}`).join(' ');
 
-export function PlayBoard({ board, label, color }: { board: Board; label: string; color: string }) {
+/** `color`: the team's, as a hex (none: the user's own team's, from the page). */
+export function PlayBoard({ board, label, color }: { board: Board; label: string; color?: string }) {
   const arrow = useId();
   // (the three-point line: straight in the corners, the arc above them)
   const arcY = 5.25 + Math.sqrt(23.75 * 23.75 - 22 * 22);
@@ -68,7 +71,7 @@ export function PlayBoard({ board, label, color }: { board: Board; label: string
       viewBox={`${-WIDE} -1 ${2 * WIDE} ${DEEP + 1.5}`}
       role="img"
       aria-label={`${label}, on the board. ${board.says.join('. ')}`}
-      style={{ ['--pb-c' as string]: color }}
+      style={color ? { ['--pb-c' as string]: color, ['--pb-ink' as string]: inkOn(color) } : undefined}
     >
       <defs>
         <marker id={arrow} viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">

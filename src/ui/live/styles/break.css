@@ -586,13 +586,15 @@
   font-size: 2.1px;
   font-weight: 700;
 }
-/* (the man the play is for: his team's colour, his number in white) */
+/* (the man the play is for: his team's colour, his number in the one of white and ink that reads on it
+   (PlayBoard.tsx: a gold or a white kit takes ink); his ring stays the board's ink, a little heavier, so a
+   pale colour on paper or a dark one on the night's stock is still a ring) */
 .lv-pb .lv-pb-man.star circle:first-child {
-  fill: var(--pb-c, var(--text));
-  stroke: var(--pb-c, var(--text));
+  fill: var(--pb-c, var(--team));
+  stroke-width: 0.42;
 }
 .lv-pb .lv-pb-man.star text {
-  fill: #fff;
+  fill: var(--pb-ink, var(--team-ink));
 }
 .lv-pb .lv-pb-man .lv-pb-ball {
   fill: #c8642a;

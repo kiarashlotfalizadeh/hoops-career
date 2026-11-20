@@ -573,6 +573,12 @@ export interface Geo {
   /** The bands round his limbs that stand off them (see Cuff), as one shape on his bones; null for none. And what they are made of (one for every man). */
   cuffs(bands: readonly Cuff[]): BufferGeometry | null;
   cuffMat: MeshStandardMaterial;
+  /**
+   * The same man far off (the model's figureFar: figure.py's dress_far), a sixth of his triangles on bones of the same
+   * names, laid on the same sheet: what a lamp's shadow map and the floor's mirror draw of him, and all a device that
+   * can't keep up draws of a man who is not close (see Fig.low). `wearing` as the body's own.
+   */
+  far: { wearing(piece: string | null, high?: boolean): BufferGeometry; order: number[]; inverse: Matrix4[] };
 }
 
 /**
@@ -1079,22 +1085,19 @@ export function figureGeo(keep: <T extends { dispose(): void }>(o: T) => T, mode
   blob.rotateX(-Math.PI / 2);
   const ring = keep(new RingGeometry(1.55, 1.85, 28));
   ring.rotateX(-Math.PI / 2);
-  // each piece of hair is the same points with other triangles left out: one set of points for every man
-  const all = Array.from(geo.index!.array as ArrayLike<number>);
-  const made = new Map<string, BufferGeometry>();
-  const wearing = (name: string | null, high = true) => {
-    const key = name !== null && PIECES.includes(name) ? name : null;
-    let g = made.get(`${key} ${high}`);
-    if (!g) {
-      g = keep(new BufferGeometry());
-      for (const [k, a] of Object.entries(geo.attributes)) g.setAttribute(k, a);
-      const on = (p: string) => p === '' || p === key || (high && p === HIGH);
-      const tris = all.filter((_v, i) => on(piece[Math.floor(i / 3)]));
-      g.setIndex(geo.getAttribute('position').count > 65535 ? tris : new BufferAttribute(Uint16Array.from(tris), 1));
-      made.set(`${key} ${high}`, g);
-    }
-    return g;
-  };
+  const wearing = wearer(keep, geo, piece);
+  // (and the same man far off, on the same sheet: his shorts' picture reaches as far on it as on him)
+  const low = model.get('figureFar');
+  if (!low?.bones) throw new Error('figure.glb: no figureFar');
+  const lowM = merged(low);
+  for (const p of low.parts) p.geo.dispose();
+  const lowOrder = low.bones.map((b) => {
+    const k = (B as Record<string, number | undefined>)[b.name];
+    if (k === undefined) throw new Error(`figure.glb: a bone the puppet doesn't have (${b.name})`);
+    return k;
+  });
+  const lowInverse = low.bones.map((b) => b.inverse);
+  const lowPiece = sheetUv(lowM.geo, lowM.materials, lowOrder, lowInverse, { cloth, tubes }, shorts).piece;
   // (the points stay for a head of curls' own fuzz, made when the first man who wears one comes on)
   const shell = geo;
   const coiled = new Map<string, BufferGeometry>();
@@ -1123,6 +1126,30 @@ export function figureGeo(keep: <T extends { dispose(): void }>(o: T) => T, mode
     ring,
     cuffs: cuffMaker(geo, order, inverse),
     cuffMat: keep(new MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0, side: DoubleSide })),
+    far: { wearing: wearer(keep, lowM.geo, lowPiece), order: lowOrder, inverse: lowInverse },
+  };
+}
+
+/**
+ * A body with one of its pieces of hair on it (or none), in high shoes or low: each is the same points with other
+ * triangles left out, one set of points for every man, made the first time it is asked for. `piece`: which piece of
+ * hair each triangle is of (sheetUv's).
+ */
+function wearer(keep: <T extends { dispose(): void }>(o: T) => T, geo: BufferGeometry, piece: string[]): Geo['wearing'] {
+  const all = Array.from(geo.index!.array as ArrayLike<number>);
+  const made = new Map<string, BufferGeometry>();
+  return (name, high = true) => {
+    const key = name !== null && PIECES.includes(name) ? name : null;
+    let g = made.get(`${key} ${high}`);
+    if (!g) {
+      g = keep(new BufferGeometry());
+      for (const [k, a] of Object.entries(geo.attributes)) g.setAttribute(k, a);
+      const on = (p: string) => p === '' || p === key || (high && p === HIGH);
+      const tris = all.filter((_v, i) => on(piece[Math.floor(i / 3)]));
+      g.setIndex(geo.getAttribute('position').count > 65535 ? tris : new BufferAttribute(Uint16Array.from(tris), 1));
+      made.set(`${key} ${high}`, g);
+    }
+    return g;
   };
 }
 
@@ -1346,9 +1373,17 @@ const OVER: Partial<Record<Pic, number>> = { [Pic.Head]: 4, [Pic.ArmL]: 3, [Pic.
  * it; the parts become one. Says how high the shorts reach, and which piece of hair each triangle is of ('' for none);
  * and how big his kit is on him there, for its knit (see Detail): ft a uv across and up the pictures of it that are
  * flat (`cloth`), and the tubes the rest of it is round (`tubes`). Those are the model's alone: given them (`sized`, as
- * worked out for this model before), they are not worked out again.
+ * worked out for this model before), they are not worked out again. `reach`: how high the shorts reach, where another
+ * body of his has said (his far one's are the near one's).
  */
-function sheetUv(geo: BufferGeometry, wears: string[], order: number[], inverse: Matrix4[], sized?: Sized): { shorts: [number, number]; piece: string[] } & Sized {
+function sheetUv(
+  geo: BufferGeometry,
+  wears: string[],
+  order: number[],
+  inverse: Matrix4[],
+  sized?: Sized,
+  reach?: [number, number],
+): { shorts: [number, number]; piece: string[] } & Sized {
   const pos = geo.getAttribute('position');
   const uv = geo.getAttribute('uv');
   const on = geo.getAttribute('skinIndex');
@@ -1377,6 +1412,8 @@ function sheetUv(geo: BufferGeometry, wears: string[], order: number[], inverse:
     }
   lo -= SHORTS_PAST;
   hi += SHORTS_PAST;
+  // (a second body of the same man, far off, takes the first's: one picture of his shorts lies on both the same)
+  if (reach) [lo, hi] = reach;
   const P = new Vector3();
   const L = new Vector3();
   /** Which picture a point is in. */
@@ -1611,10 +1648,11 @@ const STUFF = {
   skin: [0.57, 1, 0],
   face: [0.5, 1, 0],
   // (where he sweats: his brow, his shoulders; a sheen, not oil)
-  sweat: [0.44, 1, 0],
+  sweat: [0.5, 1, 0],
   scalp: [0.5, 1, 0],
-  // (the crown of a shaved head: it shines a little)
-  dome: [0.36, 1, 0],
+  // (the crown of a shaved head: it shines a little, as skin drawn over bone does; no more than his brow, or under a
+  // lamp it is a white spot the size of his hand)
+  dome: [0.47, 1, 0],
   hand: [0.6, 1, 0],
   lip: [0.48, 1, 0],
   wetLip: [0.36, 1, 0],
@@ -1812,7 +1850,7 @@ function limitWrist(fore: Quaternion, hand: Quaternion, way: number) {
  */
 const FLICKED = new Set<string>(['jumper', 'hook', 'floater', 'freeThrow']);
 const FLICK = 1.1;
-const FLICK_IN = 60;
+const FLICK_IN = 90;
 const FLICK_HOLD = 300;
 const FLICK_OUT = 260;
 /**
@@ -2425,8 +2463,11 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
           sstep(-0.32 - 0.1 * stub, -0.08, ny) *
           sstep(0.58, 0.8, ax);
         const high = sstep(0.04 * stub, -0.14 * stub, ny - 0.25 * (nz + 0.1));
+        // (a full beard's line across his cheek is a little lower than a trimmed one's and no softer: it is the longest
+        // beard, and the higher and looser its top edge the more of it stood off his cheekbones as two wings of fluff)
+        const full4 = look.beard === 4;
         const cheek = Math.max(
-          (look.beard === 1 ? sstep(0.2, -0.32, line + 0.25 * ax * ax) : sstep(0.17, -0.2, line + 0.2 * (ax - 0.5) * (ax - 0.5))) * under * high,
+          (look.beard === 1 ? sstep(0.2, -0.32, line + 0.25 * ax * ax) : sstep(full4 ? 0.1 : 0.17, -0.2, line + (full4 ? 0.07 : 0) + 0.2 * (ax - 0.5) * (ax - 0.5))) * under * high,
           burn * (look.beard === 2 || look.beard === 5 ? 0 : 1),
         );
         // (where a shaved beard's shadow is: a little further up than any beard)
@@ -2465,9 +2506,12 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
           deep = 0.006 * sstep(0.4, 1, strap);
         } else if (look.beard > 2) {
           const all = Math.max(round, cheek);
-          const m = frayed(all, look.beard === 4 ? 0.44 : 0.5);
+          const m = frayed(all, look.beard === 4 ? 0.34 : 0.5);
           on = Math.max(m * (0.72 + 0.2 * strand + 0.08 * fine2) * (look.beard === 3 ? 0.9 : 1), shave);
-          deep = (look.beard === 4 ? 0.03 + 0.045 * sstep(-0.5, -0.9, ny) : 0.011) * sstep(0.2, 1, all) ** 1.5;
+          // (a full beard is short where it starts on his cheek and long under his jaw: it lies on his cheek by its
+          // line, a few millimetres of it, and stands off him more the further under the line)
+          const below = sstep(-0.02, -0.34, line);
+          deep = (look.beard === 4 ? 0.008 + 0.022 * below + 0.045 * sstep(-0.5, -0.9, ny) : 0.011) * sstep(0.2, 1, all) ** 1.5;
         }
         on *= seam;
         // (and close to his lips it lies flat on him, its hairs over their edge: a beard stood off his face right up to
@@ -3604,7 +3648,7 @@ const THROUGH = '0.8';
  * much of his skin the point is (set where his colour is worked out).
  */
 /** The sharper shine over his skin's own (its oil, his sweat): how much smoother than his skin it is (a share of its roughness), and how much of it a dry light skin has, the darkest more by, a wet one more by. */
-const SKIN_OIL = ['0.82', '0.11', '0.06', '0.9'] as const;
+const SKIN_OIL = ['0.82', '0.11', '0.06', '0.5'] as const;
 /** How much of the building's own shine his skin goes without (a share). */
 const SKIN_ROOF = '0.5';
 /** His hair's two bands of shine: how far each is shifted along the strand (toward its root, toward its tip), and how tight each is. */
@@ -3841,7 +3885,7 @@ const CREASE_SHADE = '0.22';
  * millimetres), how high (a share of a bead's width), and how smooth a bead's shine is. His hair is darker wet, by this
  * much at the most.
  */
-const WET_SHINE = 0.5;
+const WET_SHINE = 0.36;
 const BEAD_CELL = 0.0065;
 const BEAD_HIGH = 0.35;
 const BEAD_ROUGH = 0.1;
@@ -5173,6 +5217,16 @@ export class Fig {
   private readonly fuzz: SkinnedMesh | null = null;
   /** The bands that stand off his limbs (see Cuff), on the same bones; none on a man who wears none, or with no skin of his own. */
   private readonly cuffs: SkinnedMesh | null = null;
+  /**
+   * His far body (Geo.far), on the same bones, in his plain material: all of him that a lamp's shadow map and the
+   * floor's mirror draw, and what a device that can't keep up draws of him unless he is close. In any other picture
+   * none of its triangles are drawn (its draw range is empty: see bodies). His full body throws no shadow of its own.
+   */
+  private readonly low: SkinnedMesh | null = null;
+  /** Which picture is being drawn and how: the floor's mirror's; on a device that can't keep up; and, on one, close enough that his full body is wanted. */
+  private inMirror = false;
+  private plain = false;
+  private close = false;
   /** His material, and its plain twin once a slow device has asked for it (see lite). */
   private readonly mats: [MeshStandardMaterial, MeshStandardMaterial | null] | null = null;
   private readonly textures: [CanvasTexture, CanvasTexture] | null = null;
@@ -5385,17 +5439,38 @@ export class Fig {
     );
     this.own.push(bones);
     mesh.bind(bones, new Matrix4());
-    mesh.castShadow = true;
     mesh.receiveShadow = true;
     // (its bones carry it anywhere on the floor: its own bounds say nothing)
     mesh.frustumCulled = false;
     this.group.add(mesh);
+    // His far body. The shadow he throws is its shadow: four lamps each drew all of him again, 28,000 triangles and
+    // more where he was split finer for a close-up, for a map whose dot is a tenth of a foot. (Its points are every
+    // man's; its draw range is his own, so the shape is.)
+    const from = geo.far.wearing(STYLES[look.style].piece, gear.shoe.high);
+    const lowGeo = new BufferGeometry();
+    for (const [k, a] of Object.entries(from.attributes)) lowGeo.setAttribute(k, a);
+    lowGeo.setIndex(from.index);
+    const lowMat = stuffMaterial(map, stuff, this.told, true);
+    const lowBones = new Skeleton(
+      geo.far.order.map((k) => this.bones[k]),
+      geo.far.inverse,
+    );
+    this.own.push(lowGeo, lowMat, lowBones);
+    const low = new SkinnedMesh(lowGeo, lowMat);
+    this.low = low;
+    low.bind(lowBones, new Matrix4());
+    low.castShadow = true;
+    low.receiveShadow = true;
+    low.frustumCulled = false;
+    lowGeo.setDrawRange(0, 0);
+    low.onBeforeShadow = () => lowGeo.setDrawRange(0, Infinity);
+    low.onAfterShadow = () => lowGeo.setDrawRange(0, this.far ? Infinity : 0);
+    this.group.add(low);
     // (his hair's fuzz, on the same bones, and his beard's: it casts no shadow of its own)
     this.fuzz = new SkinnedMesh(fuzzGeo, fuzzMat);
     this.fuzz.bind(bones, new Matrix4());
     this.fuzz.frustumCulled = false;
     this.fuzz.receiveShadow = true;
-    this.fuzz.visible = this.fuzzy;
     this.group.add(this.fuzz);
     const banded = geo.cuffs(cuffsOf(gear, kit));
     if (banded) {
@@ -5406,6 +5481,40 @@ export class Fig {
       this.cuffs.receiveShadow = true;
       this.group.add(this.cuffs);
     }
+    this.bodies();
+  }
+
+  /** Whether the picture being drawn has his far body and not his full one (see low). */
+  private get far(): boolean {
+    return this.inMirror || (this.plain && !this.close);
+  }
+
+  /** Puts in the picture what it has of him: his full body with its fuzz and bands, or his far one alone; on a slow device, his full body in its plain material and nothing over it. */
+  private bodies() {
+    if (!this.mesh || !this.mats || !this.fuzz || !this.low) return;
+    const far = this.far;
+    this.mesh.visible = !far;
+    this.mesh.material = (this.plain && this.mats[1]) || this.mats[0];
+    this.fuzz.visible = !far && !this.plain && this.fuzzy;
+    if (this.cuffs) this.cuffs.visible = !far && !this.plain;
+    this.low.geometry.setDrawRange(0, far ? Infinity : 0);
+  }
+
+  /** The floor's mirror is being drawn (or has been): his far body is in it. */
+  mirrored(on: boolean) {
+    if (this.inMirror === on) return;
+    this.inMirror = on;
+    this.bodies();
+  }
+
+  /** On a device that can't keep up, whether he is close enough to the camera to be drawn in his full body (the scene says: see Scene.closeUp). */
+  closeTo(on: boolean) {
+    if (this.close === on) return;
+    this.close = on;
+    this.bodies();
+  }
+  get isClose(): boolean {
+    return this.close;
   }
 
   /**
@@ -5435,7 +5544,7 @@ export class Fig {
     const own = rng(seed + 977);
     const [wide, arm, leg, low] = [0.97 + 0.07 * own(), 0.95 + 0.11 * own(), 0.95 + 0.1 * own(), 0.94 + 0.1 * own()];
     scale(B.pelvis, bulk * s, s, deep);
-    scale(B.chest, bulk * s * wide, s, deep);
+    scale(B.chest, bulk * s * wide * (body.shoulders ?? 1), s, deep);
     scale(B.hem, bulk * s, s, deep);
     // (and each has a face of his own: a wider or a longer head, his jaw, his nose)
     const hs = Math.sqrt(s) * 1.0;
@@ -5648,7 +5757,7 @@ export class Fig {
         if (p.clip === 'celebrate' || p.clip === 'cheer') free = PARTY_HANDS[Math.floor(ownHand(p.me, 31) * PARTY_HANDS.length) % PARTY_HANDS.length][left ? 0 : 1];
         if (p.overBall && !drib) free = OPEN;
         if (one && one.tau > 0 && PASSED.has(one.id)) free = OPEN;
-        if (one && one.tau > 0 && FLICKED.has(one.id)) free = left ? OPEN : GOOSE;
+        if ((one && one.tau > 0 && FLICKED.has(one.id)) || p.following > 0.3) free = left ? OPEN : GOOSE;
         if ((one?.id === 'catch' || one?.id === 'take') && one.tau < 0) free = CATCH;
         if (p.onRim) free = GRAB;
       }
@@ -5676,10 +5785,13 @@ export class Fig {
         flex += (PASS_SNAP - flex) * e;
         pron += (PASS_PRON - pron) * e;
       }
-      if (!left && one && FLICKED.has(one.id) && one.tau > 0) {
-        // (held as long as his own follow-through is: some hold it up there, some drop it at once)
-        const u = clamp01(one.tau / FLICK_IN) * (1 - clamp01((one.tau - FLICK_HOLD * p.followHold) / FLICK_OUT));
-        const e = u * u * (3 - 2 * u);
+      if (!left) {
+        // (snapped over as the ball leaves it, and kept over for as long as his arm is held up after it: a wrist that
+        // straightened on its own clock stood up straight on an arm still pointing at the rim. A shot whose arm is
+        // not held (a hook, a floater) is let go of on that clock, his own)
+        let u = 0;
+        if (one && FLICKED.has(one.id) && one.tau > 0) u = clamp01(one.tau / FLICK_IN) * (1 - clamp01((one.tau - FLICK_HOLD * p.followHold) / FLICK_OUT));
+        const e = Math.max(u * u * (3 - 2 * u), one && one.tau < FLICK_IN ? 0 : p.following);
         flex += (FLICK - flex) * e;
         pron += (toFront - pron) * e;
       }
@@ -5831,16 +5943,18 @@ export class Fig {
     this.fine = null;
   }
 
-  /** A device that can't keep up: his plain material (no cloth's sheen, no knit up close), or back to the full one. */
+  /**
+   * A device that can't keep up: his far body, and close to the camera his full one in his plain material (no cloth's
+   * sheen, no knit up close, no fuzz or bands); or back to the full one.
+   */
   lite(on: boolean) {
-    if (!this.mesh || !this.mats || !this.textures || !this.fuzz) return;
+    if (!this.mats || !this.textures) return;
     if (on && !this.mats[1]) {
       this.mats[1] = stuffMaterial(this.textures[0], this.textures[1], this.told, true, false, this.relief);
       this.own.push(this.mats[1]);
     }
-    this.mesh.material = (on && this.mats[1]) || this.mats[0];
-    this.fuzz.visible = !on && this.fuzzy;
-    if (this.cuffs) this.cuffs.visible = !on;
+    this.plain = on;
+    this.bodies();
   }
 
   dispose() {

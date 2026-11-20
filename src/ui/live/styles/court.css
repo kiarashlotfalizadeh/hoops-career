@@ -936,6 +936,12 @@
   outline: 2px solid var(--ink);
   outline-offset: 1px;
 }
+/* (the card is paper, on a plate: its ink is the page's, bone at night, not the plate's own black, or its
+   button and its focus ring are black on the night's dark stock) */
+.lv .lv-tip {
+  --ink: var(--page-ink);
+  --paper-ink: var(--page-paper-ink);
+}
 .lv-tip-n {
   flex: none;
   font-family: var(--mono);
@@ -967,9 +973,16 @@
   outline: 2px solid var(--paper-ink);
   outline-offset: -3px;
 }
-.lv[data-tip~='court'] .lv-stage {
-  outline: 2px solid var(--ink);
-  outline-offset: -2px;
+/* (the court's is over a picture, light maple or a dark building: white with a line of ink inside it, so one
+   of the two reads on either, by day and at night) */
+.lv[data-tip~='court'] .lv-stage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  border: 2px solid var(--paper-ink);
+  box-shadow: inset 0 0 0 2px var(--plate);
+  pointer-events: none;
 }
 
 /* the starting lineups have the court to themselves: the camera's buttons come in with the tip */

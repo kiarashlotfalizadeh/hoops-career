@@ -32,7 +32,7 @@ import { periodLabel } from '../stats';
 import { flowActions } from '../flow';
 import { canGoBack } from '../nav';
 import { sealedGame, simDecided, skipChoices } from '../live/skip';
-import { courtFloor } from '../live/Court';
+import { courtFloor, type Woe } from '../live/Court';
 import { CourtView } from '../live/CourtView';
 import { occasionOf, postOf } from '../live/occasion';
 import { bodyOf } from '../live/court3d/puppet';
@@ -62,7 +62,8 @@ import { coachingMoves } from '../live/coaching';
 import { Touchline } from '../live/Touchline';
 import type { CallId } from '../../core/types';
 import { quickPills, subOptions } from '../live/session';
-import { HOT_STREAK } from '../live/Lineup';
+import { foulLimit } from '../live/alerts';
+import { HOT_STREAK, isCold } from '../live/Lineup';
 import { changesLine, screenChanges } from '../tactics/changes';
 import { nightWatch } from '../games/data';
 import { teamPlayers } from '../../core/league/helpers';
@@ -341,6 +342,22 @@ export default function Live() {
   const moreBench = league.settings.liveView === 'bench';
   // shooters on a streak wear a heat ring on the court
   const hot = new Set(view.sides.flatMap((sd) => sd.players.filter((p) => p.streak >= HOT_STREAK).map((p) => p.pid)));
+  // and what the game has done to the ten on it, small, on each: worn down under his staff's own line, in foul
+  // trouble at the count they sit him at, shooting cold (the bench panel's own rules: Lineup.tsx)
+  const woes = new Map<number, Woe>();
+  view.sides.forEach((sd, k) => {
+    const manage = sim.T[k].t.manage;
+    const limit = foulLimit(view.q, manage.foulTrouble);
+    for (const p of sd.players) {
+      if (!p.on) continue;
+      const woe: Woe = {
+        ...(p.energy < manage.fatigueSub && { tired: true }),
+        ...(p.fouls >= limit && { fouls: p.fouls }),
+        ...(p.streak < HOT_STREAK && isCold(p) && { cold: true }),
+      };
+      if (woe.tired || woe.fouls || woe.cold) woes.set(p.pid, woe);
+    }
+  });
   // the player of theirs the staff watches: the night's pick; one not dressed, their best night so far or their best player
   const themSide = view.sides[1 - userSide];
   const watchP =
@@ -678,6 +695,9 @@ export default function Live() {
           replays={!s.keyPlays && !toPending}
           floor={floor}
           hot={hot}
+          woes={woes}
+          fx={league.settings.courtFx !== false}
+          looks={(pid) => league.players[pid]?.look}
           // between possessions the floor is never empty: the tip's line-up, the break's shot chart, or the players where they stood
           idle={s.intro ? { kind: 'tip', fives: [view.sides[0].on, view.sides[1].on] } : atBreak ? { kind: 'chart', shots: view.box.shots ?? [] } : { kind: 'hold' }}
           clutch={clutch}

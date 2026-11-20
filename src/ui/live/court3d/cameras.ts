@@ -107,6 +107,14 @@ const THIN = 0.3;
  * next to nothing a man shoots from (choreo.test.ts holds it to all of that).
  */
 export const LOW = [MID + 4, 6, 35.3];
+/**
+ * The room that camera has (ft round its stand, on the floor's plan, at either end): no chair on the floor and no
+ * seat of the first rows behind it within this (bowl.ts leaves them out). The last chairs of the near side's row and
+ * the corner of the front rows were an arm's length from the lens: a knee, a head and a held-up phone along the foot
+ * of its picture, and a whole man across it whenever that corner stood to cheer.
+ */
+export const LOW_ROOM = 7;
+export const byLens = (x: number, z: number) => Math.hypot(Math.abs(x) - LOW[0], z - LOW[2]) < LOW_ROOM;
 /** A backboard's half width (ft): the picture holds its top corners. */
 const BOARD_HALF = 3;
 /** The ball is held with this much room over and under its middle (ft): all of it, not half of it at an edge. */

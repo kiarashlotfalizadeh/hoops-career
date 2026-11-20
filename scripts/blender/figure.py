@@ -1503,23 +1503,42 @@ def crop(body):
 
 def fit_shorts(shorts, body):
     """
-    The shorts' waist drawn in to the real man's (the form is cut for a thicker trunk: on him its waistband would
-    stand off his vest all round, a hoop), eased out again to its own shape over his hips; and its legs a little
-    narrower, as his thighs are.
+    The shorts cut to the real man from their waistband down to the fork (the form is cut for a thicker trunk): at
+    each height their seat is his own girth there and a little room, more of it lower down, and never less cloth
+    than just above (cloth hangs from the widest of him: it doesn't follow him back in under his hips). Fitted at
+    the waistband alone and left the form's own below it, the seat stood off his hips a hand's breadth each side,
+    a puff under a drawn-in band. And their legs a little narrower, as his thighs are.
     """
     def girth(o, y):
         ps = [G(v.co) for v in o.data.vertices]
         ps = [p for p in ps if abs(p[1] - y) < 0.04 and abs(p[0]) < 0.9]
         return max(abs(p[0]) for p in ps), max(p[2] for p in ps), max(-p[2] for p in ps)
 
-    bw, bf, bb = girth(body, WAIST)
-    sw, sf, sb = girth(shorts, WAIST)
-    room = 0.05
-    fx, ff, fb = (bw + room) / sw, (bf + room) / sf, (bb + room) / sb
-    print(f'[models] shorts: his waist {bw:.3f} wide, {bf:.3f} and {bb:.3f} deep; theirs {sw:.3f}, {sf:.3f}, {sb:.3f}')
+    # (from the waistband down to where the two legs part; the room: a thumb at the band, two fingers over his seat)
+    ys = [WAIST + (FORK + 0.1 - WAIST) * k / 7 for k in range(8)]
+    his = [girth(body, y) for y in ys]
+    theirs = [girth(shorts, y) for y in ys]
+    fit = []
+    most = [0.0, 0.0, 0.0]
+    for k, (b, s) in enumerate(zip(his, theirs)):
+        room = 0.05 + 0.045 * sstep(0.0, 4.0, k)
+        most = [max(m, v + room) for m, v in zip(most, b)]
+        fit.append([m / v for m, v in zip(most, s)])
+    bw, bf, bb = his[0]
+    sw, sf, sb = theirs[0]
+    print(f'[models] shorts: his waist {bw:.3f} wide, {bf:.3f} and {bb:.3f} deep; theirs {sw:.3f}, {sf:.3f}, {sb:.3f}; his seat {max(h[0] for h in his):.3f} wide, theirs {max(t[0] for t in theirs):.3f}')
+
+    def at(y):
+        # (above the band, the band's; below the fork, the fork's: the legs go on from there)
+        u = clamp((WAIST - y) / (WAIST - ys[-1])) * (len(ys) - 1)
+        k = min(int(u), len(ys) - 2)
+        return [a + (b - a) * (u - k) for a, b in zip(fit[k], fit[k + 1])]
+
     for v in shorts.data.vertices:
         x, y, z = G(v.co)
-        t = sstep(HIP - 0.2, WAIST - 0.18, y)
+        fx, ff, fb = at(y)
+        # (below the fork each leg is its own: the seat's fit is eased out of over the top of it)
+        t = sstep(FORK - 0.35, FORK + 0.1, y)
         x *= 1 + (fx - 1) * t
         z *= 1 + (fb + (ff - fb) * sstep(-0.12, 0.12, z) - 1) * t
         if y < FORK - 0.02 and abs(x) > 0.06:
@@ -1749,6 +1768,96 @@ def dress_real(man):
     built = [body, vest, shorts, socks, *mouth()]
     for s in (1, -1):
         built += shoe_fine(s)
+    return built
+
+
+# --- the same man, far off ---
+
+# The far body (figureFar): what a lamp's shadow map, the floor's mirror and a device that can't keep up draw of him
+# (figure.ts's Fig.low). A man in it is some 5,000 triangles to his 28,000: his skin this many (his head and his
+# hands more than their share of them: see dress_far), his kit this share of its own, each shoe's part this share,
+# and each piece of hair this many.
+FAR_SKIN = 2400
+FAR_KIT = 0.2
+FAR_SHOE = 0.13
+FAR_HAIR = {BUN: 72, TAIL: 60, TWISTS: 760, LOCS: 720, BRAIDS: 220, AFRO: 260, HIGHTOP: 180, CURLS: 230}
+
+
+def thin_part(obj, tris):
+    """A finished part, thinned: what it is (its points' one tag) is kept (thinning mixes a point's numbers with its neighbours')."""
+    a = obj.data.attributes.get('tag')
+    kind = a.data[0].value if a is not None and len(a.data) else None
+    thin(obj, max(12, tris))
+    return obj if kind is None else tag(obj, kind)
+
+
+def dress_far(man):
+    """
+    The real man in his kit again, far off: the same parts by the same names on the same bones as dress_real's, so his
+    sheet's pictures lie on this body as they do on that one (figure.ts's sheetUv reads either). His lips are shut and
+    there is nothing inside his mouth; his skin has no map of its own (a uv would have thinning keep its seams).
+    """
+    from mathutils.kdtree import KDTree
+
+    hi = real_skin(man, [f for f in man.faces if max(man.Q[i][1] for i in f) < 5.95], 'hiFar')
+    hi = apply_modifier(hi, 'SUBSURF', levels=1)
+    for a in list(hi.data.attributes):
+        if a.name in ('tag', 'mhv', 'ball') or a.name.startswith('d_'):
+            hi.data.attributes.remove(a)
+    fix_normals(hi)
+    mid = thin(hi, 16000)
+
+    faces = man.faces + man.eyes + man.lips_shut
+    body = real_skin(man, faces, 'bodyFar')
+    for a in [a.name for a in body.data.attributes if a.name in ('mhv', 'ball') or a.name.startswith('d_')]:
+        body.data.attributes.remove(body.data.attributes[a])
+    ear = set(np.where(man.ear)[0])
+    body.data.materials.append(material(SKIN))
+    body.data.materials.append(material(EAR))
+    for i, f in enumerate(faces):
+        if all(v in ear for v in f):
+            body.data.polygons[i].material_index = 1
+    # (his skin goes less far in under his vest's edges than the near body's: a coarser skin would poke through it)
+    under = 0.07
+    cut(
+        body,
+        [plane_pit(1, -under), plane_pit(-1, -under), plane_vee(1, -under), plane_vee(-1, -under), level(HEM + 0.12), level(SOCK_HI - 0.06)],
+        lambda p: pit(p, 1) > -under or pit(p, -1) > -under or (vee(p) > -under and p[1] > 4.9) or (SOCK_HI - 0.06 < p[1] < HEM + 0.12 and abs(p[0]) < 1.2),
+        under=5.7,
+    )
+    # (thinned with his face and his hands swollen: thinning goes by size, and a head of a few hundred triangles is a
+    # block on his shoulders, a hand of a few dozen a paddle)
+    spots = [(Vector((0, HEAD_C[1] - 0.05, HEAD_C[2] + 0.12)), 0.42, 1.7)]
+    for s in (1, -1):
+        spots.append((arm_frame(s) @ Vector((0.0, -(ARM + 0.2), 0.01)), HAND_REACH, 1.5))
+    at = []
+    for c, reach, by in spots:
+        for o, r0, b0 in at:
+            d = c - o
+            if d.length > r0:
+                c = o + d * ((d.length + r0 * (b0 - 1)) / d.length)
+        swell(body, c, reach, by)
+        at.append((c, reach, by))
+    thin(body, FAR_SKIN)
+    for c, reach, by in reversed(at):
+        swell(body, c, reach, by, back=True)
+    # (what each point is, his head's or his body's, as the point of him nearest it was)
+    tree = KDTree(len(man.Q))
+    for i, q in enumerate(man.Q):
+        tree.insert(B(*q), i)
+    tree.balance()
+    body.data.attributes.remove(body.data.attributes['tag'])
+    kinds = [FACE if man.is_head[tree.find(v.co)[1]] else REAL for v in body.data.vertices]
+    body.data.attributes.new('tag', 'INT', 'POINT').data.foreach_set('value', kinds)
+
+    vest, shorts, socks = kit(mid, FAR_KIT)
+    for o in (vest, socks):
+        tag(o, BY_PLACE)
+    built = [body, vest, shorts, socks]
+    for s in (1, -1):
+        built += [thin_part(o, tri_count(o) * FAR_SHOE) for o in shoe_fine(s)]
+    for o in hair_pieces(light=True):
+        built.append(thin_part(o, FAR_HAIR[o.data.materials[0].name]))
     return built
 
 
@@ -2477,7 +2586,11 @@ if __name__ == '__main__':
 
     anatomy.write(fig, _real, a['out'])
     fig.data.attributes.remove(fig.data.attributes['mhv'])
-    export_glb(os.path.join(a['out'], 'figure.glb'), [fig, arm_ob])
+    # (and the same man far off: a second mesh on bones of the same names)
+    low, low_rig = finish(dress_far(_real), 'figureFar')
+    low_rig.name = 'figureFarRig'
+    report(low)
+    export_glb(os.path.join(a['out'], 'figure.glb'), [fig, arm_ob, low, low_rig])
     save_blend(os.path.join(a['blend'], 'figure.blend'))
     if 'preview' in a:
         hand = arm_frame(1) @ Vector((0, -(ARM + 0.35), 0))

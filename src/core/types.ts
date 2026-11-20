@@ -203,8 +203,28 @@ export interface DraftInfo {
   read?: { ovr: number; pot: number; rank?: number; staff?: { ovr: number; pot: number } };
 }
 
+/**
+ * How a player looks, where that is given and not made up from his number: each part named here is his own, and the
+ * rest is still made up (the 3D court's look.ts). A seed carries these for whoever its data has them for
+ * (data/looks.json: scripts/data/build-seed.ts); none ships with the game.
+ */
+export interface PlayerLook {
+  /** His skin, lightest to darkest: 0 to 7 (look.ts SKINS). */
+  tone?: number;
+  /** How he wears his hair: one of look.ts STYLES' names ('shaved', 'buzz', 'fade', 'braids', 'locs', ...). */
+  hair?: string;
+  /** His beard: one of look.ts BEARDS ('none', 'stubble', 'goatee', 'beard', 'full', 'strap'). */
+  beard?: string;
+  /** His hair's colour, where it is not his own (a hex: bleached, dyed). */
+  hairColor?: string;
+  /** How far his hairline has gone back at his temples, 0 to 1. */
+  recede?: number;
+}
+
 export interface Player {
   pid: number;
+  /** His look, where the seed has it (see PlayerLook). */
+  look?: PlayerLook;
   bbrefId?: string;
   /** NBA.com person id, for refreshing real data. */
   nbaId?: number;
@@ -1472,6 +1492,8 @@ export interface Settings {
   courtLook?: '3d' | 'flat';
   /** The 3D court's camera: the broadcast's main one (the default), the sideline's, the end zone's, the baseline's or the overhead. */
   courtCam?: 'tv' | 'side' | 'end' | 'low' | 'top';
+  /** The 3D court draws a shot's streak through the air and a ring through the net on a swish (default on). */
+  courtFx?: boolean;
   /** Live games open with the starting lineups on the court before the tip (default on). */
   liveIntro?: boolean;
   /** Live games show the night's other scores as they go (default on). */

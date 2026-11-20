@@ -305,6 +305,12 @@ export default function Settings() {
                 help="Players as figures, seen from a broadcast camera. Off: the 2D floor from above. The camera button on the court switches too."
               />
               <Toggle
+                on={st.courtFx !== false}
+                onChange={(v) => set('courtFx', v)}
+                label="Shot trails"
+                help="On the 3D court: a streak behind a shot in the air, a ring through the net on a swish."
+              />
+              <Toggle
                 on={st.liveTurn !== 'upright'}
                 onChange={(v) => set('liveTurn', v ? 'side' : 'upright')}
                 label="Sideways on a phone"

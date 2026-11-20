@@ -1,7 +1,10 @@
 // What a man looks like: his skin's tone, his hair and how he wears it, his beard, the shape of his
 // face. All of it comes from his id, the same every night, and none of it from who he is: a real name
-// gets a look as made up as anyone's. Plain data (no three.js), so the benches, the coaches and the
+// gets a look as made up as anyone's, unless the league's own data gives a player his (types.ts PlayerLook:
+// lookOf takes what is given and makes up the rest; the game ships with none). Plain data (no three.js), so the benches, the coaches and the
 // referees can take theirs from here too.
+
+import type { PlayerLook } from '../../../core/types';
 
 export interface Look {
   /** His skin, one of SKINS. */
@@ -279,16 +282,27 @@ function pick(shares: readonly number[], roll: number): number {
   return shares.length - 1;
 }
 
-/** A man's look, from his id: the same every time, and well spread over any roster. */
-export function lookOf(pid: number): Look {
+/**
+ * A man's look, from his id: the same every time, and well spread over any roster. `real`: what of it is given and
+ * not made up (types.ts PlayerLook: his tone, how he wears his hair, his beard, a dyed colour, his hairline): those
+ * parts are as given, and everything else is still his id's, made up round them (the shape of his face goes with the
+ * tone he has). A name or a value it doesn't know is passed over, not guessed at.
+ */
+export function lookOf(pid: number, real?: PlayerLook): Look {
   const r = (salt: number) => hash(pid, salt);
-  const tone = pick(TONE_SHARE, r(0));
+  const given = real?.tone;
+  const tone = given !== undefined && Number.isInteger(given) && given >= 0 && given < SKINS.length ? given : pick(TONE_SHARE, r(0));
   // (how tightly his hair curls goes with his tone, loosely: the middle tones have both kinds)
   const curl = Math.min(1, Math.max(0, (tone - 1.5) / 2.5 + (r(1) - 0.5) * 0.5));
-  const style = pick(
-    STRAIGHT.map((s, i) => s * (1 - curl) + CURLED[i] * curl),
-    r(2),
-  );
+  const worn = real?.hair === undefined ? -1 : STYLES.findIndex((s) => s.name === real.hair);
+  const style =
+    worn >= 0
+      ? worn
+      : pick(
+          STRAIGHT.map((s, i) => s * (1 - curl) + CURLED[i] * curl),
+          r(2),
+        );
+  const grown = real?.beard === undefined ? -1 : (BEARDS as readonly string[]).indexOf(real.beard);
   const hairs = HAIRS[tone];
   const span = (salt: number, lo: number, hi: number) => lo + (hi - lo) * r(salt);
   const own = hairs[Math.floor(r(3) * hairs.length) % hairs.length];
@@ -302,16 +316,16 @@ export function lookOf(pid: number): Look {
   return {
     shape: shapeOf(r, tone, age),
     skin: SKINS[tone],
-    hair: dyed ?? own,
+    hair: (real?.hairColor && /^#[0-9a-f]{6}$/i.test(real.hairColor) ? real.hairColor : null) ?? dyed ?? own,
     brows: own,
     style,
-    beard: pick(BEARD_SHARE, r(4)),
+    beard: grown >= 0 ? grown : pick(BEARD_SHARE, r(4)),
     tone,
     // (light eyes only with the lighter tones, and not often)
     eyes: EYES[tone < 2 && r(5) < 0.4 ? 4 + (r(6) < 0.5 ? 0 : 1) : Math.floor(r(6) * 4) % 4],
     brow: span(7, 0.35, 1),
     // (most men's hairline is where it was; one in eight or so has gone back at the temples, a few a long way)
-    recede: r(21) < 0.12 ? span(22, 0.25, 0.8) : 0,
+    recede: real?.recede !== undefined ? Math.min(1, Math.max(0, real.recede)) : r(21) < 0.12 ? span(22, 0.25, 0.8) : 0,
     notch: r(23) < 0.07,
     side: r(24) < 0.5 ? 1 : -1,
     cut: { sides: r(25), top: r(26) },

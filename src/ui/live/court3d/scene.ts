@@ -26,7 +26,7 @@ import {
   type WebGLRenderTarget,
 } from 'three';
 import { BASKET, COURT_LEN, faceWorld, toWorld, type Act, type Flash, type Frame, type Pt, type Script } from '../choreo';
-import { FLOOR_L, FLOOR_W, pose, type GameInfo, type Pose, type Stage } from '../Court';
+import { COLD, FLOOR_L, FLOOR_W, pose, type GameInfo, type Pose, type Stage, type Woe } from '../Court';
 import type { MatchKit, Venue } from '../../teamColors';
 import type { Occasion } from '../occasion';
 import { Arena } from './arena';
@@ -55,6 +55,9 @@ import { BIG_WORD, Director, INTRO_MS, WIPE_MS, type BigKind } from './director'
 import { Exchange, offerAt, POCKET_SIDE } from './exchange';
 import { Fig, figureGeo, type Geo } from './figure';
 import { air, arenaLight, HAZE_COLOR, HAZE_DENSITY, Lens, varnish, woodOf, type FloorKnobs } from './lens';
+import type { PlayerLook } from '../../../core/types';
+import { lookOf } from './look';
+import { ShotFx } from './fx';
 import { Marks, SHOT_LATE } from './marks';
 import type { Models } from './models';
 import type { NetSim } from './net';
@@ -72,11 +75,19 @@ export interface SceneProps {
   /** The game as the court has played it, for the building's boards (none in a highlight). */
   game?: GameInfo;
   hot?: ReadonlySet<number>;
+  /** What the game has done to the men on the floor (Court.tsx Woe): a ring under a man in foul trouble or shooting cold, and all of it in a word on his tag. */
+  woes?: ReadonlyMap<number, Woe>;
   /** The colours of the building: the boards along the far side, the warning ring. */
   board: string;
   /** Whose building it is (teamColors.ts venueLook): its seats, rails, concrete and house lights. */
   venue?: Venue;
   warn: string;
+  /** The colour of foul trouble, as it reads on the floor. */
+  bad?: string;
+  /** A shot's streak through the air and a swish's ring are drawn (fx.ts ShotFx): the user's setting, on unless it says not. */
+  fx?: boolean;
+  /** What of a player's look is given, not made up (types.ts PlayerLook), where the league has it. */
+  looks?: (pid: number) => PlayerLook | undefined;
   /** The game is over: the side that won it (they celebrate, the others don't). */
   final?: 0 | 1;
   /** And what kind of win it is (a late winner is mobbed, a title brings the confetti down): an ordinary win when not said. */
@@ -100,7 +111,7 @@ export interface Disc {
 /** What the page writes over the picture this frame (in CSS pixels). */
 export interface Labels {
   /** The tags over heads: the man with the ball, then a man the user tapped; each his name and number, in his team's colour (`late`: the shot clock is running out on him). */
-  tags: { x: number; y: number; text: string; num: string; color: string; late: boolean }[];
+  tags: { x: number; y: number; text: string; num: string; color: string; late: boolean; woe: string }[];
   flash: { x: number; y: number; text: string; kind: Flash['kind']; alpha: number } | null;
   /** The lower third: the man a cut-in or a replay is on, and what he did (`key` changes when it does). */
   third: { key: string; name: string; num: string; color: string; team: string; word: string } | null;
@@ -455,6 +466,8 @@ const V = new Vector3();
 const HEAD_FT = 0.8;
 const CLOSE_PX = [110, 140] as const;
 const CLOSE_MEN = 4;
+/** On a device that can't keep up a man is his far body (figure.ts Fig.low) until his head is this many of the screen's dots high, and his full one until it is under the first again. */
+const FULL_PX = [40, 54] as const;
 const Q = new Quaternion();
 const AXIS_X = new Vector3(1, 0, 0);
 const HANDS: V3[] = [];
@@ -714,6 +727,9 @@ export class CourtScene {
   private long = 0;
   // the shot in the air (ballistics.ts), how many of the things it meets it has met, and how fast the ball was going when this move picked it up
   private flight: Shot | null = null;
+  /** How far along that flight the ball is (0..1), and the shot's streak and a swish's ring (fx.ts). */
+  private flightU = 0;
+  private readonly shotFx: ShotFx;
   private met = 0;
   private readonly fromV = new Vector3();
   // a blocked shot is off the hand and on its own (until someone has it)
@@ -865,7 +881,12 @@ export class CourtScene {
     this.arena = new Arena(keep, props, new Sideline(keep, props, models, this.geo), venue);
     this.scene.add(this.arena.group);
     // (the floor's mirror is drawn before each picture, from that picture's camera)
-    this.lens.before = (cam) => this.arena.reflect(this.renderer, this.scene, cam);
+    // (each man in it is his far body: figure.ts Fig.low)
+    this.lens.before = (cam) => {
+      for (const f of this.figs.values()) f.mirrored(true);
+      this.arena.reflect(this.renderer, this.scene, cam);
+      for (const f of this.figs.values()) f.mirrored(false);
+    };
 
     // the baskets: the unit behind each baseline, its board, the rim and its net
     for (const end of [-1, 1]) {
@@ -889,6 +910,8 @@ export class CourtScene {
     this.scene.add(this.ballShadow);
     this.marks = new Marks(keep);
     this.scene.add(this.marks.group);
+    this.shotFx = new ShotFx(keep);
+    this.scene.add(this.shotFx.group);
     this.led = props.led;
   }
 
@@ -1036,7 +1059,7 @@ export class CourtScene {
     }
     if (!f) {
       // (his crop of hair, his sleeves and shoes are his own every night: no likeness, only so ten men are not one man)
-      f = new Fig(this.geo, p.body(pid), side, p.kits[side], p.jersey(pid), pid, p.names?.(pid), mark);
+      f = new Fig(this.geo, p.body(pid), side, p.kits[side], p.jersey(pid), pid, p.names?.(pid), mark, lookOf(pid, p.looks?.(pid)));
       f.lite(this.figLite);
       f.shadow.visible = this.figLite;
       // (a body takes the lamps' shadows too: an arm's on a trunk, one man's on the next)
@@ -1485,6 +1508,7 @@ export class CourtScene {
           if (this.landed) free = true;
           else {
             set(ball, shotAt(shot, lu, TMP));
+            this.flightU = lu;
             // (what a body had moved it in his hands is let go of on the way up)
             this.give(null, null, ease, false);
             backspin = this.met === 0;
@@ -1497,6 +1521,8 @@ export class CourtScene {
               if (hit.what === 'net') {
                 this.netKick = 1;
                 this.netHit = hit.power;
+                // (nothing but the cords: the ring drops through them)
+                if (p.fx !== false && this.level < 2 && shot.hits.every((h) => h.what === 'net')) this.shotFx.swish(rim.x, RIM_H - 0.1, rim.z);
                 roar(sc.off === 0, b.flash?.text === '+3' || !!sc.moment);
                 if (sc.moment) this.lens.bump(BUZZER_BUMP);
               } else if (hit.what === 'rim') {
@@ -1766,6 +1792,7 @@ export class CourtScene {
       game: p.game,
       bench: p.bench,
       body: p.body,
+      looks: p.looks,
       own,
       ease,
       real,
@@ -1829,11 +1856,17 @@ export class CourtScene {
       f.wear = wear;
       f.place();
       const hot = !!p.hot?.has(pid);
+      const woe = p.woes?.get(pid);
       // (the man with the ball has the broadcast's own ring: see marks.ts)
-      f.ring.visible = hot && f !== holder;
-      if (f.ring.visible) (f.ring.material as MeshBasicMaterial).color.set(p.warn);
+      // (one ring a man: his fouls first, the thing a coach acts on; then a hot hand; then a cold one)
+      const ring = woe?.fouls ? (p.bad ?? p.warn) : hot ? p.warn : woe?.cold ? COLD : null;
+      f.ring.visible = !!ring && f !== holder;
+      if (ring && f.ring.visible) (f.ring.material as MeshBasicMaterial).color.set(ring);
     }
 
+    // (a shot in the air has its way drawn behind it, where the user has that on and the device keeps up)
+    this.shotFx.arc(p.fx !== false && !calm && this.level < 2 && this.flight && !this.landed && !this.swatted ? this.flight : null, this.flightU, this.camera.position);
+    this.shotFx.tick(calm ? 1e6 : real);
     // the ball turns as what it is doing turns it (ballistics.ts spinFor): its seams show it; and its dark is put on the floor under it
     const bm = this.ballFrame.position;
     const moved = bm.distanceTo(ball);
@@ -2080,7 +2113,9 @@ export class CourtScene {
       const j = f.pup.j;
       const h = f.pup.world(j[J.head * 3], j[J.head * 3 + 1], j[J.head * 3 + 2], TMP);
       const at = this.screen(A.set(h.x, h.y + TAG_OVER, h.z));
-      labels.tags.push({ x: at.x, y: at.y, text: p.names!(pid), num: p.jersey(pid), color: p.kits[f.side].color, late: isLate });
+      const w = p.woes?.get(pid);
+      const woe = w ? [w.fouls ? `${w.fouls} fouls` : '', w.tired ? 'Tired' : '', w.cold ? 'Cold' : ''].filter(Boolean).join(' · ') : '';
+      labels.tags.push({ x: at.x, y: at.y, text: p.names!(pid), num: p.jersey(pid), color: p.kits[f.side].color, late: isLate, woe });
     };
     this.marks.tick(real);
     const lit = plain && holder ? (holder as Fig) : null;
@@ -3997,7 +4032,9 @@ export class CourtScene {
     const k = this.renderer.domElement.height / 2 / Math.tan((cam.fov * Math.PI) / 360);
     for (const f of this.figs.values()) {
       const at = headOf(f);
-      seen.push([f, this.level > 0 ? 0 : (HEAD_FT / Math.max(0.5, cam.position.distanceTo(V.set(at.x, at.y, at.z)))) * k]);
+      const px = (HEAD_FT / Math.max(0.5, cam.position.distanceTo(V.set(at.x, at.y, at.z)))) * k;
+      f.closeTo(px > FULL_PX[f.isClose ? 0 : 1]);
+      seen.push([f, this.level > 0 ? 0 : px]);
     }
     seen.sort((a, b) => b[1] - a[1]);
     let made = all ? Infinity : 1;

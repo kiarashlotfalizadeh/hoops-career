@@ -120,6 +120,14 @@ def front(tree, x, y):
     return -hit.y if hit is not None else 0.0
 
 
+def girth(tree, y, th, c=0.0):
+    """How far out a body's skin is, at this height, from the upright line through his middle `c` forward: the way `th` points (0: in front of him, round toward his left), the first of it met from outside."""
+    d = Vector((math.sin(th), 0.0, math.cos(th)))
+    o = Vector((0.0, y, c)) + d * 3.0
+    hit = tree.ray_cast(B(*o), B(*(-d)))[0]
+    return math.hypot(hit.x, -hit.y - c) if hit is not None else 0.0
+
+
 def tree_of(obj):
     from mathutils.bvhtree import BVHTree
     bm = bmesh.new()
@@ -576,7 +584,9 @@ def dress_bench(hi):
     )
     slots(top, [WARM, TRIM_M], lambda p: TRIM_M if neck(p, c) > -band or down_arm(p) > CUFF - band else WARM)
 
-    shorts = shorts_form()
+    # (cut straighter than the game's: a man on the bench is sat down, his thighs level, and a leg that flares to its
+    # hem stands off his knee all round as a bell does)
+    shorts = shorts_form([(HEM - 0.25, 0.45, 0.355, 0.395, 0.415), (HEM, 0.45, 0.36, 0.4, 0.42), (FORK - 0.12, 0.43, 0.385, 0.435, 0.45)], folds=0.014)
     F.fit_shorts(shorts, mid)
     thin(shorts, 1500)
     cut(shorts, [level(HEM), level(WAIST), level(HEM + 0.085)], lambda p: HEM < p[1] < WAIST and abs(p[0]) < 1.2)
@@ -678,8 +688,11 @@ def dress_staff(hi):
     # (little of it shows: cut out first, then thinned, so that little keeps its shape)
     thin(shirt, 900)
     set_material(shirt, material(SHIRT))
-    # its collar: a band round his neck, a leaf each side of the knot down to its point on his chest
+    # its collar: a band round his neck, a leaf each side of the knot down to its point on his chest. It is on his
+    # neck: each point of it a finger off his own skin at its own height (his neck is measured, all the way round: a
+    # ring of one size stood off a neck thinner than it, and you could see down between the two)
     under = tree_of(shirt)
+    skin = tree_of(mid)
     rows = []
     for f in (0, 0.5, 1):
         row = []
@@ -688,9 +701,12 @@ def dress_staff(hi):
             a = abs(th)
             # (how far down it comes: a hand's breadth round the back, each leaf's point a little out from the knot)
             deep = 0.12 + 0.2 * max(0.0, 1 - abs(a - 0.5) / 0.45) - 0.05 * max(0.0, 1 - a / 0.12)
-            x = math.sin(th) * (0.3 + 0.035 * f)
-            z = math.cos(th) * ((0.25 if a < math.pi / 2 else 0.29) + 0.035 * f)
-            y = 5.73 - NECK_TIP * z - deep * f
+            y = 5.73 - NECK_TIP * 0.27 * math.cos(th) - deep * f
+            # (his neck leans forward as it goes up: its middle at this height is half way from the front of it to the back)
+            c = (girth(skin, y, 0.0) - girth(skin, y, math.pi)) / 2
+            r = girth(skin, y, th, c) + 0.01 + 0.024 * f
+            x = math.sin(th) * r
+            z = c + math.cos(th) * r
             if a < 1.2:
                 z = max(z, front(under, x, y) + 0.02 + 0.012 * f)
             row.append((x, y, z))
@@ -701,7 +717,15 @@ def dress_staff(hi):
     jacket = copy(mid, 'jacket')
     # (well off him: smoothing draws cloth in, and the shirt must never come through it)
     # (less of it down his arms: a sleeve is cut closer than a jacket's body, and a thick one is a body-builder's arm)
-    push(jacket, lambda p: 0.1 - 0.035 * sstep(0.25, 0.6, down_arm(p)) + 0.08 * sstep(3.9, 3.3, p[1]) * (1 if down_arm(p) < 0.5 else 0))
+    # (and cut to him, not blown up round him: a jacket's shoulder sits on his shoulder and its collar on his shirt's;
+    # three fingers off him everywhere it was a lineman's pads on a coach)
+    push(
+        jacket,
+        lambda p: 0.07
+        - 0.03 * sstep(0.25, 0.6, down_arm(p))
+        - 0.02 * sstep(5.15, 5.45, p[1]) * (1 if down_arm(p) < 0.5 else 0)
+        + 0.06 * sstep(3.9, 3.3, p[1]) * (1 if down_arm(p) < 0.5 else 0),
+    )
     # (pushed out, it runs through itself under the arms: one skin is made of it again)
     jacket = apply_modifier(jacket, 'REMESH', mode='VOXEL', voxel_size=0.03, adaptivity=0.0, use_smooth_shade=True)
     relax(jacket, 8)
@@ -826,7 +850,9 @@ if __name__ == '__main__':
     F.scalp_of(man, shut=True)
     print(f'[models] people: {len(man.lips_shut)} faces shut his lips')
     athlete = man.Q
-    BUILDS = {'bench': None, 'staff': (0.55, 0.62, 1.08, 1.0, 1.06, 1.04), 'official': (0.72, 0.5, 1.1, 1.03, 1.06, 1.08)}
+    # (a coach is no athlete under his jacket: an ordinary man's muscle, his chest no broader than theirs and his
+    # arms lighter, or his suit is cut round a wrestler's shoulders)
+    BUILDS = {'bench': None, 'staff': (0.5, 0.58, 1.0, 0.94, 1.04, 0.98), 'official': (0.72, 0.5, 1.1, 1.03, 1.06, 1.08)}
     bodies = {name: (athlete if b is None else man.built(*b)) for name, b in BUILDS.items()}
     people = []
     for detail, suffix in ((1.0, ''), (FAR, 'Far')):

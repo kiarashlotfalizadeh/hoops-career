@@ -109,6 +109,9 @@ export type ClipId =
   | 'hesi'
   | 'inOut'
   | 'pullBack'
+  | 'btl'
+  | 'behind'
+  | 'spin'
   | 'stop'
   | 'closeout'
   | 'stumble'
@@ -131,6 +134,8 @@ export type ClipId =
   | 'dunk1'
   | 'dunkHang'
   | 'dunkBack'
+  | 'dunkMill'
+  | 'dunkRev'
   | 'dunkSide'
   | 'freeThrow'
   | 'ftRoutine'
@@ -367,6 +372,66 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
       [330, { bx: 0.95, by: 0.5, bz: 0.35, gr: 0, hip: -0.42, lean: 0.05, surge: -0.3 }],
       [450, { by: 2.8, bz: 0.6, gr: 1, hip: -0.32, lean: 0.12, surge: -0.1 }],
       [560, { by: 2.6, gr: 1 }],
+    ],
+    { grip: 'top' },
+  ),
+  // (between his legs: his feet split, his left ahead and his right back, and the ball put down through them from his
+  // right hand to his left, which takes it behind his front thigh: his own leg is between the ball and the man)
+  btl: clip(
+    'btl',
+    'shot',
+    0,
+    DRIBBLE,
+    [
+      [0, { by: 2.6, gr: 1 }],
+      // (let go of, and taken, where a hand can be on top of it: pushed down from his hip, and up into his left by his thigh)
+      [80, { bx: 0.6, by: 2.15, bz: 0.55, gr: 0.4, hip: -0.52, wide: 0.22, flf: 0.5, frf: -0.3, lean: 0.14 }],
+      [160, { bx: 0.0, by: 0.5, bz: 0.1, gr: 0, hip: -0.6, wide: 0.26, flf: 0.55, frf: -0.35, lean: 0.2 }],
+      [235, { bx: -0.7, by: 2.2, bz: 0.3, gl: 0.3, lx: 0.45, ly: -2.0, lz: 0.4, hip: -0.56, wide: 0.24, flf: 0.5, frf: -0.3, tilt: -0.12, twist: -0.2, lean: 0.16 }],
+      [270, { bx: -0.78, by: 2.4, bz: 0.35, gl: 1, lx: 0.45, ly: -2.0, lz: 0.4, hip: -0.55, wide: 0.24, flf: 0.5, frf: -0.3, tilt: -0.14, twist: -0.22, lean: 0.16 }],
+      // (it is his left hand's now, and stays there: he comes up out of the split with it)
+      [330, { bx: -0.9, by: 2.5, bz: 0.6, gl: 1, lx: 0.4, ly: -2.0, lz: 0.6, hip: -0.42, tilt: -0.08, twist: -0.1, flf: 0.25, frf: -0.15 }],
+      [410, { bx: -0.95, by: 2.6, gl: 1, lx: 0.4, ly: -2.0, lz: 0.75 }],
+    ],
+    { grip: 'top' },
+  ),
+  // (behind his back: carried back round his hip in his right hand, put down behind his heels and across, and taken by
+  // his left as he steps on past it: all of him is between the ball and the man)
+  behind: clip(
+    'behind',
+    'shot',
+    0,
+    DRIBBLE,
+    [
+      [0, { by: 2.6, gr: 1 }],
+      [100, { bx: 0.95, by: 2.4, bz: -0.25, gr: 1, hip: -0.4, lean: 0.2, twist: 0.3, rx: 0.5, ry: -1.9, rz: -0.35 }],
+      [125, { bx: 0.9, by: 2.2, bz: -0.45, gr: 0.4, hip: -0.42, lean: 0.22, twist: 0.26, rx: 0.5, ry: -1.9, rz: -0.45 }],
+      [190, { bx: 0.1, by: 0.5, bz: -0.75, gr: 0, hip: -0.46, lean: 0.24, twist: 0.12 }],
+      [262, { bx: -0.85, by: 2.2, bz: 0.05, gl: 0.3, lx: 0.5, ly: -2.0, lz: 0.15, hip: -0.45, lean: 0.2, twist: -0.26, tilt: -0.1, surge: 0.1 }],
+      [295, { bx: -0.9, by: 2.4, bz: 0.15, gl: 1, lx: 0.5, ly: -2.0, lz: 0.2, hip: -0.44, lean: 0.2, twist: -0.3, tilt: -0.12, surge: 0.14 }],
+      [350, { bx: -0.95, by: 2.5, bz: 0.55, gl: 1, lx: 0.4, ly: -2.0, lz: 0.55, hip: -0.38, twist: -0.12, tilt: -0.06 }],
+      [430, { bx: -0.95, by: 2.6, gl: 1, lx: 0.4, ly: -2.0, lz: 0.75 }],
+    ],
+    { grip: 'top' },
+  ),
+  // (a spin: a hard dribble at the man, then round on his front foot with his back to him, the ball pulled round low on
+  // his hip, and put out ahead into his other hand as he comes out of it. The turn itself is his body's: see
+  // Puppet's SPIN)
+  spin: clip(
+    'spin',
+    'shot',
+    0,
+    DRIBBLE,
+    [
+      [0, { by: 2.6, gr: 1 }],
+      [90, { bx: 0.8, by: 0.5, bz: 0.55, gr: 0, hip: -0.5, lean: 0.22, wide: 0.2 }],
+      [200, { bx: 0.85, by: 2.2, bz: 0.15, gr: 1, hip: -0.55, lean: 0.26, wide: 0.26, twist: 0.25, rx: 0.45, ry: -1.9, rz: 0.1, lx: 0.9, ly: -0.9, lz: 0.5 }],
+      [275, { bx: 0.8, by: 2.15, bz: 0.25, gr: 0.4, hip: -0.54, lean: 0.26, wide: 0.26, twist: 0.2 }],
+      [340, { bx: 0.6, by: 0.5, bz: 0.45, gr: 0, hip: -0.5, lean: 0.24, wide: 0.24, twist: 0.1 }],
+      [415, { bx: -0.6, by: 2.2, bz: 0.85, gl: 0.3, lx: 0.4, ly: -2.0, lz: 0.85, hip: -0.46, lean: 0.24, tilt: -0.1, twist: -0.16 }],
+      [450, { bx: -0.7, by: 2.4, bz: 0.9, gl: 1, lx: 0.4, ly: -2.0, lz: 0.85, hip: -0.45, lean: 0.24, tilt: -0.12, twist: -0.2 }],
+      [520, { bx: -0.9, by: 2.5, bz: 0.85, gl: 1, lx: 0.4, ly: -2.0, lz: 0.8, hip: -0.38, lean: 0.2 }],
+      [600, { bx: -0.95, by: 2.6, gl: 1, lx: 0.4, ly: -2.0, lz: 0.75 }],
     ],
     { grip: 'top' },
   ),
@@ -646,6 +711,109 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
       [640, { hip: 1.0, air: 1, gl: 0, gr: 0, lx: 0.4, ly: 1.0, lz: 0.5, rx: 0.4, ry: 1.0, rz: 0.5, leap: 1 }],
       [780, { hip: -0.45, gl: 0, gr: 0, leap: 1, lx: 0.5, ly: -0.8, lz: 0.5, rx: 0.5, ry: -0.8, rz: 0.5, lean: 0.15 }],
       [900, { gl: 0, gr: 0, leap: 0.95 }],
+    ],
+    { grip: 'side' },
+  ),
+  // (a windmill: the ball taken down past his hip in his right hand as he leaves the floor, swung back behind him at
+  // arm's length, up over the top and thrown down through the ring: one full turn of his arm)
+  dunkMill: clip(
+    'dunkMill',
+    'shot',
+    0,
+    { gr: 1, gl: 1, bx: 0.1, bz: 1 },
+    [
+      ...DUNK_UP.slice(0, 2),
+      [-40, { hip: 0.2, air: 0.4, by: 4.1, bx: 0.85, bz: 0.55, leap: 0.25, gl: 0.1, twist: -0.2 }],
+      [
+        50,
+        {
+          hip: 1.8,
+          air: 1,
+          by: 4.9,
+          bx: 1.05,
+          bz: -0.8,
+          leap: 0.75,
+          gl: 0,
+          lx: 0.8,
+          ly: 0.2,
+          lz: 0.6,
+          flu: 0.9,
+          flf: 0.6,
+          fru: 0.2,
+          frf: -0.4,
+          lean: 0.05,
+          tilt: 0.1,
+          twist: -0.45,
+        },
+      ],
+      [
+        130,
+        {
+          hip: 2.3,
+          air: 1,
+          by: 9.0,
+          bx: 0.7,
+          bz: -0.45,
+          leap: 1,
+          gl: 0,
+          lx: 0.9,
+          ly: 0.4,
+          lz: 0.5,
+          flu: 0.95,
+          flf: 0.7,
+          fru: 0.25,
+          frf: -0.4,
+          lean: -0.12,
+          tilt: 0.16,
+          twist: -0.3,
+        },
+      ],
+      [200, { hip: 2.25, air: 1, by: 7.9, bx: 0.2, bz: 1.1, leap: 1, gl: 0, lx: 0.9, ly: 0.3, lz: 0.5, flu: 0.85, flf: 0.6, fru: 0.3, frf: -0.3, lean: 0.24, tilt: 0.06 }],
+      [240, { hip: 2.1, air: 1, gl: 0, gr: 0, lx: 0.8, ly: 0.1, lz: 0.5, rx: 0.15, ry: 1.2, rz: 1.1, leap: 1, flu: 0.7, flf: 0.6, fru: 0.4, frf: 0.1, lean: 0.25 }],
+      [340, { hip: 1.4, air: 1, gl: 0, gr: 0, lx: 0.6, ly: -0.3, lz: 0.5, rx: 0.3, ry: 0.2, rz: 0.8, leap: 1 }],
+      [500, { hip: -0.45, gl: 0, gr: 0, leap: 1, lx: 0.5, ly: -0.9, lz: 0.5, rx: 0.5, ry: -0.8, rz: 0.5, lean: 0.2 }],
+      [640, { gl: 0, gr: 0, leap: 0.95 }],
+    ],
+    { grip: 'under' },
+  ),
+  // (a reverse: he turns in the air, his chest coming round away from the rim and his back arched to it, the ball
+  // carried up in both hands and thrown down behind his own head)
+  dunkRev: clip(
+    'dunkRev',
+    'shot',
+    0,
+    { gr: 1, gl: 1, bx: 0, bz: 1 },
+    [
+      ...DUNK_UP.slice(0, 3),
+      [70, { hip: 1.9, air: 1, by: 8.3, bx: -0.25, bz: 0.6, leap: 0.8, flu: 0.8, flf: 0.3, fru: 0.6, frf: -0.2, lean: -0.12, twist: 0.8, tilt: -0.08, nod: -0.1 }],
+      [150, { hip: 2.3, air: 1, by: 9.3, bx: -0.1, bz: 0.6, leap: 1, flu: 0.85, flf: 0.4, fru: 0.7, frf: -0.1, lean: -0.28, twist: 1.35, nod: -0.22 }],
+      [200, { hip: 2.25, air: 1, by: 7.8, bx: 0, bz: 1.0, leap: 1, flu: 0.8, flf: 0.5, fru: 0.6, frf: 0.1, lean: -0.32, twist: 1.5, nod: -0.28 }],
+      [
+        240,
+        {
+          hip: 2.1,
+          air: 1,
+          gl: 0,
+          gr: 0,
+          lx: 0.15,
+          ly: 1.55,
+          lz: 0.9,
+          rx: 0.15,
+          ry: 1.55,
+          rz: 0.9,
+          leap: 1,
+          flu: 0.6,
+          flf: 0.5,
+          fru: 0.5,
+          frf: 0.2,
+          lean: -0.26,
+          twist: 1.4,
+          nod: -0.2,
+        },
+      ],
+      [340, { hip: 1.5, air: 1, gl: 0, gr: 0, lx: 0.3, ly: 1.0, lz: 0.6, rx: 0.3, ry: 1.0, rz: 0.6, leap: 1, lean: -0.1, twist: 0.8 }],
+      [500, { hip: -0.42, gl: 0, gr: 0, leap: 1, lx: 0.5, ly: -0.8, lz: 0.5, rx: 0.5, ry: -0.8, rz: 0.5, twist: 0.25 }],
+      [620, { gl: 0, gr: 0, leap: 0.95 }],
     ],
     { grip: 'side' },
   ),
@@ -1300,8 +1468,12 @@ export const GESTURES: Record<Gesture, Clip> = {
 /** The arm channels a gesture takes over, and the trunk ones it adds to. */
 export const ARMS = [I.lx, I.ly, I.lz, I.rx, I.ry, I.rz, I.lsw, I.rsw];
 export const TRUNK = [I.lean, I.twist, I.tilt, I.nod, I.turn];
-/** A held follow-through after a jumper or a free throw: the shooting arm up, wrist dropped, the guide hand off the ball. */
-export const FOLLOW: PoseKey = { rx: 0.08, ry: 1.92, rz: 0.85, lx: 0.38, ly: 0.5, lz: 0.8 };
+/**
+ * A held follow-through after a jumper or a free throw: the shooting arm up after the ball, wrist dropped; the guide
+ * hand off the ball and still where it left it, up by his forehead on its own side, its elbow bent down under it
+ * (compact: not flung out to his side, nor dropped to his chest).
+ */
+export const FOLLOW: PoseKey = { rx: 0.08, ry: 1.92, rz: 0.85, lx: 0.08, ly: 0.95, lz: 0.8, lsw: -0.3 };
 /** A pass's follow-through: the arms on after the ball, toward where it went (two hands from his chest, one, or over his head). */
 export const PASS_FOLLOW: Partial<Record<ClipId, PoseKey>> = {
   pass: { lx: 0.12, ly: -0.5, lz: 1.85, rx: 0.12, ry: -0.5, rz: 1.85 },
@@ -1362,26 +1534,35 @@ if (MOCAP_CHANNELS.length === N && MOCAP_CHANNELS.every((c, i) => c === CHANNELS
 export const PASSES: readonly ClipId[] = ['pass', 'pass', 'passOne', 'passOver'];
 
 /**
- * The dunks: a two-hander, a one-hander, one that hangs on the rim, a two-hander taken back behind his head first, and
- * a one-hander brought over from out wide. All meet the rim at DUNK_AT. `isDunk` is the one test of it: whatever the
+ * The dunks: a two-hander, a one-hander, one that hangs on the rim, a two-hander taken back behind his head first, a
+ * one-hander brought over from out wide, a windmill, and a reverse (the one a dunk the play-by-play calls a reverse is). All meet the rim at DUNK_AT. `isDunk` is the one test of it: whatever the
  * rest of him does about a dunk (the ball, the rim, the net, his hands) it does for all of them.
  */
-export const DUNKS: readonly ClipId[] = ['dunk', 'dunk1', 'dunkHang', 'dunkBack', 'dunkSide'];
+export const DUNKS: readonly ClipId[] = ['dunk', 'dunk1', 'dunkHang', 'dunkBack', 'dunkSide', 'dunkMill', 'dunkRev'];
 export const isDunk = (id: ClipId | undefined): boolean => id !== undefined && DUNKS.includes(id);
 /** The plain ones, for a dunk that has no time for more: a lob taken in the air, one jammed off the iron or sent back. With two hands, and with one. */
 export const DUNKS_PLAIN: readonly [ClipId, ClipId] = ['dunk', 'dunk1'];
 /** The two-handers that come straight down (a dunk the play-by-play calls two-handed is one of these). */
-export const DUNKS_TWO: readonly ClipId[] = ['dunk', 'dunkBack'];
+export const DUNKS_TWO: readonly ClipId[] = ['dunk', 'dunkBack', 'dunkRev'];
 
 /**
- * A dribbler's moves on the man in front of him, each played once through over his dribble: a crossover (the one that
- * leaves the ball in his other hand: SWITCHES), a hesitation, an in-and-out, a snatch back. `isMove` is the one
+ * A dribbler's moves on the man in front of him, each played once through over his dribble: a crossover, between his
+ * legs, behind his back and a spin (the ones that leave the ball in his other hand: SWITCHES), a hesitation, an
+ * in-and-out, a snatch back. `isMove` is the one
  * test of it: the ball, his hands and his feet treat every one of them as they do a crossover, but for the hand it
  * ends in.
  */
-export const MOVES: readonly ClipId[] = ['crossover', 'hesi', 'inOut', 'pullBack'];
+export const MOVES: readonly ClipId[] = ['crossover', 'hesi', 'inOut', 'pullBack', 'btl', 'behind', 'spin'];
 export const isMove = (id: ClipId | undefined): boolean => id !== undefined && MOVES.includes(id);
-export const SWITCHES: ReadonlySet<ClipId> = new Set(['crossover']);
+export const SWITCHES: ReadonlySet<ClipId> = new Set(['crossover', 'btl', 'behind', 'spin']);
+/**
+ * The ways the ball goes to his other hand, as often as each is made (a name's count in the list): stood over it or
+ * walking it up, and at the start of a drive. In front of him most often; between his legs; behind his back and a spin
+ * only for a man with the handle for them (FANCY, see Puppet.across), and a spin only on the move.
+ */
+export const SWITCH_STILL: readonly ClipId[] = ['crossover', 'crossover', 'crossover', 'btl', 'btl', 'behind'];
+export const SWITCH_DRIVE: readonly ClipId[] = ['crossover', 'crossover', 'crossover', 'crossover', 'btl', 'behind', 'spin'];
+export const FANCY: ReadonlySet<ClipId> = new Set(['behind', 'spin']);
 /** The moves that keep the ball in the hand it is in: what a man pressed on its other side makes (never across into him). */
 export const MOVES_SAME: readonly ClipId[] = ['hesi', 'inOut', 'pullBack'];
 

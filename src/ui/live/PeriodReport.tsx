@@ -321,7 +321,7 @@ function PlayCall({
           <figcaption>
             On the board: <b>{callLabel(shown.id, names(shown.pid))}</b>
           </figcaption>
-          <PlayBoard board={board} label={callLabel(shown.id, names(shown.pid))} color={kits?.[side].color ?? 'var(--team)'} />
+          <PlayBoard board={board} label={callLabel(shown.id, names(shown.pid))} color={kits?.[side].color} />
           <div className="lv-br-board-key">1 has the ball. Arrow: cut. Bar: screen. Zigzag: dribble. Dashes: pass.</div>
         </figure>
       )}

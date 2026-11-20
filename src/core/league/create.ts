@@ -1,4 +1,4 @@
-import type { DraftInfo, Injury, League, Player, PlayerStats, Pos, RatingKey, Ratings, Settings, Tendencies } from '../types';
+import type { DraftInfo, Injury, League, Player, PlayerLook, PlayerStats, Pos, RatingKey, Ratings, Settings, Tendencies } from '../types';
 import { cutOrder, startGuide } from './agenda';
 import { FREE_AGENT } from '../types';
 import { CAP, RATED_SEASONS, ROOKIE_SCALE, SAVE_VERSION, START_SEASON } from '../constants';
@@ -37,6 +37,8 @@ import { injuryName, money } from '../format';
 
 export interface SeedPlayer {
   id: string;
+  /** His look, where the seed's data has it (types.ts PlayerLook). */
+  look?: PlayerLook;
   nbaId?: number;
   first: string;
   last: string;
@@ -231,6 +233,7 @@ function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng, fir
   const { experience, draft } = seedCareer(sp, season, firstRecord);
   const p: Player = {
     pid,
+    ...(sp.look && { look: sp.look }),
     bbrefId: sp.id,
     nbaId: sp.nbaId,
     firstName: sp.first,

@@ -27,6 +27,7 @@ import {
 import { COURT_LEN } from '../choreo';
 import { END, FLOOR_L, FLOOR_W, HALF_W, SIDE } from '../Court';
 import type { Stands, Venue } from '../../teamColors';
+import { byLens } from './cameras';
 import { unshadowed } from './rig';
 
 type Keep = <T extends { dispose(): void }>(o: T) => T;
@@ -102,6 +103,15 @@ const COURT_Z = 34.6;
 const DECK_FT = 80;
 const SUITE_FT = 96;
 const SHOP_FT = 128;
+/**
+ * That picture is this many bays, and these of them are a plain plate with a section's number on it. The numbers are
+ * not in the picture (laid again and again round the walkway, it had the same two on every stretch of wall: 113 and
+ * 116 four times over): each plate has its own, on the wall, counted round the building from 101 (see PLATE_GRID:
+ * the numbers' own picture, this many across and down).
+ */
+const SHOP_BAYS = 8;
+const PLATE_BAYS = [3, 7];
+const PLATE_GRID = [8, 4] as const;
 
 /** The lower bowl's rows from this one up are its high section (their seats in the building's third colour: Venue.seats). */
 const HIGH_ROWS = 12;
@@ -247,6 +257,19 @@ function texture(keep: Keep, w: number, h: number, paint: (cv: HTMLCanvasElement
   if (wrap) tex.wrapS = RepeatWrapping;
   tex.anisotropy = 8;
   return tex;
+}
+
+/** The sections' numbers, each in its own cell (PLATE_GRID), from 101: light figures on nothing (the plate behind them is the wall's picture's). */
+function paintPlates(cv: HTMLCanvasElement) {
+  const ctx = cv.getContext('2d')!;
+  const [cols, rows] = PLATE_GRID;
+  const [cw, ch] = [cv.width / cols, cv.height / rows];
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.fillStyle = '#d9d2c4';
+  ctx.font = `700 ${Math.round(ch * 0.62)}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (let i = 0; i < cols * rows; i++) ctx.fillText(String(101 + i), ((i % cols) + 0.5) * cw, (Math.floor(i / cols) + 0.5) * ch + 1, cw * 0.9);
 }
 
 /** A crowd's colours for a picture of one (the upper deck's). */
@@ -424,11 +447,14 @@ function paintShops(cv: HTMLCanvasElement, signs = SIGNS, plate = '#3a332c', see
   }
   let n = 41 + (seed % 9973);
   const rnd = () => ((n = (n * 16807) % 2147483647) & 0xffff) / 0xffff;
-  const bays = 8;
+  const bays = SHOP_BAYS;
   const bw = w / bays;
   for (let b = 0; b < bays; b++) {
     const x = b * bw;
-    const kind = (b + seed) % 4;
+    // (a section's plate is in the same bays in every building: its number is not in this picture, which is laid
+    // round the walkway again and again, but on the wall itself, each plate its own: see PLATE_BAYS. Which of the
+    // other bays are doorways is the building's)
+    const kind = PLATE_BAYS.includes(b) ? 3 : (b + (seed % 2 ? 1 : 0)) % 4 === 1 ? 1 : 0;
     if (kind === 1) {
       // a doorway through to the rest of the building
       const g = ctx.createLinearGradient(0, h * 0.2, 0, h);
@@ -441,10 +467,6 @@ function paintShops(cv: HTMLCanvasElement, signs = SIGNS, plate = '#3a332c', see
     } else if (kind === 3) {
       ctx.fillStyle = plate;
       ctx.fillRect(x + bw * 0.06, h * 0.1, bw * 0.88, h * 0.9);
-      ctx.fillStyle = '#d9d2c4';
-      ctx.font = `700 ${Math.round(h * 0.26)}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillText(String(101 + b * 3), x + bw * 0.5, h * 0.44);
     } else {
       // a counter: its opening lit from inside, a run of sign over it in some colour of light
       const g = ctx.createLinearGradient(0, h * 0.34, 0, h * 0.9);
@@ -594,7 +616,7 @@ export class Bowl {
   private built: Mesh[] = [];
   private shape = '';
   /** The pictures' and the fine parts' materials (made once, for every building). */
-  private readonly mats: { rows: Material; suites: Material; shops: Material; doors: Material; signs: Material; pane: Material; rail: Material; spilt: Material };
+  private readonly mats: { rows: Material; suites: Material; shops: Material; plates: Material; doors: Material; signs: Material; pane: Material; rail: Material; spilt: Material };
   /** The step a slow device is on (see shed), and whether the wall along the top of the lower bowl is up (see paint). */
   private level: 0 | 1 | 2 = 0;
   private banded = false;
@@ -642,12 +664,14 @@ export class Bowl {
     rows.customProgramCacheKey = () => 'upperRows';
     this.suiteTex = texture(keep, 1024, 96, (cv) => paintSuites(cv));
     this.shops = texture(keep, 1024, 96, (cv) => paintShops(cv));
+    const plates = texture(keep, 1024, 256, paintPlates, false);
     const spilt = keep(new MeshBasicMaterial({ vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, side: DoubleSide }));
     this.lit.push({ mat: spilt, glow: 1 });
     this.mats = {
       rows,
       suites: picture(this.suiteTex, SUITE_GLOW),
       shops: picture(this.shops, SHOP_GLOW),
+      plates: Object.assign(picture(plates, SHOP_GLOW), { transparent: true, depthWrite: false }),
       doors: picture(texture(keep, 128, 96, paintDoor, false), DOOR_GLOW),
       signs: picture(texture(keep, 64, 24, paintExit, false), SIGN_GLOW),
       // (glass: mostly what is behind it, and the building's lights on its face)
@@ -661,8 +685,9 @@ export class Bowl {
     this.carpet = keep(new MeshLambertMaterial({ color: 0x24262b, vertexColors: true }));
     this.glowFloor = keep(new MeshBasicMaterial({ vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false }));
     // the chairs on the floor: along the near side (not where the opening's camera starts from), and in the far corners past the benches
+    // (nor in the room the floor's camera has in each near corner: cameras.ts LOW_ROOM)
     for (let x = -47; x <= 47; x += 2.35) {
-      if (x > -12 && x < -1) continue;
+      if ((x > -12 && x < -1) || byLens(x, COURT_Z)) continue;
       this.chairs.push({ x, y: 0, z: COURT_Z, turn: Math.PI });
     }
     for (const e of [-1, 1]) for (let i = 0; i < 6; i++) this.chairs.push({ x: e * (42.5 + i * 2.35), y: 0, z: -(HALF_W + SIDE + 3.6), turn: 0 });
@@ -701,6 +726,8 @@ export class Bowl {
     const signs = new Soup();
     const suites = new Soup();
     const shops = new Soup();
+    const plates = new Soup();
+    let section = 0;
     const deck = new Soup();
     const band = new Soup();
     const cover = new Soup();
@@ -791,6 +818,8 @@ export class Bowl {
             continue;
           }
           const [x, , z] = P(s, u, 0, d);
+          // (no seat in the floor camera's room: the steps there are its operator's)
+          if (byLens(x, z)) continue;
           this.seats.push({ x, y, z, turn: s.turn, row: i, side: s.k, kind: 'seat', lit: s.k === 3 ? l * (NEAR_LIT + (1 - NEAR_LIT) * Math.max(0, 1 - i / 3)) : l, stall: true });
         }
       }
@@ -902,6 +931,17 @@ export class Bowl {
         // the concourse's wall under the suites, the suites' soffit and their windows, the band the ribbon is on
         const [lo, hi] = [-(s.half + WALL + s.lo), s.half + WALL + s.hi];
         shops.quad(P(s, lo, TOP_Y, wall), P(s, hi, TOP_Y, wall), P(s, hi, SOFFIT, wall), P(s, lo, SOFFIT, wall), '#ffffff', 1, [lo / SHOP_FT, 0, hi / SHOP_FT, 1]);
+        // (each section's number on its plate, a hair off the wall: the next one round the building)
+        const bay = SHOP_FT / SHOP_BAYS;
+        for (let j = Math.ceil(lo / bay); (j + 1) * bay <= hi; j++) {
+          if (!PLATE_BAYS.includes(((j % SHOP_BAYS) + SHOP_BAYS) % SHOP_BAYS) || section >= PLATE_GRID[0] * PLATE_GRID[1]) continue;
+          const [col, row] = [section % PLATE_GRID[0], Math.floor(section / PLATE_GRID[0])];
+          section++;
+          const [u0, u1] = [(j + 0.14) * bay, (j + 0.86) * bay];
+          const [y0, y1] = [TOP_Y + (SOFFIT - TOP_Y) * 0.52, TOP_Y + (SOFFIT - TOP_Y) * 0.92];
+          const uv: [number, number, number, number] = [col / PLATE_GRID[0], 1 - (row + 1) / PLATE_GRID[1], (col + 1) / PLATE_GRID[0], 1 - row / PLATE_GRID[1]];
+          plates.quad(P(s, u0, y0, wall - 0.06), P(s, u1, y0, wall - 0.06), P(s, u1, y1, wall - 0.06), P(s, u0, y1, wall - 0.06), '#ffffff', 1, uv);
+        }
         const f = FASCIA + s.set;
         const [flo, fhi] = [-(s.half + FASCIA + s.lo), s.half + FASCIA + s.hi];
         concrete.quad(P(s, flo, SOFFIT, f), P(s, fhi, SOFFIT, f), P(s, hi, SOFFIT, wall), P(s, lo, SOFFIT, wall), '#3a352e', [0.5, 0.5, 1, 1]);
@@ -1099,6 +1139,7 @@ export class Bowl {
     add(deck, this.mats.rows);
     add(suites, this.mats.suites);
     add(shops, this.mats.shops);
+    add(plates, this.mats.plates, 1);
     add(doors, this.mats.doors);
     add(signs, this.mats.signs);
     this.fine.push(add(glass, this.mats.pane, 1));

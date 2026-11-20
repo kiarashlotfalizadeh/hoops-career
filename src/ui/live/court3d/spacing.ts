@@ -20,6 +20,15 @@ const ROUND = 1.3;
 /** A man by either end of it (this much of its way) is given more room: the hands it leaves and the hands it goes to are still moving. */
 const END_ZONE = 0.3;
 const END_LANE = 1.9;
+/**
+ * A swerve is never wider than this (ft), nor than this share of the pass's length. A thrown ball does not curve: what
+ * bends its line here stands for the hand that lets it go, or takes it, reaching out round a man, and a hand reaches
+ * a foot or so. Two feet of it on a fifteen-foot pass was a curveball that hooked into the catcher's hands; what a
+ * swerve this size leaves of the man in its way is the hands' own business (the ball is kept off a body where it is
+ * drawn: see clearOf).
+ */
+const SWERVE_MOST = 1.0;
+const SWERVE_SHARE = 0.07;
 /** How many points along a pass are looked at for who it meets. */
 const LOOKS = 24;
 /** A pass this long (ft) past a defender in the middle of its lane may be a bounce pass under his hands (about this share of them) instead of a lob over. */
@@ -355,7 +364,7 @@ export function passPath(from: P3, to: P3, gx: number, gz: number, men: Iterable
       }
     }
     const half = t < 0.5 ? 0 : 1;
-    const round = (ends ? END_LANE : ROUND) * Math.sqrt(m.s) - near;
+    const round = Math.min((ends ? END_LANE : ROUND) * Math.sqrt(m.s) - near, SWERVE_MOST, far * SWERVE_SHARE);
     if (round <= wide[half]) continue;
     wide[half] = round;
     // (dead on him: to the side square to the pass)

@@ -50,7 +50,17 @@ export function CoachMark({ step, onNext }: { step: number; onNext: () => void }
   }, [step]);
   if (!mark) return null;
   return (
-    <button type="button" key={step} className={`lv-tip at-${mark.edge}`} onClick={onNext} aria-live="polite">
+    // (the card sits on the court, and a tap on the court is playback's: the tap that takes a card down is the card's alone)
+    <button
+      type="button"
+      key={step}
+      className={`lv-tip at-${mark.edge}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onNext();
+      }}
+      aria-live="polite"
+    >
       <span className="lv-tip-n" aria-hidden="true">
         {step + 1}/{COACH_MARKS.length}
       </span>

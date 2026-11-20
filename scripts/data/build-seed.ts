@@ -41,7 +41,7 @@ import { profilesByBbref, type PbpAgg } from './nba/profile';
 import { NBA_RAW } from './nba/fetch';
 import { collegePop, collegeRatings, findCollege, loadCollege } from './nba/college';
 import { refreshPlayerDerived } from '../../src/core/playerGen';
-import type { PlayerStats, Pos, RatingKey, Ratings, Tendencies } from '../../src/core/types';
+import type { PlayerLook, PlayerStats, Pos, RatingKey, Ratings, Tendencies } from '../../src/core/types';
 import type { SeedData, SeedPlayer } from '../../src/core/league/create';
 import { createLeague, defaultSettings } from '../../src/core/league/create';
 import { RATING_KEYS, buildOvrScale, ovrRaw, shiftToOvr, toDisplay } from '../../src/core/ratings';
@@ -65,6 +65,13 @@ const read = (key: string) => {
   const f = join(RAW, `${key}.html`);
   return existsSync(f) ? readFileSync(f, 'utf8') : null;
 };
+/**
+ * How players look, where someone has written it down: data/looks.json, a player's Basketball Reference id to what is
+ * known of his look (src/core/types.ts PlayerLook: tone, hair, beard, hairColor, recede). The file is yours to
+ * write: none ships, and a player not in it gets a made-up look from his number like everyone else.
+ */
+const LOOKS_FILE = process.env.HC_LOOKS ?? join(process.cwd(), 'data', 'looks.json');
+const LOOKS: Record<string, PlayerLook | undefined> = existsSync(LOOKS_FILE) ? (JSON.parse(readFileSync(LOOKS_FILE, 'utf8')) as Record<string, PlayerLook>) : {};
 
 async function main() {
   const contractsHtml = read('contracts');
@@ -372,6 +379,7 @@ async function main() {
     if (!fivePos) inferredPos.set(players.length, label);
     const sp: SeedPlayer = {
       id,
+      ...(LOOKS[id] && { look: LOOKS[id] }),
       nbaId,
       first,
       last,

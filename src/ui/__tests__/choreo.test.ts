@@ -1013,6 +1013,12 @@ describe('live court choreography', () => {
         expect(outShirt('#e56020', '#1d1160')).toBe('#e56020');
         expect(outShirt('#0c2340', '#236192')).toBe('#ffffff');
         expect(outShirt('#000000', '#c4ced4')).toBe('#ffffff');
+        // (a dusty gold on a green building is khaki in the stands, an orange on a deep red is mud between the two: both go
+        // white; a second colour from across the wheel is the shirt, a navy's gold or a blue's orange)
+        expect(outShirt('#007a33', '#ba9653')).toBe('#ffffff');
+        expect(outShirt('#98002e', '#f9a01b')).toBe('#ffffff');
+        expect(outShirt('#0e2240', '#fec524')).toBe('#fec524');
+        expect(outShirt('#006bb6', '#f58426')).toBe('#f58426');
         const lg = {
           playoffs: [
             { id: 'f', round: 4 },

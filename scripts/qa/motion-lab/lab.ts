@@ -74,6 +74,12 @@ const TIP_WAIT = 1600;
 /** With `breaks`: how long a period's break and a huddle before a timeout are held (real ms). */
 const BREAK_MS = 6000;
 
+/** The scene drawn straight from a camera of the lab's own, the stands as that camera wants them (the lens asks the building for that before a picture of its own: see Arena.reflect). */
+function drawFrom(cam: Camera) {
+  inner.arena.crowd.present(cam, inner.renderer.domElement.height);
+  inner.renderer.render(inner.scene, cam);
+}
+
 // (each knock a man's body takes from another's (Puppet.hit), and how many of them hard: see measure's `knocks`)
 const knocked = { n: 0, hard: 0, at: [] as string[] };
 let stamp = () => '';
@@ -146,6 +152,7 @@ const inner = scene as unknown as {
   figs: Map<number, Fig>;
   ball: Vector3;
   geo: Geo;
+  arena: { crowd: { present(camera: Camera, tall: number): void } };
 };
 // (?side=0: the floor without the people round it, for when their models are being rebuilt under the lab)
 if (q.get('side') === '0') (scene as unknown as { arena: { sideline: { update: () => void } } }).arena.sideline.update = () => {};
@@ -1717,7 +1724,7 @@ async function film({
         cam.lookAt(world[3] * e, world[4], world[5]);
         cam.updateMatrixWorld();
         drawing = true;
-        inner.renderer.render(inner.scene, cam);
+        drawFrom(cam);
       } else if (eye !== 'tv') {
         const f = inner.figs.get(pid >= 0 ? pid : sc.oPids[0]);
         if (f) {
@@ -1729,7 +1736,7 @@ async function film({
           cam.lookAt(target);
           cam.updateMatrixWorld();
           drawing = true;
-          inner.renderer.render(inner.scene, cam);
+          drawFrom(cam);
         }
       }
       cells.push(await createImageBitmap(canvas));
@@ -1835,7 +1842,7 @@ function pose({
   cam.lookAt(at[0], at[1], at[2]);
   cam.updateMatrixWorld();
   drawing = true;
-  inner.renderer.render(inner.scene, cam);
+  drawFrom(cam);
   drawing = false;
   const strip = document.getElementById('strip') as HTMLCanvasElement;
   strip.width = w;

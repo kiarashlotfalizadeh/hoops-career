@@ -66,6 +66,7 @@ import type { Occasion } from '../occasion';
 import type { Gesture } from './clips';
 import { digitTurns, DIGIT_NAMES, DIGITS as HAND_DIGITS, Fig, handOf, type Geo } from './figure';
 import { merged, type Thing } from './glb';
+import type { PlayerLook } from '../../../core/types';
 import { lookOf, STYLES, type Look } from './look';
 import type { Props } from './props';
 import { ANKLE, BALL_R, FARM, hash, HEAD, HIP, HIP_W, J, SHIN, SHOULDER, THIGH, TORSO, UARM, type Body, type V3 } from './puppet';
@@ -516,6 +517,8 @@ type Wear = Partial<Record<PartName, string>>;
 
 const mix = (a: string, b: string | Color, t: number) => `#${new Color(a).lerp(b instanceof Color ? b : new Color(b), t).getHexString()}`;
 
+/** A woman who walks the sideline (a coach, a referee) is this much narrower across the shoulders than a man of her size: her frame, where less bulk alone left a man's shoulders on her. */
+const WOMAN_SHOULDERS = 0.88;
 /** Who among the people round the floor (never the players) is a woman, from her number. */
 const lady = (id: number) => hash(id, 91) < 0.38;
 /** How a woman wears her hair (people.py's pieces). */
@@ -971,32 +974,58 @@ function towelGeo(): BufferGeometry {
   return g;
 }
 
-/** A towel round his neck: over the back of it, an end down each side of his chest (in his chest's frame). */
+/**
+ * A towel round his neck (in his chest's frame): bunched in a roll over the back of his neck and his shoulders, an
+ * end down each side of his chest, lying on it. One cloth, its faces running into one another (a strip of flat
+ * plates, each lit on its own, a hand's breadth off his chest and twice as wide, was a board hung on him): narrow
+ * where it is rolled, opening to a hand's width where it hangs; each end follows his chest in and comes off it a
+ * little at its hem; his left end hangs a little longer than his right, and each has a soft fold along it.
+ */
 function drapeGeo(): BufferGeometry {
-  const strips: BufferGeometry[] = [];
-  const n = 14;
-  const at = (t: number, wide: number): [number, number, number] => {
+  const [along, across] = [34, 5];
+  const pos: number[] = [];
+  const index: number[] = [];
+  for (let i = 0; i <= along; i++) {
     // (t: -1 the end on his right, 0 the back of his neck, 1 the end on his left)
+    const t = -1 + (2 * i) / along;
     const a = Math.abs(t);
     const s = Math.sign(t) || 1;
-    if (a < 0.4) {
-      const th = (a / 0.4) * (Math.PI / 2);
-      return [s * Math.sin(th) * (0.34 + wide * 0.4), 0.44 - wide * 0.16, -Math.cos(th) * 0.3 + 0.02];
+    for (let j = 0; j <= across; j++) {
+      // (across it: 0 the edge by his neck, 1 the edge out by his shoulder)
+      const u = j / across;
+      if (a < 0.36) {
+        // (round the back of his neck: rolled, so across it is round the roll, not out along his shoulders)
+        const th = (a / 0.36) * (Math.PI / 2);
+        const turn = (u - 0.5) * 2.6;
+        const out = 0.3 + 0.075 * (1 - Math.cos(turn)) + 0.06 * u;
+        pos.push(s * Math.sin(th) * out, 0.47 + 0.07 * Math.sin(turn) - 0.05 * Math.sin(th), -Math.cos(th) * (out - 0.02) + 0.03);
+        continue;
+      }
+      // (down his chest: forward over his collarbone and down, on him; wider as it comes out of the roll)
+      const down = (a - 0.36) / 0.64;
+      const long = (s > 0 ? 1.12 : 0.96) * down;
+      const open = 0.14 + 0.16 * Math.min(1, down * 3);
+      const x = 0.3 + 0.03 * Math.min(1, down * 3) + open * u - 0.05 * down;
+      // (his chest: out to its fullest a hand under his collarbone, back in toward his belly; the towel a finger off it)
+      const chest = 0.05 + 0.4 * Math.sin(Math.min(1, long * 2.4) * Math.PI * 0.5) - 0.07 * Math.max(0, long - 0.5);
+      const fold = 0.014 * Math.sin(u * Math.PI * 2 + s) * Math.min(1, down * 2) + 0.03 * Math.max(0, down - 0.85) * 6 * 0.15;
+      pos.push(s * x, 0.42 - long - 0.03 * u * (1 - down), chest + 0.02 - 0.05 * u * u + fold);
     }
-    const down = (a - 0.4) / 0.6;
-    return [s * (0.36 + wide * 0.36 - down * 0.06), 0.42 - down * 1.15 - wide * 0.1, 0.06 + Math.sin(Math.min(1, down * 2.2) * Math.PI * 0.5) * 0.42];
-  };
-  for (let k = 0; k < n; k++) {
-    const [t0, t1] = [-1 + (2 * k) / n, -1 + (2 * (k + 1)) / n];
-    const g = new BufferGeometry();
-    const [a, b, c, d] = [at(t0, 0), at(t1, 0), at(t1, 1), at(t0, 1)];
-    g.setAttribute('position', new BufferAttribute(new Float32Array([...a, ...b, ...c, ...a, ...c, ...d]), 3));
-    g.computeVertexNormals();
-    strips.push(g);
   }
-  const g = mergeGeometries(strips)!;
-  for (const s of strips) s.dispose();
-  return g;
+  const row = across + 1;
+  for (let i = 0; i < along; i++)
+    for (let j = 0; j < across; j++) {
+      const k = i * row + j;
+      index.push(k, k + row, k + row + 1, k, k + row + 1, k + 1);
+    }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+  g.setIndex(index);
+  g.computeVertexNormals();
+  // (the shapes a pose carries are not indexed: see props)
+  const flat = g.toNonIndexed();
+  g.dispose();
+  return flat;
 }
 
 /** A camera at a photographer's eye: its body and a long lens (the lens along z, the body at its near end). */
@@ -1306,6 +1335,8 @@ class Walker {
 
 /** What the scene tells the sideline each frame. */
 export interface Around {
+  /** What of a player's look is given, not made up (types.ts PlayerLook): a man on the bench is the man he is on the floor. */
+  looks?: (pid: number) => PlayerLook | undefined;
   /** The moment drawn (a replay's, while one has the picture). */
   stage: Stage;
   /** The ball (a referee with it in his hands puts it there). */
@@ -1543,6 +1574,11 @@ export class Sideline {
   private readonly detours = new Map<number, Detour>();
   private mine: Mine | null = null;
   private bodyOf: ((pid: number) => Body) | undefined;
+  /** A bench player's look: his id's, with what the league's data gives of it (the scene says each frame: see Around.looks). */
+  private looks: Around['looks'];
+  private benchLook(pid: number): Look {
+    return lookOf(pid, this.looks?.(pid));
+  }
 
   constructor(
     private readonly keep: Keep,
@@ -1795,13 +1831,13 @@ export class Sideline {
     this.refs = [0, 1, 2].map((i) => {
       const id = 7001 + i * 13;
       const woman = lady(id);
-      const body = { s: (0.88 + 0.05 * hash(id, 3)) * (woman ? 0.94 : 1), bulk: (0.96 + 0.14 * hash(id, 5)) * (woman ? 0.86 : 1) };
+      const body = { s: (0.88 + 0.05 * hash(id, 3)) * (woman ? 0.94 : 1), bulk: (0.96 + 0.14 * hash(id, 5)) * (woman ? 0.86 : 1), shoulders: woman ? WOMAN_SHOULDERS : 1 };
       return this.walker(this.suits.official, body, id, lookOf(id), { ...human(lookOf(id), woman), ...REF_WEAR }, this.refMat, this.suits.officialFar);
     });
     this.coaches = ([0, 1] as const).map((side) => {
       const id = 7101 + side * 17;
       const woman = lady(id);
-      const body = { s: (0.9 + 0.05 * hash(id, 3)) * (woman ? 0.94 : 1), bulk: (1 + 0.16 * hash(id, 5)) * (woman ? 0.84 : 1) };
+      const body = { s: (0.9 + 0.05 * hash(id, 3)) * (woman ? 0.94 : 1), bulk: (1 + 0.16 * hash(id, 5)) * (woman ? 0.84 : 1), shoulders: woman ? WOMAN_SHOULDERS : 1 };
       const w = this.walker(this.suits.staff, body, id, lookOf(id), suitWear(lookOf(id), id, kits[side]), this.coachMat, this.suits.staffFar);
       // (his board: a white sheet on a dark clip board, in his left hand)
       const board = new Mesh(
@@ -1863,7 +1899,7 @@ export class Sideline {
             beat: hash(id, 17),
             chair: free,
           });
-          const look = lookOf(id);
+          const look = aide ? lookOf(id) : this.benchLook(id);
           s.wear = aide ? suitWear(look, id, kit) : benchWear(look, kit);
           this.wear(s.row, s.wear);
           // (off the floor this moment: he is where he stood, on his feet, and his chair is where he is going)
@@ -2184,6 +2220,7 @@ export class Sideline {
     this.clock += a.own;
     this.sec = a.own / 1000;
     this.bodyOf = a.body;
+    this.looks = a.looks;
     // (a replay's men are not men coming off the floor)
     if (a.cut || a.replay) this.lastAt.clear();
     this.seat(a.bench, new Set(a.figs.keys()));
@@ -2200,7 +2237,7 @@ export class Sideline {
     if (!live && this.level < 2 && !a.calm && this.bodyOf) {
       const s = this.bench.find((b) => b.kind === 'bench' && b.body === 'bench' && !b.w);
       if (s) {
-        s.w = this.walker(this.suits.benchFar, this.bodyOf(s.id), s.id, lookOf(s.id), s.wear, this.benchMat);
+        s.w = this.walker(this.suits.benchFar, this.bodyOf(s.id), s.id, this.benchLook(s.id), s.wear, this.benchMat);
         s.w.show(false);
       }
     }
@@ -2569,7 +2606,7 @@ export class Sideline {
             if (!s.w) {
               const body = s.kind === 'bench' && this.bodyOf ? this.bodyOf(s.id) : { s: s.size[1], bulk: s.size[0] / s.size[1] };
               // (a few seconds on his way along the far side: the far body is all of him the broadcast shows)
-              s.w = this.walker(this.suits.benchFar, body, s.id, lookOf(s.id), s.wear, this.benchMat);
+              s.w = this.walker(this.suits.benchFar, body, s.id, s.kind === 'bench' ? this.benchLook(s.id) : lookOf(s.id), s.wear, this.benchMat);
             }
             const w = s.w;
             if (!s.walking) {

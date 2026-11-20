@@ -8,7 +8,8 @@
 // leave clear what the scene says is being played (the ball, its way to the rim, the rim, the faces and hands round it).
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import { Rewind } from 'lucide-react';
-import { FLOOR_L, paintFloor, readPaints, venueOf, type CourtFloor, type GameInfo, type Stage } from './Court';
+import type { PlayerLook } from '../../core/types';
+import { FLOOR_L, paintFloor, readPaints, venueOf, type CourtFloor, type GameInfo, type Stage, type Woe } from './Court';
 import type { MatchKit } from '../teamColors';
 import type { CamKind } from './court3d/cameras';
 import type { Body } from './court3d/puppet';
@@ -38,6 +39,9 @@ export interface Court3DProps {
   /** The game as the court has played it (asked for each frame). */
   game?: () => GameInfo;
   hot?: ReadonlySet<number>;
+  woes?: ReadonlyMap<number, Woe>;
+  fx?: boolean;
+  looks?: (pid: number) => PlayerLook | undefined;
   /** The game is over: the side that won it. */
   final?: 0 | 1;
   /** And what kind of win it is. */
@@ -162,6 +166,7 @@ export default function Court3D(props: Court3DProps) {
     const canvas = glRef.current!;
     const paints = readPaints(canvas);
     const warn = getComputedStyle(canvas).getPropertyValue('--warn-night').trim() || '#ffc65c';
+    const bad = getComputedStyle(canvas).getPropertyValue('--bad-night').trim() || '#ff9a8f';
     const calmQ = window.matchMedia?.('(prefers-reduced-motion: reduce)');
     let scene: CourtScene | null = null;
     let Scene: typeof CourtScene | null = null;
@@ -352,6 +357,10 @@ export default function Court3D(props: Court3DProps) {
           names: p.names,
           game: p.game?.(),
           hot: p.hot,
+          woes: p.woes,
+          bad,
+          fx: p.fx,
+          looks: p.looks,
           final: p.final,
           occasion: p.occasion,
           clutch: p.clutch,
@@ -434,13 +443,14 @@ export default function Court3D(props: Court3DProps) {
   }, []);
 
   return (
-    <div className="c3d" hidden={props.hide} aria-hidden="true">
+    <div className="c3d" aria-hidden="true">
       <canvas ref={glRef} className="c3d-gl" />
       <canvas ref={cutRef} className="c3d-gl c3d-cut" />
       {[tagRef, tag2Ref].map((ref, i) => (
         <span key={i} ref={ref} className="c3d-tag">
           <b className="c3d-tag-n" />
           <span className="c3d-tag-name" />
+          <span className="c3d-tag-woe" />
         </span>
       ))}
       <span ref={flashRef} className="c3d-pill c3d-flash" />
@@ -677,12 +687,14 @@ function paint(
     const s = seatOf(tag);
     const t = l.tags[i] ?? null;
     if (!t || !t.text) return hide(tag, s);
-    const key = `${t.num}/${t.text}`;
+    const key = `${t.num}/${t.text}/${t.woe}`;
     if (tag.dataset.key !== key || !s.on) {
       if (tag.dataset.key !== key) {
         tag.dataset.key = key;
         tag.children[0].textContent = t.num;
         tag.children[1].textContent = t.text;
+        // (what the game has done to him, after his name: his fouls, worn down, cold; each a short word of its own)
+        tag.children[2].textContent = t.woe;
         tag.style.setProperty('--c3d-team', t.color);
       }
       // (its size, whole: measured as it comes on, so the fonts are in)

@@ -9,6 +9,7 @@
 // boards read (shotClock.ts), so the scorebug and the arena always show the same number.
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Grid2x2, SwitchCamera, Video } from 'lucide-react';
+import type { PlayerLook } from '../../core/types';
 import { Court, emptyStage, type CourtProps, type GameInfo } from './Court';
 import type { Script } from './choreo';
 import type { Cast } from './Court3D';
@@ -69,9 +70,13 @@ export interface CourtViewProps extends CourtProps {
    * to the building, 0..1 (see live/gameSound.ts).
    */
   sound?: number;
+  /** The 3D picture draws a shot's streak and a swish's ring (the user's setting: on unless it says not). */
+  fx?: boolean;
+  /** What of a player's look is given, not made up (types.ts PlayerLook), where the league has it. */
+  looks?: (pid: number) => PlayerLook | undefined;
 }
 
-export function CourtView({ look, onLook, cam, onCam, bench, body, game, replays, onReached, occasion, sound, ...court }: CourtViewProps) {
+export function CourtView({ look, onLook, cam, onCam, bench, body, game, replays, onReached, occasion, sound, fx, looks, ...court }: CourtViewProps) {
   const kind = camKind(cam);
   const stage = useRef(emptyStage());
   const [shotClock] = useState(() => new ShotClock());
@@ -191,6 +196,9 @@ export function CourtView({ look, onLook, cam, onCam, bench, body, game, replays
             names={court.names}
             game={game}
             hot={court.hot}
+            woes={court.woes}
+            fx={fx}
+            looks={looks}
             final={court.final}
             occasion={occasion}
             floor={court.floor}

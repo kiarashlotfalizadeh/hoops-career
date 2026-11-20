@@ -22,18 +22,22 @@
 // seats of those who have seen enough of a blowout, each going along his row toward the aisle. The seats
 // themselves are here too, in the building's colour where nobody is in one.
 import {
+  Box3,
   BufferGeometry,
+  type Camera,
   CanvasTexture,
   Color,
   DoubleSide,
   Euler,
   Float32BufferAttribute,
+  Frustum,
   Group,
   InstancedBufferAttribute,
   InstancedMesh,
   Matrix4,
   MeshBasicMaterial,
   MeshLambertMaterial,
+  type PerspectiveCamera,
   PlaneGeometry,
   Quaternion,
   SRGBColorSpace,
@@ -45,6 +49,10 @@ import { ROWS, SEAT, section, type Seat } from './bowl';
 import { unshadowed } from './rig';
 
 type Keep = <T extends { dispose(): void }>(o: T) => T;
+
+/** The camera's picture as a box of planes, and what makes it (see Crowd.present). */
+const FRUSTUM = new Frustum();
+const SEEN = new Matrix4();
 
 /** The spectators' shapes (see Props.crowd). */
 export interface Fans {
@@ -60,6 +68,30 @@ export interface Fans {
 const NEAR_ROWS = 5;
 /** On the near side, the rows the broadcast's cameras look over: as many again, since they are as close to those. */
 const CAMERA_ROWS = 8;
+/**
+ * The stands are drawn a block at a time (see Block): a side is cut into runs this long (ft) along itself, and the
+ * rows behind those by the floor into bands this many rows deep. A side in one piece was never out of the picture and
+ * never far enough off to be drawn lighter: every spectator in the building was drawn in full in every frame.
+ */
+const BLOCK_RUN = 56;
+const BLOCK_ROWS = 7;
+/** A block's box reaches this far (ft) past its people's seats: they stand, lean and lift their arms. */
+const BLOCK_PAD = 4.5;
+/** A seated spectator's height (ft): what a block's size in the picture is measured by. */
+const FAN_FT = 3.6;
+/**
+ * How tall (the picture's dots) the nearest of a block's people must be for the block to be drawn in a model: the
+ * rows by the floor in the detailed one, and under that in the plain one, and under the second in the lightest; the
+ * rows behind in the plain one, the lightest, and a trunk and a head. (Looked at dot for dot at 1440p, a row drawn
+ * under these in the next model down is not told from the same row in the one above.) A block changes model only
+ * once its size is this share past the line, so one on it does not flicker between two.
+ */
+const FINE_PX = [120, 26] as const;
+const REST_PX = [34, 11] as const;
+const TIER_SLACK = 0.1;
+/** The lightest model a device that can't keep up draws each kind of block in, by the scene's steps (see shed). */
+const FINE_STEP = [0, 1, 1, 2] as const;
+const REST_STEP = [0, 0, 1, 2] as const;
 /** How far a spectator's hips are over his step (FAN_FOOT in arena.py). */
 export const SEAT_UP = 1.3;
 /** What the crowd wears when it isn't a team's colours: darks, denim, greys, heather, cream, some colours, a few bright. */
@@ -179,8 +211,11 @@ const HOME_WHITE_WEAR = '#aeaba4';
  * up from a fan's own, because tonight the stands being white is the picture; a coloured one in shades this far apart.
  */
 const OUT_SHARE = 0.86;
-const OUT_WHITE = '#c6c3bc';
-const OUT_SHADES = [0.86, 1.04] as const;
+const OUT_WHITE = '#d6d3cc';
+const OUT_SHADES = [0.9, 1.08] as const;
+/** On that night, how much of the colour the stands would lose while a play is on (LIVE_GREY) and up the bowl (DIM_COLOUR) they keep, and how much more of their light they keep sat down (of what they are short of all of it: see dim). */
+const OUT_KEEP = 0.8;
+const OUT_LIT = 0.5;
 /** A team's colour as cloth: this far toward grey (a shirt is never a paint chip), more so its second colour. */
 const WORN = 0.55;
 /** The visitors' block: from x to x on the far side, rows this to that (most of its seats theirs). */
@@ -275,6 +310,7 @@ const FAN_MOVE = /* glsl */ `
   uniform float uOvation;
   uniform float uLoud;
   uniform float uLive;
+  uniform float uOut;
   uniform float uSlump;
   uniform vec4 uRipA;
   uniform vec4 uRipB;
@@ -610,7 +646,9 @@ const CROWD_COLOR = /* glsl */ `
   // shows on it; a beard (1) or a woman (-1); glasses)
   vOwn = vec4(fract(own * 7.31), uDim * reach * color.r, beard - woman, glasses);
   vHair = hair * vOwn.y;
-  float hue = mix(${DIM_COLOUR}, 1.0, smoothstep(0.25, 0.7, reach)) * (1.0 - ${LIVE_GREY} * uLive);
+  // (a night the building is in one shirt keeps most of that colour while the play is on, and loses less of it up the
+  // bowl: it is the look of the night, not the stands' own mix of clothes going quiet behind the floor)
+  float hue = mix(mix(${DIM_COLOUR}, 1.0, ${OUT_KEEP} * uOut), 1.0, smoothstep(0.25, 0.7, reach)) * (1.0 - ${LIVE_GREY} * uLive * (1.0 - ${OUT_KEEP} * uOut));
   wear = mix(vec3(dot(wear, vec3(0.2126, 0.7152, 0.0722))), wear, hue);
   vColor = wear * (uDim * reach);
   vLook = vec4(mix(vec3(dot(aLook.rgb, vec3(0.2126, 0.7152, 0.0722))), aLook.rgb, hue) * vOwn.y, top);`;
@@ -1006,11 +1044,9 @@ interface Fan {
   carry: boolean;
 }
 
-/** One of the crowd: which draw he is in and where in it, and where he is in the mirror's. */
+/** One of the crowd: every draw he is in and where in it (the mirror's first, then his block's, one for each of its models). */
 interface Person {
-  mesh: InstancedMesh;
-  slot: number;
-  all: number;
+  in: [InstancedMesh, number][];
 }
 
 export class Crowd {
@@ -1036,6 +1072,8 @@ export class Crowd {
     uOvation: { value: 0 },
     uLoud: { value: 0.8 },
     uLive: { value: 0 },
+    /** A postseason night's shirt is on (see paint): 1, or 0 on any other night. */
+    uOut: { value: 0 },
     uAway: { value: 0 },
     uWave: { value: 0 },
     uHush: { value: 0 },
@@ -1079,16 +1117,14 @@ export class Crowd {
   /** The seats, a draw a side for the rows by the floor and one for the rest; how lit each seat is, its section, its row, a number of its own. */
   private readonly stalls: { mesh: InstancedMesh; lit: number[]; sec: number[]; row: number[]; own: number[] }[] = [];
   /**
-   * The rows by the floor's draws (the detailed people), and the rows behind's; and the same people in the
-   * lighter models a slow device draws them in (see shed): the rows by the floor in the plain one and in
-   * the lightest, the rows behind in the lightest and as a trunk and a head.
+   * The people, a block of the stands at a time: the same people three times over, in fuller and lighter models (the
+   * rows by the floor: the detailed ones, the plain ones, the lightest; the rows behind: the plain ones, the lightest, a
+   * trunk and a head), a draw for each shape among them; one of the three is drawn, or none: see present. `box`: where they are; `near`: the rows by the floor; `tier`: which
+   * of the three the last picture had.
    */
-  private readonly fine: InstancedMesh[] = [];
-  private readonly plain: InstancedMesh[] = [];
-  private readonly least: InstancedMesh[] = [];
-  private readonly rest: InstancedMesh[] = [];
-  private readonly restLow: InstancedMesh[] = [];
-  private readonly restFar: InstancedMesh[] = [];
+  private readonly blocks: { box: Box3; near: boolean; tiers: InstancedMesh[][]; tier: number }[] = [];
+  /** Every draw of the people in the stands (each block's, in each of its models). */
+  private readonly draws: InstancedMesh[] = [];
   /** The rows by the floor's seats, and the same seats as two faces each (a slow device's). */
   private readonly seats: { fine: InstancedMesh; flat: InstancedMesh }[] = [];
   private board = '';
@@ -1196,8 +1232,7 @@ export class Crowd {
     }
     this.main.clear();
     if (this.blur) this.group.remove(this.blur);
-    for (const list of [this.people, this.fans, this.others, this.visitors, this.stalls, this.fine, this.plain, this.least, this.rest, this.restLow, this.restFar, this.seats])
-      list.length = 0;
+    for (const list of [this.people, this.fans, this.others, this.visitors, this.stalls, this.blocks, this.draws, this.seats]) list.length = 0;
     this.count = seats.length;
     this.first = seats[0];
     let n = 11;
@@ -1399,51 +1434,61 @@ export class Crowd {
     who.forEach((w, i) => {
       this.blur.setMatrixAt(i, w.at);
       this.blur.setColorAt(i, c.set(w.wear));
-      this.people.push({ mesh: this.blur, slot: 0, all: i });
+      this.people.push({ in: [[this.blur, i]] });
     });
     this.blur.frustumCulled = false;
     this.blur.visible = false;
     keep(this.blur);
-    for (let side = 0; side < 4; side++)
-      for (const fine of [true, false])
-        (fine ? [...models.near, models.kid] : models.mid).forEach((geo, model) => {
-          // (in his own number's order: a slow device leaves the last of the plain ones out, from all over the stands)
-          const list = everyone.filter((i) => who[i].seat.side === side && who[i].fine === fine && who[i].model === model).sort((a, b) => who[a].seed - who[b].seed);
-          if (!list.length) return;
-          const aWho = numbers(list);
-          const aLook = looks(list);
-          const mesh = keep(new InstancedMesh(share(geo, { aWho, aLook }), mat, list.length));
-          list.forEach((i, slot) => {
-            mesh.setMatrixAt(slot, who[i].at);
-            mesh.setColorAt(slot, c.set(who[i].wear));
-            this.people[i].mesh = mesh;
-            this.people[i].slot = slot;
-          });
-          this.bound(mesh);
-          // (drawn before the seats and the steps they hide, the rows by the floor first: less is drawn twice)
-          mesh.renderOrder = fine ? -3 : -2;
-          this.main.add(mesh);
-          // (the same people in a lighter model, for a device that can't keep up: see shed)
-          const lighter = (geo: BufferGeometry, into: InstancedMesh[]) => {
-            const m = keep(new InstancedMesh(share(geo, { aWho, aLook }), mat, list.length));
-            m.instanceMatrix = mesh.instanceMatrix;
-            m.instanceColor = mesh.instanceColor;
-            m.boundingSphere = mesh.boundingSphere;
-            m.visible = false;
-            m.renderOrder = mesh.renderOrder;
-            into.push(m);
-            this.main.add(m);
-          };
-          if (!fine) {
-            this.rest.push(mesh);
-            lighter(models.low, this.restLow);
-            lighter(models.far, this.restFar);
-            return;
-          }
-          this.fine.push(mesh);
-          lighter(models.mid[NEAR_MODELS[model]?.plain ?? 0] ?? models.mid[0], this.plain);
-          lighter(models.low, this.least);
-        });
+    // (a block: a side's run of seats, the rows by the floor or a band of the rows behind)
+    const blockOf = (i: number) => {
+      const { side, row, x, z } = who[i].seat;
+      // (a side runs along the floor's length, an end across it)
+      const along = side === 0 || side === 3 ? x : z;
+      return `${side} ${who[i].fine ? -1 : Math.floor((row - NEAR_ROWS) / BLOCK_ROWS)} ${Math.floor(along / BLOCK_RUN + 0.5)}`;
+    };
+    const inBlock = new Map<string, number[]>();
+    for (const i of everyone) (inBlock.get(blockOf(i)) ?? inBlock.set(blockOf(i), []).get(blockOf(i))!).push(i);
+    const spot = new Vector3();
+    /** A draw of these people in one model: each has a place in it (his own place, colour and look are written to every draw he is in: see wear). */
+    const draw = (geo: BufferGeometry, list: number[], order: number) => {
+      const mesh = keep(new InstancedMesh(share(geo, { aWho: numbers(list), aLook: looks(list) }), mat, list.length));
+      list.forEach((i, slot) => {
+        mesh.setMatrixAt(slot, who[i].at);
+        mesh.setColorAt(slot, c.set(who[i].wear));
+        this.people[i].in.push([mesh, slot]);
+      });
+      // (in the picture or out of it by its block's box: see present)
+      mesh.frustumCulled = false;
+      mesh.visible = false;
+      mesh.renderOrder = order;
+      this.main.add(mesh);
+      this.draws.push(mesh);
+      return mesh;
+    };
+    /** These people, a draw for each model `of` says one of them is in (in his own number's order). */
+    const each = (members: number[], geos: BufferGeometry[], of: (i: number) => number, order: number) =>
+      geos.flatMap((geo, k) => {
+        const list = members.filter((i) => of(i) === k).sort((a, b) => who[a].seed - who[b].seed);
+        return list.length ? [draw(geo, list, order)] : [];
+      });
+    for (const members of inBlock.values()) {
+      const fine = who[members[0]].fine;
+      const box = new Box3();
+      for (const i of members) box.expandByPoint(spot.setFromMatrixPosition(who[i].at));
+      box.min.subScalar(BLOCK_PAD);
+      box.max.addScalar(BLOCK_PAD);
+      // (drawn before the seats and the steps they hide, the rows by the floor first: less is drawn twice)
+      const order = fine ? -3 : -2;
+      // (the lighter the model, the fewer of them: the lightest is one shape for everyone, so one draw for a block)
+      const tiers = fine
+        ? [
+            each(members, [...models.near, models.kid], (i) => who[i].model, order),
+            each(members, models.mid, (i) => (models.mid[NEAR_MODELS[who[i].model]?.plain ?? 0] ? (NEAR_MODELS[who[i].model]?.plain ?? 0) : 0), order),
+            [draw(models.low, members, order)],
+          ]
+        : [each(members, models.mid, (i) => who[i].model, order), [draw(models.low, members, order)], [draw(models.far, members, order)]];
+      this.blocks.push({ box, near: fine, tiers, tier: 0 });
+    }
 
     // the towels in the hands of those who brought one (see TOWEL_MOVE), each in his seat and on his beat
     const waving = everyone.filter((i) => who[i].kind === 1);
@@ -1524,14 +1569,9 @@ export class Crowd {
 
   /** Someone's top in colour `c`, and (`second`) the second colour on it: a jersey's trim and number, a sleeve, a cap; `look` what he has on (TOP and the rest), if it changes. */
   private wear(i: number, c: Color, second?: Color, look?: number) {
-    const p = this.people[i];
-    p.mesh.setColorAt(p.slot, c);
-    this.blur.setColorAt(p.all, c);
-    if (!second) return;
-    for (const [mesh, slot] of [
-      [p.mesh, p.slot],
-      [this.blur, p.all],
-    ] as const) {
+    for (const [mesh, slot] of this.people[i].in) {
+      mesh.setColorAt(slot, c);
+      if (!second) continue;
       const a = mesh.geometry.getAttribute('aLook') as InstancedBufferAttribute;
       a.setXYZ(slot, second.r, second.g, second.b);
       if (look !== undefined) a.setW(slot, look);
@@ -1539,7 +1579,7 @@ export class Crowd {
   }
 
   private flush() {
-    for (const o of [...this.fine, ...this.rest, this.blur]) {
+    for (const o of [...this.draws, this.blur]) {
       if (o.instanceColor) o.instanceColor.needsUpdate = true;
       o.geometry.getAttribute('aLook').needsUpdate = true;
     }
@@ -1573,6 +1613,7 @@ export class Crowd {
     const key = `${board}|${trim}|${seats.join()}|${mix}|${letters}|${share}|${out ?? ''}`;
     if (key === this.board) return;
     this.board = key;
+    this.u.uOut.value = out ? 1 : 0;
     const c = new Color();
     const d = new Color();
     // (a dark colour is worn a little lighter than it is painted: a navy shirt under the lamps is not black)
@@ -1595,14 +1636,14 @@ export class Crowd {
     // (the night's shirt: white, or its colour in a few shades of it, the other colour on it)
     const shirt = new Color(out ?? '#ffffff');
     const white = !!out && Math.min(shirt.r, shirt.g, shirt.b) > 0.8;
-    // (a shirt printed for the night keeps more of its colour than what people come in: a third of the way to grey, not most of it)
+    // (a shirt printed for the night keeps nearly all of its colour: what people come in is washed most of the way to grey, this an eighth)
     const tee = (own: number) =>
       white
         ? c.set(OUT_WHITE).multiplyScalar(0.94 + 0.06 * own)
         : c
             .copy(shirt)
-            .lerp(GREY.setScalar(0.2126 * shirt.r + 0.7152 * shirt.g + 0.0722 * shirt.b), 0.3)
-            .multiplyScalar(0.8 * (OUT_SHADES[0] + (OUT_SHADES[1] - OUT_SHADES[0]) * own));
+            .lerp(GREY.setScalar(0.2126 * shirt.r + 0.7152 * shirt.g + 0.0722 * shirt.b), 0.12)
+            .multiplyScalar(0.86 * (OUT_SHADES[0] + (OUT_SHADES[1] - OUT_SHADES[0]) * own));
     const print = () => (white ? lift(d, board, 1) : d.set(OUT_WHITE));
     for (const o of this.others) {
       if (out && o.keen < OUT_SHARE) this.wear(o.who, tee(o.keen / OUT_SHARE), print(), o.tee);
@@ -1678,7 +1719,8 @@ export class Crowd {
     this.clock = uTime.value;
     const to = uTime.value < this.slumpUntil ? Math.min(1, 0.6 + 0.2 * (this.run - RUN)) : 0;
     uSlump.value += (to - uSlump.value) * (1 - Math.exp(-dt / (to > uSlump.value ? 1.5 : 2.5)));
-    this.u.uDim.value = people;
+    // (a building in one shirt is brighter sat down than a crowd in its own clothes: the shirt is pale or bright, and is the picture)
+    this.u.uDim.value = people + (1 - Math.min(1, people)) * OUT_LIT * this.u.uOut.value;
     this.seatMat.color.setScalar(Math.min(1, seats));
     this.propMat.color.setScalar(people);
   }
@@ -1724,23 +1766,49 @@ export class Crowd {
   }
 
   /**
-   * A device that can't keep up, by the scene's steps: the rows by the floor in the plain model (1); the
-   * rows behind in the lightest one and every seat two faces (2); the rows by the floor in the lightest
+   * A device that can't keep up, by the scene's steps: the rows by the floor in the plain model at most (1); the
+   * rows behind in the lightest one at most, and every seat two faces (2); the rows by the floor in the lightest
    * and the rows behind a trunk and a head each (3: a quarter of a million triangles for the whole house).
-   * What the fans hold goes from the first.
+   * What the fans hold goes from the first. Which model a block is then drawn in is the picture's to say: see present.
    */
   shed(level: 0 | 1 | 2 | 3) {
     this.level = level;
-    for (const o of this.fine) o.visible = level < 1;
     this.held.visible = level < 1;
-    for (const o of this.plain) o.visible = level === 1 || level === 2;
-    for (const o of this.least) o.visible = level > 2;
-    for (const o of this.rest) o.visible = level < 2;
-    for (const o of this.restLow) o.visible = level === 2;
-    for (const o of this.restFar) o.visible = level > 2;
     for (const s of this.seats) {
       s.fine.visible = level < 2;
       s.flat.visible = level > 1;
+    }
+  }
+
+  /**
+   * The stands as the picture about to be drawn from `camera` wants them (the building asks, before each picture:
+   * arena.ts reflect), `tall` dots high: a block that is out of the picture is not drawn, and one in it is drawn in
+   * the model its people's size there calls for (the nearest of them: see FINE_PX), never a fuller one than the
+   * device's step allows.
+   */
+  present(camera: Camera, tall: number) {
+    camera.updateMatrixWorld();
+    const persp = camera as PerspectiveCamera;
+    FRUSTUM.setFromProjectionMatrix(SEEN.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    // (how many dots a foot is, a foot from the camera)
+    const scale = persp.isPerspectiveCamera ? (0.5 * tall) / Math.tan((persp.fov * Math.PI) / 360) : 0;
+    for (const b of this.blocks) {
+      const seen = FRUSTUM.intersectsBox(b.box);
+      if (seen) {
+        const px = (FAN_FT * scale) / Math.max(1, b.box.distanceToPoint(camera.position));
+        const lines = b.near ? FINE_PX : REST_PX;
+        // (the model this size calls for; the one it had stays until the size is well past the line between the two)
+        let want = px >= lines[0] ? 0 : px >= lines[1] ? 1 : 2;
+        if (want !== b.tier && Math.abs(want - b.tier) === 1) {
+          const line = lines[Math.min(want, b.tier)];
+          if (Math.abs(px - line) < line * TIER_SLACK) want = b.tier;
+        }
+        b.tier = want;
+      }
+      const draw = Math.max(b.tier, (b.near ? FINE_STEP : REST_STEP)[this.level]);
+      b.tiers.forEach((list, k) => {
+        for (const m of list) m.visible = seen && k === draw;
+      });
     }
   }
 }

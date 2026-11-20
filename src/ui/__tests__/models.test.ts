@@ -287,7 +287,7 @@ describe("the 3D court's models", () => {
 
     // every thing the app asks for is there, in materials it has a look for, and nothing in any list is not a number
     {
-      expect([...figure.keys()]).toEqual(['figure']);
+      expect([...figure.keys()].sort()).toEqual(['figure', 'figureFar']);
       expect([...people.keys()].sort()).toEqual(['bench', 'benchFar', 'official', 'officialFar', 'staff', 'staffFar']);
       expect([...arena.keys()]).toEqual(expect.arrayContaining(PROPS));
       expect(fans.length).toBe(FANS_NEAR.length + FANS_MID.length);
@@ -350,6 +350,42 @@ describe("the 3D court's models", () => {
       expect(geo.wearing(null, false).index!.count / 3, 'a low shoe leaves off what makes one high').toBe(triangles(fig) - pieces - size('high'));
       expect(geo.wearing('bun').index!.count, 'a piece of hair adds its own triangles').toBeGreaterThan(geo.body.index!.count);
       expect(geo.wearing('bun').getAttribute('position'), 'and shares the points').toBe(geo.body.getAttribute('position'));
+      // the same man far off (figure.py's dress_far): what a lamp's shadow map, the floor's mirror and a slow device draw of
+      // him. The same parts by the same names on bones of the same names, so his sheet's pictures lie on it too; no mouth
+      // inside it and no map of his skin; and a man in it, whatever hair he wears, under 6,000 triangles to his 28,000
+      {
+        const far = figure.get('figureFar')!;
+        expect(far.bones!.map((b) => b.name).sort()).toEqual(fig.bones!.map((b) => b.name).sort());
+        const names = new Set(fig.parts.map((p) => p.material));
+        for (const p of far.parts) expect(names.has(p.material), `figureFar: ${p.material} is a part of the figure's`).toBe(true);
+        for (const m of ['skin', 'jersey', 'trim', 'cloth', 'white', 'shoe', ...HAIR_PIECES])
+          expect(
+            far.parts.some((p) => p.material === m),
+            `figureFar has its ${m}`,
+          ).toBe(true);
+        for (const m of ['teeth', 'gum', 'tongue'])
+          expect(
+            far.parts.some((p) => p.material === m),
+            `figureFar has no ${m}`,
+          ).toBe(false);
+        expect(
+          far.parts.some((p) => p.geo.getAttribute('uv1')),
+          'no map of his skin on it',
+        ).toBe(false);
+        const farSize = (m: string) => far.parts.filter((p) => p.material === m).reduce((n, p) => n + p.geo.index!.count / 3, 0);
+        const farPieces = HAIR_PIECES.reduce((n, m) => n + farSize(m), 0);
+        expect(triangles(far) - farPieces + Math.max(...HAIR_PIECES.map(farSize))).toBeLessThanOrEqual(6_000);
+        expect(geo.far.wearing(null).index!.count / 3).toBe(triangles(far) - farPieces);
+        expect(geo.far.wearing('locs').index!.count / 3).toBe(triangles(far) - farPieces + farSize('locs'));
+        // (on the sheet, every point of it: its pictures are the near body's)
+        const uv = geo.far.wearing(null).getAttribute('uv');
+        for (let i = 0; i < uv.count; i++) {
+          expect(uv.getX(i)).toBeGreaterThanOrEqual(0);
+          expect(uv.getX(i)).toBeLessThanOrEqual(1);
+          expect(uv.getY(i)).toBeGreaterThanOrEqual(0);
+          expect(uv.getY(i)).toBeLessThanOrEqual(1);
+        }
+      }
       const uv = geo.body.getAttribute('uv');
       expect(Math.min(...Array.from(uv.array)), 'a point off the sheet').toBeGreaterThanOrEqual(0);
       expect(most(uv.array), 'a point off the sheet').toBeLessThanOrEqual(1);

@@ -68,6 +68,8 @@ export interface Bank {
 }
 
 /** How the banks hang (arena.ts, the roof over each side): tipped this far toward the floor (radians), this tall (ft). */
+/** A picture of more dots than this (a little over 1080p's) has its dark worked coarse (ao.ts Occlusion.coarse). */
+const AO_COARSE_PX = 2_600_000;
 const BANK_TIP = 0.5;
 const BANK_H = 3.2;
 /** Five banks to a side, a bank 0.11 of the side's run and 5.4 gaps to the run: a bank is this much of the gap between two. */
@@ -1248,6 +1250,9 @@ export class Lens {
     }
     this.scene.setSize(this.w, this.h);
     this.ao.size(this.w, this.h);
+    // (a big picture's dark is worked at a third of its size: a third of 1440p is as many dots on the glass as a half of
+    // 1080p, and the ten looks each of its dots takes were the dearest pass in the frame there)
+    this.ao.coarse = this.w * this.h > AO_COARSE_PX;
     this.glow.forEach((t, i) => t.setSize(Math.max(1, this.w >> (i + 1)), Math.max(1, this.h >> (i + 1))));
     this.soft.forEach((t, i) => t.setSize(Math.max(1, this.w >> (i + 1)), Math.max(1, this.h >> (i + 1))));
   }

@@ -71,6 +71,8 @@ export const LAMPS: readonly (readonly [number, number, number])[] = [
   ...[-1, 1].map((e) => [e * (ENDX + ROWS * DEEP + 31), LAMP_Y, 0] as const),
 ];
 const LED_WHITE = new Color('#ffffff');
+/** The picture's size in dots (see reflect). */
+const SIZE = new Vector2();
 /** How much of the light the crowd keeps while it sits. */
 const SAT = 0.66;
 /** The most pools of dark the floor can take: two feet and a body for every figure on it, one under everyone sat round it. */
@@ -496,6 +498,7 @@ export class Arena {
   reflect(renderer: WebGLRenderer, scene: Scene, camera: Camera) {
     // (the people round the floor, as this camera's picture wants them)
     this.sideline.present(camera);
+    this.crowd.present(camera, renderer.getDrawingBufferSize(SIZE).y);
     if (!this.sheen.visible) return;
     this.crowd.mirror(true);
     this.sideline.mirrored(true);

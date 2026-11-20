@@ -34,18 +34,36 @@ function luminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+/** A colour's hue (degrees round the wheel) and how much colour it has (its strongest channel less its weakest). */
+function hueOf(hex: string): { hue: number; chroma: number } {
+  const [r, g, b] = rgb(hex);
+  const max = Math.max(r, g, b);
+  const chroma = max - Math.min(r, g, b);
+  if (chroma < 1e-6) return { hue: 0, chroma };
+  const h = max === r ? ((g - b) / chroma) % 6 : max === g ? (b - r) / chroma + 2 : (r - g) / chroma + 4;
+  return { hue: (h * 60 + 360) % 360, chroma };
+}
+
 /**
- * The shirt a building gives out for a playoff night: its team's bright colour, if it has one (its paint or its
- * trim: a gold, an orange, a sky blue, a red the stands would glow in), and white if it hasn't (a navy, a black, a
- * forest green: a building in those is a dark building, and a white-out is what such a team does).
+ * The shirt a building gives out for a playoff night: its team's own colour where the stands would glow in it (a
+ * gold, an orange: bright, and plainly a colour), or its second colour where that one is as bright, a strong colour
+ * and not a pale or a dusty one, and sets the first off from across the wheel (a purple building in gold, a navy one
+ * in gold, a blue one in orange). White if neither: a navy, a black, a forest green or a deep red is a dark building,
+ * and a dusty gold, a cream or a silver on thousands of shirts under the lamps is a building in khaki (Boston); a
+ * second colour that is the first's neighbour (Miami's orange on its red) is mud between the two. A white-out is
+ * what such a team does.
  */
 export function outShirt(paint: string, trim: string): string {
-  const bright = [paint, trim].filter((hex) => {
-    const [r, g, b] = rgb(hex);
+  const lit = (hex: string) => {
     const l = luminance(hex);
-    return l > 0.2 && l < 0.8 && Math.max(r, g, b) - Math.min(r, g, b) > 0.4;
-  });
-  return bright.sort((a, b) => luminance(b) - luminance(a))[0] ?? '#ffffff';
+    return l > 0.2 && l < 0.8;
+  };
+  const [p, t] = [hueOf(paint), hueOf(trim)];
+  if (lit(paint) && p.chroma > 0.4) return paint;
+  const apart = Math.abs(((p.hue - t.hue + 540) % 360) - 180);
+  // (a first colour with none of its own, a black or a grey, is set off by any colour)
+  if (lit(trim) && t.chroma >= 0.55 && (p.chroma < 0.15 || apart >= 75)) return trim;
+  return '#ffffff';
 }
 
 /** WCAG contrast ratio between two colours. */

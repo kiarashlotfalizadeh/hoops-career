@@ -102,6 +102,9 @@
   --ink: #121212;
   --ink-2: #2a2826;
   --paper-ink: #ffffff;
+  /* the same two as the page has them, for a card of paper that sits on a plate (a plate pins --ink to itself) */
+  --page-ink: #121212;
+  --page-paper-ink: #ffffff;
   --accent: var(--team-fill);
   --accent-ink: var(--team-fill-ink);
   --accent-text: var(--team-text);

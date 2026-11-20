@@ -24,12 +24,16 @@
   /* (the graphics are cut for the picture's own size, not the screen's: see the small picture's below) */
   container-type: size;
 }
-/* (the picture comes up over the 2D court, it doesn't pop in) */
+/* (the picture comes up over the 2D court and goes down into it, a break's shot chart or the view from above: it
+   never pops in or out. Coming, it is there at once and fades up; going, it fades and is then gone. Its last frame
+   stays on its canvas while it goes: the frame loop stops drawing, the box keeps its size) */
+.c3d {
+  transition:
+    opacity var(--dur-slow, 0.36s) var(--ease-out, ease-out),
+    visibility 0s linear var(--dur-slow, 0.36s);
+}
 .court-view[data-look='3d'] .c3d {
   transition: opacity var(--dur-slow, 0.36s) var(--ease-out, ease-out);
-}
-.c3d[hidden] {
-  display: none;
 }
 .c3d-gl {
   display: block;
@@ -100,7 +104,24 @@
   display: none;
 }
 /* (where only his number fits: the number alone) */
-.c3d-tag[data-brief='1'] .c3d-tag-name {
+.c3d-tag[data-brief='1'] .c3d-tag-name,
+.c3d-tag[data-brief='1'] .c3d-tag-woe {
+  display: none;
+}
+/* what the game has done to him (his fouls, worn down, cold), after his name: quieter, behind a hairline */
+.c3d-tag-woe {
+  align-self: center;
+  margin-left: -2px;
+  padding: 0 8px 1px 6px;
+  border-left: 1px solid color-mix(in srgb, var(--on-ink, #fff) 28%, transparent);
+  color: color-mix(in srgb, var(--on-ink, #fff) 78%, transparent);
+  font:
+    600 11px/1 'Archivo Variable',
+    system-ui,
+    sans-serif;
+  font-stretch: semi-condensed;
+}
+.c3d-tag-woe:empty {
   display: none;
 }
 .c3d-tag[data-brief='1'] .c3d-tag-n {

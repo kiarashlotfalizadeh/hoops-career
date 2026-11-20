@@ -7,22 +7,127 @@
 // from here frame by frame. Under reduced motion none of it happens (a flash is a flash).
 import {
   AdditiveBlending,
+  BufferAttribute,
   BufferGeometry,
   DoubleSide,
   Float32BufferAttribute,
   Group,
   InstancedBufferAttribute,
   InstancedMesh,
+  Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
   Points,
+  RingGeometry,
   ShaderMaterial,
   Color,
   Vector2,
-  type Vector3,
+  Vector3,
 } from 'three';
+import { shotAt, type Shot } from './ballistics';
 
 type Keep = <T extends { dispose(): void }>(o: T) => T;
+
+/**
+ * A shot's way through the air and a clean make, drawn (the scene's own choice whether: a setting, never under reduced
+ * motion, never on a device that can't keep up). The arc: a thin streak of light behind the ball over the last of its
+ * flight (TRAIL_SPAN of it), wide as a finger at the ball and gone to nothing at its tail, turned to face the camera;
+ * it says where the ball came from, which a small ball against a dark stand does not. The swish: on a shot that
+ * touches nothing but the cords, a ring of light at the rim that drops through the net and opens as it fades
+ * (SWISH_MS). Two draws, a few dozen triangles.
+ */
+const TRAIL_N = 22;
+const TRAIL_SPAN = 0.4;
+const TRAIL_WIDE = 0.1;
+const TRAIL_LIGHT = 0.5;
+const SWISH_MS = 420;
+
+export class ShotFx {
+  readonly group = new Group();
+  private readonly trail: Mesh;
+  private readonly at: BufferAttribute;
+  private readonly light: BufferAttribute;
+  private readonly ring: Mesh;
+  private ringMs = SWISH_MS;
+
+  constructor(keep: Keep) {
+    const geo = keep(new BufferGeometry());
+    this.at = new BufferAttribute(new Float32Array((TRAIL_N + 1) * 6), 3);
+    this.light = new BufferAttribute(new Float32Array((TRAIL_N + 1) * 6), 3);
+    geo.setAttribute('position', this.at);
+    geo.setAttribute('color', this.light);
+    const index: number[] = [];
+    for (let i = 0; i < TRAIL_N; i++) index.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
+    geo.setIndex(index);
+    const mat = keep(new MeshBasicMaterial({ vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, side: DoubleSide, fog: false }));
+    this.trail = new Mesh(geo, mat);
+    this.trail.frustumCulled = false;
+    this.trail.visible = false;
+    this.trail.renderOrder = 4;
+    this.ring = new Mesh(
+      keep(new RingGeometry(0.62, 0.8, 36).rotateX(-Math.PI / 2)),
+      keep(new MeshBasicMaterial({ color: 0xffffff, transparent: true, blending: AdditiveBlending, depthWrite: false, side: DoubleSide, fog: false })),
+    );
+    this.ring.visible = false;
+    this.ring.renderOrder = 4;
+    this.group.add(this.trail, this.ring);
+  }
+
+  /** The shot in the air (null: none, and no streak), how far along its flight the ball is (0..1), and where the camera stands. */
+  arc(shot: Shot | null, u: number, eye: Vector3) {
+    this.trail.visible = !!shot && u > 0.02;
+    if (!shot || !this.trail.visible) return;
+    const [P, Q, T, S] = [A, B, C, D];
+    const from = Math.max(0, u - TRAIL_SPAN);
+    for (let i = 0; i <= TRAIL_N; i++) {
+      const k = i / TRAIL_N;
+      const ui = from + (u - from) * k;
+      shotAt(shot, ui, P);
+      shotAt(shot, Math.min(1, ui + 0.01), Q);
+      // (across it: square to its way and to the line from the camera)
+      T.subVectors(Q, P);
+      S.subVectors(eye, P).cross(T);
+      const len = S.length();
+      // (thin at its tail, a finger at the ball; and it stops short of the ball itself)
+      S.multiplyScalar(len > 1e-6 ? (TRAIL_WIDE * k * (1 - 0.6 * k * k * k)) / len : 0);
+      this.at.setXYZ(i * 2, P.x + S.x, P.y + S.y, P.z + S.z);
+      this.at.setXYZ(i * 2 + 1, P.x - S.x, P.y - S.y, P.z - S.z);
+      const c = TRAIL_LIGHT * k * k * (1 - k * k * k * k);
+      this.light.setXYZ(i * 2, c, c * 0.96, c * 0.88);
+      this.light.setXYZ(i * 2 + 1, c, c * 0.96, c * 0.88);
+    }
+    this.at.needsUpdate = true;
+    this.light.needsUpdate = true;
+  }
+
+  /** A shot has gone through with nothing but the cords: the ring, at that rim (its middle). */
+  swish(x: number, y: number, z: number) {
+    this.ring.position.set(x, y, z);
+    this.ringMs = 0;
+  }
+
+  /** The ring's own time (ms of the picture's clock). */
+  tick(ms: number) {
+    if (this.ringMs >= SWISH_MS) {
+      this.ring.visible = false;
+      return;
+    }
+    this.ringMs += ms;
+    const k = Math.min(1, this.ringMs / SWISH_MS);
+    this.ring.visible = k < 1;
+    this.ring.scale.setScalar(1 + 0.5 * k);
+    this.ring.position.y -= (ms / 1000) * 3.2;
+    (this.ring.material as MeshBasicMaterial).color.setScalar(0.55 * (1 - k) * (1 - k));
+  }
+
+  /** None of it (the setting off, a replay's cut, a possession over). */
+  clear() {
+    this.trail.visible = false;
+    this.ring.visible = false;
+    this.ringMs = SWISH_MS;
+  }
+}
+const [A, B, C, D] = [new Vector3(), new Vector3(), new Vector3(), new Vector3()];
 
 /**
  * The flashes: each camera in the stands has its own few moments a second to go off in, and at `uRate`

@@ -89,6 +89,8 @@ export interface CourtProps {
   floor?: CourtFloor;
   /** Players on a hot streak: they wear a heat ring. */
   hot?: ReadonlySet<number>;
+  /** What the game has done to the men on the floor (see Woe): each wears it small, on him. */
+  woes?: ReadonlyMap<number, Woe>;
   /** What to show with no possession to draw (default: hold the last frame). */
   idle?: CourtIdle;
   /** Clutch time: the building's lights come down around the floor. */
@@ -150,6 +152,19 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 const lerpPt = (a: Pt, b: Pt, t: number): Pt => ({ x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) });
 
 /** The colours the canvas paints with: the app's tokens, read once (tokens.css), with the same values to fall back on. */
+/**
+ * What the game has done to a man on the floor, worn small on him and never as a word over the play: worn down (his
+ * energy under the line his staff subs at), in foul trouble (how many he has, at the count his staff sits him at),
+ * shooting cold. The bench panel says the same in words; these are for the eye that stays on the floor.
+ */
+export interface Woe {
+  tired?: boolean;
+  fouls?: number;
+  cold?: boolean;
+}
+/** A cold shooter's blue, on ink and on the floor (the app's info colour as it reads on a dark plate). */
+export const COLD = '#8cbcff';
+
 export interface Paints {
   wood: string;
   wood2: string;
@@ -265,11 +280,11 @@ export interface Stander {
   at: Pt;
 }
 
-export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onBeat, names, abbrevs, floor, hot, idle, clutch, label, stage, mute }: CourtProps) {
+export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onBeat, names, abbrevs, floor, hot, woes, idle, clutch, label, stage, mute }: CourtProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const state = useRef({ t: 0, last: 0, script: null as Script | null, done: false, beat: -1 });
-  const props = useRef({ speed, paused, kits, jersey, onDone, onTick, onBeat, names, abbrevs, floor, hot, idle, clutch, stage, mute });
-  props.current = { speed, paused, kits, jersey, onDone, onTick, onBeat, names, abbrevs, floor, hot, idle, clutch, stage, mute };
+  const props = useRef({ speed, paused, kits, jersey, onDone, onTick, onBeat, names, abbrevs, floor, hot, woes, idle, clutch, stage, mute });
+  props.current = { speed, paused, kits, jersey, onDone, onTick, onBeat, names, abbrevs, floor, hot, woes, idle, clutch, stage, mute };
 
   // each possession is drawn from its start
   useEffect(() => {
@@ -378,7 +393,7 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
       const key = `${canvas.width}x${canvas.height}|${mode}|${fontsIn}|${floorId}`;
       // paused, finished or waiting for the next possession: nothing moved, so skip the redraw (battery)
       const idleKey = sc ? '' : `${p.idle?.kind ?? 'hold'}|${p.idle?.kind === 'chart' ? p.idle.shots.length : p.idle?.kind === 'tip' ? p.idle.fives.join('/') : standers.length}`;
-      const sig = `${key}|${s.t}|${s.done}|${view.top}|${view.ox}|${idleKey}|${p.clutch}|${p.hot?.size ?? 0}`;
+      const sig = `${key}|${s.t}|${s.done}|${view.top}|${view.ox}|${idleKey}|${p.clutch}|${p.hot?.size ?? 0}|${woeKey(p.woes)}`;
       if (sig === drawn && !cut) return;
       drawn = sig;
       if (!canvas.width || !canvas.height) {
@@ -408,7 +423,7 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
           view,
           who.map((st) => st.at),
         );
-        who.forEach((st, i) => drawPlayer(ctx, view, where[i], p.kits[st.side], p.jersey(st.pid), false, !!p.hot?.has(st.pid), paints));
+        who.forEach((st, i) => drawPlayer(ctx, view, where[i], p.kits[st.side], p.jersey(st.pid), false, !!p.hot?.has(st.pid), paints, p.woes?.get(st.pid)));
         const b = p.idle?.kind === 'tip' ? { x: 0, y: COURT_LEN / 2 } : ballAt;
         if (b) drawBall(ctx, view, b, 0, 0, paints);
       }
@@ -452,8 +467,8 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
       const all = apart(view, [...play.o, ...play.d].map(W));
       const oW = all.slice(0, nO);
       const dW = all.slice(nO);
-      sc.dPids.forEach((pid, j) => drawPlayer(ctx, view, dW[j], kitD, p.jersey(pid), hold === nO + j, !!p.hot?.has(pid), paints));
-      sc.oPids.forEach((pid, j) => drawPlayer(ctx, view, oW[j], kitO, p.jersey(pid), hold === j, !!p.hot?.has(pid), paints));
+      sc.dPids.forEach((pid, j) => drawPlayer(ctx, view, dW[j], kitD, p.jersey(pid), hold === nO + j, !!p.hot?.has(pid), paints, p.woes?.get(pid)));
+      sc.oPids.forEach((pid, j) => drawPlayer(ctx, view, oW[j], kitO, p.jersey(pid), hold === j, !!p.hot?.has(pid), paints, p.woes?.get(pid)));
       if (p.names && hold !== undefined && hold >= 0) {
         const pid = hold < nO ? sc.oPids[hold] : sc.dPids[hold - nO];
         const at = hold < nO ? oW[hold] : dW[hold - nO];
@@ -847,12 +862,39 @@ export function paintFloor(cv: HTMLCanvasElement, asked: View, dpr: number, floo
       ctx.lineWidth = Math.max(1, size * 0.075);
       ctx.strokeStyle = ink;
       ctx.strokeText(text, 0, 0.5, most);
-    } else {
-      if (outline) {
-        ctx.lineWidth = Math.max(1, size * 0.09);
-        ctx.strokeStyle = outline;
-        ctx.strokeText(text, 0, 0.5, most);
+    } else if (outline) {
+      // (edged words are set letter by letter: an edge is drawn round each letter, into the space between it and the
+      // next, so each is put that much further on, and a word space is a real one; and words too long for their
+      // place are set smaller, never squeezed: squeezed, with an edge, THE FINALS was one block)
+      const edge = Math.max(1, size * 0.09);
+      const track = edge * 0.9 + size * 0.02;
+      const spread = court.words === 'wide' ? Math.round(size * 0.2) : 0;
+      if (spread) {
+        (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = '0px';
+        ctx.translate(-spread / 2, 0);
       }
+      const run = (px: number) => {
+        setFont(ctx, 820, px);
+        const k = px / size;
+        return [...text].map((ch) => (ch === ' ' ? px * 0.36 : ctx.measureText(ch).width) + (track + spread) * k);
+      };
+      let steps = run(size);
+      const long = steps.reduce((n, v) => n + v, 0) - track - spread;
+      const fit = Math.min(1, most / long);
+      if (fit < 1) steps = run(size * fit);
+      ctx.textAlign = 'left';
+      ctx.lineWidth = edge * fit;
+      ctx.strokeStyle = outline;
+      ctx.fillStyle = ink;
+      const x0 = (-long * fit) / 2;
+      for (const paint of ['strokeText', 'fillText'] as const) {
+        let x = x0;
+        [...text].forEach((ch, i) => {
+          ctx[paint](ch, x, 0.5);
+          x += steps[i];
+        });
+      }
+    } else {
       ctx.fillStyle = ink;
       ctx.fillText(text, 0, 0.5, most);
     }
@@ -991,12 +1033,18 @@ function drawNeutralMark(ctx: CanvasRenderingContext2D, cx: number, cy: number, 
 /** A player's disc on screen: never smaller than a fingertip reads. */
 const bodyR = (k: number) => Math.max(BODY * k, 7.5);
 
+/** The floor's marks as one word: the court is drawn again when it changes. */
+const woeKey = (woes?: ReadonlyMap<number, Woe>) => (woes ? [...woes].map(([pid, w]) => `${pid}${w.tired ? 't' : ''}${w.fouls ?? ''}${w.cold ? 'c' : ''}`).join() : '');
+
 /**
  * A player: his team's disc, ringed, his number on it. The home team wears white trimmed in its
  * colour, the visitors their colour solid, so the two never look alike. The man with the ball gets a
- * second, bright ring; a hot shooter a ring in the warning colour.
+ * second, bright ring; a hot shooter a ring in the warning colour. What the game has done to him (`woe`) is small
+ * marks at his disc's edge, each its own shape as well as its own colour: his fouls on a square pip at his shoulder
+ * when he is in trouble with them, a dot of blue with a ring round it at the other when he is shooting cold, and
+ * a short bar under him, sagging, when he is worn down.
  */
-function drawPlayer(ctx: CanvasRenderingContext2D, view: View, at: Pt, kit: MatchKit, num: string, ball: boolean, hot: boolean, paints: Paints) {
+function drawPlayer(ctx: CanvasRenderingContext2D, view: View, at: Pt, kit: MatchKit, num: string, ball: boolean, hot: boolean, paints: Paints, woe?: Woe) {
   const { x, y } = project(view, at);
   const k = view.k;
   const r = bodyR(k);
@@ -1041,6 +1089,57 @@ function drawPlayer(ctx: CanvasRenderingContext2D, view: View, at: Pt, kit: Matc
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(num, x, y + 0.5);
+  if (!woe) return;
+  const pip = Math.max(4.5, r * 0.46);
+  if (woe.fouls) {
+    // (a square pip on ink at his right shoulder, his fouls on it)
+    const [cx, cy] = [x + r * 0.86, y - r * 0.86];
+    ctx.fillStyle = paints.ink;
+    ctx.fillRect(cx - pip - 1, cy - pip - 1, pip * 2 + 2, pip * 2 + 2);
+    ctx.fillStyle = paints.bad;
+    ctx.fillRect(cx - pip, cy - pip, pip * 2, pip * 2);
+    if (pip >= 5.5) {
+      ctx.fillStyle = paints.ink;
+      ctx.font = `800 ${Math.round(pip * 1.5)}px "Archivo Variable", system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(woe.fouls), cx, cy + 0.5);
+    }
+  }
+  if (woe.cold) {
+    // (a round one at his left shoulder: blue, ringed)
+    const [cx, cy] = [x - r * 0.86, y - r * 0.86];
+    ctx.fillStyle = paints.ink;
+    ctx.beginPath();
+    ctx.arc(cx, cy, pip + 1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = COLD;
+    ctx.lineWidth = Math.max(1.5, pip * 0.36);
+    ctx.beginPath();
+    ctx.arc(cx, cy, pip * 0.72, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = COLD;
+    ctx.beginPath();
+    ctx.arc(cx, cy, pip * 0.26, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (woe.tired) {
+    // (a bar under him that sags in its middle: the line of a man with his hands on his knees)
+    const [w, low] = [r * 0.8, y + r + ring + Math.max(3, k * 0.5)];
+    for (const [ink, wide] of [
+      [paints.ink, Math.max(4, k * 0.56)],
+      [paints.warn, Math.max(2, k * 0.3)],
+    ] as const) {
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = wide;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x - w, low);
+      ctx.quadraticCurveTo(x, low + r * 0.42, x + w, low);
+      ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+  }
 }
 
 /** The ball `z` feet up: its shadow stays on the floor and shrinks as it rises; it turns by `spin`. */
