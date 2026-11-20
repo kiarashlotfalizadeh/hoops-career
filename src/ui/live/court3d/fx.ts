@@ -34,13 +34,16 @@ type Keep = <T extends { dispose(): void }>(o: T) => T;
  * flight (TRAIL_SPAN of it), wide as a finger at the ball and gone to nothing at its tail, turned to face the camera;
  * it says where the ball came from, which a small ball against a dark stand does not. The swish: on a shot that
  * touches nothing but the cords, a ring of light at the rim that drops through the net and opens as it fades
- * (SWISH_MS). Two draws, a few dozen triangles.
+ * (SWISH_MS). The slam: on a dunk that goes down, a ring of light off the rim that opens out level with it and is
+ * gone in a quarter of a second (SLAM_MS): the iron's own answer, under the building's flashes. Three draws, a few
+ * dozen triangles.
  */
 const TRAIL_N = 22;
 const TRAIL_SPAN = 0.4;
 const TRAIL_WIDE = 0.1;
 const TRAIL_LIGHT = 0.5;
 const SWISH_MS = 420;
+const SLAM_MS = 260;
 
 export class ShotFx {
   readonly group = new Group();
@@ -49,6 +52,8 @@ export class ShotFx {
   private readonly light: BufferAttribute;
   private readonly ring: Mesh;
   private ringMs = SWISH_MS;
+  private readonly burst: Mesh;
+  private burstMs = SLAM_MS;
 
   constructor(keep: Keep) {
     const geo = keep(new BufferGeometry());
@@ -70,7 +75,13 @@ export class ShotFx {
     );
     this.ring.visible = false;
     this.ring.renderOrder = 4;
-    this.group.add(this.trail, this.ring);
+    this.burst = new Mesh(
+      keep(new RingGeometry(0.74, 0.86, 40).rotateX(-Math.PI / 2)),
+      keep(new MeshBasicMaterial({ color: 0xffffff, transparent: true, blending: AdditiveBlending, depthWrite: false, side: DoubleSide, fog: false })),
+    );
+    this.burst.visible = false;
+    this.burst.renderOrder = 4;
+    this.group.add(this.trail, this.ring, this.burst);
   }
 
   /** The shot in the air (null: none, and no streak), how far along its flight the ball is (0..1), and where the camera stands. */
@@ -106,8 +117,24 @@ export class ShotFx {
     this.ringMs = 0;
   }
 
-  /** The ring's own time (ms of the picture's clock). */
+  /** A dunk has gone down: the ring off the rim, at that rim (its middle). */
+  slam(x: number, y: number, z: number) {
+    this.burst.position.set(x, y, z);
+    this.burstMs = 0;
+  }
+
+  /** The rings' own time (ms of the picture's clock). */
   tick(ms: number) {
+    if (this.burstMs < SLAM_MS) {
+      this.burstMs += ms;
+      const k = Math.min(1, this.burstMs / SLAM_MS);
+      this.burst.visible = k < 1;
+      // (out fast and slowing, as a ring on water does; warm, the iron's colour in it)
+      const e = 1 - (1 - k) * (1 - k);
+      this.burst.scale.set(1 + 1.5 * e, 1, 1 + 1.5 * e);
+      const c = 0.5 * (1 - k) * (1 - k);
+      (this.burst.material as MeshBasicMaterial).color.setRGB(c, c * 0.82, c * 0.6);
+    } else this.burst.visible = false;
     if (this.ringMs >= SWISH_MS) {
       this.ring.visible = false;
       return;
@@ -125,6 +152,8 @@ export class ShotFx {
     this.trail.visible = false;
     this.ring.visible = false;
     this.ringMs = SWISH_MS;
+    this.burst.visible = false;
+    this.burstMs = SLAM_MS;
   }
 }
 const [A, B, C, D] = [new Vector3(), new Vector3(), new Vector3(), new Vector3()];

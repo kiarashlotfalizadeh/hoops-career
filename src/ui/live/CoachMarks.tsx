@@ -15,7 +15,7 @@ const SEEN_KEY = 'hc:live-tips';
 export const COACH_MARKS: { text: string; at: string[]; edge: 'top' | 'foot' }[] = [
   { text: 'Score, clock, fouls and timeouts are in the scorebug.', at: ['bug'], edge: 'top' },
   { text: 'Tap the pause button, or the court, for playback.', at: ['call'], edge: 'top' },
-  { text: 'The whole floor. The player with the ball wears his name.', at: ['court'], edge: 'foot' },
+  { text: 'The court. Whoever has the ball wears his name; 2D and 3D switch the view.', at: ['court'], edge: 'foot' },
   { text: 'Timeout stops play. Players has subs, Now has staff calls.', at: ['timeout', 'lineup', 'staff'], edge: 'foot' },
 ];
 

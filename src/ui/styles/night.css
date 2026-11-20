@@ -60,6 +60,9 @@
   /* the floor under the tactics board and the 2D court: the same maple, a shade down for the night */
   --maple: #cf9f69;
   --maple-2: #c6955e;
+  /* and a game's floor seen from above, which wears its building's own stain and not the token: let down this far
+     toward ink (live/Court.tsx paintFloor). The 3D picture's floor is lit by its own building and stays as it is */
+  --court-dusk: 0.2;
   /* depth: a card is lifted by its tone and a hair of light along its top; shadows are black */
   --shadow-card: inset 0 1px 0 rgba(255, 246, 228, 0.05), 0 12px 28px -18px rgba(0, 0, 0, 0.9);
   --shadow: 0 24px 48px -18px rgba(0, 0, 0, 0.85), 0 2px 8px rgba(0, 0, 0, 0.5);

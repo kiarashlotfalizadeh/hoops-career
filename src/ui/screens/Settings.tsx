@@ -308,7 +308,7 @@ export default function Settings() {
                 on={st.courtFx !== false}
                 onChange={(v) => set('courtFx', v)}
                 label="Shot trails"
-                help="On the 3D court: a streak behind a shot in the air, a ring through the net on a swish."
+                help="On the 3D court: a streak behind a shot, a ring on swishes and dunks."
               />
               <Toggle
                 on={st.liveTurn !== 'upright'}

@@ -225,37 +225,42 @@ export function CourtView({ look, onLook, cam, onCam, bench, body, game, replays
           />
         </Suspense>
       )}
-      {shown && onCam && (
-        <button
-          className="court-cam court-cam-kind"
-          onClick={(e) => {
-            e.stopPropagation();
-            // (a replay on the picture goes: the camera named on the chip is the one the picture comes back to)
-            if (held.current) cast.current?.skip();
-            onCam(CAM_KINDS[(CAM_KINDS.indexOf(kind) + 1) % CAM_KINDS.length]);
-          }}
-          aria-label={`Camera: ${CAM_NAME[kind]}. Switch to the next camera`}
-          title="Next camera"
-        >
-          <SwitchCamera size={15} aria-hidden="true" />
-          <span>{CAM_NAME[kind]}</span>
-        </button>
-      )}
+      {/* the camera's buttons, one row in the court's corner: the 3D picture's camera, then the way to the other look */}
       {can && !hide && (
-        <button
-          className="court-cam"
-          onClick={(e) => {
-            if (on) flat(e);
-            else {
-              e.stopPropagation();
-              onLook('3d');
-            }
-          }}
-          aria-label={on ? 'Switch to the view from above' : 'Switch to the broadcast camera'}
-          title={on ? 'View from above' : 'Broadcast camera'}
-        >
-          {on ? <Grid2x2 size={16} aria-hidden="true" /> : <Video size={16} aria-hidden="true" />}
-        </button>
+        <div className="court-cams">
+          {shown && onCam && (
+            <button
+              className="court-cam court-cam-kind"
+              onClick={(e) => {
+                e.stopPropagation();
+                // (a replay on the picture goes: the camera named on the chip is the one the picture comes back to)
+                if (held.current) cast.current?.skip();
+                onCam(CAM_KINDS[(CAM_KINDS.indexOf(kind) + 1) % CAM_KINDS.length]);
+              }}
+              aria-label={`Camera: ${CAM_NAME[kind]}. Switch to the next camera`}
+              title="Next camera"
+            >
+              <SwitchCamera size={15} aria-hidden="true" />
+              <span>{CAM_NAME[kind]}</span>
+            </button>
+          )}
+          {/* (it says where it goes, in words as well as a picture: a grid alone was nobody's idea of "the view from above") */}
+          <button
+            className="court-cam court-cam-look"
+            onClick={(e) => {
+              if (on) flat(e);
+              else {
+                e.stopPropagation();
+                onLook('3d');
+              }
+            }}
+            aria-label={on ? 'Switch to the 2D view from above' : 'Switch to the 3D broadcast camera'}
+            title={on ? 'View from above' : 'Broadcast camera'}
+          >
+            {on ? <Grid2x2 size={15} aria-hidden="true" /> : <Video size={15} aria-hidden="true" />}
+            <span>{on ? '2D' : '3D'}</span>
+          </button>
+        </div>
       )}
       {on && slow && !hide && (
         <div className="court-slow m-drop" role="status" onClick={(e) => e.stopPropagation()}>

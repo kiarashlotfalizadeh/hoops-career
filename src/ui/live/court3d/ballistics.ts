@@ -29,8 +29,13 @@ const THREE_FT = 22;
 const NET_DROP = 1.6;
 
 export type ShotKind = 'layup' | 'floater' | 'jumper' | 'ft';
-/** How a shot ends: clean, off the front of the rim and in, off the back and in, round the ring and down, off the glass and in; or out, off the front, the back, the side, round the ring and out, short of everything, hard off the glass, off the board's edge. */
-export type How = 'swish' | 'kiss' | 'backIn' | 'roll' | 'bank' | 'front' | 'back' | 'side' | 'round' | 'air' | 'glass' | 'edge';
+/**
+ * How a shot ends: clean, off the front of the rim and in, off the back and in, off the front and the back and in (it
+ * rattles home), round the ring and down, off the glass and in; or out, off the front, the back, the side, off the
+ * front and the back and out (in and out), round the ring and out, short of everything, hard off the glass, off the
+ * board's edge.
+ */
+export type How = 'swish' | 'kiss' | 'backIn' | 'rattleIn' | 'roll' | 'bank' | 'front' | 'back' | 'side' | 'rattle' | 'round' | 'air' | 'glass' | 'edge';
 
 /** A stretch of a shot's way, from `u0` of the move to `u1`: thrown (it falls as a ball does), round the ring, or down through the net. */
 type Leg =
@@ -156,6 +161,7 @@ export function planShot(ask: ShotAsk): Shot {
             ['swish', close ? 35 : ask.kind === 'ft' ? 62 : 50],
             ['kiss', close ? 30 : 16],
             ['backIn', 14],
+            ['rattleIn', close ? 8 : 9],
             ['roll', close ? 20 : 9],
             ['bank', canBank && ask.kind !== 'ft' && far < 15 ? 16 : 0],
           ],
@@ -180,6 +186,19 @@ export function planShot(ask: ShotAsk): Shot {
       hits.push({ u: 0.74, what: 'rim', power: 0.6 });
       fly(0.74, 0.87, p, q, GRAVITY);
       net(0.87, q, 0.6);
+    } else if (how === 'rattleIn') {
+      // (the front of the iron, a short hop across the ring onto the back of it, and down between the two: twice on
+      // the rim, a beat apart, and home. One touch and in or out was every shot's whole story on the iron)
+      const side = (r1 - 0.5) * 0.16;
+      const p = at(0.43, side, 0.2);
+      const b = at(-0.41, side * 0.4, 0.17);
+      const q = at(0.02, 0, -0.05);
+      fly(0, 0.68, from, p);
+      hits.push({ u: 0.68, what: 'rim', power: 0.55 });
+      fly(0.68, 0.79, p, b, GRAVITY);
+      hits.push({ u: 0.79, what: 'rim', power: 0.4 });
+      fly(0.79, 0.88, b, q, GRAVITY);
+      net(0.88, q, 0.55);
     } else if (how === 'roll') {
       // (onto the ring to one side of its front, round the inside of it as it slows, and down)
       const a0 = Math.atan2(uz, ux) + turn * 0.9;
@@ -207,6 +226,7 @@ export function planShot(ask: ShotAsk): Shot {
         ['front', close ? 24 : 34],
         ['back', close ? 14 : 27],
         ['side', 14],
+        ['rattle', close ? 12 : 13],
         ['round', close ? 20 : 11],
         ['air', long && far > 15 ? 5 : 0],
         ['glass', inFront && square > 0.45 && far < 20 && ask.kind !== 'ft' ? (close ? 26 : 7) : 0],
@@ -231,6 +251,17 @@ export function planShot(ask: ShotAsk): Shot {
       fly(0, 0.8, from, p);
       hits.push({ u: 0.8, what: 'rim', power: hard });
       off(0.8, p, px, pz, 5 + 3 * r2, 7 + 4 * r2);
+    } else if (how === 'rattle') {
+      // (in and out: onto the front of the iron, a short hop across the ring to the top of the back of it, and off
+      // that up and away. It is never below the ring's top on the way over)
+      const side = (r1 - 0.5) * 0.3;
+      const p = at(0.5, side, 0.24);
+      const b = at(-RING + 0.1, side * 0.5, 0.3);
+      fly(0, 0.7, from, p);
+      hits.push({ u: 0.7, what: 'rim', power: hard * 0.8 });
+      fly(0.7, 0.8, p, b, GRAVITY);
+      hits.push({ u: 0.8, what: 'rim', power: hard * 0.6 });
+      off(0.8, b, ux * 0.6 + px * (r1 - 0.5), uz * 0.6 + pz * (r1 - 0.5), 3.5 + 3 * r2, 8 + 4 * r2);
     } else if (how === 'round') {
       // (in, round the ring and out again the way it was going)
       const a0 = Math.atan2(uz, ux) + turn * 0.5;

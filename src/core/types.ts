@@ -205,8 +205,9 @@ export interface DraftInfo {
 
 /**
  * How a player looks, where that is given and not made up from his number: each part named here is his own, and the
- * rest is still made up (the 3D court's look.ts). A seed carries these for whoever its data has them for
- * (data/looks.json: scripts/data/build-seed.ts); none ships with the game.
+ * rest is still made up (the 3D court's look.ts). data/looks.json has these for the league's best-known players, by
+ * Basketball Reference id: the court reads it when it draws a man (ui/live/looks.ts), and a seed built after it
+ * carries them too (scripts/data/build-seed.ts). A player's own, here, comes before the file's.
  */
 export interface PlayerLook {
   /** His skin, lightest to darkest: 0 to 7 (look.ts SKINS). */

@@ -341,9 +341,8 @@ const LEAN_MAX = 0.13;
 /** A jumper's follow-through is held from this long after the release (ms) until the ball gets there, and is taken up over about this long. */
 const FOLLOW_FROM = 30;
 const FOLLOW_IN = 110;
-/** Held, his guide hand is this far further out to its side (ft) for a man whose guide hand flies off the most, and his elbows are swung this far round their arms (radians: his shooting elbow in under his hand, his guide elbow down). */
-const GUIDE_OUT = 0.3;
-const ELBOW_IN = 0.08;
+/** Held, his guide hand is this far further out from the shot's line (ft) for a man whose guide hand flies off the most. */
+const GUIDE_OUT = 0.22;
 /** A spring (see spring) at this rate over a number of ms gets all but there in that many ms: EASE_OVER / ms. */
 const EASE_OVER = 4000;
 /** A pass's arms go on after the ball from PASS_FROM ms after it leaves, held until PASS_HOLD, and let go of over about PASS_LET ms. */
@@ -1113,6 +1112,8 @@ const SPIN: [number, number] = [70, 560];
 const FANCY_SKILL = -0.15;
 /** And no more than this in one frame (radians), at any playback speed: a quarter of a radian is a whipped head. */
 const TURN_FRAME = 0.2;
+/** A spin's own turn in one frame, at the most (radians): faster than he squares up, and still under a whip. */
+const SPIN_FRAME = 0.25;
 /** And gathers that speed, or gives it up, no quicker than this (radians a second, each second): quicker in a move (squaring up to the rim, to a pass). */
 const TURN_ACC = 90;
 const TURN_ACC_MOVE = 160;
@@ -1672,6 +1673,10 @@ export class Puppet {
   private gatherHi = 0;
   private gatherSide = 0;
   private gatherLow = 0.05;
+  /** A spin move's turn (radians, signed: see update): how far round the move has asked him to be, how much of that he has yet to turn, and how much he has turned. */
+  private spinAsk = 0;
+  private spinOwed = 0;
+  private spinPaid = 0;
   private guideK = 0;
   private elbowSet = 0;
   private tuckK = 0;
@@ -2247,10 +2252,32 @@ export class Puppet {
       const beaten = loose && (!d.ball || d.act === 'hold') && sp0 > BEATEN_AT && Math.abs(wrap(run - d.yaw)) > BEATEN_ROUND;
       this.opened += ((beaten ? 1 : 0) - this.opened) * (1 - Math.exp(-turn / BEATEN_MS));
       // (a spin: all the way round on his front foot, his back to the man through the middle of it, over his shoulder
-      // on the side away from the ball; once round he faces where he did, so nothing is unwound after it)
-      const sp1 = this.one?.id === 'spin' ? smooth(clamp((this.one.tau - SPIN[0]) / (SPIN[1] - SPIN[0]), 0, 1)) : 0;
-      const spun = sp1 > 0 && sp1 < 1 ? (this.lefty ? -1 : 1) * 2 * Math.PI * sp1 : 0;
-      const face = (up ? Math.atan2(this.ax - rx, this.az - rz) : this.opened > 0.01 ? d.yaw + wrap(run - d.yaw) * this.opened : d.yaw) + spun;
+      // on the side away from the ball; once round he faces where he did, so nothing is unwound after it. The turn is
+      // the move's own, counted as it is asked for and laid on his heading (see spin): it is never a place for his
+      // turning to catch up with. Asked for that way it was the short way round to wherever the spin had got to, and
+      // played at 4x, where a frame is more of the spin than a man may turn in one, he fell half a turn behind it,
+      // the short way became the way back, and he unwound out of a spin he was a third of the way round)
+      let paid = this.spinPaid;
+      if (this.one?.id === 'spin') {
+        const ask = (this.lefty ? -1 : 1) * 2 * Math.PI * smooth(clamp((this.one.tau - SPIN[0]) / (SPIN[1] - SPIN[0]), 0, 1));
+        this.spinOwed += ask - this.spinAsk;
+        this.spinAsk = ask;
+      } else if (this.spinAsk !== 0) {
+        // (the move over. Past half way round when it ended (all of it, but for a move cut short or a frame so long
+        // it stepped over the end of it): the rest of the turn is his to finish, the way it was going. Short of half
+        // way: he is where he is, and comes round to where he should face the short way, as from any other turn)
+        if (Math.abs(this.spinAsk) < Math.PI) this.spinOwed = this.spinPaid = paid = 0;
+        else this.spinOwed += Math.sign(this.spinAsk) * 2 * Math.PI - this.spinAsk;
+        this.spinAsk = 0;
+      }
+      // (what is owed is paid no faster than a body may turn in a frame: at 4x he finishes the spin a few frames
+      // after the move does, still going the same way round)
+      const spin = clamp(this.spinOwed, -SPIN_FRAME, SPIN_FRAME);
+      this.spinOwed -= spin;
+      this.spinPaid = this.spinAsk === 0 && this.spinOwed === 0 ? 0 : this.spinPaid + spin;
+      const face = up ? Math.atan2(this.ax - rx, this.az - rz) : this.opened > 0.01 ? d.yaw + wrap(run - d.yaw) * this.opened : d.yaw;
+      // (the heading his turning is after: his own without what the spin has put on it)
+      const base = this.yaw - paid;
       // (in the air he turns in his own time: played fast, he still has the rim in front of him when he gets to it)
       // (he turns as a body does: it gathers speed, and no faster than a man spins. A dunker in the air has the rim in front of him whatever)
       // (and his turns keep up with a play run fast: `turn` is more of his own time than the clock's then. He still
@@ -2258,14 +2285,14 @@ export class Puppet {
       const sec = (up ? Math.max(ease, own * 0.6) : turn) / 1000;
       const gather = Math.min(sec, ease / 1000);
       if (sec > 0 && up) {
-        const [to, v] = spring(0, this.yawV, wrap(face - this.yaw), 30, sec);
+        const [to, v] = spring(0, this.yawV, wrap(face - base), 30, sec);
         this.yaw += to;
         this.yawV = clamp(v, -TURN_MAX, TURN_MAX);
       } else if (sec > 0) {
         // (the speed he'd turn at to get there: no faster than a man spins, and slow enough to stop on it; a move's
         // turn, squaring up to the rim or to a pass, is quicker. He gathers that speed and gives it up as a body
         // does, never all in a frame: a turn starts with a step into it and ends with him set)
-        const off = wrap(face - this.yaw);
+        const off = wrap(face - base);
         const down = this.feet.some((f) => !f.swing) && P[I.air] < 0.5;
         const [most, acc] = this.turning(off, wrap(face - run), sp0, !!ONE[d.act], down);
         const want = Math.sign(off) * Math.min(most, Math.sqrt((1.6 * acc * Math.abs(off) * gather) / sec), Math.abs(off) * (ONE[d.act] ? 30 : 13));
@@ -2278,6 +2305,7 @@ export class Puppet {
         // (never more of a turn in one frame than a man's fastest is at 1x, however fast the play is run)
         this.yaw += clamp(step, -TURN_FRAME, TURN_FRAME);
       }
+      this.yaw += spin;
       // (on his pivot, his body goes round on its ball as he turns)
       if (this.pivotK >= 0 && this.setOn) this.orbit(wrap(this.yaw - yaw0));
       // his hips and legs ahead of him into a run far round from the way he faces: see LEAD_FROM. (Going straight
@@ -4357,44 +4385,67 @@ export class Puppet {
 
   /**
    * The held follow-through, as his pose: his shooting arm up after the ball, and his guide hand where the ball left
-   * it, up by his forehead on its own side with its elbow bent under it, until the ball gets there (see follow).
+   * it, beside the line it went on and by his brow, its elbow down under it, until the ball gets there (see follow).
    * It is the pose itself, taken up and let go of by its own spring: laid on the clip as something added to it, it
    * had to chase a clip whose arms drop to his sides a fifth of a second after the release, and both arms sank to
-   * his waist and came back up. The form is his own: held high and still; let fall as he lands; reached up after a
-   * high one; both hands gone out after a push. How far his guide hand drifts out to its side is his too (guideK).
+   * his waist and came back up. And it is held on the shot's line, not his chest's (FOLLOW): his hands are put where
+   * that has them and then read from his shoulders as his chest is turned now, so they stay over the line while he
+   * turns under them. The form is his own: held high and still; let fall as he lands; reached up after a high one;
+   * both hands gone out after a push. How far his guide hand drifts out from the line is his too (guideK).
    */
   private held() {
     const k = this.fw;
     if (k < 0.005) return;
     const P = this.pose;
-    const H = HELD;
-    for (const [c, v] of FOLLOWED) H[c] = v;
-    H[I.lx] += GUIDE_OUT * this.guideK;
-    H[I.rsw] = ELBOW_IN + 0.3 * this.elbowSet;
+    const [rx, ry, rz] = FOLLOW.r;
+    const [lx, ly, lz] = FOLLOW.l;
+    // (each hand from the middle of his chest: out to its own side of the line, up, on toward the rim)
+    const R = HELD_R;
+    const L = HELD_L;
+    R[0] = rx;
+    R[1] = ry;
+    R[2] = rz;
+    L[0] = lx + GUIDE_OUT * this.guideK;
+    L[1] = ly;
+    L[2] = lz;
     if (this.shot === 'jumper') {
       const late = this.one ? smooth(clamp((this.one.tau - 230) / 200, 0, 1)) : 1;
-      if (this.form === 0) H[I.ly] -= 0.1;
+      if (this.form === 0) L[1] -= 0.08;
       else if (this.form === 1) {
-        H[I.ry] -= 0.55 * late;
-        H[I.rz] += 0.25 * late;
-        H[I.ly] -= 0.6 * late;
-        H[I.lz] += 0.1 * late;
+        R[1] -= 0.55 * late;
+        R[2] += 0.25 * late;
+        L[1] -= 0.55 * late;
+        L[2] += 0.1 * late;
       } else if (this.form === 2) {
-        H[I.ry] += 0.16;
-        H[I.rz] -= 0.12;
-        H[I.ly] += 0.25;
-        H[I.lz] -= 0.1;
+        R[1] += 0.14;
+        R[2] -= 0.15;
+        L[1] += 0.22;
+        L[2] -= 0.1;
       } else {
-        H[I.ry] -= 0.55;
-        H[I.rz] += 0.5;
-        H[I.lx] = 0.18;
-        H[I.ly] = 0.95;
-        H[I.lz] = 1.3;
+        R[1] -= 0.55;
+        R[2] += 0.45;
+        L[0] = 0.42;
+        L[1] = 0.82;
+        L[2] = 1.5;
       }
     }
+    // (his shoulders, as his chest is turned: its left is his own turned by the twist, the left one going back)
+    const ct = Math.cos(P[I.twist]);
+    const st = Math.sin(P[I.twist]);
+    const sw = SHOULDER * (0.92 + 0.08 * this.body.bulk) * (this.body.shoulders ?? 1);
+    const H = HELD;
+    let [vx, vz] = [L[0] - sw * ct, L[2] + sw * st];
+    H[I.lx] = vx * ct - vz * st;
+    H[I.ly] = L[1];
+    H[I.lz] = vx * st + vz * ct;
+    [vx, vz] = [sw * ct - R[0], R[2] - sw * st];
+    H[I.rx] = -(vx * ct - vz * st);
+    H[I.ry] = R[1];
+    H[I.rz] = vx * st + vz * ct;
     for (const c of HELD_AT) P[c] += (H[c] - P[c]) * k;
     // (an elbow's swing round its arm is an angle: taken the short way round)
-    for (const c of [I.lsw, I.rsw]) P[c] += wrap(H[c] - P[c]) * k;
+    P[I.lsw] += wrap(FOLLOW.lsw - P[I.lsw]) * k;
+    P[I.rsw] += wrap(FOLLOW.rsw + 0.3 * this.elbowSet - P[I.rsw]) * k;
   }
 
   /** How far his follow-through is held now (0: not at all, 1: all of it): his shooting hand's wrist stays dropped over for as long (figure.ts FLICK). */
@@ -6362,7 +6413,8 @@ const MIX = new Float32Array(N);
 /** Each foot's ankle in his frame this frame (x, y, z, the left's then the right's): see solve. */
 const FL = new Float32Array(6);
 const G = new Float32Array(N);
-const FOLLOWED = Object.entries(FOLLOW).map(([c, v]) => [I[c as keyof typeof I], v] as [number, number]);
-/** The held follow-through as this man makes it (see Puppet.held), and the channels of it that are places (its elbows' swings are angles). */
+/** The held follow-through as this man makes it (see Puppet.held): each hand on the shot's line, and from its shoulder (the channels that are places). */
+const HELD_R = [0, 0, 0];
+const HELD_L = [0, 0, 0];
 const HELD = new Float32Array(N);
 const HELD_AT = [I.lx, I.ly, I.lz, I.rx, I.ry, I.rz];

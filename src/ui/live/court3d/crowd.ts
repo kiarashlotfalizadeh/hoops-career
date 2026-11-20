@@ -920,6 +920,7 @@ const cell = (i: number) => {
 const PROP_MOVE = /* glsl */ `
   float kind = aProp;
   vKind = kind;
+  vLit = abs(aWho.w);
   vec3 hr = fanAt(vec3(${TOWEL_HAND.join(', ')}), 2.25, aWho, instanceMatrix);
   vec3 hl = fanAt(vec3(${-TOWEL_HAND[0]}, ${TOWEL_HAND[1]}, 0.0), 3.25, aWho, instanceMatrix);
   float here = 1.0 - step(0.01, fanGone(aWho));
@@ -949,8 +950,13 @@ const PROP_MOVE = /* glsl */ `
     here *= smoothstep(0.2, 0.7, uPhone);
   }
   vec3 transformed = mid + (across * position.x * size.x + rise * position.y * size.y) * here;`;
-/** Its back: a phone's is black, a sign's plain card; a foam finger is the same both sides. */
-const PROP_BACK = /* glsl */ `if (!gl_FrontFacing) diffuseColor.rgb = vKind < 0.5 || vKind > 2.5 ? vec3(0.025) : vKind < 1.5 ? vec3(0.5, 0.49, 0.46) : diffuseColor.rgb;`;
+/**
+ * Its back: a phone's is black; a sign's is the brown card it was cut from, as dark as the seat it is held up in (the
+ * house's light on it: `vLit`, and the picture's own, `diffuse`); a foam finger is the same both sides. A sign's back is
+ * what the camera sees of the near stands' signs, close and across the foot of the picture, and none of this is lit:
+ * a pale grey card there came out a blank white board held up in front of the game.
+ */
+const PROP_BACK = /* glsl */ `if (!gl_FrontFacing) diffuseColor.rgb = vKind < 0.5 || vKind > 2.5 ? vec3(0.025) : vKind < 1.5 ? vec3(0.115, 0.082, 0.052) * diffuse * (0.45 + 0.55 * vLit) : diffuseColor.rgb;`;
 
 /** The signs (the building's colour and its letters on them), the foam finger and the phone, painted onto the atlas. */
 function paintHeld(cv: HTMLCanvasElement, board: string, letters: string) {
@@ -1183,14 +1189,17 @@ export class Crowd {
     this.propMat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, this.u);
       sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', `#include <common>\nattribute vec4 aWho;\nattribute float aProp;\nattribute vec4 aCell;\nvarying float vKind;${FAN_MOVE}`)
+        .replace(
+          '#include <common>',
+          `#include <common>\nattribute vec4 aWho;\nattribute float aProp;\nattribute vec4 aCell;\nvarying float vKind;\nvarying float vLit;${FAN_MOVE}`,
+        )
         .replace('#include <uv_vertex>', '#include <uv_vertex>\n  vMapUv = aCell.xy + uv * aCell.zw;')
         .replace('#include <begin_vertex>', PROP_MOVE);
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying float vKind;')
+        .replace('#include <common>', '#include <common>\nvarying float vKind;\nvarying float vLit;')
         .replace('#include <map_fragment>', `#include <map_fragment>\n  ${PROP_BACK}`);
     };
-    this.propMat.customProgramCacheKey = () => 'held';
+    this.propMat.customProgramCacheKey = () => 'held2';
 
     // the seats: the model in the rows by the floor, a back and a pan behind (two faces: nobody is near enough for more)
     this.seatMat = keep(new MeshLambertMaterial({ color: 0xffffff, vertexColors: true, side: DoubleSide }));
@@ -1214,6 +1223,8 @@ export class Crowd {
     this.build();
   }
 
+  /** The geometries the last build made for itself (see build): its to let go of. */
+  private made: BufferGeometry[] = [];
   /**
    * Everyone in the seats (`source`) and the seats themselves: made when the crowd is, and again when the bowl
    * is built again for a building with other stands (what was made before let go).
@@ -1224,12 +1235,13 @@ export class Crowd {
     const mat = this.mat;
     const seatMat = this.seatMat;
     const far = this.flatSeat;
-    for (const o of [...this.main.children, ...(this.blur ? [this.blur] : [])]) {
-      if (o instanceof InstancedMesh) {
-        o.geometry.dispose();
-        o.dispose();
-      }
-    }
+    // (what the last build made is let go: each draw, and the geometries it made for itself, a model's points with
+    // its own people's numbers on them. Only those. The seat's model is the building's, shared with every scene that
+    // loaded it, and the far seat is this crowd's for every build: a draw's geometry let go whoever's it was took
+    // both off the card, for the next draw of them to send again)
+    for (const o of [...this.main.children, ...(this.blur ? [this.blur] : [])]) if (o instanceof InstancedMesh) o.dispose();
+    for (const g of this.made) g.dispose();
+    this.made.length = 0;
     this.main.clear();
     if (this.blur) this.group.remove(this.blur);
     for (const list of [this.people, this.fans, this.others, this.visitors, this.stalls, this.blocks, this.draws, this.seats]) list.length = 0;
@@ -1420,6 +1432,7 @@ export class Crowd {
     // the draws: each side's people of each model (the rows by the floor's, then the rest's)
     const share = (geo: BufferGeometry, attrs: Record<string, InstancedBufferAttribute>) => {
       const g = keep(new BufferGeometry());
+      this.made.push(g);
       g.setIndex(geo.index);
       for (const [name, a] of Object.entries(geo.attributes)) g.setAttribute(name, a);
       for (const [name, a] of Object.entries(attrs)) g.setAttribute(name, a);
@@ -1494,6 +1507,7 @@ export class Crowd {
     const waving = everyone.filter((i) => who[i].kind === 1);
     // (fine enough to fold and ripple: a strip of four quads is a plank)
     const cloth = keep(new PlaneGeometry(1, 1, 6, 12));
+    this.made.push(cloth);
     cloth.translate(0, 0.5, 0);
     cloth.setAttribute('aWho', numbers(waving));
     this.towels = new InstancedMesh(cloth, this.towelMat, waving.length);
@@ -1523,6 +1537,7 @@ export class Crowd {
       else if (home.has(i) && w.kind === 0 && r > 1 - FINGER_SHARE) held.push({ i, kind: PROP.finger });
     });
     const card = keep(new PlaneGeometry(1, 1));
+    this.made.push(card);
     card.setAttribute('aWho', numbers(held.map((p) => p.i)));
     card.setAttribute('aProp', new InstancedBufferAttribute(Float32Array.from(held.map((p) => p.kind)), 1));
     // (where on the atlas its picture is: one of the four signs, the finger, the phone)

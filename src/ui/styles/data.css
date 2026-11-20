@@ -51,7 +51,10 @@
     }
   }
 }
-/* more columns to the right (StatTable sets .fr): the edge fades out, as the league's team tables do */
+/* more columns to the right (StatTable and the box score set .fr): the edge fades out over the last column's width
+   and a chevron sits on the header's line, until the last column is in view. A fade a few px wide was not seen at
+   all: the box score in the live game's side column read as a table cut off at "BL", with nothing to say the rest
+   of it was a swipe away. */
 .tablewrap-o {
   position: relative;
   min-width: 0;
@@ -62,15 +65,36 @@
   top: 1px;
   right: 1px;
   bottom: 1px;
-  width: 24px;
+  width: 44px;
   border-radius: 0 var(--radius) var(--radius) 0;
-  background: linear-gradient(270deg, var(--raised) 15%, transparent);
+  background: linear-gradient(270deg, var(--raised) 26%, color-mix(in srgb, var(--raised) 72%, transparent) 60%, transparent);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.15s;
 }
+.tablewrap-o::before {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  top: 13px;
+  right: 9px;
+  width: 7px;
+  height: 7px;
+  border-top: 2px solid var(--text-2, var(--text));
+  border-right: 2px solid var(--text-2, var(--text));
+  rotate: 45deg;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+.tablewrap-o::after {
+  z-index: 2;
+}
 .tablewrap-o.fr::after {
   opacity: 1;
+}
+.tablewrap-o.fr::before {
+  opacity: 0.7;
 }
 table.stats {
   border-collapse: separate;

@@ -342,37 +342,42 @@
 /* (clutch time's dark round the floor is the picture's own: the rig brings the house lights down and the lens
    deepens its vignette with them, court3d/rig.ts and lens.ts. A plate of dark laid over the canvas as well was a
    second vignette on the first, and it darkened the lower third and the tags with the stands.) */
-/* the camera: the broadcast picture, or the floor from straight above; and the chip that goes round the 3D picture's cameras */
-.court-cam.court-cam-kind {
-  right: 48px;
+/* the camera's buttons, a row in the court's top corner: the chip that goes round the 3D picture's cameras, then the
+   way to the other look (the broadcast picture, or the floor from straight above), each an icon and a word */
+.court-cams {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* (a tap between them is the court's) */
+  pointer-events: none;
+}
+.court-cam {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  width: auto;
+  height: 32px;
   padding: 0 12px 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(18, 18, 18, 0.82);
+  color: var(--on-ink, #fff);
   font:
     700 12px/1 'Archivo Variable',
     system-ui,
     sans-serif;
   font-stretch: semi-condensed;
   white-space: nowrap;
-}
-.court-cam {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: rgba(18, 18, 18, 0.82);
-  color: var(--on-ink, #fff);
   cursor: pointer;
+  pointer-events: auto;
   transition: scale var(--dur-fast, 0.15s) var(--ease-out, ease-out);
+}
+.court-cam-look {
+  letter-spacing: 0.02em;
 }
 .court-cam:active {
   scale: 0.92;
@@ -380,7 +385,7 @@
 .court-cam::after {
   content: '';
   position: absolute;
-  inset: -6px;
+  inset: -6px -4px;
 }
 .court-cam:focus-visible {
   outline: 2px solid var(--on-ink, #fff);

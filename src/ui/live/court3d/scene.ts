@@ -1415,8 +1415,9 @@ export class CourtScene {
               this.netKick = 1;
               this.netHit = 1.5;
               roar(sc.off === 0, true);
-              // (the building's flashes go off on a slam: the picture takes a breath of light)
+              // (the building's flashes go off on a slam: the picture takes a breath of light; and the rim its own ring of it)
               if (!calm) this.lens.bump(DUNK_BUMP);
+              if (!calm && p.fx !== false && this.level < 2) this.shotFx.slam(rim.x, RIM_H + 0.04, rim.z);
             } else {
               // missed: it is jammed off the iron, up over the ring and out toward where the play next has it
               const r = hash(this.seed, bi + 11);

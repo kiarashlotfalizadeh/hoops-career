@@ -67,8 +67,10 @@ const read = (key: string) => {
 };
 /**
  * How players look, where someone has written it down: data/looks.json, a player's Basketball Reference id to what is
- * known of his look (src/core/types.ts PlayerLook: tone, hair, beard, hairColor, recede). The file is yours to
- * write: none ships, and a player not in it gets a made-up look from his number like everyone else.
+ * known of his look (src/core/types.ts PlayerLook: tone, hair, beard, hairColor, recede). It ships with the league's
+ * best-known players in it and is yours to add to: a player not in it gets a made-up look from his number like
+ * everyone else. (The court reads the file itself as well, src/ui/live/looks.ts: a save made from an older seed
+ * has the same looks.)
  */
 const LOOKS_FILE = process.env.HC_LOOKS ?? join(process.cwd(), 'data', 'looks.json');
 const LOOKS: Record<string, PlayerLook | undefined> = existsSync(LOOKS_FILE) ? (JSON.parse(readFileSync(LOOKS_FILE, 'utf8')) as Record<string, PlayerLook>) : {};

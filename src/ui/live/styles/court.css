@@ -916,10 +916,10 @@
    no room beside them, and the card takes the edge for the few seconds it's up */
 @container lv-stage (min-width: 521px) {
   .lv-stage:has(.court-cam-kind) .lv-tip.at-top {
-    max-width: calc(100% - 176px);
+    max-width: calc(100% - 200px);
   }
   .lv-stage:not(:has(.court-cam-kind)) .lv-tip.at-top {
-    max-width: calc(100% - 56px);
+    max-width: calc(100% - 84px);
   }
 }
 @container lv-stage (max-width: 520px) {
@@ -998,14 +998,14 @@
   position: absolute;
   top: 8px;
   left: 8px;
-  right: 48px;
+  right: 76px;
   z-index: 7;
   display: flex;
   justify-content: flex-start;
   pointer-events: none;
 }
 .lv-stage:has(.court-cam-kind) .lv-toasts {
-  right: 164px;
+  right: 192px;
 }
 .lv-stage:has(.c3d-bug.on) .lv-toasts {
   top: 42px;

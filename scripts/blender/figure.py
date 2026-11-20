@@ -1503,50 +1503,53 @@ def crop(body):
 
 def fit_shorts(shorts, body):
     """
-    The shorts cut to the real man from their waistband down to the fork (the form is cut for a thicker trunk): at
-    each height their seat is his own girth there and a little room, more of it lower down, and never less cloth
-    than just above (cloth hangs from the widest of him: it doesn't follow him back in under his hips). Fitted at
-    the waistband alone and left the form's own below it, the seat stood off his hips a hand's breadth each side,
-    a puff under a drawn-in band. And their legs a little narrower, as his thighs are.
+    The shorts cut to the real man, from their waistband to their hem (the form is cut for a thicker trunk, and its
+    legs for thicker thighs): at each height the cloth is his own girth there and a little room, more of it lower
+    down, and never less cloth than just above (cloth hangs from the widest of him: it doesn't follow him back in
+    under his hips, nor in to his knee). One rule all the way down. Fitted at the waistband alone and left the form's
+    own below it, the seat stood off his hips a hand's breadth each side, a puff under a drawn-in band; fitted to the
+    fork and eased back to the form's own over the top of each leg, the puff only moved down: a seat cut to him, and
+    under it the form's legs a hand wider than his thighs, out in front of them and to each side like riding breeches.
+    So the legs hang from his seat as the seat hangs from his hips: straight down, off his thighs by the same room.
     """
     def girth(o, y):
         ps = [G(v.co) for v in o.data.vertices]
         ps = [p for p in ps if abs(p[1] - y) < 0.04 and abs(p[0]) < 0.9]
         return max(abs(p[0]) for p in ps), max(p[2] for p in ps), max(-p[2] for p in ps)
 
-    # (from the waistband down to where the two legs part; the room: a thumb at the band, two fingers over his seat)
-    ys = [WAIST + (FORK + 0.1 - WAIST) * k / 7 for k in range(8)]
+    # (from the waistband down to where the two legs part, and on down the legs to the hem; the room: a thumb at the
+    # band, two fingers over his seat, three at the hem, where a leg of them stands off his thigh all round)
+    SEAT, LEG = 8, 6
+    ys = [WAIST + (FORK + 0.1 - WAIST) * k / (SEAT - 1) for k in range(SEAT)]
+    ys += [FORK + 0.1 + (HEM - FORK - 0.1) * k / LEG for k in range(1, LEG + 1)]
     his = [girth(body, y) for y in ys]
     theirs = [girth(shorts, y) for y in ys]
     fit = []
     most = [0.0, 0.0, 0.0]
     for k, (b, s) in enumerate(zip(his, theirs)):
-        room = 0.05 + 0.045 * sstep(0.0, 4.0, k)
+        room = 0.05 + 0.045 * sstep(0.0, 4.0, k) + 0.035 * sstep(SEAT - 1.0, SEAT + LEG - 1.0, k)
         most = [max(m, v + room) for m, v in zip(most, b)]
         fit.append([m / v for m, v in zip(most, s)])
     bw, bf, bb = his[0]
     sw, sf, sb = theirs[0]
     print(f'[models] shorts: his waist {bw:.3f} wide, {bf:.3f} and {bb:.3f} deep; theirs {sw:.3f}, {sf:.3f}, {sb:.3f}; his seat {max(h[0] for h in his):.3f} wide, theirs {max(t[0] for t in theirs):.3f}')
+    k = SEAT + 1
+    print(f'[models] shorts: under the fork his thighs {his[k][0]:.3f} out, {his[k][1]:.3f} and {his[k][2]:.3f} deep; theirs {theirs[k][0]:.3f}, {theirs[k][1]:.3f}, {theirs[k][2]:.3f}; cut to {most[0]:.3f}, {most[1]:.3f}, {most[2]:.3f} at the hem')
 
     def at(y):
-        # (above the band, the band's; below the fork, the fork's: the legs go on from there)
-        u = clamp((WAIST - y) / (WAIST - ys[-1])) * (len(ys) - 1)
-        k = min(int(u), len(ys) - 2)
-        return [a + (b - a) * (u - k) for a, b in zip(fit[k], fit[k + 1])]
+        # (above the band, the band's; below the hem, the hem's)
+        if y >= ys[0]:
+            return fit[0]
+        for k in range(len(ys) - 1):
+            if y >= ys[k + 1]:
+                u = (ys[k] - y) / (ys[k] - ys[k + 1])
+                return [a + (b - a) * u for a, b in zip(fit[k], fit[k + 1])]
+        return fit[-1]
 
     for v in shorts.data.vertices:
         x, y, z = G(v.co)
         fx, ff, fb = at(y)
-        # (below the fork each leg is its own: the seat's fit is eased out of over the top of it)
-        t = sstep(FORK - 0.35, FORK + 0.1, y)
-        x *= 1 + (fx - 1) * t
-        z *= 1 + (fb + (ff - fb) * sstep(-0.12, 0.12, z) - 1) * t
-        if y < FORK - 0.02 and abs(x) > 0.06:
-            # (each leg about its own middle, below where the two part)
-            k = 1 - 0.07 * sstep(FORK - 0.02, FORK - 0.3, y) * sstep(0.06, 0.2, abs(x))
-            cx = math.copysign(0.445, x)
-            x, z = cx + (x - cx) * k, 0.012 + (z - 0.012) * k
-        v.co = B(x, y, z)
+        v.co = B(x * fx, y, z * (fb + (ff - fb) * sstep(-0.12, 0.12, z)))
     shorts.data.update()
 
 

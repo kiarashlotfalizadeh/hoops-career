@@ -1650,9 +1650,10 @@ const STUFF = {
   // (where he sweats: his brow, his shoulders; a sheen, not oil)
   sweat: [0.5, 1, 0],
   scalp: [0.5, 1, 0],
-  // (the crown of a shaved head: it shines a little, as skin drawn over bone does; no more than his brow, or under a
-  // lamp it is a white spot the size of his hand)
-  dome: [0.47, 1, 0],
+  // (the crown of a shaved head: skin drawn over bone, a touch smoother than his shoulders and no more. It is the one
+  // part of him that faces straight up at a bank of lamps: any smoother, and it wore a white oval the size of his
+  // hand in every shot from above)
+  dome: [0.56, 1, 0],
   hand: [0.6, 1, 0],
   lip: [0.48, 1, 0],
   wetLip: [0.36, 1, 0],
@@ -1849,7 +1850,7 @@ function limitWrist(fore: Quaternion, hand: Quaternion, way: number) {
  * in over FLICK_IN ms, held to FLICK_HOLD and let go of over FLICK_OUT.
  */
 const FLICKED = new Set<string>(['jumper', 'hook', 'floater', 'freeThrow']);
-const FLICK = 1.1;
+const FLICK = 0.86;
 const FLICK_IN = 90;
 const FLICK_HOLD = 300;
 const FLICK_OUT = 260;
@@ -1953,8 +1954,14 @@ const ownHand = (a: number, b: number) => {
 const GRAB = shape([1.05, 1.1, 1.15, 1.2], [1.15, 1.2, 1.25, 1.3], 0, 0.15, -0.2, 0.5);
 /** Out for a pass: open, apart, the thumbs wide (toward each other, with his palms to it: see CATCH_UP). */
 const CATCH = shape([0.15, 0.15, 0.2, 0.25], [0.2, 0.2, 0.24, 0.3], 0.3, 0.1, 0.65, 0.1);
-/** The shooting hand after the release: dropped over toward the rim, its fingers down at it. */
-const GOOSE = shape([0.18, 0.2, 0.26, 0.32], [0.25, 0.28, 0.34, 0.42], 0.1, 0.1, 0.1, 0.2);
+/**
+ * The shooting hand after the release: dropped over toward the rim and let go, its fingers hanging down at it. Each a
+ * little bent at its knuckle and more at its middle, more the further from the first finger the ball rolled off, and
+ * together, the thumb let in beside them: held straight and apart, the hand was a flat paddle on the end of his arm.
+ */
+const GOOSE = shape([0.3, 0.38, 0.48, 0.6], [0.6, 0.7, 0.8, 0.92], -0.03, 0.16, 0.24, 0.32);
+/** The guide hand as it comes off the ball and is held there: as it lay on it, easy, its fingers up and a little bent, the thumb let be. Not shown open. */
+const GUIDE_OFF = shape([0.3, 0.38, 0.46, 0.56], [0.5, 0.62, 0.74, 0.86], -0.02, 0.2, 0.3, 0.25);
 /** Cupped (round his mouth, on his knee); half shut, the thumb up (a handshake). */
 const CUP = shape([0.25, 0.25, 0.3, 0.35], [0.3, 0.3, 0.35, 0.4], -0.02, 0.15, 0.1, 0.15);
 const SHAKE = shape([0.75, 0.8, 0.85, 0.9], [0.7, 0.75, 0.8, 0.85], 0, 0.15, 0.25, 0.2);
@@ -2512,6 +2519,11 @@ function headPainter(look: Look, band: string | null, k: number): { rows: number
           // line, a few millimetres of it, and stands off him more the further under the line)
           const below = sstep(-0.02, -0.34, line);
           deep = (look.beard === 4 ? 0.008 + 0.022 * below + 0.045 * sstep(-0.5, -0.9, ny) : 0.011) * sstep(0.2, 1, all) ** 1.5;
+          // (and up the side of his face to his ear it is cut down to nothing: a sideburn is the shortest of a beard,
+          // hair lying on the skin in front of the ear. The line across his cheek falls away toward the ear, so by
+          // then the side of his face is well "under the line" and stood off him as far as his jaw's does: seen
+          // from in front, two tufts of fuzz out past his ears)
+          deep *= 1 - 0.96 * sstep(0.54, 0.78, ax) * sstep(-0.74, -0.36, ny);
         }
         on *= seam;
         // (and close to his lips it lies flat on him, its hairs over their edge: a beard stood off his face right up to
@@ -3648,7 +3660,7 @@ const THROUGH = '0.8';
  * much of his skin the point is (set where his colour is worked out).
  */
 /** The sharper shine over his skin's own (its oil, his sweat): how much smoother than his skin it is (a share of its roughness), and how much of it a dry light skin has, the darkest more by, a wet one more by. */
-const SKIN_OIL = ['0.82', '0.11', '0.06', '0.5'] as const;
+const SKIN_OIL = ['0.84', '0.085', '0.05', '0.42'] as const;
 /** How much of the building's own shine his skin goes without (a share). */
 const SKIN_ROOF = '0.5';
 /** His hair's two bands of shine: how far each is shifted along the strand (toward its root, toward its tip), and how tight each is. */
@@ -5757,7 +5769,7 @@ export class Fig {
         if (p.clip === 'celebrate' || p.clip === 'cheer') free = PARTY_HANDS[Math.floor(ownHand(p.me, 31) * PARTY_HANDS.length) % PARTY_HANDS.length][left ? 0 : 1];
         if (p.overBall && !drib) free = OPEN;
         if (one && one.tau > 0 && PASSED.has(one.id)) free = OPEN;
-        if ((one && one.tau > 0 && FLICKED.has(one.id)) || p.following > 0.3) free = left ? OPEN : GOOSE;
+        if ((one && one.tau > 0 && FLICKED.has(one.id)) || p.following > 0.3) free = left ? GUIDE_OFF : GOOSE;
         if ((one?.id === 'catch' || one?.id === 'take') && one.tau < 0) free = CATCH;
         if (p.onRim) free = GRAB;
       }
@@ -5785,6 +5797,15 @@ export class Fig {
         flex += (PASS_SNAP - flex) * e;
         pron += (PASS_PRON - pron) * e;
       }
+      if (left && free === GUIDE_OFF) {
+        // (the guide hand held off the ball: its palm still in toward the line the ball left on, where it lay on it,
+        // and a little on toward the rim. Not turned to show its palm to the rim: that is a man with his hand up)
+        W3.set(-0.85, 0, 0.5).applyQuaternion(Q.copy(fore0).invert());
+        const toLine = Math.max(-SUP_MOST, Math.min(PRON_MOST, -Math.atan2(W3.z, -W3.x)));
+        const e = Math.max(p.following, one && one.tau > 0 ? clamp01(one.tau / FLICK_IN) : 0);
+        pron += (toLine - pron) * e;
+        flex += (WRIST_LOOSE - flex) * e;
+      }
       if (!left) {
         // (snapped over as the ball leaves it, and kept over for as long as his arm is held up after it: a wrist that
         // straightened on its own clock stood up straight on an arm still pointing at the rim. A shot whose arm is
@@ -5793,7 +5814,11 @@ export class Fig {
         if (one && FLICKED.has(one.id) && one.tau > 0) u = clamp01(one.tau / FLICK_IN) * (1 - clamp01((one.tau - FLICK_HOLD * p.followHold) / FLICK_OUT));
         const e = Math.max(u * u * (3 - 2 * u), one && one.tau < FLICK_IN ? 0 : p.following);
         flex += (FLICK - flex) * e;
-        pron += (toFront - pron) * e;
+        // (its palm down the line the ball went on, the way he faces: his chest is turned from it as he shoots, and a
+        // palm turned to where his chest faces waved at the sideline)
+        W3.set(0, 0, 1).applyQuaternion(Q.copy(fore0).invert());
+        const toRim = Math.max(-SUP_MOST, Math.min(PRON_MOST, Math.atan2(-W3.z, W3.x)));
+        pron += (toRim - pron) * e;
       }
       flex = Math.max(-EXT_MOST, Math.min(FLEX_MOST, flex));
       this.bones[h].quaternion.multiply(Q.setFromAxisAngle(UP, way * pron)).multiply(Q.setFromAxisAngle(ZA, way * flex));

@@ -177,6 +177,8 @@ export interface Paints {
   good: string;
   bad: string;
   warn: string;
+  /** How far the floor seen from above is let down toward ink (0..1): nothing by day, a little under Night Court (styles/night.css). */
+  dusk: number;
 }
 export function readPaints(el: Element): Paints {
   const cs = getComputedStyle(el);
@@ -194,6 +196,7 @@ export function readPaints(el: Element): Paints {
     good: v('--good-night', '#7fe3a8'),
     bad: v('--bad-night', '#ff9a8f'),
     warn: v('--warn-night', '#ffc65c'),
+    dusk: clamp(Number(v('--court-dusk', '0')) || 0, 0, 0.6),
   };
 }
 
@@ -295,7 +298,9 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
     let raf = 0;
     const canvas = ref.current!;
     const ctx = canvas.getContext('2d')!;
-    const paints = readPaints(canvas);
+    let paints = readPaints(canvas);
+    // (the look can be turned over while the court is up, Night Court and back: its paints are read again then)
+    let theme = document.documentElement.dataset.theme ?? '';
     // the floor, its lines and its marks never change: painted once a canvas size, then copied each frame
     const floorCv = document.createElement('canvas');
     let floorKey = '';
@@ -390,7 +395,12 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
         floorWas = fl;
         floorId = fl ? JSON.stringify(fl) : '';
       }
-      const key = `${canvas.width}x${canvas.height}|${mode}|${fontsIn}|${floorId}`;
+      const themeNow = document.documentElement.dataset.theme ?? '';
+      if (themeNow !== theme) {
+        theme = themeNow;
+        paints = readPaints(canvas);
+      }
+      const key = `${canvas.width}x${canvas.height}|${mode}|${fontsIn}|${floorId}|${theme}`;
       // paused, finished or waiting for the next possession: nothing moved, so skip the redraw (battery)
       const idleKey = sc ? '' : `${p.idle?.kind ?? 'hold'}|${p.idle?.kind === 'chart' ? p.idle.shots.length : p.idle?.kind === 'tip' ? p.idle.fives.join('/') : standers.length}`;
       const sig = `${key}|${s.t}|${s.done}|${view.top}|${view.ox}|${idleKey}|${p.clutch}|${p.hot?.size ?? 0}|${woeKey(p.woes)}`;
@@ -469,10 +479,12 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
       const dW = all.slice(nO);
       sc.dPids.forEach((pid, j) => drawPlayer(ctx, view, dW[j], kitD, p.jersey(pid), hold === nO + j, !!p.hot?.has(pid), paints, p.woes?.get(pid)));
       sc.oPids.forEach((pid, j) => drawPlayer(ctx, view, oW[j], kitO, p.jersey(pid), hold === j, !!p.hot?.has(pid), paints, p.woes?.get(pid)));
+      // (the man with the ball and his name under him: a play's label is kept off both, see drawFlash)
+      let named: Box | null = null;
       if (p.names && hold !== undefined && hold >= 0) {
         const pid = hold < nO ? sc.oPids[hold] : sc.dPids[hold - nO];
         const at = hold < nO ? oW[hold] : dW[hold - nO];
-        if (pid !== undefined && at) drawTag(ctx, view, at, p.names(pid), paints);
+        if (pid !== undefined && at) named = drawTag(ctx, view, at, p.names(pid), paints);
       }
       // the ball: carried, it goes where its man goes; passed, it lifts a little; shot, it climbs with the distance
       const from = W(a.ball);
@@ -498,7 +510,7 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
       const fl = (u > 0.35 ? b.flash : undefined) ?? (u <= 0.35 ? a.flash : undefined);
       if (fl) {
         const alpha = calm ? 1 : fl === b.flash ? Math.min(1, (u - 0.35) / 0.25) : 1 - u / 0.35;
-        drawFlash(ctx, view, W({ x: fl.x, y: fl.y }), fl.text, fl.kind, alpha, paints);
+        drawFlash(ctx, view, W({ x: fl.x, y: fl.y }), fl.text, fl.kind, alpha, paints, named);
       }
     };
 
@@ -686,6 +698,15 @@ export function paintFloor(cv: HTMLCanvasElement, asked: View, dpr: number, floo
       ctx.closePath();
       ctx.fill();
     });
+  }
+  // (Night Court: the wood from above let down a little toward ink. A building's maple is its own stain, not the
+  // app's token, so the night's shade of the token never reached a game's floor: it sat in the dark frame as bright
+  // as by day. The paint, the lines and the men go on over it at their full strength, and read the better for it.)
+  if (!bare && paints.dusk > 0) {
+    ctx.globalAlpha = paints.dusk;
+    ctx.fillStyle = paints.ink;
+    ctx.fillRect(-HALF_W - SIDE, -END, FLOOR_W, FLOOR_L);
+    ctx.globalAlpha = 1;
   }
   // the apron, all round, and where it meets the court a pinstripe, two, or a band (kept inside the
   // sidelines' words)
@@ -1081,16 +1102,20 @@ function drawPlayer(ctx: CanvasRenderingContext2D, view: View, at: Pt, kit: Matc
   ctx.beginPath();
   ctx.arc(x, y, r + 0.5, 0, Math.PI * 2);
   ctx.stroke();
-  // his number, when the disc has room for one that reads
-  const size = Math.max(TEXT_MIN, r * 1.02);
-  if (r < 9.5) return;
-  ctx.fillStyle = kit.token.num;
-  setFont(ctx, 800, size);
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(num, x, y + 0.5);
+  // his number, when the disc has room for one that reads. (Only his number waits for the room: what the game has
+  // done to him is marks at the disc's edge, and a phone's court, where no disc has room for a number, is where a
+  // coach most needs them.)
+  const roomy = r >= 9.5;
+  if (roomy) {
+    ctx.fillStyle = kit.token.num;
+    setFont(ctx, 800, Math.max(TEXT_MIN, r * 1.02));
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(num, x, y + 0.5);
+  }
   if (!woe) return;
-  const pip = Math.max(4.5, r * 0.46);
+  // (on a small disc the marks are small too: they sit on its edge, they don't cover it)
+  const pip = roomy ? Math.max(4.5, r * 0.46) : 3.5;
   if (woe.fouls) {
     // (a square pip on ink at his right shoulder, his fouls on it)
     const [cx, cy] = [x + r * 0.86, y - r * 0.86];
@@ -1288,15 +1313,31 @@ function drawRimFx(ctx: CanvasRenderingContext2D, view: View, basket: Pt, kind: 
   ctx.globalAlpha = 1;
 }
 
-/** An ink pill with a word on it, centered at (x, y) but kept whole inside the canvas. */
-function pill(ctx: CanvasRenderingContext2D, view: View, x: number, y: number, text: string, px: number, color: string, paints: Paints, weight = 800) {
+/** A box on the canvas (px). */
+interface Box {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/**
+ * An ink pill with a word on it, centered at (x, y) but kept whole inside the canvas; the box it took is returned.
+ * `off`: a box it must not lie on. It goes above it, or under it where there is no room above.
+ */
+function pill(ctx: CanvasRenderingContext2D, view: View, x: number, y: number, text: string, px: number, color: string, paints: Paints, weight = 800, off: Box | null = null): Box {
   setFont(ctx, weight, px, 'semi-condensed');
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const w = ctx.measureText(text).width + px * 1.1;
   const h = px * 1.55;
   const cx = clamp(x, w / 2 + 4, view.w - w / 2 - 4);
-  const cy = clamp(y, h / 2 + 4, view.h - h / 2 - 4);
+  let cy = clamp(y, h / 2 + 4, view.h - h / 2 - 4);
+  if (off && cx - w / 2 < off.x1 && cx + w / 2 > off.x0 && cy - h / 2 < off.y1 && cy + h / 2 > off.y0) {
+    const gap = Math.max(3, px * 0.25);
+    const above = off.y0 - gap - h / 2;
+    cy = above >= h / 2 + 4 ? above : Math.min(view.h - h / 2 - 4, off.y1 + gap + h / 2);
+  }
   ctx.fillStyle = paints.ink;
   ctx.beginPath();
   if (ctx.roundRect) ctx.roundRect(cx - w / 2, cy - h / 2, w, h, h / 2);
@@ -1304,22 +1345,29 @@ function pill(ctx: CanvasRenderingContext2D, view: View, x: number, y: number, t
   ctx.fill();
   ctx.fillStyle = color;
   ctx.fillText(text, cx, cy + 0.5);
+  return { x0: cx - w / 2, y0: cy - h / 2, x1: cx + w / 2, y1: cy + h / 2 };
 }
 
-/** The ball handler's name, in a small tag under his disc. */
-function drawTag(ctx: CanvasRenderingContext2D, view: View, at: Pt, name: string, paints: Paints) {
-  if (!name) return;
+/** The ball handler's name, in a small tag under his disc. Returns the box the two of them take: his disc with its ring, and the tag. */
+function drawTag(ctx: CanvasRenderingContext2D, view: View, at: Pt, name: string, paints: Paints): Box | null {
+  if (!name) return null;
   const p = project(view, at);
   const px = Math.max(TEXT_MIN, view.k * 1.3);
-  pill(ctx, view, p.x, p.y + bodyR(view.k) + Math.max(4, view.k * 0.5) + px * 0.95, name, px, paints.line, paints, 700);
+  const r = bodyR(view.k) + Math.max(4, view.k * 0.9);
+  const tag = pill(ctx, view, p.x, p.y + bodyR(view.k) + Math.max(4, view.k * 0.5) + px * 0.95, name, px, paints.line, paints, 700);
+  return { x0: Math.min(tag.x0, p.x - r), y0: Math.min(tag.y0, p.y - r), x1: Math.max(tag.x1, p.x + r), y1: Math.max(tag.y1, p.y + r) };
 }
 
-/** A play's label on the floor ("+3", "Blocked", "Foul"): an ink pill, the word in its signal's colour. */
-function drawFlash(ctx: CanvasRenderingContext2D, view: View, at: Pt, text: string, kind: string, alpha: number, paints: Paints) {
+/**
+ * A play's label on the floor ("+3", "Blocked", "Foul"): an ink pill, the word in its signal's colour. `off`: the man
+ * with the ball and his name. A label is where the play happened, which is where he is: laid there it lay across his
+ * name, one pill on another and neither read, so it stands clear of him.
+ */
+function drawFlash(ctx: CanvasRenderingContext2D, view: View, at: Pt, text: string, kind: string, alpha: number, paints: Paints, off: Box | null = null) {
   const p = project(view, at);
   ctx.globalAlpha = clamp(alpha, 0, 1);
   const color = kind === 'make' ? paints.good : kind === 'block' || kind === 'to' ? paints.bad : kind === 'foul' ? paints.warn : paints.line;
-  pill(ctx, view, p.x, p.y, text, Math.max(14, view.k * 2.1), color, paints);
+  pill(ctx, view, p.x, p.y, text, Math.max(14, view.k * 2.1), color, paints, 800, off);
   ctx.globalAlpha = 1;
 }
 

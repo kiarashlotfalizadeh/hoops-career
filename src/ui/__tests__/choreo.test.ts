@@ -2556,6 +2556,8 @@ describe('live court choreography', () => {
         shotAt(shot, 0, at);
         expect(Math.hypot(at.x - from.x, at.y - from.y, at.z - from.z), `${shot.how} leaves the hand`).toBeLessThan(1e-6);
         expect(shot.hits.some((h) => h.what === 'net')).toBe(made);
+        // (a shot that rattles is on the iron twice, a beat apart, in or out)
+        if (shot.how === 'rattle' || shot.how === 'rattleIn') expect(shot.hits.filter((h) => h.what === 'rim')).toHaveLength(2);
         shotAt(shot, 1, at);
         if (made) {
           expect(Math.hypot(at.x - rim.x, at.z - rim.z), `${shot.how} ends under the ring`).toBeLessThan(0.2);
@@ -2573,7 +2575,7 @@ describe('live court choreography', () => {
           expect(top).toBeLessThan(22);
         }
       }
-      expect([...seen].sort()).toEqual(['air', 'back', 'backIn', 'bank', 'edge', 'front', 'glass', 'kiss', 'roll', 'round', 'side', 'swish']);
+      expect([...seen].sort()).toEqual(['air', 'back', 'backIn', 'bank', 'edge', 'front', 'glass', 'kiss', 'rattle', 'rattleIn', 'roll', 'round', 'side', 'swish']);
       // (a ball going +x: a shot's top comes back toward the shooter, a rolling one's goes on ahead)
       expect(spinFor('shot', 10, 0, at)!.z).toBeGreaterThan(0);
       expect(spinFor('roll', 10, 0, at)!.z).toBeLessThan(0);

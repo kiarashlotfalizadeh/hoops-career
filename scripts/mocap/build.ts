@@ -298,13 +298,17 @@ function poseAt(m: Measured, ft: number, spec: Spec): { pose: Float32Array; hand
   const sl = dir(sub(at('LeftArm'), at('RightArm')));
   P[I.twist] = Math.atan2(-(sl[0] * Fr.x + sl[1] * Fr.y + sl[2] * Fr.z), sl[0] * L.x + sl[1] * L.y + sl[2] * L.z);
   spine(P, BODY, hipY, JT, U, Fr, L);
-  // where his head looks, against his chest
+  // where his head looks: up or down against his chest, and round from the way he faces. Not round from his chest:
+  // the puppet turns his head from wherever his chest is to the thing he looks at (Puppet.gaze), and a pose's turn is
+  // what it adds to that. A shooter stands turned from his target and looks at it: measured against his chest, his
+  // head's turn was his chest's the other way, and the puppet, having already turned his head back over his chest,
+  // turned it that far again: he shot with his body one side of the rim and his eyes as far the other side of it.
   const R = (name: string): M3 => m.take.rot[f0 + 1][m.ix[name]];
   const hr = R('Head');
   const hf = dir([hr[2], hr[5], hr[8]]);
   const cu = hf[0] * U.x + hf[1] * U.y + hf[2] * U.z;
   P[I.nod] = clamp(Math.asin(clamp(cu, -1, 1)) - m.nod0, -0.8, 0.5);
-  P[I.turn] = clamp(Math.atan2(hf[0] * L.x + hf[1] * L.y + hf[2] * L.z, hf[0] * Fr.x + hf[1] * Fr.y + hf[2] * Fr.z), -1.2, 1.2);
+  P[I.turn] = clamp(wrap(P[I.twist] + Math.atan2(hf[0] * L.x + hf[1] * L.y + hf[2] * L.z, hf[0] * Fr.x + hf[1] * Fr.y + hf[2] * Fr.z)), -1.2, 1.2);
   // hands from their shoulders, on the puppet's arms; elbows by how far they swing from hanging
   const hands = { l: [0, 0, 0] as V, r: [0, 0, 0] as V };
   for (const side of [1, -1] as const) {

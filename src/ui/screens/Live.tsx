@@ -70,6 +70,7 @@ import { teamPlayers } from '../../core/league/helpers';
 import { breakStory, crowdLevel, currentRun, isClutch, RUN_MIN } from '../live/atmosphere';
 import { Crowd, clutchSlowAlways, setClutchSlowAlways } from '../live/Atmos';
 import { COACH_MARKS, CoachMark, coachMarksSeen, markCoachMarksSeen } from '../live/CoachMarks';
+import { lookFor } from '../live/looks';
 import { lockSideways, unlockSideways, useLiveShape } from '../live/turn';
 import { setToastHost } from '../toastHost';
 import '../live/live.css';
@@ -697,7 +698,7 @@ export default function Live() {
           hot={hot}
           woes={woes}
           fx={league.settings.courtFx !== false}
-          looks={(pid) => league.players[pid]?.look}
+          looks={(pid) => lookFor(league.players[pid])}
           // between possessions the floor is never empty: the tip's line-up, the break's shot chart, or the players where they stood
           idle={s.intro ? { kind: 'tip', fives: [view.sides[0].on, view.sides[1].on] } : atBreak ? { kind: 'chart', shots: view.box.shots ?? [] } : { kind: 'hold' }}
           clutch={clutch}

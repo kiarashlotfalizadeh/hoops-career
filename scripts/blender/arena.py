@@ -833,26 +833,30 @@ def fan(name):
         # as cloth does, and the hand is a hand: the palm, the knuckles, the fingers together, a thumb
         arm = 2 if s > 0 else 3
         cuff = {'long': -0.25, 'short': 0.95, 'none': 1.5}[w['sleeve']]
+        # (The top of it is not a dome on the arm's own line. The arm hangs outside his trunk, and a dome there stood
+        # up beside his shoulder's slope as a ball in a socket, a cap he wore on each shoulder. It goes on up and in
+        # along that slope instead, each ring nearer his neck than the one under it (`in`, ft toward his middle), and
+        # ends on his trunk's own shoulder: neck, slope, the round of the shoulder, the arm, one line.)
         if near:
-            line = [(1.7, 0.1, 0.11), (1.6, 0.185, 0.195), (1.4, 0.175, 0.18), (1.1, 0.16, 0.165), (0.68, 0.128, 0.13), (0.52, 0.128, 0.128), (0.3, 0.132, 0.126), (-0.2, 0.078, 0.07), (-0.3, 0.094, 0.05), (-0.42, 0.1, 0.047), (-0.53, 0.086, 0.04)]
+            line = [(1.62, 0.07, 0.15, 0.13), (1.56, 0.14, 0.185, 0.055), (1.44, 0.18, 0.19, 0.0), (1.1, 0.16, 0.165, 0.0), (0.68, 0.128, 0.13, 0.0), (0.52, 0.128, 0.128, 0.0), (0.3, 0.132, 0.126, 0.0), (-0.2, 0.078, 0.07, 0.0), (-0.3, 0.094, 0.05, 0.0), (-0.42, 0.1, 0.047, 0.0), (-0.53, 0.086, 0.04, 0.0)]
         else:
-            line = [(1.69, 0.09, 0.1), (1.6, 0.17, 0.18), (1.38, 0.16, 0.165), (1.0, 0.14, 0.145), (0.68, 0.122, 0.125), (0.52, 0.118, 0.12), (0.1, 0.105, 0.105), (-0.22, 0.075, 0.07), (-0.33, 0.095, 0.05), (-0.5, 0.08, 0.04)]
+            line = [(1.62, 0.07, 0.14, 0.12), (1.54, 0.15, 0.175, 0.04), (1.38, 0.16, 0.165, 0.0), (1.0, 0.14, 0.145, 0.0), (0.68, 0.122, 0.125, 0.0), (0.52, 0.118, 0.12, 0.0), (0.1, 0.105, 0.105, 0.0), (-0.22, 0.075, 0.07, 0.0), (-0.33, 0.095, 0.05, 0.0), (-0.5, 0.08, 0.04, 0.0)]
         if low:
             # (a ring just over the elbow: the shader bends what is under FAN_ELBOW)
-            line = [line[1], (0.62, 0.122, 0.125), line[7], line[9]]
+            line = [line[1], (0.62, 0.122, 0.125, 0.0), line[7], line[9]]
         elif not near:
             line = [line[0], line[1], line[3], line[4], line[5], line[7], line[8], line[9]]
         # (cloth over the arm: a sleeve a little off it, a coat's or a hood's more)
         cloth = (0.03 if coat else 0.022 if thick else 0.012) if near else 0.0
         rings = []
-        for i, (y, across, deep) in enumerate(line):
+        for i, (y, across, deep, inn) in enumerate(line):
             # (few sides are measured to their corners: a little more, to be as thick across)
             g = (limb if y > -0.25 else 1.0) * (1.0 if near else 1.5 if low else 1.24)
             pad = cloth if y > cuff and y < 1.65 else 0.0
-            rings.append([(s * (sx - 0.02) + (across * g + pad) * cos(2 * pi * (k + 0.5) / m), y, (deep * g + pad) * sin(2 * pi * (k + 0.5) / m)) for k in range(m)])
+            rings.append([(s * (sx - 0.02 - inn) + (across * g + pad) * cos(2 * pi * (k + 0.5) / m), y, (deep * g + pad) * sin(2 * pi * (k + 0.5) / m)) for k in range(m)])
         # where his sleeve ends: at the wrist, between the shoulder and the elbow, or there is none. In the
         # first rows the ring there is doubled (cloth above it, skin below)
-        last = max(i for i, (y, _, _) in enumerate(line) if y > cuff)
+        last = max(i for i, (y, _, _, _) in enumerate(line) if y > cuff)
         if near:
             rings.insert(last + 1, rings[last])
         marks = [arm + (0 if i <= last else 0.25) for i in range(len(rings)) for _ in range(m)]

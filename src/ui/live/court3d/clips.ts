@@ -1469,11 +1469,15 @@ export const GESTURES: Record<Gesture, Clip> = {
 export const ARMS = [I.lx, I.ly, I.lz, I.rx, I.ry, I.rz, I.lsw, I.rsw];
 export const TRUNK = [I.lean, I.twist, I.tilt, I.nod, I.turn];
 /**
- * A held follow-through after a jumper or a free throw: the shooting arm up after the ball, wrist dropped; the guide
- * hand off the ball and still where it left it, up by his forehead on its own side, its elbow bent down under it
- * (compact: not flung out to his side, nor dropped to his chest).
+ * A held follow-through after a jumper or a free throw, on the shot's own line: where each hand is from the middle of
+ * his chest (ft: out to that hand's side of the line to the rim, up from his shoulders, on toward the rim). Not from
+ * his shoulders as his chest has them: a shooter turns as he goes up (the captured one by most of a quarter turn), and
+ * hands held off a chest turned that far followed through at the stands, the guide arm flung out to the side like a
+ * man with his hands up. The shooting arm goes up after the ball over his shooting eye; the guide hand stays where
+ * the ball left it, beside the line and by his brow. `lsw`, `rsw`: the elbows swung round their arms (radians: the
+ * guide elbow down under its hand and in, the shooting elbow in under its own).
  */
-export const FOLLOW: PoseKey = { rx: 0.08, ry: 1.92, rz: 0.85, lx: 0.08, ly: 0.95, lz: 0.8, lsw: -0.3 };
+export const FOLLOW = { r: [0.35, 1.82, 1.3], l: [0.5, 0.8, 0.88], lsw: -0.75, rsw: 0.08 } as const;
 /** A pass's follow-through: the arms on after the ball, toward where it went (two hands from his chest, one, or over his head). */
 export const PASS_FOLLOW: Partial<Record<ClipId, PoseKey>> = {
   pass: { lx: 0.12, ly: -0.5, lz: 1.85, rx: 0.12, ry: -0.5, rz: 1.85 },

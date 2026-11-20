@@ -978,10 +978,18 @@ function towelGeo(): BufferGeometry {
  * A towel round his neck (in his chest's frame): bunched in a roll over the back of his neck and his shoulders, an
  * end down each side of his chest, lying on it. One cloth, its faces running into one another (a strip of flat
  * plates, each lit on its own, a hand's breadth off his chest and twice as wide, was a board hung on him): narrow
- * where it is rolled, opening to a hand's width where it hangs; each end follows his chest in and comes off it a
- * little at its hem; his left end hangs a little longer than his right, and each has a soft fold along it.
+ * where it is rolled, opening to a hand's width where it hangs; his left end hangs a little longer than his right, and
+ * each has a soft fold along it. `lean`: how far forward his chest is tipped in the pose that wears it (radians). An
+ * end lies on his chest as far as its fullest and hangs from there as cloth does, straight down: which, on a chest
+ * tipped forward, is away from it. Shaped to lie on his chest all the way down whatever his chest was doing, the ends
+ * of a towel on a man sat forward over his knees went on down into his belly, which had come up to meet them.
  */
-function drapeGeo(): BufferGeometry {
+function drapeGeo(lean = 0): BufferGeometry {
+  // (his chest under it: out to its fullest a hand under his collarbone, back in toward his belly; the towel a
+  // finger off it, on the biggest man's shirt as well as the slightest's)
+  const chestAt = (long: number) => 0.095 + 0.4 * Math.sin(Math.min(1, long * 2.4) * Math.PI * 0.5) - 0.07 * Math.max(0, long - 0.5);
+  const FULL = 1 / 2.4;
+  const [plumbY, plumbZ] = [Math.cos(lean), Math.sin(Math.max(0, lean))];
   const [along, across] = [34, 5];
   const pos: number[] = [];
   const index: number[] = [];
@@ -1006,10 +1014,12 @@ function drapeGeo(): BufferGeometry {
       const long = (s > 0 ? 1.12 : 0.96) * down;
       const open = 0.14 + 0.16 * Math.min(1, down * 3);
       const x = 0.3 + 0.03 * Math.min(1, down * 3) + open * u - 0.05 * down;
-      // (his chest: out to its fullest a hand under his collarbone, back in toward his belly; the towel a finger off it)
-      const chest = 0.05 + 0.4 * Math.sin(Math.min(1, long * 2.4) * Math.PI * 0.5) - 0.07 * Math.max(0, long - 0.5);
+      // (on his chest to its fullest, then hanging: down as the floor has it, never back inside where his chest is)
+      const hung = Math.max(0, long - FULL);
+      const y = 0.42 - Math.min(long, FULL) - hung * plumbY;
+      const z = Math.max(chestAt(long), chestAt(FULL) + hung * plumbZ);
       const fold = 0.014 * Math.sin(u * Math.PI * 2 + s) * Math.min(1, down * 2) + 0.03 * Math.max(0, down - 0.85) * 6 * 0.15;
-      pos.push(s * x, 0.42 - long - 0.03 * u * (1 - down), chest + 0.02 - 0.05 * u * u + fold);
+      pos.push(s * x, y - 0.03 * u * (1 - down), z - 0.05 * u * u + fold);
     }
   }
   const row = across + 1;
@@ -1046,7 +1056,7 @@ function props(kind: (typeof CARRIES)[string], name: string, spec: Pose): { spec
     return g;
   };
   if (kind === 'towel') return { spec, props: [{ bone: 'har', part: 'towel', geo: plain(towelGeo()) }] };
-  if (kind === 'drape') return { spec, props: [{ bone: 'chest', part: 'rag', geo: drapeGeo() }] };
+  if (kind === 'drape') return { spec, props: [{ bone: 'chest', part: 'rag', geo: drapeGeo(spec.lean) }] };
   if (kind === 'rag') {
     // (a cloth flat on the floor under his right hand)
     const g = plain(new PlaneGeometry(0.9, 0.7, 1, 1).rotateX(-Math.PI / 2));
