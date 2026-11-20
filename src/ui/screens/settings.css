@@ -57,6 +57,17 @@
 .set-inline .seg button {
   padding: 0 10px;
 }
+/* on a phone a three-way switch takes its own line under its label, full width: beside it, "System" lost its first letter */
+@media (max-width: 479.98px) {
+  .set-inline:has(.seg > button:nth-of-type(3)) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .set-inline:has(.seg > button:nth-of-type(3)) .seg {
+    flex: 0 0 auto;
+  }
+}
 /* the volume: the slider fills the row */
 .set-vol .slider-label {
   font-weight: 680;

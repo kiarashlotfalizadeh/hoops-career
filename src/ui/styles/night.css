@@ -67,9 +67,9 @@
 }
 
 /* ---------------------------------------------------------------- plates keep the day's ink
-   The dock, toasts, a chart's tip and the live game's graphics: inside, `--ink` is the plate and
+   The dock, toasts, a chart's tip, the live game's graphics and a result's board (its white pill): inside, `--ink` is the plate and
    `--paper-ink` white, as by day (their own styles and the 2D court's canvas read them). */
-:root[data-theme='dark'] :is(.bottomnav, .continue, .toast, .ch-tip, .lv-bug, .lv-call, .lv-stage, .lv-lb, .lv-cb, .lv-bd, .lv-ff, .lv-tk, .lv-intro, .moment) {
+:root[data-theme='dark'] :is(.bottomnav, .continue, .toast, .ch-tip, .lv-bug, .lv-call, .lv-stage, .lv-lb, .lv-cb, .lv-bd, .lv-ff, .lv-tk, .lv-intro, .moment, .gd-board) {
   --ink: var(--plate);
   --ink-2: var(--plate-2);
   --paper-ink: #ffffff;

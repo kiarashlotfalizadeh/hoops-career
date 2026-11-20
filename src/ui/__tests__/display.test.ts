@@ -273,6 +273,23 @@ describe('display helpers', () => {
       // (a primary pill at night: dark words on bone; a count on the brand's badge)
       expect(contrast(nightVar('paper-ink'), nightVar('ink'))).toBeGreaterThanOrEqual(7);
       expect(contrast(nightVar('brand-ink'), nightVar('brand'))).toBeGreaterThanOrEqual(4.5);
+      // a result's board keeps the day's ink at night: its pill on the seam is white stock with `--ink` words,
+      // and the night's bone `--ink` there read white on white (the board must sit in the plates' override)
+      {
+        const nightAll = fs.readFileSync(new URL('../styles/night.css', import.meta.url), 'utf8');
+        const plates = /:is\(([^)]*)\)\s*\{[^}]*--ink: var\(--plate\);/.exec(nightAll)!;
+        const gameday = fs.readFileSync(new URL('../components/gameday.css', import.meta.url), 'utf8');
+        const pill = /\n\.gd-bd-pill,\n\.gd-bd-k \{([^}]*)\}/.exec(gameday)![1];
+        const pillBg = /background: (#[0-9a-f]{3,6});/.exec(pill)![1].replace(/^#(\w)(\w)(\w)$/, '#$1$1$2$2$3$3');
+        expect(pill).toMatch(/color: var\(--ink\);/);
+        const boardInk = plates[1]
+          .split(',')
+          .map((s) => s.trim())
+          .includes('.gd-board')
+          ? nightVar('plate')
+          : nightVar('ink');
+        expect(contrast(boardInk, pillBg), 'night board pill words on its white stock').toBeGreaterThanOrEqual(7);
+      }
       // a team's colour as text follows the look: darkened for paper by day, lightened for the dark stock by night
       const navy: [string, string, string] = ['#0c2340', '#236192', '#9ea2a2'];
       setNight(true);

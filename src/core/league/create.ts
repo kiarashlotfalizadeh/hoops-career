@@ -504,7 +504,12 @@ export function createLeague(opts: CreateOpts): League {
     from: 'Owner',
     subject: `Welcome to the ${user.region} ${user.name}`,
     body: [
-      `${opts.coachName === 'Coach' ? 'Coach' : `Coach ${opts.coachName}`}, you're running basketball operations and the bench. Your roster has ${standard.length} players${twoWays ? `, plus ${twoWays === 1 ? 'one on a two-way deal' : `${twoWays} on two-way deals`}` : ''}. Your staff has set a rotation and a playbook that fit it.`,
+      // (a GM-only career has the staff on the bench: the owner says so, and doesn't call him Coach)
+      `${
+        opts.role === 'gm'
+          ? `${opts.coachName === 'Coach' ? 'Welcome aboard' : opts.coachName}, you're running basketball operations. Your coaching staff runs the bench.`
+          : `${opts.coachName === 'Coach' ? 'Coach' : `Coach ${opts.coachName}`}, you're running basketball operations and the bench.`
+      } Your roster has ${standard.length} players${twoWays ? `, plus ${twoWays === 1 ? 'one on a two-way deal' : `${twoWays} on two-way deals`}` : ''}. Your staff has set a rotation and a playbook that fit it.`,
       ...(goals
         ? [
             'Here is what I expect from this roster.',

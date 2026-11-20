@@ -325,6 +325,12 @@ describe('the agenda', () => {
       // (an estimate until he sets it on opening night: the other rosters still change)
       expect(welcome.body).toMatch(/^Win about \d+ games: \d+% of my review$/m);
       expect(welcome.link).toBe('/office/owner');
+      expect(welcome.body).toMatch(/^Coach c, you're running basketball operations and the bench\./);
+      // (a GM-only career: the staff has the bench, and the owner doesn't call him Coach)
+      const gm = createLeague({ name: 'agenda', userTid: 5, coachName: 'c', role: 'gm', settings: defaultSettings(), seed, rngSeed: 3 });
+      const gmWelcome = gm.inbox.find((m) => m.subject.startsWith('Welcome to the'))!.body;
+      expect(gmWelcome).toMatch(/^c, you're running basketball operations\. Your coaching staff runs the bench\./);
+      expect(gmWelcome).not.toMatch(/Coach|and the bench/);
     }
 
     // it stays out of the way with teaching off: no guide, no welcome mail, and turning it back on brings the guide

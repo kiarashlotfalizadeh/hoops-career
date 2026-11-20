@@ -1025,6 +1025,7 @@ body:has(.simbar) .fo-dock {
   flex-direction: column;
   gap: 8px;
   padding: 14px var(--pad-card) var(--pad-card);
+  container: fo-tt / inline-size;
 }
 .fo-tt-h {
   display: flex;
@@ -1065,6 +1066,17 @@ body:has(.simbar) .fo-dock {
   font-size: 12px;
   letter-spacing: -0.02em;
   color: var(--text-dim);
+}
+/* a narrow card: the salary line drops under the team's name (in line with it, past the logo) so the name keeps its room */
+@container fo-tt (max-width: 380px) {
+  .fo-tt-h {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  .fo-tt-sal {
+    flex-basis: 100%;
+    padding-left: 30px;
+  }
 }
 .fo-tt-row {
   display: flex;
@@ -1156,6 +1168,19 @@ body:has(.fo-tt-verdict) .continue:not(.is-busy) {
   flex: 1 1 0;
   min-width: 0;
 }
+/* a phone: the deal's buttons stack, each the full width, so the longest answer ("Blocked by the rules") clears its pill.
+   Keyed to the row's own width: every screen under 420px, and the few just over it where two side by side still ran into the pill */
+.fo-tt-verdict {
+  container: fo-tt-v / inline-size;
+}
+@container fo-tt-v (max-width: 420px) {
+  .fo-tt-btns {
+    flex-direction: column;
+  }
+  .fo-tt-btns .btn {
+    flex: none;
+  }
+}
 .fo-tt-why {
   font-size: 13px;
   color: var(--text-dim);
@@ -1180,7 +1205,7 @@ body:has(.fo-tt-verdict) .continue:not(.is-busy) {
   font-weight: 500;
 }
 /* a wide screen: the three teams side by side */
-@media (min-width: 900px) {
+@media (min-width: 1100px) {
   .fo-tt {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: start;
