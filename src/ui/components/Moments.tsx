@@ -7,6 +7,7 @@ import { TeamLogo } from './TeamLogo';
 import { Avatar, useSheetOpen } from './ui';
 import { slabVars } from '../teamColors';
 import { haptic } from '../../native';
+import { momentCue } from '../cues';
 import { reducedMotion } from '../motion';
 import './moments.css';
 
@@ -169,6 +170,7 @@ function MomentCard({ m, tid, colors, onDone }: { m: Moment; tid: number; colors
   };
   useEffect(() => {
     haptic(m.big ? 'success' : 'tap');
+    momentCue(m.kind);
     btn.current?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') btn.current?.click();

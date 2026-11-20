@@ -13,7 +13,7 @@ import { type PlanPlayer, buildMinutePlan, planInputs, planRoles } from '../rota
 import type { FinishType, PossLog } from '../log';
 import { cloneTactics, defRoleOf, withMentality } from '../tactics';
 import { SETS, bestFor, isCallId, readAfter, setFit } from '../sets';
-import { K, ftChance } from './constants';
+import { K, cohesionLift, ftChance } from './constants';
 import { TK } from './tk';
 import { type SP, type ST, type SetPlay, type SimTeamInput, type SimOptions, type InGameInjury, type Ctx, type Stint, newBox, ACTION_LIST, freedomMult, mix } from './state';
 import { coachMethods } from './coach';
@@ -391,6 +391,7 @@ export class GameSim {
       acts: { pnr: 0, iso: 0, post: 0, handoff: 0, motion: 0, n: 0 },
       zoneSeen: 0,
       injMult: input.injuryMult ?? 1,
+      coh: cohesionLift(input.cohesion),
       subSig: [],
       manualSubs: false,
       subLock: new Map(),

@@ -3,7 +3,7 @@
 // crowd's answer, and the night's bigger turns (a period's horn, a run, the final) into the
 // building's. The sounds themselves are ui/sound.ts's; nothing here decides anything about the game.
 // The crowd is the home side's: it cheers its own baskets and groans at the visitors'.
-import type { Act, Frame, Script } from './choreo';
+import { SHOT_CLOCK, type Act, type Frame, type Script } from './choreo';
 import { crowd, sfx } from '../sound';
 
 const ON_BALL: ReadonlySet<Act> = new Set<Act>(['dribble', 'drive']);
@@ -69,6 +69,12 @@ export function beatSound(script: Script, i: number, speed: number, stakes: numb
   const flash = f.flash;
   if (flash?.kind === 'to') {
     if (flash.text === 'Steal') sfx(home ? 'groan' : 'ooh', home ? 0.7 : big, 0.05);
+    else if (flash.text === SHOT_CLOCK) {
+      // the shot clock's buzzer, the whistle that follows it, and the building: a stop its defense earned, or a trip its own side wasted
+      sfx('buzzer');
+      sfx('whistle', 0.7, 0.5);
+      sfx(home ? 'groan' : 'cheer', home ? 0.6 : 0.7 * big, 0.35);
+    }
     // (a dead-ball turnover is a whistle: out of bounds, a travel, three seconds)
     else sfx('whistle', 0.8);
   } else if (flash?.kind === 'info' && flash.text.startsWith('Timeout')) sfx('whistle');

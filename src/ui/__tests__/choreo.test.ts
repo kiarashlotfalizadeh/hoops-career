@@ -4,7 +4,22 @@
 import { PerspectiveCamera, Scene, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { courtFit, FLOOR_L, FLOOR_W, pose, type Stage } from '../live/Court';
-import { attackDir, BASKET, buildScript, captionAt, COURT_LEN, faceWorld, finishOf, standing, toWorld, type Frame, type Pt, type Script, type Standing } from '../live/choreo';
+import {
+  attackDir,
+  BASKET,
+  buildScript,
+  captionAt,
+  COURT_LEN,
+  faceWorld,
+  finishOf,
+  SHOT_CLOCK,
+  standing,
+  toWorld,
+  type Frame,
+  type Pt,
+  type Script,
+  type Standing,
+} from '../live/choreo';
 import { Director, REPLAY_GAP, type BigKind } from '../live/court3d/director';
 import { ballIn, into, PARTS, Spacing, sunk } from '../live/court3d/spacing';
 import { blocked, CAM_KINDS, camKind, clearSeat, clutter, fenced, Operator, seen, shot, type View } from '../live/court3d/cameras';
@@ -328,6 +343,29 @@ describe('live court choreography', () => {
         }
       }
       expect(techs).toBeGreaterThan(0);
+    }
+
+    // the shot clock running out says so (its buzzer keys on the flash: gameSound.ts); a lost ball is a turnover, a steal a steal
+    {
+      const flashes = (steps: Parameters<typeof log>[0]) => buildScript(log(steps), info, [40, 38]).frames.flatMap((f) => (f.flash?.kind === 'to' ? [f.flash.text] : []));
+      expect(
+        flashes([
+          { k: 'advance', pid: 1 },
+          { k: 'to', pid: 1, d: 'shot clock violation' },
+        ]),
+      ).toEqual([SHOT_CLOCK]);
+      expect(
+        flashes([
+          { k: 'advance', pid: 1 },
+          { k: 'to', pid: 1 },
+        ]),
+      ).toEqual(['Turnover']);
+      expect(
+        flashes([
+          { k: 'advance', pid: 1 },
+          { k: 'steal', pid: 1, pid2: 11 },
+        ]),
+      ).toEqual(['Steal']);
     }
 
     // a timeout flashes once, naming the team that called it

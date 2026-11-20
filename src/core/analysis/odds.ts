@@ -12,6 +12,8 @@ import type { League, Player } from '../types';
 import { Rng, hashString, mix32 } from '../random';
 import { ROSTER_NET, rosterWorth } from './worth';
 import { HOME_EDGE, MARGIN_SD, PRIOR_GAMES, blendNet, leagueRatings, phi } from './projection';
+import { expectedCohesion } from '../league/pulse';
+import { cohesionLift } from '../sim/engine/constants';
 import { LOTTERY_ODDS } from '../league/draft';
 import { drawLot, finalsHomeCourt, standings } from '../league/standings';
 
@@ -93,6 +95,11 @@ interface Setup {
   h2h: Int32Array;
 }
 
+/** Win share a point of net rating is worth (about 2.7 wins of 82). */
+const WIN_PER_NET = 0.033;
+/** Points per 100 possessions a point of field-goal percentage is worth: about 88 shots at a little over two points each. */
+const COHESION_NET = 190;
+
 function setup(league: League, fixed: { gid: number; homeWon: boolean } | undefined, spread: number): Setup {
   const n = league.teams.length;
   const ratings = leagueRatings(league);
@@ -124,9 +131,19 @@ function setup(league: League, fixed: { gid: number; homeWon: boolean } | undefi
   for (const p of Object.values(league.players)) if (p.tid >= 0 && p.tid < n) (players.get(p.tid) ?? players.set(p.tid, []).get(p.tid)!).push(p);
   const worth = league.teams.map((t) => rosterWorth(players.get(t.tid) ?? [], Math.max(1, left[t.tid] + extra[t.tid])));
   const avg = worth.reduce((a, w) => a + w, 0) / Math.max(1, n);
+  // what each core's cohesion is expected to be worth on the floor (pulse.ts, K.cohesion), against the
+  // league's average: part of what the roster is worth before the games say so (their net rating has
+  // it in already). The record a team is expected to keep is its roster's, until it has one of its own
+  const lift = league.teams.map((t) => {
+    const r = ratings.rows[t.tid];
+    const w = r.gp / (r.gp + PRIOR_GAMES);
+    const pct = 0.5 + (w * (r.gp ? r.net : 0) + (1 - w) * (worth[t.tid] - avg) * ROSTER_NET) * WIN_PER_NET;
+    return cohesionLift(expectedCohesion(league, t.tid, pct)) * COHESION_NET;
+  });
+  const avgLift = lift.reduce((a, x) => a + x, 0) / Math.max(1, n);
   const net = league.teams.map((t) => {
     const r = ratings.rows[t.tid];
-    return blendNet(r.gp ? r.net : 0, r.gp, worth[t.tid] - avg, ROSTER_NET);
+    return blendNet(r.gp ? r.net : 0, r.gp, worth[t.tid] - avg + (lift[t.tid] - avgLift) / ROSTER_NET, ROSTER_NET);
   });
   const sd = ratings.rows.map((r) => spread * Math.sqrt(PRIOR_GAMES / (r.gp + PRIOR_GAMES)));
   const paces = ratings.rows.filter((r) => r.gp > 0).map((r) => r.pace);

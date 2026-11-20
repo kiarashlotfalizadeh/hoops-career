@@ -53,7 +53,7 @@ import { frozenBooksOutlook, seasonWeight } from './jobSecurity';
 import { tenDayBlockedReason, tenDayClosedReason, userTenDay, wantsTenDay } from './tenDay';
 import { booksOf, booksOutlook, deeperText, frozen, FROZEN_BUDGET, warnWindow } from './books';
 import { aiTicketPrice, attendanceFor, budgetCostPerSeason, seasonEndCash } from './finances';
-import { filterTargets, maxTakeBack, tradeTargets } from './tradeFinder';
+import { filterTargets, maxTakeBack, onBlock, tradeTargets } from './tradeFinder';
 import { makeItWork } from './tradeHelp';
 import { packageFor } from './tradePackages';
 import { executeTrade, teamAccepts, tradingClosedReason, validateTrade, type TradeOffer } from './trades';
@@ -871,7 +871,7 @@ export function planDeadlineCall(league: League): DeadlineCall {
     const bar = [...roster].sort((a, b) => b.ovr - a.ovr)[4]?.ovr ?? 0;
     const targets = tradeTargets(league)
       .filter((t) => t.p.ovr > bar && t.avail !== 'franchise' && !t.p.injury)
-      .sort((a, b) => Number(b.avail === 'block') - Number(a.avail === 'block') || b.p.ovr - a.p.ovr || a.p.pid - b.p.pid)
+      .sort((a, b) => Number(onBlock(b.avail)) - Number(onBlock(a.avail)) || b.p.ovr - a.p.ovr || a.p.pid - b.p.pid)
       .slice(0, 6);
     for (const t of targets) {
       const ask = makeItWork(league, { a: { tid: me, pids: [], dpids: [] }, b: { tid: t.p.tid, pids: [t.p.pid], dpids: [] } }, keep);

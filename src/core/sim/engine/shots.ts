@@ -199,6 +199,8 @@ export const shotsMethods = {
     // home court, the game's shooting conditions and the score
     if (!this.opts.neutral) p += off.side === 0 ? K.home : -K.home * 0.3;
     if (this.opts.edge) p += this.opts.edge[off.side];
+    // a core that has played and won together (K.cohesion)
+    p += off.coh;
     p += this.env.shoot + this.env.team[off.side] + this.scoreEffect(off, def, three);
     if (s.finish !== 'putback') p += this.tempoOpen() * K.zoneOpen[zone];
     // late-game nerves: close and late, a player short on feel (offensive IQ) shoots a little worse, one with plenty a little better

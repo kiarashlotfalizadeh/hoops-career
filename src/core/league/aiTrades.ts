@@ -1,6 +1,8 @@
 // AI front offices: each team's strategy (contend, retool, rebuild), AI-to-AI trades (through the
-// season with a rush at the deadline, on draft night, and over the summer and preseason) and the
-// rumours of who is on the block (the AI's offers to the user are in proposals.ts).
+// season with a rush at the deadline, on draft night, and over the summer and preseason), the
+// three-team deals they make when two teams can't get one done (facilitatedDeal: a third team with
+// room takes the salary), and the rumours of who is on the block (the AI's offers to the user are
+// in proposals.ts).
 import type { DraftPick, League, Player } from '../types';
 import { CAP } from '../constants';
 import { Rng, clamp } from '../random';
@@ -10,10 +12,17 @@ import { capPayroll, withHoldsMemo } from './freeAgency';
 import { contractExp } from '../playerGen';
 import {
   MAX_FIRSTS_OUT,
+  TradeLeg,
   TradeOffer,
+  bestTpe,
   capSalary,
+  dealDelta,
+  executeDeal,
   executeTrade,
   findPick,
+  legsOf,
+  matchGap,
+  matchInfoOf,
   pickValue,
   pickValueFor,
   playerValueFor,
@@ -24,9 +33,11 @@ import {
   tradedAwayBy,
   tradingClosedReason,
   untradeable,
+  validateDeal,
   validateTrade,
 } from './trades';
 import { MAX_PICKS_OUT, dumpPackage } from './tradePackages';
+import { wantsOut } from './pulse';
 
 // ---------------------------------------------------------------- AI front offices
 
@@ -124,11 +135,17 @@ export function aiOffseasonTrades(league: League, rng: Rng, rate: number) {
  */
 function aiTradeOnce(league: League, rng: Rng): boolean {
   const late = league.phase === 'regular' && league.tradeDeadlineDay - league.day < 14;
-  const kinds = rng.chance(late ? 0.5 : 0.7) ? [saleDeal, dumpDeal] : [dumpDeal, saleDeal];
+  const sale = (l: League, r: Rng) => saleDeal(l, r);
+  const dump = (l: League, r: Rng) => {
+    const d = dumpDeal(l, r);
+    return d && legsOf(d);
+  };
+  const kinds = rng.chance(late ? 0.5 : 0.7) ? [sale, dump] : [dump, sale];
   for (const find of kinds) {
+    // (a deal is its legs: two teams, or three when a sale needed a third to take the salary)
     const deal = withHoldsMemo(() => find(league, rng));
     if (deal && draftNightRoom(league, deal)) {
-      executeTrade(league, deal);
+      executeDeal(league, deal);
       return true;
     }
   }
@@ -141,16 +158,17 @@ function aiTradeOnce(league: League, rng: Rng): boolean {
  * Without it a rebuilder with five picks to make took back four players for a veteran and came out
  * of the draft with 22 signed.
  */
-function draftNightRoom(league: League, deal: TradeOffer): boolean {
+function draftNightRoom(league: League, legs: TradeLeg[]): boolean {
   if (league.phase !== 'draft') return true;
   const bodies = (pids: number[]) => pids.filter((pid) => !league.players[pid]?.contract.twoWay).length;
-  for (const [mine, other] of [
-    [deal.a, deal.b],
-    [deal.b, deal.a],
-  ] as const) {
-    const signed = standardRoster(league, mine.tid).filter((p) => contractExp(p.contract) > league.season).length;
-    const picks = league.draftPicks.filter((d) => d.season === league.season && (d.tid === mine.tid ? !mine.dpids.includes(d.dpid) : other.dpids.includes(d.dpid))).length;
-    if (signed + bodies(other.pids) - bodies(mine.pids) + picks > OFFSEASON_ROSTER_MAX) return false;
+  for (const tid of new Set(legs.flatMap((l) => [l.tid, l.to]))) {
+    const out = legs.filter((l) => l.tid === tid);
+    const inc = legs.filter((l) => l.to === tid);
+    const outPicks = new Set(out.flatMap((l) => l.dpids));
+    const inPicks = new Set(inc.flatMap((l) => l.dpids));
+    const signed = standardRoster(league, tid).filter((p) => contractExp(p.contract) > league.season).length;
+    const picks = league.draftPicks.filter((d) => d.season === league.season && (d.tid === tid ? !outPicks.has(d.dpid) : inPicks.has(d.dpid))).length;
+    if (signed + bodies(inc.flatMap((l) => l.pids)) - bodies(out.flatMap((l) => l.pids)) + picks > OFFSEASON_ROSTER_MAX) return false;
   }
   return true;
 }
@@ -177,21 +195,26 @@ const FADING = { games: 20, pct: 0.45 };
  * else of 26 or older but its best (a young franchise player stays); a retooling team's 30+
  * outside its three best, and once it is out of it in season (under .450) every player of 28 or
  * older, its stars included; and anyone's star (80+, 26 or older) in the last season of his deal
- * who won't extend there, unless his team contends: better to get something for him now. Only
- * players the rules let move. When rebuilders kept their 26- and 27-year-old starters and fading
+ * who won't extend there, unless his team contends: better to get something for him now. And
+ * anyone, on any team, who has asked for a trade (pulse.ts): his team takes calls, a contender's
+ * too. Only players the rules let move. When rebuilders kept their 26- and 27-year-old starters and fading
  * teams their 28- and 29-year-olds, the teams at the bottom stayed nearly as deep as the middle:
  * over twelve simulated seasons the spread of team talent at the deadline fell a tenth further.
  */
 export function sellable(league: League, tid: number): Player[] {
   const t = league.teams[tid];
-  if (t.strategy === 'contend') return [];
   const roster = tradeRoster(league, tid).sort((a, b) => valueScore(league, b) - valueScore(league, a));
+  const movable = (p: Player) => !untradeable(league, p) && !justTraded(league, p);
+  // (he asked out: on the block whatever the plan, and however he ranks)
+  const asked = roster.filter((p) => wantsOut(league, p) && movable(p));
+  if (t.strategy === 'contend') return asked;
   const rank = new Map(roster.map((p, i) => [p.pid, i]));
   const cs = contractSeason(league);
   const ts = curTeamSeason(league, tid);
   const fading = league.phase === 'regular' && ts.won + ts.lost >= FADING.games && winPct(ts) < FADING.pct;
   return roster.filter((p) => {
-    if (untradeable(league, p) || justTraded(league, p) || p.ovr < 70) return false;
+    if (asked.includes(p)) return true;
+    if (!movable(p) || p.ovr < 70) return false;
     const a = age(league, p);
     const r = rank.get(p.pid)!;
     const leaving = p.ovr >= 80 && a >= 26 && contractExp(p.contract) === cs && !p.contract.next && !!extensionRefusal(league, p);
@@ -201,33 +224,50 @@ export function sellable(league: League, tid: number): Player[] {
   });
 }
 
-/** Teams that would buy him: contenders, and retooling teams for a player 76+ who is 30 or younger. */
+/** Teams that would buy him: contenders, and retooling teams for a player 76+ who is 30 or younger (or a star of any age who has asked out). */
 function buyersFor(league: League, seller: number, p: Player): number[] {
+  const star = wantsOut(league, p) && p.ovr >= 80;
   return league.teams
-    .filter((t) => t.tid !== seller && t.tid !== league.userTid && (t.strategy === 'contend' || (t.strategy === 'retool' && p.ovr >= 76 && age(league, p) <= 30)))
+    .filter((t) => t.tid !== seller && t.tid !== league.userTid && (t.strategy === 'contend' || (t.strategy === 'retool' && p.ovr >= 76 && (star || age(league, p) <= 30))))
     .map((t) => t.tid);
 }
 
 /**
  * A seller shops its best three sellable players to every team that would buy them (see
  * buyersFor) and takes the deal it likes best. Rebuilders are three times as likely to be the one
- * shopping as retooling teams; up to three sellers are tried.
+ * shopping as retooling teams, and so is a team with a player who has asked out; up to three
+ * sellers are tried.
  */
-function saleDeal(league: League, rng: Rng): TradeOffer | null {
-  const sellers = league.teams.filter((t) => t.tid !== league.userTid && t.strategy !== 'contend').map((t) => ({ t, list: sellable(league, t.tid) }));
+function saleDeal(league: League, rng: Rng): TradeLeg[] | null {
+  const sellers = league.teams.filter((t) => t.tid !== league.userTid).map((t) => ({ t, list: sellable(league, t.tid) }));
   const pool = sellers.filter((x) => x.list.length);
+  // (a request first on its team's list: the player it most needs to move)
+  for (const x of pool) x.list.sort((a, b) => Number(wantsOut(league, b)) - Number(wantsOut(league, a)));
   for (let k = 0; k < 3 && pool.length; k++) {
-    const { t, list } = pool.splice(rng.weighted(pool.map((x) => (x.t.strategy === 'rebuild' ? 3 : 1))), 1)[0];
-    let best: { deal: TradeOffer; v: number } | null = null;
+    const { t, list } = pool.splice(rng.weighted(pool.map((x) => (x.t.strategy === 'rebuild' || wantsOut(league, x.list[0]) ? 3 : 1))), 1)[0];
+    let best: { deal: TradeOffer; v: number; p: Player; b: number } | null = null;
     for (const p of list.slice(0, 3)) {
       for (const b of buyersFor(league, t.tid, p)) {
         const deal = aiPackage(league, b, t.tid, p);
         if (!deal) continue;
         const v = teamDelta(league, deal, t.tid);
-        if (!best || v > best.v) best = { deal, v };
+        if (!best || v > best.v) best = { deal, v, p, b };
       }
     }
-    if (best) return best.deal;
+    // a third team: when the best deal has the seller taking back a veteran's salary it has no use for, the
+    // same buyer's deal with a team that has the room taking that salary instead, if the seller likes it more
+    if (best && best.deal.a.pids.some((pid) => age(league, league.players[pid]) > 25)) {
+      const legs = facilitatedDeal(league, best.b, t.tid, best.p);
+      if (legs && dealDelta(league, legs, t.tid) > best.v) return legs;
+    }
+    if (best) return legsOf(best.deal);
+    // no buyer could get it done alone: the first seller tried calls a third team in for its best player (see facilitatedDeal)
+    if (k === 0 && list[0]) {
+      for (const b of buyersFor(league, t.tid, list[0]).slice(0, THIRD_BUYERS)) {
+        const legs = facilitatedDeal(league, b, t.tid, list[0]);
+        if (legs) return legs;
+      }
+    }
   }
   return null;
 }
@@ -235,6 +275,8 @@ function saleDeal(league: League, rng: Rng): TradeOffer | null {
 export interface BlockRumor {
   tid: number;
   pid: number;
+  /** He asked for the trade himself (pulse.ts): his team is taking calls because of it. */
+  asked?: true;
   /** Teams with a deal for him the seller would take. */
   suitors: number[];
 }
@@ -250,7 +292,8 @@ export function onTheBlock(league: League, max = 3): BlockRumor[] {
     const cands = league.teams
       .filter((t) => t.tid !== league.userTid)
       .flatMap((t) => sellable(league, t.tid).map((p) => ({ tid: t.tid, p })))
-      .sort((x, y) => y.p.ovr - x.p.ovr || x.p.pid - y.p.pid);
+      // (a player who asked out is the story: he leads, and his team's other veterans wait)
+      .sort((x, y) => Number(wantsOut(league, y.p)) - Number(wantsOut(league, x.p)) || y.p.ovr - x.p.ovr || x.p.pid - y.p.pid);
     const seen = new Set<number>();
     const out: BlockRumor[] = [];
     for (const { tid, p } of cands) {
@@ -258,7 +301,7 @@ export function onTheBlock(league: League, max = 3): BlockRumor[] {
       if (seen.has(tid)) continue;
       seen.add(tid);
       const suitors = buyersFor(league, tid, p).filter((b) => aiPackage(league, b, tid, p));
-      out.push({ tid, pid: p.pid, suitors: suitors.slice(0, 3) });
+      out.push({ tid, pid: p.pid, suitors: suitors.slice(0, 3), ...(wantsOut(league, p) ? { asked: true as const } : {}) });
     }
     return out;
   });
@@ -351,6 +394,134 @@ export function pastSecondApron(league: League, deal: TradeOffer, tid: number): 
   const sal = (pids: number[]) => pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
   const [mine, other] = deal.a.tid === tid ? [deal.a, deal.b] : [deal.b, deal.a];
   const net = sal(other.pids) - sal(mine.pids);
+  return net > 0 && capPayroll(league, tid, s) + net > CAP_FOR(league, s).secondApron;
+}
+
+// ---------------------------------------------------------------- three-team deals
+
+/** Buyers a seller tries a three-team deal with, and third teams each is tried with. */
+const THIRD_BUYERS = 3;
+const THIRD_TEAMS = 4;
+/** The most contracts a buyer routes to the third team, and the most picks it pays it to take them. */
+const THIRD_FILLERS = 2;
+const THIRD_PICKS = 2;
+
+/**
+ * A three-team deal for one player, when the two teams can't do it alone: the buyer gets `vet` from
+ * the seller, and the salary it must send out to match goes to a third team that has the room for
+ * it (cap space, or a trade exception that covers a single contract), instead of to a seller that
+ * can't take it back or doesn't want it. The seller is paid as in any sale: the buyer's two most
+ * valuable young players, then its picks from the cheapest up, until it says yes. The third team is
+ * paid in the buyer's picks for taking the contracts. Every team signs off on all it sends against
+ * all it gets, and the rules pass on the whole deal (see validateDeal); null otherwise, and when
+ * the buyer needs to send no salary at all (that is a two-team deal).
+ *
+ * A side that is not an AI front office says yes through `agrees` (the user: is it fair to him?
+ * see proposals.ts); `keep` are the buyer's players that stay home (default: its three best, its
+ * two best for a star), `thirds` the teams tried as the third (default: the AI teams with the most room).
+ */
+export function facilitatedDeal(
+  league: League,
+  buyer: number,
+  seller: number,
+  vet: Player,
+  opts: { keep?: ReadonlySet<number>; agrees?: (tid: number, legs: TradeLeg[]) => boolean | undefined; thirds?: number[] } = {},
+): TradeLeg[] | null {
+  const s = contractSeason(league);
+  const cap = CAP_FOR(league, s);
+  const sal = (p: Player) => capSalary(league, p.pid, s);
+  const yes = (tid: number, legs: TradeLeg[]) => opts.agrees?.(tid, legs) ?? dealDelta(league, legs, tid) >= 0;
+  const roster = tradeRoster(league, buyer).sort((x, y) => y.ovr - x.ovr || x.pid - y.pid);
+  const keep = opts.keep ?? new Set(roster.slice(0, vet.ovr >= STAR_TARGET ? 2 : 3).map((p) => p.pid));
+  const avail = roster.filter((p) => !keep.has(p.pid) && p.ovr < vet.ovr && !untradeable(league, p) && !justTraded(league, p));
+  const build = (third: number, fill: Player[], youth: Player[], toSeller: DraftPick[], toThird: DraftPick[]): TradeLeg[] => [
+    { tid: seller, to: buyer, pids: [vet.pid], dpids: [] },
+    { tid: buyer, to: seller, pids: youth.map((p) => p.pid), dpids: toSeller.map((d) => d.dpid) },
+    { tid: buyer, to: third, pids: fill.map((p) => p.pid), dpids: toThird.map((d) => d.dpid) },
+  ];
+  // (the buyer keeps 13 in season: so many players can go for the one coming back, as in aiPackage)
+  const maxOut = inSeason(league) ? Math.min(4, roster.length - CAP.rosterMin + 1) : 4;
+  // the salary the buyer has to send out: the smallest contract that covers the gap, else its biggest and another
+  const fill: Player[] = [];
+  const gap = () =>
+    matchGap(
+      league,
+      matchInfoOf(
+        league,
+        buyer,
+        fill.map((p) => p.pid),
+        [vet.pid],
+      ),
+    );
+  while (gap() > 0) {
+    const g = gap();
+    const rest = avail.filter((p) => !fill.includes(p) && sal(p) > 0);
+    const p = rest.filter((x) => sal(x) >= g).sort((x, y) => sal(x) - sal(y))[0] ?? rest.sort((x, y) => sal(y) - sal(x))[0];
+    if (!p || fill.length >= Math.min(THIRD_FILLERS, maxOut)) return null;
+    fill.push(p);
+  }
+  if (!fill.length) return null;
+  const load = fill.reduce((a, p) => a + sal(p), 0);
+  // third teams: with the cap room for all of it, or an exception for a lone contract; the most room first
+  const thirds =
+    opts.thirds ??
+    league.teams
+      .filter((t) => t.tid !== buyer && t.tid !== seller && t.tid !== league.userTid)
+      .map((t) => ({ tid: t.tid, room: cap.salaryCap - capPayroll(league, t.tid, s) }))
+      .filter((x) => x.room >= load || (fill.length === 1 && bestTpe(league, x.tid) >= load))
+      .sort((x, y) => y.room - x.room || x.tid - y.tid)
+      .slice(0, THIRD_TEAMS)
+      .map((x) => x.tid);
+  const youthPool = avail
+    .filter((p) => !fill.includes(p) && age(league, p) <= 25 && !tradedAwayBy(league, p, seller))
+    .sort((x, y) => tradeValue(league, y) - tradeValue(league, x) || x.pid - y.pid)
+    .slice(0, 2);
+  const pickPool = league.draftPicks.filter((d) => d.tid === buyer).sort((x, y) => pickValue(league, x) - pickValue(league, y) || x.dpid - y.dpid);
+  for (const third of thirds) {
+    if (fill.some((p) => tradedAwayBy(league, p, third))) continue;
+    const youth: Player[] = [];
+    const toSeller: DraftPick[] = [];
+    const toThird: DraftPick[] = [];
+    const legs = () => build(third, fill, youth, toSeller, toThird);
+    const firsts = () => [...toSeller, ...toThird].filter((d) => d.round === 1).length;
+    const legal = () => !validateDeal(league, legs()).some((e) => /first/i.test(e) && /back-to-back|consecutive|Stepien/i.test(e));
+    // picks from the cheapest up until `to` says yes: `max` at most (past it a better one replaces the cheapest), two firsts in all
+    const pay = (to: number, list: DraftPick[], max: number, taken: DraftPick[]) => {
+      for (const x of pickPool.filter((d) => !taken.includes(d) && !tradedAwayBy(league, d, to))) {
+        if (yes(to, legs())) break;
+        const out = list.length >= max ? list[0] : null;
+        if (x.round === 1 && firsts() - (out?.round === 1 ? 1 : 0) >= MAX_FIRSTS_OUT) continue;
+        if (out) list.shift();
+        list.push(x);
+        if (!legal()) {
+          list.pop();
+          if (out) list.unshift(out);
+        }
+      }
+    };
+    // the seller's price: youth, then picks
+    for (const x of youthPool) {
+      if (yes(seller, legs())) break;
+      if (fill.length + youth.length < maxOut) youth.push(x);
+    }
+    pay(seller, toSeller, MAX_PICKS_OUT, []);
+    if (!yes(seller, legs())) continue;
+    // the third team's price for taking the contracts: the buyer's picks left
+    pay(third, toThird, THIRD_PICKS, toSeller);
+    const deal = legs();
+    if (!yes(third, deal) || !yes(buyer, deal) || validateDeal(league, deal).length) continue;
+    // (as in any AI deal: no AI team buys its way past the second apron)
+    if ([buyer, third].some((tid) => tid !== league.userTid && pastApron(league, deal, tid))) continue;
+    return deal;
+  }
+  return null;
+}
+
+/** pastSecondApron for a deal read as its legs. */
+function pastApron(league: League, legs: TradeLeg[], tid: number): boolean {
+  const s = contractSeason(league);
+  const sal = (pids: number[]) => pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
+  const net = sal(legs.filter((l) => l.to === tid).flatMap((l) => l.pids)) - sal(legs.filter((l) => l.tid === tid).flatMap((l) => l.pids));
   return net > 0 && capPayroll(league, tid, s) + net > CAP_FOR(league, s).secondApron;
 }
 

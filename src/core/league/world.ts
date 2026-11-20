@@ -1,9 +1,11 @@
-// The world around the games: the press, the staff's development watch, the user's legacy and his
-// locker room's pulse,
+// The world around the games: the press, the staff's development watch, the user's legacy and the
+// locker rooms' pulse,
 // called from the season's calendar (season.ts) at four points. Each part reads the league as it
 // stands and writes news, mail and its own state. None of them draws from the league's random
-// stream: anything random is seeded from the day, the game or the season (see `worldRng`), so the
-// games, trades and signings play out exactly as they would without them.
+// stream: anything random is seeded from the day, the game or the season (see `worldRng`). The
+// press, the watch and the legacy change nothing in how the league plays out. The pulse does, on
+// purpose and in the open (pulse.ts): a tight core executes a little better, and a star who asks
+// out goes on the block.
 import type { League, ScheduledGame } from '../types';
 import { Rng, hashString, mix32 } from '../random';
 import { mediaDay, mediaGame, mediaSeasonEnd, mediaSeasonStart } from './media';

@@ -7,6 +7,7 @@ import { hardCapLine, tradeValue } from './contracts';
 import { capPayroll } from './freeAgency';
 import { capSalary, tradeMatchLimit, untradeable } from './trades';
 import { sellable } from './aiTrades';
+import { wantsOut } from './pulse';
 
 // ---------------------------------------------------------------- trade finder
 
@@ -56,7 +57,10 @@ export function valueTier(league: League, p: Player): ValueTier {
   return tierOf(league, tradeValue(league, p));
 }
 
-export type Availability = 'franchise' | 'block' | null;
+export type Availability = 'franchise' | 'block' | 'asked' | null;
+
+/** Would his team move him: on the block, or asked out himself? */
+export const onBlock = (a: Availability) => a === 'block' || a === 'asked';
 
 const shopCache = new WeakMap<League, { key: string; teams: Map<number, Set<number>> }>();
 
@@ -75,7 +79,8 @@ function shopped(league: League, p: Player): boolean {
  * worth less than nothing, or his team is shopping him as its own deals do: a rebuilder's or a
  * fading team's veteran, a star in his last season it can't keep, see sellable), 'franchise' for
  * a young star it builds around (a franchise-tier player 27 or younger, an All-Star 25 or
- * younger), null otherwise and for your own players. A label only.
+ * younger), 'asked' for one who has asked his team for a trade (pulse.ts: on the block, and he
+ * said so), null otherwise and for your own players. A label only.
  */
 export function availability(league: League, p: Player): Availability {
   return availabilityAt(league, p, tradeValue(league, p));
@@ -84,6 +89,7 @@ export function availability(league: League, p: Player): Availability {
 /** availability for a player whose neutral trade value is known. */
 function availabilityAt(league: League, p: Player, value: number): Availability {
   if (p.tid < 0 || p.tid === league.userTid || !league.teams[p.tid]) return null;
+  if (wantsOut(league, p)) return 'asked';
   if (value < 0 || shopped(league, p)) return 'block';
   const a = playerAge(p, league.season);
   const tier = tierOf(league, value);
@@ -134,7 +140,7 @@ export function filterTargets(rows: TradeTarget[], f: TargetFilter): TradeTarget
         x.p.ovr >= (f.minOvr ?? 0) &&
         x.age <= (f.maxAge ?? Infinity) &&
         x.salary <= (f.maxSalary ?? Infinity) &&
-        (!f.available || x.avail === 'block'),
+        (!f.available || onBlock(x.avail)),
     )
     .sort((a, b) => key(b) - key(a) || b.value - a.value || a.p.pid - b.p.pid);
 }

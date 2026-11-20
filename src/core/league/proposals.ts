@@ -6,6 +6,9 @@
 // and, from taxpayers, as salary dumps when free agency opens. None is a fleecing: each is at worst
 // slightly against the user in neutral value. Offers draw on their own random stream (seeded by
 // the league, the date and the purpose), so the league's stream (games, injuries) never moves.
+// When a team's two-team offer can't be made (the salary it would send back is what spoils it), it
+// may call a third team in to take that salary (aiTrades.ts's facilitatedDeal): a three-team offer,
+// kept as its legs beside the user's view of it (Proposal.legs).
 // Also here: the players the user marks untouchable, whom no AI team asks for.
 
 import type { DraftPick, League, Player, Proposal, Team } from '../types';
@@ -14,11 +17,27 @@ import { CAP_FOR, addInbox, andList, contractSeason, curTeamSeason, fmtDate, pla
 import { tradeValue } from './contracts';
 import { capPayroll, withHoldsMemo } from './freeAgency';
 import { nextPick } from './draft';
-import { capSalary, evaluateTrade, executeTrade, pickLabel, tradedAwayBy, untradeable, validateTrade, type TradeOffer } from './trades';
+import {
+  capSalary,
+  evaluateDeal,
+  evaluateTrade,
+  executeDeal,
+  executeTrade,
+  legsOf,
+  pickLabel,
+  tradedAwayBy,
+  untradeable,
+  validateDeal,
+  validateTrade,
+  type TradeLeg,
+  type TradeOffer,
+} from './trades';
+import { facilitatedDeal } from './aiTrades';
 import { dumpPackage, neutralBalance, packageFor } from './tradePackages';
 import { makeItWork } from './tradeHelp';
 import { plural } from '../format';
 import { guideWeeks } from './agenda';
+import { tradeRequests } from './pulse';
 
 /** Offers open at once, at most (one per team). */
 export const MAX_OPEN = 4;
@@ -29,8 +48,26 @@ const STANDS = [5, 7] as const;
 /** Days before the same pitch (the same player bought or sold, the same team's salary dump) can come again. */
 const PITCH_REST = 21;
 
-/** An offer found, before it's posted; `pitch` names what it's about, for the rest between pitches ("sell:812"). */
-type Pitch = { tid: number; offer: TradeOffer; kind: Proposal['kind']; note: string; pitch: string };
+/** An offer found, before it's posted; `pitch` names what it's about, for the rest between pitches ("sell:812"); `legs` when a third team is in it. */
+type Pitch = { tid: number; offer: TradeOffer; kind: Proposal['kind']; note: string; pitch: string; legs?: TradeLeg[] };
+
+/** An offer as its legs: a three-team offer's own, a two-team offer's two. */
+export const proposalLegs = (p: Pick<Proposal, 'offer' | 'legs'>): TradeLeg[] => p.legs ?? legsOf(p.offer);
+
+/** The third team in a three-team offer (the one that isn't the user's or the team that called), or null. */
+export const proposalThird = (league: League, p: Pick<Proposal, 'tid' | 'legs'>): number | null =>
+  p.legs?.flatMap((l) => [l.tid, l.to]).find((tid) => tid !== league.userTid && tid !== p.tid) ?? null;
+
+/** A three-team deal as the user sees it, added up: all he sends, and all he gets (in the name of the team that called). */
+function userView(league: League, legs: TradeLeg[], lead: number): TradeOffer {
+  const user = league.userTid;
+  const out = legs.filter((l) => l.tid === user);
+  const inc = legs.filter((l) => l.to === user);
+  return {
+    a: { tid: user, pids: out.flatMap((l) => l.pids), dpids: out.flatMap((l) => l.dpids) },
+    b: { tid: lead, pids: inc.flatMap((l) => l.pids), dpids: inc.flatMap((l) => l.dpids) },
+  };
+}
 
 export const openProposals = (league: League): Proposal[] => league.proposals ?? [];
 
@@ -65,10 +102,15 @@ const STANDS_DRIFT = 0.03;
 export function proposalError(league: League, p: Proposal): string | null {
   if (p.offer.a.tid !== league.userTid) return 'That offer was made to another team.';
   if (p.season !== league.season || league.day > p.expires) return 'The offer has expired.';
-  const errors = validateTrade(league, p.offer);
+  const errors = p.legs ? validateDeal(league, p.legs) : validateTrade(league, p.offer);
   if (errors.length) return errors[0];
   const asked = p.offer.a.pids.find((pid) => isUntouchable(league, pid));
   if (asked !== undefined) return `You made ${playerName(league.players[asked])} untouchable.`;
+  // a three-team offer stands while both other teams still take it (each through the same small drift)
+  if (p.legs) {
+    const no = evaluateDeal(league, p.legs).teams.find((t) => !t.accept && (t.parts.tooManyFirsts || t.delta < -STANDS_DRIFT * Math.abs(t.valueOut)));
+    return no ? `The ${league.teams[no.tid].name} have changed their minds.` : null;
+  }
   // (its own offer stands through a small drift in values as the days pass: STANDS_DRIFT of what it sends)
   const ev = evaluateTrade(league, p.offer);
   return ev.accept || (ev.ok && !ev.parts.tooManyFirsts && ev.delta >= -STANDS_DRIFT * Math.abs(ev.valueOut)) ? null : `The ${league.teams[p.tid].name} have changed their minds.`;
@@ -136,11 +178,13 @@ export function acceptProposal(league: League, id: number): { ok: boolean; reaso
   const err = proposalError(league, p);
   league.proposals = openProposals(league).filter((x) => x.id !== id);
   if (err) return { ok: false, reason: err };
-  executeTrade(league, p.offer);
+  const third = proposalThird(league, p);
+  if (p.legs) executeDeal(league, p.legs);
+  else executeTrade(league, p.offer);
   // the deal can make other offers impossible (the same player, a full roster)
   cleanProposals(league);
   const t = league.teams[p.tid];
-  return { ok: true, reason: `Trade done with the ${t.region} ${t.name}.` };
+  return { ok: true, reason: third !== null ? `Three-team trade done with the ${t.name} and the ${league.teams[third].name}.` : `Trade done with the ${t.region} ${t.name}.` };
 }
 
 export function declineProposal(league: League, id: number): boolean {
@@ -179,20 +223,33 @@ function sideHeadline(league: League, side: TradeOffer['a']): string {
  * An offer's headline, the same in the inbox and on the agenda, naming both sides: "PHX want
  * Kenrich Williams + 3 picks for Kennard", "MIL offer Portis + 2 picks for nothing".
  */
-export function offerSubject(league: League, offer: TradeOffer): string {
+export function offerSubject(league: League, offer: TradeOffer, third: number | null = null): string {
   const abbrev = league.teams[offer.b.tid].abbrev;
   const yours = sideHeadline(league, offer.a);
   const theirs = sideHeadline(league, offer.b);
-  return yours ? `${abbrev} want ${yours} for ${theirs || 'nothing'}` : `${abbrev} offer ${theirs} for nothing`;
+  const line = yours ? `${abbrev} want ${yours} for ${theirs || 'nothing'}` : `${abbrev} offer ${theirs} for nothing`;
+  // (a three-team offer says so, and who the third is)
+  return third !== null ? `${line}, with ${league.teams[third].abbrev}` : line;
+}
+
+/** What a third team does in a three-team offer, as the calling GM's mail says it. */
+function thirdText(league: League, p: Pick<Proposal, 'tid' | 'legs'>): string {
+  const third = proposalThird(league, p);
+  if (third === null || !p.legs) return '';
+  const name = league.teams[third].name;
+  const takes = p.legs.filter((l) => l.to === third);
+  const from = takes[0]?.tid;
+  const what = assetText(league, { tid: third, pids: takes.flatMap((l) => l.pids), dpids: takes.flatMap((l) => l.dpids) });
+  return from === league.userTid ? ` You'd send ${what} to the ${name}, who have the room for it.` : ` The ${name} take ${what} from us to make the money work.`;
 }
 
 /** Post an offer (if it is still one the team accepts and the user would want), with its inbox message. */
 function post(league: League, pitch: Pitch, rng: Rng, lastDay?: number): Proposal | null {
   const open = openProposals(league);
   if (open.length >= MAX_OPEN || open.some((p) => p.tid === pitch.tid)) return null;
-  // a player is in one open offer at a time (the one it's about, or a part of its package)
-  const players = (o: TradeOffer) => [...o.a.pids, ...o.b.pids];
-  if (open.some((p) => players(p.offer).some((pid) => players(pitch.offer).includes(pid)))) return null;
+  // a player is in one open offer at a time (the one it's about, or a part of its package, a third team's leg too)
+  const players = (o: Pick<Proposal, 'offer' | 'legs'>) => (o.legs ? o.legs.flatMap((l) => l.pids) : [...o.offer.a.pids, ...o.offer.b.pids]);
+  if (open.some((p) => players(p).some((pid) => players(pitch).includes(pid)))) return null;
   const days = rng.int(STANDS[0], STANDS[1]);
   const p: Proposal = {
     id: league.nextProposalId ?? 1,
@@ -203,22 +260,26 @@ function post(league: League, pitch: Pitch, rng: Rng, lastDay?: number): Proposa
     season: league.season,
     day: league.day,
     expires: Math.max(league.day, Math.min(league.day + days, lastDay ?? Infinity)),
+    ...(pitch.legs ? { legs: structuredClone(pitch.legs).map(({ tid, to, pids, dpids }) => ({ tid, to, pids, dpids })) } : {}),
   };
   // every offer is one the team takes and the rules allow, the day it is made
   if (proposalError(league, p)) return null;
   league.nextProposalId = p.id + 1;
   league.proposals = [...open, p];
   const t = league.teams[p.tid];
+  const user = league.userTid;
   const until = standsText(league, p);
-  const ask = p.offer.a.pids.length || p.offer.a.dpids.length ? `for ${assetText(league, p.offer.a)}` : 'and want nothing back';
+  const lead = p.legs ? p.legs.filter((l) => l.tid === user && l.to === p.tid) : [p.offer.a];
+  const toLead = { tid: user, pids: lead.flatMap((l) => l.pids), dpids: lead.flatMap((l) => l.dpids) };
+  const ask = toLead.pids.length || toLead.dpids.length ? `for ${assetText(league, toLead)}` : 'and want nothing back';
   const from = `${t.region} ${t.name} GM`;
   // the same pitch made again this season replaces its earlier mail: one message per pitch, the latest on top
   league.inbox = league.inbox.filter((m) => !(m.season === league.season && m.pitch === pitch.pitch && m.from === from));
   addInbox(league, {
     from,
-    subject: offerSubject(league, p.offer),
+    subject: offerSubject(league, p.offer, proposalThird(league, p)),
     pitch: pitch.pitch,
-    body: `${p.note}\n${sentence(`We'd send ${assetText(league, p.offer.b)} ${ask}`)} ${until}`,
+    body: `${p.note}\n${sentence(`We'd send ${assetText(league, p.offer.b)} ${ask}`)}${thirdText(league, p)} ${until}`,
     tone: 'neutral',
     link: '/office/trade?tab=offers',
     proposal: p.id,
@@ -288,6 +349,12 @@ function buyNote(league: League, t: Team, target: Player): string {
   return lines[hashString(`${league.id}:${league.season}:${league.day}:${target.pid}:note`) % lines.length];
 }
 
+/** Teams that try a three-team offer for one player once their two-team offer fails. */
+const THIRD_TRIES = 2;
+
+/** The user's yes in a three-team offer an AI team builds: fair to him in neutral value, as every offer is (the AI teams answer for themselves). */
+const userAgrees = (league: League, lead: number) => (tid: number, legs: TradeLeg[]) => (tid === league.userTid ? fair(league, userView(league, legs, lead)) : undefined);
+
 /**
  * An AI team wants one of the user's players (70+, not untouchable) that fits its plan, and offers
  * its best package for him (see packageFor). Two players are tried, each with up to six teams.
@@ -299,10 +366,14 @@ function tryBuy(league: League, rng: Rng): Pitch | null {
   for (let k = 0; k < 2 && targets.length; k++) {
     // (any of them alike, on one draw of the stream)
     const target = targets.splice(rng.weighted(targets.map(() => 1)), 1)[0];
+    let thirds = THIRD_TRIES;
     for (const t of rng.shuffle(free(league).filter((x) => fits(league, x, target))).slice(0, 6)) {
       const pkg = packageFor(league, t.tid, { pids: [target.pid], dpids: [] });
-      if (!pkg || !fair(league, pkg.offer)) continue;
-      return { tid: t.tid, offer: pkg.offer, kind: 'buy', note: buyNote(league, t, target), pitch: `buy:${target.pid}` };
+      if (pkg && fair(league, pkg.offer)) return { tid: t.tid, offer: pkg.offer, kind: 'buy', note: buyNote(league, t, target), pitch: `buy:${target.pid}` };
+      // the salary it would have to send back spoils the offer: a third team with room takes it instead
+      if (thirds-- <= 0) continue;
+      const legs = facilitatedDeal(league, t.tid, league.userTid, target, { agrees: userAgrees(league, t.tid) });
+      if (legs) return { tid: t.tid, offer: userView(league, legs, t.tid), legs, kind: 'buy', note: buyNote(league, t, target), pitch: `buy:${target.pid}` };
     }
   }
   return null;
@@ -316,12 +387,23 @@ function tryBuy(league: League, rng: Rng): Pitch | null {
  */
 function trySell(league: League, rng: Rng): Pitch | null {
   const user = league.userTid;
-  // a rebuilding team isn't in the market for veterans
-  if (league.teams[user].strategy === 'rebuild') return null;
   const keep = standardRoster(league, user)
     .sort((a, b) => tradeValue(league, b) - tradeValue(league, a))
     .slice(0, 2)
     .map((p) => p.pid);
+  // a star who has asked his team for a trade (pulse.ts): it calls around, the user included, whatever either team's plan
+  const busy = new Set(openProposals(league).map((p) => p.tid));
+  for (const star of tradeRequests(league).slice(0, 3)) {
+    if (busy.has(star.tid) || untradeable(league, star) || tradedAwayBy(league, star, user) || pitchedLately(league, star.pid, `sell:${star.pid}`)) continue;
+    const ask = makeItWork(league, { a: { tid: user, pids: [], dpids: [] }, b: { tid: star.tid, pids: [star.pid], dpids: [] } }, keep);
+    const note = `${shortName(league, star)} has asked us for a trade. We'd rather make a deal now than lose him for nothing.`;
+    if (ask.offer && fair(league, ask.offer)) return { tid: star.tid, offer: ask.offer, kind: 'sell', note, pitch: `sell:${star.pid}` };
+    // (the salary the user would send back is what spoils it: a third team with room takes it)
+    const legs = facilitatedDeal(league, user, star.tid, star, { keep: new Set([...keep, ...(league.untouchable ?? [])]), agrees: userAgrees(league, star.tid) });
+    if (legs) return { tid: star.tid, offer: userView(league, legs, star.tid), legs, kind: 'sell', note, pitch: `sell:${star.pid}` };
+  }
+  // a rebuilding team isn't in the market for veterans
+  if (league.teams[user].strategy === 'rebuild') return null;
   for (const t of rng.shuffle(free(league).filter((x) => x.strategy === 'rebuild')).slice(0, 4)) {
     const vets = standardRoster(league, t.tid)
       .filter((p) => p.ovr >= 74 && age(league, p) >= 27 && !untradeable(league, p) && !tradedAwayBy(league, p, user) && !pitchedLately(league, p.pid, `sell:${p.pid}`))

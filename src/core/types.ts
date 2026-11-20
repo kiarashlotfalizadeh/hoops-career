@@ -1343,7 +1343,8 @@ export interface InboxMessage {
 
 /**
  * A trade an AI team offers the user. Side a of `offer` is the user's team, side b the AI team.
- * 'buy': it wants one of the user's players; 'sell': a rebuilder offers a veteran; 'dump': a
+ * 'buy': it wants one of the user's players; 'sell': a rebuilder offers a veteran (or a team the
+ * player who has asked it for a trade); 'dump': a
  * taxpayer attaches picks to a contract it wants off its books; 'pick': it wants the user's pick
  * on draft night. The AI accepted it when it was made; it stands until `expires` (a day of
  * `season`) or until it stops being valid.
@@ -1360,6 +1361,12 @@ export interface Proposal {
   expires: number;
   /** It has been in front of the user (Today's Needs you lists every open offer): its date no longer moves (see holdUnseen in proposals.ts). */
   seen?: true;
+  /**
+   * A three-team offer: the deal as its legs (what each team sends another: TradeLeg in trades.ts),
+   * with a third team taking salary so the money works. `offer` is then the user's view of it, added
+   * up: side a all he sends, to anyone; side b (the team that called) all he gets, from anyone.
+   */
+  legs?: { tid: number; to: number; pids: number[]; dpids: number[] }[];
 }
 
 export interface SeasonAwards {
@@ -1683,6 +1690,8 @@ export interface LiveJournal {
    * the one difficulty: a replay plays it as it was. Absent (or null) otherwise.
    */
   court?: [number, number] | null;
+  /** Each side's cohesion at tip-off (home first; SimTeamInput.cohesion): a replay plays it as it was. Absent in a journal from before cohesion counted on the floor: none. */
+  coh?: [number, number];
   /**
    * The other side's tactics as the engine took them, with its coach's game plan for tonight and his
    * tactics rating (the engine reads it for his adjustments at the breaks and his read of your sets):

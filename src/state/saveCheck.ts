@@ -2,6 +2,7 @@
 // imported backup goes through migrate(): the shape is checked, older optional parts are filled in,
 // and anything damaged is repaired or dropped rather than left to break a screen later. Everything
 // here is pure; persistence.ts reads and writes the saves.
+import type { Room } from '../core/league/pulse';
 import { ACTIONS, DEF_ROLES, FREE_AGENT, OFF_SHAPES, SET_IDS, type League, type Player, type Tactics } from '../core/types';
 import { MIN_SAVE_VERSION, SAVE_VERSION } from '../core/constants';
 import { defaultTactics } from '../core/sim/tactics';
@@ -289,12 +290,43 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   // the user's weekly odds: a damaged trail goes (the next week starts it again)
   if (x.oddsTrail !== undefined && !trailIntact(x, x.oddsTrail)) delete x.oddsTrail;
   migrateOwner(x);
+  migratePulse(x);
   migrateReadings(x);
   // god mode's switch and its count of edits: out of shape, they go (god mode off, an unedited league)
   if (x.settings.godMode !== undefined && typeof x.settings.godMode !== 'boolean') delete x.settings.godMode;
   if (x.godEdits !== undefined && !(int(x.godEdits) && x.godEdits >= 0)) delete x.godEdits;
   x.version = SAVE_VERSION;
   return x;
+}
+
+/**
+ * The locker rooms' pulse (league/pulse.ts): a save from when only the user's room was read holds
+ * that room alone, flat, and becomes his team's room; a room out of shape goes (the next weekly
+ * read starts it again), and so does a pulse that is neither.
+ */
+function migratePulse(x: League) {
+  const p = x.pulse as unknown;
+  if (p === undefined) return;
+  const roomIntact = (r: unknown) =>
+    obj(r) &&
+    nums(r.core) &&
+    num(r.cohesion) &&
+    numValues(r.mood) &&
+    numValues(r.low) &&
+    num(r.games) &&
+    obj(r.seen) &&
+    obj(r.asked) &&
+    Object.values(r.asked).every((a) => obj(a) && int(a.season) && int(a.day));
+  if (!obj(p) || !int(p.season) || !int(p.day)) return void delete x.pulse;
+  if (!obj(p.rooms)) {
+    const { season, day, ...room } = p;
+    x.pulse = { season, day, rooms: roomIntact(room) ? { [x.userTid]: { ...(room as unknown as Room), out: 0 } } : {} };
+    return;
+  }
+  for (const [tid, r] of Object.entries(p.rooms)) {
+    if (!x.teams[Number(tid)] || !roomIntact(r)) delete p.rooms[tid];
+    else if (!num((r as Record<string, unknown>).out)) (r as Record<string, unknown>).out = 0;
+  }
 }
 
 /** A measured reading in shape: its shrunk worth, the reading as measured and its standard error. */
@@ -763,6 +795,7 @@ function liveIntact(l: League, j: unknown): boolean {
   if (j.edge !== undefined && !num(j.edge)) return false;
   // (the edge on the court Easy or Hard gave at tip-off, in a journal from before the one difficulty: a pair of numbers, or null)
   if (j.court !== undefined && j.court !== null && !(Array.isArray(j.court) && j.court.length === 2 && j.court.every(num))) return false;
+  if (j.coh !== undefined && !(Array.isArray(j.coh) && j.coh.length === 2 && j.coh.every(num))) return false;
   const r = u.rotation;
   if (!obj(r) || !nums(r.order) || !numValues(r.minutes) || !nums(r.closers) || !nums(r.restB2B) || !numValues(r.caps)) return false;
   if (j.seen !== undefined && !(nums(j.seen) && j.seen.length === 2)) return false;
@@ -843,6 +876,28 @@ function rfaIntact(l: League, p: Player) {
 function proposalIntact(l: League, p: unknown): boolean {
   if (!obj(p) || !num(p.id) || !num(p.tid) || !num(p.season) || !num(p.expires) || !obj(p.offer)) return false;
   const pick = new Set(l.draftPicks.map((d) => d.dpid));
+  // a three-team offer's legs: each between two teams of the league, its players and picks still there
+  if (
+    p.legs !== undefined &&
+    !(
+      Array.isArray(p.legs) &&
+      p.legs.length > 0 &&
+      p.legs.every(
+        (g) =>
+          obj(g) &&
+          num(g.tid) &&
+          num(g.to) &&
+          g.tid !== g.to &&
+          !!l.teams[g.tid as number] &&
+          !!l.teams[g.to as number] &&
+          nums(g.pids) &&
+          nums(g.dpids) &&
+          g.pids.every((pid) => !!l.players[pid]) &&
+          g.dpids.every((d) => pick.has(d)),
+      )
+    )
+  )
+    return false;
   return [p.offer.a, p.offer.b].every(
     (s) =>
       obj(s) &&

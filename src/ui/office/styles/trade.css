@@ -1139,6 +1139,26 @@ body:has(.simbar) .fo-dock {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  /* the deal's own buttons end the screen: clear of the tab bar when the page is scrolled to them */
+  margin-bottom: 24px;
+  scroll-margin-bottom: 24px;
+}
+/* a deal being built owns the foot of the screen, as the two-team builder's dock does: the play row
+   steps aside (a running sim's progress still shows), so it never sits over the deal's buttons */
+body:has(.fo-tt-verdict) .continue:not(.is-busy) {
+  display: none;
+}
+.fo-tt-btns {
+  display: flex;
+  gap: 8px;
+}
+.fo-tt-btns .btn {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.fo-tt-why {
+  font-size: 13px;
+  color: var(--text-dim);
 }
 .fo-tt-v {
   display: flex;

@@ -9,19 +9,21 @@ import { testLeague } from '../../state/__tests__/fixtures';
 import { loadLeague, migrate, saveLeague } from '../../state/persistence';
 import {
   DRESS_MIN,
+  checkForceDeal,
   checkForceTrade,
   checkPlayerEdit,
   checkTeamEdit,
   createPlayer,
   editPlayer,
   editTeam,
+  forceDeal,
   forceTrade,
   healTeam,
   setOwnerConfidence,
   yearsLeft,
 } from '../league/godMode';
 import { contractSeason, freeAgents, payroll, playerName, standardRoster, teamPlayers } from '../league/helpers';
-import { evaluateTrade } from '../league/trades';
+import { evaluateDeal, evaluateTrade, legsOf } from '../league/trades';
 import { askingContract, marketSalary, preferredYears } from '../league/contracts';
 import { registryProblems } from '../league/coaches';
 import { simDay } from '../league/season';
@@ -306,6 +308,44 @@ describe('god mode', () => {
       expect(checkForceTrade(l, offer).errors[0]).toMatch(/isn't with/);
       expect(checkForceTrade(l, { a: { tid: A, pids: [], dpids: [] }, b: { tid: B, pids: [], dpids: [] } }).errors[0]).toMatch(/empty/);
       expect(() => forceTrade(l, { a: { tid: A, pids: [], dpids: [] }, b: { tid: A, pids: [], dpids: [] } })).toThrow();
+    }
+
+    // a forced deal is its legs: three teams at once, whatever their GMs say; the same checks on its shape
+    {
+      const l = fresh();
+      const [x, y, z] = [best(l, A)[0], best(l, B)[0], worst(l, l.userTid)[0]];
+      const ring = [
+        { tid: A, to: l.userTid, pids: [x.pid], dpids: [] },
+        { tid: B, to: A, pids: [y.pid], dpids: [] },
+        { tid: l.userTid, to: B, pids: [z.pid], dpids: [] },
+      ];
+      expect(evaluateDeal(l, ring).accept).toBe(false);
+      expect(checkForceDeal(l, ring).errors).toEqual([]);
+      forceDeal(l, ring);
+      expect([x.tid, y.tid, z.tid]).toEqual([l.userTid, A, B]);
+      expect(l.godEdits).toBe(1);
+      expect(l.news[l.news.length - 1].text.startsWith('Three-team trade: ')).toBe(true);
+      for (const [p, tid] of [
+        [x, l.userTid],
+        [y, A],
+        [z, B],
+      ] as const)
+        expect(l.teams[tid].tactics.offense.roles[p.pid]).toBeDefined();
+      // nobody is where the legs say any more; a leg to itself, a fourth team and a player sent twice are out of shape
+      expect(checkForceDeal(l, ring).errors[0]).toMatch(/isn't with/);
+      expect(() => forceDeal(l, ring)).toThrow();
+      expect(checkForceDeal(l, [{ tid: A, to: A, pids: [], dpids: [] }]).errors).toContain('A trade is between two teams.');
+      const four = l.teams.find((t) => ![A, B, l.userTid].includes(t.tid))!.tid;
+      const again = [
+        { tid: l.userTid, to: A, pids: [x.pid], dpids: [] },
+        { tid: A, to: B, pids: [y.pid], dpids: [] },
+        { tid: B, to: four, pids: [z.pid], dpids: [] },
+      ];
+      expect(checkForceDeal(l, again).errors).toEqual(['A trade is between two teams or three.']);
+      expect(checkForceDeal(l, [...again.slice(0, 2), { tid: l.userTid, to: B, pids: [x.pid], dpids: [] }]).errors).toContain('A player or pick is in the deal twice.');
+      // (a two-team offer forced is the same check on its two legs)
+      const two = { a: { tid: l.userTid, pids: [x.pid], dpids: [] }, b: { tid: A, pids: [y.pid], dpids: [] } };
+      expect(checkForceTrade(l, two)).toEqual(checkForceDeal(l, legsOf(two)));
     }
 
     // the arrivals' roles are set at once; a swap needs both teams' own firsts, staying put

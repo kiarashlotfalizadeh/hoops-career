@@ -11,6 +11,7 @@
 // points); winProb.test.ts keeps it honest on a smaller sample.
 
 import { GAME } from '../constants';
+import { an } from '../format';
 import { clamp } from '../random';
 import type { GameResult, PbpEntry } from '../types';
 import { HOME_EDGE, phi } from './projection';
@@ -257,9 +258,9 @@ export const marginWords = (abbrev: string, margin: number) => (margin === 0 ? '
 
 /** What a possession did to the score, from one team's side (`before`/`after`: its margin): "took the lead", "tied it", "cut it to 3"... */
 export function swingWords(before: number, after: number): string {
-  if (after === before) return after > 0 ? `held a ${after}-point lead` : after < 0 ? `got a stop down ${-after}` : 'got a stop in a tie game';
+  if (after === before) return after > 0 ? `held ${an(after)} ${after}-point lead` : after < 0 ? `got a stop down ${-after}` : 'got a stop in a tie game';
   if (after > before) {
-    if (after > 0 && before <= 0) return `took a ${after}-point lead`;
+    if (after > 0 && before <= 0) return `took ${an(after)} ${after}-point lead`;
     if (after === 0) return 'tied it';
     if (after < 0) return `cut it to ${-after}`;
     return `stretched the lead to ${after}`;

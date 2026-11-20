@@ -5,6 +5,7 @@
 import type { BoxLine, GameResult, League, NewsItem, ScheduledGame, TeamBox } from '../../types';
 import { gameScore } from '../awards';
 import { fmtDate } from '../helpers';
+import { An, an } from '../../format';
 import { worldRng } from '../world';
 import type { MediaState } from '../media';
 import { Voice, confName, last, name, nightLine, nth, perGame, poss, publish, rebOf, rec, recOf, tsOf, type Story } from './voice';
@@ -189,7 +190,7 @@ function fifty(league: League, v: Voice, res: GameResult, side: TeamBox, opp: Te
   const body = [
     v.say('fifty-b1', [
       `${L} finished with ${nightLine(b)} in ${Math.round(b.min)} minutes.${avg !== null ? ` He came in averaging ${avg.toFixed(1)}.` : ''}`,
-      `${avg !== null ? `A ${avg.toFixed(1)}-a-game scorer coming in, ${L}` : L} had ${nightLine(b)}, in ${Math.round(b.min)} minutes.`,
+      `${avg !== null ? `${An(avg)} ${avg.toFixed(1)}-a-game scorer coming in, ${L}` : L} had ${nightLine(b)}, in ${Math.round(b.min)} minutes.`,
     ]),
     fifties <= 1
       ? `It's the league's first 50-point game of the ${res.type === 'playoffs' ? 'postseason' : 'season'}.`
@@ -211,8 +212,8 @@ function comeback(league: League, v: Voice, res: GameResult, w: TeamBox, l: Team
   const head = v.say('comeback', [
     `The ${WN} rally from ${lead} down to beat the ${LN}`,
     `Down ${lead}, the ${WN} come all the way back`,
-    `The ${LN} blow a ${lead}-point lead`,
-    `The ${WN} erase a ${lead}-point hole against the ${LN}`,
+    `The ${LN} blow ${an(lead)} ${lead}-point lead`,
+    `The ${WN} erase ${an(lead)} ${lead}-point hole against the ${LN}`,
     `${lead} down, and the ${WN} still win`,
   ]);
   const hero = topScorer(w);
@@ -274,7 +275,7 @@ function winRun(league: League, v: Voice, res: GameResult, w: TeamBox, l: TeamBo
     `No stopping the ${N}: ${n} wins running`,
     `Make it ${n}: the ${N} beat the ${O}`,
   ]);
-  const dek = `A ${score(res)} win over the ${O} puts the ${N} at ${standing(league, w.tid)}.`;
+  const dek = `${An(Math.max(res.home.pts, res.away.pts))} ${score(res)} win over the ${O} puts the ${N} at ${standing(league, w.tid)}.`;
   const f = runFacts(league, w.tid, n);
   const lp = f.leader ? league.players[f.leader.pid] : undefined;
   const lastLoss = lastGames(league, w.tid, n + 1)[n];
@@ -313,7 +314,7 @@ function skid(league: League, v: Voice, res: GameResult, w: TeamBox, l: TeamBox,
 function skidOver(league: League, v: Voice, res: GameResult, w: TeamBox, l: TeamBox, n: number) {
   const N = league.teams[w.tid].name;
   const head = v.say('skid-over', [
-    `The ${N} win at last, ending a ${n}-game skid`,
+    `The ${N} win at last, ending ${an(n)} ${n}-game skid`,
     `${n} losses, then a win: the ${N} beat the ${league.teams[l.tid].name}`,
     `The ${poss(N)} ${n}-game slide is over`,
   ]);

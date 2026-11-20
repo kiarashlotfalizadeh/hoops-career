@@ -16,7 +16,7 @@ import { CAP } from '../constants';
 import { addInbox, fmtDate, freeAgents, playerName, standardRoster, teamPlayers, twoWayRoster, TWO_WAY_MAX } from './helpers';
 import { FIRED_REASON, askingContract, releaseDeadMoney, releasePlayer, releasedBy, valueScore } from './contracts';
 import { marqueeFA, offerBlockedReason, signingClosedReason, userOffer } from './freeAgency';
-import { acceptProposal, declineProposal, offerSubject, openProposals, proposalError } from './proposals';
+import { acceptProposal, declineProposal, offerSubject, openProposals, proposalError, proposalThird } from './proposals';
 import { restrictedFreeAgents, sheetDecisionBlocked, userDecideSheet } from './rfa';
 import { tenDayBlockedReason, tenDayEndBlockedReason, tenDayRestBlockedReason, userEndTenDay, userTenDay, userTenDayRest } from './tenDay';
 import { autoDraftUserPick, continueDraft } from './season';
@@ -448,7 +448,7 @@ export function agenda(league: League): AgendaItem[] {
       kind: 'tradeOffer',
       required: false,
       // the inbox's subject, and the other GM's pitch in his name (it isn't your staff talking)
-      title: offerSubject(league, pr.offer),
+      title: offerSubject(league, pr.offer, proposalThird(league, pr)),
       line: `${league.teams[pr.tid].abbrev} GM: “${pr.note}”`,
       tone: 'info',
       to: `/office/trade?offer=${pr.id}`,
@@ -502,13 +502,21 @@ export function agenda(league: League): AgendaItem[] {
       kind: 'tradeRequest',
       required: false,
       title: `${playerName(p)} has asked for a trade`,
-      line: r ? `He expects ${r.expects} minutes a game and plays ${r.plays}. He won't re-sign while it stands.` : "He won't re-sign while it stands.",
-      detail: 'A few weeks at his minutes and he withdraws it. A trade settles it too. Left alone, he stays and leaves when his deal is up.',
+      line:
+        r?.why === 'losing'
+          ? "He asked out of a losing team. He won't re-sign while it stands."
+          : r
+            ? `He expects ${r.expects} minutes a game and plays ${r.plays}. He won't re-sign while it stands.`
+            : "He won't re-sign while it stands.",
+      detail:
+        r?.why === 'losing'
+          ? 'Get the team back near .500 and he withdraws it. A trade settles it too. Left alone, he stays and leaves when his deal is up.'
+          : 'A few weeks at his minutes and he withdraws it. A trade settles it too. Left alone, he stays and leaves when his deal is up.',
       tone: 'bad',
       to: `/player/${p.pid}`,
       pids: [p.pid],
       choices: [
-        { label: 'Set his minutes', action: done, to: '/team/rotation' },
+        ...(r?.why === 'losing' ? [] : [{ label: 'Set his minutes', action: done, to: '/team/rotation' }]),
         { label: 'Shop him', action: done, to: `/office/trade?give=${p.pid}` },
         { label: 'He stays', action: done },
       ],
@@ -617,8 +625,24 @@ export function resolveAgenda(league: League, a: AgendaAction): { ok: boolean; t
   }
 }
 
-/** Start a new league's guide (createLeague), with a welcome from the staff (none with teaching off). */
-export function startGuide(league: League) {
+/**
+ * Start a new league's guide (createLeague), with a welcome from the staff (none with teaching off).
+ * A GM-only career (create.ts's Role) starts with the coaching guide put away, as if he had hidden
+ * it: the staff says what it runs, and Today's Guide link brings the checklist back if he wants the bench.
+ */
+export function startGuide(league: League, role: 'coach' | 'gm' = 'coach') {
+  if (role === 'gm') {
+    league.onboarding = { done: [], hidden: true };
+    if (league.settings.teaching === false) return;
+    addInbox(league, {
+      from: 'Assistant Coach',
+      subject: 'The staff has the bench',
+      body: 'We set the rotation, pick the playbook and make the calls in games. You run the front office. Play or sim to the next game. Want the bench? Change anything in Team and it is yours, or bring the guide back from Today.',
+      tone: 'good',
+      link: '/',
+    });
+    return;
+  }
   league.onboarding = { done: [] };
   if (league.settings.teaching === false) return;
   addInbox(league, {

@@ -156,7 +156,22 @@ export interface CreateOpts {
   id?: string;
   /** Cut AI rosters to 15 at creation (default). The seed builder keeps everyone to calibrate them. */
   preseasonCuts?: boolean;
+  /** How the career starts (see Role): absent, GM and head coach, as ever. */
+  role?: Role;
 }
+
+/**
+ * How a career starts. Not a mode: a preset over switches that already exist, each of which the
+ * user can still throw himself. 'coach' (GM and head coach): the staff brings its in-game tactics
+ * calls to him, and the first games' guide walks him through the bench. 'gm' (GM only): the staff
+ * makes those calls itself (Settings.liveStaff 'auto'), keeps adjusting at the breaks of simmed
+ * games (Tactics.manage.assistantAdjusts), and the coaching guide is put away (Today brings it
+ * back). Either way the staff runs the rotation and the playbook until he changes one.
+ */
+export type Role = 'coach' | 'gm';
+
+/** The settings a role starts with. */
+export const roleSettings = (role: Role): Pick<Settings, 'liveStaff'> => ({ liveStaff: role === 'gm' ? 'auto' : 'ask' });
 
 export function defaultSettings(): Settings {
   return { injuries: true, jobSecurity: true, liveSpeed: 2 };
@@ -314,7 +329,7 @@ export function createLeague(opts: CreateOpts): League {
     season,
     phase: 'preseason',
     day: 0,
-    settings: opts.settings,
+    settings: { ...opts.settings, ...(opts.role ? roleSettings(opts.role) : {}) },
     teams,
     players: {},
     draftPicks: [],
@@ -503,7 +518,9 @@ export function createLeague(opts: CreateOpts): League {
     tone: 'good',
     link: '/office/owner',
   });
-  startGuide(league);
+  // (a GM-only career: the assistant's adjustments in simmed games are on, whatever a preset carried)
+  if (opts.role === 'gm') delete league.teams[league.userTid].tactics.manage.assistantAdjusts;
+  startGuide(league, opts.role);
   const over = standard.length - CAP.rosterMax;
   if (over > 0) {
     const cuts = cutOrder(league, standard).slice(0, over);

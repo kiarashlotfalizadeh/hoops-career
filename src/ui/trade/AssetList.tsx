@@ -5,7 +5,7 @@ import { Check, ChevronDown } from 'lucide-react';
 import type { DraftPick, League, Player } from '../../core/types';
 import { teamPlayers } from '../../core/league/helpers';
 import { pickLabel, untradeable, type TradeOffer } from '../../core/league/trades';
-import { availability, valueTier } from '../../core/league/tradeFinder';
+import { availability, onBlock, valueTier } from '../../core/league/tradeFinder';
 import { playerAge, salaryFor } from '../../core/playerGen';
 import { TeamLogo } from '../components/TeamLogo';
 import { Ovr } from '../components/ui';
@@ -49,7 +49,7 @@ export function AssetList({
   const leaving = all.filter((p) => untradeable(league, p)?.kind === 'expiring');
   const players = all.filter((p) => !leaving.includes(p));
   // the ones his team would move come first, under their own divider: the flag no longer crowds each name
-  const shopped = new Set(players.filter((p) => availability(league, p) === 'block').map((p) => p.pid));
+  const shopped = new Set(players.filter((p) => onBlock(availability(league, p))).map((p) => p.pid));
   const groups = shopped.size
     ? [
         { k: 'On the block', ps: players.filter((p) => shopped.has(p.pid)) },

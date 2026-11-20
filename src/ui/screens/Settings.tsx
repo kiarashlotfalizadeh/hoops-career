@@ -174,7 +174,7 @@ export default function Settings() {
                 on={device.gameSound}
                 onChange={(v) => setDevicePref('gameSound', v)}
                 label="Game sounds"
-                help="The ball, the rim, the whistle, the horn and the crowd in a live game. The speaker on the court switches it too."
+                help="The ball, the whistle and the crowd in a live game. A chime when a trade, a pick or a milestone lands."
               />
               <Toggle
                 on={device.uiSound}

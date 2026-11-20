@@ -1119,7 +1119,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
           tenDayTally.ai.add(p.pid);
           if (p.contract.tenDay.hardship) tenDayTally.hardship.add(p.pid);
         }
-      trades += L.news.filter((x) => x.kind === 'trade' && x.text.startsWith('Trade: ') && x.id >= lastId).length;
+      trades += L.news.filter((x) => TR.isTradeNews(x) && x.id >= lastId).length;
       buyouts += L.news.filter((x) => x.kind === 'release' && x.id >= lastId && x.text.includes('bought out')).length;
       lastId = L.nextMsgId;
       // a player can't be signed on waivers: one on a roster now with his old contract was claimed, and
@@ -1143,7 +1143,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
         const r = P.acceptProposal(L, open.id);
         if (!r.ok) bad('open trade offer refused', `#${open.id} ${open.kind}: ${r.reason}`);
         accepted = `${open.kind} with ${L.teams[open.tid].abbrev}`;
-        trades += L.news.filter((x) => x.kind === 'trade' && x.text.startsWith('Trade: ') && x.id >= lastId).length;
+        trades += L.news.filter((x) => TR.isTradeNews(x) && x.id >= lastId).length;
         lastId = L.nextMsgId;
         check();
       }

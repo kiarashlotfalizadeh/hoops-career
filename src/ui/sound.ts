@@ -3,9 +3,9 @@
 // works offline and can be as loud, as long and as many as the moment needs. One context for the
 // app, opened by the first touch (browsers keep audio shut until then), with everything through one
 // limiter so a dunk over a roaring crowd never clips. Two buses: the game's (the ball, the rim, the
-// whistle, the horns, the crowd) and the interface's (a tick under a tap). The device's settings
-// (ui/device.ts) open and shut each; nothing here knows what a basketball game is: live/gameSound.ts
-// decides what plays when.
+// whistle, the horns, the crowd, and the chime when a deal or a moment lands) and the interface's (a
+// tick under a tap). The device's settings (ui/device.ts) open and shut each; nothing here knows what
+// a basketball game is: live/gameSound.ts and ui/cues.ts decide what plays when.
 import { devicePrefs, onDevicePrefs } from './device';
 
 export type Sfx =
@@ -28,7 +28,7 @@ export type Sfx =
   | 'groan'
   | 'ooh';
 
-const GAME: ReadonlySet<Sfx> = new Set<Sfx>(['bounce', 'swish', 'rim', 'board', 'dunk', 'block', 'squeak', 'whistle', 'buzzer', 'horn', 'cheer', 'roar', 'groan', 'ooh']);
+const GAME: ReadonlySet<Sfx> = new Set<Sfx>(['chime', 'bounce', 'swish', 'rim', 'board', 'dunk', 'block', 'squeak', 'whistle', 'buzzer', 'horn', 'cheer', 'roar', 'groan', 'ooh']);
 
 type Ctx = AudioContext;
 
@@ -214,9 +214,10 @@ const play: Record<Sfx, (r: Rig, t: number, k: number) => void> = {
     tone(r, env(r, r.ui, t, 0.2, 0.002, 0.04), 'sine', 1200, 1200, t, 0.05);
     tone(r, env(r, r.ui, t + 0.055, 0.2, 0.002, 0.06), 'sine', 800, 800, t + 0.055, 0.07);
   },
-  chime: (r, t) => {
-    tone(r, env(r, r.ui, t, 0.2, 0.004, 0.22), 'triangle', 784, 784, t, 0.24);
-    tone(r, env(r, r.ui, t + 0.09, 0.2, 0.004, 0.3), 'triangle', 1175, 1175, t + 0.09, 0.32);
+  // something landed (a trade, your pick, a milestone): a small two-note yes, with the game's sounds
+  chime: (r, t, k) => {
+    tone(r, env(r, r.game, t, 0.13 * k, 0.004, 0.22), 'triangle', 784, 784, t, 0.24);
+    tone(r, env(r, r.game, t + 0.09, 0.13 * k, 0.004, 0.3), 'triangle', 1175, 1175, t + 0.09, 0.32);
   },
   // the ball on the floor: a low knock that drops in pitch, and the slap of leather on wood
   bounce: (r, t, k) => {

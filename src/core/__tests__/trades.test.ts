@@ -21,6 +21,7 @@ import {
   cashRoom,
   cashValueFor,
   dealTerms,
+  dealDelta,
   dealTeams,
   evaluateDeal,
   evaluateTrade,
@@ -48,12 +49,14 @@ import {
   validateDeal,
   validateTrade,
   CORNERSTONE,
+  MAX_FIRSTS_OUT,
   USER_RELIEF_SHARE,
   type TradeLeg,
   type TradeOffer,
   type TradeSide,
 } from '../league/trades';
-import { canMakeWork, counterOffers, makeItWork } from '../league/tradeHelp';
+import { canMakeWork, counterOffers, dealAddsText, makeDealWork, makeItWork } from '../league/tradeHelp';
+import { facilitatedDeal } from '../league/aiTrades';
 import { neutralBalance } from '../league/tradePackages';
 import { aiChoose, draftPlayer, ensureFuturePicks, nextPick, runLottery } from '../league/draft';
 import { shareRevenue } from '../league/finances';
@@ -919,6 +922,79 @@ it('the rules: back-to-back firsts, protections going home, no trading straight 
     expect(
       validateDeal(l, [leg(U, AI, { dpids: [f1.dpid] }), leg(U, THIRD, { dpids: [f2.dpid] }), leg(AI, U, { pids: [theirs.pid] })]).some((e) => e.includes('back-to-back drafts')),
     ).toBe(true);
+    // "what would make this work?", three teams: the user adds until the rules pass and both other GMs say yes
+    {
+      const stuck = evaluateDeal(l, robbed);
+      expect(stuck.accept).toBe(false);
+      const work = makeDealWork(l, robbed);
+      if (!work.legs) throw new Error(`no way found: ${work.why}`);
+      const got = work.legs;
+      expect(validateDeal(l, got)).toEqual([]);
+      expect(evaluateDeal(l, got).accept).toBe(true);
+      // everything that was in the deal still is, where it was going; what was added says who sends it and who gets it
+      for (const x of robbed) for (const pid of x.pids) expect(got.find((y) => y.tid === x.tid && y.to === x.to)!.pids).toContain(pid);
+      expect(work.added.length).toBeGreaterThan(0);
+      // (the team that only gave is paid by the user: nobody else's assets are spent for him, but a contract an AI team sends back to match)
+      expect(work.added.some((a) => a.from === U && a.to === THIRD)).toBe(true);
+      expect(work.added.filter((a) => a.from !== U).every((a) => a.to === U && a.kind === 'player')).toBe(true);
+      expect(dealAddsText(l, work.added)).toContain(` to ${l.teams[THIRD].abbrev}`);
+      // a deal they take as it is needs nothing; an untouchable is never spent; rules no asset fixes say so
+      expect(makeDealWork(l, ring)).toMatchObject({ legs: ring, added: [] });
+      const spent = work.added.filter((a) => a.from === U && a.kind === 'player').map((a) => a.id);
+      l.untouchable = spent;
+      const again = makeDealWork(l, robbed);
+      if (again.legs) for (const pid of spent) expect(again.legs.flatMap((x) => x.pids)).not.toContain(pid);
+      delete l.untouchable;
+      expect(makeDealWork(l, [...ring, leg(U, THIRD, { pids: [mine.pid] })])).toEqual({ legs: null, why: 'rules' });
+    }
+    // an AI three-team deal: a buyer over the cap gets a star, and a third team with room takes the salary the seller can't
+    {
+      const g = termsLeague(7);
+      const [B, S, F] = [3, 4, 5];
+      g.teams[B].strategy = 'contend';
+      g.teams[S].strategy = 'rebuild';
+      g.teams[F].strategy = 'rebuild';
+      const rb = standardRoster(g, B).sort((a, b) => b.ovr - a.ovr || a.pid - b.pid);
+      const rs = standardRoster(g, S).sort((a, b) => b.ovr - a.ovr || a.pid - b.pid);
+      // the buyer: three good players it keeps, a mid contract to send out, and youth the seller would want
+      rb.slice(0, 3).forEach((p) => shape(g, p, 86, 27, 38000));
+      shape(g, rb[3], 72, 29, 24000);
+      shape(g, rb[4], 76, 21, 4000, 3);
+      shape(g, rb[5], 74, 22, 3500, 3);
+      rb.slice(6).forEach((p) => shape(g, p, 62, 27, 2500, 1));
+      // the seller: a star on a big deal, and a payroll that can't take a mid contract back
+      const vet = shape(g, rs[0], 85, 31, 30000);
+      rs.slice(1, 6).forEach((p) => shape(g, p, 78, 26, 30000));
+      rs.slice(6).forEach((p) => shape(g, p, 62, 24, 2500, 1));
+      // the third team: nothing on its books
+      standardRoster(g, F).forEach((p) => shape(g, p, 66, 24, 2500, 1));
+      const legs = facilitatedDeal(g, B, S, vet);
+      expect(legs).not.toBeNull();
+      expect(new Set(dealTeams(legs!))).toEqual(new Set([B, S, F]));
+      expect(validateDeal(g, legs!)).toEqual([]);
+      // all three sign off on all they send against all they get
+      for (const tid of [B, S, F]) expect(dealDelta(g, legs!, tid)).toBeGreaterThanOrEqual(0);
+      expect(evaluateDeal(g, legs!).accept).toBe(true);
+      // the star to the buyer; the salary to the third team, paid for in picks; the seller paid in youth and picks
+      expect(legs!.find((x) => x.tid === S && x.to === B)!.pids).toEqual([vet.pid]);
+      const toThird = legs!.find((x) => x.tid === B && x.to === F)!;
+      expect(toThird.pids).toEqual([rb[3].pid]);
+      expect(legs!.some((x) => x.tid === F)).toBe(false);
+      const toSeller = legs!.find((x) => x.tid === B && x.to === S)!;
+      expect(toSeller.pids.length + toSeller.dpids.length).toBeGreaterThan(0);
+      expect(toSeller.pids.every((pid) => playerAge(g.players[pid], g.season) <= 25)).toBe(true);
+      // (its best stay home, and no more than two firsts leave in all)
+      for (const p of rb.slice(0, 3)) expect(legs!.flatMap((x) => x.pids)).not.toContain(p.pid);
+      const firsts = legs!.flatMap((x) => x.dpids).filter((d) => g.draftPicks.find((x) => x.dpid === d)!.round === 1).length;
+      expect(firsts).toBeLessThanOrEqual(MAX_FIRSTS_OUT);
+      executeDeal(g, legs!);
+      expect([vet.tid, rb[3].tid]).toEqual([B, F]);
+      expect(g.news[g.news.length - 1].text.startsWith('Three-team trade: the ')).toBe(true);
+      // a buyer with the room to take him needs no third team: that is a two-team deal
+      const h = termsLeague(7);
+      standardRoster(h, B).forEach((p) => shape(h, p, 66, 24, 2500, 1));
+      expect(facilitatedDeal(h, B, S, shape(h, standardRoster(h, S)[0], 85, 31, 30000))).toBeNull();
+    }
     // made: everyone lands where his leg sent him, the picks too, and the news tells it by who got what
     const pick = own(l, THIRD, l.season + 3, 2);
     const done = [...ring.slice(0, 2), leg(THIRD, U, { pids: [third.pid], dpids: [pick.dpid] })];

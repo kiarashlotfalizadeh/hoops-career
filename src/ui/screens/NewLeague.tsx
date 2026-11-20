@@ -5,12 +5,12 @@ import { FRANCHISES, BBREF_TO_TID } from '../../core/teams';
 import { ordinal, rankOf } from '../../core/format';
 import { TeamLogo } from '../components/TeamLogo';
 import { Fit, More, Ovr, Section, Segmented, Spinner, Toggle } from '../components/ui';
-import { TEACHING_HELP, rememberTeaching, teachingDefault } from '../settingsOptions';
+import { ROLES, TEACHING_HELP, rememberRole, rememberTeaching, roleDefault, teachingDefault } from '../settingsOptions';
 import { slabVars } from '../teamColors';
 import './start.css';
 import { loadSeed } from '../../data/seedLoader';
 import type { SeedData } from '../../core/league/create';
-import { createLeague, defaultSettings } from '../../core/league/create';
+import { createLeague, defaultSettings, type Role } from '../../core/league/create';
 import { buildOvrScale, ovrRaw, toDisplay } from '../../core/ratings';
 import { useStore } from '../../state/store';
 import type { Settings } from '../../core/types';
@@ -49,6 +49,7 @@ export default function NewLeague() {
   const [name, setName] = useState('My League');
   const [coach, setCoach] = useState('');
   const [settings, setSettings] = useState<Settings>(() => ({ ...defaultSettings(), teaching: teachingDefault() }));
+  const [role, setRole] = useState<Role>(roleDefault);
   const [busy, setBusy] = useState(false);
   // the league still open behind the main menu couldn't be saved: the user decides before it's replaced
   const [unsaved, setUnsaved] = useState(false);
@@ -167,7 +168,7 @@ export default function NewLeague() {
     }
     await new Promise((r) => setTimeout(r, 30));
     try {
-      const l = createLeague({ name: name.trim() || 'My League', userTid: tid!, coachName: coach.trim() || 'Coach', settings, seed: kind === 'real' ? seed : null, ...made });
+      const l = createLeague({ name: name.trim() || 'My League', userTid: tid!, coachName: coach.trim() || 'Coach', settings, role, seed: kind === 'real' ? seed : null, ...made });
       setLeague(l);
       // if it fails, play on: the save banner says so and offers a backup, and later saves retry
       await useStore.getState().save();
@@ -360,6 +361,23 @@ export default function NewLeague() {
                 <span className="nl-label">League</span>
                 <input className="input" value={name} maxLength={50} onChange={(e) => setName(e.target.value)} />
               </label>
+            </div>
+          </Section>
+          {/* a preset over the staff's own switches (Settings has each): who coaches from day one */}
+          <Section title="Your role">
+            <div className="card nl-role">
+              <Segmented
+                value={role}
+                onChange={(r) => {
+                  setRole(r);
+                  rememberRole(r);
+                }}
+                label="Your role"
+                options={ROLES.map(({ id, label }) => ({ id, label }))}
+              />
+              <p className="nl-role-line" aria-live="polite">
+                {ROLES.find((r) => r.id === role)!.line}
+              </p>
             </div>
           </Section>
           <Section title="Gameplay">

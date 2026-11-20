@@ -47,6 +47,7 @@ import { applyAccent } from './teamColors';
 import { useToastHost } from './toastHost';
 import { haptic } from '../native';
 import { armSound, sfx } from './sound';
+import { useCues } from './cues';
 import { useTheme } from './theme';
 import { useChanged, useIndicator } from './motion';
 import { TABS, tabFor, type TabId } from './nav';
@@ -709,6 +710,7 @@ function useUiSound() {
 
 export function App() {
   useUiSound();
+  useCues();
   return (
     <HashRouter>
       <ErrorBoundary>

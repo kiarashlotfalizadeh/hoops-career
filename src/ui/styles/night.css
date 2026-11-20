@@ -38,6 +38,9 @@
   --brand: #ff7b63;
   --brand-ink: #1c0a06;
   --accent-2: #e0a52e;
+  /* a link before any team is yours (the main menu, a new league's first step): the default blue,
+     lifted to read on the dark stock. applyAccent sets a team's own over it, on the root itself */
+  --team-text: #7cb0ff;
   /* signals, lifted: 4.5:1 as text on every night ground and on their own 12% wash */
   --good: #6fdc9c;
   --bad: #ff9d90;

@@ -18,6 +18,7 @@ export function TierLine({ tier, avail, inline = false }: { tier: ValueTier; ava
     <Tag className={inline ? 'fo-tier inline' : 'fo-tier'}>
       <span className={`fo-tier-v ${tier === 'Negative' ? 'bad' : ''}`}>{tier} value</span>
       {avail === 'block' && <span className="good bold"> · On the block</span>}
+      {avail === 'asked' && <span className="good bold"> · Asked for a trade</span>}
       {avail === 'franchise' && <span className="dim2"> · Cornerstone</span>}
     </Tag>
   );
@@ -26,6 +27,7 @@ export function TierLine({ tier, avail, inline = false }: { tier: ValueTier; ava
 /** Whether his team looks ready to move him, or builds around him, as a flag after his name (nothing for anyone else). */
 export function AvailFlag({ avail }: { avail: Availability }) {
   if (avail === 'block') return <span className="fo-flag good">On the block</span>;
+  if (avail === 'asked') return <span className="fo-flag good">Asked for a trade</span>;
   if (avail === 'franchise') return <span className="fo-flag">Cornerstone</span>;
   return null;
 }

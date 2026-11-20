@@ -13,7 +13,7 @@ import type { BoxLine, GameResult, League, NewsItem, PbpEntry, Player, Scheduled
 import { worldRng } from '../league/world';
 import { addNews, andList, dateToDay, fmtDate, playerName } from '../league/helpers';
 import { seasonLabel } from '../constants';
-import { madeAtt, ordinal, plural } from '../format';
+import { an, madeAtt, ordinal, plural } from '../format';
 import { FRANCHISES } from '../teams';
 import { careerTotals, markText, milestonesIn, newsworthy, type MilestoneStat } from './milestones';
 import { REC_LABEL, bookFrom, gameMark, recordReach, recordsHeld, recordWhat, type HeldRecord, type RecStat } from '../league/records';
@@ -718,8 +718,8 @@ function meansOf(league: League, f: Facts): string[] {
   }
   const { before, after } = f.streak;
   if (f.res.type === 'regular') {
-    if (f.won && before <= -3) out.push(`Ended a ${-before}-game skid`);
-    else if (!f.won && before >= 3) out.push(`Ended a ${before}-game win streak`);
+    if (f.won && before <= -3) out.push(`Ended ${an(-before)} ${-before}-game skid`);
+    else if (!f.won && before >= 3) out.push(`Ended ${an(before)} ${before}-game win streak`);
     else if (after >= 2) out.push(`${ordinal(after)} straight win`);
     else if (after <= -2) out.push(`${ordinal(-after)} straight loss`);
   }

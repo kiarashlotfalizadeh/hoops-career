@@ -340,6 +340,44 @@ describe('reading a league', () => {
     }
 
     // a setting waiting for opening night loads as it was; a damaged one goes, as if never chosen; a save
+    // the locker rooms' pulse: a save from when only the user's room was read becomes that team's room; damaged, it goes
+    {
+      const l = testLeague('pulse');
+      const room = { core: [1, 2, 3, 4, 5], cohesion: 0.62, mood: { 1: -0.5 }, low: { 1: 2 }, games: 20, seen: { 1: [300, 10] }, asked: { 1: { season: l.season, day: 30 } } };
+      (l as { pulse?: unknown }).pulse = { season: l.season, day: 35, ...room };
+      const m = migrate(structuredClone(l));
+      expect(m.pulse).toEqual({ season: l.season, day: 35, rooms: { [l.userTid]: { ...room, out: 0 } } });
+      // (already in today's shape, it is kept as it is; a room for a team that isn't there, or out of shape, goes alone)
+      expect(migrate(structuredClone(m)).pulse).toEqual(m.pulse);
+      const two = structuredClone(m);
+      two.pulse!.rooms[999] = two.pulse!.rooms[l.userTid];
+      (two.pulse!.rooms as Record<number, unknown>)[1] = { core: 'x' };
+      expect(Object.keys(migrate(two).pulse!.rooms)).toEqual([String(l.userTid)]);
+      (l as { pulse?: unknown }).pulse = { season: 'now' };
+      expect(migrate(structuredClone(l)).pulse).toBeUndefined();
+      // a live game's journal with each side's cohesion at tip-off keeps it; out of shape, the journal goes
+    }
+
+    // a three-team offer keeps its legs; one whose legs are out of shape is dropped with them
+    {
+      const l = testLeague('legs');
+      const [a, b] = l.teams.filter((t) => t.tid !== l.userTid).map((t) => t.tid);
+      const mine = Object.values(l.players).find((p) => p.tid === l.userTid)!.pid;
+      const theirs = Object.values(l.players).find((p) => p.tid === a)!.pid;
+      const base = { id: 1, tid: a, kind: 'buy' as const, note: 'n', season: l.season, day: l.day, expires: l.day + 5 };
+      const offer = { a: { tid: l.userTid, pids: [mine], dpids: [] }, b: { tid: a, pids: [], dpids: [] } };
+      const legs = [
+        { tid: l.userTid, to: a, pids: [mine], dpids: [] },
+        { tid: a, to: b, pids: [theirs], dpids: [] },
+      ];
+      l.proposals = [{ ...base, offer, legs }];
+      expect(migrate(structuredClone(l)).proposals![0].legs).toEqual(legs);
+      l.proposals = [{ ...base, offer, legs: [{ ...legs[0], to: l.userTid }] }];
+      expect(migrate(structuredClone(l)).proposals).toEqual([]);
+      l.proposals = [{ ...base, offer, legs: [{ ...legs[1], pids: [-5] }] }];
+      expect(migrate(structuredClone(l)).proposals).toEqual([]);
+    }
+
     // from when there were three difficulties plays the one there is now (its preset and a change of it go)
     {
       const l = testLeague('pending');

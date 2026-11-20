@@ -3,7 +3,7 @@
 // with a line of its own: its form, the net rating, a streak, a key injury, its star, and how far it
 // moved. The headline leads with the user's team when it moved or sits high.
 import type { League, Player } from '../../types';
-import { injuryName } from '../../format';
+import { An, an, injuryName } from '../../format';
 import { worldRng } from '../world';
 import type { MediaState, PowerRow } from '../media';
 import { Voice, f1, last, lastTen, netOf, nth, perGame, poss, publish, recOf, rosters, signed, tsOf } from './voice';
@@ -33,9 +33,6 @@ function netRanks(league: League): number[] {
   const nets = league.teams.map((t) => netOf(tsOf(league, t.tid)));
   return nets.map((n) => 1 + nets.filter((o) => o > n).length);
 }
-
-/** "an 8-game", "a 9-game": the article a number takes when it's read aloud. */
-const an = (n: number) => (n === 8 || n === 11 || n === 18 || (n >= 80 && n < 90) ? 'an' : 'a');
 
 /** An injury in a sentence: "sprained ankle", "MCL sprain" (an abbreviation keeps its capitals). */
 const hurtWords = (type: string) => {
@@ -68,12 +65,12 @@ function blurb(league: League, v: Voice, tid: number, rank: number, prev: number
   else if (move >= 3)
     lead = v.say('pw-up', [
       streak >= 3 ? `${streak} straight wins.` : `${form}.`,
-      `A ${move}-spot climb on a ${l10.w}-${l10.l} run.`,
+      `${An(move)} ${move}-spot climb on a ${l10.w}-${l10.l} run.`,
       `Up ${move} places.`,
       "The week's big riser.",
     ]);
   else if (move <= -3)
-    lead = v.say('pw-down', [streak <= -3 ? `${-streak} straight losses.` : `${form}.`, `A ${-move}-spot slide.`, `Down ${-move} places.`, "The week's big faller."]);
+    lead = v.say('pw-down', [streak <= -3 ? `${-streak} straight losses.` : `${form}.`, `${An(-move)} ${-move}-spot slide.`, `Down ${-move} places.`, "The week's big faller."]);
   else if (rank <= 6) lead = v.say('pw-top', [`${form}.`, `A ${net} net rating.`, 'Steady near the top.', `${nth(netRank)} in net rating.`]);
   else if (rank <= 16) lead = v.say('pw-mid', [`${form}.`, 'In the pack.', `A ${net} net rating.`, move > 0 ? `Up ${move}.` : move < 0 ? `Down ${-move}.` : 'Holding steady.']);
   else if (rank <= 24) lead = v.say('pw-low', [`${form}.`, `${nth(netRank)} in net rating.`, 'Treading water.', `A ${net} net rating.`]);
@@ -95,7 +92,7 @@ function blurb(league: League, v: Voice, tid: number, rank: number, prev: number
     detail =
       streak > 0
         ? v.say('pw-ws', [`Winners of ${streak} straight.`, `${streak} wins in a row.`, `On ${an(streak)} ${streak}-game win streak.`])
-        : v.say('pw-ls', [`Lost ${-streak} straight.`, `${-streak} losses in a row.`, `${an(-streak) === 'an' ? 'An' : 'A'} ${-streak}-game losing streak.`]);
+        : v.say('pw-ls', [`Lost ${-streak} straight.`, `${-streak} losses in a row.`, `${An(-streak)} ${-streak}-game losing streak.`]);
   } else if (star?.pg) {
     const pg = star.pg;
     const L = last(league, star.p);

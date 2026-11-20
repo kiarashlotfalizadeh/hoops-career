@@ -62,7 +62,7 @@ export function usePlayerTags(league: League, p: Player): { key: string; node: R
     return awardRaces(league, 5);
   }, [league]);
   const dev = p.tid >= 0 ? devTag(league, p) : null;
-  // how he stands with his role, when he isn't content with it (your players only: pulse.ts)
+  // how he stands with his role, when he isn't content with it (your players; anyone, anywhere, who has asked for a trade: pulse.ts)
   const role = roleRead(league, p);
   const inRaces = races
     ? RACES.flatMap(([k, label]) => {

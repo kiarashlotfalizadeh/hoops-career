@@ -62,6 +62,9 @@ export interface Flash {
   y: number;
 }
 
+/** The flash a shot clock violation gets (the sound keys on it: live/gameSound.ts). */
+export const SHOT_CLOCK = 'Shot clock';
+
 export interface Frame {
   dur: number; // ms to reach this frame from the previous one
   o: Pt[];
@@ -1371,9 +1374,17 @@ export function buildScript(
           does(st.pid ?? holder, 'rue');
           ball = { x: 25, y: ball.y };
         }
+        // (the shot clock running out is the buzzer's, not a lost ball: the court and the sound say which)
+        const clockOut = st.k === 'to' && st.d === 'shot clock violation';
         snap(420, {
-          flash: { text: st.k === 'steal' ? 'Steal' : 'Turnover', kind: 'to', x: ball.x * 0.5, y: ball.y + 3 },
-          ...cap(st.k === 'steal' && stl !== undefined ? (voiced() ?? `${N(stl)} steals it from ${N(st.pid)}!`) : `Turnover, ${N(st.pid ?? holder)}`),
+          flash: { text: st.k === 'steal' ? 'Steal' : clockOut ? SHOT_CLOCK : 'Turnover', kind: 'to', x: ball.x * 0.5, y: ball.y + 3 },
+          ...cap(
+            st.k === 'steal' && stl !== undefined
+              ? (voiced() ?? `${N(stl)} steals it from ${N(st.pid)}!`)
+              : clockOut
+                ? `Shot clock violation, ${abbrev(off)}`
+                : `Turnover, ${N(st.pid ?? holder)}`,
+          ),
         });
         // he's off the other way with it (the next possession picks him up from there)
         if (stolen && live) {

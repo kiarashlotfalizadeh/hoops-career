@@ -5,7 +5,7 @@
 // Pure: it reads the stored result and the report built from it.
 
 import type { GameResult, KeyGrade, League, Tactics, TacticsPatch } from '../types';
-import { gameTime, madeAtt, plural } from '../format';
+import { An, an, gameTime, madeAtt, plural } from '../format';
 import { playerName, shortName } from '../league/helpers';
 import { playTypeBaselines } from './playTypes';
 import { leagueThreePct } from '../ai/opponentPlan';
@@ -302,17 +302,17 @@ export function verdict(res: GameResult, side: 0 | 1, report: GameReport): strin
     ? ot
       ? say('wot', [`We won it in ${ot}.`, `${ot.charAt(0).toUpperCase()}${ot.slice(1)}, and we found a way.`])
       : m >= 20
-        ? say('wbig', [`A ${m}-point rout.`, `We won by ${m}, and it was never close.`, `Never in doubt: a ${m}-point win.`])
+        ? say('wbig', [`${An(m)} ${m}-point rout.`, `We won by ${m}, and it was never close.`, `Never in doubt: ${an(m)} ${m}-point win.`])
         : m <= 3
           ? say('wclose', ['A nail-biter, and it went our way.', `We held on by ${m}.`, 'A close one, and we closed it out.'])
-          : say('w', [`We won by ${m}.`, `A ${m}-point win.`, `We were ${m} points better tonight.`])
+          : say('w', [`We won by ${m}.`, `${An(m)} ${m}-point win.`, `We were ${m} points better tonight.`])
     : ot
       ? say('lot', [`We lost it in ${ot}.`, `${ot.charAt(0).toUpperCase()}${ot.slice(1)}, and it got away.`])
       : m >= 20
-        ? say('lbig', [`Run off the floor by ${m}.`, `A ${m}-point loss. Never in it.`, `They beat us by ${m}, and it wasn't that close.`])
+        ? say('lbig', [`Run off the floor by ${m}.`, `${An(m)} ${m}-point loss. Never in it.`, `They beat us by ${m}, and it wasn't that close.`])
         : m <= 3
           ? say('lclose', ['A close one, and it got away.', `We lost by ${m}.`, 'It came down to the last few plays, and they made them.'])
-          : say('l', [`They beat us by ${m}.`, `A ${m}-point loss.`, `We came up ${m} short.`]);
+          : say('l', [`They beat us by ${m}.`, `${An(m)} ${m}-point loss.`, `We came up ${m} short.`]);
   // the biggest edge that went the winner's way (as the deciding edges tell them: a setting that only
   // won back what it cost didn't win it, and a cost of ours that our setting more than won back didn't lose it)
   const top = decidingFactors(report.factors, report.factors.length).find((f) => f.pts > 0 === won && !f.paid);

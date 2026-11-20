@@ -21,7 +21,7 @@ import { numberTeam, retiredNumbers } from './jerseys';
 import { ensureRotation } from './games';
 import { activeCoach } from './coaches';
 import { cleanProposals } from './proposals';
-import { executeTrade, swapSeasons, type TradeOffer } from './trades';
+import { dealTeams, executeDeal, legsOf, swapSeasons, type TradeLeg, type TradeOffer } from './trades';
 
 /** A team in season needs this many players to dress for a game (the engine plays five). */
 export const DRESS_MIN = 5;
@@ -493,63 +493,73 @@ export function createPlayer(league: League, o: NewPlayer): Player {
 }
 
 /**
- * What stops a forced trade: only the deal's shape (each player and pick still with the team
- * sending it, each swap on both teams' own open firsts, nothing in it twice, something moving, cash
- * one way) and five players left to dress in season. Value, salary matching, roster limits, the
- * deadline and the trade-back rule don't apply; the roster limits come back as warnings.
+ * What stops a forced deal of two teams or three, read as its legs (see TradeLeg): only the deal's
+ * shape (each player and pick still with the team sending it, each swap on both teams' own open
+ * firsts, nothing in it twice, something moving, cash one way) and five players left to dress in
+ * season. Value, salary matching, roster limits, the deadline and the trade-back rule don't apply;
+ * the roster limits come back as warnings.
  */
-export function checkForceTrade(league: League, offer: TradeOffer): EditCheck {
+export function checkForceDeal(league: League, legs: TradeLeg[]): EditCheck {
   const out: EditCheck = { errors: [], warnings: [] };
-  const { a, b } = offer;
-  if (a.tid === b.tid || !league.teams[a.tid] || !league.teams[b.tid]) out.errors.push('A trade is between two teams.');
-  for (const side of [a, b]) {
-    for (const pid of side.pids) if (league.players[pid]?.tid !== side.tid) out.errors.push(`A player in the deal isn't with ${teamLabel(league, side.tid)}.`);
-    for (const dpid of side.dpids)
-      if (league.draftPicks.find((d) => d.dpid === dpid)?.tid !== side.tid) out.errors.push(`A pick in the deal isn't ${teamLabel(league, side.tid)}'s.`);
-    if (side.cash !== undefined && side.cash !== 0 && !(Number.isInteger(side.cash) && side.cash > 0)) out.errors.push("The cash in the deal isn't a valid amount.");
+  const tids = dealTeams(legs);
+  if (tids.length < 2 || legs.some((l) => l.tid === l.to) || tids.some((t) => !league.teams[t])) out.errors.push('A trade is between two teams.');
+  if (tids.length > 3) out.errors.push('A trade is between two teams or three.');
+  for (const leg of legs) {
+    for (const pid of leg.pids) if (league.players[pid]?.tid !== leg.tid) out.errors.push(`A player in the deal isn't with ${teamLabel(league, leg.tid)}.`);
+    for (const dpid of leg.dpids) if (league.draftPicks.find((d) => d.dpid === dpid)?.tid !== leg.tid) out.errors.push(`A pick in the deal isn't ${teamLabel(league, leg.tid)}'s.`);
+    if (leg.cash !== undefined && leg.cash !== 0 && !(Number.isInteger(leg.cash) && leg.cash > 0)) out.errors.push("The cash in the deal isn't a valid amount.");
   }
-  const pids = [...a.pids, ...b.pids];
-  const dpids = [...a.dpids, ...b.dpids];
+  const pids = legs.flatMap((l) => l.pids);
+  const dpids = legs.flatMap((l) => l.dpids);
   if (new Set(pids).size < pids.length || new Set(dpids).size < dpids.length) out.errors.push('A player or pick is in the deal twice.');
-  if ((a.cash ?? 0) > 0 && (b.cash ?? 0) > 0) out.errors.push('Cash can only go one way in a deal.');
   // a swap right rides on both teams' own firsts of that draft (see termErrors in trades.ts): each
   // still with its team, unprotected, in no other swap and staying put in this deal, or the right
   // would land on a pick a third team holds
   const moving = new Set(dpids);
-  for (const [side, other] of [
-    [a, b],
-    [b, a],
-  ])
-    for (const y of side.swaps ?? [])
+  for (const leg of legs) {
+    const back = legs.find((l) => l.tid === leg.to && l.to === leg.tid);
+    if ((leg.cash ?? 0) > 0 && (back?.cash ?? 0) > 0) out.errors.push('Cash can only go one way in a deal.');
+    for (const y of leg.swaps ?? [])
       if (
-        !swapSeasons(league, side.tid, other.tid).includes(y) ||
-        other.swaps?.includes(y) ||
-        league.draftPicks.some((d) => d.season === y && d.round === 1 && moving.has(d.dpid) && (d.originalTid === a.tid || d.originalTid === b.tid))
+        !swapSeasons(league, leg.tid, leg.to).includes(y) ||
+        back?.swaps?.includes(y) ||
+        league.draftPicks.some((d) => d.season === y && d.round === 1 && moving.has(d.dpid) && (d.originalTid === leg.tid || d.originalTid === leg.to))
       )
         out.errors.push(`A ${y} pick swap needs both teams' own ${y} firsts. Each must be unprotected, in no other swap and staying put.`);
-  const something = (s: TradeOffer['a']) => s.pids.length || s.dpids.length || s.swaps?.length || (s.cash ?? 0) > 0;
-  if (!something(a) && !something(b)) out.errors.push('The trade is empty.');
+  }
+  const something = (s: TradeLeg) => s.pids.length || s.dpids.length || s.swaps?.length || (s.cash ?? 0) > 0;
+  if (!legs.some(something)) out.errors.push('The trade is empty.');
   if (!out.errors.length) {
     const tw = (pid: number) => !!league.players[pid].contract.twoWay;
-    const moves = (from: number, to: number, pids: number[]) =>
-      pids.flatMap((pid): RosterMove[] => [
-        { tid: from, n: -1, twoWay: tw(pid) },
-        { tid: to, n: 1, twoWay: tw(pid) },
-      ]);
-    rosterChecks(league, [...moves(a.tid, b.tid, a.pids), ...moves(b.tid, a.tid, b.pids)], out);
+    rosterChecks(
+      league,
+      legs.flatMap((l) =>
+        l.pids.flatMap((pid): RosterMove[] => [
+          { tid: l.tid, n: -1, twoWay: tw(pid) },
+          { tid: l.to, n: 1, twoWay: tw(pid) },
+        ]),
+      ),
+      out,
+    );
   }
   out.errors = [...new Set(out.errors)];
   return out;
 }
 
-/** Make a trade happen whatever the AI GM and the rules say (throws, changing nothing, if checkForceTrade finds an error). */
-export function forceTrade(league: League, offer: TradeOffer) {
-  const { errors } = checkForceTrade(league, offer);
+/** Make a deal of two teams or three happen whatever the AI GMs and the rules say (throws, changing nothing, if checkForceDeal finds an error). */
+export function forceDeal(league: League, legs: TradeLeg[]) {
+  const { errors } = checkForceDeal(league, legs);
   if (errors.length) throw new Error(errors[0]);
-  executeTrade(league, offer);
-  // as after any edit: offers that no longer stand go now, and both rosters' rotations, roles and
+  executeDeal(league, legs);
+  // as after any edit: offers that no longer stand go now, and every roster's rotation, roles and
   // numbers follow at once
   cleanProposals(league);
-  refreshTeams(league, [offer.a.tid, offer.b.tid]);
+  refreshTeams(league, dealTeams(legs));
   league.godEdits = (league.godEdits ?? 0) + 1;
 }
+
+/** What stops a forced two-team trade (see checkForceDeal). */
+export const checkForceTrade = (league: League, offer: TradeOffer): EditCheck => checkForceDeal(league, legsOf(offer));
+
+/** Make a two-team trade happen whatever the AI GM and the rules say (see forceDeal). */
+export const forceTrade = (league: League, offer: TradeOffer) => forceDeal(league, legsOf(offer));

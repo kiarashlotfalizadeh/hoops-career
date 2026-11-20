@@ -48,6 +48,7 @@ import { teamTaxBill } from './finances';
 import { capPayroll, withHoldsMemo } from './freeAgency';
 import { numberTeam } from './jerseys';
 import { logTrade } from './transactions';
+import { wantsOut } from './pulse';
 import { leagueBoard, revealOutlook } from './prospects';
 import { money, moneyExact } from '../format';
 import { Rng, hashString, mix32 } from '../random';
@@ -128,6 +129,8 @@ export interface AssetView {
   flipped: boolean;
   /** The sending team's cornerstone (see cornerstoneOf): it counts CORNERSTONE times as much going out. */
   cornerstone?: boolean;
+  /** He has asked the sending team for a trade: he counts WANTS_OUT times as much going out. */
+  wantsOut?: boolean;
 }
 
 /** How one team's verdict on a deal adds up (see judge). */
@@ -599,6 +602,11 @@ function tradedAway(league: League, a: Player | DraftPick, tid: number): NonNull
  * front-office review).
  */
 export const CORNERSTONE = 1.3;
+/**
+ * What a player who has asked for a trade (pulse.ts) counts for going out, to the team he asked: it
+ * has to move him and everyone knows it. He is nobody's cornerstone while the request stands.
+ */
+export const WANTS_OUT = 0.9;
 /** A cornerstone is 26 or younger and worth this much (see cornerstoneOf). */
 const CORNERSTONE_VALUE = 82;
 
@@ -623,6 +631,8 @@ function playerView(league: League, p: Player, tid: number, incoming: boolean, a
   const own = strategy === 'retool' ? neutral : tradeValue(league, p, strategy);
   const f = flipped(league, p);
   const value = f ? neutral : lens(own, neutral, incoming, aiDeal);
+  // (he asked out: it has to move him, see WANTS_OUT)
+  if (!incoming && value > 0 && p.tid === tid && wantsOut(league, p)) return { kind: 'player', id: p.pid, value: value * WANTS_OUT, neutral, own, flipped: f, wantsOut: true };
   // (its cornerstone going out counts for more: see CORNERSTONE)
   if (!incoming && value > 0 && p.tid === tid && cornerstoneOf(league, tid) === p.pid)
     return { kind: 'player', id: p.pid, value: value * CORNERSTONE, neutral, own, flipped: f, cornerstone: true };
@@ -951,6 +961,31 @@ export function teamAccepts(league: League, offer: TradeOffer, tid: number): boo
 export function teamDelta(league: League, offer: TradeOffer, tid: number): number {
   const v = judge(league, offer, tid);
   return v.tooManyFirsts ? -Infinity : v.delta;
+}
+
+/**
+ * How much team `tid` likes a deal read as its legs (two teams or three): everything it gets, from
+ * anyone, less everything it sends; -Infinity for one it won't do at any price (too many firsts
+ * out). The same judge as teamDelta: a deal with the user's team in it is judged as one with him.
+ */
+export function dealDelta(league: League, legs: TradeLeg[], tid: number): number {
+  const v = judgeLegs(
+    league,
+    tid,
+    legs.filter((l) => l.to === tid),
+    legs.filter((l) => l.tid === tid),
+    !dealTeams(legs).includes(league.userTid),
+  );
+  return v.tooManyFirsts ? -Infinity : v.delta;
+}
+
+/** A deal's legs with one more thing going from `from` to `to` (a new leg when nothing went that way yet). */
+export function withMove(legs: TradeLeg[], from: number, to: number, add: { pid?: number; dpid?: number }): TradeLeg[] {
+  const has = legs.some((l) => l.tid === from && l.to === to);
+  const next = has ? legs : [...legs, { tid: from, to, pids: [], dpids: [] }];
+  return next.map((l) =>
+    l.tid === from && l.to === to ? { ...l, pids: add.pid !== undefined ? [...l.pids, add.pid] : l.pids, dpids: add.dpid !== undefined ? [...l.dpids, add.dpid] : l.dpids } : l,
+  );
 }
 
 // ---------------------------------------------------------------- rules
@@ -1535,6 +1570,8 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
   }
 
   if (x.depthApplied && matters(x.depthLoss)) add('bad', "Depth doesn't add up to talent for them", x.depthLoss);
+  const leaving = x.outgoing.find((a) => a.wantsOut);
+  if (leaving) add('good', `${nameOf(leaving)} has asked out: they'd take a little less for him`, leaving.value / WANTS_OUT - leaving.value);
   const corner = x.outgoing.find((a) => a.cornerstone);
   if (corner) add('bad', `They build around ${nameOf(corner)}: he counts ${Math.round((CORNERSTONE - 1) * 100)}% more to them`, corner.value - corner.value / CORNERSTONE);
   if (x.cuts > 0 && matters(x.cut)) add('bad', `They'd have to waive ${x.cuts === 1 ? 'a player' : `${x.cuts} players`} to get down to ${CAP.rosterMax}`, x.cut);
@@ -1597,6 +1634,12 @@ export function dealHeadline(league: League, legs: TradeLeg[]): string {
     .map((x, i) => (i ? x.charAt(0).toUpperCase() + x.slice(1) : x))
     .join('. ');
 }
+
+/**
+ * Is this news item a trade as executeDeal tells it (one item a deal: "Trade: ..." for two teams,
+ * "Three-team trade: ..." for three)? What counts the season's trades reads this, not the words.
+ */
+export const isTradeNews = (n: { kind: string; text: string }): boolean => n.kind === 'trade' && (n.text.startsWith('Trade: ') || n.text.startsWith('Three-team trade: '));
 
 /** Make a deal of two teams or three, read as its legs (see TradeLeg): everything moves at once. */
 export function executeDeal(league: League, legs: TradeLeg[]) {

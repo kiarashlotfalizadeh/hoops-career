@@ -225,6 +225,8 @@ export interface ST {
   subSig: number[];
   manualSubs: boolean; // user drives subs live
   injMult: number;
+  /** Field-goal percentage its cohesion adds to its shots (see K.cohesion). */
+  coh: number;
   subLock: Map<number, number>; // pid -> game second until which a manual sub sticks
   /** Chance an AI coach acts on what the opponent is exploiting at a break (0: never). */
   adjust: number;
@@ -316,6 +318,8 @@ export interface SimTeamInput {
   play?: number[];
   /** A coach (AI, or the user's assistant in simmed games) who may adjust the game plan at quarter breaks and timeouts. */
   adjust?: boolean;
+  /** How tight the team's core is, 0..1 (league/pulse.ts): from K.cohesion.from up its shots fall a touch more. Absent: no lift. */
+  cohesion?: number;
 }
 
 export interface SimOptions {

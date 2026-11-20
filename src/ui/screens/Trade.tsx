@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Ban } from 'lucide-react';
-import type { League } from '../../core/types';
+import type { League, Proposal } from '../../core/types';
 import { POSITIONS } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { playerName } from '../../core/league/helpers';
@@ -33,7 +33,7 @@ import { DealCard } from '../trade/DealCard';
 import { AssetList } from '../trade/AssetList';
 import { Dock } from '../trade/Dock';
 import { TradingBlock } from '../trade/TradingBlock';
-import { ThreeTeam } from '../trade/ThreeTeam';
+import { ThreeTeam, threeInitOf, type ThreeInit } from '../trade/ThreeTeam';
 
 const ids = (s: string | null) =>
   s
@@ -53,7 +53,7 @@ const posOf = (params: URLSearchParams): FinderState['pos'] => POSITIONS.find((x
 function readParams(
   league: League,
   params: URLSearchParams,
-): { partner: number; give: Sel; get: Sel; shop: number | null; tab: Tab; focus: number | null; minOvr: number; pos: FinderState['pos'] } {
+): { partner: number; give: Sel; get: Sel; shop: number | null; tab: Tab; focus: number | null; minOvr: number; pos: FinderState['pos']; three?: ThreeInit | null } {
   const user = league.userTid;
   // an offer from the agenda (?offer=id): the Offers tab, that offer first
   const focus = params.get('offer') !== null ? Number(params.get('offer')) : null;
@@ -62,11 +62,13 @@ function readParams(
   const offer = pr !== null ? openProposals(league).find((p) => p.id === Number(pr)) : undefined;
   if (offer)
     return {
+      // (a three-team offer opens in the three-team builder, as its legs)
+      three: offer.legs ? threeInitOf(league, offer.legs) : null,
       partner: offer.tid,
       give: { pids: [...offer.offer.a.pids], dpids: [...offer.offer.a.dpids] },
       get: { pids: [...offer.offer.b.pids], dpids: [...offer.offer.b.dpids] },
       shop: null,
-      tab: 'build',
+      tab: offer.legs ? 'three' : 'build',
       focus: null,
       minOvr: 0,
       pos: 'all',
@@ -101,6 +103,8 @@ export default function Trade() {
   const [give, setGive] = useState<Sel>(init.give);
   const [get, setGet] = useState<Sel>(init.get);
   const [tab, setTab] = useState<Tab>(init.tab);
+  // a three-team deal to open that builder on (an AI team's offer, reviewed), and a count that remounts it
+  const [three, setThree] = useState<{ n: number; init: ThreeInit | null }>({ n: 0, init: init.three ?? null });
   const [shop, setShop] = useState<number | null>(init.shop);
   const [focus, setFocus] = useState<number | null>(init.focus);
   const [side, setSide] = useState<'theirs' | 'mine'>('theirs');
@@ -227,6 +231,15 @@ export default function Trade() {
     else useStore.getState().toast(`${pt.abbrev}: ${r.message}${r.ok && r.notes.length ? ` ${r.notes[0].text}.` : ''}`, 'bad');
   };
 
+  // an AI team's offer, opened to be reworked: a three-team one in the three-team builder
+  const review = (p: Proposal) => {
+    const legs = p.legs && threeInitOf(league, p.legs);
+    if (!legs) return loadDeal(p.offer);
+    setThree((x) => ({ n: x.n + 1, init: legs }));
+    setTab('three');
+    window.scrollTo({ top: 0, behavior: scrollBehavior() });
+  };
+
   const loadDeal = (o: TradeOffer) => {
     setPartner(o.b.tid);
     setGive(selOf(o.a));
@@ -340,7 +353,7 @@ export default function Trade() {
         ]}
       />
 
-      {tab === 'offers' && <OffersTab league={league} closed={closed} focus={focus} onReview={loadDeal} />}
+      {tab === 'offers' && <OffersTab league={league} closed={closed} focus={focus} onReview={review} />}
 
       {tab === 'offers' ? null : tab === 'build' ? (
         <>
@@ -388,7 +401,7 @@ export default function Trade() {
           />
         </>
       ) : tab === 'three' ? (
-        <ThreeTeam league={league} season={s} closed={closed} partner={partner} />
+        <ThreeTeam key={three.n} league={league} season={s} closed={closed} partner={partner} init={three.init} />
       ) : tab === 'find' ? (
         <TradeFinder league={league} state={finder} onChange={setFinder} onPick={pickTarget} />
       ) : (

@@ -212,6 +212,19 @@ export const K = {
   recover: 0.0012,
   /** Home court: field-goal percentage the home side gains (the away side loses 0.3 of it): about 2 points a game, 54% home wins. */
   home: 0.009,
+  /**
+   * A core that has played and won together executes better (league/pulse.ts): from a cohesion of
+   * `from` (the pulse's "Settled") up to 1, field-goal percentage added to its shots, up to `fg`.
+   * Small on purpose: about a fifth of a point a game for a "Tight group" at 0.8, under half a point
+   * at the very top, nothing for a new group. Every team has it, the user's and the AI's alike.
+   * The season forecast carries what each core is expected to be worth (analysis/odds.ts's setup,
+   * pulse.ts's expectedCohesion), so an owner's goals allow for it. Sized with forecast-check, whose
+   * line on the default newcomer team (a weak one with a new core) is the tight one: at this size it
+   * met its owner's opening goals in 7 of the gate's 10 first seasons; at 0.0025, 27 of 50 over a
+   * wider set of leagues but 3 of those 10. That line is a coin's width from its 50%: a change
+   * here, or to anything that moves a season's path, can tip it on sampling alone.
+   */
+  cohesion: { from: 0.55, fg: 0.002 },
   usageExp: 2.0,
   /**
    * A player's share of his team's possessions while he's on the floor levels off past useLevel: his
@@ -699,6 +712,10 @@ export const K = {
    */
   recenter: { three: -0.15, foul: 0.05, orb: -0.12, tov: -0.12, blk: 0 },
 };
+
+/** The field-goal percentage a team's cohesion (0..1, or none) adds to its shots: see K.cohesion. */
+export const cohesionLift = (cohesion: number | undefined): number =>
+  cohesion === undefined ? 0 : K.cohesion.fg * Math.min(1, Math.max(0, (cohesion - K.cohesion.from) / (1 - K.cohesion.from)));
 
 /** The share of free throws a player makes, from his FT rating (the Plan tab's Hack-a-player reads it too). */
 export const ftChance = (ft: number) => Math.min(0.95, Math.max(0.3, 0.42 + 0.0052 * ft));

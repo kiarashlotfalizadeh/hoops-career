@@ -5,6 +5,7 @@ import { GameSim, K, type SimTeamInput } from '../sim/engine';
 import { Rng, clamp } from '../random';
 import { autoRotation, autoTactics, presetScores, staffPick, styleChanged } from '../ai/coachAI';
 import { addNews, andList, inSeason, playerName, statsLine, teamName, teamPlayers, teamSeason } from './helpers';
+import { cohesionOf } from './pulse';
 import { applyInjury, clearedToPlay, GAME_TIME_PERF, healOneGame } from './injuries';
 import { gameFinances, updateHype } from './finances';
 import { playerAge } from '../playerGen';
@@ -378,6 +379,18 @@ export function neutralSite(g: Pick<ScheduledGame, 'type' | 'cup'>) {
  * plan was made for, and with its id and day, the game an AI coach game-plans for against the user.
  */
 export function buildSimInput(
+  league: League,
+  tid: number,
+  day: number,
+  type: ScheduledGame['type'],
+  opp?: number,
+  game?: Pick<ScheduledGame, 'seriesId'> & Partial<Pick<ScheduledGame, 'gid' | 'day'>>,
+): SimTeamInput {
+  // (how tight its core is, as the pulse last read it: the engine turns it into a touch of execution)
+  return { ...teamSimInput(league, tid, day, type, opp, game), cohesion: cohesionOf(league, tid) };
+}
+
+function teamSimInput(
   league: League,
   tid: number,
   day: number,

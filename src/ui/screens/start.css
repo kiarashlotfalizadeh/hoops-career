@@ -392,6 +392,17 @@
 .nl-label {
   font-weight: 680;
 }
+/* the role: one switch and the line that says what it means */
+.nl-role {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.nl-role-line {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-2);
+}
 /* the game's settings: the switches, a hairline between each */
 .nl-game {
   display: flex;

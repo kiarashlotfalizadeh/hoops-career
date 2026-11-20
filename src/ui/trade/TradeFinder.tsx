@@ -88,8 +88,8 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
             </p>
             <p>A tier is trade value, not rating. A cheap young 78 can outrank an expensive 84.</p>
             <p>
-              <b>On the block</b>: his team looks ready to move him. His contract is a burden, or he&apos;s a rebuilder&apos;s veteran. <b>Cornerstone</b>: a young star his team
-              builds around. Expect a steep price.
+              <b>On the block</b>: his team looks ready to move him. His contract is a burden, or he&apos;s a rebuilder&apos;s veteran. <b>Asked for a trade</b>: he wants out, and
+              they&apos;d take a little less. <b>Cornerstone</b>: a young star his team builds around. Expect a steep price.
             </p>
             <p>
               <b>Salary you can match</b>: the most you could take back for up to two of your contracts. That is 125% of them plus $0.1M, or what fits under the cap after they

@@ -93,7 +93,7 @@ import {
 } from './rfa';
 import { logMove } from './transactions';
 import { money, moneyExact } from '../format';
-import { askedOutReason } from './pulse';
+import { askedOutReason, wantsOut } from './pulse';
 
 export { FA_DAYS };
 
@@ -140,6 +140,8 @@ function resignPlan(league: League, t: Team, agrees: (p: Player) => boolean = ()
   const plan: { p: Player; ask: Ask }[] = [];
   for (const p of byValue) {
     if (contractExp(p.contract) > league.season) continue;
+    // (he asked for a trade and it never came: he leaves, see pulse.ts)
+    if (wantsOut(league, p)) continue;
     const v = valueScore(league, p);
     const ask = askingContract(league, p, t.tid);
     // without full Bird rights his team can only pay him so much (see resignLimit): above it he walks

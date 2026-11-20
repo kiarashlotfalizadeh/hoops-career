@@ -126,6 +126,8 @@ export class LiveGame {
       };
     };
     const sides = [input(game.home, game.away), input(game.away, game.home)];
+    // (a replay plays each side's cohesion as it was at tip-off; a journal from before it had none)
+    if (from) sides.forEach((x, i) => (x.cohesion = from.coh?.[i]));
     // (as the engine reads it: on unless switched off)
     const injuries = from ? from.injuries : league.settings.injuries !== false;
     this.sim = new GameSim(sides[0], sides[1], {
@@ -160,6 +162,7 @@ export class LiveGame {
         ...(mine.play?.length ? { play: [...mine.play] } : {}),
       },
       edge: this.edge,
+      coh: [sides[0].cohesion ?? 0, sides[1].cohesion ?? 0],
       opp: { tactics: cloneTactics(theirs.team.tactics), ...(oppPlan ? { plan: structuredClone(oppPlan) } : {}), coach: theirs.team.coach.tactics },
       steps: 0,
       q: this.sim.q,

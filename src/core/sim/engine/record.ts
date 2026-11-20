@@ -105,7 +105,7 @@ export const recordMethods = {
               // an equal share for each of twelve words had three-second calls at 6.6 times the NBA's rate)
               `${handler.name} turnover (${DEAD_BALL[this.fx.weighted(DEAD_BALL_W)]}).`;
       this.addPbp(off.side, text, 'to');
-      this.cur!.steps.push({ k: stealer ? 'steal' : 'to', pid: handler.pid, pid2: stealer?.pid });
+      this.cur!.steps.push({ k: stealer ? 'steal' : 'to', pid: handler.pid, pid2: stealer?.pid, ...(kind && !stealer ? { d: kind } : {}) });
     }
     if (charge) this.chargeFoul(off, handler);
     this.ctx = live ? 'steal' : 'deadTO';

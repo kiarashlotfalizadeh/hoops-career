@@ -5,6 +5,7 @@
 // phrasings by hashing the game and the possession, so a game picked up from its journal reads the
 // same as it did the first time. Nothing here changes the game: it only says what the logs show.
 
+import { an } from '../../core/format';
 import { hashString } from '../../core/random';
 import type { PossLog, PossStep } from '../../core/sim/log';
 import { fmtClock, periodLabel } from '../stats';
@@ -655,7 +656,7 @@ export function advance(t: Tally, log: PossLog, ctx: AtmoCtx): { t: Tally; event
           weight: 2,
           pri: 60,
           kicker: 'Comeback',
-          title: `The ${T[side]} have wiped out a ${down}-point deficit`,
+          title: `The ${T[side]} have wiped out ${an(down)} ${down}-point deficit`,
           line: `${T[side]} lead ${scoreText(n.score)}`,
         });
       else if (first)
@@ -683,7 +684,7 @@ export function advance(t: Tally, log: PossLog, ctx: AtmoCtx): { t: Tally; event
         weight: clutchy || back !== undefined ? 2 : 1,
         pri: back !== undefined ? 60 : 80,
         kicker: back !== undefined ? 'Comeback' : 'Tied',
-        title: back !== undefined ? `The ${T[back]} have erased a ${t.big[1 - back]}-point deficit` : `Tied at ${n.score[0]}`,
+        title: back !== undefined ? `The ${T[back]} have erased ${an(t.big[1 - back])} ${t.big[1 - back]}-point deficit` : `Tied at ${n.score[0]}`,
         line: back !== undefined ? `Tied at ${n.score[0]}` : clutchy ? `${who} ties it with ${fmtClock(log.clockEnd)} left` : undefined,
       });
     }

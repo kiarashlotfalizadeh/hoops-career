@@ -283,6 +283,13 @@
   color: var(--accent-text);
   text-decoration: none;
 }
+/* Night Court: your colour on its own wash over the page, as a .tag.brand. On the night's grey chip a
+   lightened team colour sat at the 4.5:1 floor (the Thunder's blue at 4.6); the wash is darker than
+   that chip for every team, so the words stand off it (6.6 for the same blue). By day the paper chip
+   is the ground the colour was darkened for, and stays */
+:root[data-theme='dark'] .tag.td-tag-link {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
 .tag.td-tag-link::after {
   content: '';
   position: absolute;
@@ -290,6 +297,9 @@
 }
 .tag.td-tag-link:active {
   background: var(--surface-3);
+}
+:root[data-theme='dark'] .tag.td-tag-link:active {
+  background: color-mix(in srgb, currentColor 22%, transparent);
 }
 .td-outs {
   display: flex;

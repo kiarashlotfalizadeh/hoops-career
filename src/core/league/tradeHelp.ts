@@ -9,13 +9,18 @@ import { withHoldsMemo } from './freeAgency';
 import { neutralBalance } from './tradePackages';
 import { money, moneyExact } from '../format';
 import {
+  TradeLeg,
   TradeOffer,
   TradeSide,
   capSalary,
   cashRoom,
   cashValueFor,
+  dealTeams,
+  evaluateDeal,
   evaluateTrade,
   findPick,
+  matchGap,
+  matchInfoOf,
   neutralSplit,
   pickLabel,
   pickValueFor,
@@ -25,7 +30,9 @@ import {
   tradedAwayBy,
   untradeable,
   untradeableReason,
+  validateDeal,
   validateTrade,
+  withMove,
 } from './trades';
 
 // ---------------------------------------------------------------- "what would make this work?"
@@ -198,6 +205,174 @@ function topUp(
     cur = (covering[0] && (covering[0].v <= need * 1.5 + 2 || !short.length) ? covering[0] : short[0]).next;
   }
   return evaluateTrade(league, cur).accept ? { offer: cur } : { offer: null, why: 'value' };
+}
+
+// ---------------------------------------------------------------- "what would make this work?", three teams
+
+/** One thing "make it work" added to a three-team deal: what, from whom and to whom. */
+export interface DealAdd {
+  kind: 'player' | 'pick';
+  id: number;
+  from: number;
+  to: number;
+}
+
+/**
+ * A three-team deal every other team takes, or why none was found: the rules block it whatever is
+ * added ('rules'), no contract of the asking team's matches the salary ('salary'), another team
+ * can't send back enough ('theirSalary'), the asking team hasn't the value ('value'), or a team
+ * (`idle`) has no part in the deal and none could be found for it ('idle': it is a two-team deal).
+ */
+export type DealWork = { legs: TradeLeg[]; added: DealAdd[]; why?: undefined } | { legs: null; why: 'rules' | 'salary' | 'theirSalary' | 'value' | 'idle'; idle?: number };
+
+/** A team in the deal with nothing going either way (the builder keeps its card: the rules say to take it out). */
+const idleIn = (legs: TradeLeg[]) => dealTeams(legs).filter((tid) => !legs.some((l) => (l.tid === tid || l.to === tid) && l.pids.length + l.dpids.length > 0));
+
+/** Would the asking team end up over the roster limit: sending one more of its players fixes that. */
+function rosterOver(league: League, legs: TradeLeg[], from: number): boolean {
+  const std = (pids: number[]) => pids.filter((pid) => !league.players[pid]?.contract.twoWay).length;
+  const out = std(legs.filter((l) => l.tid === from).flatMap((l) => l.pids));
+  const inc = std(legs.filter((l) => l.to === from).flatMap((l) => l.pids));
+  return inc > out && tradeRoster(league, from).length - out + inc > rosterMaxNow(league);
+}
+
+/** The rule problems adding players can fix: each team's salary matching, a full roster on the asking side, a team with no part yet. */
+function fixable(league: League, legs: TradeLeg[], from: number): number {
+  let n = idleIn(legs).length + (rosterOver(league, legs, from) ? 1 : 0);
+  for (const tid of dealTeams(legs)) {
+    const out = legs.filter((l) => l.tid === tid).flatMap((l) => l.pids);
+    const inc = legs.filter((l) => l.to === tid).flatMap((l) => l.pids);
+    if (matchGap(league, matchInfoOf(league, tid, out, inc)) > 0) n++;
+  }
+  return n;
+}
+
+/**
+ * "What would make this work?" for a deal of three teams, asked by team `from` (the user): what it
+ * adds so that the rules allow the deal and both other teams say yes. Salary first, as in a
+ * two-team deal: a team taking back more than matching allows sends its least wanted contract that
+ * covers the gap to the asking team; the asking team sends its least valuable one that does to
+ * whichever team can take it, one with no part in the deal yet first (a third team with the room
+ * for it is what a three-team deal is for). Then value: each round, the team furthest from yes gets
+ * the asking team's smallest pick or player that covers what it is missing, else its most valuable
+ * one (a full roster sends a player). The asking team's untouchables are never added, and nothing
+ * already in the deal moves. A team left with no part in it is said so: that deal is for two teams.
+ */
+export function makeDealWork(league: League, legs: TradeLeg[], from = league.userTid): DealWork {
+  return withHoldsMemo(() => findDealWork(league, legs, from));
+}
+
+function findDealWork(league: League, start: TradeLeg[], from: number): DealWork {
+  let cur = start;
+  const added: DealAdd[] = [];
+  const others = dealTeams(cur).filter((t) => t !== from);
+  if (!others.length) return { legs: null, why: 'rules' };
+  const broken = (legs: TradeLeg[]) => validateDeal(league, legs).length;
+  if (broken(cur) > fixable(league, cur, from)) return { legs: null, why: 'rules' };
+  const inDeal = (legs: TradeLeg[]) => ({ pids: new Set(legs.flatMap((l) => l.pids)), dpids: new Set(legs.flatMap((l) => l.dpids)) });
+  const off = new Set(from === league.userTid ? (league.untouchable ?? []) : []);
+  const gapOf = (legs: TradeLeg[], tid: number) =>
+    matchGap(
+      league,
+      matchInfoOf(
+        league,
+        tid,
+        legs.filter((l) => l.tid === tid).flatMap((l) => l.pids),
+        legs.filter((l) => l.to === tid).flatMap((l) => l.pids),
+      ),
+    );
+  const add = (legs: TradeLeg[], a: DealAdd) => withMove(legs, a.from, a.to, a.kind === 'player' ? { pid: a.id } : { dpid: a.id });
+  const spare = (legs: TradeLeg[]) => {
+    const used = inDeal(legs);
+    return standardRoster(league, from).filter((p) => !used.pids.has(p.pid) && !off.has(p.pid) && !untradeableReason(league, p));
+  };
+  // ---- salary, in rounds (one side's fix can open the other's): the asking team's own, then theirs
+  for (let round = 0; round < 3; round++) {
+    if (dealTeams(cur).every((tid) => gapOf(cur, tid) === 0)) break;
+    // the asking team takes back too much: its least valuable contract that covers the gap (else its biggest, and
+    // another round), to a team that can take it without breaking its own matching, one with no part in the deal first
+    for (let i = 0; i < 2 && gapOf(cur, from) > 0; i++) {
+      const gap = gapOf(cur, from);
+      const pool = spare(cur)
+        .map((p) => ({ p, v: tradeValue(league, p, 'retool'), sal: capSalary(league, p.pid) }))
+        .filter((x) => x.sal > 0)
+        .sort((x, y) => x.v - y.v);
+      const tries = [...pool.filter((x) => x.sal >= gap), ...[...pool].sort((x, y) => y.sal - x.sal).slice(0, 1)];
+      const idle = idleIn(cur);
+      const dests = [...others].sort((x, y) => Number(idle.includes(y)) - Number(idle.includes(x)));
+      const moves = dests.flatMap((to) => tries.map((x) => ({ kind: 'player' as const, id: x.p.pid, from, to })));
+      // (of the ones that help, the one its taker can best match: no gap of its own, else the smallest)
+      const fill = moves
+        .filter((m) => broken(add(cur, m)) <= broken(cur) && gapOf(add(cur, m), from) < gap)
+        .map((m) => ({ m, theirs: gapOf(add(cur, m), m.to) }))
+        .sort((x, y) => x.theirs - y.theirs)[0]?.m;
+      if (!fill) return { legs: null, why: 'salary' };
+      cur = add(cur, fill);
+      added.push(fill);
+    }
+    if (gapOf(cur, from) > 0) return { legs: null, why: 'salary' };
+    // another team takes back too much: the contract it would most like to move that covers the gap, to the asking team
+    for (const tid of others) {
+      const gap = gapOf(cur, tid);
+      if (gap <= 0) continue;
+      const used = inDeal(cur);
+      const fill = tradeRoster(league, tid)
+        .filter((p) => !used.pids.has(p.pid) && !p.contract.twoWay && !untradeable(league, p) && !tradedAwayBy(league, p, from) && capSalary(league, p.pid) >= gap)
+        .map((p) => ({ a: { kind: 'player' as const, id: p.pid, from: tid, to: from }, v: playerValueFor(league, p, tid, false) }))
+        .sort((x, y) => x.v - y.v)
+        .find((x) => gapOf(add(cur, x.a), tid) === 0 && broken(add(cur, x.a)) <= broken(cur));
+      if (!fill) return { legs: null, why: 'theirSalary' };
+      cur = add(cur, fill.a);
+      added.push(fill.a);
+    }
+  }
+  if (dealTeams(cur).some((tid) => gapOf(cur, tid) > 0)) return { legs: null, why: gapOf(cur, from) > 0 ? 'salary' : 'theirSalary' };
+  // a team with no part in the deal, and no salary found its way to it: nothing that follows gives it one
+  const out = idleIn(cur).filter((t) => t !== from);
+  if (out.length) return { legs: null, why: 'idle', idle: out[0] };
+  // ---- value: the team furthest from yes gets what covers its gap (a full roster sends a player)
+  for (let iter = 0; iter < 8; iter++) {
+    const ev = evaluateDeal(league, cur);
+    if (ev.accept) return { legs: cur, added };
+    const no = ev.teams.filter((t) => !t.accept).sort((x, y) => x.delta - y.delta)[0];
+    // (too many firsts out of their side: nothing added to it changes that)
+    if (no?.parts.tooManyFirsts) return { legs: null, why: 'value' };
+    const full = rosterOver(league, cur, from);
+    if (!no && !full) break;
+    const idle = idleIn(cur).filter((t) => t !== from);
+    // who gets it: the team that says no; with everyone at yes and a player to shed, a team with no part yet, else any
+    const tos = no ? [no.tid] : idle.length ? idle : others;
+    const need = no ? -no.delta : 0;
+    const errs = broken(cur);
+    const used = inDeal(cur);
+    const picks = full
+      ? []
+      : league.draftPicks
+          .filter((d) => d.tid === from && !used.dpids.has(d.dpid))
+          .flatMap((d) => tos.map((to) => ({ a: { kind: 'pick' as const, id: d.dpid, from, to }, v: pickValueFor(league, d, to, true) })));
+    const players = spare(cur).flatMap((p) => tos.map((to) => ({ a: { kind: 'player' as const, id: p.pid, from, to }, v: playerValueFor(league, p, to, true) })));
+    const cands = [...picks, ...players].filter((c) => (full || c.v > 0) && broken(add(cur, c.a)) <= errs);
+    if (!cands.length) break;
+    const covering = cands.filter((c) => c.v >= need).sort((x, y) => x.v - y.v);
+    const short = cands.filter((c) => c.v < need).sort((x, y) => y.v - x.v);
+    const pick = covering[0] && (covering[0].v <= need * 1.5 + 2 || !short.length) ? covering[0] : short[0];
+    cur = add(cur, pick.a);
+    added.push(pick.a);
+  }
+  const last = evaluateDeal(league, cur);
+  if (last.accept) return { legs: cur, added };
+  // every GM at yes and the rules passing but for a team with no part in it: this is a two-team deal
+  const idle = idleIn(cur).filter((t) => t !== from);
+  if (idle.length && broken(cur) === idle.length && last.teams.every((t) => t.accept || idle.includes(t.tid))) return { legs: null, why: 'idle', idle: idle[0] };
+  // (a GM still at no is the reason, whatever rule is also open: more value was what it took)
+  return { legs: null, why: last.teams.some((t) => !t.accept) || !broken(cur) ? 'value' : 'rules' };
+}
+
+/** What "make it work" added, in words: "Lu Dort to ATL and a 2029 2nd to BOS". */
+export function dealAddsText(league: League, added: DealAdd[]): string {
+  const name = (a: DealAdd) => (a.kind === 'player' ? playerName(league.players[a.id]) : `the ${pickLabel(league, findPick(league, a.id)!)}`);
+  const parts = added.map((a) => `${name(a)} to ${league.teams[a.to].abbrev}`);
+  return parts.length <= 1 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
 // ---------------------------------------------------------------- counter-offers

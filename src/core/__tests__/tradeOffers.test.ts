@@ -21,6 +21,8 @@ import {
   offerSubject,
   openProposals,
   proposalError,
+  proposalLegs,
+  proposalThird,
   setUntouchable,
 } from '../league/proposals';
 import { deadlineDay, seasonTrades } from '../league/deadline';
@@ -28,12 +30,15 @@ import { agenda } from '../league/agenda';
 import {
   MAX_FIRSTS_OUT,
   capSalary,
+  dealTeams,
+  evaluateDeal,
   evaluateTrade,
   executeTrade,
   neutralSplit,
   salaryMatchGap,
   tradeMatchLimit,
   untradeable,
+  validateDeal,
   validateTrade,
   type TradeOffer,
 } from '../league/trades';
@@ -467,11 +472,36 @@ it("AI deals: offers to the user, AI-to-AI trades, the deadline's ramp, rumors a
   // are deals the offering team accepts and the rules allow, never far against the user, four open at most and one per team, with one headline each
   {
     let n = 0;
+    let three = 0;
     for (const seed of [5, 9]) {
       const l = prSeason(seed);
       const made = offersThroughDeadline(l, (p) => {
-        expect(validateTrade(l, p.offer)).toEqual([]);
-        expect(evaluateTrade(l, p.offer).accept).toBe(true);
+        // (a deal is its legs: two teams' offer, or a three-team offer with a third team taking the salary)
+        expect(validateDeal(l, proposalLegs(p))).toEqual([]);
+        expect(evaluateDeal(l, proposalLegs(p)).accept).toBe(true);
+        if (!p.legs) expect(evaluateTrade(l, p.offer).accept).toBe(true);
+        else {
+          three++;
+          // three teams: the user's, the one that called and a third; the user's view is all he sends and all he gets
+          const third = proposalThird(l, p)!;
+          expect(new Set(dealTeams(p.legs))).toEqual(new Set([U, p.tid, third]));
+          expect([...p.offer.a.pids].sort()).toEqual(
+            p.legs
+              .filter((x) => x.tid === U)
+              .flatMap((x) => x.pids)
+              .sort(),
+          );
+          expect([...p.offer.b.pids].sort()).toEqual(
+            p.legs
+              .filter((x) => x.to === U)
+              .flatMap((x) => x.pids)
+              .sort(),
+          );
+          // the third team is there to take salary, and says so in the headline and the mail
+          expect(p.legs.some((x) => x.to === third && x.pids.length > 0)).toBe(true);
+          expect(offerSubject(l, p.offer, third)).toContain(`, with ${l.teams[third].abbrev}`);
+          expect(l.inbox.find((m) => m.proposal === p.id)!.body).toContain(l.teams[third].name);
+        }
         expect(proposalError(l, p)).toBeNull();
         const { net, out } = neutralBalance(l, p.offer);
         expect(net).toBeGreaterThanOrEqual(-0.1 * Math.max(0, out) - 1e-9);
@@ -482,7 +512,7 @@ it("AI deals: offers to the user, AI-to-AI trades, the deadline's ramp, rumors a
         expect(open.length).toBeLessThanOrEqual(MAX_OPEN);
         expect(new Set(open.map((x) => x.tid)).size).toBe(open.length);
         // one headline naming both sides, the same in the inbox and on the agenda, and the pitch in the other GM's name
-        const subject = offerSubject(l, p.offer);
+        const subject = offerSubject(l, p.offer, proposalThird(l, p));
         expect(subject.startsWith(`${l.teams[p.tid].abbrev} `)).toBe(true);
         // every player in the deal is named, on either side
         for (const pid of [...p.offer.a.pids, ...p.offer.b.pids]) expect(subject).toContain(l.players[pid].lastName);
@@ -495,6 +525,9 @@ it("AI deals: offers to the user, AI-to-AI trades, the deadline's ramp, rumors a
       expect(new Set(made.map((p) => p.kind)).has('buy')).toBe(true);
     }
     expect(n).toBeGreaterThan(4);
+    // (now and then a team calls a third in: an offer the two of them couldn't make)
+    expect(three).toBeGreaterThan(0);
+    expect(three).toBeLessThan(n / 2);
   }
 
   // pitch a player once at a time and rest a pitch three weeks before it comes back, one mail for each

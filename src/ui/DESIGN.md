@@ -57,13 +57,25 @@ Rules that follow from it:
 - **A three-team deal is its legs** (`TradeLeg` in `core/league/trades.ts`: what one team sends
   another). The rules and every GM's verdict read any deal that way, two teams or three, so each
   team is judged, and its salary matched, on all it sends against all it gets. Trade → 3-team
-  (`trade/ThreeTeam.tsx`) builds one: players and picks, each row with where it goes.
+  (`trade/ThreeTeam.tsx`) builds one: players and picks, each row with where it goes. It has what
+  the two-team builder has: **Make it work** (`makeDealWork` in `tradeHelp.ts`: salary first, then
+  value, to whichever GM is furthest from yes) and, in god mode, **Force this trade**
+  (`forceDeal`). While it is on screen the play row steps aside, as for the two-team dock.
+- **AI teams make three-team deals too** (`facilitatedDeal` in `aiTrades.ts`): a third team with
+  room takes the salary a seller has no use for. Between themselves, and as offers to you: such an
+  offer is a `Proposal` with `legs`, its headline ends ", with UTA", the Offers tab says where each
+  thing goes, and Review opens it in the three-team builder.
 - Routes from before the redesign redirect (`routes/legacy.tsx`); link to the new ones.
 - **Search finds everything.** The top bar's search (`components/QuickSearch.tsx`, ranking in
   `search.ts`; Ctrl/⌘ K or "/") reaches any player, team, screen or glossary word. A new screen
   gets an entry in `SCREENS` with the words players use for it.
 - **Teaching can be turned off.** The first-week guide, its welcome mail and Today's Glossary link
   follow `settings.teaching` (Settings → Help, and New League). Every `?` and `Term` stays.
+- **A career starts in a role** (New League, step 3): "GM + Head Coach" or "GM only". A preset over
+  switches that exist, not a mode (`Role` in `core/league/create.ts`): GM only sets the staff to
+  make its in-game tactics calls (`liveStaff`), keeps the assistant adjusting in simmed games, and
+  starts with the coaching guide put away and a note saying who runs the bench. Today's Guide link
+  brings the checklist back; every switch stays the user's to throw.
 
 ## How screens change the league
 
@@ -97,15 +109,26 @@ personalities, no conversations and no promises.
 - **Today is the front page** (`ui/today/FrontPage.tsx`, `front.ts`): the user's last result or top
   story, the next game's billing, form and pulse, the league's headlines; after a long sim, "While you
   were away" (`digest.ts`).
-- **The locker room has a pulse** (`core/league/pulse.ts`, read once a week): each player who expects
-  minutes against what he plays ("Wants more minutes", "Unhappy with his role"), and how tight the
-  five who play most are ("Strangers" to "Tight group": longer together and winning). A star short
-  for three weeks asks for a trade: front-page news, mail, a Needs-you item (Set his minutes, Shop
-  him, He stays), and he signs no new deal until he has his minutes back. One row on Team → Roster
-  (`team/LockerRoom.tsx`) opens it; a player's page carries his word as a tag. Signals only: it
-  changes nothing in the sim.
-- All of it reads the league and writes news, mail and its own state from `core/league/world.ts`,
-  never from the league's random stream: the games play out the same with or without it.
+- **Every locker room has a pulse** (`core/league/pulse.ts`, read once a week, a room per team): each
+  player who expects minutes against what he plays ("Wants more minutes", "Unhappy with his role"),
+  and how tight the five who play most are ("Strangers" to "Tight group": longer together and
+  winning). A star short for three weeks asks for a trade: front-page news, mail, a Needs-you item
+  (Set his minutes, Shop him, He stays), and he signs no new deal until he has his minutes back. One
+  row on Team → Roster (`team/LockerRoom.tsx`) opens it; a player's page carries his word as a tag.
+  Still signals only: nothing to talk through.
+- **Around the league a star tires of losing.** In his prime, on a team twenty games in and under
+  .400, some ask out after a month or two: league news, and his team puts him **on the block**. The
+  finder and a row's flag say "Asked for a trade", the rumor mill leads with him, his team would
+  take a little less (`WANTS_OUT`, with a note saying so), it may call you about him, and he
+  re-signs nowhere there. A team back near .500 gets him back. Your own players answer only for
+  their minutes.
+- **A settled core plays a little better**, yours and everyone's: from "Settled" up, a touch on its
+  shooting (`K.cohesion` in the engine; about a fifth of a point a game for a "Tight group"). Said in
+  words on the Locker room sheet ("Executes a little better on the floor"), never as a figure.
+  The season forecast expects it (`expectedCohesion`), so an owner's goals already allow for it.
+- The press, the watch and the legacy read the league and write news, mail and their own state from
+  `core/league/world.ts`; the games play out the same with or without them. The pulse is the one
+  part that changes the league, as above. None of it draws from the league's random stream.
 
 ## Principles
 
@@ -591,9 +614,13 @@ package (ink plates, white type); the console is paper and card stock like every
   envelope, through one limiter. No audio files. A touch opens it; a hidden tab is silent.
 - **The live game is heard as the court plays it** (`live/gameSound.ts`, from CourtView's beats): the
   dribble, the net, the rim, a dunk, a block, the whistle on a foul, a dead-ball turnover or a
-  timeout; the home crowd cheers its baskets and groans at the visitors'. The building
+  timeout, the buzzer on a shot clock violation (the court flashes "Shot clock"); the home crowd
+  cheers its baskets and groans at the visitors'. The building
   (`live/SoundStage.tsx`): a murmur at the night's crowd level, the horn at a period's end and the
   final, a roar on a home run and in clutch time. Nothing at 4×'s pace but the results.
+- **A chime when something of yours lands** (`ui/cues.ts`): a trade your team is in (read off the
+  transaction log, so every way of making one rings), your draft pick, and each career moment that
+  takes the screen. It rides Game sounds.
 - **Two switches and a volume** in Settings → Game (the device's, not the league's): Game sounds
   (on), Interface sounds (off: a tick under every control, from one listener in the shell). The
   speaker in the court's foot corner mutes the game.

@@ -8,7 +8,9 @@ import { compareCells, fmtNum } from '../components/ui';
 import { applyAccent, contrast, lookDistance, matchKits, neutralVenue, setNight, teamLook, venueLook } from '../teamColors';
 import { spread } from '../live/Court';
 import { FRANCHISES } from '../../core/teams';
-import { keepFigures } from '../../core/format';
+import { An, an, keepFigures } from '../../core/format';
+import { ringsFor } from '../cues';
+import { ROLES } from '../settingsOptions';
 
 describe('display helpers', () => {
   it('read numbers, clocks and finals, sort table cells, build box minutes, starters and season lines, and keep colours readable', async () => {
@@ -32,6 +34,30 @@ describe('display helpers', () => {
     ];
     for (const [n, s] of cases) expect(ordinal(n)).toBe(s);
     expect(ordinalSuffix(53)).toBe('rd');
+
+    // the article a number takes read aloud: "An 8-point loss", "an 11-game skid", "a 118-110 win" (it read "A 8-point loss")
+    {
+      for (const n of [8, 11, 18, 80, 85, 89, 8.4, 18.5, 800, 8000, 11000, 85_000]) expect(an(n)).toBe('an');
+      for (const n of [0, 1, 2, 7, 9, 10, 12, 17, 19, 20, 28, 79, 90, 100, 108, 110, 118, 180, 1100, 1800, 0.8]) expect(an(n)).toBe('a');
+      expect(`${An(8)} 8-point loss.`).toBe('An 8-point loss.');
+      expect(`${An(9)} 9-point loss.`).toBe('A 9-point loss.');
+      expect(an(-8)).toBe('an');
+    }
+
+    // the chime (ui/cues.ts): a trade your team is in, your own pick; nobody else's, and no signing
+    {
+      const me = { userTid: 3 };
+      expect(ringsFor(me, { kind: 'trade', tids: [7, 3] })).toBe(true);
+      expect(ringsFor(me, { kind: 'trade', tids: [1, 3, 9] })).toBe(true);
+      expect(ringsFor(me, { kind: 'trade', tids: [7, 9] })).toBe(false);
+      expect(ringsFor(me, { kind: 'draft', tids: [3] })).toBe(true);
+      expect(ringsFor(me, { kind: 'draft', tids: [7] })).toBe(false);
+      expect(ringsFor(me, { kind: 'sign', tids: [3] })).toBe(false);
+    }
+
+    // a new career's role: two, each said in a line a phone shows whole
+    expect(ROLES.map((r) => r.id)).toEqual(['coach', 'gm']);
+    for (const r of ROLES) expect(r.line.split(/[.:] /).every((x) => x.split(' ').length <= 15)).toBe(true);
 
     // never "-0.0": a value that rounds to zero reads as zero, with no sign
     // (a -1 plus-minus over 30 games, a net rating that rounds to nothing)
@@ -251,6 +277,27 @@ describe('display helpers', () => {
       const navy: [string, string, string] = ['#0c2340', '#236192', '#9ea2a2'];
       setNight(true);
       for (const ground of grounds) expect(contrast(teamLook(navy).text, ground)).toBeGreaterThanOrEqual(4.5);
+      // a link before any team is yours (a new league's first step) reads on the night page: the default blue, lifted
+      const nightLink = /--team-text: (#[0-9a-f]{6});/.exec(night)![1];
+      for (const ground of grounds) expect(contrast(nightLink, ground), `night default link on ${ground}`).toBeGreaterThanOrEqual(4.5);
+      // Today's tag that is a link: every team's colour on its own 12% wash over the night page clears 4.5:1, and by more than on the grey chip
+      {
+        const hex = (c: string) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+        const wash = (c: string, over: string) =>
+          `#${hex(c)
+            .map((v, i) =>
+              Math.round(v * 0.12 + hex(over)[i] * 0.88)
+                .toString(16)
+                .padStart(2, '0'),
+            )
+            .join('')}`;
+        for (const f of FRANCHISES) {
+          const text = teamLook(f.colors).text;
+          const on = contrast(text, wash(text, nightVar('bg')));
+          expect(on, `${f.abbrev} tag link at night`).toBeGreaterThanOrEqual(4.5);
+          expect(on, `${f.abbrev} tag link against the chip`).toBeGreaterThanOrEqual(contrast(text, nightVar('surface-2')) - 0.01);
+        }
+      }
       setNight(false);
       for (const ground of ['#ffffff', '#f3efe7']) expect(contrast(teamLook(navy).text, ground)).toBeGreaterThanOrEqual(4.5);
       // the signals read as text on every ground, and --bad, --warn and the elite gold stand apart by

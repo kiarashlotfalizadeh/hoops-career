@@ -6,7 +6,7 @@
 // checklist item. Job security: the meter, the grace period, the ultimatum.
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
-import { createLeague, defaultSettings, type SeedData } from '../league/create';
+import { createLeague, defaultSettings, roleSettings, type SeedData } from '../league/create';
 import { agenda, agendaBlocker, cutOrder, GUIDE_STEPS, guideDone, guideFinished, guideOpen, guideStepOpen, guideStepTitle, resolveAgenda, showGuide } from '../league/agenda';
 import { canStartRegularSeason, simDay, startRegularSeason } from '../league/season';
 import { CAP_FOR, curTeamSeason, fmtDate, playerName, revenueScale, standardRoster } from '../league/helpers';
@@ -336,6 +336,35 @@ describe('the agenda', () => {
       expect(camp(5).inbox.some((m) => m.subject === 'Your first games')).toBe(true);
       l.settings.teaching = true;
       expect(guideOpen(l)).toBe(true);
+    }
+
+    // a GM-only career (create.ts's Role): a preset over switches that exist. The staff makes its in-game calls and adjusts in simmed games,
+    // the coaching guide starts put away with a note saying who runs the bench, and Today's Guide link brings the checklist back
+    {
+      const make = (role?: 'coach' | 'gm', settings = defaultSettings()) => createLeague({ name: 'role', userTid: 5, coachName: 'c', settings, seed: null, rngSeed: 5, role });
+      expect(roleSettings('gm')).toEqual({ liveStaff: 'auto' });
+      expect(roleSettings('coach')).toEqual({ liveStaff: 'ask' });
+      const gm = make('gm');
+      expect(gm.settings.liveStaff).toBe('auto');
+      expect(gm.teams[5].tactics.manage.assistantAdjusts).not.toBe(false);
+      expect(gm.teams[5].rotation.manual || gm.teams[5].tactics.manual).toBeFalsy();
+      expect(gm.onboarding).toEqual({ done: [], hidden: true });
+      expect(guideOpen(gm)).toBe(false);
+      expect(agenda(gm).some((i) => i.kind === 'guide')).toBe(false);
+      expect(gm.inbox.some((m) => m.subject === 'Your first games')).toBe(false);
+      expect(gm.inbox.find((m) => m.subject === 'The staff has the bench')).toMatchObject({ from: 'Assistant Coach', link: '/' });
+      // (the bench is one tap away: the guide comes back whole)
+      showGuide(gm);
+      expect(guideOpen(gm)).toBe(true);
+      expect(agenda(gm).find((i) => i.kind === 'guide')!.title).toBe(`Your first games · 0 of ${GUIDE_STEPS.length} done`);
+      // GM and head coach is the career as it always started, said or not; the preset decides its own switch whatever the settings carried
+      const coach = make('coach', { ...defaultSettings(), liveStaff: 'auto' });
+      expect(coach.settings.liveStaff).toBe('ask');
+      expect(coach.onboarding).toEqual({ done: [] });
+      expect(make().settings.liveStaff).toBeUndefined();
+      expect(make().onboarding).toEqual({ done: [] });
+      // with teaching off the GM gets no note either
+      expect(make('gm', { ...defaultSettings(), teaching: false }).inbox.some((m) => m.from === 'Assistant Coach')).toBe(false);
     }
 
     // job security reads a neutral standing as steady on opening night, and the grace period

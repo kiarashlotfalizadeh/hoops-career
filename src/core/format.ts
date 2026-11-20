@@ -27,6 +27,20 @@ export const ordinalSuffix = (n: number) => {
 };
 export const ordinal = (n: number) => `${n}${ordinalSuffix(n)}`;
 
+/**
+ * The article a number takes when it's read aloud: "an 8-point loss", "an 11-game skid", "an 18.4-a-game
+ * scorer", "an 85-80 win", "a 9-point loss", "a 118-110 win". Only eight, eleven, eighteen and the
+ * eighties start with a vowel sound, alone or leading a bigger figure (800, 11,000).
+ */
+export function an(n: number): 'a' | 'an' {
+  let head = Math.floor(Math.abs(n));
+  while (head >= 1000) head = Math.floor(head / 1000);
+  if (head >= 100) head = Math.floor(head / 100);
+  return head === 8 || head === 11 || head === 18 || (head >= 80 && head < 90) ? 'an' : 'a';
+}
+/** The same, starting a sentence: "An 8-point loss." */
+export const An = (n: number): 'A' | 'An' => (an(n) === 'an' ? 'An' : 'A');
+
 /** A rank with the field it's out of: "7th of 30". */
 export const rankOf = (n: number, of: number) => `${ordinal(n)} of ${of}`;
 

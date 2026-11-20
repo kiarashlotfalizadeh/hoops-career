@@ -1,11 +1,36 @@
-// The locker room's pulse (league/pulse.ts): the weekly read of each player's role and the core's
-// cohesion, a star's trade request and what it does (the agenda, re-signing), and its withdrawal.
+// The locker rooms' pulse (league/pulse.ts): the weekly read of each player's role and the core's
+// cohesion, a star's trade request and what it does (the agenda, re-signing), and its withdrawal;
+// around the league, a star who tires of losing, the block he lands on, and what cohesion is worth
+// on the floor.
 import { expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { agenda, resolveAgenda } from '../league/agenda';
 import { extensionRefusal } from '../league/contracts';
 import { curTeamSeason, standardRoster } from '../league/helpers';
-import { ASK_WEEKS, UNHAPPY, askedOut, cohesionWord, expectedMinutes, openRequests, pulseDay, pulseRead, roleRead } from '../league/pulse';
+import {
+  ASK_WEEKS,
+  COHESION_EDGE,
+  LOSING_WEEKS,
+  OUT_OF_IT,
+  UNHAPPY,
+  askedOut,
+  cohesionEffect,
+  cohesionOf,
+  cohesionWord,
+  expectedMinutes,
+  losingPatience,
+  openRequests,
+  pulseDay,
+  pulseRead,
+  roleRead,
+  tradeRequests,
+  wantsOut,
+} from '../league/pulse';
+import { onTheBlock, sellable } from '../league/aiTrades';
+import { availability } from '../league/tradeFinder';
+import { WANTS_OUT, playerValueFor } from '../league/trades';
+import { buildSimInput } from '../league/games';
+import { K, cohesionLift } from '../sim/engine/constants';
 import type { League, Player } from '../types';
 
 const U = 0;
@@ -17,15 +42,15 @@ function pulseLeague(): League {
   return l;
 }
 
-/** Play `games` more team games in a week, each player getting `mpg(p)` minutes a game. */
-function week(l: League, games: number, mpg: (p: Player) => number, wins = games) {
-  const ts = curTeamSeason(l, U);
+/** Team `tid` plays `games` more games, each player getting `mpg(p)` minutes a game. */
+function play(l: League, tid: number, games: number, mpg: (p: Player) => number, wins = games) {
+  const ts = curTeamSeason(l, tid);
   ts.won += wins;
   ts.lost += games - wins;
-  for (const p of standardRoster(l, U)) {
-    let row = p.stats.find((s) => s.season === l.season && !s.playoffs && s.tid === U);
+  for (const p of standardRoster(l, tid)) {
+    let row = p.stats.find((s) => s.season === l.season && !s.playoffs && s.tid === tid);
     if (!row) {
-      row = { ...p.stats[0], season: l.season, tid: U, playoffs: false, gp: 0, gs: 0, min: 0 } as Player['stats'][number];
+      row = { ...p.stats[0], season: l.season, tid, playoffs: false, gp: 0, gs: 0, min: 0 } as Player['stats'][number];
       // (a generated player may have no stats row to copy: the fields the pulse reads are these)
       p.stats.push(row);
     }
@@ -33,6 +58,11 @@ function week(l: League, games: number, mpg: (p: Player) => number, wins = games
     row.gp += m > 0 ? games : 0;
     row.min += m * games;
   }
+}
+
+/** A week of the user's team (see play), then the week's read. */
+function week(l: League, games: number, mpg: (p: Player) => number, wins = games) {
+  play(l, U, games, mpg, wins);
   l.day += 7;
   pulseDay(l);
 }
@@ -64,15 +94,15 @@ it('the locker room: roles read from minutes, a core that grows together, a star
   week(l, 4, fair);
   week(l, 4, fair);
   // (the first read only takes its bearings: nobody is judged on a week that wasn't measured)
-  expect(Object.values(l.pulse!.low).every((n) => n === 0)).toBe(true);
-  expect(Object.values(l.pulse!.mood).every((m) => m >= 0)).toBe(true);
-  expect(l.pulse!.core).toHaveLength(5);
-  expect(l.pulse!.core).toContain(star.pid);
+  expect(Object.values(l.pulse!.rooms[U].low).every((n) => n === 0)).toBe(true);
+  expect(Object.values(l.pulse!.rooms[U].mood).every((m) => m >= 0)).toBe(true);
+  expect(l.pulse!.rooms[U].core).toHaveLength(5);
+  expect(l.pulse!.rooms[U].core).toContain(star.pid);
   expect(pulseRead(l).roles).toEqual([]);
-  const early = l.pulse!.cohesion;
+  const early = l.pulse!.rooms[U].cohesion;
   for (let i = 0; i < 6; i++) week(l, 4, fair);
-  expect(l.pulse!.cohesion).toBeGreaterThan(early);
-  expect(l.pulse!.mood[star.pid]).toBeGreaterThan(0);
+  expect(l.pulse!.rooms[U].cohesion).toBeGreaterThan(early);
+  expect(l.pulse!.rooms[U].mood[star.pid]).toBeGreaterThan(0);
   expect(cohesionWord(0.8)).toBe('Tight group');
   expect(cohesionWord(0.2)).toBe('Strangers');
 
@@ -82,7 +112,7 @@ it('the locker room: roles read from minutes, a core that grows together, a star
   while (!askedOut(l, star) && weeks < 12) {
     week(l, 4, benched, 2);
     weeks++;
-    if (!askedOut(l, star) && l.pulse!.mood[star.pid] <= UNHAPPY) expect(['Wants more minutes', 'Unhappy with his role']).toContain(roleRead(l, star)!.word);
+    if (!askedOut(l, star) && l.pulse!.rooms[U].mood[star.pid] <= UNHAPPY) expect(['Wants more minutes', 'Unhappy with his role']).toContain(roleRead(l, star)!.word);
   }
   expect(askedOut(l, star)).toBe(true);
   expect(weeks).toBeGreaterThanOrEqual(ASK_WEEKS);
@@ -119,14 +149,107 @@ it('the locker room: roles read from minutes, a core that grows together, a star
   expect(extensionRefusal(l, star) ?? '').not.toContain('asked for a trade');
 
   // a core member traded away: the group starts again, and whoever left takes his standing with him
-  const tight = l.pulse!.cohesion;
+  const tight = l.pulse!.rooms[U].cohesion;
   second.tid = 1;
   l.teams[U].rotation.order = l.teams[U].rotation.order.filter((pid) => pid !== second.pid);
   week(l, 4, fair);
-  expect(l.pulse!.cohesion).toBeLessThan(tight);
-  expect(l.pulse!.mood[second.pid]).toBeUndefined();
-  expect(l.pulse!.core).not.toContain(second.pid);
+  expect(l.pulse!.rooms[U].cohesion).toBeLessThan(tight);
+  expect(l.pulse!.rooms[U].mood[second.pid]).toBeUndefined();
+  expect(l.pulse!.rooms[U].core).not.toContain(second.pid);
   expect([third, fourth, fifth].every((p) => roleRead(l, p) === null || roleRead(l, p)!.word === 'Content')).toBe(true);
+
+  // ---- around the league: every team has a room, read the same week
+  const T = 5;
+  expect(l.pulse!.rooms[T]).toBeDefined();
+  {
+    // what a group's cohesion is worth on the floor: nothing until it is settled, then a touch more with every step, the same for every team
+    expect(cohesionLift(undefined)).toBe(0);
+    expect(cohesionLift(COHESION_EDGE - 0.1)).toBe(0);
+    expect(cohesionLift(0.8)).toBeGreaterThan(0);
+    expect(cohesionLift(0.8)).toBeLessThan(cohesionLift(1));
+    expect(cohesionLift(1)).toBeCloseTo(K.cohesion.fg, 10);
+    // (small on purpose: under half a percentage point of shooting at the very top)
+    expect(K.cohesion.fg).toBeLessThanOrEqual(0.005);
+    expect(K.cohesion.from).toBe(COHESION_EDGE);
+    expect(cohesionEffect(0.4)).toBe('No lift on the floor yet.');
+    expect(cohesionEffect(0.6)).toBe('Executes a little better on the floor.');
+    expect(pulseRead(l).effect).toBe(cohesionEffect(l.pulse!.rooms[U].cohesion));
+    // the sim is handed each side's cohesion as the pulse last read it
+    expect(buildSimInput(l, U, l.day, 'regular').cohesion).toBe(l.pulse!.rooms[U].cohesion);
+    expect(buildSimInput(l, T, l.day, 'regular').cohesion).toBe(cohesionOf(l, T));
+  }
+  {
+    // a star in his prime on a team that is out of it: after his patience runs out he asks for a trade, and his team puts him on the block
+    const theirs = standardRoster(l, T).sort((a, b) => b.ovr - a.ovr || a.pid - b.pid);
+    for (const p of theirs) {
+      p.injury = null;
+      p.bornYear = l.season - 29;
+      p.joinedSeason = l.season - 2;
+    }
+    // (some stars ride it out: the test takes one who wouldn't)
+    const rider = theirs.find((p) => losingPatience(l, p) === Infinity)!;
+    const star2 = theirs.find((p) => losingPatience(l, p) < Infinity)!;
+    const patience = losingPatience(l, star2);
+    expect(patience).toBeGreaterThanOrEqual(LOSING_WEEKS[0]);
+    expect(patience).toBeLessThanOrEqual(LOSING_WEEKS[1]);
+    for (const p of theirs) p.ovr = Math.min(p.ovr, 80);
+    star2.ovr = 93;
+    rider.ovr = 90;
+    // (a kid, or a player who only just arrived, never asks over the record)
+    star2.bornYear = l.season - 22;
+    expect(losingPatience(l, star2)).toBe(Infinity);
+    star2.bornYear = l.season - 29;
+    star2.joinedSeason = l.season;
+    expect(losingPatience(l, star2)).toBe(Infinity);
+    star2.joinedSeason = l.season - 2;
+    l.teams[T].strategy = 'contend';
+    expect(sellable(l, T)).toEqual([]);
+    const before = playerValueFor(l, star2, T, false, true);
+    const mail = l.inbox.length;
+    const theirFair = (p: Player) => expectedMinutes(l, p) || 4;
+    let weeks = 0;
+    while (!wantsOut(l, star2) && weeks < 20) {
+      // everyone plays his minutes: it is the losing, not the role
+      play(l, T, 4, theirFair, 1);
+      week(l, 4, fair);
+      weeks++;
+    }
+    expect(wantsOut(l, star2)).toBe(true);
+    // (out of it from twenty games in: his patience is counted from there)
+    expect(weeks).toBeGreaterThanOrEqual(Math.ceil(OUT_OF_IT.games / 4) + patience - 1);
+    expect(wantsOut(l, rider)).toBe(false);
+    expect(l.pulse!.rooms[T].asked[star2.pid]).toMatchObject({ why: 'losing' });
+    expect(tradeRequests(l).map((p) => p.pid)).toEqual([star2.pid]);
+    // league news, not the user's mail or his agenda
+    const told = l.news.filter((n) => n.pids?.includes(star2.pid)).pop()!;
+    expect(told.head).toContain('asks the');
+    expect(told.text).toContain('wants to play for a winner');
+    expect(told.weight).toBe(2);
+    expect(l.inbox.length).toBe(mail);
+    expect(openRequests(l)).toEqual([]);
+    expect(askedOut(l, star2)).toBe(false);
+    // on the block, a contender's too: the rumor mill and the finder say he asked, he counts for a little less going out, and he signs nothing there
+    expect(sellable(l, T).map((p) => p.pid)).toEqual([star2.pid]);
+    // (the test's weeks ran past the deadline: the block is read while deals can be made)
+    l.tradeDeadlineDay = l.day + 30;
+    expect(onTheBlock(l, 30)[0]).toMatchObject({ tid: T, pid: star2.pid, asked: true });
+    expect(availability(l, star2)).toBe('asked');
+    expect(roleRead(l, star2)).toMatchObject({ word: 'Asked for a trade', why: 'losing' });
+    expect(roleRead(l, rider)).toBeNull();
+    const after = playerValueFor(l, star2, T, false, true);
+    expect(after).toBeLessThan(before * (WANTS_OUT + 0.05));
+    expect(extensionRefusal(l, star2)).toContain("won't sign a new deal while the team is losing");
+    // the team climbs back: he withdraws it
+    let back = 0;
+    while (wantsOut(l, star2) && back < 30) {
+      play(l, T, 4, theirFair, 4);
+      week(l, 4, fair);
+      back++;
+    }
+    expect(wantsOut(l, star2)).toBe(false);
+    expect(l.news.filter((n) => n.pids?.includes(star2.pid)).pop()!.text).toContain('are winning again');
+    expect(sellable(l, T)).toEqual([]);
+  }
 
   // the off-season: nothing is read
   const day = l.pulse!.day;

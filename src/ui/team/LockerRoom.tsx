@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { League } from '../../core/types';
-import { pulseRead, type RoleRead } from '../../core/league/pulse';
+import { COHESION_EDGE, pulseRead, type RoleRead } from '../../core/league/pulse';
 import { teamPlayers } from '../../core/league/helpers';
 import { useLeagueMemo } from '../../state/store';
 import { Bar, Sheet } from '../components/ui';
@@ -18,7 +18,7 @@ export function LockerRoom({ league }: { league: League }) {
   const [open, setOpen] = useState(false);
   const read = useLeagueMemo(() => pulseRead(league), [league]);
   // (before the first read, ten games in, there is nothing to say)
-  if (!league.pulse || !read.core.length) return null;
+  if (!read.core.length) return null;
   const nameOf = rosterNames(teamPlayers(league, league.userTid));
   const alarm = read.roles.some((r) => r.asked) ? 'bad' : read.roles.length ? 'warn' : '';
   return (
@@ -41,6 +41,7 @@ export function LockerRoom({ league }: { league: League }) {
             </div>
             <Bar value={read.cohesion * 100} />
             <div className="small dim2">{read.core.map((pid) => nameOf(pid)).join(' · ')}</div>
+            <div className={`small ${read.cohesion >= COHESION_EDGE ? 'good' : 'dim2'}`}>{read.effect}</div>
             <div className="small dim2">A core grows tighter the longer it plays and wins together. Trade one of the five and it starts again.</div>
           </div>
           {read.roles.length > 0 ? (
@@ -50,9 +51,7 @@ export function LockerRoom({ league }: { league: League }) {
                   <Link key={r.pid} to={`/player/${r.pid}`} className="listrow clickable" onClick={() => setOpen(false)}>
                     <span className="grow tm-pulse-who">
                       <span className="lr-name">{nameOf(r.pid)}</span>
-                      <span className="lr-meta">
-                        Expects {r.expects} a game · plays {r.plays}
-                      </span>
+                      <span className="lr-meta">{r.why === 'losing' ? 'Wants out of a losing team' : `Expects ${r.expects} a game · plays ${r.plays}`}</span>
                     </span>
                     <span className={`tag ${TONE[r.tone]}`}>{r.word}</span>
                   </Link>
@@ -63,7 +62,8 @@ export function LockerRoom({ league }: { league: League }) {
             <div className="empty">Everyone who expects minutes is getting them.</div>
           )}
           <div className="small dim2">
-            A star short of his minutes for three weeks asks for a trade. He won't sign a new deal until he has them back. A tight, winning group is slower to complain.
+            A star short of his minutes for three weeks asks for a trade. He won't sign a new deal until he has them back. A tight, winning group is slower to complain. Every team
+            has a room like this one: a settled core plays a little better everywhere, and a star tired of losing asks out too.
           </div>
           <Link to="/team/rotation" className="btn block" onClick={() => setOpen(false)}>
             Set the rotation
