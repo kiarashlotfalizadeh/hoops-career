@@ -5,7 +5,7 @@ import type { GameResult, League, Player } from '../../core/types';
 import { RETIRED } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { FRANCHISES } from '../../core/teams';
-import { fmtDate, playerName } from '../../core/league/helpers';
+import { fmtDate, playerName, teamCity } from '../../core/league/helpers';
 import { gameStoryFor } from '../../core/analysis/gameStory';
 import { f1, playerSeason } from '../stats';
 import { pct } from '../components/ui';
@@ -67,7 +67,7 @@ export function gamePosterOf(league: League, g: GameResult): GamePoster {
     over: ['Final', g.ot ? (g.ot > 1 ? `${g.ot}OT` : 'OT') : '', fmtDate(g.season, g.day, { weekday: 'short', month: 'short', day: 'numeric' }), story?.kicker ?? '']
       .filter(Boolean)
       .join(' · '),
-    head: story?.head ?? `${league.teams[w.tid].name} beat the ${league.teams[l.tid].name}`,
+    head: story?.head ?? `${teamCity(league, w.tid)} beat ${teamCity(league, l.tid)}`,
     hero: hero ? { name: playerName(hero), line: story?.heroLine ?? (top ? `${top.pts} pts · ${top.orb + top.drb} reb · ${top.ast} ast` : '') } : undefined,
     means: story?.means ?? [],
   };

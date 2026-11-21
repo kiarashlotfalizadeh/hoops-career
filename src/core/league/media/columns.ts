@@ -15,7 +15,7 @@ import type { MediaState } from '../media';
 import { gradeReason, gradeTrade, type SideGrade } from './grades';
 import { strengths, seriesOdds } from './strength';
 import { awardLine, droughtLine, rematchLine, titleLine } from './history';
-import { Voice, aGrade, confName, f1, gradeFor, last, list, netOf, nth, perGame, poss, publish, rec, recOf, rosters, signed, tsOf, type Grade } from './voice';
+import { Voice, aGrade, city, confName, f1, gradeFor, last, list, netOf, nth, perGame, poss, publish, rec, recOf, rosters, signed, tsOf, type Grade } from './voice';
 
 /** Whether a column has run this season, and mark it run. */
 function once(league: League, m: MediaState, key: string): boolean {
@@ -68,31 +68,31 @@ function tradeColumn(league: League, m: MediaState, t: Txn, g: [SideGrade, SideG
   const v = new Voice(worldRng(league, 'grade', t.id), m);
   // the user's side first
   const [a, b] = g[1].tid === league.userTid ? [g[1], g[0]] : g;
-  const NA = league.teams[a.tid].name;
-  const NB = league.teams[b.tid].name;
+  const NA = city(league, a.tid);
+  const NB = city(league, b.tid);
   const star = [...a.got.players, ...b.got.players].sort((x, y) => y.ovr - x.ovr || x.pid - y.pid)[0];
   const L = star ? last(league, star) : null;
   const head =
     a.tid === league.userTid
       ? v.say('grade-u', [
-          `Grading the ${poss(NA)} trade with the ${NB}: ${aGrade(a.grade)}`,
-          `The ${NA} get ${aGrade(a.grade)} for the ${L ? `${L} ` : ''}deal`,
+          `Grading ${poss(NA)} trade with ${NB}: ${aGrade(a.grade)}`,
+          `${NA} gets ${aGrade(a.grade)} for the ${L ? `${L} ` : ''}deal`,
           `Trade grades: ${NA} ${a.grade}, ${NB} ${b.grade}`,
-          `${a.grade} for the ${NA}: the trade with the ${NB}, graded`,
+          `${a.grade} for ${NA}: the trade with ${NB}, graded`,
         ])
       : weight >= 2 && L
         ? v.say('grade-big', [
             `Trade grades: ${NA} ${a.grade}, ${NB} ${b.grade}`,
-            `Who won the ${L} trade? Grading the ${NA} and ${NB}`,
+            `Who won the ${L} trade? Grading ${NA} and ${NB}`,
             `The ${L} deal, graded`,
-            `${L} moves: the ${NA} get ${aGrade(a.grade)}, the ${NB} ${aGrade(b.grade)}`,
+            `${L} moves: ${NA} gets ${aGrade(a.grade)}, ${NB} ${aGrade(b.grade)}`,
           ])
         : `Trade grades: ${NA} ${a.grade}, ${NB} ${b.grade}`;
   const sentTo = star ? (a.got.players.includes(star) ? a.tid : b.tid) : null;
   const dek =
     star && sentTo !== null
-      ? `${playerName(star)} goes to the ${league.teams[sentTo].name}. The ${NA} get ${aGrade(a.grade)}, the ${NB} ${aGrade(b.grade)}.`
-      : `The ${NA} get ${aGrade(a.grade)}, the ${NB} ${aGrade(b.grade)}.`;
+      ? `${playerName(star)} goes to ${city(league, sentTo)}. ${NA} gets ${aGrade(a.grade)}, ${NB} ${aGrade(b.grade)}.`
+      : `${NA} gets ${aGrade(a.grade)}, ${NB} ${aGrade(b.grade)}.`;
   const say = (opts: string[]) => v.pick(opts);
   const body = [`${NA}: ${a.grade}. ${gradeReason(league, a, say)}`, `${NB}: ${b.grade}. ${gradeReason(league, b, say)}`];
   // the trade's own news item becomes its graded story (its line stays the dek): one item a trade
@@ -135,7 +135,7 @@ function signingColumn(league: League, m: MediaState, txns: Txn[]) {
   const v = new Voice(worldRng(league, 'signings', league.season, league.phase, league.day, league.faDay), m);
   const lines = takes.map(({ t, p, market }) => {
     const tid = t.tids[0];
-    const N = league.teams[tid].name;
+    const N = city(league, tid);
     const L = last(league, p);
     const yrs = t.years ?? 1;
     const age = playerAge(p, league.season);
@@ -146,13 +146,13 @@ function signingColumn(league: League, m: MediaState, txns: Txn[]) {
         ? v.pick([
             `That's an overpay: the market had him nearer ${money(market)} a year.`,
             `Too much. He's worth something like ${money(market)} a season.`,
-            `The ${N} paid a premium: about ${money(t.amount! - market)} a year over his value.`,
+            `${N} paid a premium: about ${money(t.amount! - market)} a year over his value.`,
           ])
         : ratio <= 0.85
           ? v.pick([
               `A bargain: he's worth closer to ${money(market)} a season.`,
               `Good business. That's well under the ${money(market)} he could command.`,
-              `The ${N} got a discount.`,
+              `${N} got a discount.`,
             ])
           : v.pick([`Fair money for what he is.`, `About what the market said.`, `A market-rate deal.`]);
     const risk =
@@ -172,7 +172,7 @@ function signingColumn(league: League, m: MediaState, txns: Txn[]) {
       N,
       L,
       deal,
-      text: `${playerName(p)} to the ${N} (${deal}${t.kind === 'resign' ? ', re-signed' : ''}). ${verdict}${risk}${pg && pg.gp >= 20 ? ` ${when}: ${f1(pg.pts)} points a game.` : ''}`,
+      text: `${playerName(p)} to ${N} (${deal}${t.kind === 'resign' ? ', re-signed' : ''}). ${verdict}${risk}${pg && pg.gp >= 20 ? ` ${when}: ${f1(pg.pts)} points a game.` : ''}`,
       ratio,
     };
   });
@@ -181,9 +181,9 @@ function signingColumn(league: League, m: MediaState, txns: Txn[]) {
   const head =
     lines.length === 1
       ? v.say('sign-1', [
-          `The ${lead.N} land ${lead.L}: ${word(lead.ratio)}?`,
-          `${lead.L} to the ${lead.N}, and the verdict`,
-          `The ${lead.N} pay ${lead.L}`,
+          `${lead.N} lands ${lead.L}: ${word(lead.ratio)}?`,
+          `${lead.L} to ${lead.N}, and the verdict`,
+          `${lead.N} pays ${lead.L}`,
           `${lead.L}'s new deal: ${word(lead.ratio)}`,
         ])
       : v.say('sign-n', [
@@ -191,7 +191,7 @@ function signingColumn(league: League, m: MediaState, txns: Txn[]) {
           `Signings, judged: ${list(lines.map((x) => x.L))}`,
           `The day's big deals: ${list(lines.map((x) => x.L))}`,
         ]);
-  const dek = `${playerName(lead.p)} signs with the ${lead.N} for ${lead.deal}: ${word(lead.ratio)}${lines.length > 1 ? `, and ${lines.length - 1} more` : ''}.`;
+  const dek = `${playerName(lead.p)} signs with ${lead.N} for ${lead.deal}: ${word(lead.ratio)}${lines.length > 1 ? `, and ${lines.length - 1} more` : ''}.`;
   const weight = lead.t.tids[0] === league.userTid ? (takes[0].share >= 0.25 ? 3 : 2) : takes[0].share >= 0.25 ? 2 : 1;
   publish(league, { kind: 'column', head, dek, body: lines.map((x) => x.text), tids: lines.map((x) => x.t.tids[0]), pids: lines.map((x) => x.p.pid), weight });
 }
@@ -222,7 +222,7 @@ export function surprisesColumn(league: League, m: MediaState) {
   if (!up.length && !down.length) return;
   const rost = rosters(league);
   const u = rows[league.userTid];
-  const N = (tid: number) => league.teams[tid].name;
+  const N = (tid: number) => city(league, tid);
   const why = (r: (typeof rows)[number]) => {
     const hurt = rost[r.tid].slice(0, 3).find((p) => p.injury && p.injury.gamesRemaining > 0);
     const star = rost[r.tid][0];
@@ -231,34 +231,29 @@ export function surprisesColumn(league: League, m: MediaState) {
     if (r.d > 0 && pg && pg.gp >= 5) return `${last(league, star)} is averaging ${f1(pg.pts)}.`;
     return `Their net rating is ${signed(netOf(r.ts))}.`;
   };
-  const line = (r: (typeof rows)[number]) => `The ${N(r.tid)} (${recOf(r.ts)}) were picked for ${r.proj} wins and are on pace for ${r.p}. ${why(r)}`;
+  const line = (r: (typeof rows)[number]) => `${N(r.tid)} (${recOf(r.ts)}): picked for ${r.proj} wins, on pace for ${r.p}. ${why(r)}`;
   const userTop = up[0]?.tid === league.userTid || down[0]?.tid === league.userTid;
   const head = userTop
     ? up[0]?.tid === league.userTid
-      ? v.say('sur-u-up', [`Three weeks in, the ${N(u.tid)} are the surprise of the season`, `Nobody saw the ${N(u.tid)} coming`, `The ${N(u.tid)} are ahead of every projection`])
-      : v.say('sur-u-down', [
-          `Three weeks in, the ${N(u.tid)} are the season's big disappointment`,
-          `What's wrong with the ${N(u.tid)}?`,
-          `The ${N(u.tid)} are well short of the projections`,
-        ])
+      ? v.say('sur-u-up', [`Three weeks in, ${N(u.tid)} is the surprise of the season`, `Nobody saw ${N(u.tid)} coming`, `${N(u.tid)} is ahead of every projection`])
+      : v.say('sur-u-down', [`Three weeks in, ${N(u.tid)} is the season's big disappointment`, `What's wrong with ${N(u.tid)}?`, `${N(u.tid)} is well short of the projections`])
     : up[0] && down[0]
       ? v.say('sur', [
-          `Three weeks in: the ${N(up[0].tid)} surprise, the ${N(down[0].tid)} disappoint`,
+          `Three weeks in: ${N(up[0].tid)} surprises, ${N(down[0].tid)} disappoints`,
           `Early verdicts: ${N(up[0].tid)} up, ${N(down[0].tid)} down`,
-          `Surprises and disappointments: the ${N(up[0].tid)} and the ${N(down[0].tid)}`,
+          `Surprises and disappointments: ${N(up[0].tid)} and ${N(down[0].tid)}`,
         ])
       : up[0]
-        ? `Three weeks in, the ${N(up[0].tid)} are the surprise`
-        : `Three weeks in, the ${N(down[0].tid)} are the disappointment`;
-  const dek =
-    `${up.length ? `Ahead of the projections: ${list(up.map((r) => `the ${N(r.tid)}`))}. ` : ''}${down.length ? `Behind them: ${list(down.map((r) => `the ${N(r.tid)}`))}.` : ''}`.trim();
+        ? `Three weeks in, ${N(up[0].tid)} is the surprise`
+        : `Three weeks in, ${N(down[0].tid)} is the disappointment`;
+  const dek = `${up.length ? `Ahead of the projections: ${list(up.map((r) => N(r.tid)))}. ` : ''}${down.length ? `Behind them: ${list(down.map((r) => N(r.tid)))}.` : ''}`.trim();
   const inIt = up.concat(down).some((r) => r.tid === league.userTid);
   const body = [
     up.length ? `The surprises. ${up.map(line).join(' ')}` : '',
     down.length ? `The disappointments. ${down.map(line).join(' ')}` : '',
     inIt
       ? ''
-      : `And the ${N(u.tid)}: picked for ${u.proj}, on pace for ${u.p}${Math.abs(u.d) <= 3 ? ', right where they were expected' : u.d > 0 ? ', ahead of schedule' : ', behind it'}.`,
+      : `And ${N(u.tid)}: picked for ${u.proj}, on pace for ${u.p}${Math.abs(u.d) <= 3 ? ', right where they were expected' : u.d > 0 ? ', ahead of schedule' : ', behind it'}.`,
   ];
   publish(league, { kind: 'column', head, dek, body, tids: [...up, ...down].map((r) => r.tid).concat(league.userTid), pids: [], weight: userTop ? 3 : 2 });
 }
@@ -279,16 +274,16 @@ export function midseasonColumn(league: League, m: MediaState) {
   });
   const order = [...rows].sort((a, b) => b.score - a.score || a.tid - b.tid);
   const u = rows[league.userTid];
-  const N = (tid: number) => league.teams[tid].name;
+  const N = (tid: number) => city(league, tid);
   const rost = rosters(league);
   const star = rost[u.tid][0];
   const pg = star ? perGame(star, league.season) : null;
   const head = v.say('mid', [
-    `Midseason report card: the ${N(u.tid)} get ${aGrade(u.grade)}`,
+    `Midseason report card: ${N(u.tid)} gets ${aGrade(u.grade)}`,
     `Grading all 30 at the break: ${N(u.tid)} ${u.grade}`,
-    `The ${N(u.tid)} at the break: ${aGrade(u.grade)}`,
+    `${N(u.tid)} at the break: ${aGrade(u.grade)}`,
   ]);
-  const dek = `Top of the class: the ${N(order[0].tid)} (${order[0].grade}). The ${N(u.tid)}: ${recOf(u.ts)}${u.proj !== undefined ? `, against a projection of ${u.proj} wins` : ''}.`;
+  const dek = `Top of the class: ${N(order[0].tid)} (${order[0].grade}). ${N(u.tid)}: ${recOf(u.ts)}${u.proj !== undefined ? `, against a projection of ${u.proj} wins` : ''}.`;
   const verdict = u.grade.startsWith('A')
     ? v.pick(['Better than anyone expected.', 'Everything is going to plan, and then some.'])
     : u.grade.startsWith('B')
@@ -296,7 +291,7 @@ export function midseasonColumn(league: League, m: MediaState) {
       : u.grade.startsWith('C')
         ? v.pick(['Middling. The second half has to be better.', 'Not bad, not good.'])
         : v.pick(['A long way short.', 'Something has to change.']);
-  const short = (r: (typeof rows)[number]) => `the ${N(r.tid)} (${r.grade}, ${recOf(r.ts)})`;
+  const short = (r: (typeof rows)[number]) => `${N(r.tid)} (${r.grade}, ${recOf(r.ts)})`;
   const body = [
     `${N(u.tid)}: ${u.grade}. ${recOf(u.ts)}, on pace for ${u.p} wins${u.proj !== undefined ? ` after a projection of ${u.proj}` : ''}. ${verdict}${pg && star ? ` ${last(league, star)} is averaging ${f1(pg.pts)} points.` : ''}`,
     `Top of the class: ${list(order.slice(0, 3).map(short))}.`,
@@ -340,7 +335,7 @@ function roundPreview(league: League, m: MediaState, round: number, rs: PlayoffS
   const v = new Voice(worldRng(league, 'round', league.season, round), m);
   const rost = rosters(league);
   const str = strengths(league, rost);
-  const N = (tid: number) => league.teams[tid].name;
+  const N = (tid: number) => city(league, tid);
   const mine = rs.find((s) => s.high === league.userTid || s.low === league.userTid);
   const ordered = mine ? [mine, ...rs.filter((s) => s !== mine)] : rs;
   const preview = ordered.map((s) => {
@@ -354,13 +349,13 @@ function roundPreview(league: League, m: MediaState, round: number, rs: PlayoffS
         .filter((x) => x.injury && x.injury.gamesRemaining > 2)
         .map((x) => ({ tid, x })),
     )[0];
-    // (their playoff history in this save: "A rematch of the 2029-30 conference finals, which the Celtics won in six.")
+    // (their playoff history in this save: "A rematch of the 2029-30 conference finals, which Boston won in six.")
     const again = rematchLine(league, s.high, s.low);
     const facts = [
       again ? `${again.replace(/^./, (c) => c.toUpperCase())}.` : '',
-      hw + lw ? `${hw === lw ? 'They split the season series' : `The ${N(hw > lw ? s.high : s.low)} won the season series ${rec(Math.max(hw, lw), Math.min(hw, lw))}`}.` : '',
+      hw + lw ? `${hw === lw ? 'They split the season series' : `${N(hw > lw ? s.high : s.low)} won the season series ${rec(Math.max(hw, lw), Math.min(hw, lw))}`}.` : '',
       `Net ratings: ${N(s.high)} ${signed(netOf(tsOf(league, s.high)))}, ${N(s.low)} ${signed(netOf(tsOf(league, s.low)))}.`,
-      hurt ? `The ${N(hurt.tid)} are without ${last(league, hurt.x)} for ${hurt.x.injury!.gamesRemaining} more games.` : '',
+      hurt ? `${N(hurt.tid)} is without ${last(league, hurt.x)} for ${hurt.x.injury!.gamesRemaining} more games.` : '',
     ].filter(Boolean);
     const conf = s.conf === 'F' ? '' : `${confName(s.conf)} `;
     const match = `(${s.highSeed}) ${N(s.high)} vs. (${s.lowSeed}) ${N(s.low)}`;
@@ -371,7 +366,7 @@ function roundPreview(league: League, m: MediaState, round: number, rs: PlayoffS
       games,
       p: Math.max(p, 1 - p),
       match,
-      text: `${conf}${match}. ${facts.join(' ')} Pick: ${N(pick)} in ${games}.${close ? ` A coin flip. The ${N(other)} can win it.` : ''}`,
+      text: `${conf}${match}. ${facts.join(' ')} Pick: ${N(pick)} in ${games}.${close ? ` A coin flip. ${N(other)} can win it.` : ''}`,
     };
   });
   const lead = preview[0];
@@ -381,48 +376,44 @@ function roundPreview(league: League, m: MediaState, round: number, rs: PlayoffS
     const pre = m.preseason?.season === league.season ? m.preseason : undefined;
     const path = (tid: number) => {
       const won = league.playoffs.filter((x) => x.round < 4 && x.winner === tid).sort((a, b) => a.round - b.round);
-      return won.map((x) => `the ${N(x.high === tid ? x.low : x.high)} in ${x.highWins + x.lowWins}`).join(', ');
+      return won.map((x) => `${N(x.high === tid ? x.low : x.high)} in ${x.highWins + x.lowWins}`).join(', ');
     };
     const star = (tid: number) => {
       const p = rost[tid][0];
       return p ? `${playerName(p)} (${playerAge(p, league.season)})` : '';
     };
     const head = v.say('finals', [
-      `Finals preview: the ${N(s.high)} vs. the ${N(s.low)}`,
-      `The Finals: the pick is the ${N(lead.pick)} in ${lead.games}`,
+      `Finals preview: ${N(s.high)} vs. ${N(s.low)}`,
+      `The Finals: the pick is ${N(lead.pick)} in ${lead.games}`,
       `${N(s.high)}-${N(s.low)}: the Finals, previewed`,
     ]);
-    const dek = `The ${N(s.high)} have home court. Pick: ${N(lead.pick)} in ${lead.games}.`;
+    const dek = `${N(s.high)} has home court. Pick: ${N(lead.pick)} in ${lead.games}.`;
     const body = [
-      `The ${N(s.high)} beat ${path(s.high)}. The ${N(s.low)} beat ${path(s.low)}.`,
-      `The stars: ${star(s.high)} for the ${N(s.high)}, ${star(s.low)} for the ${N(s.low)}.`,
+      `${N(s.high)} beat ${path(s.high)}. ${N(s.low)} beat ${path(s.low)}.`,
+      `The stars: ${star(s.high)} for ${N(s.high)}, ${star(s.low)} for ${N(s.low)}.`,
       lead.text,
       pre?.champ !== undefined
         ? pre.champ === s.high || pre.champ === s.low
-          ? `The ${N(pre.champ)} were opening night's pick to win it all.`
-          : `Opening night's pick, the ${N(pre.champ)}, didn't make it.`
+          ? `${N(pre.champ)} was opening night's pick to win it all.`
+          : `Opening night's pick, ${N(pre.champ)}, didn't make it.`
         : '',
     ];
     publish(league, { kind: 'preview', head, dek, body, tids: [s.high, s.low], pids: [rost[s.high][0], rost[s.low][0]].filter(Boolean).map((p) => p.pid), weight: 3 });
     return;
   }
   const label = ROUND[round];
-  const UN = league.teams[league.userTid].name;
+  const UN = N(league.userTid);
   const head = userIn
     ? lead.pick === league.userTid
       ? v.say('rnd-u-fav', [
-          `${label} preview: the ${UN} in ${lead.games} over the ${N(lead.pick === lead.s.high ? lead.s.low : lead.s.high)}`,
-          `${label}: the ${UN} are the pick`,
-          `The ${UN} should get through, says the ${label.toLowerCase()} preview`,
+          `${label} preview: ${UN} in ${lead.games} over ${N(lead.pick === lead.s.high ? lead.s.low : lead.s.high)}`,
+          `${label}: ${UN} is the pick`,
+          `${UN} should get through, says the ${label.toLowerCase()} preview`,
         ])
-      : v.say('rnd-u-dog', [
-          `${label} preview: the ${N(lead.pick)} over the ${UN} in ${lead.games}`,
-          `${label}: the ${UN} are the underdogs`,
-          `The ${UN} have work to do against the ${N(lead.pick)}`,
-        ])
+      : v.say('rnd-u-dog', [`${label} preview: ${N(lead.pick)} over ${UN} in ${lead.games}`, `${label}: ${UN} is the underdog`, `${UN} has work to do against ${N(lead.pick)}`])
     : v.say('rnd', [`${label} preview: every series, and the picks`, `${label}: the picks are in`, `Previewing the ${label.toLowerCase()}`]);
   const closest = [...preview].sort((a, b) => a.p - b.p)[0];
-  const dek = userIn ? `${lead.match}: the pick is the ${N(lead.pick)} in ${lead.games}.` : `The closest call: ${closest.match}, the ${N(closest.pick)} in ${closest.games}.`;
+  const dek = userIn ? `${lead.match}: the pick is ${N(lead.pick)} in ${lead.games}.` : `The closest call: ${closest.match}, ${N(closest.pick)} in ${closest.games}.`;
   publish(league, {
     kind: 'preview',
     head,
@@ -442,7 +433,7 @@ export function seasonWrap(league: League, m: MediaState): NewsItem | undefined 
   const aw = league.awards.find((a) => a.season === league.season);
   if (!aw || aw.champion === undefined || !once(league, m, 'wrap')) return undefined;
   const v = new Voice(worldRng(league, 'wrap', league.season), m);
-  const N = (tid: number) => league.teams[tid].name;
+  const N = (tid: number) => city(league, tid);
   const C = aw.champion;
   const R = aw.runnerUp;
   const pre = m.preseason?.season === league.season ? m.preseason : undefined;
@@ -452,18 +443,18 @@ export function seasonWrap(league: League, m: MediaState): NewsItem | undefined 
   // what the title means against the league's history in this save ("a third title in four years")
   const dyn = titleLine(league, C, league.season);
   const head = dyn
-    ? v.say('wrap-dyn', [`The ${N(C)} win ${dyn}`, `Season wrap: ${dyn} for the ${N(C)}`])
+    ? v.say('wrap-dyn', [`${N(C)} wins ${dyn}`, `Season wrap: ${dyn} for ${N(C)}`])
     : userChamp
-      ? v.say('wrap-u', [`Season wrap: the ${N(u)}, champions`, `The ${poss(N(u))} year: a title`, `${seasonLabel(league.season)} belongs to the ${N(u)}`])
+      ? v.say('wrap-u', [`Season wrap: ${N(u)}, champions`, `${poss(N(u))} year: a title`, `${seasonLabel(league.season)} belongs to ${N(u)}`])
       : v.say('wrap', [
-          `Season wrap: the ${poss(N(C))} year`,
-          `The ${N(C)} close out ${seasonLabel(league.season)} as champions`,
-          `${seasonLabel(league.season)}, wrapped: the ${N(C)} on top`,
+          `Season wrap: ${poss(N(C))} year`,
+          `${N(C)} closes out ${seasonLabel(league.season)} as champions`,
+          `${seasonLabel(league.season)}, wrapped: ${N(C)} on top`,
         ]);
   const fmvp = aw.finalsMvp !== undefined ? league.players[aw.finalsMvp] : undefined;
   const mvp = aw.mvp !== undefined ? league.players[aw.mvp] : undefined;
   const mvpAgain = mvp ? awardLine(league, mvp, 'MVP', league.season) : null;
-  const dek = `The ${N(C)} beat the ${R !== undefined ? N(R) : 'field'} in the Finals.${fmvp ? ` ${playerName(fmvp)} was Finals MVP.` : ''}${mvp ? ` ${playerName(mvp)} was the MVP${mvpAgain && mvpAgain !== 'his first' ? `, ${mvpAgain}` : ''}.` : ''}`;
+  const dek = `${N(C)} beat ${R !== undefined ? N(R) : 'the field'} in the Finals.${fmvp ? ` ${playerName(fmvp)} was Finals MVP.` : ''}${mvp ? ` ${playerName(mvp)} was the MVP${mvpAgain && mvpAgain !== 'his first' ? `, ${mvpAgain}` : ''}.` : ''}`;
   // the user's run against his franchise's history in this save ("a first series win since 2029-30")
   const drought = uts.playoffRound >= 1 && uts.playoffRound < 5 ? droughtLine(league, u, league.season, uts.playoffRound) : null;
   const final = standings(league);
@@ -483,14 +474,14 @@ export function seasonWrap(league: League, m: MediaState): NewsItem | undefined 
   const body = [
     pre?.champ !== undefined
       ? pre.champ === C
-        ? `Opening night's pick was the ${N(C)}, and they delivered.`
-        : `Opening night's pick was the ${N(pre.champ)}. The ${N(C)} had other ideas.`
+        ? `Opening night's pick was ${N(C)}, and they delivered.`
+        : `Opening night's pick was ${N(pre.champ)}. ${N(C)} had other ideas.`
       : '',
-    pre && over && over.d >= 6 ? `The season's overachievers: the ${N(over.tid)}, ${over.d} wins better than projected.` : '',
-    pre && under && under.d <= -6 ? `The biggest letdown: the ${N(under.tid)}, ${-under.d} wins short.` : '',
-    `The ${N(u)} finished ${recOf(uts)}${urow ? `, ${nth(urow.confRank)} in the ${confName(urow.conf)}` : ''}, and ${reached}.${
+    pre && over && over.d >= 6 ? `The season's overachiever: ${N(over.tid)}, ${over.d} wins better than projected.` : '',
+    pre && under && under.d <= -6 ? `The biggest letdown: ${N(under.tid)}, ${-under.d} wins short.` : '',
+    `${N(u)} finished ${recOf(uts)}${urow ? `, ${nth(urow.confRank)} in the ${confName(urow.conf)}` : ''}, and ${reached}.${
       pre ? ` They were picked for ${pre.rows[u].wins} wins${uts.won - pre.rows[u].wins >= 4 ? ': a step ahead' : uts.won - pre.rows[u].wins <= -4 ? ': a step short' : ''}.` : ''
-    }${drought && !userChamp ? ` For the ${N(u)}, ${drought}.` : ''}`,
+    }${drought && !userChamp ? ` For ${N(u)}, ${drought}.` : ''}`,
   ];
   return publish(league, {
     kind: 'column',

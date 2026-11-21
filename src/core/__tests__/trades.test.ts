@@ -7,7 +7,7 @@ import { expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { startRegularSeason } from '../league/season';
 import { GM_STYLE, gmLine, gmTemper, leagueBusy, takesCalls } from '../league/voices';
-import { CAP_FOR, contractSeason, curTeamSeason, dateToDay, freeAgents, payroll, standardRoster, twoWayRoster } from '../league/helpers';
+import { CAP_FOR, contractSeason, curTeamSeason, dateToDay, freeAgents, payroll, standardRoster, twoWayRoster, teamCity } from '../league/helpers';
 import { DEC_15, DUMP_PER_FIRST, FIRST_VALUE, askingContract, marketSalary, releaseDeadMoney, releasePlayer, signPlayer, tradeValue, twoWaySalary } from '../league/contracts';
 import { capPayroll } from '../league/freeAgency';
 import { changesStarters, tradeImpact } from '../league/tradeImpact';
@@ -933,12 +933,10 @@ it('the rules: back-to-back firsts, protections going home, no trading straight 
 
   // reads a one-sided deal as what it is: a dump taken off a team's hands, or picks bought for nothing
   {
-    expect(tradeHeadline('Hornets', ['Terry Rozier', '2028 2nd'], 1, 'Timberwolves', [], 0)).toBe(
-      "the Timberwolves take Terry Rozier off the Hornets' hands, with 2028 2nd for it",
-    );
-    expect(tradeHeadline('Kings', [], 0, 'Magic', ['Ben Simmons'], 1)).toBe("the Kings take Ben Simmons off the Magic's hands");
-    expect(tradeHeadline('Kings', ['2029 2nd'], 0, 'Nets', [], 0)).toBe('the Nets get 2029 2nd from the Kings');
-    expect(tradeHeadline('Raptors', ['Scottie Barnes'], 1, 'Knicks', ['Mikal Bridges'], 1)).toBe('the Raptors send Scottie Barnes to the Knicks for Mikal Bridges');
+    expect(tradeHeadline('Charlotte', ['Terry Rozier', '2028 2nd'], 1, 'Minnesota', [], 0)).toBe("Minnesota takes Terry Rozier off Charlotte's hands, with 2028 2nd for it");
+    expect(tradeHeadline('Sacramento', [], 0, 'Dallas', ['Ben Simmons'], 1)).toBe("Sacramento takes Ben Simmons off Dallas' hands");
+    expect(tradeHeadline('Sacramento', ['2029 2nd'], 0, 'Brooklyn', [], 0)).toBe('Brooklyn gets 2029 2nd from Sacramento');
+    expect(tradeHeadline('Toronto', ['Scottie Barnes'], 1, 'New York', ['Mikal Bridges'], 1)).toBe('Toronto sends Scottie Barnes to New York for Mikal Bridges');
   }
 
   // an offer sheet a team has signed holds one of its spots: a trade can’t take it past the offseason limit
@@ -1085,7 +1083,7 @@ it('the rules: back-to-back firsts, protections going home, no trading straight 
       expect(firsts).toBeLessThanOrEqual(MAX_FIRSTS_OUT);
       executeDeal(g, legs!);
       expect([vet.tid, rb[3].tid]).toEqual([B, F]);
-      expect(g.news[g.news.length - 1].text.startsWith('Three-team trade: the ')).toBe(true);
+      expect(g.news[g.news.length - 1].text.startsWith('Three-team trade: ')).toBe(true);
       // a buyer with the room to take him needs no third team: that is a two-team deal
       const h = termsLeague(7);
       standardRoster(h, B).forEach((p) => shape(h, p, 66, 24, 2500, 1));
@@ -1102,9 +1100,9 @@ it('the rules: back-to-back firsts, protections going home, no trading straight 
     expect(l.teams[U].rotation.order).not.toContain(mine.pid);
     expect(mine.tradedFrom?.tid).toBe(U);
     const news = l.news[l.news.length - 1];
-    expect(news.text.startsWith('Three-team trade: the ')).toBe(true);
+    expect(news.text.startsWith(`Three-team trade: ${teamCity(l, U)} gets `)).toBe(true);
     expect(news.tids).toEqual([U, AI, THIRD]);
-    expect(news.text).toContain(`${mine.firstName} ${mine.lastName} from the ${l.teams[U].name}`);
+    expect(news.text).toContain(`${mine.firstName} ${mine.lastName} from ${teamCity(l, U)}`);
     expect((l.transactions?.length ?? 0) - txns).toBe(1);
     expect(l.transactions![l.transactions!.length - 1].tids).toEqual([U, AI, THIRD]);
     // (and nobody he sent away comes straight back through a third team)
@@ -1462,7 +1460,7 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
       expect(swaps.length).toBe(used ? 1 : 0);
       if (used) {
         expect(txnText(l, txnLine(swaps[0], { tid: U }))).toBe(`Swapped firsts with ${l.teams[AI].abbrev}: took the ${y} 1st #${subject.pick} for the ${y} 1st #${right.pick}`);
-        expect(l.news.some((n) => n.text.startsWith('Pick swap:') && n.text.includes(`pick #${subject.pick} instead of #${right.pick}`))).toBe(true);
+        expect(l.news.some((n) => n.text.startsWith('Pick swap:') && n.text.includes(`picks #${subject.pick} instead of #${right.pick}`))).toBe(true);
       }
       const mail = l.inbox.find((m) => m.subject.startsWith('Pick swap'))!;
       expect(mail.subject).toBe(used ? `Pick swap: we move up to #${subject.pick}` : `Pick swap with ${l.teams[AI].abbrev} not used`);
@@ -1589,7 +1587,7 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
     const txn = l.transactions!.at(-1)!;
     expect(txn.sides![0].cash).toBe(3_000);
     expect(txnText(l, txnLine(txn, { tid: U }))).toBe(`Acquired a ${second.season} 2nd from ${l.teams[AI].abbrev}. Sent $3.0M in cash`);
-    expect(l.news.at(-1)!.text).toBe(`Trade: the ${l.teams[U].name} send $3.0M in cash to the ${l.teams[AI].name} for ${second.season} 2nd (${l.teams[AI].abbrev}).`);
+    expect(l.news.at(-1)!.text).toBe(`Trade: ${teamCity(l, U)} sends $3.0M in cash to ${teamCity(l, AI)} for ${second.season} 2nd (${l.teams[AI].abbrev}).`);
   }
 
   // "what would make this work?" closes a small gap with a little cash before a pick or a player, and so does a counter
@@ -1632,7 +1630,7 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
     const y = l.season + 2;
     executeTrade(l, deal({ swaps: [y], cash: 1_000 }, { dpids: [own(l, AI, l.season + 1, 2).dpid] }));
     expect(l.news.at(-1)!.text).toBe(
-      `Trade: the ${l.teams[U].name} send the right to swap ${y} firsts and $1.0M in cash to the ${l.teams[AI].name}. The ${l.teams[AI].name} send back ${l.season + 1} 2nd (${l.teams[AI].abbrev}).`,
+      `Trade: ${teamCity(l, U)} sends the right to swap ${y} firsts and $1.0M in cash to ${teamCity(l, AI)}. ${teamCity(l, AI)} sends back ${l.season + 1} 2nd (${l.teams[AI].abbrev}).`,
     );
     const txn = l.transactions!.at(-1)!;
     expect(txnText(l, txnLine(txn, { tid: AI }))).toBe(`Acquired the right to swap ${y} firsts and $1.0M in cash from ${l.teams[U].abbrev}. Sent a ${l.season + 1} 2nd`);

@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GameResult, League, PlayoffSeries, Proposal } from '../../core/types';
 import { createLeague, defaultSettings } from '../../core/league/create';
-import { curTeamSeason, standardRoster, teamPlayers } from '../../core/league/helpers';
+import { curTeamSeason, standardRoster, teamPlayers, teamCity } from '../../core/league/helpers';
 import { CAP } from '../../core/constants';
 import { flowActions, liveScoreText, simStart, simSummary } from '../flow';
 import { BIG_SIGNING_OVR, WAIT_DAYS, currentMoments, momentFits, newMoments, pickMoments, scheduleMoments } from '../moments';
@@ -173,7 +173,7 @@ describe('the journey between screens', () => {
       l.playoffs = [decided('E1-0', 1, 0, 1, 0), decided('E1-1', 1, 2, 3, 3), decided('E2-0', 2, 0, 3)];
       const m = currentMoments(l);
       expect(m.map((x) => x.kind)).toEqual(['series']);
-      expect(m[0].sub).toMatch(/^4-1 over the /);
+      expect(m[0].sub).toMatch(/^4-1 over [A-Z]/);
     }
 
     // winning the Finals is the title, with confetti
@@ -289,7 +289,7 @@ describe('the journey between screens', () => {
       // (the career mark's and the farewell's news items are theirs, not a front-page story's)
       expect(one('story')).toEqual([]);
       // told as the bracket stands: the quarterfinal still to play is in the future tense
-      expect(one('cup')[0].sub).toMatch(/The quarterfinal is at home to the .+ on .+: win twice more and it's Las Vegas\.$/);
+      expect(one('cup')[0].sub).toMatch(/The quarterfinal is at home to [A-Z].+ on .+: win twice more and it's Las Vegas\.$/);
       // while he edits his tactics a celebration waits; the job's own doesn't
       expect(momentFits(one('cup')[0], '/team/tactics', '/')).toBe(false);
       expect(momentFits({ ...one('cup')[0], kind: 'fired' }, '/team/tactics', '/')).toBe(true);
@@ -307,7 +307,7 @@ describe('the journey between screens', () => {
       }
       expect(currentMoments(l).find((x) => x.key === `cup-out-${l.season}`)).toMatchObject({
         title: 'Out of the Cup',
-        sub: `104-99 to the ${l.teams[3].name} in the quarterfinal.`,
+        sub: `104-99 to ${teamCity(l, 3)} in the quarterfinal.`,
       });
       // one shows, the ones that keep wait; a story doesn't, and nothing waits past WAIT_DAYS
       const story = { key: 'st', kind: 'story' as const, over: '', title: '', sub: '', rank: 9, season: l.season, day: 40 };
@@ -332,10 +332,10 @@ describe('the journey between screens', () => {
         const k = structuredClone(l);
         const s1 = { id: 'E1-0', round: 1, conf: 'E' as const, high: me, low: 3, highSeed: 1, lowSeed: 8, highWins: 4, lowWins: 1, winner: me };
         k.playoffs = [s1];
-        expect(currentMoments(k).find((x) => x.kind === 'series')!.sub).toBe(`4-1 over the ${k.teams[3].name}. Next up: the conference semifinals.`);
+        expect(currentMoments(k).find((x) => x.kind === 'series')!.sub).toBe(`4-1 over ${teamCity(k, 3)}. Next up: the conference semifinals.`);
         k.playoffs = [s1, { id: 'E2-0', round: 2, conf: 'E', high: me, low: 5, highSeed: 1, lowSeed: 4, highWins: 2, lowWins: 4, winner: 5 }];
         expect(currentMoments(k).find((x) => x.key === `series-${k.season}-E1-0`)!.sub).toBe(
-          `4-1 over the ${k.teams[3].name}. Then out in the conference semifinals, 2-4 to the ${k.teams[5].name}.`,
+          `4-1 over ${teamCity(k, 3)}. Then out in the conference semifinals, 2-4 to ${teamCity(k, 5)}.`,
         );
       }
       // beside the job's own, a night's or a player's moment waits

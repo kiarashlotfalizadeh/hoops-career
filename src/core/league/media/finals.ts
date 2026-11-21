@@ -175,19 +175,15 @@ export function clincherLine(f: FinalsStory, us: string, them: string): string |
   const who = g.shot?.name;
   const what = g.shot ? (g.shot.ft ? 'free throws' : g.shot.three ? 'a three' : 'a basket') : '';
   if (g.shot?.buzzer)
-    return f.won
-      ? `${who ?? 'The winner'} beat the buzzer with ${what} to win ${game}, ${score}.`
-      : `${who ?? `The ${them}`} beat the buzzer with ${what} to win ${game}, ${score}.`;
+    return f.won ? `${who ?? 'The winner'} beat the buzzer with ${what} to win ${game}, ${score}.` : `${who ?? them} beat the buzzer with ${what} to win ${game}, ${score}.`;
   if (g.shot && g.shot.secs <= 12) {
     const left = `${Math.max(1, Math.round(g.shot.secs))} second${Math.round(g.shot.secs) === 1 ? '' : 's'} left`;
-    return f.won
-      ? `${who ?? 'The winning basket'}${who ? ` hit ${what}` : ' came'} with ${left} in ${game}, ${score}.`
-      : `${who ?? `The ${them}`} won ${game} with ${left}, ${score}.`;
+    return f.won ? `${who ?? 'The winning basket'}${who ? ` hit ${what}` : ' came'} with ${left} in ${game}, ${score}.` : `${who ?? them} won ${game} with ${left}, ${score}.`;
   }
   if (g.comeback >= 12)
-    return f.won ? `From ${g.comeback} down in ${game}, the ${us} came back to win it, ${score}.` : `The ${them} came back from ${g.comeback} down to win ${game}, ${score}.`;
+    return f.won ? `From ${g.comeback} down in ${game}, ${us} came back to win it, ${score}.` : `${them} came back from ${g.comeback} down to win ${game}, ${score}.`;
   if (g.ot) return `${game} went to ${g.ot === 1 ? 'overtime' : `${countWord(g.ot)} overtimes`}: ${score}.`;
-  if (g.n === 7) return `The ${f.won ? us : them} won Game 7, ${score}.`;
+  if (g.n === 7) return `${f.won ? us : them} won Game 7, ${score}.`;
   return null;
 }
 
@@ -195,10 +191,10 @@ export function clincherLine(f: FinalsStory, us: string, them: string): string |
 export function seriesArc(f: FinalsStory, us: string, them: string): string | null {
   // (after the deepest hole: "won three straight", or "won four of the next five")
   const run = (n: number, of: number) => (n === of ? `${countWord(n)} straight` : `${countWord(n)} of the next ${countWord(of)}`);
-  if (f.won && f.down) return `Down ${f.down.at[1]}-${f.down.at[0]}, the ${us} won ${run(f.w - f.down.at[0], f.w + f.l - f.down.at[0] - f.down.at[1])}.`;
-  if (!f.won && f.blew) return `Up ${f.blew.at[0]}-${f.blew.at[1]}, the ${us} lost ${run(f.l - f.blew.at[1], f.w + f.l - f.blew.at[0] - f.blew.at[1])}.`;
-  if (f.won && f.l === 0) return `A sweep of the ${them}.`;
-  if (!f.won && f.w === 0) return `Swept by the ${them}.`;
+  if (f.won && f.down) return `Down ${f.down.at[1]}-${f.down.at[0]}, ${us} won ${run(f.w - f.down.at[0], f.w + f.l - f.down.at[0] - f.down.at[1])}.`;
+  if (!f.won && f.blew) return `Up ${f.blew.at[0]}-${f.blew.at[1]}, ${us} lost ${run(f.l - f.blew.at[1], f.w + f.l - f.blew.at[0] - f.blew.at[1])}.`;
+  if (f.won && f.l === 0) return `A sweep of ${them}.`;
+  if (!f.won && f.w === 0) return `Swept by ${them}.`;
   return null;
 }
 

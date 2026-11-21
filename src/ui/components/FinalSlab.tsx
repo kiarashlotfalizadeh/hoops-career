@@ -12,7 +12,7 @@ import type { GameStory } from '../../core/analysis/gameStory';
 import { Avatar, CountUp, Fit, Statline, keep } from './ui';
 import { madeAtt } from '../../core/format';
 import { cupLabel } from '../../core/league/cup';
-import { fmtDate } from '../../core/league/helpers';
+import { fmtDate, teamCity } from '../../core/league/helpers';
 import { matchupColors, matchupLooks } from '../teamColors';
 import { finalLabel } from '../stats';
 import { TeamLogo } from './TeamLogo';
@@ -92,6 +92,7 @@ export function GameBoard({
   const [lh, la] = matchupLooks(h.colors, a.colors);
   const side = (s: BoardSide, isHome: boolean) => {
     const t = league.teams[s.tid];
+    const nm = teamCity(league, t);
     const cls = `gd-bd-team${isHome ? ' home' : ''}${s.lost ? ' lost' : ''}`;
     const id = (
       <>
@@ -102,9 +103,9 @@ export function GameBoard({
             <span className="gd-bd-nm">{t.abbrev}</span>
           ) : (
             <>
-              {/* (a long name gives way below 600px, a middling one ("Pacers", "Grizzlies") below 380px) */}
-              <span className={`gd-bd-nm${t.name.length > 9 ? ' long' : t.name.length > 5 ? ' mid' : ''}`}>{t.name}</span>
-              {t.name.length > 5 && <span className={`gd-bd-nm short${t.name.length > 9 ? '' : ' of-mid'}`}>{t.abbrev}</span>}
+              {/* (a long name gives way below 600px, a middling one ("Boston", "Milwaukee") below 380px) */}
+              <span className={`gd-bd-nm${nm.length > 9 ? ' long' : nm.length > 5 ? ' mid' : ''}`}>{nm}</span>
+              {nm.length > 5 && <span className={`gd-bd-nm short${nm.length > 9 ? '' : ' of-mid'}`}>{t.abbrev}</span>}
             </>
           )}
           {s.sub && <span className="gd-bd-sub num">{keep(s.sub)}</span>}
@@ -188,7 +189,7 @@ export function FinalSlab({
   return (
     <section
       className={`gd-final${story ? ` gd-story w${story.weight}` : ''}${moment ? ' gd-moment' : ''}`}
-      aria-label={`Final: ${away.name} ${res.away.pts}, ${home.name} ${res.home.pts}`}
+      aria-label={`Final: ${teamCity(league, away)} ${res.away.pts}, ${teamCity(league, home)} ${res.home.pts}`}
     >
       <GameBoard
         league={league}

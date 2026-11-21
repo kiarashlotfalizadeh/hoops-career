@@ -24,7 +24,7 @@
 // patient a star is) is a hash of the league, the season and the player.
 import type { League, Player } from '../types';
 import { hashString } from '../random';
-import { addInbox, addNews, curTeamSeason, playerName, standardRoster, winPct } from './helpers';
+import { addInbox, addNews, curTeamSeason, playerName, standardRoster, teamCity, winPct } from './helpers';
 import { playerAge } from '../playerGen';
 import { playerSays } from './voices';
 
@@ -382,7 +382,7 @@ function readRoom(league: League, tid: number, s: Room) {
 }
 
 function request(league: League, tid: number, p: Player, why: AskWhy, expects: number, week: number) {
-  const t = league.teams[tid];
+  const C = teamCity(league, tid);
   const mine = users(league, tid);
   roomOf(league, tid)!.asked[p.pid] = { season: league.season, day: league.day, why };
   const name = playerName(p);
@@ -391,13 +391,13 @@ function request(league: League, tid: number, p: Player, why: AskWhy, expects: n
   const said = `“${playerSays(league, p, why === 'losing' ? 'askLosing' : 'askRole', league.season)}”`;
   const text =
     why === 'losing'
-      ? `The ${t.name} are ${ts.won}-${ts.lost}. He wants to play for a winner.`
+      ? `${C} is ${ts.won}-${ts.lost}. He wants to play for a winner.`
       : `He has played ${Math.round(week)} minutes a game lately. A player of his standing plays about ${expects}.`;
   const body =
     why === 'losing'
-      ? `${name} has told the ${t.name} he wants out.\n\n${said}\n\nThey are ${ts.won}-${ts.lost} and going nowhere this season. He won't talk about a new deal while it stands.\n\nThe ${t.name} are taking calls. Winning would settle it. So would a trade.`
-      : `${name} has told the ${t.name} he wants out.\n\n${said}\n\nHe has been short of a star's minutes for three weeks. He won't talk about a new deal while it stands.\n\nPlaying him settles it. So does a trade.`;
-  addNews(league, { kind: 'rumor', head: `${name} asks the ${t.name} for a trade`, text, body, tids: [t.tid], pids: [p.pid], weight: mine ? 3 : 2 });
+      ? `${name} has told ${C} he wants out.\n\n${said}\n\nThey are ${ts.won}-${ts.lost} and going nowhere this season. He won't talk about a new deal while it stands.\n\n${C} is taking calls. Winning would settle it. So would a trade.`
+      : `${name} has told ${C} he wants out.\n\n${said}\n\nHe has been short of a star's minutes for three weeks. He won't talk about a new deal while it stands.\n\nPlaying him settles it. So does a trade.`;
+  addNews(league, { kind: 'rumor', head: `${name} asks ${C} for a trade`, text, body, tids: [tid], pids: [p.pid], weight: mine ? 3 : 2 });
   if (!mine) return;
   addInbox(league, {
     from: 'Assistant GM',
@@ -416,7 +416,7 @@ function settle(league: League, tid: number, p: Player, why: AskWhy) {
     kind: 'general',
     text:
       why === 'losing'
-        ? `${name} has withdrawn his trade request: the ${league.teams[tid].name} are winning again.`
+        ? `${name} has withdrawn his trade request: ${teamCity(league, tid)} is winning again.`
         : `${name} has withdrawn his trade request: he has his minutes back.`,
     tids: [tid],
     pids: [p.pid],

@@ -14,7 +14,7 @@ import { keepFigures, ordinal } from '../../core/format';
 import { Avatar, Sheet, useSheetOpen } from '../components/ui';
 import { onTaskScreen } from '../moments';
 import { TeamLogo } from '../components/TeamLogo';
-import { curTeamSeason } from '../../core/league/helpers';
+import { curTeamSeason, teamCity } from '../../core/league/helpers';
 import { storyLink } from './front';
 import { senderOf } from './senders';
 import { isImportant, needsYou } from './messages';
@@ -152,7 +152,7 @@ function DigestBody({ d }: { d: Digest }) {
       )}
 
       {d.stories.length > 0 && (
-        <DigestSection title={`The ${league.teams[league.userTid].name} in the news`} go={go}>
+        <DigestSection title={`${teamCity(league, league.userTid)} in the news`} go={go}>
           {d.stories.map((s) => (
             <StoryRow key={s.id} s={s} go={go} />
           ))}

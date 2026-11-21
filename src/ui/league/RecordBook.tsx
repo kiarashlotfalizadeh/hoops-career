@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
-import { fmtDate } from '../../core/league/helpers';
+import { fmtDate, teamCity } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
 import {
   ALL_TIME_SEASON,
@@ -279,13 +279,13 @@ export function RecordBook({ league }: { league: League }) {
       <Poster
         // (how far back each part reaches is its section's line)
         over={post === 'post' ? 'Playoffs' : 'Regular season'}
-        head={tid !== undefined ? `${league.teams[tid].name} records` : 'League records'}
+        head={tid !== undefined ? `${teamCity(league, tid)} records` : 'League records'}
         fig={book.game[0]?.lines[0] ? { v: book.game[0].lines[0].v, k: book.game[0].label } : undefined}
       >
         <PickerLine
           parts={['Change book']}
           title="Record book"
-          label={`Record book: ${tid !== undefined ? league.teams[tid].name : 'league records'}, ${post === 'post' ? 'playoffs' : 'regular season'}. Change`}
+          label={`Record book: ${tid !== undefined ? teamCity(league, tid) : 'league records'}, ${post === 'post' ? 'playoffs' : 'regular season'}. Change`}
         >
           <FilterField label="Records">
             <select className="lg-select" value={tid ?? 'league'} onChange={(e) => setScope(e.target.value)} aria-label="Record book">

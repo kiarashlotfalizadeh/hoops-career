@@ -10,7 +10,7 @@ import type { Player, SigningRoute, TalkTerms } from '../../core/types';
 import { FREE_AGENT } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
-import { CAP_FOR, payroll, playerName, rosterMaxNow, shortName, standardRoster } from '../../core/league/helpers';
+import { CAP_FOR, payroll, playerName, rosterMaxNow, shortName, standardRoster, teamCity } from '../../core/league/helpers';
 import { CAP } from '../../core/constants';
 import {
   EXCEPTIONS,
@@ -175,7 +175,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
       ? (signingClosedReason(league) ?? (sheet ? sheetBlockedReason(league, p, Math.max(years, SHEET_MIN_YEARS)) : null))
       : ownRfa
         ? p.rfa?.sheet
-          ? `${shortName(league, p)} has signed an offer sheet with the ${league.teams[p.rfa.sheet.tid].name}. Match it or let him go.`
+          ? `${shortName(league, p)} has signed an offer sheet with ${teamCity(league, p.rfa.sheet.tid)}. Match it or let him go.`
           : null
         : league.phase !== 'resign'
           ? 'Re-signing happens between the draft and free agency.'
@@ -442,8 +442,8 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
 
       {sheet && !closed && p.rfa && (
         <Callout icon={<ShieldCheck size={18} className="dim" />}>
-          <b>Restricted: this is an offer sheet.</b> Signed, the {league.teams[p.rfa.tid].name} have until the end of {deadlineLabel(matchDeadline(league.faDay))} to match it.
-          Until then it holds your {isException(route) ? EXCEPTIONS[route].name : 'cap room'} and a roster spot. Unmatched, he&apos;s yours.
+          <b>Restricted: this is an offer sheet.</b> Signed, {teamCity(league, p.rfa.tid)} has until the end of {deadlineLabel(matchDeadline(league.faDay))} to match it. Until then
+          it holds your {isException(route) ? EXCEPTIONS[route].name : 'cap room'} and a roster spot. Unmatched, he&apos;s yours.
         </Callout>
       )}
 

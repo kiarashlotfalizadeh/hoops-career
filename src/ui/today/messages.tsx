@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import type { InboxMessage, League } from '../../core/types';
 import { agenda, type AgendaItem } from '../../core/league/agenda';
-import { fmtDate, sentence } from '../../core/league/helpers';
+import { fmtDate, sentence, teamCity } from '../../core/league/helpers';
 import { openProposals, proposalError } from '../../core/league/proposals';
 import { edit, touch } from '../../state/actions';
 import { useLeagueMemo, useStore } from '../../state/store';
@@ -131,13 +131,13 @@ function settledLine(league: League, m: InboxMessage): string {
     // gone from the open offers: taken (a trade with that team since), or turned down or lapsed
     const from = Object.values(league.teams).find((t) => m.from.startsWith(`${t.region} ${t.name}`));
     const took = from && (league.transactions ?? []).some((t) => t.kind === 'trade' && t.season === m.season && t.day >= m.day && t.tids.includes(me) && t.tids.includes(from.tid));
-    return took ? `Settled: you made a deal with the ${from.name}.` : 'This offer is no longer open.';
+    return took ? `Settled: you made a deal with ${teamCity(league, from)}.` : 'This offer is no longer open.';
   }
   const pid = m.sheet ?? m.tenDay;
   const p = pid !== undefined ? league.players[pid] : undefined;
   if (!p) return 'Settled.';
   if (p.tid === me) return m.sheet !== undefined ? 'Settled: he stayed with us.' : p.contract.tenDay ? 'Settled: he is on a 10-day contract.' : 'Settled: he is signed with us.';
-  if (p.tid >= 0) return `Settled: he joined the ${league.teams[p.tid].name}.`;
+  if (p.tid >= 0) return `Settled: he joined ${teamCity(league, p.tid)}.`;
   return 'Settled: he is a free agent.';
 }
 

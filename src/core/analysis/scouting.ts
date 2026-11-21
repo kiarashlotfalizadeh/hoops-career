@@ -507,7 +507,7 @@ function readHeadToHead(league: League, d: ScoutData, counters: Map<string, Sign
   const n = d.h2h.tracked;
   for (const e of d.h2h.effects) {
     if (e.forUser || e.perGame < 1 || !IMPACT_COUNTER[e.key]) continue;
-    const said = impactSentence(e.key, teamRef(opp), 'your team').replace(/\.$/, '');
+    const said = impactSentence(e.key, teamRef(league, opp), 'your team').replace(/\.$/, '');
     const text = `${said}. That was +${e.perGame.toFixed(1)} points a game for them in your ${n === 1 ? 'last meeting' : `${n} meetings`}.`;
     for (const id of IMPACT_COUNTER[e.key]) backs(counters, id, text, 3 + e.perGame);
   }

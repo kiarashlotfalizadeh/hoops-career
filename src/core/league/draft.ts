@@ -3,7 +3,7 @@ import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../types';
 import { Rng, clamp, hashString } from '../random';
 import { contractExp, genTendencies, generatePlayer, refreshPlayerDerived } from '../playerGen';
 import { fmtHeight, shiftToOvr } from '../ratings';
-import { TWO_WAY_MAX, addInbox, addNews, andList, curTeamSeason, playerName, prospects, standardRoster, teamPlayers, twoWayRoster, winPct } from './helpers';
+import { TWO_WAY_MAX, addInbox, addNews, andList, curTeamSeason, playerName, prospects, standardRoster, teamCity, teamPlayers, twoWayRoster, winPct } from './helpers';
 import { FA_PRICE_CUT_DAYS, askingContract, rookieContract, twoWaySalary, valueScore } from './contracts';
 import { numberTeam } from './jerseys';
 import { logMove, logSwap } from './transactions';
@@ -157,7 +157,7 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
         const orig = league.teams[dp.originalTid];
         addNews(league, {
           kind: 'draft',
-          text: `The ${orig.name} keep their top-${(round - 1) * 30 + dp.protection} protected ${season} ${round === 1 ? 'first' : 'second'}, #${(round - 1) * 30 + dp.pick}. The ${holder.name} come away empty.`,
+          text: `${teamCity(league, orig)} keeps its top-${(round - 1) * 30 + dp.protection} protected ${season} ${round === 1 ? 'first' : 'second'}, #${(round - 1) * 30 + dp.pick}. ${teamCity(league, holder)} comes away empty.`,
           tids: [dp.tid, dp.originalTid],
           pids: [],
         });
@@ -177,7 +177,7 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
   if (top)
     addNews(league, {
       kind: 'draft',
-      text: `Draft lottery: the ${league.teams[top.tid].region} ${league.teams[top.tid].name} win the No. 1 pick from the ${ordinal(top.pre)} spot.`,
+      text: `Draft lottery: ${teamCity(league, top.tid)} wins the No. 1 pick from the ${ordinal(top.pre)} spot.`,
       tids: [top.tid],
       pids: [],
     });
@@ -219,7 +219,7 @@ export function resolveSwaps(league: League, season: number) {
       [right.tid, subject.tid] = [down.tid, up.tid];
       addNews(league, {
         kind: 'draft',
-        text: `Pick swap: the ${up.region} ${up.name} use their swap right with the ${down.region} ${down.name} and pick #${theirs} instead of #${ours}.`,
+        text: `Pick swap: ${teamCity(league, up)} uses its swap right with ${teamCity(league, down)} and picks #${theirs} instead of #${ours}.`,
         tids: [up.tid, down.tid],
         pids: [],
       });

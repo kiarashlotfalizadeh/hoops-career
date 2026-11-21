@@ -18,7 +18,7 @@ import {
   playerName,
   prospects,
   standardRoster,
-  teamName,
+  teamCity,
   teamPlayers,
   teamSeason,
   twoWayRoster,
@@ -461,7 +461,7 @@ function endPlayoffs(league: League) {
   for (const p of teamPlayers(league, champ)) p.awards.push({ season: league.season, type: 'Champion' });
   addNews(league, {
     kind: 'award',
-    text: `🏆 The ${teamName(league.teams[champ])} are ${league.season} champions! Finals MVP: ${aw.finalsMvp !== undefined ? playerName(league.players[aw.finalsMvp]) : '—'}.`,
+    text: `🏆 ${teamCity(league, champ)} wins the ${league.season} title! Finals MVP: ${aw.finalsMvp !== undefined ? playerName(league.players[aw.finalsMvp]) : '—'}.`,
     tids: [champ],
     pids: aw.finalsMvp !== undefined ? [aw.finalsMvp] : [],
   });

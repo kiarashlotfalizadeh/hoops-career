@@ -5,7 +5,7 @@
 import { expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { advanceDay, continueDraft, draftNextPick, startDraft, startRegularSeason, userDraftPick } from '../league/season';
-import { CAP_FOR, contractSeason, dateToDay, fmtDate, freeAgents, payroll, prospects, standardRoster } from '../league/helpers';
+import { CAP_FOR, contractSeason, dateToDay, fmtDate, freeAgents, payroll, prospects, standardRoster, teamCity } from '../league/helpers';
 import { DEC_15, marketSalary, releasePlayer, signPlayer, tradeValue } from '../league/contracts';
 import { capPayroll } from '../league/freeAgency';
 import {
@@ -506,7 +506,7 @@ it("AI deals: offers to the user, AI-to-AI trades, the deadline's ramp, rumors a
           // the third team is there to take salary, and says so in the headline and the mail
           expect(p.legs.some((x) => x.to === third && x.pids.length > 0)).toBe(true);
           expect(offerSubject(l, p.offer, third)).toContain(`, with ${l.teams[third].abbrev}`);
-          expect(l.inbox.find((m) => m.proposal === p.id)!.body).toContain(l.teams[third].name);
+          expect(l.inbox.find((m) => m.proposal === p.id)!.body).toContain(teamCity(l, third));
         }
         expect(proposalError(l, p)).toBeNull();
         const { net, out } = neutralBalance(l, p.offer);
@@ -821,7 +821,7 @@ it("AI deals: offers to the user, AI-to-AI trades, the deadline's ramp, rumors a
     }
     const rumors = l.news.filter((n) => n.kind === 'rumor');
     expect(rumors.length).toBeGreaterThan(0);
-    expect(rumors.every((n) => [D - 21, D - 14, D - 7].includes(n.day) && /are listening on/.test(n.text))).toBe(true);
+    expect(rumors.every((n) => [D - 21, D - 14, D - 7].includes(n.day) && /is listening on/.test(n.text))).toBe(true);
     expect(l.inbox.filter((m) => m.subject === 'Deadline day' && m.day === D)).toHaveLength(1);
     // the recap counts the season's trades, once, however often the day is looked at
     deadlineDay(l);

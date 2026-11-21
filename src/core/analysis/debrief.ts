@@ -6,7 +6,7 @@
 
 import type { GameResult, KeyGrade, League, Tactics, TacticsPatch } from '../types';
 import { An, an, gameTime, madeAtt, plural } from '../format';
-import { playerName, shortName } from '../league/helpers';
+import { playerName, shortName, teamCity } from '../league/helpers';
 import { playTypeBaselines } from './playTypes';
 import { leagueThreePct } from '../ai/opponentPlan';
 import { buildGameReport, decidingFactors, leverNet, type GameReport, type Factor } from './gameReport';
@@ -132,15 +132,18 @@ function firstLesson(league: League, res: GameResult, side: 0 | 1, decided: Fact
   // (the setup that night, as the result kept it: today's playbook isn't what he went in with)
   const used = res.setup;
   const oppTid = side === 0 ? res.away.tid : res.home.tid;
-  const opp = league.teams[oppTid];
+  const opp = teamCity(league, oppTid);
   const mine = side === 0 ? res.home.pts : res.away.pts;
   const theirs = side === 0 ? res.away.pts : res.home.pts;
   const book = used ? `${used.own ? 'your own' : "your staff's"} playbook (${used.playbook})` : 'your playbook';
   const planText = plan.length
-    ? `You went in with ${book} and a plan against the ${opp.name}: ${plan.map((g) => g.label).join(', ')}.`
-    : `You went in with ${book} and no plan of your own against the ${opp.name}.`;
+    ? `You went in with ${book} and a plan against ${opp}: ${plan.map((g) => g.label).join(', ')}.`
+    : `You went in with ${book} and no plan of your own against ${opp}.`;
   const top = decided[0];
-  const why = top ? ` What decided it: ${top.title.replace(/\.$/, '').replace(/^./, (c) => c.toLowerCase())}${top.luck ? ', which was mostly shooting luck' : ''}.` : '';
+  // (run on after the colon in lower case, unless it opens with a team: "Toronto's shots fell above their looks")
+  const named = top ? league.teams.some((t) => top.title.startsWith(t.region)) : false;
+  const what = top ? top.title.replace(/\.$/, '') : '';
+  const why = top ? ` What decided it: ${named ? what : what.replace(/^./, (c) => c.toLowerCase())}${top.luck ? ', which was mostly shooting luck' : ''}.` : '';
   const showed = plan.filter((g) => g.night === 'better').map((g) => g.label);
   const missed = plan.filter((g) => g.night === 'worse').map((g) => g.label);
   const planNight = showed.length
@@ -170,7 +173,7 @@ function firstLesson(league: League, res: GameResult, side: 0 | 1, decided: Fact
   return {
     plan: planText,
     outcome,
-    next: `That plan was for the ${opp.name} and is used up. Make one for your next opponent on its preview: a plan shows over several games.`,
+    next: `That plan was for ${opp} and is used up. Make one for your next opponent on its preview: a plan shows over several games.`,
     to: '/preview',
     toLabel: 'Next opponent',
   };

@@ -2,7 +2,7 @@
 // from many on the world's own random stream, never the same shape twice running (see world.ts).
 import type { BoxLine, League, NewsItem, Player, TeamSeason } from '../../types';
 import type { Rng } from '../../random';
-import { addNews, curTeamSeason, playerName, seasonTotals, shortName } from '../helpers';
+import { addNews, curTeamSeason, playerName, seasonTotals, shortName, teamCity } from '../helpers';
 import type { MediaState } from '../media';
 
 /** Phrasings the press remembers having used lately, so the next headline reaches for another. */
@@ -10,16 +10,10 @@ const RECENT = 40;
 
 export const confName = (c: 'E' | 'W') => (c === 'E' ? 'East' : 'West');
 
-/** "Knicks". */
-export const nick = (league: League, tid: number) => league.teams[tid].name;
+/** "Boston": the name the press calls a team by (see teamCity). */
+export const city = (league: League, tid: number) => teamCity(league, tid);
 
-/** "the Knicks". */
-export const the = (league: League, tid: number) => `the ${league.teams[tid].name}`;
-
-/** "New York Knicks". */
-export const full = (league: League, tid: number) => `${league.teams[tid].region} ${league.teams[tid].name}`;
-
-/** "the Knicks'", "the Magic's", "Brunson's": a name in the possessive. */
+/** "Boston's", "Dallas'", "Brunson's": a name in the possessive. */
 export const poss = (name: string) => `${name}${name.endsWith('s') ? "'" : "'s"}`;
 
 /** "31-12". */

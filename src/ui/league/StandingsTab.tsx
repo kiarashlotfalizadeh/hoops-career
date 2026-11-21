@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
 import type { League } from '../../core/types';
 import { standings, type StandingRow } from '../../core/league/standings';
-import { curTeamSeason, fmtDate, teamPlayers } from '../../core/league/helpers';
+import { curTeamSeason, fmtDate, teamPlayers, teamCity } from '../../core/league/helpers';
 import { useLeagueMemo } from '../../state/store';
 import { Help } from '../components/ui';
 import { Term } from '../components/Glossary';
@@ -51,7 +51,7 @@ function Standings({ league, view }: { league: League; view: 'E' | 'W' | 'league
   const all = useLeagueMemo(() => standings(league), [league]);
   const started = all.some((r) => r.won + r.lost > 0);
   // before a game is played there's no order to show: the teams A to Z, and the line says so
-  const rows = started ? all : [...all].sort((a, b) => league.teams[a.tid].name.localeCompare(league.teams[b.tid].name));
+  const rows = started ? all : [...all].sort((a, b) => teamCity(league, a.tid).localeCompare(teamCity(league, b.tid)));
   const shown = view === 'league' ? (started ? leagueRows(rows) : rows) : rows.filter((r) => r.conf === view);
   // the clinch key only once a team has clinched or is out: before then it names marks nobody has
   const marked = view !== 'league' && shown.some((r) => r.clinched);
@@ -86,7 +86,7 @@ const gbText = (gb: number) => (gb % 1 ? gb.toFixed(1) : gb.toFixed(0));
 function StandingsPoster({ league, rows, view, started }: { league: League; rows: StandingRow[]; view: 'E' | 'W' | 'league'; started: boolean }) {
   const conf = view !== 'league';
   const over = `${conf ? `${confName(view)} standings` : 'League standings'} · ${fmtDate(league.season, league.day)}`;
-  const nm = (r: StandingRow) => league.teams[r.tid].name;
+  const nm = (r: StandingRow) => teamCity(league, r.tid);
   if (!started || rows.length < 2) return <Poster over={over} head="Everyone starts at 0-0" />;
   const [a, b] = rows;
   const gap = b.gb - a.gb;
@@ -100,7 +100,7 @@ function StandingsPoster({ league, rows, view, started }: { league: League; rows
   return (
     <Poster
       over={over}
-      head={conf ? `${nm(a)} lead the ${confName(view)}` : `${nm(a)} have the league's best record`}
+      head={conf ? `${nm(a)} leads the ${confName(view)}` : `${nm(a)} has the league's best record`}
       dek={dek}
       fig={{ v: gbText(gap), k: gap === 1 ? 'game clear' : 'games clear' }}
     />
@@ -171,7 +171,7 @@ function StandingsTable({ league, rows, conf }: { league: League; rows: Standing
               me={r.tid === league.userTid}
               rank={played ? conf ? r.confRank : r.leagueRank : <span aria-hidden="true">—</span>}
               tid={r.tid}
-              name={t.name}
+              name={teamCity(league, t)}
               after={
                 <>
                   {r.clinched && (
@@ -225,8 +225,8 @@ function Power({ league }: { league: League }) {
   const week = `Week ${Math.max(1, Math.round(p.day / 7))}`;
   const top = rows.find((r) => r.rank === 1) ?? rows[0];
   const mine = rows.find((r) => r.tid === league.userTid);
-  const topName = league.teams[top.tid].name;
-  const head = top.prev === 1 ? `${topName} stay No. 1` : top.prev !== undefined ? `${topName} up to No. 1` : `${topName} start at No. 1`;
+  const topName = teamCity(league, top.tid);
+  const head = top.prev === 1 ? `${topName} stays No. 1` : top.prev !== undefined ? `${topName} up to No. 1` : `${topName} starts at No. 1`;
   return mode === 'net' ? (
     <PowerRankings league={league} back={() => setMode('press')} week={week} />
   ) : (
@@ -236,7 +236,7 @@ function Power({ league }: { league: League }) {
         head={head}
         dek={
           mine && mine.rank !== 1
-            ? `${league.teams[mine.tid].name}: No. ${mine.rank}${mine.prev !== undefined && mine.prev !== mine.rank ? `, ${mine.prev > mine.rank ? 'up' : 'down'} from ${mine.prev}` : ''}`
+            ? `${teamCity(league, mine.tid)}: No. ${mine.rank}${mine.prev !== undefined && mine.prev !== mine.rank ? `, ${mine.prev > mine.rank ? 'up' : 'down'} from ${mine.prev}` : ''}`
             : undefined
         }
       >
@@ -297,7 +297,7 @@ function PowerRankings({ league, back, week }: { league: League; back?: () => vo
       {list[0] && (
         <Poster
           over={`Power rankings · ${fmtDate(league.season, league.day)}`}
-          head={`${league.teams[list[0].tid].name} on top`}
+          head={`${teamCity(league, list[0].tid)} on top`}
           dek={early}
           // the figure that orders the table: the net rating once teams have played enough, roster strength before
           fig={list[0].gp >= 10 ? { v: signed(list[0].tr.net), k: 'net per 100' } : { v: f0(list[0].talent), k: 'top 8 OVR' }}
@@ -333,7 +333,7 @@ function PowerRankings({ league, back, week }: { league: League; back?: () => vo
             me={x.tid === league.userTid}
             rank={i + 1}
             tid={x.tid}
-            name={league.teams[x.tid].name}
+            name={teamCity(league, x.tid)}
             spoken={`, ${x.ts.won}-${x.ts.lost}${x.gp ? `, net rating ${signed(x.tr.net)}` : ''}, roster strength ${f0(x.talent)}`}
           >
             <span className={`wl ${x.gp ? (x.tr.net >= 0 ? 'good' : 'bad') : 'dim'}`} aria-hidden="true">

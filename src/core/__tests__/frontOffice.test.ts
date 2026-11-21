@@ -12,7 +12,7 @@ import { testLeague } from '../../state/__tests__/fixtures';
 import { migrate } from '../../state/persistence';
 import { autoRotation } from '../ai/coachAI';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
-import { CAP_FOR, addInbox, contractSeason, curTeamSeason, freeAgents, payroll, standardRoster, statsLine, teamPlayers, teamSeason, winPct } from '../league/helpers';
+import { CAP_FOR, addInbox, contractSeason, curTeamSeason, freeAgents, payroll, standardRoster, statsLine, teamPlayers, teamSeason, winPct, teamCity } from '../league/helpers';
 import { askingContract, releasePlayer, valueScore } from '../league/contracts';
 import { bidFloor, faDay, marqueeFA, offerUtility, userBid } from '../league/freeAgency';
 import { AI_RETRADE_DAYS, aiPackage, justTraded, sellable } from '../league/aiTrades';
@@ -536,7 +536,7 @@ describe('coaches', () => {
       const displaced = activeCoach(x, offer.tid)!;
       // only an offer is a way in (god mode can put him anywhere)
       const other = x.teams.find((t) => t.tid !== x.userTid && !x.jobOffers!.offers.some((o) => o.tid === t.tid))!.tid;
-      expect(takeJob(x, other)).toMatch(/haven't offered you the job/);
+      expect(takeJob(x, other)).toMatch(/hasn't offered you the job/);
       expect(x.userTid).toBe(old);
       // his reputation comes with him: part of the standing that got him fired
       x.ownerMood.total = -0.8;
@@ -548,7 +548,7 @@ describe('coaches', () => {
       expect(registryProblems(x)).toEqual([]);
       // the coach in charge there takes the user's old job
       expect(openStint(displaced)?.tid).toBe(old);
-      expect(x.news.some((n) => n.kind === 'coach' && n.text.startsWith(`The ${x.teams[offer.tid].name} hired ${x.coachName}`))).toBe(true);
+      expect(x.news.some((n) => n.kind === 'coach' && n.text.startsWith(`${teamCity(x, offer.tid)} hired ${x.coachName}`))).toBe(true);
       // and the season can go on to the draft
       expect(startDraft(x)).toBe(true);
     }

@@ -5,7 +5,8 @@
 // (clips.ts), and his arms and legs are solved to that (puppet.ts). So each frame of a take is
 // measured the same way, on the captured body, and scaled to the puppet's limbs: the hand ends up
 // where the real one was, on anyone's build. Feet stay the puppet's own (planted on the floor it's
-// actually crossing), so a captured stride can't slide.
+// actually crossing), so a captured stride can't slide; what a take says about a runner's legs
+// (how long a foot is down, where it lands, how it swings through) is measured apart: see `strideOf`.
 //
 // The takes are the CMU Motion Capture Database's (mocap.cs.cmu.edu), free to use; they sit in
 // data/raw/mocap (not in the repository). Run: npm run mocap:build
@@ -613,6 +614,223 @@ function build(spec: Spec): Built {
   return { kind: spec.kind, dur: Math.round(((to - from) * dt * 1000) / (spec.tempo ?? 1)), grip: spec.grip ?? 'side', at: poses.map((_, i) => Number((i / n).toFixed(4))), poses };
 }
 
+// --- strides: the legs of a man going ahead ---
+//
+// A stride's upper body is a clip like any other. Its legs are not: a planted foot stays where the puppet put it on
+// the floor he is actually crossing, and what a take can say about legs is everything else. How long a foot is down,
+// how far ahead of him it comes down, the path it swings through behind and under him to get there, how it is
+// pitched, and how his hips ride over it. Those are measured here, from the take's toes (down: on the floor and still),
+// each on a clock of its own (a stance from 0 to 1, a swing from 0 to 1), so that strides at two speeds can be mixed
+// stance with stance and swing with swing (Puppet.step reads them: stride.ts).
+
+/** The puppet's foot as Puppet.solve draws it: how far ahead of its point on the floor its ankle is, and how high, pitched `th`. */
+const FOOT_BALL = 0.62;
+const FOOT_HEEL = 0.3;
+const ankleOf = (th: number): [number, number] => {
+  const pz = th >= 0 ? FOOT_BALL : -FOOT_HEEL;
+  return [pz * (1 - Math.cos(th)) + ANKLE * Math.sin(th), ANKLE * Math.cos(th) + Math.abs(pz * Math.sin(th))];
+};
+const SWING_N = 24;
+const STANCE_N = 8;
+const HIP_N = 16;
+
+interface StrideSpec {
+  /** Takes of one way of going, and the stretch of each (seconds). */
+  src: [string, number, number][];
+  /** His hips, on average through it (the puppet's `hip`): a ballplayer's carriage, as the clips' are set. */
+  hip: number;
+  /** His heel comes up this many times as high as the take's (a runner who barely picked up his feet). */
+  lift?: number;
+}
+
+interface Stride {
+  v: number;
+  tc: number;
+  a: number;
+  z: number[];
+  up: number[];
+  pitch: number[];
+  stance: number[];
+  hip: number[];
+}
+
+function strideOf(spec: StrideSpec): Stride {
+  const acc = {
+    v: 0,
+    tc: 0,
+    a: 0,
+    n: 0,
+    z: new Array(SWING_N + 1).fill(0),
+    up: new Array(SWING_N + 1).fill(0),
+    pitch: new Array(SWING_N + 1).fill(0),
+    sw: 0,
+    stance: new Array(STANCE_N + 1).fill(0),
+    hip: new Array(HIP_N).fill(0),
+    hn: 0,
+  };
+  for (const [src, t0, t1] of spec.src) {
+    const take = readBvh(`data/raw/mocap/${src}.bvh`, 2);
+    const m = measure(take);
+    const dt = take.dt;
+    const rest = take.pos[0];
+    const ix = take.index;
+    const restPitch = Math.atan2(
+      rest[ix.LeftFoot][1] - rest[ix.LeftToeBase][1],
+      Math.hypot(rest[ix.LeftToeBase][0] - rest[ix.LeftFoot][0], rest[ix.LeftToeBase][2] - rest[ix.LeftFoot][2]),
+    );
+    const lo = Math.max(1, Math.round(t0 / dt));
+    const hi = Math.min(m.F - 2, Math.round(t1 / dt));
+    // how fast he goes, and which way (where he is, without the wobble of a stride)
+    const vel = (f: number): [number, number, number] => {
+      const a = clamp(f - 1, 0, m.F - 1);
+      const b = clamp(f + 1, 0, m.F - 1);
+      const vx = ((m.rx[b] - m.rx[a]) * m.k) / ((b - a) * dt);
+      const vz = ((m.rz[b] - m.rz[a]) * m.k) / ((b - a) * dt);
+      const v = Math.hypot(vx, vz) || 1;
+      return [v, vx / v, vz / v];
+    };
+    const tds: { f: number; side: number }[] = [];
+    for (const side of [0, 1]) {
+      const S = side ? 'Right' : 'Left';
+      const floorOf = (name: string) => Array.from({ length: m.F }, (_, f) => m.P(f, name)[1]).sort((a, b) => a - b)[Math.floor(m.F * 0.05)];
+      const toeFloor = floorOf(`${S}ToeBase`);
+      const ankFloor = floorOf(`${S}Foot`);
+      // (a frame may fall between two of the take's)
+      const at = (ft: number, name: string): V => {
+        const f0 = clamp(Math.floor(ft), 0, m.F - 1);
+        const f1 = Math.min(m.F - 1, f0 + 1);
+        const w = ft - f0;
+        const a = m.P(f0, name);
+        const b = m.P(f1, name);
+        return [a[0] + (b[0] - a[0]) * w, a[1] + (b[1] - a[1]) * w, a[2] + (b[2] - a[2]) * w];
+      };
+      const down: boolean[] = [];
+      for (let f = 0; f < m.F; f++) {
+        const a = m.P(Math.max(0, f - 1), `${S}ToeBase`);
+        const b = m.P(Math.min(m.F - 1, f + 1), `${S}ToeBase`);
+        const tv = (Math.hypot(b[0] - a[0], b[2] - a[2]) * m.k) / (2 * dt);
+        down.push(tv < 0.3 * vel(f)[0] + 0.6 && (m.P(f, `${S}ToeBase`)[1] - toeFloor) * m.k < 0.2);
+      }
+      // (a flicker of a frame or two is neither a step nor a stride)
+      const gap = Math.round(0.05 / dt);
+      for (let f = 1; f < m.F - 1; f++) {
+        if (down[f] === down[f - 1]) continue;
+        let n = 1;
+        while (f + n < m.F && down[f + n] === down[f]) n++;
+        if (n <= gap && f + n < m.F) for (let i = 0; i < n; i++) down[f + i] = !down[f];
+      }
+      /** The foot at a frame: its point on the floor ahead of him, how high that is, and its pitch. */
+      const foot = (ft: number): [number, number, number] => {
+        const an = at(ft, `${S}Foot`);
+        const to = at(ft, `${S}ToeBase`);
+        const f0 = clamp(Math.round(ft), 0, m.F - 1);
+        const [, ux, uz] = vel(f0);
+        const th = clamp(Math.atan2(an[1] - to[1], Math.hypot(to[0] - an[0], to[2] - an[2])) - restPitch, -0.4, 1.1);
+        const [fwd, low] = ankleOf(th);
+        const w = ft - Math.floor(ft);
+        const g0 = clamp(Math.floor(ft), 0, m.F - 1);
+        const g1 = Math.min(m.F - 1, g0 + 1);
+        const rx = m.rx[g0] + (m.rx[g1] - m.rx[g0]) * w;
+        const rz = m.rz[g0] + (m.rz[g1] - m.rz[g0]) * w;
+        const z = ((an[0] - rx) * ux + (an[2] - rz) * uz) * m.k - fwd;
+        const y = (an[1] - ankFloor) * m.k + ANKLE - low;
+        return [z, Math.max(0, y), th];
+      };
+      const edges: { f: number; down: boolean }[] = [];
+      for (let f = 1; f < m.F; f++) if (down[f] !== down[f - 1]) edges.push({ f, down: down[f] });
+      for (let i = 0; i < edges.length; i++) {
+        const e = edges[i];
+        if (e.f < lo || e.f > hi) continue;
+        if (e.down) tds.push({ f: e.f, side });
+        const next = edges[i + 1];
+        if (!next || next.f > hi) continue;
+        if (e.down) {
+          // a stance: touchdown to toe-off
+          acc.tc += (next.f - e.f) * dt;
+          acc.a += foot(e.f)[0];
+          acc.v += vel(Math.round((e.f + next.f) / 2))[0];
+          acc.n++;
+          for (let j = 0; j <= STANCE_N; j++) acc.stance[j] += foot(e.f + ((next.f - e.f) * j) / STANCE_N)[2];
+        } else {
+          // a swing: toe-off to touchdown, its way ahead measured from where it left to where it lands
+          const z0 = foot(e.f)[0];
+          const z1 = foot(next.f)[0];
+          if (z1 - z0 < 0.5) continue;
+          for (let j = 0; j <= SWING_N; j++) {
+            const [z, y, th] = foot(e.f + ((next.f - e.f) * j) / SWING_N);
+            acc.z[j] += (z - z0) / (z1 - z0);
+            acc.up[j] += y;
+            acc.pitch[j] += th;
+          }
+          acc.sw++;
+        }
+      }
+    }
+    // his hips over a step: from one foot coming down to the other
+    tds.sort((a, b) => a.f - b.f);
+    for (let i = 0; i + 1 < tds.length; i++) {
+      if (tds[i].side === tds[i + 1].side) continue;
+      for (let j = 0; j < HIP_N; j++) {
+        const ft = tds[i].f + ((tds[i + 1].f - tds[i].f) * j) / HIP_N;
+        const f0 = clamp(Math.floor(ft), 0, m.F - 2);
+        const w = ft - f0;
+        const y = (f: number) => (m.P(f, 'LeftUpLeg')[1] + m.P(f, 'RightUpLeg')[1]) / 2;
+        acc.hip[j] += (y(f0) + (y(f0 + 1) - y(f0)) * w) * m.k;
+      }
+      acc.hn++;
+    }
+  }
+  if (!acc.n || !acc.sw || !acc.hn) throw new Error(`no stride in ${spec.src.map((x) => x[0]).join(', ')}`);
+  const r3 = (v: number) => Number(v.toFixed(3));
+  const hip = acc.hip.map((v) => v / acc.hn);
+  const mean = hip.reduce((t, v) => t + v, 0) / HIP_N;
+  const up = acc.up.map((v) => v / acc.sw);
+  // (it is on the floor as it leaves it and as it meets it)
+  const lift = (j: number) => up[j] - (up[0] + (up[SWING_N] - up[0]) * (j / SWING_N));
+  return {
+    v: r3(acc.v / acc.n),
+    tc: r3(acc.tc / acc.n),
+    a: r3(acc.a / acc.n),
+    z: acc.z.map((v) => r3(v / acc.sw)),
+    up: up.map((_, j) => r3(Math.max(0, lift(j)) * (spec.lift ?? 1))),
+    pitch: acc.pitch.map((v) => r3(v / acc.sw)),
+    stance: acc.stance.map((v) => r3(v / acc.n)),
+    hip: hip.map((v) => r3(spec.hip + v - mean)),
+  };
+}
+
+const STRIDE_SPECS: StrideSpec[] = [
+  { src: [['06_01', 0.2, 4.0]], hip: -0.04 },
+  {
+    src: [
+      ['127_13', 0, 1.5],
+      ['127_14', 0, 1.3],
+    ],
+    hip: -0.1,
+    // (the joggers in these takes skimmed the floor: a ballplayer's heel comes up to his calf)
+    lift: 2.4,
+  },
+  {
+    src: [
+      ['102_05', 0, 0.9],
+      ['102_10', 0, 0.8],
+    ],
+    hip: -0.1,
+  },
+];
+const strides = STRIDE_SPECS.map(strideOf);
+// (no take is a flat-out sprint: it is the run's stride driven harder. A foot down for less time and no farther ahead
+// of him, the heel up nearer his seat, his hips riding flatter)
+{
+  const run = strides[strides.length - 1];
+  const r3 = (v: number) => Number(v.toFixed(3));
+  strides.push({ ...run, v: 29, tc: 0.122, a: r3(run.a * 0.9), up: run.up.map((v) => r3(v * 1.15)), hip: run.hip.map((v) => r3(-0.12 + (v + 0.1) * 0.8)) });
+}
+for (const s of strides)
+  console.log(
+    `stride v ${s.v}  down ${s.tc} s  lands ${s.a} ahead  heel up ${Math.max(...s.up).toFixed(2)}  swing ${Math.min(...s.z).toFixed(2)}..${Math.max(...s.z).toFixed(2)}  hips ${Math.min(...s.hip).toFixed(2)}..${Math.max(...s.hip).toFixed(2)}`,
+  );
+
 const out: string[] = [];
 for (const spec of SPECS) {
   const b = build(spec);
@@ -633,5 +851,14 @@ export const MOCAP_CHANNELS: string[] = ${JSON.stringify([...CHANNELS])};
 export const MOCAP: Record<string, { kind: 'loop' | 'gait' | 'shot'; dur: number; grip: 'side' | 'top' | 'under'; at: number[]; poses: number[][] }> = {
 ${out.join('\n')}
 };
+/**
+ * The legs of a man going ahead, at the speeds takes were run at (ft a second, slowest first): how long a foot is down
+ * (tc, seconds), how far ahead of him its point on the floor comes down (a, ft), its swing (z: how far along from
+ * where it left the floor to where it lands; up: how high; pitch: toes down), its pitch through its time down
+ * (stance), and his hips over one step from a foot coming down (hip). See scripts/mocap/build.ts.
+ */
+export const STRIDES: { v: number; tc: number; a: number; z: number[]; up: number[]; pitch: number[]; stance: number[]; hip: number[] }[] = [
+${strides.map((s) => `  ${JSON.stringify(s)},`).join('\n')}
+];
 `,
 );

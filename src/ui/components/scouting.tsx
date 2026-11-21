@@ -10,7 +10,7 @@ import type { PlayTypeRow, Ranked, ScoutData, ScoutPlayer } from '../../core/ana
 import type { OppPlanItem } from '../../core/ai/opponentPlan';
 import { FINISH_LABEL } from '../../core/sim/log';
 import { IMPACT_TEXT, impactSentence, teamRef } from '../../core/analysis/gameReport';
-import { fmtDate } from '../../core/league/helpers';
+import { fmtDate, teamCity } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
 import { edgeWord } from '../../core/analysis/staffWords';
 import { StatTable, Tag, type Col } from './ui';
@@ -147,7 +147,7 @@ export function KeyPlayers({ d }: { d: ScoutData }) {
 export function HeadToHead({ league, d }: { league: League; d: ScoutData }) {
   const opp = league.teams[d.tid];
   const me = league.teams[league.userTid];
-  if (!d.h2h.games.length) return <div className="small dim">No meetings with the {opp.name} this season or last.</div>;
+  if (!d.h2h.games.length) return <div className="small dim">No meetings with {teamCity(league, opp)} this season or last.</div>;
   const effects = d.h2h.effects.filter((e) => e.perGame >= 0.8).slice(0, 4);
   return (
     <div className="scout-h2h-wrap">
@@ -176,7 +176,7 @@ export function HeadToHead({ league, d }: { league: League; d: ScoutData }) {
                 <span>
                   <Tag tone={e.forUser ? 'good' : 'bad'}>{edgeWord(e.perGame)}</Tag>
                 </span>
-                <span>{IMPACT_TEXT[e.key] && impactSentence(e.key, e.forUser ? `the ${me.name}` : teamRef(opp), e.forUser ? teamRef(opp) : `the ${me.name}`)}</span>
+                <span>{IMPACT_TEXT[e.key] && impactSentence(e.key, teamRef(league, e.forUser ? me : opp), teamRef(league, e.forUser ? opp : me))}</span>
               </Fragment>
             ))}
           </div>

@@ -221,7 +221,7 @@ describe('the record book', () => {
       const userGame = next.home.tid === l.userTid || next.away.tid === l.userTid;
       if (userGame) expect(news[0].text).toContain('100 points (a league record)');
       else expect(news[0]).toMatchObject({ head: expect.stringContaining('sets a league record: 100 points'), weight: 3 });
-      expect(`${news[0].head ?? ''} ${news[0].text}`).not.toContain('Knicks record');
+      expect(`${news[0].head ?? ''} ${news[0].text}`).not.toContain('franchise record');
     }
 
     // a real league's book opens with the NBA's games since 1996-97 (records.json): its records are
@@ -273,8 +273,8 @@ describe('the record book', () => {
       };
       expect(wins(71)).toEqual([]);
       expect(wins(72)[0]).toContain('level with the 1995-96 Chicago Bulls (72-10). Only the 2015-16 Golden State Warriors (73-9) won more');
-      expect(wins(73)[0]).toMatch(/^73 wins: the .+ tie the record/);
-      expect(wins(74)[0]).toMatch(/^74 wins: the .+ pass the record.*past the 2015-16 Golden State Warriors \(73-9\)/);
+      expect(wins(73)[0]).toMatch(/^73 wins: [A-Z].+ ties the record/);
+      expect(wins(74)[0]).toMatch(/^74 wins: [A-Z].+ passes the record.*past the 2015-16 Golden State Warriors \(73-9\)/);
       expect(wins(40, 33)[0]).toContain('It ties the 1971-72 Los Angeles Lakers (33) for the longest winning streak');
     }
 
@@ -330,7 +330,7 @@ describe('the record book', () => {
         const before = x.news.length;
         recordNews(x, t, recordGame(x, t));
         const text = x.news.slice(before).find((n) => n.pids.includes(him.pid))!.text;
-        expect(text).toContain(`150 points (tying the league record, a ${x.teams[t.away.tid].name} record)`);
+        expect(text).toContain('150 points (tying the league record, a franchise record)');
         expect(text.match(/150 points/g)).toHaveLength(1);
       }
 

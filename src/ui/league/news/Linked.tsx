@@ -2,7 +2,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { League, NewsItem } from '../../../core/types';
-import { fmtDate, playerName } from '../../../core/league/helpers';
+import { fmtDate, playerName, teamCity } from '../../../core/league/helpers';
 import { teamPath } from '../shared';
 
 /** The story reader's deep link (other screens link here too). */
@@ -32,7 +32,8 @@ export function mentions(league: League, text: string, pids: number[], tids: num
   for (const tid of tids) {
     const t = league.teams[tid];
     if (!t) continue;
-    for (const name of [`${t.region} ${t.name}`, t.name, t.abbrev]) names.push({ name, to: teamPath(tid), id: `t${tid}` });
+    // (its full name, its city as the press writes it, its nickname as older stories did, its abbreviation)
+    for (const name of new Set([`${t.region} ${t.name}`, teamCity(league, t), t.name, t.abbrev])) names.push({ name, to: teamPath(tid), id: `t${tid}` });
   }
   const word = (c: string | undefined) => !!c && /[\p{L}\p{N}]/u.test(c);
   const found: Mention[] = [];

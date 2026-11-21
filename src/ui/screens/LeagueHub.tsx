@@ -18,6 +18,7 @@ import { AwardsTab } from '../league/AwardsTab';
 import { CupTab } from '../league/CupTab';
 import { NewsTab } from '../league/NewsTab';
 import { DayScoreboard } from '../league/Schedule';
+import { teamCity } from '../../core/league/helpers';
 
 const History = lazyRetry(() => import('./History'));
 
@@ -97,7 +98,7 @@ export default function LeagueHub() {
 /** The In-Season Cup while it's on, as one row under Playoffs' poster: where it stands, a tap to its groups and bracket. */
 function CupLink({ league }: { league: League }) {
   const cup = league.cup;
-  const where = !cup ? '' : cup.champion !== undefined ? `Won by the ${league.teams[cup.champion].name}` : cup.seeds ? 'Knockouts' : 'Group stage';
+  const where = !cup ? '' : cup.champion !== undefined ? `Won by ${teamCity(league, cup.champion)}` : cup.seeds ? 'Knockouts' : 'Group stage';
   return (
     <Link to="/league/cup" className="card listrow clickable lg-cuplink">
       <span className="grow">

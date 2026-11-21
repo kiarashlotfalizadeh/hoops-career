@@ -6,7 +6,7 @@ import type { League, Player } from '../../types';
 import { An, an, injuryName } from '../../format';
 import { worldRng } from '../world';
 import type { MediaState, PowerRow } from '../media';
-import { Voice, f1, last, lastTen, netOf, nth, perGame, poss, publish, recOf, rosters, signed, tsOf } from './voice';
+import { Voice, city, f1, last, lastTen, netOf, nth, perGame, poss, publish, recOf, rosters, signed, tsOf } from './voice';
 import { strengths } from './strength';
 
 /** The day's power score of every team: strength, then the record (more as the games add up) and the last ten. */
@@ -123,44 +123,44 @@ export function powerRankings(league: League, m: MediaState) {
   const u = rows.find((r) => r.tid === league.userTid)!;
   const top = rows[0];
   const move = u.prev !== undefined ? u.prev - u.rank : 0;
-  const UN = league.teams[u.tid].name;
-  const TN = league.teams[top.tid].name;
+  const UN = city(league, u.tid);
+  const TN = city(league, top.tid);
   let head: string;
   if (u.rank === 1 && u.prev !== 1)
-    head = v.say('pwh-u1', [`Power rankings: the ${UN} take over at No. 1`, `The ${UN} are No. 1 in the power rankings`, `Top of the power rankings: the ${UN}`]);
+    head = v.say('pwh-u1', [`Power rankings: ${UN} takes over at No. 1`, `New No. 1 in the power rankings: ${UN}`, `Top of the power rankings: ${UN}`]);
   else if (move >= 3)
     head = v.say('pwh-uup', [
-      `Power rankings: the ${UN} climb to ${nth(u.rank)}`,
-      `The ${UN} jump ${move} spots in the power rankings`,
+      `Power rankings: ${UN} climbs to ${nth(u.rank)}`,
+      `${UN} jumps ${move} spots in the power rankings`,
       `Power rankings: ${UN} up ${move}, to No. ${u.rank}`,
     ]);
   else if (move <= -3)
     head = v.say('pwh-udown', [
-      `Power rankings: the ${UN} slip to ${nth(u.rank)}`,
-      `The ${UN} drop ${-move} spots in the power rankings`,
+      `Power rankings: ${UN} slips to ${nth(u.rank)}`,
+      `${UN} drops ${-move} spots in the power rankings`,
       `Power rankings: ${UN} down ${-move}, to No. ${u.rank}`,
     ]);
   else if (u.rank <= 3)
     head = v.say('pwh-uhigh', [
-      `Power rankings: the ${UN} hold at No. ${u.rank}`,
-      `The ${UN} stay ${nth(u.rank)} in the power rankings`,
+      `Power rankings: ${UN} holds at No. ${u.rank}`,
+      `${UN} stays ${nth(u.rank)} in the power rankings`,
       `Power rankings, week ${week}: ${UN} ${nth(u.rank)}`,
     ]);
   else if (top.prev !== undefined && top.prev !== 1)
-    head = v.say('pwh-new1', [`Power rankings: the ${TN} take over at No. 1`, `New No. 1 in the power rankings: the ${TN}`, `The ${TN} climb to the top of the power rankings`]);
+    head = v.say('pwh-new1', [`Power rankings: ${TN} takes over at No. 1`, `New No. 1 in the power rankings: ${TN}`, `${TN} climbs to the top of the power rankings`]);
   else
     head = v.say('pwh-1', [
-      `Power rankings: the ${TN} stay on top`,
-      `Still No. 1: the ${TN}`,
-      `Power rankings, week ${week}: the ${TN} lead again`,
-      `The ${TN} remain the power rankings' No. 1`,
+      `Power rankings: ${TN} stays on top`,
+      `Still No. 1: ${TN}`,
+      `Power rankings, week ${week}: ${TN} leads again`,
+      `${TN} remains the power rankings' No. 1`,
     ]);
   const moved = (r: PowerRow) => (r.prev === undefined ? '' : r.prev > r.rank ? `, up ${r.prev - r.rank}` : r.prev < r.rank ? `, down ${r.rank - r.prev}` : '');
   const dek =
     u.rank === 1
-      ? `Week ${week}: the ${UN} are No. 1${moved(u)}, ahead of the ${league.teams[rows[1].tid].name}.`
-      : `Week ${week}: the ${TN} lead${moved(top)}. The ${UN} are ${nth(u.rank)}${moved(u)}.`;
-  const line = (r: PowerRow) => `${r.rank}. ${league.teams[r.tid].region} ${league.teams[r.tid].name}, ${recOf(tsOf(league, r.tid))}. ${r.blurb}`;
+      ? `Week ${week}: ${UN} is No. 1${moved(u)}, ahead of ${city(league, rows[1].tid)}.`
+      : `Week ${week}: ${TN} leads${moved(top)}. ${UN} is ${nth(u.rank)}${moved(u)}.`;
+  const line = (r: PowerRow) => `${r.rank}. ${city(league, r.tid)}, ${recOf(tsOf(league, r.tid))}. ${r.blurb}`;
   const risers = rows.filter((r) => r.prev !== undefined && r.prev - r.rank >= 3).sort((a, b) => b.prev! - b.rank - (a.prev! - a.rank));
   const fallers = rows.filter((r) => r.prev !== undefined && r.rank - r.prev >= 3).sort((a, b) => b.rank - b.prev! - (a.rank - a.prev!));
   const body = [
@@ -168,10 +168,8 @@ export function powerRankings(league: League, m: MediaState) {
     u.rank > 5 ? line(u) : '',
     risers.length || fallers.length
       ? [
-          risers[0] && risers[0].tid !== u.tid ? `Biggest riser: the ${league.teams[risers[0].tid].name}, up ${risers[0].prev! - risers[0].rank} to ${nth(risers[0].rank)}.` : '',
-          fallers[0] && fallers[0].tid !== u.tid
-            ? `Biggest faller: the ${league.teams[fallers[0].tid].name}, down ${fallers[0].rank - fallers[0].prev!} to ${nth(fallers[0].rank)}.`
-            : '',
+          risers[0] && risers[0].tid !== u.tid ? `Biggest riser: ${city(league, risers[0].tid)}, up ${risers[0].prev! - risers[0].rank} to ${nth(risers[0].rank)}.` : '',
+          fallers[0] && fallers[0].tid !== u.tid ? `Biggest faller: ${city(league, fallers[0].tid)}, down ${fallers[0].rank - fallers[0].prev!} to ${nth(fallers[0].rank)}.` : '',
         ]
           .filter(Boolean)
           .join(' ')

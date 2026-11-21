@@ -1,11 +1,11 @@
 // Post-game "why" report: turns engine impact tags, four factors, play types, runs and
 // lineups into ranked, plain-language factors with concrete advice.
 
-import type { DefRole, GameResult, League, SetId, TacticImpact, Tactics, TeamBox } from '../types';
+import type { DefRole, GameResult, League, SetId, TacticImpact, Tactics, Team, TeamBox } from '../types';
 import { FINISH_LABEL, type FinishType } from '../sim/log';
 import { hacks, isJunk } from '../sim/tactics';
 import { CLEAR_OUT, SETS, SET_IDS } from '../sim/sets';
-import { shortName, wholeMinutes } from '../league/helpers';
+import { shortName, teamCity, wholeMinutes } from '../league/helpers';
 import { madeAtt, plural } from '../format';
 
 export interface Factor {
@@ -32,7 +32,7 @@ export interface Factor {
 }
 
 interface Tpl {
-  /** X benefited, Y was hurt: lowercase noun phrases ("the Celtics", "your team"); `who` names the players involved. */
+  /** X benefited, Y was hurt: noun phrases ("Boston", "your team"); `who` names the players involved. */
   text: (X: string, Y: string, who: string) => string;
   advice?: string; // advice for the team that was hurt
   /** Whether the hurt team's tactics still use what caused it (no "go to Hedge" for a team already in Hedge). */
@@ -44,11 +44,11 @@ const dropping = (t: Tactics) => t.defense.scheme === 'man' && t.defense.pnr ===
 /** Whether the tactics give anyone this out-of-possession role. */
 const hasRole = (t: Tactics, r: DefRole) => Object.values(t.defense.roles ?? {}).includes(r);
 
-/** Team nicknames are plural, so their possessive drops the extra s: "the Celtics" → "the Celtics'", "your team" → "your team's". */
+/** A name's possessive, dropping the extra s after one: "Boston" → "Boston's", "Dallas" → "Dallas'", "your team" → "your team's". */
 export const possessive = (x: string) => (x.endsWith('s') ? `${x}'` : `${x}'s`);
 
-/** A team as the impact sentences name it: "the Thunder". */
-export const teamRef = (t: { name: string }) => `the ${t.name}`;
+/** A team as the impact sentences name it: its city, "Boston" (see teamCity). */
+export const teamRef = (league: Pick<League, 'teams'>, t: Pick<Team, 'tid' | 'region' | 'name'>) => teamCity(league, t);
 
 /** One impact as a sentence, X having benefited and Y been hurt (noun phrases as `teamRef` makes them). */
 export const impactSentence = (key: string, X: string, Y: string, who = '') => {
@@ -400,7 +400,7 @@ IMPACT_TEXT['set_read:d'] = {
 
 /** "Halftime: the Thunder lead the Celtics 55-50. Biggest factor so far: …" (the factor that went the leader's way, the biggest one when tied). */
 function partialHeadline(us: string, them: string, a: number, b: number, periods: number, top?: string) {
-  const score = a === b ? `the ${us} and the ${them} are tied at ${a}` : `the ${us} ${a > b ? 'lead' : 'trail'} the ${them} ${Math.max(a, b)}-${Math.min(a, b)}`;
+  const score = a === b ? `${us} and ${them} are tied at ${a}` : `${us} ${a > b ? 'leads' : 'trails'} ${them} ${Math.max(a, b)}-${Math.min(a, b)}`;
   return `${breakLabel(periods)}: ${score}.${top ? ` Biggest factor so far: ${top}.` : ''}`;
 }
 
@@ -607,8 +607,8 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     const tpl = IMPACT_TEXT[im.key];
     if (!tpl || im.pts < 0.6) continue;
     const benefitUser = im.t === userSide;
-    const X = teamRef(benefitUser ? ut : ot);
-    const Y = teamRef(benefitUser ? ot : ut);
+    const X = teamRef(league, benefitUser ? ut : ot);
+    const Y = teamRef(league, benefitUser ? ot : ut);
     // a cost of one of the user's settings that the same setting more than won back: no fix for it
     const lv = benefitUser ? null : leverNet(res.impacts, im.key, userSide);
     const paid = !benefitUser && leverPaid(res.impacts, im.key, userSide);
@@ -645,7 +645,7 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     if (Math.abs(looks) >= 3) {
       const [hi, lo] = looks > 0 ? [xefg(xu, u.t.fga), xefg(xo, o.t.fga)] : [xefg(xo, o.t.fga), xefg(xu, u.t.fga)];
       factors.push({
-        title: `The ${looks > 0 ? ut.name : ot.name} got the better looks: worth ${pct(hi)} eFG vs ${pct(lo)}.`,
+        title: `${teamCity(league, looks > 0 ? ut : ot)} got the better looks: worth ${pct(hi)} eFG vs ${pct(lo)}.`,
         detail: 'What the shots were worth as taken, before any fell. That counts the shooter, how open he was and the contest.',
         pts: looks,
         category: 'shooting',
@@ -656,9 +656,9 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
       // told by the side whose shooting strayed further from its looks: a cold night isn't the other team's hot one
       const du = fu.efg - xefg(xu, u.t.fga);
       const dv = fo.efg - xefg(xo, o.t.fga);
-      const [who, d] = Math.abs(du) >= Math.abs(dv) ? [ut.name, du] : [ot.name, dv];
+      const [who, d] = Math.abs(du) >= Math.abs(dv) ? [teamCity(league, ut), du] : [teamCity(league, ot), dv];
       factors.push({
-        title: `${possessive(`The ${who}`)} shots fell ${d > 0 ? 'above' : 'below'} their looks.`,
+        title: `${possessive(who)} shots fell ${d > 0 ? 'above' : 'below'} their looks.`,
         detail: 'That part is luck, with nothing to change.',
         pts: fell,
         category: 'shooting',
@@ -667,9 +667,9 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
       });
     }
   } else if (Math.abs(efgSwing) >= 3) {
-    const better = efgSwing > 0 ? ut.name : ot.name;
+    const better = teamCity(league, efgSwing > 0 ? ut : ot);
     factors.push({
-      title: `The ${better} shot it better: eFG ${(Math.max(fu.efg, fo.efg) * 100).toFixed(1)}% vs ${(Math.min(fu.efg, fo.efg) * 100).toFixed(1)}%.`,
+      title: `${better} shot it better: eFG ${(Math.max(fu.efg, fo.efg) * 100).toFixed(1)}% vs ${(Math.min(fu.efg, fo.efg) * 100).toFixed(1)}%.`,
       detail: `${ut.abbrev} ${madeAtt(u.t.fgm, u.t.fga)}, ${madeAtt(u.t.tpm, u.t.tpa)} from three · ${ot.abbrev} ${madeAtt(o.t.fgm, o.t.fga)}, ${madeAtt(o.t.tpm, o.t.tpa)} from three.`,
       pts: efgSwing,
       category: 'shooting',
@@ -794,8 +794,8 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
   const lead = u.pts === o.pts ? told[0] : top;
   const how = res.ot ? ` in ${res.ot > 1 ? `${res.ot}OT` : 'OT'}` : margin <= 3 ? ' in a nail-biter' : margin >= 20 ? ' in a rout' : '';
   const headline = opts.partial
-    ? partialHeadline(ut.name, ot.name, u.pts, o.pts, periods, lead && factorPhrase(lead.title))
-    : `The ${ut.name} ${userWon ? 'beat' : 'fell to'} the ${ot.name} ${Math.max(u.pts, o.pts)}-${Math.min(u.pts, o.pts)}${how}.${topText ? ` Biggest factor: ${topText}.` : ''}`;
+    ? partialHeadline(teamCity(league, ut), teamCity(league, ot), u.pts, o.pts, periods, lead && factorPhrase(lead.title))
+    : `${teamCity(league, ut)} ${userWon ? 'beat' : 'fell to'} ${teamCity(league, ot)} ${Math.max(u.pts, o.pts)}-${Math.min(u.pts, o.pts)}${how}.${topText ? ` Biggest factor: ${topText}.` : ''}`;
   return {
     headline,
     userWon,

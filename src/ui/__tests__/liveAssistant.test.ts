@@ -10,7 +10,7 @@
 // only from games stored this season.
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../../core/league/create';
-import { teamPlayers } from '../../core/league/helpers';
+import { teamCity, teamPlayers } from '../../core/league/helpers';
 import { GameSim } from '../../core/sim/engine';
 import { Rng } from '../../core/random';
 import { cloneTactics } from '../../core/sim/tactics';
@@ -49,6 +49,7 @@ function alertInput(g: ReturnType<typeof game>, view: Drawn, over: Partial<Alert
     view,
     side: 0,
     teams: [league.teams[0], league.teams[1]],
+    cities: [teamCity(league, 0), teamCity(league, 1)],
     tactics: sim.baseTactics(0),
     manualSubs: false,
     atBreak: false,
@@ -912,7 +913,7 @@ describe('broadcast graphics', () => {
         graphicCandidates(graphicInput(end, logs, { before: new Map([[top.pid, { records }]]) })).filter((g) => g.kind === 'record' || g.id.startsWith('rec-'));
       // past the franchise's record but not the league's
       expect(at({ team: top.pts - 1, teamName: 'Hawks', league: top.pts + 5, playoffs: false })).toEqual([
-        expect.objectContaining({ id: `rec-t-${top.pid}`, tag: 'Franchise record', text: `P${top.pid}: ${top.pts} points, a Hawks record` }),
+        expect.objectContaining({ id: `rec-t-${top.pid}`, tag: 'Franchise record', text: `P${top.pid}: ${top.pts} points, a franchise record` }),
       ]);
       // past both: only the league's is called
       expect(at({ team: top.pts - 1, teamName: 'Hawks', league: top.pts - 1, playoffs: true }).map((g) => g.tag)).toEqual(['League playoff record']);

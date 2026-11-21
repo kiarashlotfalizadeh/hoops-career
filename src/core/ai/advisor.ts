@@ -12,7 +12,7 @@ import { leverCard, withStaffMoves } from '../league/staffLever';
 import { applyPatch } from '../sim/tactics';
 import { effectiveTactics, itemGroup, planFor } from '../league/gamePlans';
 import { scoutData } from '../analysis/scouting';
-import { andList, inSeason, playerName, rosterSorted, shortName, teamPlayers } from '../league/helpers';
+import { andList, inSeason, playerName, rosterSorted, shortName, teamCity, teamPlayers } from '../league/helpers';
 import { IMPACT_TEXT, LEVER_KEYS, leverNet } from '../analysis/gameReport';
 import { castThrees, leagueThreePct } from './opponentPlan';
 import { huntPick, ratingText } from '../analysis/guarding';
@@ -160,7 +160,7 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
     threats.push({ pid: shooters[0].p.pid, name: playerName(shooters[0].p), why: `Best shooter, ${ratingText(shooters[0].p, 'tp')}. Don't leave him open.` });
   if (protector && !threats.some((x) => x.pid === protector.p.pid))
     threats.push({ pid: protector.p.pid, name: playerName(protector.p), why: `Anchors the paint, ${ratingText(protector.p, 'blk')}.` });
-  const summary = `${team.region} ${team.name}: ${offName} offense, ${defName} defense. Watch ${threats[0]?.name ?? 'their starters'}.`;
+  const summary = `${teamCity(league, team)}: ${offName} offense, ${defName} defense. Watch ${threats[0]?.name ?? 'their starters'}.`;
   return { tid, summary, offense, defense, threats, weaknesses };
 }
 
@@ -203,7 +203,7 @@ export const PRESSURE_SECURITY = 53;
 const BIG_GROUPS = new Set(['coverage', 'pressure', 'press', 'help', 'star']);
 
 export function counterCandidates(league: League, userTid: number, oppTid: number): Candidate[] {
-  const opp = league.teams[oppTid];
+  const C = teamCity(league, oppTid);
   const { rot, cs, creators, spacing, security } = readRotation(league, oppTid);
   const top = creators[0];
   /** How the five who play most besides `skip` space the floor (what a double or a junk defense dares). */
@@ -248,7 +248,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
       add({
         id: 'star-double',
         label: `Double-team ${star.lastName}`,
-        why: `${star.lastName} doesn't pass out of traps. The ${opp.name} around him can't shoot, spacing ${Math.round(around)}.`,
+        why: `${star.lastName} doesn't pass out of traps. The players around him can't shoot, spacing ${Math.round(around)}.`,
         group: 'star',
         patch: { defense: { starPlan: 'double', starTarget: star.pid } },
       });
@@ -259,7 +259,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     add({
       id: 'zone23',
       label: '2-3 zone',
-      why: `The ${opp.name} can't shoot, spacing ${Math.round(spacing)}. Wall off the paint and let them fire away.`,
+      why: `${C} can't shoot, spacing ${Math.round(spacing)}. Wall off the paint and let them fire away.`,
       group: 'coverage',
       patch: { defense: { scheme: 'zone23' } },
     });
@@ -267,7 +267,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     add({
       id: 'zone32',
       label: '3-2 zone',
-      why: `The ${opp.name} live on threes, spacing ${Math.round(spacing)}. Run their shooters off the arc.`,
+      why: `${C} lives on threes, spacing ${Math.round(spacing)}. Run their shooters off the arc.`,
       group: 'coverage',
       patch: { defense: { scheme: 'zone32' } },
     });
@@ -280,10 +280,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     add({
       id: 'help-high',
       label: 'Pack the paint',
-      why:
-        spacing < CRAMPED_SPACING + 4
-          ? `The ${opp.name} can't shoot, spacing ${Math.round(spacing)}. Sag off and protect the rim.`
-          : `The ${opp.name} score inside. Sag off and protect the rim.`,
+      why: spacing < CRAMPED_SPACING + 4 ? `${C} can't shoot, spacing ${Math.round(spacing)}. Sag off and protect the rim.` : `${C} scores inside. Sag off and protect the rim.`,
       group: 'help',
       patch: { defense: { help: 78 } },
     });
@@ -291,7 +288,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     add({
       id: 'help-low',
       label: 'Stay home on shooters',
-      why: spacing >= 45 ? `The ${opp.name} space the floor well. Don't over-help.` : `The ${opp.name} make open threes pay. Don't over-help.`,
+      why: spacing >= 45 ? `${C} spaces the floor well. Don't over-help.` : `${C} makes open threes pay. Don't over-help.`,
       group: 'help',
       patch: { defense: { help: 32 } },
     });
@@ -341,7 +338,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
       patch: { defense: { press: 'afterMade' } },
     });
   if (backed('getback') && cur.defense.getBack < 80)
-    add({ id: 'getback', label: 'Sprint back', why: `The ${opp.name} live in transition: get back before anyone crashes.`, group: 'getback', patch: { defense: { getBack: 85 } } });
+    add({ id: 'getback', label: 'Sprint back', why: `${C} lives in transition: get back before anyone crashes.`, group: 'getback', patch: { defense: { getBack: 85 } } });
   if (backed('physicality-down') && cur.defense.physicality > 40)
     add({
       id: 'physicality-down',
@@ -351,7 +348,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
       patch: { defense: { physicality: 35 } },
     });
   // offensive counters, as relative changes to the playbook (each in the group of its main action)
-  const od = opp.tactics.defense;
+  const od = league.teams[oppTid].tactics.defense;
   if (od.pnr === 'drop' && od.scheme === 'man')
     add({
       id: 'vs-drop',
@@ -415,7 +412,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     add({
       id: 'post-up',
       label: 'Post them up',
-      why: oppProfile.size < 48 ? `The ${opp.name} are small: feed the block.` : 'Their post defense is giving up points: feed the block.',
+      why: oppProfile.size < 48 ? `${C} is small: feed the block.` : 'Their post defense is giving up points: feed the block.',
       group: 'actions-post',
       patch: { nudge: { actions: { post: 25 } } },
     });
@@ -431,7 +428,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     add({
       id: 'pace-up',
       label: 'Push the pace',
-      why: oppProfile.athleticism < 50 ? `The ${opp.name} are slow. Run on them.` : `The ${opp.name} don't defend in transition. Run on them.`,
+      why: oppProfile.athleticism < 50 ? `${C} is slow. Run on them.` : `${C} doesn't defend in transition. Run on them.`,
       group: 'pace',
       patch: { offense: { pace: 78, transition: 85 } },
     });

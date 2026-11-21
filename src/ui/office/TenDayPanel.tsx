@@ -3,7 +3,7 @@
 // for the player page, the Office and the inbox, and the short label lists show.
 import type { League, Player } from '../../core/types';
 import { CAP } from '../../core/constants';
-import { CAP_FOR, standardRoster } from '../../core/league/helpers';
+import { CAP_FOR, standardRoster, teamCity } from '../../core/league/helpers';
 import {
   HARDSHIP_OUT,
   TEN_DAY_MAX,
@@ -43,7 +43,7 @@ export function tenDayLabel(league: League, p: Player): string | null {
 export function tenDayLine(league: League, p: Player): string {
   const td = p.contract.tenDay!;
   const n = tenDaysWith(league, p, p.tid);
-  return `${n >= 2 ? 'Second' : 'First'} 10-day with the ${league.teams[p.tid].name}: ${moneyExact(p.contract.salaries[0])}, paid at signing. It ends after ${tenDayEnds(league, td.until)}${
+  return `${n >= 2 ? 'Second' : 'First'} 10-day with ${teamCity(league, p.tid)}: ${moneyExact(p.contract.salaries[0])}, paid at signing. It ends after ${tenDayEnds(league, td.until)}${
     td.hardship ? `, on a hardship spot past ${CAP.rosterMax}` : ''
   }. No dead money if he goes.`;
 }
@@ -85,7 +85,7 @@ export function TenDayMessage({ league, pid }: { league: League; pid: number }) 
       ? 'His 10-day contract is over: he is a free agent.'
       : p.tid === league.userTid
         ? 'He is signed with us now.'
-        : `He has signed with the ${league.teams[p.tid].name}.`;
+        : `He has signed with ${teamCity(league, p.tid)}.`;
   return <p className="small dim">{how}</p>;
 }
 

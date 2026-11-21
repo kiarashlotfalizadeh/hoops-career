@@ -1294,7 +1294,7 @@ it('restricted free agency: qualifying offers, cap holds, offer sheets and match
     expect(userOffer(l, p.pid, Math.round((atAsk(l, p, 3) * 0.8) / 50) * 50, 3).reason).toMatch(/counters at/);
     const amount = atAsk(l, p, 3);
     const space = capSpace(l, U, s);
-    const [t] = logged(l, () => expect(userOffer(l, p.pid, amount, 3).reason).toMatch(/Offer sheet signed: the .* have until the end of day 2 to match/));
+    const [t] = logged(l, () => expect(userOffer(l, p.pid, amount, 3).reason).toMatch(/Offer sheet signed: [A-Z].* has until the end of day 2 to match/));
     expect(t).toMatchObject({ kind: 'offerSheet', tids: [U, R], amount, years: 3 });
     expect(text(l, t, { tid: U })).toBe(
       `Signed ${playerName(p)} to an offer sheet: 3 yrs / $${((amount + Math.round((amount * 1.05) / 10) * 10 + Math.round((amount * 1.1025) / 10) * 10) / 1000).toFixed(1)}M. ${l.teams[R].abbrev} can match`,
@@ -1304,7 +1304,7 @@ it('restricted free agency: qualifying offers, cap holds, offer sheets and match
     expect(capSpace(l, U, s)).toBe(space - amount);
     expect(marketHolds(l, U).map((h) => h.kind)).toEqual(['sheet']);
     // nobody else can sign him meanwhile, the user included
-    expect(sheetBlockedReason(l, p, 3)).toMatch(/has signed an offer sheet with the .*\. The .* decide by the end of day 2/);
+    expect(sheetBlockedReason(l, p, 3)).toMatch(/has signed an offer sheet with [A-Z].*\. [A-Z].* must decide by the end of day 2/);
     expect(userBid(l, p.pid, amount, 3).ok).toBe(false);
   }
 

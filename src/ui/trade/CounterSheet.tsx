@@ -2,7 +2,7 @@
 // what it does to your payroll, and buttons to make it or to edit it in the builder.
 import { Handshake, Minus, PackagePlus, Plus } from 'lucide-react';
 import type { League } from '../../core/types';
-import { CAP_FOR, playerName } from '../../core/league/helpers';
+import { CAP_FOR, playerName, teamCity } from '../../core/league/helpers';
 import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
 import { capSalary, evaluateTrade, type TradeOffer } from '../../core/league/trades';
 import { pickName } from '../draft/common';
@@ -37,7 +37,7 @@ export function CounterSheet({
 }) {
   const open = !!base && counters.length > 0;
   return (
-    <Sheet open={open} onClose={onClose} title={base ? `The ${league.teams[base.b.tid].name} say no` : undefined}>
+    <Sheet open={open} onClose={onClose} title={base ? `${teamCity(league, base.b.tid)} says no` : undefined}>
       {open && base && (
         <div className="col fo-sheet">
           <p className="fo-lede">

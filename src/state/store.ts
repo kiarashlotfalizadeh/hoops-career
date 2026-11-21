@@ -10,6 +10,7 @@ import { newCall, openCallIds } from '../core/league/calls';
 import { staffPicksSince } from '../core/league/weekCall';
 import { userGameOnDay } from '../core/league/games';
 import { billingFor } from '../core/analysis/gameStory';
+import { teamCity } from '../core/league/helpers';
 
 export type { SimProgress, SimTarget, TaskOp, TaskResult } from './simCore';
 export { allStarStop, loopSetting, MONTH_DAYS, type LoopSettings } from './simCore';
@@ -115,7 +116,7 @@ function stopToast(l: League, stop: SimStop, callsFrom: ReadonlySet<string>): { 
     const opp = g && l.teams[g.home === l.userTid ? g.away : g.home];
     return {
       toast: [
-        b && opp ? `Stopped for tonight: ${b.tag} ${g.home === l.userTid ? 'vs' : 'at'} ${opp.name}` : 'Stopped for a big night.',
+        b && opp ? `Stopped for tonight: ${b.tag} ${g.home === l.userTid ? 'vs' : 'at'} ${teamCity(l, opp)}` : 'Stopped for a big night.',
         'neutral',
         opp ? `/games/${opp.tid}` : '/',
       ],

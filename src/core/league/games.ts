@@ -5,7 +5,7 @@ import type { GameResult, League, Player, Rotation, ScheduledGame, StandingLine,
 import { GameSim, K, type SimTeamInput } from '../sim/engine';
 import { Rng, clamp } from '../random';
 import { autoRotation, autoTactics, presetScores, staffPick, styleChanged } from '../ai/coachAI';
-import { addNews, andList, inSeason, playerName, statsLine, teamName, teamPlayers, teamSeason } from './helpers';
+import { addNews, andList, inSeason, playerName, statsLine, teamCity, teamPlayers, teamSeason } from './helpers';
 import { cohesionOf } from './pulse';
 import { applyInjury, clearedToPlay, GAME_TIME_PERF, healOneGame } from './injuries';
 import { gameFinances, updateHype } from './finances';
@@ -303,21 +303,22 @@ const PLAYOFF_REST = 3;
 export function youthNews(league: League) {
   for (const t of league.teams) {
     if (youthMovement(league, t.tid) < 1) continue;
-    if (league.news.some((n) => n.season === league.season && n.kind === 'general' && n.tids[0] === t.tid && n.text.includes(YOUTH_NEWS))) continue;
+    if (league.news.some((n) => n.season === league.season && n.kind === 'general' && n.tids[0] === t.tid && YOUTH_NEWS.test(n.text))) continue;
     const young = teamPlayers(league, t.tid)
       .filter((p) => playerAge(p, league.season) <= 23)
       .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
       .slice(0, 2);
     addNews(league, {
       kind: 'general',
-      text: `The ${teamName(t)} ${YOUTH_NEWS}.${young.length ? ` More minutes for ${andList(young.map(playerName))}.` : ''} Their veterans will sit some nights.`,
+      text: `${teamCity(league, t)} turns to its young players.${young.length ? ` More minutes for ${andList(young.map(playerName))}.` : ''} Their veterans will sit some nights.`,
       tids: [t.tid],
       pids: young.map((p) => p.pid),
     });
   }
 }
 
-const YOUTH_NEWS = 'turn to their young players';
+/** The line youthNews writes (and, in older saves, wrote with the nickname: "turn to their young players"). */
+const YOUTH_NEWS = /turns? to (its|their) young players/;
 
 /**
  * The user's own rotation after the roster changes under it (a trade, a signing): his order and
@@ -734,7 +735,7 @@ function milestoneNews(league: League, sim: GameSim) {
         const team = league.teams[rb.tid];
         addNews(league, {
           kind: 'milestone',
-          text: `${playerName(p)} of the ${team.name} ${STAT_NEWS[stat]} ${markText(stat, mark)}.`,
+          text: `${playerName(p)} of ${teamCity(league, team)} ${STAT_NEWS[stat]} ${markText(stat, mark)}.`,
           tids: [team.tid],
           pids: [p.pid],
         });
@@ -756,14 +757,14 @@ function notableNews(league: League, res: GameResult) {
         // (two short sentences: who and against whom, then the line)
         const reb = bl.orb + bl.drb;
         const text = tdbl
-          ? `${playerName(p)} had a triple-double for the ${team.name} against the ${opp.name}. ${andList([
+          ? `${playerName(p)} had a triple-double for ${teamCity(league, team)} against ${teamCity(league, opp)}. ${andList([
               plural(bl.pts, 'point'),
               plural(reb, 'rebound'),
               plural(bl.ast, 'assist'),
               ...(bl.stl >= 10 ? [plural(bl.stl, 'steal')] : []),
               ...(bl.blk >= 10 ? [plural(bl.blk, 'block')] : []),
             ]).replace(/^./, (c) => c.toUpperCase())}.`
-          : `${playerName(p)} scored ${bl.pts} for the ${team.name} against the ${opp.name}. He added ${plural(reb, 'rebound')} and ${plural(bl.ast, 'assist')}.`;
+          : `${playerName(p)} scored ${bl.pts} for ${teamCity(league, team)} against ${teamCity(league, opp)}. He added ${plural(reb, 'rebound')} and ${plural(bl.ast, 'assist')}.`;
         addNews(league, { kind: 'milestone', text, tids: [team.tid], pids: [p.pid] });
       }
     }

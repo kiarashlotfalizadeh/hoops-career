@@ -8,7 +8,7 @@
 
 import type { CupGroup, CupState, CupTie, League, ScheduledGame, Team } from '../types';
 import type { Rng } from '../random';
-import { addInbox, addNews, dateToDay, dayToDate, fmtDate, playerName, teamName, teamPlayers, winPct } from './helpers';
+import { addInbox, addNews, dateToDay, dayToDate, fmtDate, playerName, teamCity, teamPlayers, winPct } from './helpers';
 import { gameScore } from './awards';
 import { drawLot } from './standings';
 
@@ -330,7 +330,7 @@ function userFixtures(league: League, games: ScheduledGame[]): string {
   return games
     .filter((g) => g.home === user || g.away === user)
     .sort((a, b) => a.day - b.day)
-    .map((g) => `${fmtDate(league.season, g.day)}: ${g.home === user ? 'home vs' : 'at'} the ${teamName(league.teams[g.home === user ? g.away : g.home])}`)
+    .map((g) => `${fmtDate(league.season, g.day)}: ${g.home === user ? 'home vs' : 'at'} ${teamCity(league, g.home === user ? g.away : g.home)}`)
     .join('\n');
 }
 
@@ -378,7 +378,7 @@ function seedKnockouts(league: League, cup: CupState, rng: Rng) {
     addInbox(league, {
       from: 'League Office',
       subject: 'In-Season Cup: into the knockouts',
-      body: `You're the ${['1st', '2nd', '3rd', '4th'][seed - 1]} seed in the ${conf === 'E' ? 'East' : 'West'}${seed === 4 ? ' as the wild card' : ''}. Quarterfinal ${opp.high === user ? 'at home' : 'on the road'} against the ${teamName(league.teams[other])}. Quarterfinals and semifinals count in the standings. The championship doesn't.`,
+      body: `You're the ${['1st', '2nd', '3rd', '4th'][seed - 1]} seed in the ${conf === 'E' ? 'East' : 'West'}${seed === 4 ? ' as the wild card' : ''}. Quarterfinal ${opp.high === user ? 'at home' : 'on the road'} against ${teamCity(league, other)}. Quarterfinals and semifinals count in the standings. The championship doesn't.`,
       tone: 'good',
       link: '/league/cup',
     });
@@ -448,8 +448,8 @@ function finishCup(league: League, cup: CupState, final: CupTie) {
   // (the league's story of the night: the user's own final is his game's story too)
   addNews(league, {
     kind: 'award',
-    head: `The ${t.name} win the In-Season Cup`,
-    text: `They beat the ${teamName(league.teams[runnerUp])} ${score} in the championship in Las Vegas. Cup MVP: ${mvpName}.`,
+    head: `${teamCity(league, t)} wins the In-Season Cup`,
+    text: `They beat ${teamCity(league, runnerUp)} ${score} in the championship in Las Vegas. Cup MVP: ${mvpName}.`,
     tids: [champ, runnerUp],
     pids: cup.mvp !== undefined ? [cup.mvp] : [],
     weight: 2,
@@ -466,7 +466,7 @@ function finishCup(league: League, cup: CupState, final: CupTie) {
     addInbox(league, {
       from: 'Owner',
       subject: 'In-Season Cup final',
-      body: `We fell ${score} to the ${teamName(t)} in the championship. A good run, and the final doesn't count against our record.`,
+      body: `We fell ${score} to ${teamCity(league, t)} in the championship. A good run, and the final doesn't count against our record.`,
       tone: 'neutral',
       link: '/league/cup',
     });
@@ -507,7 +507,7 @@ export function advanceCup(league: League, rng: Rng) {
       addInbox(league, {
         from: 'League Office',
         subject: 'In-Season Cup: out in the quarterfinals',
-        body: `The ${teamName(league.teams[out.winner!])} knocked you out of the Cup. Your last regular-season game falls in the knockout window.${mine ? `\n${mine}` : ''}`,
+        body: `${teamCity(league, out.winner!)} knocked you out of the Cup. Your last regular-season game falls in the knockout window.${mine ? `\n${mine}` : ''}`,
         tone: 'neutral',
         link: '/league/cup',
       });
@@ -520,7 +520,7 @@ export function advanceCup(league: League, rng: Rng) {
     const [hi, lo] = crossGroup(league, rows.get(e)!, rows.get(w)!) <= 0 ? [e, w] : [w, e];
     addTie(league, cup, 'final', 'F', hi, lo, 1, 1, cup.finalDay);
     sortSchedule(league);
-    addNews(league, { kind: 'general', text: `In-Season Cup championship set: ${teamName(league.teams[e])} vs ${teamName(league.teams[w])}.`, tids: [e, w], pids: [] });
+    addNews(league, { kind: 'general', text: `In-Season Cup championship set: ${teamCity(league, e)} vs ${teamCity(league, w)}.`, tids: [e, w], pids: [] });
   } else if (fin && fin.winner !== undefined) {
     finishCup(league, cup, fin);
   }

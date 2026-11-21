@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { League } from '../../core/types';
 import { FORECAST_SIMS, pct, type Forecast, type TeamOdds } from '../../core/analysis/odds';
-import { fmtDate } from '../../core/league/helpers';
+import { fmtDate, teamCity } from '../../core/league/helpers';
 import { LineChart } from '../components/charts';
 import { Help, Section } from '../components/ui';
 import { Term } from '../components/Glossary';
@@ -29,8 +29,8 @@ export function OddsView({ league }: { league: League }) {
       {fav && (
         <Poster
           over={f.preseason ? 'Preseason forecast' : `Forecast · ${fmtDate(league.season, league.day)}`}
-          head={`${league.teams[fav.tid].name} favoured to win it all`}
-          dek={me && me.tid !== fav.tid ? `${league.teams[me.tid].name}: playoffs ${pct(me.reach[0], me.clinched || me.out)} · title ${pct(me.reach[4], me.out)}` : undefined}
+          head={`${teamCity(league, fav.tid)} favoured to win it all`}
+          dek={me && me.tid !== fav.tid ? `${teamCity(league, me.tid)}: playoffs ${pct(me.reach[0], me.clinched || me.out)} · title ${pct(me.reach[4], me.out)}` : undefined}
           fig={{ v: pct(fav.reach[4]), k: 'title chance' }}
         />
       )}
@@ -63,7 +63,7 @@ export function LotteryView({ league }: { league: League }) {
       {best && (
         <Poster
           over={`Draft lottery · ${fmtDate(league.season, league.day)}`}
-          head={`${league.teams[best.tid].name} have the best shot at No. 1`}
+          head={`${teamCity(league, best.tid)} has the best shot at No. 1`}
           fig={{ v: pct(best.pick1, best.clinched), k: 'chance at No. 1' }}
         />
       )}
@@ -129,7 +129,7 @@ function OddsRow({ league, t, rank }: { league: League; t: TeamOdds; rank: numbe
       me={t.tid === league.userTid}
       rank={rank}
       tid={t.tid}
-      name={league.teams[t.tid].name}
+      name={teamCity(league, t.tid)}
       spoken={`, projected ${proj}, ${t.lo} to ${t.hi} wins, playoffs ${pct(t.reach[0], t.clinched || t.out)}, title ${pct(t.reach[4], t.out)}`}
     >
       <span className="wl lg-proj" aria-hidden="true">
@@ -166,7 +166,7 @@ function LotteryRow({ league, f, t, rank }: { league: League; f: Forecast; t: Te
       rank={rank}
       tid={t.tid}
       // (a traded pick reads "LAC → OKC": the two abbreviations fit beside the figures where a name and its owner can't)
-      name={owner ? league.teams[t.tid].abbrev : league.teams[t.tid].name}
+      name={owner ? league.teams[t.tid].abbrev : teamCity(league, t.tid)}
       after={
         owner ? (
           <span className="lg-conf" aria-hidden="true">

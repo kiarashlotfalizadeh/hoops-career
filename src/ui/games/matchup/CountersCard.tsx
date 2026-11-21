@@ -15,6 +15,7 @@ import { act } from '../../../state/actions';
 import { Help, Section, Tag } from '../../components/ui';
 import { Term } from '../../components/Glossary';
 import { changesLine, screenChanges } from '../../tactics/changes';
+import { teamCity } from '../../../core/league/helpers';
 
 /** Counters shown before "more": the ones the numbers back come first. */
 const SHOWN = 4;
@@ -112,7 +113,7 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
                       </button>
                       {armed === c.id && (
                         <span className="mu-fam small" role="status">
-                          Not just against the {them.name}. Tap again to confirm.
+                          Not just against {teamCity(league, them)}. Tap again to confirm.
                         </span>
                       )}
                     </div>

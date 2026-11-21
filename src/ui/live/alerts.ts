@@ -8,7 +8,7 @@ import type { GameAdjustment, GameManagement, LiveOp, Tactics } from '../../core
 import type { InGameInjury } from '../../core/sim/engine';
 import { FINISH_LABEL, type FinishType, type PossLog } from '../../core/sim/log';
 import { cloneTactics } from '../../core/sim/tactics';
-import { impactAdvice, impactSentence, leverPaid, teamRef } from '../../core/analysis/gameReport';
+import { impactAdvice, impactSentence, leverPaid } from '../../core/analysis/gameReport';
 import { impactCounter, liveCounter } from '../../core/ai/advisor';
 import { zScore } from '../../core/analysis/playTypes';
 import { CLOSE_WIN, crunchTime as coreCrunch, winProb } from '../../core/analysis/winProb';
@@ -115,6 +115,8 @@ export interface AlertInput {
   side: 0 | 1;
   /** [home, away]. */
   teams: [{ tid: number; name: string; abbrev: string }, { tid: number; name: string; abbrev: string }];
+  /** [home, away] as copy names them: their cities (teamCity). */
+  cities: [string, string];
   /** The user's tactics now. */
   tactics: Tactics;
   manualSubs: boolean;
@@ -199,7 +201,6 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
   const me = view.sides[side];
   const them = view.sides[1 - side];
   const themTeam = a.teams[1 - side];
-  const meTeam = a.teams[side];
   const out: LiveAlert[] = [];
   const crunch = crunchTime(view);
   // from the fourth quarter on, legs and fouls only while the game is close (the band the game stops
@@ -308,7 +309,7 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
     out.push({
       id: `imp-${worst.key}`,
       tone: 'warn',
-      title: impactSentence(worst.key, teamRef(themTeam), teamRef(meTeam)).replace(/\.$/, ''),
+      title: impactSentence(worst.key, a.cities[1 - side], a.cities[side]).replace(/\.$/, ''),
       text: impactAdvice(worst.key, tactics)!,
       action: fix && { kind: 'tactics', apply: fix.apply, label: fix.label },
     });

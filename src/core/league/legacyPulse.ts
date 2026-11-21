@@ -9,7 +9,7 @@ import { QUIRK_LINES, ownerQuirk } from './voices';
 import type { League, Team, TeamSeason } from '../types';
 import { clamp } from '../random';
 import { worldRng } from './world';
-import { addInbox, dateToDay, fmtDate } from './helpers';
+import { addInbox, dateToDay, fmtDate, teamCity } from './helpers';
 import { arenaCapacity } from './finances';
 import { jobSecurity, seatHeat, type SeatHeat } from './jobSecurity';
 import { frozen } from './books';
@@ -109,29 +109,29 @@ export function fanLine(league: League, tid = league.userTid, score = fanScore(l
   const seats = fill !== null ? `${Math.round(fill * 100)}% full` : '';
   if (score >= 80)
     return rng.pick([
-      full ? `${arena} is sold out and loud` : `${city} is all in on the ${t.name}`,
+      full ? `${arena} is sold out and loud` : `${city} is all in on this team`,
       streak >= 4 ? `${plural(streak, 'straight win')} and ${city} can't get enough` : `Every ticket in ${city} is spoken for`,
       `${arena} is the loudest building in the league right now`,
     ]);
   if (score >= 66)
     return rng.pick([
       full ? `Sellouts at ${arena}, and ${city} is buzzing` : `The crowds at ${arena} are growing`,
-      `${city} is talking about the ${t.name} again`,
+      `${city} is talking about this team again`,
       `${arena} is rocking`,
     ]);
   if (score >= 52)
     return rng.pick([
-      `${city} is behind the ${t.name}`,
+      `${city} is behind this team`,
       seats ? `Steady crowds at ${arena}, ${seats}` : `Steady crowds at ${arena}`,
-      `${poss(t.name)} fans are patient and present`,
+      `${teamCity(league, t)} fans are patient and present`,
     ]);
   if (score >= 40)
     return rng.pick([
       `${city} is getting restless`,
       thin ? `Empty seats are showing at ${arena}` : `${arena} is quieter than it was`,
-      streak <= -3 ? `${plural(-streak, 'straight loss', 'straight losses')} and ${city} is losing its voice` : `${poss(t.name)} fans want more`,
+      streak <= -3 ? `${plural(-streak, 'straight loss', 'straight losses')} and ${city} is losing its voice` : `${teamCity(league, t)} fans want more`,
     ]);
-  if (score >= 28) return rng.pick([`Boos at ${arena}`, `${city} is grumbling about the ${t.name}`, thin ? `Whole sections empty at ${arena}` : `${arena} has gone flat`]);
+  if (score >= 28) return rng.pick([`Boos at ${arena}`, `${city} is grumbling about this team`, thin ? `Whole sections empty at ${arena}` : `${arena} has gone flat`]);
   return rng.pick([thin ? `${city} has stopped coming: ${arena} is ${seats}` : `${city} has given up on this season`, `Empty seats and silence at ${arena}`]);
 }
 
@@ -373,8 +373,6 @@ function skidNote(league: League, s: LegacyState) {
   });
 }
 
-/** "The Knicks' fans", "The Heat's fans". */
-const poss = (name: string) => `The ${name}${name.endsWith('s') ? "'" : "'s"}`;
 const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
 
 /** The pulse's points as dates, for a chart's labels. */

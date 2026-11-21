@@ -4,7 +4,10 @@
 // points the pose asks for. It decides nothing about the game.
 //
 // Getting around is one stride blended from the captured gaits either side of his speed (a walk, a jog, a
-// run, a sprint), at a man's cadence for that speed and his own build; a planted foot is never dragged
+// run, a sprint), at a man's cadence for that speed and his own build. Going ahead his legs are a runner's
+// as measured off the same takes (stride.ts): how long each foot is down, where it lands ahead of him, the
+// way it swings through behind and under him, and how his hips ride over it; from a jog up his arms are a
+// runner's too (Puppet.pump). A planted foot is never dragged
 // (he is in the air between strides when he's going faster than it can cover), nor turned flat on the floor:
 // it keeps its own heading as his body turns over it, and past what a hip and a knee turn he pivots on its
 // ball or picks it up. For the body to read: `feet[k].turn` and `.pitch` (which way each shoe points and its
@@ -47,6 +50,7 @@ import {
 } from './clips';
 import { Follow, Lay, type Pace } from './settle';
 import { clearOf, SHAPES } from './spacing';
+import { downOver, hipsMean, hipsOver, landsAhead, scaled, stancePitch, strideAt, swingAlong, swingEnds, swingPitch, swingUp, type Stride } from './stride';
 
 /**
  * What is laid over a clip is followed, not set (see Lay): a spring at LAY_W a second, no faster than each channel's
@@ -636,6 +640,53 @@ const FOOT_SWING_MIN = 9;
  * is laid out anew under it (into a run out of a slide, his cadence changing).
  */
 const FOOT_ACC = 500;
+/**
+ * A stride going ahead (see stride.ts). As he leaves a foot behind him his heel is up, and his ankle this far nearer
+ * him and this much higher than the foot's place on the floor (ft on the puppet): his leg straightens to there before the foot is
+ * picked up ahead of its turn (see LOCK_KNEE). Its pitch follows a runner's over STRIDE_ROLL ms. And at 4x, where a
+ * stride is four drawn frames, its heel comes up this much less far.
+ */
+const STRIDE_HEEL = [0.45, 0.35] as const;
+/** At a run his feet come down this much nearer his middle than he stands (a share of his stance's half-width), and a swinging leg's knee goes this far out from straight ahead (the pole's sideways part; KNEE_OUT standing). */
+const STRIDE_NARROW = 0.55;
+/** A swinging foot's ankle comes no nearer under his hips than this (ft on the puppet). */
+const STRIDE_UNDER = 1.0;
+/**
+ * Reaching for the floor a runner's foot goes out past where it will land and is drawn back onto it. The puppet's goes
+ * this share of that far: all of it, his leg was dead straight in front of him (the takes' runners' nearly were), and
+ * its knee shut in the frame his weight came onto it.
+ */
+const STRIDE_OVER = 0.55;
+/** A stride's foot gathers the speed its swing begins at over about this long (ms), from rest on the floor. */
+const STRIDE_PEEL = 65;
+/** No more of a rise than this is taken off its first frame (ft a ms). And where it is to land ahead of him follows his stride over this long (ms). */
+const STRIDE_PEEL_UP = 0.022;
+const STRIDE_LAND_MS = 110;
+const KNEE_OUT = 0.25;
+const KNEE_OUT_RUN = 0.08;
+/**
+ * A runner's arms (see Puppet.pump): his own from PUMP_FROM ft a second, all of the way by PUMP_FULL, driven hardest
+ * at PUMP_SPRINT. The upper arm hangs PUMP_HANG from straight down (radians, forward) and swings PUMP_SWING each way
+ * (at a run, flat out); the forearm is bent PUMP_BEND up from it, and PUMP_SHUT more in front of him, as much less
+ * behind. The hand is PUMP_OUT outside its shoulder (ft on the puppet), and comes PUMP_IN in toward his middle in
+ * front. And it is farthest back as the knee on its side is farthest through: PUMP_KNEE of the way through that foot's swing.
+ * At 4x it swings PUMP_FAST less far.
+ */
+const PUMP_FROM = 5.5;
+const PUMP_FULL = 10;
+const PUMP_SPRINT = 27;
+const PUMP_HANG = -0.3;
+const PUMP_SWING = [0.4, 0.85] as const;
+const PUMP_BEND = [1.42, 1.62] as const;
+const PUMP_SHUT = 0.24;
+const PUMP_OUT = 0.3;
+const PUMP_IN = 0.42;
+const PUMP_KNEE = 0.78;
+const PUMP_FAST = 0.45;
+const STRIDE_ROLL = 22;
+const STRIDE_FAST = 0.35;
+/** A runner's stride is taken up to this far toward a 4x frame (see BOB_FAST_MS): 2x is 0.32 of the way. */
+const STRIDE_UNTIL = 0.6;
 const FOOT_ACC_SP = 45;
 /** Where the two hands meet that far behind him (ft), he doesn't reach back for it. */
 const FIVE_BACK = 1.2;
@@ -1496,6 +1547,20 @@ interface Foot {
   n: number;
   st: boolean;
   go: boolean;
+  /** Its swing is a stride's, going ahead: swung as a runner's foot is at his speed (see stride.ts), not stepped. */
+  run: boolean;
+  /**
+   * A stride's foot comes off the floor from rest: how fast its swing would have it going in its first frame (ft a ms:
+   * along the floor, and up), and how long ago that was (ms; under 0: not yet taken). See STRIDE_PEEL.
+   */
+  kx: number;
+  kz: number;
+  ky: number;
+  kt: number;
+  /** How fast he was going as it left the floor (ft a second): a stride's foot is swung through as fast as that needs, though he stops dead under it. */
+  sp0: number;
+  /** How far ahead of him its stride is to land (ft): set as it leaves the floor, and followed from there, not jumped to as his cadence changes under it. */
+  land: number;
   /** How far through its swing it is (0..1), and the stride's count when that was last moved on. */
   u: number;
   pw: number;
@@ -1591,6 +1656,13 @@ export class Puppet {
       n: NaN,
       st: false,
       go: false,
+      run: false,
+      kx: 0,
+      kz: 0,
+      ky: 0,
+      kt: -1,
+      sp0: 0,
+      land: 0,
       u: 0,
       pw: 0,
       pitch: 0,
@@ -1617,6 +1689,13 @@ export class Puppet {
       n: NaN,
       st: false,
       go: false,
+      run: false,
+      kx: 0,
+      kz: 0,
+      ky: 0,
+      kt: -1,
+      sp0: 0,
+      land: 0,
       u: 0,
       pw: 0,
       pitch: 0,
@@ -1923,6 +2002,13 @@ export class Puppet {
   private sinkFrom = 0;
   /** His stride, eased (see step): how much of it a foot is down, how early it is up, how high it goes (ft). */
   private downE = 0.5;
+  /** The stride his legs take going ahead (see stride.ts): for the speed he is getting up to, eased (`strideV`, ft a second). */
+  private gait: Stride = { k: 0, w: 0 };
+  private strideV = 0;
+  /** His legs took a runner's stride last frame (going ahead, played at 2x or under: see STRIDE_UNTIL). */
+  private strode = false;
+  private linedE = 0;
+  private kneeOut = [KNEE_OUT, KNEE_OUT];
   private paceE = 0;
   private liftE = 0.3;
   private ax = 0;
@@ -3206,6 +3292,10 @@ export class Puppet {
     P[I.tilt] += d.hand * RIDE_TILT * w;
     P[I.hip] -= RIDE_HIP * w;
     P[I.lean] += 0.025 * w;
+    // (pushing it up the floor at a run, his hips ride over his feet as a runner's do: the take he dribbles in is a
+    // walk's, and its hips are level)
+    if (id === 'dribbleRun' && clamp((this.ownMs - BOB_FROM_MS) / (BOB_FAST_MS - BOB_FROM_MS), 0, 1) < STRIDE_UNTIL)
+      P[I.hip] += (this.rides(1) - hipsMean(this.gait)) * clamp((this.spLag - 7) / 6, 0, 1);
   }
 
   /** What makes a shot his own (see `fade`, `kick`, `euro`): laid on the clip around its release. */
@@ -4214,10 +4304,56 @@ export class Puppet {
     };
     sample(CLIPS[AHEAD[k][0]], this.phase + (stanceOf(AHEAD[k][0]) - mid) * keep, out);
     flat(AHEAD[k][0], out);
-    if (w <= 0) return;
-    sample(CLIPS[AHEAD[k + 1][0]], this.phase + (stanceOf(AHEAD[k + 1][0]) - mid) * keep, MIX);
-    flat(AHEAD[k + 1][0], MIX);
-    for (let i = 0; i < N; i++) out[i] += (MIX[i] - out[i]) * w;
+    if (w > 0) {
+      sample(CLIPS[AHEAD[k + 1][0]], this.phase + (stanceOf(AHEAD[k + 1][0]) - mid) * keep, MIX);
+      flat(AHEAD[k + 1][0], MIX);
+      for (let i = 0; i < N; i++) out[i] += (MIX[i] - out[i]) * w;
+    }
+    // (his hips ride over his own feet, as a runner's do at his speed: lowest just after each comes down, highest
+    // between them. The takes' upper bodies are mixed above; their hips went over their own feet. See stride.ts)
+    // (not at 4x, where his legs are stepped compactly and the takes' own hips, flattened above, go with them)
+    if (fast < STRIDE_UNTIL) out[I.hip] = this.rides(bob * (1 + (this.bounceK - 1) * keep));
+    this.pump(out, sp);
+  }
+
+  /**
+   * A runner's arms, in place of the takes' from a jog up (PUMP_FROM..PUMP_FULL ft a second): each swings from its
+   * shoulder against the leg on its side, its elbow bent near square, farther and more shut the faster he goes. The
+   * hand comes up in front of his chest, in toward his middle, as the knee across from it drives through, and goes
+   * back past his hip as that foot pushes off. Worked out as the two bones are (upper arm from straight down, forearm
+   * from the upper arm), so the hand is where an arm bent that way has it.
+   */
+  private pump(out: Float32Array, sp: number) {
+    const v = scaled(sp, this.body.s);
+    const k = smooth(clamp((v - PUMP_FROM) / (PUMP_FULL - PUMP_FROM), 0, 1));
+    if (k <= 0) return;
+    const hard = clamp((v - PUMP_FULL) / (PUMP_SPRINT - PUMP_FULL), 0, 1);
+    // (played at 4x, where a stride is four drawn frames, they swing less far: an arm at each end of its swing in turn is a flicker)
+    const fast = clamp((this.ownMs - BOB_FROM_MS) / (BOB_FAST_MS - BOB_FROM_MS), 0, 1);
+    const swing = (PUMP_SWING[0] + (PUMP_SWING[1] - PUMP_SWING[0]) * hard) * (1 - PUMP_FAST * fast);
+    const bend = PUMP_BEND[0] + (PUMP_BEND[1] - PUMP_BEND[0]) * hard;
+    // (his left knee is farthest through this far into his stride: his right hand is up in front of him then, his left back)
+    const q = Math.cos(2 * Math.PI * (this.phase - PUMP_KNEE * (1 - this.downE)));
+    for (const side of [1, -1] as const) {
+      const fore = side > 0 ? -q : q;
+      const th = PUMP_HANG + swing * fore;
+      const ga = th + bend + PUMP_SHUT * fore;
+      const z = UARM * Math.sin(th) + FARM * Math.sin(ga);
+      const y = -UARM * Math.cos(th) - FARM * Math.cos(ga);
+      const x = PUMP_OUT - PUMP_IN * Math.max(0, fore);
+      const [cx, cy, cz, cs] = side > 0 ? [I.lx, I.ly, I.lz, I.lsw] : [I.rx, I.ry, I.rz, I.rsw];
+      out[cx] += (x - out[cx]) * k;
+      out[cy] += (y - out[cy]) * k;
+      out[cz] += (z - out[cz]) * k;
+      out[cs] *= 1 - k;
+    }
+  }
+
+  /** His hips through his stride (the pose's `hip`), their rise and fall `k` times a runner's at his speed: by his own feet (see step). */
+  private rides(k: number): number {
+    const m = hipsMean(this.gait);
+    // (his left foot comes down 1 - downE through his stride, his right half a stride on)
+    return m + (hipsOver(this.gait, (this.phase - (1 - this.downE)) * 2) - m) * k;
   }
 
   /** His own carriage laid on the clip's: how upright he is, how his head sits, how far his arms swing in a gait. */
@@ -4735,6 +4871,8 @@ export class Puppet {
     this.catchK = -1;
     this.wideE = Number.NaN;
     this.downE = 0.5;
+    this.strideV = 0;
+    this.linedE = 0;
     this.paceE = 0;
     this.liftE = 0.3 * this.body.s;
     const [, , sx, sz] = this.dirs();
@@ -4773,7 +4911,10 @@ export class Puppet {
     const vsL = this.vs * lc + this.vf * ls;
     // (how wide he stands, followed: see WIDE_MS)
     this.wideE = !Number.isFinite(this.wideE) ? this.pose[I.wide] : this.wideE + clamp((this.pose[I.wide] - this.wideE) * (1 - Math.exp(-dt / WIDE_MS)), -WIDE_FRAME, WIDE_FRAME);
-    const w = (HIP_W + 0.08 + this.wideE * 0.6) * s;
+    // (going ahead his feet come down nearer under his middle the faster he goes, as a runner's do: see STRIDE_NARROW)
+    const lined = this.vf > 0.6 * sp && this.strode ? STRIDE_NARROW * smooth(clamp((sp - 3) / 9, 0, 1)) * (1 - clamp(this.felt, 0, 1)) : 0;
+    this.linedE += (lined - this.linedE) * (1 - Math.exp(-dt / STRIDE_MS));
+    const w = (HIP_W + 0.08 + this.wideE * 0.6) * s * (1 - this.linedE);
     // (a hard knock's step: that foot's place is out the way he was pushed until it is put down there)
     if (this.catchK >= 0 && (this.catchMs -= dt) <= 0 && !this.feet[this.catchK].swing) this.catchK = -1;
     // (where each foot goes under him: out in front of him, or behind, as his footwork has it (see ahead), and to the
@@ -4819,6 +4960,9 @@ export class Puppet {
     const soon = urged ? sp + clamp(this.accBody, 0, GAIN_FULL) * GAIN_AHEAD : sp;
     const brake = urged ? BRAKE_RATE * clamp(-this.accBody / GAIN_FULL, 0, 1) : 0;
     const chopK = this.tempo * (1 + (CHOP_RATE - 1) * Math.max(this.chop, this.stutter));
+    // (his legs' stride for that speed, as a man his size takes it: see stride.ts)
+    this.strideV += (soon - this.strideV) * (1 - Math.exp(-dt / STRIDE_MS));
+    const G = strideAt(scaled(this.strideV, s), this.gait);
     // (and his first steps from a stand quicker again: short, driving ones, up to DRIVE_RATE more of them, gone by DRIVE_UNTIL ft a second)
     const quick = urged ? DRIVE_RATE * this.driveK * clamp(this.accBody / GAIN_FULL, 0, 1) * clamp(1 - sp / DRIVE_UNTIL, 0, 1) : 0;
     // (planting for a cut: a beat on the foot he plants)
@@ -4902,8 +5046,22 @@ export class Puppet {
     const drive = urged ? DRIVE_DOWN * clamp(this.accBody / GAIN_FULL, 0, 1) * clamp(1 - sp / DRIVE_UNTIL, 0, 1) : 0;
     // (and as he gets up to speed it shrinks to a runner's no quicker than over DOWN_DROP_MS: a swing isn't stretched
     // by much under its foot, his steps grow one by one)
-    const downTo = going ? Math.max(drive, clamp((CONTACT * s * crouch) / (sp * even), 0.08, slides ? SLIDE_DOWN : DOWN_WALK)) : 0.5;
+    // (going ahead a foot is down as long as a runner's is at his speed, and covers what floor that takes it over: see
+    // stride.ts. Backing up or sliding, CONTACT of it)
+    // (played at 4x a stride is four or five drawn frames, and a runner's, sampled that few times, is a leg straight
+    // behind him in one frame and shut under him in the next. There his legs are stepped compactly, as they are backing
+    // up: down over CONTACT under his hips, swung straight through, the heel low. At 2x and under, a runner's as measured)
+    const strides = ahead && fast4 < STRIDE_UNTIL;
+    this.strode = strides;
+    const reachFt = (strides ? downOver(G) : CONTACT) * s * crouch;
+    const downTo = going ? Math.max(drive, clamp(reachFt / (sp * even), 0.08, slides ? SLIDE_DOWN : DOWN_WALK)) : 0.5;
     this.downE += (downTo - this.downE) * (downTo < this.downE ? 1 - Math.exp(-dt / DOWN_DROP_MS) : ke);
+    // (how much floor that is, as he is going now: under a walk's pace his feet turn over no slower, and are down over less)
+    // (stopped under a foot still in the air, none: it comes down under him)
+    const coverFt = going && cycle ? Math.min(reachFt, this.downE * cycle * sp) : 0;
+    // (and it comes down this far ahead of him: a runner's share of the floor it is down over)
+    const landFt = (landsAhead(G) * s * crouch * coverFt) / reachFt;
+    const rollK = smooth(clamp((sp - 1.2) / 2.5, 0, 1));
     // (a runner's swing and knee lift go by the speed he is getting up to: his first steps from a stand drive his knees)
     this.paceE += ((ahead ? clamp((soon - 6) / 12, 0, 1) : 0) - this.paceE) * ke;
     // (a jog's foot only clears the floor and a run's comes up to his calf: it is at a sprint that the heel comes up
@@ -4925,6 +5083,10 @@ export class Puppet {
     const S = SHIN * s;
     const tall = (HIP + this.pose[I.hip]) * s - ANKLE * s;
     const lockR2 = T * T + S * S - 2 * T * S * Math.cos(LOCK_KNEE) - tall * tall;
+    // (in a stride going ahead he goes right over it and off its toes, his leg straight behind him: his heel is up by
+    // then, and his ankle that much higher and nearer him than the foot's place on the floor. See STRIDE_HEEL)
+    const tallRun = tall - STRIDE_HEEL[1] * s;
+    const lockRun2 = (T + S) * (T + S) * 0.98 - tallRun * tallRun;
     // (where he will be a frame from now, going as he goes)
     const [nx, nz] = [this.vx * dt, this.vz * dt];
     this.feet.forEach((f, k) => {
@@ -4954,9 +5116,13 @@ export class Puppet {
           else if (lockR2 > 0) {
             const jx = this.x + nx + sx * HIP_W * s * (k ? 1 : -1);
             const jz = this.z + nz + sz * HIP_W * s * (k ? 1 : -1);
-            const [ex, ez] = [f.x - jx, f.z - jz];
+            let [ex, ez] = [f.x - jx, f.z - jz];
+            if (strides) {
+              ex += (this.vx / vl) * STRIDE_HEEL[0] * s;
+              ez += (this.vz / vl) * STRIDE_HEEL[0] * s;
+            }
             // (his weight still coming onto it, out in front of him, it is a foot he lands on: the next step is the other's)
-            strained = ex * ex + ez * ez > lockR2 && ex * nx + ez * nz < 0;
+            strained = ex * ex + ez * ez > (strides ? lockRun2 : lockR2) && ex * nx + ez * nz < 0;
           }
         }
         swinging = !kept(k) && (turn || strained);
@@ -4979,6 +5145,10 @@ export class Puppet {
         f.vx = f.vz = 0;
         f.st = stood;
         f.go = going;
+        f.run = going && strides && !stood;
+        f.kt = -1;
+        f.sp0 = f.run ? sp : 0;
+        f.land = landFt;
         // (cutting at a run, the foot on the outside of the turn goes down wide: he pushes off it into the new way)
         f.wide = going && ahead && sp > TURN_GATE_FROM && (k ? 1 : -1) * this.bend < 0 ? Math.min(PLANT_WIDE, Math.abs(this.bend) * PLANT_OUT) * s * (k ? 1 : -1) : 0;
       }
@@ -5004,8 +5174,11 @@ export class Puppet {
         }
         f.pw = p;
         const u = f.u;
-        let tx = homeX(k) - this.x + this.vx * till * lead + sx * f.wide;
-        let tz = homeZ(k) - this.z + this.vz * till * lead + sz * f.wide;
+        // (a stride's: where a runner's foot comes down at his speed, ahead of him as he is then; its swing is measured
+        // from him all the way, see below)
+        f.land += (landFt - f.land) * (1 - Math.exp(-dt / STRIDE_LAND_MS));
+        let tx = homeX(k) - this.x + (f.run ? (this.vx / vl) * f.land : this.vx * till * lead) + sx * f.wide;
+        let tz = homeZ(k) - this.z + (f.run ? (this.vz / vl) * f.land : this.vz * till * lead) + sz * f.wide;
         // (body to body with a man (see contact) he doesn't put his foot down on the other man's: the two stand one
         // behind the other, their feet under them the same way, and a step taken where he stood landed shin in shin.
         // It goes down FOOT_OFF clear of each of the other's feet, on its own side of it)
@@ -5050,6 +5223,36 @@ export class Puppet {
         } else if (f.st) {
           f.x = f.wx + (this.x + tx - f.wx) * h01;
           f.z = f.wz + (this.z + tz - f.wz) * h01;
+        } else if (f.run) {
+          // (a stride going ahead: from where it left the floor to where it comes down, both measured from him, along
+          // the way a runner's foot goes at his speed. It trails on behind him as the heel comes up, comes through
+          // under his hips, reaches past where it will land and is drawn back to meet the floor: see stride.ts. And it
+          // is still on the floor as it meets it: over the last of its swing it is drawn back under him exactly as
+          // fast as he is going over it, whatever his stride's time is now)
+          const far = Math.max(0.5 * s, ((tx - f.fx) * this.vx + (tz - f.fz) * this.vz) / vl);
+          const still = -(Math.hypot(this.vx, this.vz) * swingMs) / far - swingEnds(G);
+          const measured = swingAlong(G, u);
+          const along = measured > 1 ? 1 + (measured - 1) * STRIDE_OVER : measured;
+          const e = along + still * (u - 1) * u2 * u2 * u2;
+          f.x = this.x + f.fx + (tx - f.fx) * e;
+          f.z = this.z + f.fz + (tz - f.fz) * e;
+          // (and it comes off the floor from rest. The stride was measured from the moment a toe was already going: taken
+          // as it is, the foot was still one frame and at a third of his speed the next, and his knee, straightening
+          // behind him, shut with a snap. What its first frame would have it doing is taken off it and given back over
+          // STRIDE_PEEL ms: it gathers that speed over three or four frames, and is on its way as measured after that)
+          // (taken in the first frame it is on its way: in the frame it is picked up it is where it was)
+          if (dt > 0 && !landing && u > 0) {
+            if (f.kt < 0) {
+              // (no more than he is going himself: a foot put somewhere new in that frame is not a speed)
+              const kv = Math.hypot(f.x - x0, f.z - z0) / dt;
+              const kk = kv > vl ? vl / kv : 1;
+              [f.kx, f.kz, f.kt] = [((f.x - x0) / dt) * kk, ((f.z - z0) / dt) * kk, 0];
+            }
+            f.kt += dt;
+            const lag = f.kt * Math.exp(-f.kt / STRIDE_PEEL);
+            f.x -= f.kx * lag;
+            f.z -= f.kz * lag;
+          }
         } else {
           // (a stride's is measured from him: where it left the floor, and where it goes down, which goes with him; drawn
           // back from that by how far he goes as it swings, most at the start, so it is still on the floor as it leaves it
@@ -5075,6 +5278,24 @@ export class Puppet {
         f.up = (walk + (run - walk) * pace) * lift;
         // (toes down as it trails, up as it reaches for the floor)
         toes = going ? 0.95 - 1.25 * smooth(clamp((u - 0.2) / 0.55, 0, 1)) + 0.15 * clamp((u - 0.85) / 0.15, 0, 1) : 0.4 * Math.sin(Math.PI * u);
+        if (f.run) {
+          // (a stride's: as high as a runner's heel comes at his speed, and as his own stride has it; body to body, low;
+          // at 4x, where a stride is four frames, lower: see BOB_FAST)
+          let high = swingUp(G, u) * s * (1 + (this.kneeK - 1) * 0.6) * (1 - STRIDE_FAST * fast4);
+          toes = swingPitch(G, u) * rollK;
+          // (never folded up tight under his seat: his ankle stays STRIDE_UNDER below his hips, however low he is
+          // sitting into a start or a stop. A leg shut that far has no way for its knee to point, and it flickered)
+          const cap = (HIP + this.pose[I.hip] - STRIDE_UNDER) * s - (ANKLE * Math.cos(f.pitch) + BALL * Math.sin(Math.max(0, f.pitch))) * s;
+          const soft = 0.2 * s;
+          if (high > cap - soft) high = Math.max(0, cap - soft * Math.exp(-(high - (cap - soft)) / soft));
+          f.up = high + (Math.min(high, CONTACT_LIFT * s * Math.sin(Math.PI * u)) - high) * held;
+          // (up off the floor from rest too: see STRIDE_PEEL)
+          if (dt > 0 && !landing && f.kt >= 0) {
+            if (f.kt <= dt) f.ky = Math.min(f.up / dt, STRIDE_PEEL_UP);
+            f.up = Math.max(0, f.up - f.ky * f.kt * Math.exp(-f.kt / STRIDE_PEEL));
+          }
+          roll = 45 + (STRIDE_ROLL - 45) * clamp((sp - 6) / 8, 0, 1);
+        }
         // (the foot he plants for a cut comes down flat: his weight goes straight onto it)
         if (f.wide && u > 0.6) toes = Math.max(toes, 0);
         // (a slide, or going any way in his slide's stance: it comes down on its own side of the other foot, eased out
@@ -5098,7 +5319,7 @@ export class Puppet {
         // (no faster than a foot is swung: a stride caught late in its turn as he sets off from a stand is not thrown
         // down the floor in a frame; it is put down short, and the next one makes it up)
         const moved = Math.hypot(f.x - x0, f.z - z0);
-        const most = ((FOOT_SWING * Math.max(sp, this.spLag) + FOOT_SWING_MIN) * s * dt) / 1000;
+        const most = ((FOOT_SWING * Math.max(sp, this.spLag, f.sp0) + FOOT_SWING_MIN) * s * dt) / 1000;
         if (moved > most) {
           f.x = x0 + ((f.x - x0) * most) / moved;
           f.z = z0 + ((f.z - z0) * most) / moved;
@@ -5108,7 +5329,7 @@ export class Puppet {
           const nvx = (f.x - x0) / sec;
           const nvz = (f.z - z0) / sec;
           const dv = Math.hypot(nvx - f.vx, nvz - f.vz);
-          const acc = (FOOT_ACC + FOOT_ACC_SP * Math.max(sp, this.spLag)) * sec;
+          const acc = (FOOT_ACC + FOOT_ACC_SP * Math.max(sp, this.spLag, f.sp0)) * sec;
           const k2 = dv > acc ? acc / dv : 1;
           f.vx += (nvx - f.vx) * k2;
           f.vz += (nvz - f.vz) * k2;
@@ -5124,7 +5345,16 @@ export class Puppet {
         f.up = Math.max(0, f.up - dt * 0.006 * s);
         f.side = 0;
         // (down: flat until it is behind him, then the heel comes up as he goes over it)
+        // (in a stride: as a runner's foot is through its time down, by how far he has gone over it. Onto its heel
+        // first at a walk, flat at a run, and up onto its ball as it goes behind him)
         if (going && ahead) toes = 0.75 * clamp((-((f.x - this.x) * this.vx + (f.z - this.z) * this.vz) / vl - 0.35 * s) / (0.9 * s), 0, 1);
+        if (going && strides) {
+          // (a walk's roll from heel to toe comes in over his first steps: a man edging off his spot hasn't a heel in the air)
+          toes = stancePitch(G, (landFt - ((f.x - this.x) * this.vx + (f.z - this.z) * this.vz) / vl) / Math.max(0.5 * s, coverFt)) * rollK;
+          // (it goes by where the foot is under him, which moves as he does: followed closely at a run, or at a sprint,
+          // down for six or seven frames, his heel was still coming up as the foot left the floor)
+          roll = 45 + (STRIDE_ROLL / 2 - 45) * clamp((sp - 6) / 8, 0, 1);
+        }
         // (going up off the floor: his heels come up as his hips drive up out of his crouch, and as they rise past where
         // he stands, his toes the last of him to leave it; coming down, the first of him on it)
         const air = this.pose[I.air];
@@ -5157,7 +5387,8 @@ export class Puppet {
       const dx = f.x - this.x;
       const dz = f.z - this.z;
       const far = Math.hypot(dx, dz);
-      const max = (REACH + 0.3) * s + w;
+      // (in a stride he goes right over it: it is behind him by all of its time down before it is his to pick up)
+      const max = Math.max((REACH + 0.3) * s + w, f.run || (strides && going) ? downOver(G) * s * crouch - landFt + 0.7 * s : 0);
       if (far > max) {
         f.x = this.x + (dx / far) * max;
         f.z = this.z + (dz / far) * max;
@@ -5362,7 +5593,9 @@ export class Puppet {
     // way; square being the way his legs go, opened ahead of him or not)
     for (let k = 0; k < 2; k++) {
       const a = this.hipLead + KNEE_TRACK * wrap(this.feet[k].turn - this.hipLead - (k ? -TOE_OUT : TOE_OUT));
-      const px = k ? -0.25 : 0.25;
+      const out = this.feet[k].run && this.feet[k].swing ? KNEE_OUT_RUN : KNEE_OUT;
+      this.kneeOut[k] += (out - this.kneeOut[k]) * (dt > 0 ? 1 - Math.exp(-dt / STRIDE_MS) : 1);
+      const px = k ? -this.kneeOut[k] : this.kneeOut[k];
       reach(j, k ? J.jr : J.jl, k ? J.kr : J.kl, k ? J.fr : J.fl, THIGH * s, SHIN * s, px * Math.cos(a) + Math.sin(a), 0.1, -px * Math.sin(a) + Math.cos(a), KNEE_SOFT);
     }
     this.vf = vf;

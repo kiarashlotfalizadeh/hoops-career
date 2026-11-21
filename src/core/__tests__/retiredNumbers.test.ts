@@ -9,7 +9,7 @@ import { testLeague } from '../../state/__tests__/fixtures';
 import { loadLeague, migrate, saveLeague } from '../../state/persistence';
 import { JERSEYS, LEADER_POINTS, awardTeam, legendReason, mainTeam, numberTeam, retireNumbers, retiredNumbers } from '../league/jerseys';
 import { ensureRotation } from '../league/games';
-import { freeAgents, playerName, teamPlayers } from '../league/helpers';
+import { freeAgents, playerName, teamPlayers, teamCity } from '../league/helpers';
 import { releasePlayer, signPlayer } from '../league/contracts';
 import { blankStats } from '../playerGen';
 import { CAP } from '../constants';
@@ -63,7 +63,7 @@ describe('retired numbers', () => {
       expect(retireNumbers(l, p)).toEqual([A]);
       expect(l.teams[A].retired).toEqual([{ jersey: '8', pid: p.pid, name: playerName(p), season: l.season }]);
       expect(l.teams[B].retired).toBeUndefined();
-      expect(l.news.slice(news).map((n) => n.text)).toEqual([`The ${l.teams[A].name} will retire ${playerName(p)}'s No. 8.`]);
+      expect(l.news.slice(news).map((n) => n.text)).toEqual([`${teamCity(l, A)} will retire ${playerName(p)}'s No. 8.`]);
       expect(l.news[l.news.length - 1]).toMatchObject({ kind: 'retire', tids: [A], pids: [p.pid] });
       // his numbers by team were kept for this; a second call changes nothing
       expect(p.jerseys).toBeUndefined();
@@ -231,12 +231,12 @@ describe('retired numbers', () => {
       retireNumbers(l, mine);
       expect(l.inbox.length).toBe(inbox + 1);
       expect(l.inbox[0]).toMatchObject({ from: 'Owner', subject: 'No. 9 to the rafters', tone: 'good', link: `/league/history?tid=${U}` });
-      expect(l.inbox[0].body).toBe(`${playerName(mine)}'s No. 9 goes up to the rafters at the home opener, and nobody wears it for the ${l.teams[U].name} again.`);
+      expect(l.inbox[0].body).toBe(`${playerName(mine)}'s No. 9 goes up to the rafters at the home opener, and nobody wears it for ${teamCity(l, U)} again.`);
       const theirs = career(l, [[A, 5]], { jerseys: { [A]: '9' } });
       theirs.hof = true;
       retireNumbers(l, theirs);
       expect(l.inbox.length).toBe(inbox + 1);
-      expect(l.news[l.news.length - 1].text).toBe(`The ${l.teams[A].name} will retire ${playerName(theirs)}'s No. 9.`);
+      expect(l.news[l.news.length - 1].text).toBe(`${teamCity(l, A)} will retire ${playerName(theirs)}'s No. 9.`);
     }
 
     // a real Hall of Famer goes up with the franchise he left before the league began, in the number he wore there

@@ -11,7 +11,7 @@ import { ArrowLeftRight, Award, ChevronRight, Crown, Flame, Landmark, Medal, Spa
 import type { League } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { SINCE } from '../../core/analysis/staffWords';
-import { curTeamSeason, fmtDate, payroll } from '../../core/league/helpers';
+import { curTeamSeason, fmtDate, payroll, teamCity } from '../../core/league/helpers';
 import { coachCareer, coyWinners, userCoach, type CoachCareer } from '../../core/league/coaches';
 import { seasonsInCharge } from '../../core/league/owner';
 import { cabinet, coachRanks, gmLegacy, legacyOf, reviewPath, type Milestone, type SignatureWin, type Trophy as TrophyT } from '../../core/league/legacy';
@@ -78,7 +78,13 @@ function Profile({ league }: { league: League }) {
 
       <section className={`slab fo-career-slab${full ? '' : ' compact no-court'}`} aria-label="Your record">
         <div className="row between">
-          <span className="over">{league.fired ? `Last job: the ${team.name}` : seasonsIn < 1 ? `${team.name} · from next season` : `${team.name} · season ${seasonsIn}`}</span>
+          <span className="over">
+            {league.fired
+              ? `Last job: ${teamCity(league, team)}`
+              : seasonsIn < 1
+                ? `${teamCity(league, team)} · from next season`
+                : `${teamCity(league, team)} · season ${seasonsIn}`}
+          </span>
           {me && k && k.seasons > 0 && (
             <Link to={`/league/history?view=coaches&coach=${me.id}`} className="card-link">
               Season by season
@@ -547,7 +553,7 @@ function TakeOver({ league, onTaken }: { league: League; onTaken: () => void }) 
   return (
     <Section title={league.settings.godMode ? 'Take over any team · god mode' : 'Take over a team'}>
       <div className="small dim2">
-        {league.fired ? (league.settings.godMode ? 'God mode puts you anywhere.' : 'No offers on file: pick a team.') : `The ${cur.name} go back to the AI staff.`}{' '}
+        {league.fired ? (league.settings.godMode ? 'God mode puts you anywhere.' : 'No offers on file: pick a team.') : `${teamCity(league, cur)} goes back to the AI staff.`}{' '}
         <More label="What carries over">
           <div className="small dim2 fo-help">
             <p>Part of your standing with this owner comes with you. Your coaching ratings come too.</p>
@@ -582,7 +588,7 @@ function TakeOver({ league, onTaken }: { league: League; onTaken: () => void }) 
                 onClick={() => setPick(x.tid)}
               >
                 <TeamLogo tid={x.tid} size={28} decorative />
-                <span className="nl-team-name">{x.name}</span>
+                <span className="nl-team-name">{teamCity(league, x)}</span>
                 <span className="nl-team-sub num">{me ? (league.fired ? 'Fired' : 'Yours') : keepFigures(`${ts.won}-${ts.lost}`)}</span>
               </button>
             );

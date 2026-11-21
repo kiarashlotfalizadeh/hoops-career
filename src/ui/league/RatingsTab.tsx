@@ -11,6 +11,7 @@ import { RatingKey, ratingCols } from '../ratingCols';
 import { OvrKey } from '../components/OvrKey';
 import { FilterField, FiltersButton, shortName, teamAbbrev, useQueryParam } from './shared';
 import { plural } from '../../core/format';
+import { teamCity } from '../../core/league/helpers';
 
 const PAGE = 100;
 
@@ -67,7 +68,7 @@ export function RatingsTab({ league }: { league: League }) {
           <FilterField label="Players">
             <select className="lg-select" value={team} onChange={(e) => setTeam(e.target.value)} aria-label="Team">
               <option value="all">Every team</option>
-              <option value={String(league.userTid)}>{league.teams[league.userTid].name} (yours)</option>
+              <option value={String(league.userTid)}>{teamCity(league, league.userTid)} (yours)</option>
               <option value="fa">Free agents</option>
               {teams.map((t) => (
                 <option key={t.tid} value={String(t.tid)}>

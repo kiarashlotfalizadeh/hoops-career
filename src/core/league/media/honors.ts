@@ -7,7 +7,7 @@ import { activeCoach } from '../coaches';
 import { addInbox, dayToDate, playerName, sentence } from '../helpers';
 import { worldRng } from '../world';
 import type { Honor, MediaState } from '../media';
-import { Voice, confName, f1, last, list, nth, publish, rec, signed } from './voice';
+import { Voice, city, confName, f1, last, list, nth, publish, rec, signed } from './voice';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -73,12 +73,12 @@ function tally(games: GameResult[]) {
   return { players: [...players.values()], teams: [...teams.values()] };
 }
 
-/** "31.5 points, 8.0 rebounds and 6.3 assists a game as the Knicks went 4-0". */
+/** "31.5 points, 8.0 rebounds and 6.3 assists a game as Boston went 4-0". */
 function lineText(league: League, x: Line): string {
   const parts = [`${f1(x.pts / x.gp)} points`];
   if (x.reb / x.gp >= 6) parts.push(`${f1(x.reb / x.gp)} rebounds`);
   if (x.ast / x.gp >= 5) parts.push(`${f1(x.ast / x.gp)} assists`);
-  return `${list(parts)} a game as the ${league.teams[x.tid].name} went ${rec(x.wins, x.gp - x.wins)}`;
+  return `${list(parts)} a game as ${city(league, x.tid)} went ${rec(x.wins, x.gp - x.wins)}`;
 }
 
 const confOf = (league: League, tid: number) => league.teams[tid].conf;
@@ -229,7 +229,7 @@ function awardMonth(league: League, m: MediaState, from: number, to: number) {
         kind: 'cotm',
         conf,
         tid: com.tid,
-        line: `the ${league.teams[com.tid].name} went ${rec(com.w, com.l)} in ${label}, by ${signed(com.diff / (com.w + com.l))} a game`,
+        line: `${city(league, com.tid)} went ${rec(com.w, com.l)} in ${label}, by ${signed(com.diff / (com.w + com.l))} a game`,
       });
   }
   if (!honors.length) return;

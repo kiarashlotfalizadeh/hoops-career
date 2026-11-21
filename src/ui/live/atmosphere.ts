@@ -31,7 +31,7 @@ export interface AtmoCtx {
   gid: number;
   /** The user's side (0 home, 1 away). */
   user: 0 | 1;
-  /** Nicknames, [home, away]: "Knicks". */
+  /** The teams as copy names them, [home, away]: their cities, "New York" (teamCity). */
   teams: [string, string];
   abbrevs: [string, string];
   /** The home arena ("Madison Square Garden"); none on a neutral floor. */
@@ -194,7 +194,7 @@ const periodAdj = (q: number) => (q <= 4 ? `${QWORD[q]}-quarter` : q === 5 ? 'ov
 const periodThe = (q: number) => (q <= 4 ? `the ${ordinal(q)}` : q === 5 ? 'overtime' : `the ${ordinal(q - 4)} overtime`);
 
 /** "the Celtics'", "the Thunder's". */
-export const teamPoss = (name: string) => `the ${name}${name.endsWith('s') ? "'" : "'s"}`;
+export const teamPoss = (name: string) => `${name}${name.endsWith('s') ? "'" : "'s"}`;
 
 /** What people call the building: "The Garden" for a Garden, its name otherwise. */
 export function arenaShort(arena?: string): string {
@@ -353,7 +353,7 @@ const POSTER = ['{P} dunks it on {F}: and one', '{P} posterizes {F}, and the fou
 const BLOCK = ['{B} sends it back', 'Rejected! {B} blocks {P}', "{B} swats away {P}'s {D}", '{B} gets a hand on it: blocked', '{B} with the block on {P}', '{B} says no to {P}'];
 const STEAL = ["{S} picks {P}'s pocket", '{S} jumps the passing lane', 'Stolen by {S}', '{S} strips {P}', '{S} with the steal on {P}'];
 const BREAKAWAY = ['{S} takes it the other way', '{S} steals it and goes coast to coast', 'Off the steal, {S} all alone'];
-const GO_AHEAD = ['and the {T} lead {SC}', '{T} in front {SC}', 'and that puts the {T} ahead, {SC}'];
+const GO_AHEAD = ['and {T} leads {SC}', '{T} in front {SC}', 'and that puts {T} ahead, {SC}'];
 const TIE = ['tied at {N}', 'and we are tied at {N}', 'all square at {N}'];
 const STREAK = ['{N} straight for {P}', "{P}'s {N}th straight make", "he's heating up: {N} in a row"];
 const STREAK3 = ['{N} straight threes for {P}', "{P}'s {N}th straight three", '{P} is on fire: {N} threes in a row'];
@@ -599,8 +599,8 @@ export function advance(t: Tally, log: PossLog, ctx: AtmoCtx): { t: Tally; event
         weight: to.t === ctx.user ? 1 : 2,
         pri: 40,
         kicker: 'Timeout',
-        title: `${T[to.t]} call timeout`,
-        line: `${cap1(teamPoss(T[runner]))} ${r.a}-${r.b} run${home ? `: ${arenaShort(ctx.arena)} is on its feet` : ''}`,
+        title: `${T[to.t]} timeout`,
+        line: `${teamPoss(T[runner])} ${r.a}-${r.b} run${home ? `: ${arenaShort(ctx.arena)} is on its feet` : ''}`,
       });
     }
   }
@@ -617,7 +617,7 @@ export function advance(t: Tally, log: PossLog, ctx: AtmoCtx): { t: Tally; event
         pri: 70,
         kicker: 'At the buzzer',
         title: `${N(lastShot.pid)} beats the ${log.q === 2 ? 'halftime ' : ''}buzzer`,
-        line: margin === 0 ? `Tied at ${n.score[0]}` : `${T[margin > 0 ? 0 : 1]} lead ${scoreText(n.score)}`,
+        line: margin === 0 ? `Tied at ${n.score[0]}` : `${T[margin > 0 ? 0 : 1]} up ${scoreText(n.score)}`,
       });
   }
 
@@ -639,7 +639,7 @@ export function advance(t: Tally, log: PossLog, ctx: AtmoCtx): { t: Tally; event
           weight: log.clockEnd <= 24 ? 3 : 2,
           pri: 90,
           kicker: 'Go-ahead',
-          title: `${who} puts the ${T[side]} in front`,
+          title: `${who} puts ${T[side]} in front`,
           line: `${scoreText(n.score)}, ${fmtClock(log.clockEnd)} left`,
         });
       else if (comeback)
@@ -650,11 +650,11 @@ export function advance(t: Tally, log: PossLog, ctx: AtmoCtx): { t: Tally; event
           weight: 2,
           pri: 60,
           kicker: 'Comeback',
-          title: `The ${T[side]} have wiped out ${an(down)} ${down}-point deficit`,
-          line: `${T[side]} lead ${scoreText(n.score)}`,
+          title: `${T[side]} wiped out ${an(down)} ${down}-point deficit`,
+          line: `${T[side]} up ${scoreText(n.score)}`,
         });
       else if (first)
-        ev({ id: `first-${side}`, kind: 'lead', side, weight: 2, pri: 50, kicker: 'Lead change', title: `${T[side]} lead for the first time tonight`, line: scoreText(n.score) });
+        ev({ id: `first-${side}`, kind: 'lead', side, weight: 2, pri: 50, kicker: 'Lead change', title: `A first lead tonight for ${T[side]}`, line: scoreText(n.score) });
       else if (changed)
         ev({
           id: `lead-${t.n}`,
@@ -663,7 +663,7 @@ export function advance(t: Tally, log: PossLog, ctx: AtmoCtx): { t: Tally; event
           weight: log.q >= 4 && log.clockEnd <= 360 && Math.abs(margin) <= 5 ? 2 : 1,
           pri: 45,
           kicker: 'Lead change',
-          title: `${T[side]} ${t.led[side] ? 'back in front' : 'take the lead'}, ${scoreText(n.score)}`,
+          title: `${T[side]} ${t.led[side] ? 'back in front' : 'takes the lead'}, ${scoreText(n.score)}`,
           line: n.leadChanges >= 2 ? `The ${ordinal(n.leadChanges)} lead change of the night` : undefined,
         });
       n.led[side] = true;
@@ -678,7 +678,7 @@ export function advance(t: Tally, log: PossLog, ctx: AtmoCtx): { t: Tally; event
         weight: clutchy || back !== undefined ? 2 : 1,
         pri: back !== undefined ? 60 : 80,
         kicker: back !== undefined ? 'Comeback' : 'Tied',
-        title: back !== undefined ? `The ${T[back]} have erased ${an(t.big[1 - back])} ${t.big[1 - back]}-point deficit` : `Tied at ${n.score[0]}`,
+        title: back !== undefined ? `${T[back]} erased ${an(t.big[1 - back])} ${t.big[1 - back]}-point deficit` : `Tied at ${n.score[0]}`,
         line: back !== undefined ? `Tied at ${n.score[0]}` : clutchy ? `${who} ties it with ${fmtClock(log.clockEnd)} left` : undefined,
       });
     }
@@ -701,10 +701,10 @@ export function advance(t: Tally, log: PossLog, ctx: AtmoCtx): { t: Tally; event
       const home = run.side === 0 && ctx.arena;
       const road = run.side === 1 && ctx.arena;
       const lines = [
-        ...(run.b === 0 && dry >= 120 ? [`The ${T[other]} haven't scored in ${fmtClock(dry)}`] : []),
+        ...(run.b === 0 && dry >= 120 ? [`No points for ${T[other]} in ${fmtClock(dry)}`] : []),
         ...(home ? [`${arenaShort(ctx.arena)} is on its feet`, `${arenaShort(ctx.arena)} is rocking`] : []),
         ...(road ? [`A hush over ${ctx.arena}`, `${arenaShort(ctx.arena)} has gone quiet`] : []),
-        `${T[run.side]} ${margin === 0 ? 'level' : margin > 0 === (run.side === 0) ? 'lead' : 'trail'} ${margin === 0 ? `at ${n.score[0]}` : scoreText(n.score)}`,
+        `${T[run.side]} ${margin === 0 ? 'level' : margin > 0 === (run.side === 0) ? 'up' : 'down'} ${margin === 0 ? `at ${n.score[0]}` : scoreText(n.score)}`,
       ];
       ev({
         id: `run-${key}-${step}`,
@@ -845,7 +845,7 @@ export function advance(t: Tally, log: PossLog, ctx: AtmoCtx): { t: Tally; event
 /** "lead 54-50", "trail 50-54", "level at 50". */
 function scoreLine(sc: [number, number], side: 0 | 1): string {
   const m = sc[side] - sc[1 - side];
-  return m === 0 ? `level at ${sc[0]}` : `${m > 0 ? 'lead' : 'trail'} ${sc[side]}-${sc[1 - side]}`;
+  return m === 0 ? `level at ${sc[0]}` : `${m > 0 ? 'up' : 'down'} ${sc[side]}-${sc[1 - side]}`;
 }
 
 /** The whole night so far: the tally after `logs`, every call by log index, and every event. */
@@ -903,7 +903,7 @@ export function breakStory(t: Tally, ctx: AtmoCtx, q: number, scorers: [{ pid: n
   if (run && run.a - run.b >= 10) {
     const what = `${run.a}-${run.b} ${periodAdj(q)} run`;
     const an = run.a === 8 || run.a === 11 || run.a === 18 ? 'an' : 'a';
-    cause = `${run.side === u ? 'You' : `The ${ctx.teams[o]}`} had ${an} ${what}.`;
+    cause = `${run.side === u ? 'You' : ctx.teams[o]} had ${an} ${what}.`;
   } else if (t.leadChanges >= 6 && Math.abs(lead) <= 6) cause = `${t.leadChanges} lead changes so far.`;
   // (after the first, its score is the game's: said once)
   else if (Math.abs(pm) >= 6 && q > 1 && q <= 4) cause = pm > 0 ? `You took ${periodThe(q)} ${per[u]}-${per[o]}.` : `You lost ${periodThe(q)} ${per[o]}-${per[u]}.`;
@@ -911,7 +911,7 @@ export function breakStory(t: Tally, ctx: AtmoCtx, q: number, scorers: [{ pid: n
   const mine = scorers[u][0];
   const theirs = scorers[o][0];
   let star = '';
-  if (theirs && theirs.pts >= 20 && (!mine || theirs.pts >= mine.pts + 6)) star = `${ctx.name(theirs.pid)} has ${theirs.pts} for the ${ctx.teams[o]}.`;
+  if (theirs && theirs.pts >= 20 && (!mine || theirs.pts >= mine.pts + 6)) star = `${ctx.name(theirs.pid)} has ${theirs.pts} for ${ctx.teams[o]}.`;
   else if (mine && mine.pts >= 8) star = pick([`${ctx.name(mine.pid)} has ${mine.pts}.`, `${ctx.name(mine.pid)} leads you with ${mine.pts}.`], ...key, 'star');
   return [state, cause, star].filter(Boolean).join(' ');
 }

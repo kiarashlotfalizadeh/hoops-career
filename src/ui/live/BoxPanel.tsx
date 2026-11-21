@@ -12,6 +12,7 @@ import { periodLabel } from '../stats';
 import { BoxScore } from '../components/BoxScore';
 import { Term } from '../components/Glossary';
 import type { Drawn } from './drawn';
+import { teamCity } from '../../core/league/helpers';
 
 /** The Stats view's sections (the play-by-play is the console's own, beside them). */
 export type BoxTab = 'players' | 'team' | 'shots' | 'flow';
@@ -74,7 +75,7 @@ export function BoxPanel({
               { id: '0', label: home.abbrev },
             ]}
           />
-          <BoxScore box={tb} name={nameOf} label={`${(team === 0 ? home : away).name} box score`} shown={(p) => p.min > 0 || onFloor.has(p.pid)} />
+          <BoxScore box={tb} name={nameOf} label={`${teamCity(league, team === 0 ? home : away)} box score`} shown={(p) => p.min > 0 || onFloor.has(p.pid)} />
           <Section
             title={`${(team === 0 ? home : away).abbrev} play types so far`}
             right={

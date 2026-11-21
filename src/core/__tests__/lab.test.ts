@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
-import { teamPlayers, wholeMinutes } from '../league/helpers';
+import { teamCity, teamPlayers, wholeMinutes } from '../league/helpers';
 import { applyPatch, pairedDelta, runLab, type TacticsPatch } from '../ai/lab';
 import { counterCandidates, liveCounter, scoutTeam, teamAlerts } from '../ai/advisor';
 import { buildGameReport, impactAdvice } from '../analysis/gameReport';
@@ -115,7 +115,7 @@ describe('batch sims & reports', () => {
       const rep = buildGameReport(league, res)!;
       expect(rep.userWon).toBe(false);
       expect(rep.factors[0].pts).toBeGreaterThan(0);
-      expect(rep.headline).toMatch(/^The .+ fell to the .+ 121-120 in OT\. Biggest factor: /);
+      expect(rep.headline).toMatch(/^[A-Z].+ fell to [A-Z].+ 121-120 in OT\. Biggest factor: /);
       expect(rep.headline).not.toMatch(/pull-up|nail-biter/);
       expect(rep.headline.split(':')).toHaveLength(2);
       expect(rep.factors.find((f) => f.title.includes('kick-out'))!.detail).toMatch(/^Over 1 play\.$/);
@@ -389,11 +389,11 @@ describe('batch sims & reports', () => {
       expect(flagged).toBeLessThan(15);
       mine.tactics = saved;
     }
-    // scouts in plain English: plural team names, the creator role named once
+    // scouts in plain English: a team by its city, which takes a singular verb, the creator role named once
     {
       for (let tid = 1; tid < 30; tid++) {
         for (const t of scoutTeam(league, tid).threats) expect(t.why).not.toMatch(/Primary creator, Primary Creator/);
-        for (const c of counterCandidates(league, 0, tid)) expect(c.why).not.toMatch(new RegExp(`^${league.teams[tid].name} (is|spaces)\\b`));
+        for (const c of counterCandidates(league, 0, tid)) expect(c.why).not.toMatch(new RegExp(`^${teamCity(league, tid)} (are|space|live|score)\\b`));
       }
     }
   });

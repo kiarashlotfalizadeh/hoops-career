@@ -20,7 +20,21 @@ import { FREE_AGENT } from '../types';
 import { seasonLabel } from '../constants';
 import { clamp } from '../random';
 import { contractExp, salaryFor } from '../playerGen';
-import { CAP_FOR, OFFSEASON_ROSTER_MAX, addInbox, addNews, andList, contractSeason, freeAgents, payroll, playerName, revenueScale, standardRoster, teamPlayers } from './helpers';
+import {
+  CAP_FOR,
+  OFFSEASON_ROSTER_MAX,
+  addInbox,
+  addNews,
+  andList,
+  contractSeason,
+  freeAgents,
+  payroll,
+  playerName,
+  revenueScale,
+  standardRoster,
+  teamCity,
+  teamPlayers,
+} from './helpers';
 import {
   EXCEPTIONS,
   FA_DAYS,
@@ -61,7 +75,6 @@ export const AI_SHEET_PENALTY = 2;
 const MATCH_VALUE = 2;
 
 const yrs = (n: number) => `${n} yr${n === 1 ? '' : 's'}`;
-const teamName = (league: League, tid: number) => `${league.teams[tid].region} ${league.teams[tid].name}`;
 
 // ---------------------------------------------------------------- who, and for how much
 
@@ -230,7 +243,7 @@ export function userWithdrawQualifying(league: League, pid: number): { ok: boole
   if (league.fired) return { ok: false, reason: FIRED_REASON };
   const r = p?.rfa;
   if (!p || !r || r.tid !== league.userTid) return { ok: false, reason: 'No qualifying offer of yours to withdraw.' };
-  if (r.sheet) return { ok: false, reason: `${playerName(p)} has signed an offer sheet with the ${league.teams[r.sheet.tid].name}: match it or let him go.` };
+  if (r.sheet) return { ok: false, reason: `${playerName(p)} has signed an offer sheet with ${teamCity(league, r.sheet.tid)}: match it or let him go.` };
   logMove(league, 'qualify', r.tid, p, { amount: r.qo, note: 'withdrawn' });
   const hold = r.hold;
   delete p.rfa;
@@ -251,7 +264,7 @@ export function sheetBlockedReason(league: League, p: Player, years: number): st
   if (!r || p.tid !== FREE_AGENT) return `${playerName(p)} isn't a restricted free agent.`;
   if (league.phase !== 'freeAgency') return 'Offer sheets are signed during free agency.';
   if (r.sheet)
-    return `${playerName(p)} has signed an offer sheet with the ${league.teams[r.sheet.tid].name}. The ${league.teams[r.tid].name} decide by the end of ${deadlineLabel(r.sheet.until)}.`;
+    return `${playerName(p)} has signed an offer sheet with ${teamCity(league, r.sheet.tid)}. ${teamCity(league, r.tid)} must decide by the end of ${deadlineLabel(r.sheet.until)}.`;
   if (years < SHEET_MIN_YEARS || years > SHEET_MAX_YEARS) return `Offer sheets run ${SHEET_MIN_YEARS} to ${SHEET_MAX_YEARS} years.`;
   return null;
 }
@@ -284,7 +297,7 @@ export function signOfferSheet(league: League, p: Player, tid: number, amount: n
   if (notable(league, p, amount, [tid, r.tid]))
     addNews(league, {
       kind: 'signing',
-      text: `${name} signed a ${years}-year, ${money(total)} offer sheet with the ${t.region} ${t.name}. The ${own.name} can match it by the end of ${deadlineLabel(sheet.until)}${sheet.until < FA_DAYS - 1 ? ' of free agency' : ''}.`,
+      text: `${name} signed a ${years}-year, ${money(total)} offer sheet with ${teamCity(league, t)}. ${teamCity(league, own)} can match it by the end of ${deadlineLabel(sheet.until)}${sheet.until < FA_DAYS - 1 ? ' of free agency' : ''}.`,
       tids: [tid, r.tid],
       pids: [p.pid],
     });
@@ -292,7 +305,7 @@ export function signOfferSheet(league: League, p: Player, tid: number, amount: n
     addInbox(league, {
       from: 'Assistant GM',
       subject: `${t.abbrev} signed ${name} to an offer sheet`,
-      body: `${name} signed an offer sheet with the ${t.region} ${t.name}: ${yrs(years)} / ${money(total)}, ${money(sheetContract(league, p, sheet).salaries[0])} in ${seasonLabel(contractSeason(league))} with 5% raises.\nMatch it by the end of ${deadlineLabel(sheet.until)} and he stays with us on exactly those terms. Let it go, or leave it unanswered, and he joins ${t.abbrev}. Matching needs a roster spot, not cap room.`,
+      body: `${name} signed an offer sheet with ${teamCity(league, t)}: ${yrs(years)} / ${money(total)}, ${money(sheetContract(league, p, sheet).salaries[0])} in ${seasonLabel(contractSeason(league))} with 5% raises.\nMatch it by the end of ${deadlineLabel(sheet.until)} and he stays with us on exactly those terms. Let it go, or leave it unanswered, and he joins ${t.abbrev}. Matching needs a roster spot, not cap room.`,
       tone: 'alert',
       important: true,
       link: '/office/free-agents',
@@ -345,8 +358,8 @@ function settleSheet(league: League, p: Player, matched: boolean) {
   addNews(league, {
     kind: 'signing',
     text: matched
-      ? `The ${own.region} ${own.name} matched ${playerName(p)}'s offer sheet from the ${offerer.name}. He stays, on ${yrs(sh.years)} / ${money(total)}.`
-      : `${playerName(p)} joins the ${offerer.region} ${offerer.name} on ${yrs(sh.years)} / ${money(total)}. The ${own.name} didn't match.`,
+      ? `${teamCity(league, own)} matched ${playerName(p)}'s offer sheet from ${teamCity(league, offerer)}. He stays, on ${yrs(sh.years)} / ${money(total)}.`
+      : `${playerName(p)} joins ${teamCity(league, offerer)} on ${yrs(sh.years)} / ${money(total)}. ${teamCity(league, own)} didn't match.`,
     tids: [r.tid, sh.tid],
     pids: [p.pid],
   });
@@ -359,7 +372,7 @@ export function sheetDecisionBlocked(league: League, pid: number, match: boolean
   if (league.fired) return FIRED_REASON;
   if (!p || !r?.sheet || p.tid !== FREE_AGENT || league.phase !== 'freeAgency') return 'This offer sheet has been decided.';
   // (the user took over another team since it was signed)
-  if (r.tid !== league.userTid) return `His rights belong to the ${league.teams[r.tid].name}: they decide on it.`;
+  if (r.tid !== league.userTid) return `His rights belong to ${teamCity(league, r.tid)}: they decide on it.`;
   if (match && summerRoster(league, league.userTid) >= OFFSEASON_ROSTER_MAX)
     return `Matching needs a roster spot: yours is full (${OFFSEASON_ROSTER_MAX}${league.faBids?.length || pendingSheets(league, league.userTid).length ? ', counting your pending offers and offer sheets' : ''}). Release or trade someone first.`;
   // the owner's freeze: matching a sheet above his salary is a raise, and the price of the freeze is that he walks
@@ -376,7 +389,7 @@ export function userDecideSheet(league: League, pid: number, match: boolean): { 
   settleSheet(league, p, match);
   return match
     ? { ok: true, reason: `Matched: ${playerName(p)} stays on ${yrs(sh.years)} at ${money(p.contract.salaries[0])}.` }
-    : { ok: true, reason: `${playerName(p)} joins the ${t.name} on their offer sheet.` };
+    : { ok: true, reason: `${playerName(p)} joins ${teamCity(league, t)} on their offer sheet.` };
 }
 
 /**
@@ -399,7 +412,7 @@ export function resolveOfferSheets(league: League, through = Infinity) {
       addInbox(league, {
         from: 'Assistant GM',
         subject: `${name} joins ${league.teams[sh.tid].abbrev}`,
-        body: `We didn't match ${name}'s offer sheet by the deadline, so he joins the ${teamName(league, sh.tid)} at ${terms}. His cap hold is off our books.`,
+        body: `We didn't match ${name}'s offer sheet by the deadline, so he joins ${teamCity(league, sh.tid)} at ${terms}. His cap hold is off our books.`,
         tone: 'bad',
         link: `/player/${p.pid}`,
       });
@@ -413,8 +426,8 @@ export function resolveOfferSheets(league: League, through = Infinity) {
       from: 'Assistant GM',
       subject: verdict.match ? `${own.abbrev} matched our offer sheet for ${name}` : `${name} is ours`,
       body: verdict.match
-        ? `The ${teamName(league, r.tid)} matched our offer sheet for ${name} (${terms}): ${verdict.why}. He stays with them, and the room the sheet held is free again${isException(sh.route) ? `, ${EXCEPTIONS[sh.route].name} included` : ''}.`
-        : `The ${teamName(league, r.tid)} declined to match our offer sheet: ${verdict.why}. ${name} joins us at ${terms}, at the end of your rotation.`,
+        ? `${teamCity(league, r.tid)} matched our offer sheet for ${name} (${terms}): ${verdict.why}. He stays with them, and the room the sheet held is free again${isException(sh.route) ? `, ${EXCEPTIONS[sh.route].name} included` : ''}.`
+        : `${teamCity(league, r.tid)} declined to match our offer sheet: ${verdict.why}. ${name} joins us at ${terms}, at the end of your rotation.`,
       tone: verdict.match ? 'neutral' : 'good',
       link: `/player/${p.pid}`,
     });

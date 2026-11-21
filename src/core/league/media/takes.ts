@@ -17,7 +17,7 @@
 import type { BoxLine, GameResult, League, Player, PlayoffSeries, ScheduledGame, Txn } from '../../types';
 import { worldRng } from '../world';
 import type { MediaState } from '../media';
-import { Voice, aGrade, f1, last, name, nick, perGame, poss, publish, recOf, rosters, tsOf } from './voice';
+import { Voice, aGrade, city, f1, last, name, perGame, poss, publish, recOf, rosters, tsOf } from './voice';
 import { isGenerational } from '../legends';
 import { CAP_FOR, prospects } from '../helpers';
 import { fmtHeight } from '../../ratings';
@@ -105,7 +105,7 @@ function lastGames(league: League, p: Player, n: number): BoxLine[] {
 function candidates(league: League, m: MediaState, v: Voice): Take[] {
   const out: Take[] = [];
   const u = league.userTid;
-  const N = (tid: number) => nick(league, tid);
+  const N = (tid: number) => city(league, tid);
   const pre = m.preseason?.season === league.season ? m.preseason : undefined;
   // (whoever spoke last sits this one out, where someone else has a view)
   const spoke = m.takes?.season === league.season ? m.takes.by : undefined;
@@ -124,8 +124,8 @@ function candidates(league: League, m: MediaState, v: Voice): Take[] {
         const n = ts.streak;
         const texts: Record<Pundit, [string, string, string[]]> = {
           rex: [
-            `I'm not buying the ${N(t.tid)}. Not for a second.`,
-            `${n} straight for the ${N(t.tid)}, and ${PUNDITS.rex.name} wants to see the schedule.`,
+            `I'm not buying ${N(t.tid)}. Not for a second.`,
+            `${n} straight for ${N(t.tid)}, and ${PUNDITS.rex.name} wants to see the schedule.`,
             [
               `${n} in a row. Wonderful. Against who? Go look. I'll wait.`,
               `Everybody wants to hand them a trophy in ${league.day < 90 ? 'the first half of the season' : 'the regular season'}. I've seen this movie. It ends in the second round.`,
@@ -133,16 +133,16 @@ function candidates(league: League, m: MediaState, v: Voice): Take[] {
             ],
           ],
           dee: [
-            `Book it: the ${N(t.tid)} are for real`,
+            `Book it: ${N(t.tid)} is for real`,
             `${n} straight. ${PUNDITS.dee.name} has seen enough.`,
             [
               `I played on a team that won ${n} in a row once. You know what it feels like? It feels like nobody can touch you.`,
-              `That locker room believes right now, and belief travels. The ${N(t.tid)} are a problem for everybody.`,
+              `That locker room believes right now, and belief travels. ${N(t.tid)} is a problem for everybody.`,
               `${R}. I'm all the way in.`,
             ],
           ],
           marv: [
-            `The ${N(t.tid)} have won ${n} straight and I'm still not impressed`,
+            `${N(t.tid)} has won ${n} straight and I'm still not impressed`,
             `${PUNDITS.marv.name} would like to see somebody take a charge.`,
             [
               `${n} straight. In my day you needed twenty before anybody called a parade route.`,
@@ -151,7 +151,7 @@ function candidates(league: League, m: MediaState, v: Voice): Take[] {
             ],
           ],
           lila: [
-            `The ${poss(N(t.tid))} streak, and what the numbers say comes next`,
+            `${poss(N(t.tid))} streak, and what the numbers say comes next`,
             `${n} wins in a row. ${PUNDITS.lila.name} checked the shooting luck.`,
             [
               `Streaks like this are part skill and part the other team missing open shots. I know which part comes back.`,
@@ -170,7 +170,7 @@ function candidates(league: League, m: MediaState, v: Voice): Take[] {
         const good = !!picked && picked.confRank <= 6;
         const texts: Record<Pundit, [string, string, string[]]> = {
           rex: [
-            `Blow up the ${N(t.tid)}. Today.`,
+            `Blow up ${N(t.tid)}. Today.`,
             `${n} straight losses, and ${PUNDITS.rex.name} has seen enough.`,
             [
               `${n} in a row. This isn't a slump, it's a verdict.`,
@@ -179,7 +179,7 @@ function candidates(league: League, m: MediaState, v: Voice): Take[] {
             ],
           ],
           dee: [
-            `The ${N(t.tid)} are one move away, and they need to make it`,
+            `${N(t.tid)} is one move away, and needs to make it`,
             `${PUNDITS.dee.name} on ${n} straight losses: go get a star.`,
             [
               `I've been in a locker room on a streak like this. You stop looking each other in the eye.`,
@@ -188,7 +188,7 @@ function candidates(league: League, m: MediaState, v: Voice): Take[] {
             ],
           ],
           marv: [
-            `The ${N(t.tid)} are soft. There, I said it.`,
+            `${N(t.tid)} is soft. There, I said it.`,
             `${n} losses in a row. ${PUNDITS.marv.name} blames the practices.`,
             [
               `${n} straight. You know what fixes that? Running. Lots of running.`,
@@ -197,7 +197,7 @@ function candidates(league: League, m: MediaState, v: Voice): Take[] {
             ],
           ],
           lila: [
-            `Don't panic about the ${N(t.tid)}. Yet.`,
+            `Don't panic about ${N(t.tid)}. Yet.`,
             `${n} straight losses. ${PUNDITS.lila.name} says look at the margins first.`,
             [
               `Losing streaks get loud. Most of them are four bad shooting nights and a schedule.`,
@@ -214,7 +214,7 @@ function candidates(league: League, m: MediaState, v: Voice): Take[] {
         const by = who(['rex', 'lila', 'dee']);
         const texts: Record<Pundit, [string, string, string[]]> = {
           rex: [
-            `The ${N(t.tid)} are the biggest frauds in basketball`,
+            `${N(t.tid)} is the biggest fraud in basketball`,
             `${R}, picked for ${picked.wins} wins. ${PUNDITS.rex.name} isn't moved.`,
             [
               `I picked them to be bad. They are ${R}. So one of us is wrong, and I've been doing this a long time.`,
@@ -222,7 +222,7 @@ function candidates(league: League, m: MediaState, v: Voice): Take[] {
             ],
           ],
           lila: [
-            `The ${N(t.tid)} are ${R}. Half of it is real.`,
+            `${N(t.tid)} is ${R}. Half of it is real.`,
             `${PUNDITS.lila.name} splits the difference on the season's surprise.`,
             [
               `They were picked for ${picked.wins} wins and they're on pace to blow past it. Some of that is a roster that fits. Some of it is close games going their way.`,
@@ -230,7 +230,7 @@ function candidates(league: League, m: MediaState, v: Voice): Take[] {
             ],
           ],
           dee: [
-            `Apologize to the ${N(t.tid)}`,
+            `Apologize to ${N(t.tid)}`,
             `Picked for ${picked.wins} wins. ${R}. ${PUNDITS.dee.name} wants the apologies in writing.`,
             [
               `Everybody had them in the basement. Everybody. I've got the clips.`,
@@ -247,17 +247,17 @@ function candidates(league: League, m: MediaState, v: Voice): Take[] {
         const by = who(['rex', 'marv', 'lila']);
         const texts: Record<Pundit, [string, string, string[]]> = {
           rex: [
-            `It's over for the ${N(t.tid)}`,
+            `It's over for ${N(t.tid)}`,
             `A preseason favourite at ${R}. ${PUNDITS.rex.name} is reading the eulogy.`,
             [`They were picked to win ${picked.wins}. Look at them now.`, `This group has had its chance. Break it up before the deadline does it for you.`],
           ],
           marv: [
-            `The ${N(t.tid)} believed their own press clippings`,
+            `${N(t.tid)} believed its own press clippings`,
             `${R} for a team picked ${picked.confRank === 1 ? 'first' : 'near the top'}. ${PUNDITS.marv.name} saw it coming.`,
             [`You get told you're great all summer, you show up in October already tired of working.`, `Nobody fears them. That used to matter.`],
           ],
           lila: [
-            `The ${N(t.tid)} are better than ${R}. Probably.`,
+            `${N(t.tid)} is better than ${R}. Probably.`,
             `${PUNDITS.lila.name} on a slow start that the numbers half forgive.`,
             [
               `A team picked for ${picked.wins} wins doesn't forget how to play. It does get hurt, get unlucky and get old.`,
@@ -396,7 +396,7 @@ function deadlineTakes(league: League, who: (list: Pundit[]) => Pundit): Take[] 
   if (left > DEADLINE_WEEK || left < -2) return [];
   const out: Take[] = [];
   const u = league.userTid;
-  const N = (tid: number) => nick(league, tid);
+  const N = (tid: number) => city(league, tid);
   const deals = deadlineDeals(league);
   for (const t of deals) {
     const g = gradeTrade(league, t);
@@ -422,26 +422,26 @@ function deadlineTakes(league: League, who: (list: Pundit[]) => Pundit): Take[] 
     const by = who(['rex', 'dee', 'marv', 'lila']);
     const texts: Texts = {
       rex: [
-        `The ${B} just panicked`,
-        `${name(star)} to the ${B} for ${price}. ${PUNDITS.rex.name} calls it a panic trade.`,
+        `${B} just panicked`,
+        `${name(star)} to ${B} for ${price}. ${PUNDITS.rex.name} calls it a panic trade.`,
         [
           `You know what that is? That's a front office that looked at the standings and got scared.`,
           `${L} is a fine player. He is not a ${price} player, and in two years everybody will pretend they knew that.`,
-          `The ${S} picked up the phone at the right time. That's the whole trade.`,
+          `${S} picked up the phone at the right time. That's the whole trade.`,
         ],
       ],
       dee: [
-        `The ${B} just won the deadline`,
+        `${B} just won the deadline`,
         `${PUNDITS.dee.name} on the ${L} trade: this is how you tell a locker room you believe in it.`,
         [
           `I've been on a team that stood pat in February. You feel it. Everybody feels it.`,
-          `The ${B} went and got ${L}. Every player in that room just found another gear.`,
-          `Picks are for teams that aren't close. The ${B} are close.`,
+          `${B} went and got ${L}. Every player in that room just found another gear.`,
+          `Picks are for teams that aren't close. ${B} is close.`,
         ],
       ],
       marv: [
         `You can't buy a team in February`,
-        `${PUNDITS.marv.name} on ${L} to the ${B}: chemistry doesn't come in the mail.`,
+        `${PUNDITS.marv.name} on ${L} to ${B}: chemistry doesn't come in the mail.`,
         [
           `In my day you built a team in October and you lived with it. Now it's a new roster every Thursday.`,
           `${L} has had ${t.day >= league.tradeDeadlineDay ? 'one practice' : 'a week'} with these guys. He doesn't know the plays. He barely knows the trainer.`,
@@ -452,7 +452,7 @@ function deadlineTakes(league: League, who: (list: Pundit[]) => Pundit): Take[] 
         `The price of ${L}, itemized`,
         `${PUNDITS.lila.name} grades the deadline's biggest deal: ${B} ${buyer.grade}, ${S} ${seller.grade}.`,
         [
-          `The ${B} gave up ${price}. I have it as ${aGrade(buyer.grade)} for them and ${aGrade(seller.grade)} for the ${S}.`,
+          `${B} gave up ${price}. I have it as ${aGrade(buyer.grade)} for them and ${aGrade(seller.grade)} for ${S}.`,
           buyer.score < seller.score
             ? `Deadline deals nearly always cost the buyer more than a summer one would. This one did.`
             : `Buyers usually overpay in February. This time the seller blinked first.`,
@@ -488,22 +488,22 @@ function deadlineTakes(league: League, who: (list: Pundit[]) => Pundit): Take[] 
       const by = who(['rex', 'dee', 'marv', 'lila']);
       const texts: Texts = {
         rex: [
-          `The ${N(tid)} did nothing. Nothing!`,
-          `${deals.length} trades in the deadline's last week, none of them the ${poss(N(tid))}. ${PUNDITS.rex.name} is appalled.`,
+          `${N(tid)} did nothing. Nothing!`,
+          `${deals.length} trades in the deadline's last week, none of them ${poss(N(tid))}. ${PUNDITS.rex.name} is appalled.`,
           [`Everybody around them got better this week. They got a nice lunch.`, `${R} and they think they're finished? Call me in May when they're one player short.`],
         ],
         dee: [
-          `The ${N(tid)} needed one more guy`,
+          `${N(tid)} needed one more guy`,
           `${PUNDITS.dee.name} on the contender that sat out the deadline.`,
           [`The players know. Trust me. They watched the phones all week too.`, `One more defender, one more shooter, anything. That room wanted a signal and didn't get one.`],
         ],
         marv: [
-          `Good for the ${N(tid)}`,
+          `Good for ${N(tid)}`,
           `${PUNDITS.marv.name} salutes the one team that kept its hands in its pockets.`,
-          [`They're ${R}. They like each other. They left it alone. I could cry.`, `The rest of the league is learning names this weekend. The ${N(tid)} are practicing.`],
+          [`They're ${R}. They like each other. They left it alone. I could cry.`, `The rest of the league is learning names this weekend. ${N(tid)} is practicing.`],
         ],
         lila: [
-          `Doing nothing was a move, and for the ${N(tid)} the right one`,
+          `Doing nothing was a move, and for ${N(tid)} the right one`,
           `${PUNDITS.lila.name} on standing pat at ${R}.`,
           [
             `The best trade at most deadlines is the one you don't make. The prices this week were buyer-beware.`,
@@ -537,7 +537,7 @@ function leftTeam(league: League, p: Player, now: number): number | null {
 function signingTakes(league: League, who: (list: Pundit[]) => Pundit): Take[] {
   const out: Take[] = [];
   const u = league.userTid;
-  const N = (tid: number) => nick(league, tid);
+  const N = (tid: number) => city(league, tid);
   const log = league.transactions ?? [];
   for (let i = log.length - 1; i >= 0; i--) {
     const t = log[i];
@@ -558,8 +558,8 @@ function signingTakes(league: League, who: (list: Pundit[]) => Pundit): Take[] {
     const by = who(from !== null ? ['rex', 'dee', 'marv', 'lila'] : ['rex', 'dee', 'lila']);
     const texts: Texts = {
       rex: [
-        ratio >= 1.05 ? `The ${N(tid)} just set ${money(t.amount * yrs)} on fire` : `What does ${L} know that we don't?`,
-        `${name(p)} to the ${N(tid)}, ${deal}. ${PUNDITS.rex.name} has questions.`,
+        ratio >= 1.05 ? `${N(tid)} just set ${money(t.amount * yrs)} on fire` : `What does ${L} know that we don't?`,
+        `${name(p)} to ${N(tid)}, ${deal}. ${PUNDITS.rex.name} has questions.`,
         ratio >= 1.05
           ? [`${deal}. For ${L}. Say it out loud and listen to yourself.`, `Somebody in that front office wanted to win the press conference. Congratulations. You won July.`]
           : [
@@ -568,8 +568,8 @@ function signingTakes(league: League, who: (list: Pundit[]) => Pundit): Take[] {
             ],
       ],
       dee: [
-        `${L} picked the ${N(tid)}, and players noticed`,
-        `${PUNDITS.dee.name} on what the summer's big signing says about the ${N(tid)}.`,
+        `${L} picked ${N(tid)}, and players noticed`,
+        `${PUNDITS.dee.name} on what the summer's big signing says about ${N(tid)}.`,
         [
           `Free agents talk to each other. When a guy like ${L} picks you, the next one takes your call.`,
           `Forget the money. He had choices and he chose that locker room. That's the story.`,
@@ -579,9 +579,9 @@ function signingTakes(league: League, who: (list: Pundit[]) => Pundit): Take[] {
         from !== null
           ? [
               `Nobody stays anywhere anymore`,
-              `${L} leaves the ${N(from)} for the ${N(tid)}. ${PUNDITS.marv.name} remembers when that meant something.`,
+              `${L} leaves ${N(from)} for ${N(tid)}. ${PUNDITS.marv.name} remembers when that meant something.`,
               [
-                `The ${N(from)} raised him, paid him and put his face on the building. He left for ${deal}.`,
+                `${N(from)} raised him, paid him and put his face on the building. He left for ${deal}.`,
                 `In my day you finished what you started. Now you finish wherever the check clears.`,
               ],
             ]
@@ -680,7 +680,7 @@ export function playoffTakes(league: League, m: MediaState, g: ScheduledGame) {
   const v = new Voice(worldRng(league, 'ptake', league.season, g.gid), m);
   const spoke = s.by;
   const who = (list: Pundit[]) => v.pick(list.length > 1 ? list.filter((p) => p !== spoke) : list);
-  const N = (tid: number) => nick(league, tid);
+  const N = (tid: number) => city(league, tid);
   const wins = seriesWins(league, ps);
   const round = seriesLabel(ps);
   const [hw, lw] = [ps.highWins, ps.lowWins];
@@ -702,7 +702,7 @@ export function playoffTakes(league: League, m: MediaState, g: ScheduledGame) {
         who(['rex', 'dee', 'marv', 'lila']),
         {
           rex: [
-            `The ${N(Lo)} just choked away a ${lead} lead`,
+            `${N(Lo)} just choked away a ${lead} lead`,
             `Up ${lead} in the ${round}, out in ${games}. ${PUNDITS.rex.name} wants names.`,
             [
               `${lead}. They had it. They had it wrapped, and they handed it back.`,
@@ -711,24 +711,24 @@ export function playoffTakes(league: League, m: MediaState, g: ScheduledGame) {
             ],
           ],
           dee: [
-            `What happened in the ${poss(N(Lo))} locker room?`,
+            `What happened in ${poss(N(Lo))} locker room?`,
             `${PUNDITS.dee.name} on a ${lead} lead that became a summer vacation.`,
             [
               `I've been up in a series and felt it start to slip. It's the quietest room you'll ever sit in.`,
-              `The ${N(W)} never believed they were out of it. The ${N(Lo)} started believing they'd already won. That's the whole series.`,
+              `${N(W)} never believed they were out of it. ${N(Lo)} started believing they'd already won. That's the whole series.`,
             ],
           ],
           marv: [
-            `The ${N(Lo)} were up ${lead} and went home`,
+            `${N(Lo)} led ${lead} and went home`,
             `${PUNDITS.marv.name} has a word for it, and it isn't "unlucky."`,
-            [`In my day a team up ${lead} put its foot on a throat. This one put its feet up.`, `Give the ${N(W)} credit. They kept showing up. Showing up is most of it.`],
+            [`In my day a team up ${lead} put its foot on a throat. This one put its feet up.`, `Give ${N(W)} credit. They kept showing up. Showing up is most of it.`],
           ],
           lila: [
-            `How rare was the ${poss(N(Lo))} collapse?`,
+            `How rare was ${poss(N(Lo))} collapse?`,
             `Up ${lead}, out in ${games}. ${PUNDITS.lila.name} on what the odds said, and when they turned.`,
             [
               `Teams up ${lead} win the series nearly every time. "Nearly" is carrying a great deal today.`,
-              `It wasn't one bad night. The ${N(W)} were the better team from the middle of the series on. The lead hid it.`,
+              `It wasn't one bad night. ${N(W)} was the better team from the middle of the series on. The lead hid it.`,
             ],
           ],
         },
@@ -742,11 +742,11 @@ export function playoffTakes(league: League, m: MediaState, g: ScheduledGame) {
         {
           rex: [
             `${S} got swept. Can you win with him?`,
-            `Four games and out for the ${N(Lo)}. ${PUNDITS.rex.name} is asking the question.`,
+            `Four games and out for ${N(Lo)}. ${PUNDITS.rex.name} is asking the question.`,
             [
               `Great players don't get swept. I said what I said.`,
               `Four games. Not one win. At some point the numbers in January stop mattering.`,
-              `If I'm the ${N(Lo)} I'm at least taking the calls.`,
+              `If I'm ${N(Lo)} I'm at least taking the calls.`,
             ],
           ],
           dee: [
@@ -756,11 +756,11 @@ export function playoffTakes(league: League, m: MediaState, g: ScheduledGame) {
           ],
           marv: [
             `Swept. With ${S}. Imagine.`,
-            `${PUNDITS.marv.name} on four straight losses for the ${N(Lo)}.`,
-            [`Stars used to drag bad teams to a Game 6 out of spite.`, `The ${N(W)} played five-man basketball. It still works. Somebody tell the kids.`],
+            `${PUNDITS.marv.name} on four straight losses for ${N(Lo)}.`,
+            [`Stars used to drag bad teams to a Game 6 out of spite.`, `${N(W)} played five-man basketball. It still works. Somebody tell the kids.`],
           ],
           lila: [
-            `The ${N(Lo)} were swept, and it wasn't close`,
+            `${N(Lo)} got swept, and it wasn't close`,
             `${PUNDITS.lila.name} on what four games say about a team built around ${S}.`,
             [`One star gets you into the playoffs. It takes about three good players to stay there.`, `He was fine. The minutes he sat were the series.`],
           ],
@@ -774,24 +774,24 @@ export function playoffTakes(league: League, m: MediaState, g: ScheduledGame) {
         who(['rex', 'dee', 'lila']),
         {
           rex: [
-            `I told you the ${N(Lo)} were frauds`,
+            `I told you ${N(Lo)} was a fraud`,
             `A ${ps.highSeed} seed out to a ${ps.lowSeed} seed. ${PUNDITS.rex.name} would like the credit.`,
             [
               `${recOf(tsOf(league, Lo))} in the regular season. Lovely. They don't hang banners for that.`,
-              `The ${N(W)} weren't scared for one second. That tells you what the league really thought of the ${N(Lo)}.`,
+              `${N(W)} wasn't scared for one second. That tells you what the league really thought of ${N(Lo)}.`,
             ],
           ],
           dee: [
-            `The ${N(W)} just grew up in front of us`,
+            `${N(W)} just grew up in front of us`,
             `${PUNDITS.dee.name} on the upset of the ${round}.`,
             [`Nobody gave them a chance. I love a team nobody gave a chance.`, `Win one series like that and a young group never thinks the same way again. Watch out for them.`],
           ],
           marv: SILENT,
           lila: [
             `The ${ps.lowSeed} seed was better than its seed`,
-            `${PUNDITS.lila.name} on why the ${N(W)} over the ${N(Lo)} wasn't the shock it looks.`,
+            `${PUNDITS.lila.name} on why ${N(W)} over ${N(Lo)} wasn't the shock it looks.`,
             [
-              `Seeds are records. Records are schedules and injuries and close games. The ${N(W)} were healthier in April than their record.`,
+              `Seeds are records. Records are schedules and injuries and close games. ${N(W)} was healthier in April than its record.`,
               `It's an upset by the bracket. It was a coin flip by the numbers.`,
             ],
           ],
@@ -804,7 +804,7 @@ export function playoffTakes(league: League, m: MediaState, g: ScheduledGame) {
     // (whoever let a lead go is the one with everything to lose)
     const onIt = blownLead(wins, ps.high) ? ps.high : blownLead(wins, ps.low) ? ps.low : ps.high;
     const star = rosters(league)[onIt][0];
-    const S = star ? last(league, star) : `the ${N(onIt)}`;
+    const S = star ? last(league, star) : N(onIt);
     make(
       'g7',
       who(['rex', 'dee', 'marv', 'lila']),
@@ -832,7 +832,7 @@ export function playoffTakes(league: League, m: MediaState, g: ScheduledGame) {
         ],
         lila: [
           `Game 7 is closer to a coin flip than anyone will admit`,
-          `${PUNDITS.lila.name} on the ${N(ps.high)}, the ${N(ps.low)} and one game.`,
+          `${PUNDITS.lila.name} on ${N(ps.high)}, ${N(ps.low)} and one game.`,
           [
             `Home teams win most Game 7s. Most, not all, and the six games before it say these two are level.`,
             `Whoever loses will be called a choker by Thursday. They'll have lost a coin flip.`,
@@ -849,29 +849,29 @@ export function playoffTakes(league: League, m: MediaState, g: ScheduledGame) {
       who(['rex', 'dee', 'marv', 'lila']),
       {
         rex: [
-          `It's over for the ${N(F)}`,
+          `It's over for ${N(F)}`,
           `Down 0-2 at home in the ${round}. ${PUNDITS.rex.name} has seen enough.`,
           [`You lose two at home, you don't deserve the home court.`, `Eighty-two games to earn those two nights and they gave both away. Start the autopsy.`],
         ],
         dee: [
-          `The ${N(F)} aren't dead. They're embarrassed.`,
+          `${N(F)} isn't dead. They're embarrassed.`,
           `${PUNDITS.dee.name} on a ${ps.highSeed} seed down 0-2.`,
           [
             `A series doesn't start until somebody wins on the road. Well, somebody has. Twice.`,
-            `Embarrassed is useful. I'd take the ${N(F)} in Game 3, and then we'll see who's nervous.`,
+            `Embarrassed is useful. I'd take ${N(F)} in Game 3, and then we'll see who's nervous.`,
           ],
         ],
         marv: [
-          `The ${N(F)} got punched and didn't punch back`,
+          `${N(F)} got punched and didn't punch back`,
           `${PUNDITS.marv.name} on two home losses to open the ${round}.`,
-          [`The ${N(ps.low)} came in and took their lunch. Twice.`, `There's no adjustment for that. You either get mad or you get swept.`],
+          [`${N(ps.low)} came in and took their lunch. Twice.`, `There's no adjustment for that. You either get mad or you get swept.`],
         ],
         lila: [
-          `Down 0-2: how bad is it for the ${N(F)}?`,
+          `Down 0-2: how bad is it for ${N(F)}?`,
           `${PUNDITS.lila.name} has the history, and it isn't kind.`,
           [
             `Teams that lose the first two at home rarely come back. The ones that do are usually the better team having two bad nights.`,
-            `The ${N(F)} might be that. They have one game to show it.`,
+            `${N(F)} might be that. They have one game to show it.`,
           ],
         ],
       },
@@ -895,7 +895,7 @@ export function finalsTake(league: League, m: MediaState) {
   const v = new Voice(worldRng(league, 'title-take', league.season), m);
   const C = aw.champion;
   const R = aw.runnerUp;
-  const N = (tid: number) => nick(league, tid);
+  const N = (tid: number) => city(league, tid);
   const mvp = aw.finalsMvp !== undefined ? league.players[aw.finalsMvp] : rosters(league)[C][0];
   if (!mvp) return;
   const M = last(league, mvp);
@@ -907,18 +907,18 @@ export function finalsTake(league: League, m: MediaState) {
   const texts: Texts = {
     rex: [
       rings >= 3 ? `Put ${M} on the mountain` : rings === 1 ? `One ring doesn't make ${M} an all-timer` : `${M} has ${rings} now. Start the argument.`,
-      `The ${N(C)} are champions. ${PUNDITS.rex.name} is already arguing about what it means.`,
+      `${N(C)} won the title. ${PUNDITS.rex.name} is already arguing about what it means.`,
       rings >= 3
-        ? [`${rings} titles. I'm done with the debate. If you still have him outside your top handful, turn in your vote.`, `The ${N(R)} were good. They ran into history.`]
+        ? [`${rings} titles. I'm done with the debate. If you still have him outside your top handful, turn in your vote.`, `${N(R)} was good. They ran into history.`]
         : [
             `Congratulations. Truly. Now do it again.`,
             `One title is a great season. The names people remember did it over and over, with everybody coming for them.`,
-            loser ? `And ${last(league, loser)}? Another June, another long flight home. That's a legacy too.` : `The ${N(R)} will hear about this one for a while.`,
+            loser ? `And ${last(league, loser)}? Another June, another long flight home. That's a legacy too.` : `${N(R)} will hear about this one for a while.`,
           ],
     ],
     dee: [
       `${M} just changed how he'll be remembered`,
-      `${PUNDITS.dee.name} on the ${poss(N(C))} title and the player who carried it.`,
+      `${PUNDITS.dee.name} on ${poss(N(C))} title and the player who carried it.`,
       [
         `There's who you are before you win one and who you are after. Ask anybody who has.`,
         rings > 1
@@ -927,16 +927,16 @@ export function finalsTake(league: League, m: MediaState) {
       ],
     ],
     marv: [
-      `The ${N(C)} won it the hard way, and I approve`,
+      `${N(C)} won it the hard way, and I approve`,
       `${PUNDITS.marv.name} tips his cap. Briefly.`,
-      [`Four rounds. Two months. Nobody handed them a thing.`, `${M} took every hit the ${N(R)} had and kept coming. That's a champion in any decade, including mine.`],
+      [`Four rounds. Two months. Nobody handed them a thing.`, `${M} took every hit ${N(R)} had and kept coming. That's a champion in any decade, including mine.`],
     ],
     lila: [
       `The best team won. That's rarer than you'd think.`,
-      `${PUNDITS.lila.name} on the ${N(C)}${what ? `, ${what}` : ''}.`,
+      `${PUNDITS.lila.name} on ${N(C)}${what ? `, ${what}` : ''}.`,
       [
         `The playoffs are short enough that the best team often doesn't win. This time it did.`,
-        `${M} was the best player in the series, and the ${N(C)} were better in the minutes he sat too. That second part is what wins titles.`,
+        `${M} was the best player in the series, and ${N(C)} was better in the minutes he sat too. That second part is what wins titles.`,
       ],
     ],
   };
@@ -968,10 +968,10 @@ export function receipts(league: League, m: MediaState) {
     const best = graded.filter((g) => g.ok).sort((a, b) => (a.c.buy ? b.ts.won - a.ts.won : a.ts.won - b.ts.won))[0];
     const tell = (g: (typeof graded)[number]) => {
       tids.add(g.c.tid);
-      const N = nick(league, g.c.tid);
+      const N = city(league, g.c.tid);
       const how =
         g.ts.playoffRound >= 5 ? 'won the title' : g.ts.playoffRound >= 2 ? 'won a playoff round' : g.ts.playoffRound >= 1 ? 'went out in the first round' : 'missed the playoffs';
-      return `${g.c.buy ? 'bought' : 'sold'} the ${N} at ${g.c.rec}. They finished ${recOf(g.ts)} and ${how}.`;
+      return `${g.c.buy ? 'bought' : 'sold'} ${N} at ${g.c.rec}. They finished ${recOf(g.ts)} and ${how}.`;
     };
     const [they, their] = PUNDITS[by].they;
     const parts = [`${PUNDITS[by].name} went ${graded.filter((g) => g.ok).length} for ${graded.length}.`];

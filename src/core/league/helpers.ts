@@ -230,8 +230,19 @@ export function shortName(league: League, p: Player): string {
   return twin ? playerName(p) : p.lastName;
 }
 
+/** The full formal name, "Boston Shamrocks": for a team shown as an identity (pickers, headers, record rows). */
 export function teamName(t: Team) {
   return `${t.region} ${t.name}`;
+}
+
+/**
+ * The name copy calls a team by: its city ("Boston is 10-2"). Two teams in one city keep their
+ * nicknames to tell them apart: "LA Cutters" in Los Angeles, "<city> <nickname>" anywhere else.
+ */
+export function teamCity(league: Pick<League, 'teams'>, team: Pick<Team, 'tid' | 'region' | 'name'> | number): string {
+  const t = typeof team === 'number' ? league.teams[team] : team;
+  if (!league.teams.some((o) => o.tid !== t.tid && o.region === t.region)) return t.region;
+  return `${t.region === 'Los Angeles' ? 'LA' : t.region} ${t.name}`;
 }
 
 export function rosterSorted(league: League, tid: number): Player[] {

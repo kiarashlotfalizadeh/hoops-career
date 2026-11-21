@@ -25,7 +25,7 @@ import { chronicleOf } from '../../core/league/media/chronicle';
 import { franchiseTitles } from '../../core/league/media/past';
 import { reviewPath, seasonReviewOf } from '../../core/league/legacy';
 import { endText } from '../../core/league/legacyReview';
-import { fmtDate, seasonTotals } from '../../core/league/helpers';
+import { fmtDate, seasonTotals, teamCity } from '../../core/league/helpers';
 import { qualifies } from '../../core/league/records';
 import { Bracket, FinalsCard, seriesSlots } from '../league/PlayoffsTab';
 import { keepFigures } from '../../core/format';
@@ -104,7 +104,7 @@ function Seasons({ league }: { league: League }) {
           fig={titles > 1 ? titles : undefined}
           figLabel={titles > 1 ? titlesLabel : undefined}
         >
-          {last.runnerUp !== undefined ? `def. ${league.teams[last.runnerUp].name}` : ''}
+          {last.runnerUp !== undefined ? `def. ${teamCity(league, last.runnerUp)}` : ''}
           {name(last.finalsMvp) ? `${last.runnerUp !== undefined ? ' · ' : ''}Finals MVP ${name(last.finalsMvp)}` : ''}
         </TitleSlab>
       )}
@@ -117,7 +117,7 @@ function Seasons({ league }: { league: League }) {
           fig={franchiseTitles(league, reigning[1]).n > 1 ? franchiseTitles(league, reigning[1]).n : undefined}
           figLabel="titles"
         >
-          {reigning[2] >= 0 ? keepFigures(`def. ${league.teams[reigning[2]].name} ${reigning[3]}-${reigning[4]}`) : ''}
+          {reigning[2] >= 0 ? keepFigures(`def. ${teamCity(league, reigning[2])} ${reigning[3]}-${reigning[4]}`) : ''}
           {reigning[5] ? ` · Finals MVP ${reigning[5]}` : ''}
         </TitleSlab>
       )}
@@ -140,7 +140,7 @@ function Seasons({ league }: { league: League }) {
                 {champ ? <TeamLogo tid={champ.tid} size={34} decorative /> : <span className="lg-yr-none" />}
                 <span className="lg-yr-t">
                   <span className="nm ellipsis">
-                    {champ ? champ.name : a.season === league.season ? 'In progress' : 'No champion'}
+                    {champ ? teamCity(league, champ) : a.season === league.season ? 'In progress' : 'No champion'}
                     {champ && a.runnerUp !== undefined && (
                       <span className="dim">
                         {' '}
@@ -283,7 +283,7 @@ function SeasonPage({ league, season }: { league: League; season: number }) {
           fig={titles > 1 ? titles : undefined}
           figLabel={titles > 1 ? (league.past ? 'titles' : 'titles in this league') : undefined}
         >
-          {a.runnerUp !== undefined ? keepFigures(`def. ${league.teams[a.runnerUp].name}${score ? ` ${score}` : ''}`) : ''}
+          {a.runnerUp !== undefined ? keepFigures(`def. ${teamCity(league, a.runnerUp)}${score ? ` ${score}` : ''}`) : ''}
         </TitleSlab>
       ) : (
         <Poster over={seasonLabel(season)} head="No champion" />
@@ -348,7 +348,7 @@ function SeasonPage({ league, season }: { league: League; season: number }) {
             <TeamLogo tid={line.tid} size={30} decorative />
             <span className="grow">
               <span className="bold">
-                {line.won}-{line.lost} with the {league.teams[line.tid].name}
+                {line.won}-{line.lost} with {teamCity(league, line.tid)}
               </span>
               <span className="sub">{endText({ round: line.round ?? -1 })}</span>
             </span>

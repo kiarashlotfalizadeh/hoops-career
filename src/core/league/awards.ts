@@ -2,7 +2,7 @@ import type { League, Player, PlayerStats, SeasonAwards } from '../types';
 import { composites } from '../ratings';
 import { playerAge } from '../playerGen';
 import { clamp } from '../random';
-import { addInbox, addNews, andList, curTeamSeason, playerName, seasonTotals, winPct } from './helpers';
+import { addInbox, addNews, andList, curTeamSeason, playerName, seasonTotals, teamCity, winPct } from './helpers';
 import { seasonLabel } from '../constants';
 import { awardLine, awardPhrase } from './media/history';
 
@@ -271,7 +271,7 @@ function awardsStory(league: League, aw: SeasonAwards, coyAbbrev?: string) {
   const nm = (pid?: number) => (pid !== undefined ? playerName(league.players[pid]) : '—');
   const mvp = aw.mvp !== undefined ? league.players[aw.mvp] : undefined;
   const again = mvp ? awardLine(league, mvp, 'MVP', season) : null;
-  const team = (p: Player) => league.teams[p.tid]?.name;
+  const team = (p: Player) => (league.teams[p.tid] ? teamCity(league, p.tid) : undefined);
   const head = mvp ? (again ? `${playerName(mvp)} wins ${awardPhrase(again, 'MVP')}` : `${playerName(mvp)} is the MVP`) : `The ${seasonLabel(season)} awards`;
   const line = (label: string, type: string, pid?: number) => {
     const p = pid !== undefined ? league.players[pid] : undefined;

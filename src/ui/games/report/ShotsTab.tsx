@@ -8,6 +8,7 @@ import { TeamLogo } from '../../components/TeamLogo';
 import { ShotChart, ShotKey } from '../../components/charts';
 import { boardColors } from '../../components/FinalSlab';
 import { p1 } from '../../stats';
+import { teamCity } from '../../../core/league/helpers';
 
 const ZONES = [
   { k: 'At the rim', in: (z: string) => z === 'rim' },
@@ -38,7 +39,7 @@ export function ShotsTab({ g, league }: { g: GameResult; league: League }) {
               key={side}
               title={
                 <h3>
-                  <TeamLogo tid={t.tid} size={18} decorative /> {t.name}
+                  <TeamLogo tid={t.tid} size={18} decorative /> {teamCity(league, t)}
                 </h3>
               }
               right={<span className="small bold num">{keepFigures(madeAtt(made, mine.length))} FG</span>}

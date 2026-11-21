@@ -14,7 +14,7 @@ import { loadLeague, migrate, saveLeague } from '../../state/persistence';
 import { buildSimInput, ensureRotation, userGameOnDay } from '../league/games';
 import { advanceDay, simDay } from '../league/season';
 import { GAME_TIME_PERF, clearedToPlay, isQuestionable, setGameTime } from '../league/injuries';
-import { curTeamSeason, statsLine, teamPlayers } from '../league/helpers';
+import { curTeamSeason, statsLine, teamPlayers, teamCity } from '../league/helpers';
 import { setPlanMatchup } from '../league/gamePlans';
 import { createLeague, defaultSettings } from '../league/create';
 import { gameProjection, HOME_EDGE, matchupPreview, projectMargin, winChance } from '../analysis/preview';
@@ -167,7 +167,7 @@ describe('game day', () => {
         .map((k) => k + 1);
       const afterWin = afterWins.find((n) => !/streak/.test(routOn(n).head))!;
       const rout = routOn(afterWin);
-      expect(rout.head).toMatch(/rout|blow out|off the floor/);
+      expect(rout.head).toMatch(/rout|blows out|off the floor/);
 
       const routed = craft((l, g) => {
         plain(l, g, false);
@@ -301,11 +301,11 @@ describe('game day', () => {
       expect(missed.means).toContain('Lead the series 3-2');
       const cut = series([false, false, true]);
       expect(cut.head).toMatch(/2-1/);
-      expect(cut.head).not.toMatch(/lead over|go up/);
+      expect(cut.head).not.toMatch(/lead over|goes up/);
       expect(cut.means).toContain('Trail the series 2-1');
 
       const forced = series([true, false, false, true, false, true]);
-      expect(forced.head).toMatch(/force Game 7/);
+      expect(forced.head).toMatch(/forces Game 7/);
       expect(forced.means).toContain('Series tied 3-3');
       // (a story: the front page waits for Game 7 itself)
       expect(forced.weight).toBe(2);
@@ -741,14 +741,14 @@ describe('game day', () => {
       for (const p of [mine[2], theirs[2]]) p.draft = { ...p.draft, round: 1, pick: 1, year: 2020 };
       const stories = storylines(l, g);
       const text = stories.map((s) => s.text);
-      expect(text).toContain(`${traded.lastName} faces the ${l.teams[opp].name} for the first time since he left after ${seasonLabel(l.season - 1)}.`);
+      expect(text).toContain(`${traded.lastName} faces ${teamCity(l, opp)} for the first time since he left after ${seasonLabel(l.season - 1)}.`);
       // (by his full name when another player in the game shares his last name)
       expect(
         text.some((t) => [kid.lastName, `${kid.firstName} ${kid.lastName}`].some((n) => t === `${n} needs 6 points for 1,000 in his career. He averages 15.1 points a game.`)),
       ).toBe(true);
       // (a postseason night doesn't count toward a career's regular-season totals)
       expect(storylines(l, { ...g, type: 'playoffs' }).some((s) => s.kind === 'milestone')).toBe(false);
-      expect(text).toContain(`The ${l.teams[opp].name} have won 5 straight.`);
+      expect(text).toContain(`${teamCity(l, opp)} has won 5 straight.`);
       // (the best No. 1 pick on each side: there may be real ones)
       const picks = stories.find((s) => s.kind === 'picks')!;
       expect(picks.pids.map((pid) => l.players[pid].tid).sort()).toEqual([l.userTid, opp].sort());
@@ -790,8 +790,8 @@ describe('game day', () => {
       expect(quoteLines('wcomeback', { pts: 0, n: 0, them: '', mate: '' })).toContain(voice.text);
       expect([
         "We had control of that game and let it get away. That's on me.",
-        `Credit to the ${l.teams[l.userTid].name}: they kept coming, and we stopped doing what built the lead.`,
-        ...benchLines('ccollapse', { us: `the ${l.teams[l.userTid].name}`, star: '', pts: 0 }),
+        `Credit to ${teamCity(l, l.userTid)}: they kept coming, and we stopped doing what built the lead.`,
+        ...benchLines('ccollapse', { us: teamCity(l, l.userTid), star: '', pts: 0 }),
       ]).toContain(coach.text);
     }
 
@@ -969,7 +969,7 @@ describe('game day', () => {
       expect(s, key).not.toMatch(/\byou(r)?\b/i);
       expect(s, key).toMatch(/the Aces|the Bees/i);
     }
-    expect(impactSentence('drop_pop:o', 'the Knicks', 'the Celtics')).toBe("The Knicks' popping big punished the drop with open threes.");
+    expect(impactSentence('drop_pop:o', 'New York', 'Boston')).toBe("New York's popping big punished the drop with open threes.");
     expect(impactSentence('switch_slip:o', 'your team', 'the opposition')).toBe("Your team's screeners slipped the opposition's switches for rolls to the rim.");
   }, 120_000);
 

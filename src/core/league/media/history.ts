@@ -11,7 +11,7 @@
 import type { League, Player, ScheduledGame } from '../../types';
 import { seasonLabel } from '../../constants';
 import { ordinal } from '../../format';
-import { dayToDate } from '../helpers';
+import { dayToDate, teamCity } from '../helpers';
 import { REC_LABEL, REC_STATS, TEAM_REC_LABEL, TEAM_REC_STATS, gameMark, teamMark } from '../records';
 import { pastFinal, pastTitles } from './past';
 
@@ -141,19 +141,19 @@ export function meetings(league: League, a: number, b: number): Meeting[] {
 
 /**
  * Two teams' playoff history in a line, from `a`'s side: "a rematch of the 2029-30 conference
- * finals, which the Celtics won in six", "their third playoff meeting in four years". Null when
+ * finals, which Boston won in six", "their third playoff meeting in four years". Null when
  * they haven't met in the save.
  */
 export function rematchLine(league: League, a: number, b: number): string | null {
   const ms = meetings(league, a, b);
   if (!ms.length) return null;
   const [last] = ms;
-  const winner = league.teams[last.won ? a : b].name;
+  const winner = teamCity(league, last.won ? a : b);
   const games = last.w + last.l;
   const inN = games === 4 ? 'in a sweep' : `in ${countWord(games)}`;
   const recent = ms.filter((m) => m.season > last.season - 4);
   if (recent.length >= 3) return `their ${ordWord(recent.length + 1)} playoff meeting in ${countWord(league.season - recent.at(-1)!.season + 1)} years`;
-  return `a rematch of the ${seasonLabel(last.season)} ${ROUND_NAME[last.round] ?? 'playoffs'}, which the ${winner} won ${inN}`;
+  return `a rematch of the ${seasonLabel(last.season)} ${ROUND_NAME[last.round] ?? 'playoffs'}, which ${winner} won ${inN}`;
 }
 
 /** An anniversary of a night between two teams: how many years ago it was and the line that says it. */
@@ -191,15 +191,14 @@ export function anniversaryOf(league: League, g: Pick<ScheduledGame, 'home' | 'a
         for (const r of shelf.players[stat] ?? []) {
           const m = gameMark(league, r);
           if (!pair(m.tid, m.opp) || !ROUND_YEARS.has(season - m.season) || !sameDate(m.season, m.day, season, g.day)) continue;
-          return { years: season - m.season, line: `${when(m.season)}, ${m.name} had ${m.v} ${REC_LABEL[stat][1]} against the ${league.teams[m.opp].name}.` };
+          return { years: season - m.season, line: `${when(m.season)}, ${m.name} had ${m.v} ${REC_LABEL[stat][1]} against ${teamCity(league, m.opp)}.` };
         }
       for (const stat of TEAM_REC_STATS)
         for (const r of shelf.teams[stat] ?? []) {
           const m = teamMark(r);
           if (!pair(m.tid, m.opp) || !ROUND_YEARS.has(season - m.season) || !sameDate(m.season, m.day, season, g.day)) continue;
-          const what =
-            stat === 'margin' ? `beat the ${league.teams[m.opp].name} by ${m.v}` : `put up ${m.v} ${TEAM_REC_LABEL[stat].toLowerCase()} on the ${league.teams[m.opp].name}`;
-          return { years: season - m.season, line: `${when(m.season)}, the ${league.teams[m.tid].name} ${what}, ${m.score[0]}-${m.score[1]}.` };
+          const what = stat === 'margin' ? `beat ${teamCity(league, m.opp)} by ${m.v}` : `put up ${m.v} ${TEAM_REC_LABEL[stat].toLowerCase()} on ${teamCity(league, m.opp)}`;
+          return { years: season - m.season, line: `${when(m.season)}, ${teamCity(league, m.tid)} ${what}, ${m.score[0]}-${m.score[1]}.` };
         }
     }
   }

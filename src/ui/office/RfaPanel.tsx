@@ -7,7 +7,7 @@ import { FileSignature, PenLine, ShieldCheck } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { FREE_AGENT } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
-import { OFFSEASON_ROSTER_MAX, contractSeason, playerName, shortName } from '../../core/league/helpers';
+import { OFFSEASON_ROSTER_MAX, contractSeason, playerName, shortName, teamCity } from '../../core/league/helpers';
 import { askingContract, makeContract, summerRoster } from '../../core/league/contracts';
 import {
   MATCH_DAYS,
@@ -126,7 +126,7 @@ export function SheetDecision({ league, p }: { league: League; p: Player }) {
         {sheetTerms(league, p)}.
       </div>
       <div className="small">
-        Match by the end of {deadlineLabel(s.until)} to keep him on those terms. Matching takes a roster spot, not cap room. Let it go, and he joins the {t.name}.
+        Match by the end of {deadlineLabel(s.until)} to keep him on those terms. Matching takes a roster spot, not cap room. Let it go, and he joins {teamCity(league, t)}.
       </div>
       {blocked && <div className="small warn">{blocked}</div>}
       <div className="row fo-callout-btns">
@@ -163,7 +163,7 @@ export function LetGoSheet({ league, p, open, onClose }: { league: League; p: Pl
       {t && (
         <div className="col fo-sheet">
           <p className="fo-lede">
-            {playerName(p)} joins the {t.region} {t.name} at {sheetTerms(league, p)}. His cap hold comes off your books. This can&apos;t be undone.
+            {playerName(p)} joins {teamCity(league, t)} at {sheetTerms(league, p)}. His cap hold comes off your books. This can&apos;t be undone.
           </p>
           <div className="row">
             <button className="btn grow" onClick={onClose}>

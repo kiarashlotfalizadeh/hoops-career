@@ -5,7 +5,7 @@ import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { PencilLine, Ticket } from 'lucide-react';
 import type { League, Proposal } from '../../core/types';
-import { CAP_FOR, payroll, playerName } from '../../core/league/helpers';
+import { CAP_FOR, payroll, playerName, teamCity, teamName } from '../../core/league/helpers';
 import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
 import { declineProposal, markOffersSeen, openProposals, proposalError, proposalThird } from '../../core/league/proposals';
 import { agenda, type AgendaItem } from '../../core/league/agenda';
@@ -105,10 +105,10 @@ function OfferCard({
     third === null
       ? ''
       : n
-        ? `Three teams: the ${league.teams[third].name} take ${plural(n, 'piece')} from the ${t.name} so the salary works.`
-        : `Three teams: the ${league.teams[third].name} take salary from you so it works.`;
+        ? `Three teams: ${teamCity(league, third)} takes ${plural(n, 'piece')} from ${teamCity(league, t)} so the salary works.`
+        : `Three teams: ${teamCity(league, third)} takes salary from you so it works.`;
   return (
-    <section ref={ref} className={`card flush fo-offer ${focus ? 'focus' : ''}`} aria-label={`Offer from the ${t.region} ${t.name}`}>
+    <section ref={ref} className={`card flush fo-offer ${focus ? 'focus' : ''}`} aria-label={`Offer from the ${teamName(t)}`}>
       {item && !error ? (
         // (its own screen is this one: the row doesn't link)
         <AgendaRow item={{ ...item, to: undefined }} />

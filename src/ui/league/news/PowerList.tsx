@@ -8,6 +8,7 @@ import { TeamLogo } from '../../components/TeamLogo';
 import { keep } from '../../components/ui';
 import { teamPath } from '../shared';
 import './news.css';
+import { teamCity } from '../../../core/league/helpers';
 
 /** "▲ 3" in green, "▼ 2" in red, "–" for no move, "new" without last week's. */
 export function PowerMove({ r }: { r: PowerRow }) {
@@ -42,9 +43,9 @@ export function PowerList({ league, rows, blurbs = true }: { league: League; row
             <PowerMove r={r} />
             <TeamLogo tid={r.tid} size={28} decorative />
             <span className="lg-pw-t">
-              {/* the team's name, as the standings print it ("Thunder", never "Oklahoma City Thun…") */}
+              {/* the team's name, as the standings print it: its city ("Oklahoma City", never "Oklahoma City Twis…") */}
               <span className="lg-pw-name">
-                <span className="ellipsis">{t.name}</span>
+                <span className="ellipsis">{teamCity(league, t)}</span>
                 <span className="lg-pw-rec num">
                   {ts.won}-{ts.lost}
                 </span>

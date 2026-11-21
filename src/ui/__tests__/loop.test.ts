@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { League, ScheduledGame } from '../../core/types';
 import { billingFor, type Billing } from '../../core/analysis/gameStory';
-import { addNews, standardRoster } from '../../core/league/helpers';
+import { addNews, standardRoster, teamCity } from '../../core/league/helpers';
 import { userGameOnDay } from '../../core/league/games';
 import { runSim } from '../../state/simCore';
 import { newCall, openCallIds, settleCall, storeWorth, worthSig } from '../../core/league/calls';
@@ -313,7 +313,7 @@ describe('the Continue loop', () => {
       const l = testLeague('digest');
       const me = l.userTid;
       const mark = digestMark(l);
-      addNews(l, { kind: 'power', head: `Power rankings: the ${l.teams[me].name} slip to 16th`, text: '.', tids: [me], pids: [], weight: 2 });
+      addNews(l, { kind: 'power', head: `Power rankings: ${teamCity(l, me)} slips to 16th`, text: '.', tids: [me], pids: [], weight: 2 });
       addNews(l, { kind: 'honor', head: 'Coach of the Month', text: '.', tids: [me], pids: [], weight: 2 });
       // (a long stretch leads with its biggest story under the front page, its moment, told once)
       const d = buildDigest(mark, l, { long: true })!;
@@ -333,7 +333,7 @@ describe('the Continue loop', () => {
       const me = l.userTid;
       const other = (me + 1) % 30;
       l.day = 30;
-      addNews(l, { kind: 'column', head: `Season wrap: the ${l.teams[other].name}' year`, text: '.', tids: [other, me], pids: [], weight: 2 });
+      addNews(l, { kind: 'column', head: `Season wrap: ${teamCity(l, other)}'s year`, text: '.', tids: [other, me], pids: [], weight: 2 });
       const wrap = l.news.at(-1)!;
       expect([isHisStory(l, wrap), isLeagueStory(l, wrap)]).toEqual([false, true]);
       addNews(l, { kind: 'milestone', head: 'Old and big', text: '.', tids: [me], pids: [], weight: 3 });

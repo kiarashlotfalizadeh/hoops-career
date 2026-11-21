@@ -24,6 +24,7 @@ import {
   revenueScale,
   rosterMaxNow,
   standardRoster,
+  teamCity,
   teamPlayers,
   winPct,
 } from './helpers';
@@ -933,7 +934,7 @@ export function signPlayer(
     addNews(league, {
       kind: 'signing',
       // the total includes the yearly raises, as on the offer sheet
-      text: `${playerName(p)} ${verb} the ${team.region} ${team.name}: ${years} yr${years === 1 ? '' : 's'} / ${money(p.contract.salaries.reduce((a, x) => a + x, 0))}.`,
+      text: `${playerName(p)} ${verb} ${teamCity(league, team)}: ${years} yr${years === 1 ? '' : 's'} / ${money(p.contract.salaries.reduce((a, x) => a + x, 0))}.`,
       tids: [tid],
       pids: [p.pid],
     });
@@ -1088,7 +1089,7 @@ export function releasePlayer(league: League, p: Player, opts: { news?: boolean;
   p.asking = undefined;
   p.asking = askingContract(league, p);
   p.faDays = FA_PRICE_CUT_DAYS;
-  if (opts.news !== false) addNews(league, { kind: 'release', text: `The ${team.name} ${waive ? 'waived' : 'released'} ${playerName(p)}.`, tids: [tid], pids: [p.pid] });
+  if (opts.news !== false) addNews(league, { kind: 'release', text: `${teamCity(league, team)} ${waive ? 'waived' : 'released'} ${playerName(p)}.`, tids: [tid], pids: [p.pid] });
   // (a buyout logs itself)
   if ((opts.news !== false || tid === league.userTid) && opts.giveback === undefined && opts.log !== false)
     logMove(league, waive ? 'waive' : 'release', tid, p, { amount: dead.reduce((a, d) => a + d.amount, 0) || undefined, ...(spread ? { note: 'stretched', years: spread } : {}) });
@@ -1162,7 +1163,7 @@ function claimPlayer(league: League, p: Player, tid: number) {
   p.faDays = undefined;
   if (!team.rotation.order.includes(p.pid)) team.rotation.order.push(p.pid);
   numberTeam(league, tid);
-  addNews(league, { kind: 'signing', text: `The ${team.region} ${team.name} claimed ${playerName(p)} off waivers from the ${old.name}.`, tids: [tid, w.from], pids: [p.pid] });
+  addNews(league, { kind: 'signing', text: `${teamCity(league, team)} claimed ${playerName(p)} off waivers from ${teamCity(league, old)}.`, tids: [tid, w.from], pids: [p.pid] });
   logMove(league, 'claim', [tid, w.from], p, { amount: salaryFor(p, league.season), years: contractExp(p.contract) - league.season + 1 });
 }
 
@@ -1191,7 +1192,7 @@ export function resolveWaivers(league: League) {
         addInbox(league, {
           from: 'Assistant GM',
           subject: `${name} claimed off waivers`,
-          body: `The ${teamNameOf(league, claimer.tid)} claimed ${name} and took over his contract. The ${money(dead)} in dead money he left comes off our books.`,
+          body: `${teamCity(league, claimer.tid)} claimed ${name} and took over his contract. The ${money(dead)} in dead money he left comes off our books.`,
           tone: 'good',
           link: '/office',
         });
@@ -1199,7 +1200,7 @@ export function resolveWaivers(league: League) {
         addInbox(league, {
           from: 'Assistant GM',
           subject: `${name} claimed`,
-          body: `Our waiver claim on ${name} went through. His contract is ours: ${money(salaryFor(p, league.season))} this season, through ${seasonLabel(contractExp(p.contract))}. The ${league.teams[w.from].name} are off the hook for it.`,
+          body: `Our waiver claim on ${name} went through. His contract is ours: ${money(salaryFor(p, league.season))} this season, through ${seasonLabel(contractExp(p.contract))}. ${teamCity(league, w.from)} is off the hook for it.`,
           tone: 'good',
           link: `/player/${p.pid}`,
         });
@@ -1208,8 +1209,8 @@ export function resolveWaivers(league: League) {
           from: 'Assistant GM',
           subject: `${name} went elsewhere`,
           body: yourClaimFailed
-            ? `Our claim on ${name} fell through, and the ${teamNameOf(league, claimer.tid)} claimed him. ${yourClaimFailed}`
-            : `The ${teamNameOf(league, claimer.tid)} claimed ${name} ahead of us: worse records come first in the waiver order.`,
+            ? `Our claim on ${name} fell through, and ${teamCity(league, claimer.tid)} claimed him. ${yourClaimFailed}`
+            : `${teamCity(league, claimer.tid)} claimed ${name} ahead of us: worse records come first in the waiver order.`,
           tone: 'neutral',
           link: `/player/${p.pid}`,
         });
@@ -1229,8 +1230,6 @@ export function resolveWaivers(league: League) {
       });
   }
 }
-
-const teamNameOf = (league: League, tid: number) => `${league.teams[tid].region} ${league.teams[tid].name}`;
 
 /** Put in (or withdraw) the user's claim on a player on waivers; it is decided when he clears, in waiver order. */
 export function userClaim(league: League, pid: number, claim = true): { ok: boolean; reason: string } {
@@ -1284,7 +1283,7 @@ export function userBuyout(league: League, pid: number, stretch = false): { ok: 
   releasePlayer(league, p, { news: false, giveback: terms.giveback, stretch });
   addNews(league, {
     kind: 'release',
-    text: `The ${team.name} bought out ${playerName(p)}, who gave back ${money(terms.saved)}.`,
+    text: `${teamCity(league, team)} bought out ${playerName(p)}, who gave back ${money(terms.saved)}.`,
     tids: [team.tid],
     pids: [p.pid],
   });
@@ -1323,7 +1322,7 @@ export function aiBuyouts(league: League) {
     if (!vet || !new Rng(hashString(`${league.id}:${league.season}:${league.day}:buyout:${t.tid}`)).chance(t.strategy === 'rebuild' ? 0.5 : 0.33)) continue;
     const terms = buyoutTerms(league, vet)!;
     releasePlayer(league, vet, { news: false, giveback: terms.giveback });
-    addNews(league, { kind: 'release', text: `The ${t.name} bought out ${playerName(vet)}, who gave back ${money(terms.saved)}.`, tids: [t.tid], pids: [vet.pid] });
+    addNews(league, { kind: 'release', text: `${teamCity(league, t)} bought out ${playerName(vet)}, who gave back ${money(terms.saved)}.`, tids: [t.tid], pids: [vet.pid] });
     logMove(league, 'buyout', t.tid, vet, { amount: terms.saved });
     out.push(vet);
   }
@@ -1402,7 +1401,7 @@ export function convertTwoWay(league: League, pid: number): { ok: boolean; reaso
   p.contract = { start: s, salaries: Array.from({ length: exp - s + 1 }, (_, i) => min(s + i)), converted: true };
   // like a minimum signing, it doesn't count against the user's pending free-agent offers (see slackForBids)
   if (p.tid === league.userTid) for (const b of league.faBids ?? []) if (b.route === 'space' || isException(b.route)) b.slack = (b.slack ?? 0) + p.contract.salaries[0];
-  addNews(league, { kind: 'signing', text: `The ${league.teams[p.tid].name} converted ${playerName(p)} to a standard contract.`, tids: [p.tid], pids: [p.pid] });
+  addNews(league, { kind: 'signing', text: `${teamCity(league, p.tid)} converted ${playerName(p)} to a standard contract.`, tids: [p.tid], pids: [p.pid] });
   logMove(league, 'convert', p.tid, p, { amount: p.contract.salaries[0], years: p.contract.salaries.length });
   return { ok: true, reason: `${playerName(p)} now holds a standard roster spot.` };
 }
@@ -1630,7 +1629,7 @@ export function extendContract(league: League, p: Player, amount: number, years:
   const team = league.teams[p.tid];
   addNews(league, {
     kind: 'signing',
-    text: `${playerName(p)} signed a ${years}-year, ${money(p.contract.next.salaries.reduce((a, x) => a + x, 0))} extension with the ${team.region} ${team.name}.`,
+    text: `${playerName(p)} signed a ${years}-year, ${money(p.contract.next.salaries.reduce((a, x) => a + x, 0))} extension with ${teamCity(league, team)}.`,
     tids: [p.tid],
     pids: [p.pid],
   });

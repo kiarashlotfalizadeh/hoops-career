@@ -3,6 +3,7 @@
 // league reading (no React), shared by Today and the "While you were away" digest.
 import type { GameResult, League, NewsItem } from '../../core/types';
 import { gameStoryFor, type GameStory } from '../../core/analysis/gameStory';
+import { teamCity } from '../../core/league/helpers';
 
 /** A story's page in the News tab. */
 export const storyLink = (id: number) => `/league/news?story=${id}`;
@@ -18,14 +19,15 @@ export const headOf = (n: NewsItem) => n.head ?? n.text;
 
 /**
  * Whether a news item is about the user's team: it names it, and for the power rankings (which name
- * every week's leader and the user's team) its headline does too ("the Thunder lead again" isn't his);
+ * every week's leader and the user's team) its headline does too ("Oklahoma City leads again" isn't his);
  * so does a league-wide column that only mentions his team on the way (the season's wrap, the
  * surprises), one that doesn't lead with it.
  */
 function names(l: League, n: NewsItem): boolean {
   if (!n.tids.includes(l.userTid)) return false;
   const aside = n.kind === 'power' || (n.kind === 'column' && n.tids[0] !== l.userTid);
-  return !aside || headOf(n).includes(l.teams[l.userTid].name);
+  // (by its city, as the press writes it now; by its nickname, as older saves' headlines did)
+  return !aside || headOf(n).includes(teamCity(l, l.userTid)) || headOf(n).includes(l.teams[l.userTid].name);
 }
 
 /** A story about the user's team worth a place on Today or in the digest: one about it that is a story (or an honor, a milestone, a record). */

@@ -11,7 +11,7 @@
 
 import type { BoxLine, GameResult, League, NewsItem, PbpEntry, Player, ScheduledGame, Team, TeamBox } from '../types';
 import { worldRng } from '../league/world';
-import { addNews, andList, dateToDay, fmtDate, playerName } from '../league/helpers';
+import { addNews, andList, dateToDay, fmtDate, playerName, teamCity } from '../league/helpers';
 import { seasonLabel } from '../constants';
 import { an, madeAtt, ordinal, plural } from '../format';
 import { FRANCHISES } from '../teams';
@@ -52,7 +52,7 @@ const QUARTER = ['first quarter', 'second quarter', 'third quarter', 'fourth qua
 const periodWord = (i: number) => (i < 4 ? QUARTER[i] : i === 4 ? 'overtime' : `the ${ordinal(i - 3)} overtime`);
 const otWord = (ot: number) => (ot <= 1 ? 'overtime' : ot === 2 ? 'double overtime' : ot === 3 ? 'triple overtime' : `${ot} overtimes`);
 const confWord = (c: 'E' | 'W') => (c === 'E' ? 'East' : 'West');
-/** "Knicks'", "Heat's": a nickname's possessive. */
+/** "Boston's", "Dallas'": a name's possessive. */
 const poss = (name: string) => (name.endsWith('s') ? `${name}'` : `${name}'s`);
 const reb = (b: BoxLine) => b.orb + b.drb;
 const gameScore = (b: BoxLine) => b.pts + 0.4 * b.fgm - 0.7 * b.fga - 0.4 * (b.fta - b.ftm) + 0.7 * b.orb + 0.3 * b.drb + b.stl + 0.7 * b.ast + 0.7 * b.blk - 0.4 * b.pf - b.tov;
@@ -446,14 +446,15 @@ function rotate<T>(league: League, f: Facts, cat: string, list: T[]): T {
 
 /** The headline: from the biggest thing that happened, in that category's words. */
 function headline(league: League, f: Facts): { cat: string; head: string } {
-  const T = f.team.name;
-  const O = f.foe.name;
+  const T = teamCity(league, f.team);
+  const O = teamCity(league, f.foe);
   const hi = Math.max(f.us.pts, f.them.pts);
   const lo = Math.min(f.us.pts, f.them.pts);
   const score = `${hi}-${lo}`;
   const H = f.hero ? f.name(f.hero) : T;
   const S = f.star ? f.name(f.star) : O;
-  const city = f.home ? 'at home' : f.neutral ? 'in Las Vegas' : `in ${f.foe.region}`;
+  // (the opponent is named by its city: an away win reads "on the road", not "edges Toronto in Toronto")
+  const where = f.home ? 'at home' : f.neutral ? 'in Las Vegas' : 'on the road';
   const pick = (cat: string, list: string[]) => ({ cat, head: rotate(league, f, cat, list) });
   const s = f.series;
   const shot = (d: Decider) => (d.ft ? 'free throws' : d.three ? 'three' : 'shot');
@@ -461,44 +462,44 @@ function headline(league: League, f: Facts): { cat: string; head: string } {
   if (s) {
     const n = s.w + s.l;
     if (f.won) {
-      if (s.w === 4 && s.round === 4) return pick('s-title', [`${T} are champions`, `${T} win the title in ${n}`, `${T} finish off ${O} for the championship`]);
-      if (s.w === 4 && n === 7) return pick('s-g7w', [`${T} win Game 7, beat ${O}`, `Game 7 goes to the ${T}`, `${H} carries ${T} through Game 7`]);
-      if (s.w === 4) return pick('s-close', [`${T} close out ${O} in ${n}`, `${T} finish off ${O}, reach the ${s.next}`, `${T} past ${O} in ${n} games`]);
-      if (s.w === 3 && s.l === 3) return pick('s-force7', [`${T} force Game 7`, `${T} stay alive, force Game 7 against ${O}`]);
-      if (s.l === 3) return pick('s-alive', [`${T} stay alive, trail ${O} ${s.l}-${s.w}`, `${T} avoid elimination in Game ${n}`]);
-      if (s.w === 3) return pick('s-3', [`${T} take ${s.w}-${s.l} lead, one win from the ${s.next}`, `${T} move within a win of the ${s.next}`]);
-      if (s.w === s.l) return pick('s-even', [`${T} even the series with ${O} at ${s.w}-${s.l}`, `${T} level the ${s.label} at ${s.w}`]);
-      if (s.w > s.l) return pick('s-lead', [`${T} take ${s.w}-${s.l} lead over ${O}`, `${T} go up ${s.w}-${s.l} on ${O}`]);
-      return pick('s-cut', [`${T} win Game ${n}, cut ${poss(O)} lead to ${s.l}-${s.w}`, `${T} get one back on ${O}, trail ${s.l}-${s.w}`]);
+      if (s.w === 4 && s.round === 4) return pick('s-title', [`${T} wins it all`, `${T} wins the title in ${n}`, `${T} finishes off ${O} for the championship`]);
+      if (s.w === 4 && n === 7) return pick('s-g7w', [`${T} wins Game 7, beats ${O}`, `Game 7 goes to ${T}`, `${H} carries ${T} through Game 7`]);
+      if (s.w === 4) return pick('s-close', [`${T} closes out ${O} in ${n}`, `${T} finishes off ${O}, reaches the ${s.next}`, `${T} past ${O} in ${n} games`]);
+      if (s.w === 3 && s.l === 3) return pick('s-force7', [`${T} forces Game 7`, `${T} stays alive, forces Game 7 against ${O}`]);
+      if (s.l === 3) return pick('s-alive', [`${T} stays alive, trails ${O} ${s.l}-${s.w}`, `${T} avoids elimination in Game ${n}`]);
+      if (s.w === 3) return pick('s-3', [`${T} takes ${s.w}-${s.l} lead, one win from the ${s.next}`, `${T} moves within a win of the ${s.next}`]);
+      if (s.w === s.l) return pick('s-even', [`${T} evens the series with ${O} at ${s.w}-${s.l}`, `${T} levels the ${s.label} at ${s.w}`]);
+      if (s.w > s.l) return pick('s-lead', [`${T} takes ${s.w}-${s.l} lead over ${O}`, `${T} goes up ${s.w}-${s.l} on ${O}`]);
+      return pick('s-cut', [`${T} wins Game ${n}, cuts ${poss(O)} lead to ${s.l}-${s.w}`, `${T} gets one back on ${O}, trails ${s.l}-${s.w}`]);
     }
-    if (s.l === 4 && s.round === 4) return pick('s-titlel', [`${O} beat ${T} for the title`, `${T} fall short in the Finals`]);
-    if (s.l === 4 && n === 7) return pick('s-g7l', [`${T} lose Game 7 to ${O}`, `${poss(T)} season ends in Game 7`]);
-    if (s.l === 4) return pick('s-out', [`${O} end ${poss(T)} season`, `${T} eliminated by ${O} in ${n}`, `Season over: ${T} fall to ${O}`]);
-    if (s.l === 3 && s.w === 3) return pick('s-forced7', [`${O} force Game 7`, `${O} stay alive against ${T}`]);
-    if (s.l === 3) return pick('s-brink', [`${T} one loss from elimination`, `${O} take ${s.l}-${s.w} lead on ${T}`]);
-    if (s.w === s.l) return pick('s-evenl', [`${O} even the series at ${s.w}-${s.l}`, `${O} tie the ${s.label} at ${s.w}`]);
+    if (s.l === 4 && s.round === 4) return pick('s-titlel', [`${O} beats ${T} for the title`, `${T} falls short in the Finals`]);
+    if (s.l === 4 && n === 7) return pick('s-g7l', [`${T} loses Game 7 to ${O}`, `${poss(T)} season ends in Game 7`]);
+    if (s.l === 4) return pick('s-out', [`${O} ends ${poss(T)} season`, `${T} eliminated by ${O} in ${n}`, `Season over: ${T} falls to ${O}`]);
+    if (s.l === 3 && s.w === 3) return pick('s-forced7', [`${O} forces Game 7`, `${O} stays alive against ${T}`]);
+    if (s.l === 3) return pick('s-brink', [`${T} one loss from elimination`, `${O} takes ${s.l}-${s.w} lead on ${T}`]);
+    if (s.w === s.l) return pick('s-evenl', [`${O} evens the series at ${s.w}-${s.l}`, `${O} ties the ${s.label} at ${s.w}`]);
     // still ahead after a loss: a closeout missed, or a lead cut
-    if (s.w === 3) return pick('s-missed', [`${O} stay alive, cut ${poss(T)} lead to ${s.w}-${s.l}`, `${T} miss first chance to close out ${O}`]);
-    if (s.w > s.l) return pick('s-cutl', [`${O} win Game ${n}, trail ${T} ${s.w}-${s.l}`, `${O} get one back, ${T} lead ${s.w}-${s.l}`]);
-    return pick('s-trail', [`${O} take ${s.l}-${s.w} lead on ${T}`, `${T} fall behind ${s.w}-${s.l}`]);
+    if (s.w === 3) return pick('s-missed', [`${O} stays alive, cuts ${poss(T)} lead to ${s.w}-${s.l}`, `${T} misses first chance to close out ${O}`]);
+    if (s.w > s.l) return pick('s-cutl', [`${O} wins Game ${n}, trails ${T} ${s.w}-${s.l}`, `${O} gets one back, ${T} leads ${s.w}-${s.l}`]);
+    return pick('s-trail', [`${O} takes ${s.l}-${s.w} lead on ${T}`, `${T} falls behind ${s.w}-${s.l}`]);
   }
   if (f.playIn) {
     const id = f.playIn;
     if (f.won)
       return id.endsWith('-910')
-        ? pick('pi-910', [`${T} survive the play-in, play for the 8th seed`, `${T} beat ${O} to stay alive`])
-        : pick('pi-in', [`${T} are in: the ${id.endsWith('-78') ? '7th' : '8th'} seed`, `${T} beat ${O}, reach the playoffs`]);
+        ? pick('pi-910', [`${T} survives the play-in, plays for the 8th seed`, `${T} beats ${O} to stay alive`])
+        : pick('pi-in', [`${T} is in: the ${id.endsWith('-78') ? '7th' : '8th'} seed`, `${T} beats ${O}, reaches the playoffs`]);
     return id.endsWith('-78')
-      ? pick('pi-78l', [`${T} fall to ${O}, get one more chance`, `${O} take the 7th seed from ${T}`])
-      : pick('pi-out', [`${poss(T)} season ends in the play-in`, `${O} end ${poss(T)} season`]);
+      ? pick('pi-78l', [`${T} falls to ${O}, gets one more chance`, `${O} takes the 7th seed from ${T}`])
+      : pick('pi-out', [`${poss(T)} season ends in the play-in`, `${O} ends ${poss(T)} season`]);
   }
   if (f.res.cup && f.res.cup !== 'group') {
     const round = f.res.cup === 'final' ? 'final' : f.res.cup === 'sf' ? 'semifinal' : 'quarterfinal';
     if (f.won)
       return f.res.cup === 'final'
-        ? pick('cup-win', [`${T} win the In-Season Cup`, `${T} take the Cup, ${score} over ${O}`])
-        : pick('cup-adv', [`${T} beat ${O}, into the Cup ${f.res.cup === 'qf' ? 'semifinals' : 'final'}`, `${T} advance in the Cup with ${score} win`]);
-    return pick('cup-out', [`${O} knock ${T} out of the Cup`, `${poss(T)} Cup run ends in the ${round}`]);
+        ? pick('cup-win', [`${T} wins the In-Season Cup`, `${T} takes the Cup, ${score} over ${O}`])
+        : pick('cup-adv', [`${T} beats ${O}, into the Cup ${f.res.cup === 'qf' ? 'semifinals' : 'final'}`, `${T} advances in the Cup with ${score} win`]);
+    return pick('cup-out', [`${O} knocks ${T} out of the Cup`, `${poss(T)} Cup run ends in the ${round}`]);
   }
   // a record set tonight leads the story, a win or a loss (the night is remembered for it)
   const rc = f.record;
@@ -506,16 +507,16 @@ function headline(league: League, f: Facts): { cat: string; head: string } {
     const what = recordWhat({ stat: rc.stat, team: rc.team, v: rc.v });
     if (rc.team)
       return rc.scope === 'league'
-        ? pick('rec-lt', [`${T} set a league record: ${what}`, `A league record for ${T}: ${what} ${f.won ? `in a win over ${O}` : `in a loss to ${O}`}`])
-        : pick('rec-ft', [`${T} set a franchise record with ${what}`, `${what} for ${T}, a franchise record`]);
+        ? pick('rec-lt', [`${T} sets a league record: ${what}`, `A league record for ${T}: ${what} ${f.won ? `in a win over ${O}` : `in a loss to ${O}`}`])
+        : pick('rec-ft', [`${T} sets a franchise record with ${what}`, `${what} for ${T}, a franchise record`]);
     const W = f.name(rc.who!);
     if (rc.scope === 'league')
       return f.won
-        ? pick('rec-l', [`${W} sets a league record with ${what}`, `A league-record ${what} for ${W} as ${T} beat ${O}`, `${what}: ${W} sets a league record`])
+        ? pick('rec-l', [`${W} sets a league record with ${what}`, `A league-record ${what} for ${W} as ${T} beats ${O}`, `${what}: ${W} sets a league record`])
         : pick('rec-ll', [`${poss(W)} league-record ${what} not enough for ${T}`, `${W} sets a league record with ${what} in a loss to ${O}`]);
     return f.won
-      ? pick('rec-f', [`${poss(W)} ${rc.v} sets a ${T} record`, `A ${T} record: ${rc.v} for ${W}`, `${W} scores ${rc.v}, a ${T} record, as ${T} beat ${O}`])
-      : pick('rec-fl', [`${W} scores a ${T}-record ${rc.v} in a loss to ${O}`, `${poss(W)} ${T}-record ${rc.v} not enough against ${O}`]);
+      ? pick('rec-f', [`${poss(W)} ${rc.v} sets a franchise record`, `A franchise record: ${rc.v} for ${W}`, `${W} scores ${rc.v}, a franchise record, as ${T} beats ${O}`])
+      : pick('rec-fl', [`${W} scores a franchise-record ${rc.v} in a loss to ${O}`, `${poss(W)} franchise-record ${rc.v} not enough against ${O}`]);
   }
   const d = f.decider;
   if (d?.buzzer)
@@ -523,59 +524,59 @@ function headline(league: League, f: Facts): { cat: string; head: string } {
       ? pick(
           'buzz',
           d.who
-            ? [`${f.name(d.who)} beats the buzzer, ${T} stun ${O}`, `${f.name(d.who)} at the horn: ${T} ${score}`, `${poss(f.name(d.who))} buzzer-beater sinks ${O}`]
-            : [`${T} beat ${O} at the buzzer`],
+            ? [`${f.name(d.who)} beats the buzzer, ${T} stuns ${O}`, `${f.name(d.who)} at the horn: ${T} ${score}`, `${poss(f.name(d.who))} buzzer-beater sinks ${O}`]
+            : [`${T} beats ${O} at the buzzer`],
         )
-      : pick('buzzl', d.who ? [`${f.name(d.who)} beats the buzzer to sink ${T}`, `Heartbreak for ${T}: ${f.name(d.who)} at the horn`] : [`${O} beat ${T} at the buzzer`]);
+      : pick('buzzl', d.who ? [`${f.name(d.who)} beats the buzzer to sink ${T}`, `Heartbreak for ${T}: ${f.name(d.who)} at the horn`] : [`${O} beats ${T} at the buzzer`]);
   if (d && d.secs <= 12)
     return d.ours
       ? pick(
           'gw',
           d.who
             ? [`${poss(f.name(d.who))} late ${shot(d)} ${d.ft ? 'lift' : 'lifts'} ${T} past ${O}`, `${f.name(d.who)} wins it late for ${T}`]
-            : [`${T} edge ${O} ${score} at the finish`],
+            : [`${T} edges ${O} ${score} at the finish`],
         )
-      : pick('gwl', d.who ? [`${f.name(d.who)} wins it late for ${O}`, `${poss(f.name(d.who))} late ${shot(d)} beats ${T}`] : [`${O} edge ${T} at the finish`]);
+      : pick('gwl', d.who ? [`${f.name(d.who)} wins it late for ${O}`, `${poss(f.name(d.who))} late ${shot(d)} beats ${T}`] : [`${O} edges ${T} at the finish`]);
   if (f.won && f.comeback >= 15)
     return pick('comeback', [
-      `${T} erase ${f.comeback}-point deficit, beat ${O}`,
-      `From ${f.comeback} down, ${T} come back on ${O}`,
-      `${T} rally from ${f.comeback} down to beat ${O}`,
+      `${T} erases ${f.comeback}-point deficit, beats ${O}`,
+      `From ${f.comeback} down, ${T} comes back on ${O}`,
+      `${T} rallies from ${f.comeback} down to beat ${O}`,
     ]);
-  if (!f.won && f.blown >= 15) return pick('collapse', [`${T} blow ${f.blown}-point lead, fall to ${O}`, `${O} storm back from ${f.blown} down to beat ${T}`]);
+  if (!f.won && f.blown >= 15) return pick('collapse', [`${T} blows ${f.blown}-point lead, falls to ${O}`, `${O} storms back from ${f.blown} down to beat ${T}`]);
   if (f.res.ot)
     return f.won
-      ? pick('ot', [`${T} outlast ${O} in ${otWord(f.res.ot)}`, `${T} take ${O} in ${otWord(f.res.ot)}, ${score}`, `${H} carries ${T} through ${otWord(f.res.ot)}`])
-      : pick('otl', [`${T} fall to ${O} in ${otWord(f.res.ot)}`, `${O} outlast ${T} in ${otWord(f.res.ot)}`]);
+      ? pick('ot', [`${T} outlasts ${O} in ${otWord(f.res.ot)}`, `${T} takes ${O} in ${otWord(f.res.ot)}, ${score}`, `${H} carries ${T} through ${otWord(f.res.ot)}`])
+      : pick('otl', [`${T} falls to ${O} in ${otWord(f.res.ot)}`, `${O} outlasts ${T} in ${otWord(f.res.ot)}`]);
   if (f.won && f.hero && f.high === 'career' && f.hero.pts >= 30)
     return pick('high', [`${H} career-high ${f.hero.pts} powers ${T} past ${O}`, `Career night: ${H} scores ${f.hero.pts} in ${T} win`]);
   if (f.won && f.hero && f.hero.pts >= 40)
-    return pick('forty', [`${poss(H)} ${f.hero.pts} sinks ${O}`, `${H} scores ${f.hero.pts} as ${T} beat ${O}`, `${f.hero.pts} for ${H}, a win for ${T}`]);
-  if (!f.won && f.hero && f.hero.pts >= 50) return pick('fifty-l', [`${poss(H)} ${f.hero.pts} not enough for ${T}`, `${H} scores ${f.hero.pts}, but ${T} fall to ${O}`]);
-  if (!f.won && f.star && f.star.pts >= 40) return pick('forty-l', [`${poss(S)} ${f.star.pts} too much for ${T}`, `${S} scores ${f.star.pts}, ${O} beat ${T}`]);
-  if (f.won && f.firstWin) return pick('first', [`First win for the new coach as ${T} beat ${O}`, `${T} beat ${O} for their new coach's first win`]);
+    return pick('forty', [`${poss(H)} ${f.hero.pts} sinks ${O}`, `${H} scores ${f.hero.pts} as ${T} beats ${O}`, `${f.hero.pts} for ${H}, a win for ${T}`]);
+  if (!f.won && f.hero && f.hero.pts >= 50) return pick('fifty-l', [`${poss(H)} ${f.hero.pts} not enough for ${T}`, `${H} scores ${f.hero.pts}, but ${T} falls to ${O}`]);
+  if (!f.won && f.star && f.star.pts >= 40) return pick('forty-l', [`${poss(S)} ${f.star.pts} too much for ${T}`, `${S} scores ${f.star.pts}, ${O} beats ${T}`]);
+  if (f.won && f.firstWin) return pick('first', [`First win for the new coach as ${T} beats ${O}`, `${T} beats ${O} for its new coach's first win`]);
   if (f.streak.after >= 4)
-    return pick('streak', [`${T} make it ${f.streak.after} straight`, `${f.streak.after} in a row for ${T}`, `${T} win ${ordinal(f.streak.after)} straight, beat ${O}`]);
-  if (f.won && f.streak.before <= -3) return pick('skid-end', [`${T} end ${-f.streak.before}-game skid`, `${T} snap ${-f.streak.before}-game losing streak against ${O}`]);
-  if (f.won && f.theirStreak >= 5) return pick('their-end', [`${T} end ${poss(O)} ${f.theirStreak}-game win streak`, `${T} stop ${O} after ${f.theirStreak} straight wins`]);
+    return pick('streak', [`${T} makes it ${f.streak.after} straight`, `${f.streak.after} in a row for ${T}`, `${T} wins ${ordinal(f.streak.after)} straight, beats ${O}`]);
+  if (f.won && f.streak.before <= -3) return pick('skid-end', [`${T} ends ${-f.streak.before}-game skid`, `${T} snaps ${-f.streak.before}-game losing streak against ${O}`]);
+  if (f.won && f.theirStreak >= 5) return pick('their-end', [`${T} ends ${poss(O)} ${f.theirStreak}-game win streak`, `${T} stops ${O} after ${f.theirStreak} straight wins`]);
   if (f.streak.after <= -4)
-    return pick('skid', [`${T} drop ${ordinal(-f.streak.after)} straight`, `Losing streak hits ${-f.streak.after} for ${T}`, `${T} skid reaches ${-f.streak.after}`]);
-  if (!f.won && f.streak.before >= 4) return pick('streak-end', [`${O} snap ${poss(T)} ${f.streak.before}-game win streak`, `${poss(T)} streak ends at ${f.streak.before}`]);
+    return pick('skid', [`${T} drops ${ordinal(-f.streak.after)} straight`, `Losing streak hits ${-f.streak.after} for ${T}`, `${T} skid reaches ${-f.streak.after}`]);
+  if (!f.won && f.streak.before >= 4) return pick('streak-end', [`${O} snaps ${poss(T)} ${f.streak.before}-game win streak`, `${poss(T)} streak ends at ${f.streak.before}`]);
   if (f.won && f.chance !== undefined && f.chance < 0.3)
-    return pick('upset', [`${T} stun ${O}`, `${T} upset the ${f.theirRec[0]}-${f.theirRec[1]} ${O}`, `Underdog ${T} beat ${O} ${city}`]);
-  if (!f.won && f.chance !== undefined && f.chance > 0.75) return pick('upset-l', [`${O} stun ${T}`, `${T} upset by ${O}`]);
-  if (f.won && f.margin >= 25) return pick('rout', [`${T} rout ${O} by ${f.margin}`, `${T} blow out ${O}, ${score}`, `${T} run ${O} off the floor`]);
-  if (!f.won && f.margin >= 20) return pick('routl', [`${O} rout ${T}, ${score}`, `${T} routed by ${O}`]);
+    return pick('upset', [`${T} stuns ${O}`, `${T} upsets ${f.theirRec[0]}-${f.theirRec[1]} ${O}`, `Underdog ${T} beats ${O} ${where}`]);
+  if (!f.won && f.chance !== undefined && f.chance > 0.75) return pick('upset-l', [`${O} stuns ${T}`, `${T} upset by ${O}`]);
+  if (f.won && f.margin >= 25) return pick('rout', [`${T} routs ${O} by ${f.margin}`, `${T} blows out ${O}, ${score}`, `${T} runs ${O} off the floor`]);
+  if (!f.won && f.margin >= 20) return pick('routl', [`${O} routs ${T}, ${score}`, `${T} routed by ${O}`]);
   if (f.won && f.hero && f.hero.pts >= 30 && tripleDouble(f.hero)) return pick('tdbl', [`${poss(H)} triple-double leads ${T} past ${O}`]);
-  if (f.won && f.opening) return pick('open', [`${T} open the season with a win over ${O}`, `${T} win on opening night, ${score}`]);
-  if (f.won && f.christmas) return pick('xmas', [`${T} take Christmas from ${O}`, `A Christmas win for ${T} over ${O}`]);
+  if (f.won && f.opening) return pick('open', [`${T} opens the season with a win over ${O}`, `${T} wins on opening night, ${score}`]);
+  if (f.won && f.christmas) return pick('xmas', [`${T} takes Christmas from ${O}`, `A Christmas win for ${T} over ${O}`]);
   if (f.won)
     return f.margin <= 5
-      ? pick('close', [`${T} hold off ${O}, ${score}`, `${T} edge ${O} ${city}`, `${H} helps ${T} hold off ${O}`])
-      : pick('win', [`${T} beat ${O} ${score}`, `${H} leads ${T} past ${O}`, `${T} handle ${O} ${city}`, `${T} top ${O} behind ${H}`]);
+      ? pick('close', [`${T} holds off ${O}, ${score}`, `${T} edges ${O} ${where}`, `${H} helps ${T} hold off ${O}`])
+      : pick('win', [`${T} beats ${O} ${score}`, `${H} leads ${T} past ${O}`, `${T} handles ${O} ${where}`, `${T} tops ${O} behind ${H}`]);
   return f.margin <= 5
-    ? pick('closel', [`${O} hold off ${T}, ${score}`, `${T} come up short against ${O}`, `${O} edge ${T} ${city}`])
-    : pick('loss', [`${T} fall to ${O} ${score}`, `${O} beat ${T}`, `${T} drop one to ${O}`, `${S} leads ${O} past ${T}`]);
+    ? pick('closel', [`${O} holds off ${T}, ${score}`, `${T} comes up short against ${O}`, `${O} edges ${T} ${where}`])
+    : pick('loss', [`${T} falls to ${O} ${score}`, `${O} beats ${T}`, `${T} drops one to ${O}`, `${S} leads ${O} past ${T}`]);
 }
 
 // ---------------------------------------------------------------- the dek, the means, the body
@@ -621,6 +622,8 @@ function tiedOnCall(f: Facts): string | undefined {
 
 function dekOf(league: League, f: Facts, cat: string): string {
   const rng = worldRng(league, 'story-dek', f.res.gid);
+  const T = teamCity(league, f.team);
+  const O = teamCity(league, f.foe);
   const out: string[] = [];
   // the record its headline leads with: what it beat
   if (cat.startsWith('rec-') && f.record) {
@@ -629,9 +632,7 @@ function dekOf(league: League, f: Facts, cat: string): string {
     const since = league.records ? seasonLabel(bookFrom(league.records)) : '';
     const most = rc.team ? (rc.stat === 'margin' ? 'the biggest win' : `the most ${rc.stat === 'pts' ? 'points' : 'threes'}`) : `the most ${REC_LABEL[rc.stat as RecStat][1]}`;
     const where =
-      rc.scope === 'league'
-        ? `in a game ${recordReach(league, { book: 'reg', stat: rc.stat, team: rc.team, v: rc.v }, f.res.season)}`
-        : `in a game for the ${f.team.name} since ${since}`;
+      rc.scope === 'league' ? `in a game ${recordReach(league, { book: 'reg', stat: rc.stat, team: rc.team, v: rc.v }, f.res.season)}` : `in a game for ${T} since ${since}`;
     const prev =
       rc.prev && rc.prev.v < rc.v ? ` The old mark was ${rc.prev.v}, by ${rc.prev.name}${rc.prev.season !== f.res.season ? ` in ${seasonLabel(rc.prev.season)}` : ''}.` : '';
     out.push(rc.who ? `${f.full(rc.who)} had ${nightWords(rc.who)}: ${most} ${where}.${prev}` : `${most.replace(/^./, (c) => c.toUpperCase())} ${where}.`);
@@ -645,7 +646,7 @@ function dekOf(league: League, f: Facts, cat: string): string {
     out.push(
       f.won
         ? rng.pick([`${n} had ${nightWords(h)}${high}.`, `${n} scored ${h.pts} on ${fg}${high}.`, `${n} led the way with ${nightWords(h)}.`])
-        : rng.pick([`${n} had ${nightWords(h)} for the ${f.team.name}.`, `${n} scored ${h.pts} in the loss.`]),
+        : rng.pick([`${n} had ${nightWords(h)} for ${T}.`, `${n} scored ${h.pts} in the loss.`]),
     );
   }
   const d = f.decider;
@@ -655,10 +656,10 @@ function dekOf(league: League, f: Facts, cat: string): string {
   const tie = tiedOnCall(f);
   if (d && d.who && (d.secs <= 12 || onIt))
     out.push(
-      `${f.name(d.who)} put ${d.ours ? 'them' : 'the ' + f.foe.name} ahead with ${d.buzzer ? 'no time' : plural(Math.max(1, Math.round(d.secs)), 'second')} left${onIt ? `, ${onCall(f, d.who)}` : ''}.`,
+      `${f.name(d.who)} put ${d.ours ? 'them' : O} ahead with ${d.buzzer ? 'no time' : plural(Math.max(1, Math.round(d.secs)), 'second')} left${onIt ? `, ${onCall(f, d.who)}` : ''}.`,
     );
   else if (tie) out.push(tie);
-  else if (f.won && f.comeback >= 12) out.push(`The ${f.team.name} trailed by ${f.comeback} ${venue(f)}.`);
+  else if (f.won && f.comeback >= 12) out.push(`${T} trailed by ${f.comeback} ${venue(f)}.`);
   else if (!f.won && f.blown >= 12) out.push(`They led by ${f.blown}.`);
   else if (s)
     out.push(
@@ -669,8 +670,8 @@ function dekOf(league: League, f: Facts, cat: string): string {
   else if (f.opening) out.push(`Opening night ${venue(f)}.`);
   else if (f.christmas) out.push(`Christmas Day ${venue(f)}.`);
   else if (f.won && f.streak.after >= 3 && cat !== 'streak') out.push(`Their ${ordinal(f.streak.after)} straight win, ${venue(f)}.`);
-  else if (f.star && !f.won && f.star.pts >= 20 && !cat.startsWith('forty')) out.push(`${f.full(f.star)} had ${f.star.pts} for the ${f.foe.name}.`);
-  else if (f.turn) out.push(f.won ? `They won the ${periodWord(f.turn.i)} ${f.turn.w}-${f.turn.l}.` : `The ${f.foe.name} won the ${periodWord(f.turn.i)} ${f.turn.w}-${f.turn.l}.`);
+  else if (f.star && !f.won && f.star.pts >= 20 && !cat.startsWith('forty')) out.push(`${f.full(f.star)} had ${f.star.pts} for ${O}.`);
+  else if (f.turn) out.push(f.won ? `They won the ${periodWord(f.turn.i)} ${f.turn.w}-${f.turn.l}.` : `${O} won the ${periodWord(f.turn.i)} ${f.turn.w}-${f.turn.l}.`);
   return out.join(' ');
 }
 
@@ -743,8 +744,8 @@ function meansOf(league: League, f: Facts): string[] {
 
 function bodyOf(league: League, f: Facts, means: string[]): string {
   const rng = worldRng(league, 'story-body', f.res.gid);
-  const T = f.team.name;
-  const O = `${f.foe.region} ${f.foe.name}`;
+  const T = teamCity(league, f.team);
+  const O = teamCity(league, f.foe);
   const hi = Math.max(f.us.pts, f.them.pts);
   const lo = Math.min(f.us.pts, f.them.pts);
   const ot = f.res.ot ? ` in ${otWord(f.res.ot)}` : '';
@@ -752,13 +753,11 @@ function bodyOf(league: League, f: Facts, means: string[]): string {
   const paras: string[] = [];
   // the lede: the result, where, and how it went
   const lede = f.won
-    ? rng.pick([`The ${T} beat the ${O} ${hi}-${lo}${ot} ${venue(f)}${when}.`, `The ${T} won ${hi}-${lo}${ot} over the ${O} ${venue(f)}${when}.`])
-    : rng.pick([`The ${T} lost ${hi}-${lo}${ot} to the ${O} ${venue(f)}${when}.`, `The ${O} beat the ${T} ${hi}-${lo}${ot} ${venue(f)}${when}.`]);
+    ? rng.pick([`${T} beat ${O} ${hi}-${lo}${ot} ${venue(f)}${when}.`, `${T} won ${hi}-${lo}${ot} over ${O} ${venue(f)}${when}.`])
+    : rng.pick([`${T} lost ${hi}-${lo}${ot} to ${O} ${venue(f)}${when}.`, `${O} beat ${T} ${hi}-${lo}${ot} ${venue(f)}${when}.`]);
   const how: string[] = [];
   if (f.turn && f.margin >= 8)
-    how.push(
-      f.won ? `They won the ${periodWord(f.turn.i)} ${f.turn.w}-${f.turn.l} and were not caught.` : `The ${f.foe.name} took the ${periodWord(f.turn.i)} ${f.turn.w}-${f.turn.l}.`,
-    );
+    how.push(f.won ? `They won the ${periodWord(f.turn.i)} ${f.turn.w}-${f.turn.l} and were not caught.` : `${O} took the ${periodWord(f.turn.i)} ${f.turn.w}-${f.turn.l}.`);
   else if (f.margin <= 5 && !f.decider) how.push(rng.pick(['It was close to the end.', 'Neither side pulled away.']));
   paras.push([lede, ...how].join(' '));
   // the hero, the help and their best
@@ -768,10 +767,10 @@ function bodyOf(league: League, f: Facts, means: string[]): string {
     const lines = [
       f.won
         ? `${f.full(h)} led them with ${plural(h.pts, 'point')}${high} on ${madeAtt(h.fgm, h.fga)} shooting. He had ${plural(reb(h), 'rebound')} and ${plural(h.ast, 'assist')}.`
-        : `${f.full(h)} had ${nightWords(h)} for the ${T}.`,
+        : `${f.full(h)} had ${nightWords(h)} for ${T}.`,
     ];
     if (f.second && f.second.pts >= 12) lines.push(`${f.name(f.second)} added ${f.second.pts}.`);
-    if (f.star && f.star.pts >= 20) lines.push(`${f.full(f.star)} scored ${f.star.pts} for the ${f.foe.name}.`);
+    if (f.star && f.star.pts >= 20) lines.push(`${f.full(f.star)} scored ${f.star.pts} for ${O}.`);
     paras.push(lines.join(' '));
   }
   // the turning point: the shot that won it, the comeback, the collapse or the run
@@ -780,19 +779,19 @@ function bodyOf(league: League, f: Facts, means: string[]): string {
   const tie = tiedOnCall(f);
   if (tie) turn.push(tie);
   if (d) {
-    const who = d.who ? f.full(d.who) : d.ours ? `The ${T}` : `The ${f.foe.name}`;
+    const who = d.who ? f.full(d.who) : d.ours ? T : O;
     const what = d.ft ? 'free throws' : d.three ? 'a three' : 'a basket';
     const call = d.ours && f.called?.how === 'won' ? `, ${onCall(f, d.who)}` : '';
     turn.push(`${who} won it with ${what} ${d.buzzer ? 'at the buzzer' : `with ${plural(Math.max(1, Math.round(d.secs)), 'second')} left`}${call}.`);
   }
-  if (f.won && f.comeback >= 10) turn.push(`The ${T} came back from ${f.comeback} points down.`);
-  if (!f.won && f.blown >= 10) turn.push(`The ${T} had led by ${f.blown}.`);
-  if (f.run && !d) turn.push(`${f.run.ours ? `The ${T}` : `The ${f.foe.name}`} put it away with a ${f.run.pts}-0 run in the ${periodWord(f.run.q - 1)}.`);
+  if (f.won && f.comeback >= 10) turn.push(`${T} came back from ${f.comeback} points down.`);
+  if (!f.won && f.blown >= 10) turn.push(`${T} had led by ${f.blown}.`);
+  if (f.run && !d) turn.push(`${f.run.ours ? T : O} put it away with a ${f.run.pts}-0 run in the ${periodWord(f.run.q - 1)}.`);
   if (turn.length) paras.push(turn.join(' '));
   // what it means
   const reg = f.res.type === 'regular';
   const mean: string[] = [];
-  if (reg) mean.push(`The ${T} are ${f.rec[0]}-${f.rec[1]}.`);
+  if (reg) mean.push(`${T} is ${f.rec[0]}-${f.rec[1]}.`);
   if (means.length) mean.push(`${means.map((m) => m.charAt(0).toUpperCase() + m.slice(1)).join('. ')}.`);
   // the next game, for the latest one
   const latest = league.games.filter((g) => g.home.tid === f.tid || g.away.tid === f.tid).at(-1)?.gid === f.res.gid;
@@ -801,10 +800,8 @@ function bodyOf(league: League, f: Facts, means: string[]): string {
       .filter((g) => !g.played && g.type !== 'allstar' && g.day > f.res.day && (g.home === f.tid || g.away === f.tid))
       .sort((a, b) => a.day - b.day || a.gid - b.gid)[0];
     if (next) {
-      const opp = league.teams[next.home === f.tid ? next.away : next.home];
-      mean.push(
-        `Next: ${next.home === f.tid ? 'home to' : 'at'} the ${opp.region} ${opp.name}, ${fmtDate(league.season, next.day, { weekday: 'short', month: 'short', day: 'numeric' })}.`,
-      );
+      const opp = teamCity(league, next.home === f.tid ? next.away : next.home);
+      mean.push(`Next: ${next.home === f.tid ? 'home to' : 'at'} ${opp}, ${fmtDate(league.season, next.day, { weekday: 'short', month: 'short', day: 'numeric' })}.`);
     }
   }
   if (mean.length) paras.push(mean.join(' '));
@@ -1079,7 +1076,7 @@ function rivalry0(league: League, a: number, b: number): Rivalry {
           ? aWon
             ? `You knocked them out of last season's ${sn.label}, ${tally}`
             : `They knocked you out of last season's ${sn.label}, ${tally}`
-          : `${aWon ? ta.name : tb.name} won last season's ${sn.label}, ${tally}`,
+          : `${teamCity(league, aWon ? ta : tb)} won last season's ${sn.label}, ${tally}`,
         w: 5,
       });
     }
@@ -1090,7 +1087,7 @@ function rivalry0(league: League, a: number, b: number): Rivalry {
     heat += real.heat + (real.tally.endsWith('3') ? 0.5 : 0);
     playoff = true;
     const [w, l] = real.winner === ta.abbrev ? [ta, tb] : [tb, ta];
-    reasons.push({ text: `The ${w.name} beat the ${l.name} in the ${real.season + 1} ${real.label}, ${real.tally}`, w: 4 });
+    reasons.push({ text: `${teamCity(league, w)} beat ${teamCity(league, l)} in the ${real.season + 1} ${real.label}, ${real.tally}`, w: 4 });
   }
   // older playoff series, from the league's memory (the chronicle keeps every one): a little less each year back
   for (const m of meetings(league, a, b)) {
@@ -1099,7 +1096,7 @@ function rivalry0(league: League, a: number, b: number): Rivalry {
     heat += ago === 2 ? 2 : ago === 3 ? 1.5 : 1;
     playoff = true;
     const sn = ['', 'first round', 'second round', 'conference finals', 'Finals'][m.round] ?? 'playoffs';
-    reasons.push({ text: `${m.won ? ta.name : tb.name} won the ${seasonLabel(m.season)} ${sn}, ${Math.max(m.w, m.l)}-${Math.min(m.w, m.l)}`, w: 4 - ago / 5 });
+    reasons.push({ text: `${teamCity(league, m.won ? ta : tb)} won the ${seasonLabel(m.season)} ${sn}, ${Math.max(m.w, m.l)}-${Math.min(m.w, m.l)}`, w: 4 - ago / 5 });
   }
   for (const s of league.playoffs) {
     if (!([s.high, s.low].includes(a) && [s.high, s.low].includes(b)) || s.winner === undefined) continue;
@@ -1107,7 +1104,7 @@ function rivalry0(league: League, a: number, b: number): Rivalry {
     heat += 3;
     playoff = true;
     const tally = `${Math.max(s.highWins, s.lowWins)}-${Math.min(s.highWins, s.lowWins)}`;
-    reasons.push({ text: `${s.winner === a ? ta.name : tb.name} won this season's ${sn?.label ?? 'series'}, ${tally}`, w: 5 });
+    reasons.push({ text: `${teamCity(league, s.winner === a ? ta : tb)} won this season's ${sn?.label ?? 'series'}, ${tally}`, w: 5 });
   }
   // close games: within five points or to overtime, in the meetings on record
   let close = 0;
@@ -1256,7 +1253,7 @@ export function billingsFor(league: League, g: ScheduledGame, tid = league.userT
       if (old?.to && league.season - old.to.season <= 2 && coach?.stints.at(-1)?.tid === tid) {
         const left = old.to.season;
         const met = league.games.some((r) => r.season >= left && [r.home.tid, r.away.tid].includes(opp) && [r.home.tid, r.away.tid].includes(tid));
-        if (!met) add({ tag: 'Old team', line: `Your first game against the ${them.name} since you left them`, weight: 2 }, 6);
+        if (!met) add({ tag: 'Old team', line: `Your first game against ${teamCity(league, them)} since you left them`, weight: 2 }, 6);
       }
     }
     // a night these two remember on this date, a round number of years ago
@@ -1271,7 +1268,7 @@ export function billingsFor(league: League, g: ScheduledGame, tid = league.userT
       const theirs = them.seasons.find((s) => s.season === league.season)?.streak ?? 0;
       if (streak >= 5) add({ tag: 'Streak on the line', line: `${plural(streak, 'win')} in a row`, weight: streak >= 8 ? 2 : 1 }, 8);
       else if (streak <= -5) add({ tag: 'Snap the skid', line: `${plural(-streak, 'loss', 'losses')} in a row`, weight: 1 }, 14);
-      if (theirs >= 7) add({ tag: `${them.name} rolling`, line: `They have won ${theirs} straight`, weight: 2 }, 10);
+      if (theirs >= 7) add({ tag: `${teamCity(league, them)} rolling`, line: `They have won ${theirs} straight`, weight: 2 }, 10);
       const sh = showdown(league, tid, opp, g);
       if (sh) add(sh, 9);
     }

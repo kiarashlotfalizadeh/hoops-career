@@ -15,6 +15,7 @@ import { gameTime, plural } from '../../core/format';
 import type { League, PbpEntry } from '../../core/types';
 import type { GameSim } from '../../core/sim/engine';
 import { neutralSite } from '../../core/league/games';
+import { teamCity } from '../../core/league/helpers';
 import { FRANCHISES } from '../../core/teams';
 import type { PossLog } from '../../core/sim/log';
 import { playTypeBaselines } from '../../core/analysis/playTypes';
@@ -58,7 +59,7 @@ function atmoCtx(league: League, lg: LiveGame): AtmoCtx {
   return {
     gid: g.gid,
     user: lg.userSide,
-    teams: [h.name, a.name],
+    teams: [teamCity(league, h), teamCity(league, a)],
     abbrevs: [h.abbrev, a.abbrev],
     arena: neutralSite(g) ? undefined : FRANCHISES[g.home]?.arena,
     name: simNames(league, lg.sim),
@@ -191,6 +192,9 @@ export function useLiveGame() {
   userSideRef.current = userSide;
   const home = game ? league.teams[game.game.home] : null;
   const away = game ? league.teams[game.game.away] : null;
+  // (the two sides as copy names them: their cities)
+  const homeCity = home ? teamCity(league, home) : '';
+  const awayCity = away ? teamCity(league, away) : '';
   // tonight's kits: one colour a team everywhere the game is on screen (the bug, the floor, the graphics)
   const kits = useMemo(() => (home && away ? matchKits(home.colors, away.colors) : null), [home, away]);
   // (the lists that badge a player by his jersey: [fill, trim] a side)
@@ -215,6 +219,7 @@ export function useLiveGame() {
         view: v,
         side: lg.userSide,
         teams: [home, away],
+        cities: [homeCity, awayCity],
         tactics: lg.sim.baseTactics(lg.userSide),
         manualSubs: lg.manualSubs,
         atBreak,
@@ -229,7 +234,7 @@ export function useLiveGame() {
         recent: recentLevers(lg.marks, lg.logs.slice(0, v.logs), lg.userSide),
       };
     },
-    [home, away, atBreak, toPending, events, nameOf, baselines, subFor],
+    [home, away, homeCity, awayCity, atBreak, toPending, events, nameOf, baselines, subFor],
   );
   // the night's other games (played before this one: see prepareLive), for the bottom line
   const showScores = league.settings.liveScores !== false;

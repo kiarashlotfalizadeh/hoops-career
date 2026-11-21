@@ -3,7 +3,7 @@
 // answer { ok, reason }: `settle` runs one and says it in a toast. A refused move (a counter, a
 // lowball, a rule) still went through as an action: talks remember it, so nothing is rolled back.
 import type { League } from '../../core/types';
-import { playerName } from '../../core/league/helpers';
+import { playerName, teamCity } from '../../core/league/helpers';
 import { dealTeams, evaluateDeal, evaluateTrade, executeDeal, executeTrade, type TradeLeg, type TradeOffer } from '../../core/league/trades';
 import { continueDraft, userDraftPick } from '../../core/league/season';
 import { releasePlayer, userBuyout } from '../../core/league/contracts';
@@ -127,5 +127,5 @@ export function takeTeam(league: League, tid: number): boolean {
 
 /** Turn a job offer down. */
 export function turnDownJob(league: League, tid: number) {
-  if (act('Turning the job down', (l) => declineJob(l, tid))) say(`You turned down the ${league.teams[tid].name}.`, 'neutral');
+  if (act('Turning the job down', (l) => declineJob(l, tid))) say(`You turned down ${teamCity(league, tid)}.`, 'neutral');
 }

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Lock, LockKeyhole, Ticket } from 'lucide-react';
 import type { League } from '../../core/types';
-import { playerName, shortName, teamPlayers } from '../../core/league/helpers';
+import { playerName, shortName, teamPlayers, teamCity } from '../../core/league/helpers';
 import { capSalary, untradeable, type TradeOffer } from '../../core/league/trades';
 import { pickName } from '../draft/common';
 import { playerAge, salaryFor } from '../../core/playerGen';
@@ -109,7 +109,7 @@ export function TradingBlock({
                     </div>
                     <div className="right">
                       <span className={`tag ${tone.c}`}>{tone.l}</span>
-                      <button className="btn xs" aria-label={`Open the ${t.name}' package in the builder`} onClick={() => onLoad(o.offer)}>
+                      <button className="btn xs" aria-label={`Open the package from ${teamCity(league, t)} in the builder`} onClick={() => onLoad(o.offer)}>
                         Open
                       </button>
                     </div>

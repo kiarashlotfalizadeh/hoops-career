@@ -10,7 +10,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { League } from '../../core/types';
 import { CAP, TAX_BRACKET_PCT, TAX_RATES } from '../../core/constants';
-import { CAP_FOR, OFFSEASON_ROSTER_MAX, fmtDate, freeAgents, payroll, playerName, prospects, shortName, teamPlayers } from '../../core/league/helpers';
+import { CAP_FOR, OFFSEASON_ROSTER_MAX, fmtDate, freeAgents, payroll, playerName, prospects, shortName, teamPlayers, teamCity } from '../../core/league/helpers';
 import { EXCEPTIONS, EXCEPTION_ORDER, exceptionAmount, exceptionUsedShort, extensionBlockedReason, hardCapLine, onWaivers } from '../../core/league/contracts';
 import { bidOnException, capHolds, expiringPlayers, signedThisSummer, signingClosedReason, userExceptionRoom } from '../../core/league/freeAgency';
 import { HARDSHIP_OUT } from '../../core/league/tenDay';
@@ -699,8 +699,8 @@ function Desks({ league }: { league: League }) {
       sub: jobOffers
         ? `${plural(jobOffers, 'job offer')} · lapse${jobOffers === 1 ? 's' : ''} at the draft`
         : seasonsIn < 1
-          ? `Your ${team.name} tenure starts next season`
-          : `Season ${seasonsIn} with the ${team.name}`,
+          ? `Your ${teamCity(league, team)} tenure starts next season`
+          : `Season ${seasonsIn} with ${teamCity(league, team)}`,
       tone: jobOffers ? 'good' : undefined,
       hot: jobOffers > 0,
     },

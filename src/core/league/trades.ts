@@ -26,6 +26,7 @@ import {
   revenueScale,
   rosterMaxNow,
   standardRoster,
+  teamCity,
   twoWayRoster,
 } from './helpers';
 import {
@@ -1660,19 +1661,18 @@ const legWords = (league: League, leg: TradeSide) => [
 ];
 
 /**
- * A three-team deal in words, by what each team ends up with: "the Thunder get Anthony Davis from
- * the Mavericks. The Mavericks get Lu Dort from the Thunder and a 2029 1st (PHX) from the Suns. ..."
+ * A three-team deal in words, by what each team ends up with: "Oklahoma City gets Anthony Davis from
+ * Dallas. Dallas gets Lu Dort from Oklahoma City and a 2029 1st (PHX) from Phoenix. ..."
  * Read after the deal is done (a pick's label is its new holder's).
  */
 export function dealHeadline(league: League, legs: TradeLeg[]): string {
-  const name = (tid: number) => league.teams[tid].name;
+  const name = (tid: number) => teamCity(league, tid);
   return dealTeams(legs)
     .map((tid) => {
-      const from = legs.filter((l) => l.to === tid && moves(l)).map((l) => `${andList(legWords(league, l))} from the ${name(l.tid)}`);
-      return from.length ? `the ${name(tid)} get ${andList(from)}` : '';
+      const from = legs.filter((l) => l.to === tid && moves(l)).map((l) => `${andList(legWords(league, l))} from ${name(l.tid)}`);
+      return from.length ? `${name(tid)} gets ${andList(from)}` : '';
     })
     .filter(Boolean)
-    .map((x, i) => (i ? x.charAt(0).toUpperCase() + x.slice(1) : x))
     .join('. ');
 }
 
@@ -1743,7 +1743,7 @@ export function executeDeal(league: League, legs: TradeLeg[]) {
     const tb = league.teams[b.tid];
     addNews(league, {
       kind: 'trade',
-      text: sentence(`Trade: ${tradeHeadline(ta.name, legWords(league, a), a.pids.length, tb.name, legWords(league, b), b.pids.length)}`),
+      text: sentence(`Trade: ${tradeHeadline(teamCity(league, ta), legWords(league, a), a.pids.length, teamCity(league, tb), legWords(league, b), b.pids.length)}`),
       tids: [ta.tid, tb.tid],
       pids,
     });
@@ -1752,28 +1752,26 @@ export function executeDeal(league: League, legs: TradeLeg[]) {
   for (const tid of tids) waiveForTrade(league, tid);
 }
 
-/** "the Hornets'", "the Magic's": a team name in the possessive. */
-const teamPossessive = (name: string) => `the ${name}${name.endsWith('s') ? "'" : "'s"}`;
+/** "Charlotte's", "Dallas'": a team's name in the possessive. */
+const teamPossessive = (name: string) => `${name}${name.endsWith('s') ? "'" : "'s"}`;
 
 /**
- * A trade in words, the teams by name: "the Raptors send Scottie Barnes and a 2027 1st (TOR) to
- * the Knicks for ...". When one side sends nothing back, it reads as what it is: a salary dump
- * ("the Timberwolves take Terry Rozier off the Hornets' hands, with a 2028 2nd for it") or picks or
- * cash bought for nothing ("the Nets get a 2029 2nd from the Kings"). `x` lists what each side sends
+ * A trade in words, the teams by city: "Toronto sends Scottie Barnes and a 2027 1st (TOR) to
+ * New York for ...". When one side sends nothing back, it reads as what it is: a salary dump
+ * ("Minnesota takes Terry Rozier off Charlotte's hands, with a 2028 2nd for it") or picks or
+ * cash bought for nothing ("Brooklyn gets a 2029 2nd from Sacramento"). `x` lists what each side sends
  * (players first), `xPlayers` how many of them are players.
  */
 export function tradeHeadline(a: string, aList: string[], aPlayers: number, b: string, bList: string[], bPlayers: number): string {
   const one = (giver: string, list: string[], players: number, taker: string) => {
-    if (!players) return `the ${taker} get ${andList(list)} from the ${giver}`;
+    if (!players) return `${taker} gets ${andList(list)} from ${giver}`;
     const extra = list.slice(players);
-    return `the ${taker} take ${andList(list.slice(0, players))} off ${teamPossessive(giver)} hands${extra.length ? `, with ${andList(extra)} for it` : ''}`;
+    return `${taker} takes ${andList(list.slice(0, players))} off ${teamPossessive(giver)} hands${extra.length ? `, with ${andList(extra)} for it` : ''}`;
   };
   if (aList.length && !bList.length) return one(a, aList, aPlayers, b);
   if (bList.length && !aList.length) return one(b, bList, bPlayers, a);
   // a short swap reads in one breath; a bigger one gets a sentence a side
-  return aList.length + bList.length > 2
-    ? `the ${a} send ${andList(aList)} to the ${b}. The ${b} send back ${andList(bList)}`
-    : `the ${a} send ${andList(aList)} to the ${b} for ${andList(bList)}`;
+  return aList.length + bList.length > 2 ? `${a} sends ${andList(aList)} to ${b}. ${b} sends back ${andList(bList)}` : `${a} sends ${andList(aList)} to ${b} for ${andList(bList)}`;
 }
 
 /**

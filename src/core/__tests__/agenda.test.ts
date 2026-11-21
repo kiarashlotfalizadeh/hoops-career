@@ -832,14 +832,14 @@ describe('the agenda', () => {
           expect(c.measure).toBeUndefined();
           expect(c.line).toMatch(/The deal should help\.$/);
           expect(c.detail).not.toMatch(/wins over|Postseason odds/);
-          expect(c.suggestion!.confirm).toMatch(/^You send .+\. The .+ send .+\. The deal should help\.$/);
+          expect(c.suggestion!.confirm).toMatch(/^You send .+\. [A-Z].+ sends .+\. The deal should help\.$/);
           // a buy that measures as no gain is his to take, not the staff's call
           if (odds > 500) {
             storeWorth(m, ms.key, changeWorth(m, ms, { id: 'deal', pts: 0.2, raw: 0.3, se: 0.4 }));
             const f = agenda(m).find((i) => i.kind === 'deadline')!;
             expect([f.suggestion!.label, f.choices![0].label]).toEqual(['Stand pat', c.suggestion!.label]);
             expect(f.line).toMatch(/The staff's call: stand pat\. No clear edge from the deal\.$/);
-            expect(f.detail).toMatch(/^The best buy it found: .+ from the .+ for .+\./);
+            expect(f.detail).toMatch(/^The best buy it found: .+ from [A-Z].+ for .+\./);
           }
         }
         // a buy never costs one of the owner's money or youth goals: with a profit goal and no room in it, a deal that adds salary isn't the call

@@ -11,7 +11,7 @@
 // league, the season and the team.
 import type { League, Player } from '../types';
 import { hashString, mix32 } from '../random';
-import { addInbox, curTeamSeason, fmtDate, playerName, shortName, standardRoster, teamPlayers } from './helpers';
+import { addInbox, curTeamSeason, fmtDate, playerName, shortName, standardRoster, teamCity, teamPlayers } from './helpers';
 import { playerAge, salaryFor } from '../playerGen';
 import { money } from '../format';
 import { ownerQuirk, type OwnerQuirk } from './voices';
@@ -162,11 +162,11 @@ function compose(league: League, quirk: OwnerQuirk): { cameo: OwnerCameo; subjec
     case 'hothead': {
       const next = league.schedule.find((g) => !g.played && g.day >= league.day && g.type === 'regular' && (g.home === u || g.away === u));
       if (!next) return null;
-      const opp = league.teams[next.home === u ? next.away : next.home];
+      const opp = teamCity(league, next.home === u ? next.away : next.home);
       return {
-        cameo: { ...base, until: next.day, ask: `Beat the ${opp.name} in the next game.` },
+        cameo: { ...base, until: next.day, ask: `Beat ${opp} in the next game.` },
         subject: 'About last night',
-        body: `I said some things in my box last night. Loudly.\nBeat the ${opp.name} and we never speak of it again.`,
+        body: `I said some things in my box last night. Loudly.\nBeat ${opp} and we never speak of it again.`,
       };
     }
     case 'sentimental': {

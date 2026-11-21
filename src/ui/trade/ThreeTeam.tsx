@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { ArrowRight, ChevronDown, Handshake, Plus, RotateCcw, Sparkles, Ticket, X, Zap } from 'lucide-react';
 import type { League } from '../../core/types';
-import { teamPlayers } from '../../core/league/helpers';
+import { teamPlayers, teamCity } from '../../core/league/helpers';
 import { capSalary, evaluateDeal, pickLabel, untradeable, type TradeLeg } from '../../core/league/trades';
 import { useLeagueMemo, useStore } from '../../state/store';
 import { makeDeal } from '../../state/actions/office';
@@ -111,7 +111,7 @@ export function ThreeTeam({ league, season, closed, partner, init }: { league: L
           <TeamLogo tid={tid} size={22} decorative />
           {slot ? (
             <button className="fo-tt-pick grow" onClick={() => setPicking(slot)} aria-haspopup="dialog" aria-label={`${t.region} ${t.name}. Change team`}>
-              <span className="ellipsis">{t.name} send</span>
+              <span className="ellipsis">{teamCity(league, t)} sends</span>
               <ChevronDown size={16} aria-hidden="true" />
             </button>
           ) : (
@@ -271,7 +271,11 @@ export function ThreeTeam({ league, season, closed, partner, init }: { league: L
         </div>
       </Section>
 
-      <Sheet open={adding !== null} onClose={() => setAdding(null)} title={addT ? (adding === user ? 'Your players and picks' : `${addT.name}: players and picks`) : ''}>
+      <Sheet
+        open={adding !== null}
+        onClose={() => setAdding(null)}
+        title={addT ? (adding === user ? 'Your players and picks' : `${teamCity(league, addT)}: players and picks`) : ''}
+      >
         {addT && (
           <div className="card flush fo-assets">
             <div className="list">

@@ -29,7 +29,7 @@
 // INJURY_AGE of his games is ridden out. Nothing here draws from the league's random stream.
 import type { GamePlanItem, GameResult, League, PlayInGame, PlayoffSeries, Player, Pos, ScheduledGame } from '../types';
 import { FREE_AGENT } from '../types';
-import { fmtDate, payroll, playerName, revenueScale, standardRoster } from './helpers';
+import { fmtDate, payroll, playerName, revenueScale, standardRoster, teamCity } from './helpers';
 import { confStandings } from './standings';
 import { money, plural } from '../format';
 import {
@@ -1474,7 +1474,7 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
           : '';
     const detail = offer
       ? [
-          `${flat ? 'The best buy it found: ' : ''}${assetText(league, offer.b)} from the ${other?.name ?? league.teams[offer.b.tid].name} for ${assetText(league, offer.a)}.`,
+          `${flat ? 'The best buy it found: ' : ''}${assetText(league, offer.b)} from ${teamCity(league, offer.b.tid)} for ${assetText(league, offer.a)}.`,
           ...(pts !== undefined && on && now && call?.oddsGain !== undefined && !now.clinched ? [oddsMoveText(call.oddsGain)] : []),
           ...offer.b.pids.map((pid) => `${contractText(league, league.players[pid])}.`),
           ...dealGoals(league, offer)
@@ -1487,7 +1487,7 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
         ? {
             label: call!.mode === 'buy' ? `Trade for ${playerName(league.players[offer.b.pids[0]])}` : `Sell to ${other.abbrev}`,
             action: { kind: 'trade', id, offer },
-            confirm: `You send ${assetText(league, offer.a)}. The ${other.name} send ${assetText(league, offer.b)}. ${measured}`.trim(),
+            confirm: `You send ${assetText(league, offer.a)}. ${teamCity(league, other)} sends ${assetText(league, offer.b)}. ${measured}`.trim(),
           }
         : null;
     cards.push({
@@ -1496,7 +1496,7 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
       title: left === 0 ? 'Trade deadline: today' : `Trade deadline in ${plural(left, 'day')}`,
       line:
         deal && other
-          ? `${odds}The staff's call: ${flat ? 'stand pat' : call!.mode === 'buy' ? `buy ${playerName(league.players[offer!.b.pids[0]])}` : `sell to the ${other.name}`}. ${measured}`.trim()
+          ? `${odds}The staff's call: ${flat ? 'stand pat' : call!.mode === 'buy' ? `buy ${playerName(league.players[offer!.b.pids[0]])}` : `sell to ${teamCity(league, other)}`}. ${measured}`.trim()
           : `${odds}The staff's call: ${none}`,
       ...(detail ? { detail } : {}),
       tone: 'warn',
@@ -1710,12 +1710,12 @@ export function resolveCall(league: League, a: CallAction): { ok: boolean; text:
       const t = league.teams[a.offer.b.tid];
       const errors = validateTrade(league, a.offer);
       if (errors.length) r = { ok: false, text: errors[0] };
-      else if (!teamAccepts(league, a.offer, t.tid)) r = { ok: false, text: `The ${t.name} have changed their mind.` };
+      else if (!teamAccepts(league, a.offer, t.tid)) r = { ok: false, text: `${teamCity(league, t)} has changed its mind.` };
       else {
         executeTrade(league, a.offer);
         // the deal can make open offers impossible (the same player, a full roster)
         cleanProposals(league);
-        r = { ok: true, text: `Trade done with the ${t.region} ${t.name}.` };
+        r = { ok: true, text: `Trade done with ${teamCity(league, t)}.` };
       }
       break;
     }

@@ -11,6 +11,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Help, Section, Statline } from '../components/ui';
 import { PICK_RANGE_NOTE, pickOrder, pickProjText, projectedSlot } from '../draft/common';
 import { teamPath } from './shared';
+import { teamCity } from '../../core/league/helpers';
 
 /**
  * One draft pick: whose it was (its team's mark) and its name ("2027 1st #4 (LAC)"), the team behind
@@ -26,7 +27,7 @@ export function PickRow({ league, d, hidden = false, owner = false }: { league: 
   // the other team in the pick's story: its owner, or the team whose record decides it
   const other = owner ? d.tid : d.originalTid !== d.tid ? d.originalTid : undefined;
   // (the owner by its name alone: its mark is beside it, so the line stays one line)
-  const meta = [owner ? `Owned by the ${league.teams[d.tid].name}.` : '', terms ?? ''].filter(Boolean).join(' ');
+  const meta = [owner ? `Owned by ${teamCity(league, d.tid)}.` : '', terms ?? ''].filter(Boolean).join(' ');
   const body = (
     <>
       <TeamLogo tid={owner ? d.tid : d.originalTid} size={28} decorative />

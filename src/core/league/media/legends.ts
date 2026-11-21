@@ -12,7 +12,7 @@ import { playerName } from '../helpers';
 import { worldRng } from '../world';
 import { careerOnRecord, careerTotals } from '../../analysis/milestones';
 import type { MediaState } from '../media';
-import { Voice, list, publish } from './voice';
+import { Voice, city, list, publish } from './voice';
 import { chronicleFarewell } from './chronicle';
 import { countWord, honoursWhole } from './history';
 
@@ -115,17 +115,17 @@ function farewell(league: League, m: MediaState, p: Player, lead: boolean) {
   ]
     .filter(Boolean)
     .join(' · ');
-  const where = teams.map((t) => league.teams[t].name);
+  const where = teams.map((t) => city(league, t));
   const peak = peakSeason(p);
   const numbers = league.teams.flatMap((t) => (t.retired ?? []).filter((r) => r.pid === p.pid && r.season === league.season).map((r) => ({ t, r })));
   const body = [
-    `${name} has retired. ${where.length > 1 ? `He played for the ${list(where)}` : where.length ? `He spent his whole career with the ${where[0]}` : ''}${where.length ? `, ${plural(n, 'season')} in all.` : ''}`,
+    `${name} has retired. ${where.length > 1 ? `He played for ${list(where)}` : where.length ? `He spent his whole career with ${where[0]}` : ''}${where.length ? `, ${plural(n, 'season')} in all.` : ''}`,
     peak
-      ? `His best season was ${seasonLabel(peak.season)}, ${peak.ppg.toFixed(1)} points a game${league.teams[peak.tid] ? ` for the ${league.teams[peak.tid].name}` : ''}.${whole ? ` He finishes with ${pts} points, ${Math.round(c.reb).toLocaleString('en-US')} rebounds and ${Math.round(c.ast).toLocaleString('en-US')} assists.` : ''}`
+      ? `His best season was ${seasonLabel(peak.season)}, ${peak.ppg.toFixed(1)} points a game${league.teams[peak.tid] ? ` for ${city(league, peak.tid)}` : ''}.${whole ? ` He finishes with ${pts} points, ${Math.round(c.reb).toLocaleString('en-US')} rebounds and ${Math.round(c.ast).toLocaleString('en-US')} assists.` : ''}`
       : '',
     honors ? `He leaves with ${honors}${p.stats.some((s) => s.real) ? ' won in this league' : ''}.` : '',
     numbers.length
-      ? `The ${list(numbers.map((x) => x.t.name))} will retire his No. ${[...new Set(numbers.map((x) => x.r.jersey))].join(' and No. ')}${numbers.length === 1 ? ': it goes up at their home opener' : ', each at its home opener'}.`
+      ? `${list(numbers.map((x) => city(league, x.t.tid)))} will retire his No. ${[...new Set(numbers.map((x) => x.r.jersey))].join(' and No. ')}${numbers.length === 1 ? ': it goes up at their home opener' : ', each at its home opener'}.`
       : '',
     p.hof ? `He goes into the Hall of Fame with this year's class.` : '',
   ].filter(Boolean);
@@ -208,24 +208,25 @@ export function jerseyNight(league: League, m: MediaState, g: ScheduledGame) {
   if (!res) return;
   const v = new Voice(worldRng(league, 'jersey-night', league.season, g.home), m);
   const won = res.home.pts > res.away.pts;
-  const opp = league.teams[g.away];
+  const opp = city(league, g.away);
+  const TN = city(league, g.home);
   const legends = up.map((r) => ({ r, p: league.players[r.pid] }));
   const named = legends.map(({ r, p }) => `${p ? playerName(p) : r.name}'s No. ${r.jersey}`);
   const head =
     legends.length === 1
       ? v.say('jersey-1', [
           `No. ${up[0].jersey} goes up in ${team.region}`,
-          `The ${team.name} retire ${named[0]}`,
+          `${TN} retires ${named[0]}`,
           `${legends[0].p ? playerName(legends[0].p) : up[0].name}'s night in ${team.region}`,
         ])
-      : `The ${team.name} retire ${list(named)}`;
+      : `${TN} retires ${list(named)}`;
   publish(league, {
     kind: 'retire',
     head,
-    dek: `Before the home opener, ${list(named)} went up to the rafters. Then the ${team.name} ${won ? 'beat' : 'lost to'} the ${opp.name}, ${Math.max(res.home.pts, res.away.pts)}-${Math.min(res.home.pts, res.away.pts)}.`,
+    dek: `Before the home opener, ${list(named)} went up to the rafters. Then ${TN} ${won ? 'beat' : 'lost to'} ${opp}, ${Math.max(res.home.pts, res.away.pts)}-${Math.min(res.home.pts, res.away.pts)}.`,
     body: legends.map(({ r, p }) =>
       p
-        ? `${playerName(p)} played ${plural(new Set(p.stats.filter((s) => s.tid === g.home && !s.playoffs && s.gp > 0).map((s) => s.season)).size, 'season')} for the ${team.name}. Nobody wears No. ${r.jersey} for them again.`
+        ? `${playerName(p)} played ${plural(new Set(p.stats.filter((s) => s.tid === g.home && !s.playoffs && s.gp > 0).map((s) => s.season)).size, 'season')} for ${TN}. Nobody wears No. ${r.jersey} for them again.`
         : '',
     ),
     tids: [g.home],

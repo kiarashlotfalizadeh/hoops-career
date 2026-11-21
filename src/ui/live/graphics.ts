@@ -13,6 +13,7 @@ import { bookFrom, bookOf, pastMark, youngBook } from '../../core/league/records
 import { seasonLabel } from '../../core/constants';
 import { periodLabel } from '../stats';
 import type { Drawn } from './drawn';
+import { teamCity } from '../../core/league/helpers';
 
 export type GraphicKind = 'milestone' | 'record' | 'high' | 'triple' | 'big' | 'perfect' | 'solo' | 'quarter' | 'watch' | 'streak' | 'double' | 'team';
 
@@ -151,7 +152,7 @@ export function graphicCandidates(a: GraphicInput): Graphic[] {
             id: `rec-t-${b.pid}`,
             kind: 'record',
             tag: 'Franchise record',
-            text: `${name}: ${b.pts} points, a ${rec.teamName} ${post}record${rec.since ? ` ${rec.since}` : ''}`,
+            text: `${name}: ${b.pts} points, a franchise ${post}record${rec.since ? ` ${rec.since}` : ''}`,
             side,
             priority: 96,
           });
@@ -375,7 +376,7 @@ export function playersBefore(league: League, sim: GameSim, type: GameType = 're
         ...(h ? { high: { ...h, career: whole && p.experience === 0 } } : {}),
         ...(c ? { career: { pts: c.pts, reb: c.reb, ast: c.ast } } : {}),
         ...(best ? { best } : {}),
-        ...(lists && team ? { records: { team: franchise, teamName: team.name, league: lists.league, playoffs: lists.kind === 'post', ...reach } } : {}),
+        ...(lists && team ? { records: { team: franchise, teamName: teamCity(league, team), league: lists.league, playoffs: lists.kind === 'post', ...reach } } : {}),
       });
     }
   }

@@ -2,7 +2,7 @@ import { Fragment } from 'react';
 import { Link } from 'react-router-dom';
 import type { CupTie, League } from '../../core/types';
 import { cupSeeds, cupTables, type CupGroupTable } from '../../core/league/cup';
-import { dayToDate, fmtDate, playerName } from '../../core/league/helpers';
+import { dayToDate, fmtDate, playerName, teamCity } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
@@ -132,7 +132,7 @@ export function CupTab({ league }: { league: League }) {
 /** The Cup's poster before it's decided: where you stand (through, or out) in the group stage or the knockouts. */
 function CupPoster({ league, seeds, decided, koRound, status }: { league: League; seeds?: Seeds; decided: boolean; koRound: string; status: string }) {
   const me = league.userTid;
-  const name = league.teams[me].name;
+  const name = teamCity(league, me);
   const conf = league.teams[me].conf;
   const over = `In-Season Cup · ${seasonLabel(league.cup!.season)}`;
   if (!seeds) return <Poster over={over} head={status} />;
@@ -199,7 +199,7 @@ function GroupTables({ league, tables, seeds, decided }: { league: League; table
                   <TeamLogo tid={r.tid} size={22} decorative />
                   <span className="nm">
                     <span>
-                      <span className="nm-full">{league.teams[r.tid].name}</span>
+                      <span className="nm-full">{teamCity(league, r.tid)}</span>
                       <span className="nm-ab">{league.teams[r.tid].abbrev}</span>
                     </span>
                   </span>
@@ -311,7 +311,7 @@ function CupFinal({ league, final }: { league: League; final?: CupTie }) {
   const side = (tid: number | undefined, label: string) => (
     <div className={`side ${final?.winner !== undefined && final.winner !== tid ? 'lose' : ''}`}>
       {tid !== undefined ? <TeamLogo tid={tid} size={46} decorative /> : <span className="bk-ghost" />}
-      <div className="bk-fname ellipsis">{tid !== undefined ? league.teams[tid].name : `${label} winner`}</div>
+      <div className="bk-fname ellipsis">{tid !== undefined ? teamCity(league, tid) : `${label} winner`}</div>
       {tid !== undefined && <div className="bk-fconf">{label}</div>}
       {ptsOf(tid) !== undefined && <div className="score">{ptsOf(tid)}</div>}
     </div>
@@ -340,7 +340,7 @@ function CupFinal({ league, final }: { league: League; final?: CupTie }) {
 export function CupBanner({ league, season, tid, runnerUp, mvp, final }: { league: League; season: number; tid: number; runnerUp?: number; mvp?: number; final?: CupTie }) {
   const p = mvp !== undefined ? league.players[mvp] : undefined;
   const score = final?.highPts !== undefined && final.lowPts !== undefined ? `${Math.max(final.highPts, final.lowPts)}-${Math.min(final.highPts, final.lowPts)}` : undefined;
-  const beat = runnerUp !== undefined ? `def. ${league.teams[runnerUp].name}` : undefined;
+  const beat = runnerUp !== undefined ? `def. ${teamCity(league, runnerUp)}` : undefined;
   return (
     <TitleSlab
       league={league}

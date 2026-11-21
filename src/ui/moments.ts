@@ -12,7 +12,7 @@ import { RETIRED } from '../core/types';
 import { confStandings } from '../core/league/standings';
 import { seasonLabel } from '../core/constants';
 import { money, plural } from '../core/format';
-import { curTeamSeason, fmtDate } from '../core/league/helpers';
+import { curTeamSeason, fmtDate, teamCity, teamName } from '../core/league/helpers';
 import { storyLink } from './today/front';
 import { isFrontPage } from '../state/simCore';
 import { currentGoals, ownerPersonality, personalityLine, resultText } from '../core/league/ownerGoals';
@@ -97,18 +97,18 @@ const NEXT = ['', 'the conference semifinals', 'the conference finals', 'the Fin
 /**
  * What came after a series won, as the bracket stands when the card shows (it can show a sim or more
  * later): the next round still to start, under way, won, or lost ("Then out in the conference
- * semifinals, 2-4 to the Celtics"), never "next up" for a round already over.
+ * semifinals, 2-4 to Boston"), never "next up" for a round already over.
  */
 function afterSeries(league: League, round: number): string {
   const me = league.userTid;
   const next = league.playoffs.find((x) => x.round === round + 1 && (x.high === me || x.low === me));
   const what = NEXT[round] ?? 'the next round';
   if (!next) return `Next up: ${what}.`;
-  const opp = league.teams[next.high === me ? next.low : next.high]?.name ?? 'other side';
+  const oppTid = next.high === me ? next.low : next.high;
+  const opp = league.teams[oppTid] ? teamCity(league, oppTid) : 'the other side';
   const [w, l] = next.high === me ? [next.highWins, next.lowWins] : [next.lowWins, next.highWins];
-  if (next.winner === undefined)
-    return w + l === 0 ? `Next up: ${what}, against the ${opp}.` : `Now in ${what}: ${w === l ? `level at ${w}-${l}` : `${w}-${l}`} against the ${opp}.`;
-  return next.winner === me ? `They won ${what} too, ${w}-${l} over the ${opp}.` : `Then out in ${what}, ${w}-${l} to the ${opp}.`;
+  if (next.winner === undefined) return w + l === 0 ? `Next up: ${what}, against ${opp}.` : `Now in ${what}: ${w === l ? `level at ${w}-${l}` : `${w}-${l}`} against ${opp}.`;
+  return next.winner === me ? `They won ${what} too, ${w}-${l} over ${opp}.` : `Then out in ${what}, ${w}-${l} to ${opp}.`;
 }
 
 /** A free agent this good (OVR) or this expensive (share of the cap, in $K) makes his signing a moment. */
@@ -411,7 +411,7 @@ function recordMoments(league: League): Moment[] {
       m.day,
       m.pid,
       9,
-      `${m.name} against the ${league.teams[m.opp]?.name}: the most in a game ${recordReach(league, { book: 'reg', stat, v: m.v }, season)}.`,
+      `${m.name} against ${teamCity(league, m.opp)}: the most in a game ${recordReach(league, { book: 'reg', stat, v: m.v }, season)}.`,
     );
   }
   for (const stat of TEAM_REC_STATS) {
@@ -426,14 +426,14 @@ function recordMoments(league: League): Moment[] {
       m.day,
       undefined,
       8,
-      `${m.score[0]}-${m.score[1]} over the ${league.teams[m.opp]?.name}: a league record${recordSpan(league, { scope: 'league', book: 'reg', stat, team: true, v: m.v })}.`,
+      `${m.score[0]}-${m.score[1]} over ${teamCity(league, m.opp)}: a league record${recordSpan(league, { scope: 'league', book: 'reg', stat, team: true, v: m.v })}.`,
     );
   }
   const mine = book.teams[me]?.reg;
   const pts = mine?.players.pts?.[0];
   if (pts && pts[4] === season && pts[0] >= FRANCHISE_POINTS && !young) {
     const m = gameMark(league, pts);
-    push('team', `${m.v} points`, m.gid, m.day, m.pid, 6, `${m.name} against the ${league.teams[m.opp]?.name}: the most for the ${league.teams[me].name} since ${since}.`);
+    push('team', `${m.v} points`, m.gid, m.day, m.pid, 6, `${m.name} against ${teamCity(league, m.opp)}: the most for ${teamCity(league, me)} since ${since}.`);
   }
   return out;
 }
@@ -518,7 +518,7 @@ function jerseyMoments(league: League): Moment[] {
       kind: 'jersey' as const,
       over: `${fmtDate(league.season, opener.day)} · Banner night`,
       title: `No. ${r.jersey}`,
-      sub: `${p ? name(p) : r.name}'s number goes up to the rafters before the home opener. Nobody wears it for the ${team.name} again.`,
+      sub: `${p ? name(p) : r.name}'s number goes up to the rafters before the home opener. Nobody wears it for ${teamCity(league, team)} again.`,
       pid: r.pid,
       jersey: r.jersey,
       ...(story ? { link: storyLink(story.id), story: story.id } : {}),
@@ -552,8 +552,8 @@ function cupMoments(league: League): Moment[] {
     const next =
       ahead && opp
         ? ahead.round === 'final'
-          ? ` The final is against the ${opp.name} on ${fmtDate(league.season, ahead.day)} in Las Vegas.`
-          : ` The ${ROUND_NAME[ahead.round]} is ${ahead.high === me ? 'at home to' : 'at'} the ${opp.name} on ${fmtDate(league.season, ahead.day)}${ahead.round === 'qf' ? ": win twice more and it's Las Vegas" : ''}.`
+          ? ` The final is against ${teamCity(league, opp)} on ${fmtDate(league.season, ahead.day)} in Las Vegas.`
+          : ` The ${ROUND_NAME[ahead.round]} is ${ahead.high === me ? 'at home to' : 'at'} ${teamCity(league, opp)} on ${fmtDate(league.season, ahead.day)}${ahead.round === 'qf' ? ": win twice more and it's Las Vegas" : ''}.`
         : '';
     const over = !!lost || won.some((t) => t.round === 'final');
     out.push({
@@ -579,7 +579,7 @@ function cupMoments(league: League): Moment[] {
       kind: 'cup',
       over: `${fmtDate(league.season, lost.day)} · In-Season Cup ${round}`,
       title: lost.round === 'final' ? 'Cup runners-up' : 'Out of the Cup',
-      sub: `${them}-${us} to the ${league.teams[lost.winner!].name} in the ${round}.${lost.round === 'final' ? " The final doesn't count against the record." : ''}`,
+      sub: `${them}-${us} to ${teamCity(league, lost.winner!)} in the ${round}.${lost.round === 'final' ? " The final doesn't count against the record." : ''}`,
       link: '/league/cup',
       linkLabel: 'The bracket',
       rank: 0,
@@ -631,7 +631,7 @@ function jobMoments(league: League): Moment[] {
       out.push({
         key: `fired-${season}-${me}`,
         kind: 'fired',
-        over: `${seasonLabel(season)} · ${team.region} ${team.name}`,
+        over: `${seasonLabel(season)} · ${teamName(team)}`,
         title: "You're fired",
         sub: r.said ? `“${r.said}”` : 'The owner is going in a different direction.',
         lines: [
@@ -664,7 +664,7 @@ function jobMoments(league: League): Moment[] {
       key: `hired-${me}-${stint.from}`,
       kind: 'hired',
       over: `${seasonLabel(stint.from)} · New job`,
-      title: `${team.region} ${team.name}`,
+      title: teamName(team),
       sub: `${who}.`,
       lines: [
         og ? `He wants: ${og.goals.map((g) => g.title.toLowerCase()).join('; ')}.` : 'He sets his goals on opening night, from the roster you open with.',
@@ -689,8 +689,8 @@ function finalsMoment(league: League): Moment | null {
   const f = finalsStory(league, me);
   if (!f) return null;
   const season = league.season;
-  const us = team.name;
-  const them = league.teams[f.opp]?.name ?? 'other side';
+  const us = teamCity(league, team);
+  const them = league.teams[f.opp] ? teamCity(league, f.opp) : 'the other side';
   const g7 = f.w + f.l === 7;
   const night = clincherLine(f, us, them);
   const arc = seriesArc(f, us, them);
@@ -701,7 +701,7 @@ function finalsMoment(league: League): Moment | null {
       kind: 'series',
       over,
       title: g7 ? 'Lost in Game 7' : 'Runners-up',
-      sub: `The ${them} win the title, ${f.l}-${f.w}${f.w === 0 ? ', a sweep' : ''}.${night ? ` ${night}` : ''}`,
+      sub: `${them.replace(/^t/, 'T')} won the title, ${f.l}-${f.w}${f.w === 0 ? ', a sweep' : ''}.${night ? ` ${night}` : ''}`,
       ...(arc && f.w > 0 ? { lines: [arc] } : {}),
       link: '/league/playoffs',
       linkLabel: 'The bracket',
@@ -724,16 +724,14 @@ function finalsMoment(league: League): Moment | null {
             : 'Champions';
   // (the series' arc, when the headline doesn't say it already)
   const first = arc && (peat || f.history === 'back-to-back titles') ? arc : null;
-  const sub = [night ?? `The ${team.region} ${us} win the title, ${f.w}-${f.l} over the ${them}.`, night ? `A ${f.w}-${f.l} series over the ${them}.` : '']
-    .filter(Boolean)
-    .join(' ');
+  const sub = [night ?? `The ${teamName(team)} win the title, ${f.w}-${f.l} over ${them}.`, night ? `A ${f.w}-${f.l} series over ${them}.` : ''].filter(Boolean).join(' ');
   const coach = userCoach(league);
   const titles = coach ? coachCareer(league, coach).titles : 0;
   const mvp = f.mvp ? league.players[f.mvp.pid] : undefined;
   const lines = [
     first ?? '',
     f.history && !peat && f.history !== 'back-to-back titles' ? f.history.charAt(0).toUpperCase() + f.history.slice(1) + '.' : '',
-    f.upset ? `${f.upset.champWins} wins in the regular season, against the ${f.upset.runnerWins}-win ${them}.` : '',
+    f.upset ? `${f.upset.champWins} wins in the regular season, against ${f.upset.runnerWins}-win ${them}.` : '',
     mvp && f.mvp ? `Finals MVP ${name(mvp)} · ${f.mvp.line}` : '',
     titles >= 1 ? `${league.coachName}'s ${titles === 1 ? 'first title' : titleCount(titles)}.` : '',
   ].filter(Boolean);
@@ -757,7 +755,7 @@ export function currentMoments(league: League): Moment[] {
   const me = league.userTid;
   const team = league.teams[me];
   if (!team) return out;
-  const nick = team.name;
+  const C = teamCity(league, team);
   const season = league.season;
 
   // a postseason spot (read into the postseason too: a long sim can clinch it in its last week and
@@ -767,7 +765,7 @@ export function currentMoments(league: League): Moment[] {
     const conf = team.conf === 'E' ? 'Eastern Conference' : 'Western Conference';
     // a play-in spot is only news until a playoff spot is
     if (row?.clinched === 'x')
-      out.push({ key: `clinch-x-${season}`, kind: 'clinch', over: `${seasonLabel(season)} · ${conf}`, title: 'Playoff bound', sub: `The ${nick} have clinched a top-six seed.` });
+      out.push({ key: `clinch-x-${season}`, kind: 'clinch', over: `${seasonLabel(season)} · ${conf}`, title: 'Playoff bound', sub: `${C} has clinched a top-six seed.` });
     else if (row?.clinched === 'p') {
       // clinching the top ten mid-season is "at least the play-in", not a play-in seed: a team
       // sitting first can clinch it in February
@@ -777,7 +775,7 @@ export function currentMoments(league: League): Moment[] {
         kind: 'clinch',
         over: `${seasonLabel(season)} · ${conf}`,
         title: playIn ? 'In the play-in' : 'Postseason bound',
-        sub: playIn ? `The ${nick} play on in the play-in.` : `The ${nick} have clinched at least a play-in spot.`,
+        sub: playIn ? `${C} plays on in the play-in.` : `${C} has clinched at least a play-in spot.`,
       });
     }
   }
@@ -798,7 +796,7 @@ export function currentMoments(league: League): Moment[] {
           kind: 'title',
           over: `${seasonLabel(season)} · Finals`,
           title: 'Champions',
-          sub: `The ${team.region} ${nick} win the title, ${w}-${l} over the ${opp?.name ?? 'field'}.`,
+          sub: `The ${teamName(team)} win the title, ${w}-${l} over ${opp ? teamCity(league, opp) : 'the field'}.`,
           big: true,
           mail: mailOf(league, 'Owner', (x) => x === 'Champions'),
         },
@@ -809,7 +807,7 @@ export function currentMoments(league: League): Moment[] {
         kind: 'series',
         over: `${seasonLabel(season)} · ${ROUND[s.round] ?? 'Playoffs'}`,
         title: 'Series won',
-        sub: `${w}-${l} over the ${opp?.name ?? 'other side'}. ${afterSeries(league, s.round)}`,
+        sub: `${w}-${l} over ${opp ? teamCity(league, opp) : 'the other side'}. ${afterSeries(league, s.round)}`,
         // (of two series won in one sim, the later round shows: see pickMoments)
         rank: s.round,
       });
@@ -817,7 +815,7 @@ export function currentMoments(league: League): Moment[] {
 
   const aw = league.awards.find((a) => a.season === season);
   if (aw?.cupWinner === me)
-    out.push({ key: `cup-${season}`, kind: 'cup', over: `${seasonLabel(season)} · In-Season Cup`, title: 'Cup champions', sub: `The ${nick} lift the In-Season Cup.`, big: true });
+    out.push({ key: `cup-${season}`, kind: 'cup', over: `${seasonLabel(season)} · In-Season Cup`, title: 'Cup champions', sub: `${C} lifts the In-Season Cup.`, big: true });
   if (aw) {
     for (const k of Object.keys(AWARD_NAME) as (keyof typeof AWARD_NAME)[]) {
       const pid = aw[k as 'mvp'];

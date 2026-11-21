@@ -122,7 +122,7 @@ it('the locker room: roles read from minutes, a core that grows together, a star
   expect(askedOut(l, sixth)).toBe(false);
   // it is news, mail that stops a sim, a line on Team and a decision on the agenda
   const story = l.news[l.news.length - 1];
-  expect(story.head).toContain('asks the');
+  expect(story.head).toMatch(/ asks [A-Z].+ for a trade$/);
   expect(story.weight).toBe(3);
   expect(story.pids).toEqual([star.pid]);
   expect(l.inbox[0]).toMatchObject({ important: true, link: `/player/${star.pid}` });
@@ -222,7 +222,7 @@ it('the locker room: roles read from minutes, a core that grows together, a star
     expect(tradeRequests(l).map((p) => p.pid)).toEqual([star2.pid]);
     // league news, not the user's mail or his agenda
     const told = l.news.filter((n) => n.pids?.includes(star2.pid)).pop()!;
-    expect(told.head).toContain('asks the');
+    expect(told.head).toMatch(/ asks [A-Z].+ for a trade$/);
     expect(told.text).toContain('wants to play for a winner');
     expect(told.weight).toBe(2);
     expect(l.inbox.length).toBe(mail);
@@ -247,7 +247,7 @@ it('the locker room: roles read from minutes, a core that grows together, a star
       back++;
     }
     expect(wantsOut(l, star2)).toBe(false);
-    expect(l.news.filter((n) => n.pids?.includes(star2.pid)).pop()!.text).toContain('are winning again');
+    expect(l.news.filter((n) => n.pids?.includes(star2.pid)).pop()!.text).toContain('is winning again');
     expect(sellable(l, T)).toEqual([]);
   }
 

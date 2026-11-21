@@ -11,7 +11,7 @@
 
 import type { League } from '../types';
 import { activeCoach, candidateScore, coachCareer, coyWinners, openStint, profileOf, userCoach, type CarouselMoves } from './coaches';
-import { addInbox, addNews, andList, curTeamSeason, winPct } from './helpers';
+import { addInbox, addNews, andList, curTeamSeason, teamCity, winPct } from './helpers';
 import { clamp } from '../random';
 import { seasonsInCharge, takeOverTeam } from './owner';
 
@@ -75,7 +75,7 @@ export function makeJobOffers(league: League, moves: CarouselMoves) {
       offers.push({
         tid: o.tid,
         kind: 'opening',
-        note: `The ${league.teams[o.tid].name}, ${record(league, o.tid)}, have an opening${firedText(o.tid)} and want you to take over.`,
+        note: `${teamCity(league, o.tid)}, ${record(league, o.tid)}, has an opening${firedText(o.tid)} and wants you to take over.`,
       });
     if (!offers.length) {
       // nobody's first choice: the jobs nobody else wants, the league's worst records, take a chance on him
@@ -90,8 +90,8 @@ export function makeJobOffers(league: League, moves: CarouselMoves) {
           tid: t.tid,
           kind: hiring.has(t.tid) ? 'opening' : 'change',
           note: hiring.has(t.tid)
-            ? `The ${t.name}, ${record(league, t.tid)}, have an opening${firedText(t.tid)}. Nobody better is calling, so they'll take a chance on you.`
-            : `The ${t.name}, ${record(league, t.tid)}, would make a change for you. ${activeCoach(league, t.tid)?.name ?? 'Their coach'} would take over your old team.`,
+            ? `${teamCity(league, t)}, ${record(league, t.tid)}, has an opening${firedText(t.tid)}. Nobody better is calling, so they'll take a chance on you.`
+            : `${teamCity(league, t)}, ${record(league, t.tid)}, would make a change for you. ${activeCoach(league, t.tid)?.name ?? 'Their coach'} would take over your old team.`,
         });
     }
   } else if (seasonsInCharge(league) >= APPROACH_SEASONS) {
@@ -99,18 +99,18 @@ export function makeJobOffers(league: League, moves: CarouselMoves) {
       offers.push({
         tid: o.tid,
         kind: 'approach',
-        note: `The ${league.teams[o.tid].name} (${record(league, o.tid)}) would like to talk to you about their opening${firedText(o.tid)}.`,
+        note: `${teamCity(league, o.tid)} (${record(league, o.tid)}) would like to talk to you about the opening${firedText(o.tid)}.`,
       });
   }
   if (!offers.length) return;
   league.jobOffers = { season: league.season, offers };
-  const names = andList(offers.map((o) => `the ${league.teams[o.tid].name}`));
+  const names = andList(offers.map((o) => teamCity(league, o.tid)));
   addInbox(league, {
     important: true,
     from: 'Your agent',
     subject: league.fired ? (offers.length > 1 ? `${offers.length} job offers` : 'A job offer') : 'Other teams are calling',
     body: league.fired
-      ? `${names[0].toUpperCase()}${names.slice(1)} want you as head coach. ${offers.map((o) => o.note).join(' ')} Take one: the league waits until you do.`
+      ? `${names} ${offers.length > 1 ? 'want' : 'wants'} you as head coach. ${offers.map((o) => o.note).join(' ')} Take one: the league waits until you do.`
       : `${offers.map((o) => o.note).join(' ')} Stay put, or ${offers.length > 1 ? 'take one of the jobs: the offers stand' : 'take the job: the offer stands'} until the draft.`,
     tone: 'good',
     link: '/office/career',
@@ -128,7 +128,7 @@ export function takeJob(league: League, tid: number): string | null {
   if (tid === league.userTid || !league.teams[tid]) return 'Pick another team.';
   const offer = jobOffer(league, tid);
   // jobs come to him; god mode, or a fired coach with no offers on file (a save from before them), can take any
-  if (!offer && !league.settings.godMode && !(league.fired && !league.jobOffers?.offers.length)) return `The ${league.teams[tid].name} haven't offered you the job.`;
+  if (!offer && !league.settings.godMode && !(league.fired && !league.jobOffers?.offers.length)) return `${teamCity(league, tid)} hasn't offered you the job.`;
   const old = league.teams[league.userTid];
   const displaced = activeCoach(league, tid);
   // his reputation comes with him: part of where he stood with his last owner (a firing's poor standing too)
@@ -144,7 +144,7 @@ export function takeJob(league: League, tid: number): string | null {
       k && k.seasons ? `, ${k.won}-${k.lost} in ${k.seasons} season${k.seasons === 1 ? '' : 's'}${k.titles ? ` with ${k.titles} title${k.titles > 1 ? 's' : ''}` : ''}` : '';
     addNews(league, {
       kind: 'coach',
-      text: `The ${t.name} hired ${league.coachName}${resume}${displaced && !displaced.user && openStint(displaced)?.tid === old.tid ? `. ${displaced.name} takes over the ${old.name}` : ''}.`,
+      text: `${teamCity(league, t)} hired ${league.coachName}${resume}${displaced && !displaced.user && openStint(displaced)?.tid === old.tid ? `. ${displaced.name} takes over ${teamCity(league, old)}` : ''}.`,
       tids: [tid, old.tid],
       pids: [],
     });

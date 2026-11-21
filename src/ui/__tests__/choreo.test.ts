@@ -1771,11 +1771,48 @@ describe('live court choreography', () => {
       }
       // (getting up to 26 ft a second at 15 ft a second squared, his steps through 14..22 against an even run's at 18:
       // shorter; pulling up from it, his lean against an even run's)
+      // (each against an even run's step at the speed he has reached as it lands, between the speeds measured above: which
+      // steps fall in the stretch, one or two of them, is a matter of a frame)
       const going = steps((t) => Math.min(26, (15 * t) / 1000), 2200, 900, 1500).out;
-      expect(going.reduce((n, s) => n + s.len, 0) / going.length).toBeLessThan((0.96 * even[2].reduce((n, s) => n + s.len, 0)) / even[2].length);
+      const evenLen = even.map((run) => run.reduce((n, s) => n + s.len, 0) / run.length);
+      const evenAt = (v: number) => {
+        const at = [4.5, 11, 18, 26];
+        const k = v >= at[at.length - 1] ? at.length - 2 : Math.max(0, at.findIndex((x) => x > v) - 1);
+        return evenLen[k] + ((evenLen[k + 1] - evenLen[k]) * (v - at[k])) / (at[k + 1] - at[k]);
+      };
+      expect(going.length).toBeGreaterThan(0);
+      for (const s of going) expect(s.len).toBeLessThan(0.96 * evenAt(s.v));
       const evenLean = steps(() => 26, 3000, 2000).lean;
       const stopping = steps((t) => (t < 2000 ? 26 : Math.max(0, 26 - (30 * (t - 2000)) / 1000)), 3000, 2200, 2800);
       expect(stopping.lean).toBeLessThan(evenLean - 0.15);
+      // (a run is a runner's, as measured off the takes: his foot leaves the floor well behind him and its heel comes up
+      // toward his seat there, it lands a little ahead of him, never a leg's length out, and each hand is ahead of him
+      // while the foot on its side is behind)
+      {
+        const m = new Puppet(bodyOf(78, 215));
+        let back = 0;
+        let high = 0;
+        let ahead = 0;
+        let across = 0;
+        let n = 0;
+        for (let t = 0; t < 3600; t += 16) {
+          m.update({ x: 0, z: (18 * t) / 1000, yaw: 0, act: 'move', ms: t, dur: 9999, ball: false, who: 3 }, 16);
+          m.arms(null);
+          if (t < 1600) continue;
+          const [fy, fz, hz] = [m.j[J.fl * 3 + 1], m.j[J.fl * 3 + 2], m.j[J.hl * 3 + 2] - m.j[J.sl * 3 + 2]];
+          back = Math.min(back, fz);
+          ahead = Math.max(ahead, fz);
+          if (fz < -0.8) high = Math.max(high, fy);
+          if (Math.abs(fz) > 1) {
+            n++;
+            if (hz * fz < 0) across++;
+          }
+        }
+        expect(back).toBeLessThan(-1.9);
+        expect(high).toBeGreaterThan(1.6);
+        expect(ahead).toBeLessThan(1.8);
+        expect(across / n).toBeGreaterThan(0.75);
+      }
       // (sent backward at 20 ft a second facing the other way: within half a second he has turned and runs)
       const back = new Puppet(bodyOf(78, 215));
       for (let t = 0; t < 900; t += 16) back.update({ x: 0, z: (-20 * t) / 1000, yaw: 0, act: 'screen', ms: t, dur: 9999, ball: false, who: 4 }, 16);

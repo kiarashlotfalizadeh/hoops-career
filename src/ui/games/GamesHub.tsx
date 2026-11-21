@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom';
 import { Check, ChevronRight, ListFilter } from 'lucide-react';
 import type { GameResult, League, ScheduledGame } from '../../core/types';
 import { useLeague, useLeagueMemo } from '../../state/store';
-import { curTeamSeason, fmtDate } from '../../core/league/helpers';
+import { curTeamSeason, fmtDate, teamCity } from '../../core/league/helpers';
 import { keepFigures } from '../../core/format';
 import { neutralSite } from '../../core/league/games';
 import { gameProjection } from '../../core/analysis/preview';
@@ -166,7 +166,7 @@ function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
             <span className={plan.set ? 'gs-next-plan set' : 'gs-next-plan'}>{plan.text}</span>
             {seriesLine && <span className="gs-next-ss">{keepFigures(seriesLine)}</span>}
           </span>
-          <Link to={`/games/${opp}`} className="btn sm gs-next-go" aria-label={`Matchup: the ${t.name}`}>
+          <Link to={`/games/${opp}`} className="btn sm gs-next-go" aria-label={`Matchup: ${teamCity(league, t)}`}>
             Matchup <ChevronRight size={15} aria-hidden="true" />
           </Link>
         </div>
@@ -227,7 +227,9 @@ function ByOpponent({ league, right }: { league: League; right?: ReactNode }) {
         })
         .filter((r) => r.ss.total > 0)
         // the ones you have the better of first, then by how many are left
-        .sort((a, b) => b.ss.won - b.ss.lost - (a.ss.won - a.ss.lost) || b.ss.won + b.ss.lost - (a.ss.won + a.ss.lost) || a.t.name.localeCompare(b.t.name)),
+        .sort(
+          (a, b) => b.ss.won - b.ss.lost - (a.ss.won - a.ss.lost) || b.ss.won + b.ss.lost - (a.ss.won + a.ss.lost) || teamCity(league, a.t).localeCompare(teamCity(league, b.t)),
+        ),
     [league, me],
   );
   if (!rows.length)
@@ -256,13 +258,13 @@ function ByOpponent({ league, right }: { league: League; right?: ReactNode }) {
               </span>
               <TeamLogo tid={t.tid} size={28} decorative />
               <span className="gs-opp">
-                <span className="gs-name ellipsis">{t.name}</span>
+                <span className="gs-name ellipsis">{teamCity(league, t)}</span>
                 <span className="gs-sub">
                   <span>{[p.left, next && `next ${fmtDate(league.season, next.day)}`].filter(Boolean).join(' · ') || 'All played'}</span>
                 </span>
               </span>
               <span className="gs-res">
-                {form.length > 0 ? <FormPills results={form} label={`Against the ${t.name}`} page /> : <ChevronRight size={16} className="dim" aria-hidden="true" />}
+                {form.length > 0 ? <FormPills results={form} label={`Against ${teamCity(league, t)}`} page /> : <ChevronRight size={16} className="dim" aria-hidden="true" />}
               </span>
             </Link>
           );

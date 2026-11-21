@@ -10,7 +10,7 @@ import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { GameResult, League, NewsItem, ScheduledGame } from '../../core/types';
 import { billingsFor, userGameNews, type Billing } from '../../core/analysis/gameStory';
-import { curTeamSeason, dayToDate, fmtDate } from '../../core/league/helpers';
+import { curTeamSeason, dayToDate, fmtDate, teamCity } from '../../core/league/helpers';
 import { boxNames } from './report/names';
 import { neutralSite } from '../../core/league/games';
 import { standings, type StandingRow } from '../../core/league/standings';
@@ -316,7 +316,7 @@ function GameRow({ r, league, tid, h2hTid, ranks, nth }: RowProps & { r: Row; nt
         <span className="gs-name ellipsis">
           {/* the Cup final is on a neutral floor: nobody's home */}
           <span className="gs-at">{r.home || neutralSite(r.g) ? 'vs' : '@'}</span>
-          {opp.name}
+          {teamCity(league, opp)}
         </span>
         {(tag || sub) && (
           <span className="gs-sub">

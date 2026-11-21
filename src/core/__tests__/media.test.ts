@@ -18,7 +18,7 @@ vi.mock('../league/media', async (importOriginal) => {
 import { createLeague, defaultSettings } from '../league/create';
 import { simDay, startRegularSeason } from '../league/season';
 import { CAP, seasonLabel } from '../constants';
-import { teamPlayers } from '../league/helpers';
+import { teamPlayers, teamCity } from '../league/helpers';
 import { BODIES_KEPT, frontPage, latestPower, mediaDay, prune, seasonHonors } from '../league/media';
 import { publish } from '../league/media/voice';
 import { gradeTrade } from '../league/media/grades';
@@ -94,7 +94,7 @@ describe('the press', () => {
       expect(new Set(potw.map((x) => x.day))).toEqual(new Set([8, 15, 22, 29, 36, 43]));
       for (const x of potw) {
         expect(league.teams[x.tid].conf).toBe(x.conf);
-        expect(x.line).toMatch(/points.* a game as the .+ went \d+-\d+/);
+        expect(x.line).toMatch(/points.* a game as [A-Z].+ went \d+-\d+/);
       }
       // December 1st (day 42) closes the first month, October's games with November's
       const month = h.filter((x) => x.kind !== 'potw');
@@ -200,8 +200,8 @@ describe('the press', () => {
       const item = league.news.filter((n) => n.kind === 'trade').at(-1)!;
       expect(item.text.startsWith('Trade: ')).toBe(true);
       expect(item.head).toMatch(/[A-F]/);
-      expect(item.body).toContain(league.teams[4].name);
-      expect(item.body).toContain(league.teams[9].name);
+      expect(item.body).toContain(teamCity(league, 4));
+      expect(item.body).toContain(teamCity(league, 9));
       // a front page only when a star (80+) or two firsts move
       expect(item.weight).toBe(Math.max(mine[0].ovr, theirs[0].ovr) >= 80 ? 3 : 2);
     }
@@ -255,12 +255,16 @@ describe('the press', () => {
       p.awards = [s0 - 1, s0].map((season) => ({ season, type: 'MVP' }));
       expect(awardLine(l, p, 'MVP', s0)).toBe('his second straight');
       l.chronicle = [{ season: s0 - 2, stories: [], series: [[3, 3, 7, 4, 3]] }];
-      expect(rematchLine(l, 7, 3)).toBe(`a rematch of the ${seasonLabel(s0 - 2)} conference finals, which the ${l.teams[3].name} won in seven`);
+      expect(rematchLine(l, 7, 3)).toBe(`a rematch of the ${seasonLabel(s0 - 2)} conference finals, which ${teamCity(l, 3)} won in seven`);
       const book = emptyBook(s0 - 6);
       book.league.reg.players.pts = [[62, p.pid, 3, 7, s0 - 5, 40, 1]];
       l.records = book;
-      expect(anniversaryOf(l, { home: 7, away: 3, day: 40 })?.line).toBe(`Five years ago tonight, ${p.firstName} ${p.lastName} had 62 points against the ${l.teams[7].name}.`);
+      expect(anniversaryOf(l, { home: 7, away: 3, day: 40 })?.line).toBe(`Five years ago tonight, ${p.firstName} ${p.lastName} had 62 points against ${teamCity(l, 7)}.`);
       expect(anniversaryOf(l, { home: 7, away: 3, day: 41 })).toBeNull();
+      // the name copy calls a team by: its city, and its nickname too only where two teams share one ("LA" for Los Angeles)
+      const twins = { teams: l.teams.map((t) => ({ ...t, region: t.tid < 2 ? 'Los Angeles' : t.tid < 4 ? 'Springfield' : `City ${t.tid}`, name: `Nick${t.tid}` })) };
+      expect([0, 1, 2, 3, 4].map((tid) => teamCity(twins, tid))).toEqual(['LA Nick0', 'LA Nick1', 'Springfield Nick2', 'Springfield Nick3', 'City 4']);
+      expect(teamCity(twins, twins.teams[5])).toBe('City 5');
     }
 
     // the summer's farewells: a Hall of Famer's own story with his career line, the wire's list without

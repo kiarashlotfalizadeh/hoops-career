@@ -17,6 +17,7 @@ import {
   rosterMaxNow,
   seasonTid,
   standardRoster,
+  teamCity,
   teamPlayers,
   twoWayRoster,
 } from './helpers';
@@ -1330,7 +1331,7 @@ function decideBid(league: League, b: FaBid) {
     addInbox(league, {
       from: 'Assistant GM',
       subject: `${name} signed with ${t.abbrev}`,
-      body: `${route ? `${name} chose the ${t.region} ${t.name} over us` : `Our offer to ${name} fell through: ${why}. He signed with the ${t.region} ${t.name}`}. Their offer: ${yrs(years)} at ${money(best.amount)}. ${ours}${route && reasons.length ? ` ${reasons.join(', and ').replace(/^./, (c) => c.toUpperCase())}. ${PREF_LABEL[top].replace(/^./, (c) => c.toUpperCase())} matters most to him.` : ''}`,
+      body: `${route ? `${name} chose ${teamCity(league, t)} over us` : `Our offer to ${name} fell through: ${why}. He signed with ${teamCity(league, t)}`}. Their offer: ${yrs(years)} at ${money(best.amount)}. ${ours}${route && reasons.length ? ` ${reasons.join(', and ').replace(/^./, (c) => c.toUpperCase())}. ${PREF_LABEL[top].replace(/^./, (c) => c.toUpperCase())} matters most to him.` : ''}`,
       tone: 'bad',
       link: `/player/${p.pid}`,
     });
@@ -1423,7 +1424,7 @@ export function userOfferSheet(league: League, pid: number, amount: number, year
   if (!h.accept) return { ok: false, reason: h.text, counter: h.counter };
   signOfferSheet(league, p, league.userTid, amount, years, route, league.faDay);
   const own = league.teams[p.rfa.tid];
-  return { ok: true, reason: `Offer sheet signed: the ${own.name} have until the end of ${deadlineLabel(p.rfa.sheet!.until)} to match.` };
+  return { ok: true, reason: `Offer sheet signed: ${teamCity(league, own)} has until the end of ${deadlineLabel(p.rfa.sheet!.until)} to match.` };
 }
 
 /**
@@ -1441,7 +1442,7 @@ export function userTwoWayOffer(league: League, pid: number): { ok: boolean; rea
       reason:
         p.rfa.tid === league.userTid
           ? `${playerName(p)} is your restricted free agent: re-sign him to a standard deal.`
-          : `${playerName(p)} is a restricted free agent. Only an offer sheet the ${league.teams[p.rfa.tid].name} can match signs him.`,
+          : `${playerName(p)} is a restricted free agent. Only an offer sheet ${teamCity(league, p.rfa.tid)} can match signs him.`,
     };
   const closed = signingClosedReason(league);
   if (closed) return { ok: false, reason: closed };
@@ -1488,7 +1489,7 @@ export function userResign(league: League, pid: number, amount: number, years: n
   const rfa = !!p && p.tid === FREE_AGENT && p.rfa?.tid === league.userTid && league.phase === 'freeAgency';
   if (league.phase !== 'resign' && !rfa) return { ok: false, reason: 'Re-signing happens between the draft and free agency.' };
   if (!p || (p.tid !== league.userTid && !rfa)) return { ok: false, reason: 'Not on your team.' };
-  if (rfa && p.rfa!.sheet) return { ok: false, reason: `${playerName(p)} has signed an offer sheet with the ${league.teams[p.rfa!.sheet.tid].name}: match it or let him go.` };
+  if (rfa && p.rfa!.sheet) return { ok: false, reason: `${playerName(p)} has signed an offer sheet with ${teamCity(league, p.rfa!.sheet.tid)}: match it or let him go.` };
   if (contractExp(p.contract) > league.season) return { ok: false, reason: `${playerName(p)} is still under contract.` };
   // (he asked for a trade and never got his role back: he leaves, see pulse.ts)
   const out = askedOutReason(league, p);

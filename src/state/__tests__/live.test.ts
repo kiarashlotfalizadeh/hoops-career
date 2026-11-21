@@ -450,7 +450,7 @@ describe('live game', () => {
       const lg = goLive(l);
       lg.simTo('half');
       const half = buildGameReport(l, lg.sim.result(), l.userTid, { partial: true, elapsed: lg.sim.elapsed })!;
-      expect(half.headline).toMatch(/^Halftime: the .+ (lead|trail) the .+ \d+-\d+\.|^Halftime: the .+ and the .+ are tied at \d+\./);
+      expect(half.headline).toMatch(/^Halftime: [A-Z].+ (leads|trails) [A-Z].+ \d+-\d+\.|^Halftime: [A-Z].+ and [A-Z].+ are tied at \d+\./);
       expect(half.headline).not.toMatch(/ beat | fell to /);
       if (/Biggest factor/.test(half.headline)) expect(half.headline).toContain('Biggest factor so far:');
       expect(half.factors.some((x) => x.category === 'stars')).toBe(false);
@@ -458,7 +458,7 @@ describe('live game', () => {
       expect(buildGameReport(l, lg.sim.result(), l.userTid, { partial: true })!.headline).toMatch(/^After Q3: /);
       const res = lg.commit(l);
       const full = buildGameReport(l, res)!;
-      expect(full.headline).toMatch(/^The .+ (beat|fell to) the .+ \d+-\d+/);
+      expect(full.headline).toMatch(/^[A-Z].+ (beat|fell to) [A-Z].+ \d+-\d+/);
       // the options only change a report that asks for them
       expect(buildGameReport(l, res, l.userTid, { partial: false })).toEqual(full);
       expect(full.factors.filter((f) => f.category === 'stars').every((f) => /erupted for (3[5-9]|[4-9]\d)/.test(f.title))).toBe(true);

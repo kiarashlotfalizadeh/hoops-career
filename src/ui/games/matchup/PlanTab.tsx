@@ -19,7 +19,7 @@ import { Chips, Help, Ovr, Section, Segmented, Tag } from '../../components/ui';
 import { Term } from '../../components/Glossary';
 import { AttackCard, JunkCard } from '../../components/GuardPlanner';
 import { rosterNames } from '../../stats';
-import { teamPlayers } from '../../../core/league/helpers';
+import { teamPlayers, teamCity } from '../../../core/league/helpers';
 import { changesLine, screenChanges } from '../../tactics/changes';
 import { liveSeries, NO_PLAN } from '../data';
 import { CountersCard } from './CountersCard';
@@ -348,7 +348,7 @@ function NoteCard({ league, opp }: { league: League; opp: number }) {
         className="mu-note-input"
         value={text}
         maxLength={500}
-        placeholder={`Anything to remember against the ${league.teams[opp].name}`}
+        placeholder={`Anything to remember against ${teamCity(league, opp)}`}
         aria-label="Notes for this game plan"
         onChange={(e) => {
           setText(e.target.value);

@@ -8,7 +8,7 @@ import { ChevronRight } from 'lucide-react';
 import type { League, ScheduledGame } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
 import { liveInProgress } from '../../state/live';
-import { curTeamSeason, fmtDate, teamPlayers } from '../../core/league/helpers';
+import { curTeamSeason, fmtDate, teamCity, teamPlayers } from '../../core/league/helpers';
 import { keepFigures, ordinal, outFor, plural } from '../../core/format';
 import { cupLabel } from '../../core/league/cup';
 import { matchupPreview, type SidePreview } from '../../core/analysis/preview';
@@ -142,7 +142,7 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
   const home = g.home === me;
   // the night's name as the headline on the paper ("Rivalry night in Denver"), its reason as the dek
   const top = bills[0];
-  const head = top ? `${billingTitle(top)} ${home ? `vs the ${t.name}` : `in ${t.region}`}` : home ? `The ${t.name} in town` : `On the road in ${t.region}`;
+  const head = top ? `${billingTitle(top)} ${home ? `vs ${teamCity(league, t)}` : `in ${t.region}`}` : home ? `${teamCity(league, t)} in town` : `On the road in ${t.region}`;
   // (a series or play-in game starting tonight whose counters measured no gain: no call stops for it, the staff says so here)
   const quiet = useLeagueMemo(() => (g.day === league.day ? quietSeriesStart(league) : null), [league, g.day]);
   const dek = top && quiet ? `${top.line.replace(/\.?$/, '.')} ${quiet}` : (top?.line ?? quiet ?? '');
@@ -241,12 +241,12 @@ export function NextGameRow({ league, g }: { league: League; g: ScheduledGame })
     <Link
       to={`/games/${opp}`}
       className="card td-next"
-      aria-label={`Next game, ${whenLabel(league, g.day)}: ${g.home === me ? 'versus' : 'at'} the ${t.name}. ${fav.line}.${out ? ` ${out}.` : ''} Matchup`}
+      aria-label={`Next game, ${whenLabel(league, g.day)}: ${g.home === me ? 'versus' : 'at'} ${teamCity(league, t)}. ${fav.line}.${out ? ` ${out}.` : ''} Matchup`}
     >
       <TeamLogo tid={opp} size={40} decorative />
       <span className="grow">
         <span className="td-next-t">
-          {g.home === me ? 'vs' : 'at'} {t.name}
+          {g.home === me ? 'vs' : 'at'} {teamCity(league, t)}
         </span>
         {/* (when, the billing if it has one, their record: "Game 29 of 82" is on the game's own page) */}
         <span className="td-next-m">{keep([whenLabel(league, g.day), bills[0]?.tag, `${r.won}-${r.lost}`].filter(Boolean).join(' · '))}</span>

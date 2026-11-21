@@ -21,7 +21,7 @@ import { coachName, randomCoach } from '../teamFactory';
 import { autoTactics } from '../ai/coachAI';
 import { defaultTactics } from '../sim/tactics';
 import { seasonLabel } from '../constants';
-import { addNews, andList, teamPlayers, winPct } from './helpers';
+import { addNews, andList, teamCity, teamPlayers, winPct } from './helpers';
 
 /** One head-coaching job (CoachRecord.stints). */
 export interface CoachStint {
@@ -532,8 +532,8 @@ export function coachingCarousel(league: League): CarouselMoves {
     const tenure = `${n} season${n === 1 ? '' : 's'}`;
     const text =
       last && last.won >= 0.6 * (last.won + last.lost)
-        ? `The ${t.name} parted ways with ${r.name} after a ${last.won}-${last.lost} season (${tenure}, ${k.won}-${k.lost}).`
-        : `The ${t.name} fired ${r.name} after ${tenure} (${k.won}-${k.lost}).`;
+        ? `${teamCity(league, t)} parted ways with ${r.name} after a ${last.won}-${last.lost} season (${tenure}, ${k.won}-${k.lost}).`
+        : `${teamCity(league, t)} fired ${r.name} after ${tenure} (${k.won}-${k.lost}).`;
     addNews(league, { kind: 'coach', text, tids: [t.tid], pids: [] });
     moves.fired.push({ tid: t.tid, coach: r.id });
   }
@@ -580,7 +580,12 @@ export function coachingCarousel(league: League): CarouselMoves {
     r.stints.push({ tid: job.tid, from: season + 1 });
     install(league, job.tid, r);
     const t = league.teams[job.tid];
-    addNews(league, { kind: 'coach', text: `The ${t.name} hired ${r.name}, ${best.career ? resume(league, best.career) : 'a first-time head coach'}.`, tids: [job.tid], pids: [] });
+    addNews(league, {
+      kind: 'coach',
+      text: `${teamCity(league, t)} hired ${r.name}, ${best.career ? resume(league, best.career) : 'a first-time head coach'}.`,
+      tids: [job.tid],
+      pids: [],
+    });
     moves.hired.push({ tid: job.tid, coach: r.id, first: !best.rec });
   }
   return moves;

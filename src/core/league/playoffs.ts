@@ -1,6 +1,6 @@
 import type { League, PlayInGame, PlayoffSeries, ScheduledGame } from '../types';
 import { confStandings, finalsHomeCourt } from './standings';
-import { addInbox, addNews, curTeamSeason, teamName } from './helpers';
+import { addInbox, addNews, curTeamSeason, teamCity } from './helpers';
 
 export function startPlayIn(league: League) {
   league.playIn = [];
@@ -129,7 +129,7 @@ export function processPlayoffResult(league: League, g: ScheduledGame, homeWon: 
     curTeamSeason(league, s.winner).playoffRound = s.round + 1;
     curTeamSeason(league, loser).playoffRound = s.round;
     const res = `${Math.max(s.highWins, s.lowWins)}-${Math.min(s.highWins, s.lowWins)}`;
-    addNews(league, { kind: 'general', text: `The ${teamName(wt)} beat the ${teamName(lt)} ${res} in the ${seriesLabel(s)}.`, tids: [wt.tid, lt.tid], pids: [] });
+    addNews(league, { kind: 'general', text: `${teamCity(league, wt)} beat ${teamCity(league, lt)} ${res} in the ${seriesLabel(s)}.`, tids: [wt.tid, lt.tid], pids: [] });
     advanceRounds(league);
   }
   // the next game (or the next round's opener) goes on the calendar as soon as it's known

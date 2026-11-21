@@ -13,7 +13,7 @@
 
 import type { DraftPick, League, Player, Proposal, Team } from '../types';
 import { Rng, hashString } from '../random';
-import { CAP_FOR, addInbox, andList, contractSeason, curTeamSeason, fmtDate, playerName, sentence, shortName, standardRoster } from './helpers';
+import { CAP_FOR, addInbox, andList, contractSeason, curTeamSeason, fmtDate, playerName, sentence, shortName, standardRoster, teamCity } from './helpers';
 import { tradeValue } from './contracts';
 import { capPayroll, withHoldsMemo } from './freeAgency';
 import { nextPick } from './draft';
@@ -110,11 +110,11 @@ export function proposalError(league: League, p: Proposal): string | null {
   // a three-team offer stands while both other teams still take it (each through the same small drift)
   if (p.legs) {
     const no = evaluateDeal(league, p.legs).teams.find((t) => !t.accept && (t.parts.tooManyFirsts || t.delta < -STANDS_DRIFT * Math.abs(t.valueOut)));
-    return no ? `The ${league.teams[no.tid].name} have changed their minds.` : null;
+    return no ? `${teamCity(league, no.tid)} has changed its mind.` : null;
   }
   // (its own offer stands through a small drift in values as the days pass: STANDS_DRIFT of what it sends)
   const ev = evaluateTrade(league, p.offer);
-  return ev.accept || (ev.ok && !ev.parts.tooManyFirsts && ev.delta >= -STANDS_DRIFT * Math.abs(ev.valueOut)) ? null : `The ${league.teams[p.tid].name} have changed their minds.`;
+  return ev.accept || (ev.ok && !ev.parts.tooManyFirsts && ev.delta >= -STANDS_DRIFT * Math.abs(ev.valueOut)) ? null : `${teamCity(league, p.tid)} has changed its mind.`;
 }
 
 /** An offer whose mail is still unread stands at least this many days more, up to OFFER_MAX_DAYS days after it was made. */
@@ -184,8 +184,8 @@ export function acceptProposal(league: League, id: number): { ok: boolean; reaso
   else executeTrade(league, p.offer);
   // the deal can make other offers impossible (the same player, a full roster)
   cleanProposals(league);
-  const t = league.teams[p.tid];
-  return { ok: true, reason: third !== null ? `Three-team trade done with the ${t.name} and the ${league.teams[third].name}.` : `Trade done with the ${t.region} ${t.name}.` };
+  const C = teamCity(league, p.tid);
+  return { ok: true, reason: third !== null ? `Three-team trade done with ${C} and ${teamCity(league, third)}.` : `Trade done with ${C}.` };
 }
 
 export function declineProposal(league: League, id: number): boolean {
@@ -237,11 +237,11 @@ export function offerSubject(league: League, offer: TradeOffer, third: number | 
 function thirdText(league: League, p: Pick<Proposal, 'tid' | 'legs'>): string {
   const third = proposalThird(league, p);
   if (third === null || !p.legs) return '';
-  const name = league.teams[third].name;
+  const name = teamCity(league, third);
   const takes = p.legs.filter((l) => l.to === third);
   const from = takes[0]?.tid;
   const what = assetText(league, { tid: third, pids: takes.flatMap((l) => l.pids), dpids: takes.flatMap((l) => l.dpids) });
-  return from === league.userTid ? ` You'd send ${what} to the ${name}, who have the room for it.` : ` The ${name} take ${what} from us to make the money work.`;
+  return from === league.userTid ? ` You'd send ${what} to ${name}, which has the room for it.` : ` ${name} takes ${what} from us to make the money work.`;
 }
 
 /** Post an offer (if it is still one the team accepts and the user would want), with its inbox message. */

@@ -8,7 +8,7 @@ import { fmtDate } from '../helpers';
 import { An, an } from '../../format';
 import { worldRng } from '../world';
 import type { MediaState } from '../media';
-import { Voice, confName, last, name, nightLine, nth, perGame, poss, publish, rebOf, rec, recOf, tsOf, type Story } from './voice';
+import { Voice, city, confName, last, name, nightLine, nth, perGame, poss, publish, rebOf, rec, recOf, tsOf, type Story } from './voice';
 
 /** A roundup's first words: how its brief is known again (pruned after a fortnight). */
 export const ROUNDUP = 'Around the league: ';
@@ -167,20 +167,20 @@ function fifty(league: League, v: Voice, res: GameResult, side: TeamBox, opp: Te
   const p = league.players[b.pid];
   if (!p) return;
   const L = last(league, p);
-  const N = league.teams[side.tid].name;
-  const O = league.teams[opp.tid].name;
+  const N = city(league, side.tid);
+  const O = city(league, opp.tid);
   const won = side.pts > opp.pts;
   const head = v.say('fifty', [
-    `${L} scores ${b.pts} ${won ? `as the ${N} beat the ${O}` : `in a loss to the ${O}`}`,
-    `${b.pts} for ${L}${won ? '' : ', and the ' + N + ' still lose'}`,
-    `${L} drops ${b.pts} on the ${O}`,
-    `${poss(L)} ${b.pts}-point night ${won ? `sinks the ${O}` : `isn't enough against the ${O}`}`,
+    `${L} scores ${b.pts} ${won ? `as ${N} beats ${O}` : `in a loss to ${O}`}`,
+    `${b.pts} for ${L}${won ? '' : ', and ' + N + ' still loses'}`,
+    `${L} drops ${b.pts} on ${O}`,
+    `${poss(L)} ${b.pts}-point night ${won ? `sinks ${O}` : `isn't enough against ${O}`}`,
     `${L} goes for ${b.pts}${won ? '' : ' in a losing cause'}`,
   ]);
   const shooting = `${b.fgm}-${b.fga} from the field`;
   // the rest of his shooting, a sentence of its own
   const rest = [b.tpa ? `${b.tpm}-${b.tpa} from three` : '', b.fta ? `${b.ftm}-${b.fta} at the line` : ''].filter(Boolean).join(' and ');
-  const dek = `${name(p)} went ${shooting} in the ${poss(N)} ${score(res)} ${won ? 'win over' : 'loss to'} the ${O}.${rest ? ` He was ${rest}.` : ''}`;
+  const dek = `${name(p)} went ${shooting} in ${poss(N)} ${score(res)} ${won ? 'win over' : 'loss to'} ${O}.${rest ? ` He was ${rest}.` : ''}`;
   // how rare: the season's 50-point nights so far (read only on such a night)
   let fifties = 0;
   for (const g of league.games) if (g.season === league.season) for (const s of [g.home, g.away]) for (const x of s.players) if (x.pts >= 50) fifties++;
@@ -196,8 +196,8 @@ function fifty(league: League, v: Voice, res: GameResult, side: TeamBox, opp: Te
       ? `It's the league's first 50-point game of the ${res.type === 'playoffs' ? 'postseason' : 'season'}.`
       : `It's the ${nth(fifties)} 50-point game around the league this season.`,
     won
-      ? `${mate && mate.pts >= 15 ? `${league.players[mate.pid] ? last(league, league.players[mate.pid]) : mate.name} added ${mate.pts}. ` : ''}The ${N} are ${standing(league, side.tid)}.`
-      : `The rest of the ${N} shot ${side.t.fgm - b.fgm}-${side.t.fga - b.fga}. They are ${standing(league, side.tid)}.`,
+      ? `${mate && mate.pts >= 15 ? `${league.players[mate.pid] ? last(league, league.players[mate.pid]) : mate.name} added ${mate.pts}. ` : ''}${N} is ${standing(league, side.tid)}.`
+      : `His teammates shot ${side.t.fgm - b.fgm}-${side.t.fga - b.fga}. ${N} is ${standing(league, side.tid)}.`,
   ];
   const brief = briefTonight(league, (n) => n.kind === 'milestone' && n.pids.includes(p.pid));
   // a front page for 55, or for the season's first 50
@@ -206,15 +206,15 @@ function fifty(league: League, v: Voice, res: GameResult, side: TeamBox, opp: Te
 }
 
 function comeback(league: League, v: Voice, res: GameResult, w: TeamBox, l: TeamBox) {
-  const WN = league.teams[w.tid].name;
-  const LN = league.teams[l.tid].name;
+  const WN = city(league, w.tid);
+  const LN = city(league, l.tid);
   const lead = l.extra.biggestLead;
   const head = v.say('comeback', [
-    `The ${WN} rally from ${lead} down to beat the ${LN}`,
-    `Down ${lead}, the ${WN} come all the way back`,
-    `The ${LN} blow ${an(lead)} ${lead}-point lead`,
-    `The ${WN} erase ${an(lead)} ${lead}-point hole against the ${LN}`,
-    `${lead} down, and the ${WN} still win`,
+    `${WN} rallies from ${lead} down to beat ${LN}`,
+    `Down ${lead}, ${WN} comes all the way back`,
+    `${LN} blows ${an(lead)} ${lead}-point lead`,
+    `${WN} erases ${an(lead)} ${lead}-point hole against ${LN}`,
+    `${lead} down, and ${WN} still wins`,
   ]);
   const hero = topScorer(w);
   const p = hero ? league.players[hero.pid] : undefined;
@@ -222,18 +222,18 @@ function comeback(league: League, v: Voice, res: GameResult, w: TeamBox, l: Team
   const half = (s: TeamBox) => (s.quarters[0] ?? 0) + (s.quarters[1] ?? 0);
   const q4 = (s: TeamBox) => s.quarters[3] ?? 0;
   const body = [
-    half(l) > half(w) ? `The ${LN} led ${half(l)}-${half(w)} at the half and by as many as ${lead}.` : `The ${LN} were up by as many as ${lead} before it turned.`,
-    q4(w) > q4(l) ? `The ${WN} won the fourth quarter ${q4(w)}-${q4(l)}.` : '',
-    `The ${WN} are ${standing(league, w.tid)}. The ${LN} are ${recOf(tsOf(league, l.tid))}.`,
+    half(l) > half(w) ? `${LN} led ${half(l)}-${half(w)} at the half and by as many as ${lead}.` : `${LN} led by as many as ${lead} before it turned.`,
+    q4(w) > q4(l) ? `${WN} won the fourth quarter ${q4(w)}-${q4(l)}.` : '',
+    `${WN} is ${standing(league, w.tid)}. ${LN} is ${recOf(tsOf(league, l.tid))}.`,
   ];
   publish(league, { kind: 'game', head, dek, body: res.type === 'regular' ? body : body.slice(0, 2), tids: [w.tid, l.tid], pids: p ? [p.pid] : [], weight: 2 });
 }
 
 function overtime(league: League, v: Voice, res: GameResult, w: TeamBox, l: TeamBox) {
-  const WN = league.teams[w.tid].name;
-  const LN = league.teams[l.tid].name;
+  const WN = city(league, w.tid);
+  const LN = city(league, l.tid);
   const ots = res.ot === 3 ? 'triple overtime' : `${res.ot} overtimes`;
-  const head = v.say('ot', [`The ${WN} outlast the ${LN} in ${ots}`, `${res.ot === 3 ? 'Three' : res.ot} overtimes, and the ${WN} survive`, `A ${ots} war goes to the ${WN}`]);
+  const head = v.say('ot', [`${WN} outlasts ${LN} in ${ots}`, `${res.ot === 3 ? 'Three' : res.ot} overtimes, and ${WN} survives`, `A ${ots} war goes to ${WN}`]);
   const hero = topScorer(w);
   const p = hero ? league.players[hero.pid] : undefined;
   const dek = `${WN} ${score(res)} ${LN}${p && hero ? `. ${last(league, p)} played ${Math.round(hero.min)} minutes and scored ${hero.pts}` : ''}.`;
@@ -266,77 +266,69 @@ function runFacts(league: League, tid: number, n: number) {
 }
 
 function winRun(league: League, v: Voice, res: GameResult, w: TeamBox, l: TeamBox, n: number) {
-  const N = league.teams[w.tid].name;
-  const O = league.teams[l.tid].name;
+  const N = city(league, w.tid);
+  const O = city(league, l.tid);
   const head = v.say('run', [
-    `The ${N} make it ${n} straight`,
-    `${n} in a row for the ${N}`,
-    `The ${N} keep rolling: ${n} straight`,
-    `No stopping the ${N}: ${n} wins running`,
-    `Make it ${n}: the ${N} beat the ${O}`,
+    `${N} makes it ${n} straight`,
+    `${n} in a row for ${N}`,
+    `${N} keeps rolling: ${n} straight`,
+    `No stopping ${N}: ${n} wins running`,
+    `Make it ${n}: ${N} beats ${O}`,
   ]);
-  const dek = `${An(Math.max(res.home.pts, res.away.pts))} ${score(res)} win over the ${O} puts the ${N} at ${standing(league, w.tid)}.`;
+  const dek = `${An(Math.max(res.home.pts, res.away.pts))} ${score(res)} win over ${O} puts ${N} at ${standing(league, w.tid)}.`;
   const f = runFacts(league, w.tid, n);
   const lp = f.leader ? league.players[f.leader.pid] : undefined;
   const lastLoss = lastGames(league, w.tid, n + 1)[n];
   const body = [
     `They have won the ${n} by an average of ${f.margin.toFixed(1)} points${lp && f.leader ? `, and ${last(league, lp)} has averaged ${f.leader.ppg.toFixed(1)} over the run` : ''}.`,
     lastLoss
-      ? `Their last loss: ${fmtDate(league.season, lastLoss.day, { month: 'short', day: 'numeric' })}, against the ${league.teams[lastLoss.home.tid === w.tid ? lastLoss.away.tid : lastLoss.home.tid].name}.`
+      ? `Their last loss: ${fmtDate(league.season, lastLoss.day, { month: 'short', day: 'numeric' })}, against ${city(league, lastLoss.home.tid === w.tid ? lastLoss.away.tid : lastLoss.home.tid)}.`
       : '',
   ];
   publish(league, { kind: 'game', head, dek, body, tids: [w.tid, l.tid], pids: lp ? [lp.pid] : [], weight: n >= 15 ? 3 : 2 });
 }
 
 function snapped(league: League, v: Voice, res: GameResult, w: TeamBox, l: TeamBox, n: number) {
-  const N = league.teams[l.tid].name;
-  const O = league.teams[w.tid].name;
-  const head = v.say('snap', [
-    `The ${O} end the ${poss(N)} ${n}-game streak`,
-    `The ${poss(N)} run stops at ${n}`,
-    `${n} and done: the ${O} stop the ${N}`,
-    `The ${O} snap the ${poss(N)} streak at ${n}`,
-  ]);
+  const N = city(league, l.tid);
+  const O = city(league, w.tid);
+  const head = v.say('snap', [`${O} ends ${poss(N)} ${n}-game streak`, `${poss(N)} run stops at ${n}`, `${n} and done: ${O} stops ${N}`, `${O} snaps ${poss(N)} streak at ${n}`]);
   const hero = topScorer(w);
   const p = hero ? league.players[hero.pid] : undefined;
   const dek = `${O} ${score(res)} ${N}${p && hero ? `: ${last(league, p)} had ${nightLine(hero)}` : ''}.`;
-  const body = [`The ${N} had not lost in ${n} games. They are ${standing(league, l.tid)}. The ${O} are ${recOf(tsOf(league, w.tid))}.`];
+  const body = [`${N} had not lost in ${n} games. They are ${standing(league, l.tid)}. ${O} is ${recOf(tsOf(league, w.tid))}.`];
   publish(league, { kind: 'game', head, dek, body, tids: [l.tid, w.tid], pids: p ? [p.pid] : [], weight: n >= 14 ? 3 : 2 });
 }
 
 function skid(league: League, v: Voice, res: GameResult, w: TeamBox, l: TeamBox, n: number) {
-  const N = league.teams[l.tid].name;
-  const head = v.say('skid', [`The ${N} have lost ${n} straight`, `${n} in a row now for the ${N}`, `No end in sight: the ${N} drop ${n} straight`]);
-  const dek = `${league.teams[w.tid].name} ${score(res)} ${N}. The ${N} are ${recOf(tsOf(league, l.tid))}.`;
+  const N = city(league, l.tid);
+  const head = v.say('skid', [`${N} has lost ${n} straight`, `${n} in a row now for ${N}`, `No end in sight: ${N} drops ${n} straight`]);
+  const dek = `${city(league, w.tid)} ${score(res)} ${N}. ${N} is ${recOf(tsOf(league, l.tid))}.`;
   publish(league, { kind: 'game', head, dek, tids: [l.tid, w.tid], pids: [], weight: 1 });
 }
 
 function skidOver(league: League, v: Voice, res: GameResult, w: TeamBox, l: TeamBox, n: number) {
-  const N = league.teams[w.tid].name;
-  const head = v.say('skid-over', [
-    `The ${N} win at last, ending ${an(n)} ${n}-game skid`,
-    `${n} losses, then a win: the ${N} beat the ${league.teams[l.tid].name}`,
-    `The ${poss(N)} ${n}-game slide is over`,
-  ]);
-  const dek = `${N} ${score(res)} ${league.teams[l.tid].name}. The ${N} are ${recOf(tsOf(league, w.tid))}.`;
+  const N = city(league, w.tid);
+  const O = city(league, l.tid);
+  const head = v.say('skid-over', [`${N} wins at last, ending ${an(n)} ${n}-game skid`, `${n} losses, then a win: ${N} beats ${O}`, `${poss(N)} ${n}-game slide is over`]);
+  const dek = `${N} ${score(res)} ${O}. ${N} is ${recOf(tsOf(league, w.tid))}.`;
   publish(league, { kind: 'game', head, dek, tids: [w.tid, l.tid], pids: [], weight: 1 });
 }
 
 function clash(league: League, v: Voice, res: GameResult, w: TeamBox, l: TeamBox) {
-  const WN = league.teams[w.tid].name;
-  const LN = league.teams[l.tid].name;
+  const WN = city(league, w.tid);
+  const LN = city(league, l.tid);
   const conf = confName(league.teams[w.tid].conf);
   const head = v.say('clash', [
-    `The ${WN} beat the ${LN} in a meeting of the ${conf}'s top two`,
-    `First place on the line, and the ${WN} take it`,
-    `The ${WN} win the ${conf}'s heavyweight bout`,
-    `The ${WN} take the measure of the ${LN}`,
+    `${WN} beats ${LN} in a meeting of the ${conf}'s top two`,
+    `First place on the line, and ${WN} takes it`,
+    `${WN} wins the ${conf}'s heavyweight bout`,
+    `${WN} takes the measure of ${LN}`,
   ]);
   const a = topScorer(w);
   const b = topScorer(l);
   const pa = a ? league.players[a.pid] : undefined;
   const pb = b ? league.players[b.pid] : undefined;
-  const dek = `${WN} ${score(res)} ${LN}.${pa && a ? ` ${last(league, pa)} had ${nightLine(a)}.` : ''}${pb && b ? ` ${last(league, pb)} scored ${b.pts} for the ${LN}.` : ''}`;
+  const dek = `${WN} ${score(res)} ${LN}.${pa && a ? ` ${last(league, pa)} had ${nightLine(a)}.` : ''}${pb && b ? ` ${last(league, pb)} scored ${b.pts} for ${LN}.` : ''}`;
   // the season series between them so far
   let ww = 0;
   let lw = 0;
@@ -349,8 +341,8 @@ function clash(league: League, v: Voice, res: GameResult, w: TeamBox, l: TeamBox
     else lw++;
   }
   const body = [
-    `The ${WN} are ${standing(league, w.tid)}. The ${LN} are ${standing(league, l.tid)}.`,
-    ww + lw > 1 ? `The ${WN} ${ww > lw ? 'lead' : ww === lw ? 'have evened' : 'trail'} the season series ${rec(Math.max(ww, lw), Math.min(ww, lw))}.` : '',
+    `${WN} is ${standing(league, w.tid)}. ${LN} is ${standing(league, l.tid)}.`,
+    ww + lw > 1 ? `${WN} ${ww > lw ? 'leads' : ww === lw ? 'has evened' : 'trails'} the season series ${rec(Math.max(ww, lw), Math.min(ww, lw))}.` : '',
   ];
   publish(league, { kind: 'game', head, dek, body, tids: [w.tid, l.tid], pids: [pa?.pid, pb?.pid].filter((x): x is number => x !== undefined), weight: 2 });
 }
@@ -358,26 +350,21 @@ function clash(league: League, v: Voice, res: GameResult, w: TeamBox, l: TeamBox
 function seriesOver(league: League, v: Voice, res: GameResult, s: League['playoffs'][number], seven: boolean, upset: boolean) {
   const wt = s.winner!;
   const lt = wt === s.high ? s.low : s.high;
-  const WN = league.teams[wt].name;
-  const LN = league.teams[lt].name;
+  const WN = city(league, wt);
+  const LN = city(league, lt);
   const ws = wt === s.high ? s.highSeed : s.lowSeed;
   const ls = wt === s.high ? s.lowSeed : s.highSeed;
   const round = s.round === 1 ? 'first round' : s.round === 2 ? 'second round' : `${confName(s.conf as 'E' | 'W')} finals`;
   const head = seven
-    ? v.say('g7', [
-        `The ${WN} win Game 7 and end the ${poss(LN)} season`,
-        `Game 7 goes to the ${WN}`,
-        `The ${WN} survive the ${LN} in seven`,
-        `Seven games, and the ${WN} are through`,
-      ])
-    : v.say('upset', [`No. ${ws} ${WN} knock out No. ${ls} ${LN}`, `Upset: the ${WN} take down the ${LN}`, `The ${LN} are out, beaten by the ${ws}-seed ${WN}`]);
+    ? v.say('g7', [`${WN} wins Game 7 and ends ${poss(LN)} season`, `Game 7 goes to ${WN}`, `${WN} survives ${LN} in seven`, `Seven games, and ${WN} is through`])
+    : v.say('upset', [`No. ${ws} ${WN} knocks out No. ${ls} ${LN}`, `Upset: ${WN} takes down ${LN}`, `${LN} is out, beaten by ${ws}-seed ${WN}`]);
   const hero = topScorer(res.home.tid === wt ? res.home : res.away);
   const p = hero ? league.players[hero.pid] : undefined;
   const dek = `${WN} ${score(res)} ${LN} closes the ${round} ${rec(Math.max(s.highWins, s.lowWins), Math.min(s.highWins, s.lowWins))}.${p && hero ? ` ${last(league, p)} had ${nightLine(hero)}.` : ''}`;
   const brief = briefTonight(league, (n) => n.kind === 'general' && n.tids[0] === wt && n.tids[1] === lt);
   const body = [
-    upset ? `The ${LN} won ${tsOf(league, lt).won} games in the regular season, the ${WN} ${tsOf(league, wt).won}.` : '',
-    s.round < 3 ? `Next for the ${WN}: the ${s.round === 1 ? 'second round' : `${confName(s.conf as 'E' | 'W')} finals`}.` : `The ${WN} are going to the Finals.`,
+    upset ? `${LN} won ${tsOf(league, lt).won} games in the regular season, ${WN} ${tsOf(league, wt).won}.` : '',
+    s.round < 3 ? `Next for ${WN}: the ${s.round === 1 ? 'second round' : `${confName(s.conf as 'E' | 'W')} finals`}.` : `${WN} is going to the Finals.`,
   ];
   tell(league, { kind: 'game', head, dek, body, tids: [wt, lt], pids: p ? [p.pid] : [], weight: s.round >= 3 || (seven && upset) ? 3 : 2 }, brief);
 }
@@ -433,8 +420,8 @@ export function roundup(league: League, m: MediaState) {
   const parts = picked.map(({ b, side, opp }, i) => {
     const p = league.players[b.pid];
     const L = last(league, p);
-    const N = league.teams[side.tid].name;
-    const O = league.teams[opp.tid].name;
+    const N = city(league, side.tid);
+    const O = city(league, opp.tid);
     const won = side.pts > opp.pts;
     const reb = rebOf(b);
     const shape =
@@ -446,10 +433,10 @@ export function roundup(league: League, m: MediaState) {
             ? `${b.pts} and ${b.ast} assists`
             : `${b.pts}`;
     return v.say(`rnd${i}`, [
-      `${L} had ${shape} as the ${N} ${won ? 'beat' : 'lost to'} the ${O}`,
-      won ? `${poss(L)} ${shape} carried the ${N} past the ${O}` : `${poss(L)} ${shape} weren't enough for the ${N} against the ${O}`,
-      `${L} put up ${shape} in the ${poss(N)} ${won ? 'win over' : 'loss to'} the ${O}`,
-      won ? `the ${N} beat the ${O} behind ${poss(L)} ${shape}` : `${L} scored ${b.pts} in a ${N} loss to the ${O}`,
+      `${L} had ${shape} as ${N} ${won ? 'beat' : 'lost to'} ${O}`,
+      won ? `${poss(L)} ${shape} carried ${N} past ${O}` : `${poss(L)} ${shape} weren't enough for ${N} against ${O}`,
+      `${L} put up ${shape} in ${poss(N)} ${won ? 'win over' : 'loss to'} ${O}`,
+      won ? `${N} beat ${O} behind ${poss(L)} ${shape}` : `${L} scored ${b.pts} as ${N} lost to ${O}`,
     ]);
   });
   // one game a sentence, each short enough to read at a glance

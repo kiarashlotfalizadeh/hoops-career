@@ -10,7 +10,7 @@ import { Link } from 'react-router-dom';
 import { Award, Crown, Flame, Medal, Star, Trophy } from 'lucide-react';
 import type { League } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
-import { fmtDate } from '../../core/league/helpers';
+import { fmtDate, teamCity, teamName } from '../../core/league/helpers';
 import { legacyOf } from '../../core/league/legacy';
 import { endText, gradeWord, vsPress, type DecisionThread, type SeasonReview } from '../../core/league/legacyReview';
 import { ownerWord } from '../../core/league/legacyPulse';
@@ -75,11 +75,11 @@ export function SeasonReviewView({ league, season }: { league: League; season: n
   const step = () => ({ '--fo-rv-i': i++ }) as CSSProperties;
   return (
     <main className="page fo-page fo-review">
-      <PageHeader title={`${seasonLabel(r.season)} review`} sub={`${t.region} ${t.name}`} back backTo="/office/career" />
+      <PageHeader title={`${seasonLabel(r.season)} review`} sub={teamName(t)} back backTo="/office/career" />
 
       <section className="slab fo-rv-slab fo-rv-in" style={{ ...slabVars(t.colors), ...step() } as CSSProperties} aria-label="The season">
         <span className="over">
-          {seasonLabel(r.season)} · {t.name}
+          {seasonLabel(r.season)} · {teamCity(league, t)}
         </span>
         <h2 className="fo-rv-head">{r.fired ? 'Fired' : endText(r)}</h2>
         {/* the poster's figure: the season's record, as big as it fits */}

@@ -4,7 +4,7 @@
 // the season's best and its honors). Pure league reading, no React.
 import type { League, Player } from '../../core/types';
 import { allStarVote } from '../../core/league/awards';
-import { curTeamSeason, playerName } from '../../core/league/helpers';
+import { curTeamSeason, playerName, teamCity } from '../../core/league/helpers';
 import { awardLine, awardPhrase } from '../../core/league/media/history';
 import { stillAlive } from '../flow';
 import { lastResults } from './front';
@@ -64,7 +64,7 @@ export function allStarResults(l: League): { head: string; lines: string[]; mine
   const first = mine[0];
   const again = first ? awardLine(l, first, 'All-Star', l.season) : null;
   const head = mine.length
-    ? `${mine.length > 1 ? `${mine.length} All-Stars` : `${playerName(first)}${again && again !== 'his first' ? `, ${awardPhrase(again, 'selection')}` : ''}`} for the ${l.teams[me].name}`
+    ? `${mine.length > 1 ? `${mine.length} All-Stars` : `${playerName(first)}${again && again !== 'his first' ? `, ${awardPhrase(again, 'selection')}` : ''}`} for ${teamCity(l, me)}`
     : `${winner} wins the All-Star Game`;
   return { head, lines, mine };
 }
@@ -76,7 +76,7 @@ export function seasonOver(l: League): boolean {
   return (l.phase === 'playin' || l.phase === 'playoffs') && !stillAlive(l);
 }
 
-/** How his postseason ended, in a line: "Lost 1-4 to the Celtics in the first round", "Out in the play-in". */
+/** How his postseason ended, in a line: "Lost 1-4 to Boston in the first round", "Out in the play-in". */
 export function seasonEndLine(l: League): string {
   const me = l.userTid;
   const ts = curTeamSeason(l, me);
@@ -84,13 +84,13 @@ export function seasonEndLine(l: League): string {
   if (lost) {
     const [w, ls] = lost.high === me ? [lost.highWins, lost.lowWins] : [lost.lowWins, lost.highWins];
     const round = ['', 'first round', 'second round', 'conference finals', 'Finals'][lost.round] ?? 'playoffs';
-    return `Lost ${w}-${ls} to the ${l.teams[lost.winner!].name} in the ${round}.`;
+    return `Lost ${w}-${ls} to ${teamCity(l, lost.winner!)} in the ${round}.`;
   }
   if (ts.playoffRound === 5) {
     const f = l.playoffs.find((s) => s.round === 4 && s.winner === me);
     if (!f) return 'Champions.';
     const [w, ls] = f.high === me ? [f.highWins, f.lowWins] : [f.lowWins, f.highWins];
-    return `${w}-${ls} over the ${l.teams[f.high === me ? f.low : f.high].name} in the Finals.`;
+    return `${w}-${ls} over ${teamCity(l, f.high === me ? f.low : f.high)} in the Finals.`;
   }
   if (ts.playIn || ts.playoffRound === 0) return 'Out in the play-in.';
   return 'Missed the postseason.';

@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { ChevronRight, Trophy } from 'lucide-react';
 import type { GameResult, League, PlayInGame, PlayoffSeries } from '../../core/types';
 import { confStandings } from '../../core/league/standings';
-import { curTeamSeason, fmtDate, playerName } from '../../core/league/helpers';
+import { curTeamSeason, fmtDate, playerName, teamCity, teamName } from '../../core/league/helpers';
 import { seriesLabel } from '../../core/league/playoffs';
 import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
@@ -170,7 +170,7 @@ export function PlayoffsTab({ league, cup }: { league: League; cup?: ReactNode }
  */
 function PlayoffsPoster({ league, phase }: { league: League; phase: Phase }) {
   const me = league.userTid;
-  const name = (tid: number) => league.teams[tid].name;
+  const name = (tid: number) => teamCity(league, tid);
   if (phase === 'live') {
     const mine = league.playoffs.filter((s) => s.high === me || s.low === me).sort((a, b) => b.round - a.round)[0];
     const out = mine && mine.winner !== undefined && mine.winner !== me;
@@ -182,19 +182,19 @@ function PlayoffsPoster({ league, phase }: { league: League; phase: Phase }) {
     const trail = lead === s.high ? s.low : s.high;
     const head =
       s.winner !== undefined
-        ? `${name(s.winner)} beat the ${name(s.winner === s.high ? s.low : s.high)}`
+        ? `${name(s.winner)} beat ${name(s.winner === s.high ? s.low : s.high)}`
         : hw === lw
           ? hw === 0
             ? `${name(s.high)} vs ${name(s.low)}`
             : `${name(s.high)} and ${name(s.low)} tied`
-          : `${name(lead)} lead the ${name(trail)}`;
-    const dek = out ? `${league.teams[me].region} ${name(me)}: out in the ${roundName(mine.round)}` : s.winner === undefined && hw + lw === 0 ? 'Game 1 next' : undefined;
+          : `${name(lead)} leads ${name(trail)}`;
+    const dek = out ? `${name(me)}: out in the ${roundName(mine.round)}` : s.winner === undefined && hw + lw === 0 ? 'Game 1 next' : undefined;
     return <Poster over={`${seasonLabel(league.season)} playoffs`} head={head} dek={dek} fig={{ v: `${Math.max(hw, lw)}-${Math.min(hw, lw)}`, k: seriesLabel(s) }} />;
   }
   const conf = league.teams[me].conf;
   if (phase === 'playin') {
     const seed = curTeamSeason(league, me).seed;
-    const dek = seed && seed <= 6 ? `${name(me)} wait as the ${ordinal(seed)} seed` : undefined;
+    const dek = seed && seed <= 6 ? `${name(me)} waits as the ${ordinal(seed)} seed` : undefined;
     return <Poster over={`${confName(conf)} play-in`} head="Seeds 7 and 8 on the line" dek={dek} />;
   }
   // projected: where you'd open if it ended today
@@ -203,13 +203,13 @@ function PlayoffsPoster({ league, phase }: { league: League; phase: Phase }) {
   const seed = i + 1;
   const pair = R1_PAIRS.find(([h, l]) => h === seed || l === seed);
   const opp = pair && seed <= 6 ? st[(pair[0] === seed ? pair[1] : pair[0]) - 1] : undefined;
-  const head = opp ? `${name(me)} would open with the ${name(opp.tid)}` : seed <= 10 ? `${name(me)} would be in the play-in` : `${name(me)} would miss the playoffs`;
+  const head = opp ? `${name(me)} would open with ${name(opp.tid)}` : seed <= 10 ? `${name(me)} would be in the play-in` : `${name(me)} would miss the playoffs`;
   return <Poster over="If the season ended today" head={head} fig={{ v: ordinal(seed), k: `seed in the ${confName(conf)}` }} />;
 }
 
 function ChampionSlab({ league, season, tid, runnerUp, result, fmvp }: { league: League; season: number; tid: number; runnerUp?: number; result?: string; fmvp?: number }) {
   const p = fmvp !== undefined ? league.players[fmvp] : undefined;
-  const beat = runnerUp !== undefined ? `def. ${league.teams[runnerUp].name}` : undefined;
+  const beat = runnerUp !== undefined ? `def. ${teamCity(league, runnerUp)}` : undefined;
   return (
     <TitleSlab league={league} tid={tid} over={`${seasonLabel(season)} champions`} fig={result} figLabel={result ? `${beat ?? 'Won'} in the Finals` : undefined}>
       {!result && beat}
@@ -230,7 +230,7 @@ function ChampionSlab({ league, season, tid, runnerUp, result, fmvp }: { league:
           className="btn xs"
           spec={() => titlePosterOf(league, season, tid, { runnerUp, result, fmvp })}
           file={posterFile(`${league.teams[tid].name} ${season} champions`)}
-          title={`The ${league.teams[tid].name}' title`}
+          title={`The ${teamName(league.teams[tid])} title`}
         />
       </span>
     </TitleSlab>
@@ -339,7 +339,7 @@ export function FinalsCard({ league, finals, onOpen }: { league: League; finals?
       {tid !== undefined ? <TeamLogo tid={tid} size={46} decorative /> : <span className="bk-ghost" />}
       {/* (two lines at most: "East champion"; "Timberwolves" as much smaller as it needs to fit whole) */}
       <Fit className="bk-fname" min={11}>
-        {tid !== undefined ? league.teams[tid].name : `${conf} champion`}
+        {tid !== undefined ? teamCity(league, tid) : `${conf} champion`}
       </Fit>
       {tid !== undefined && <div className="bk-fconf">{conf}</div>}
       {finals && <div className="score">{wins}</div>}
@@ -496,7 +496,7 @@ function SeriesSheet({ league, series, onClose }: { league: League; series: Play
           {[series.high, series.low].map((tid, i) => (
             <div key={tid} className={`side ${series.winner !== undefined && series.winner !== tid ? 'lose' : ''} ${i === 0 ? '' : 'second'}`}>
               <TeamLogo tid={tid} size={44} decorative />
-              <div className="bk-fname">{league.teams[tid].name}</div>
+              <div className="bk-fname">{teamCity(league, tid)}</div>
               <div className="bk-fconf">{ordinal(i === 0 ? series.highSeed : series.lowSeed)} seed</div>
             </div>
           ))}

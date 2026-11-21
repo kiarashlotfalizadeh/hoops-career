@@ -6,7 +6,7 @@
 import type { League } from '../../types';
 import { seasonLabel } from '../../constants';
 import { playerAge } from '../../playerGen';
-import { teamPlayers } from '../helpers';
+import { teamCity, teamPlayers } from '../helpers';
 import { coachCareer, openStint, userCoach } from '../coaches';
 import { WIN_MARKS } from '../legacy';
 import { countWord, titleLine } from './history';
@@ -41,7 +41,7 @@ export function tenureOf(league: League): Tenure | null {
   const champ = defendingChampion(league);
   const defending = champ && champ.tid === tid && champ.season === league.season - 1;
   if (year === 1) {
-    if (defending) parts.push(`The ${team.name} are the defending champions.`);
+    if (defending) parts.push(`${teamCity(league, team)} is the defending champion.`);
     else if (league.past) {
       const ft = franchiseTitles(league, tid);
       if (!ft.n) parts.push('The franchise has never won a title.');
@@ -84,5 +84,5 @@ export function tenureOf(league: League): Tenure | null {
   const next = WIN_MARKS.find((m) => m > k.won);
   if (next !== undefined && next >= 100 && next - k.won <= 60 && parts.length < 3) parts.push(`${next} wins: ${next - k.won} to go.`);
   if (!parts.length) return null;
-  return { over: `Year ${year} with the ${team.name}`, line: parts.join(' '), banners: titles };
+  return { over: `Year ${year} with ${teamCity(league, team)}`, line: parts.join(' '), banners: titles };
 }

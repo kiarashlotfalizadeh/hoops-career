@@ -15,7 +15,7 @@ import { ordinal, plural } from '../format';
 import { FRANCHISES } from '../teams';
 import { winProb } from '../analysis/winProb';
 import { worldRng } from './world';
-import { addInbox, addNews, fmtDate } from './helpers';
+import { addInbox, addNews, fmtDate, teamCity } from './helpers';
 import { coachCareer, coyWinners, openStint, stintSeasons, userCoach, type CoachCareer, type CoachSeason } from './coaches';
 import { seriesLabel } from './playoffs';
 import { pulseDay } from './legacyPulse';
@@ -183,8 +183,8 @@ export function tipoffChance(g: GameResult, home: boolean): number | null {
   return home ? p : 1 - p;
 }
 
-const teamName = (league: League, tid: number) => `${league.teams[tid].region} ${league.teams[tid].name}`;
-const nick = (league: League, tid: number) => league.teams[tid].name;
+/** The team as copy names it: its city. */
+const nick = (league: League, tid: number) => teamCity(league, tid);
 /** The arena a team plays in (the franchise table's), or "<city>'s arena". */
 export const arenaOf = (league: League, tid: number) => FRANCHISES[tid]?.arena ?? `${league.teams[tid].region}'s arena`;
 /** Where a game was: "at TD Garden" (his road game) or "at home" (the arena named). */
@@ -254,7 +254,7 @@ function winsMilestone(league: League, k: CoachCareer, n: number, side: NonNulla
   const jobs = new Set(k.lines.map((l) => l.tid)).size;
   const pct = (k.won / Math.max(1, k.won + k.lost)).toFixed(3).replace(/^0/, '');
   const head = pick(league, `wins:${n}`, [`Win No. ${n} for ${coach}`, `${coach} reaches ${n} career wins`, `${n} and counting for ${coach}`, `${coach} gets to ${n}`]);
-  const text = `It came ${side.us}-${side.them} over the ${teamName(league, side.opp)} ${where(league, side)}. ${k.won}-${k.lost} as a head coach (${pct})${jobs > 1 ? ` across ${plural(jobs, 'job')}` : ''}.`;
+  const text = `It came ${side.us}-${side.them} over ${nick(league, side.opp)} ${where(league, side)}. ${k.won}-${k.lost} as a head coach (${pct})${jobs > 1 ? ` across ${plural(jobs, 'job')}` : ''}.`;
   const big = n === 100 || n % 500 === 0;
   reach(
     league,
@@ -270,7 +270,7 @@ function winsMilestone(league: League, k: CoachCareer, n: number, side: NonNulla
         : {}),
       mail: {
         from: 'Media Relations',
-        body: `${n} career wins, the latest ${side.us}-${side.them} over the ${nick(league, side.opp)}. You're ${k.won}-${k.lost} (${pct}).`,
+        body: `${n} career wins, the latest ${side.us}-${side.them} over ${nick(league, side.opp)}. You're ${k.won}-${k.lost} (${pct}).`,
       },
     },
     big ? 3 : 2,
@@ -311,9 +311,9 @@ export function legacyGame(league: League, g: ScheduledGame) {
         {
           key: 'all-teams',
           head: pick(league, 'all-teams', [`${league.coachName} has beaten every team in the league`, `All ${league.teams.length - 1}: ${league.coachName} completes the set`]),
-          text: `The ${nick(league, side.opp)} were the last: ${side.us}-${side.them} ${where(league, side)}. Every franchise in the league has now lost to a team he coached.`,
+          text: `${nick(league, side.opp)} was the last: ${side.us}-${side.them} ${where(league, side)}. Every franchise in the league has now lost to a team he coached.`,
           gid: g.gid,
-          mail: { from: 'Media Relations', body: `With the win over the ${nick(league, side.opp)}, you've beaten all ${league.teams.length - 1} other teams in the league.` },
+          mail: { from: 'Media Relations', body: `With the win over ${nick(league, side.opp)}, you've beaten all ${league.teams.length - 1} other teams in the league.` },
         },
         2,
       );
@@ -333,23 +333,23 @@ export function legacyGame(league: League, g: ScheduledGame) {
         {
           key: jobKey(stint.tid, stint.from),
           head: first
-            ? pick(league, 'first-win', [`${coach} gets his first win`, `Win No. 1 for ${coach}`, `${coach} is off the mark against the ${nick(league, side.opp)}`])
+            ? pick(league, 'first-win', [`${coach} gets his first win`, `Win No. 1 for ${coach}`, `${coach} is off the mark against ${nick(league, side.opp)}`])
             : pick(league, jobKey(stint.tid, stint.from), [
-                `${coach}'s first win with the ${nick(league, tid)}`,
+                `${coach}'s first win with ${nick(league, tid)}`,
                 `${coach} is off the mark in ${league.teams[tid].region}`,
-                `A first win for the ${nick(league, tid)}'s new coach`,
+                `A first win for the new ${nick(league, tid)} coach`,
               ]),
-          text: `${side.us}-${side.them} over the ${teamName(league, side.opp)} ${where(league, side)} on ${date}.${first ? '' : ` Win No. ${k.won} of his career, the first of a new job.`}`,
+          text: `${side.us}-${side.them} over ${nick(league, side.opp)} ${where(league, side)} on ${date}.${first ? '' : ` Win No. ${k.won} of his career, the first of a new job.`}`,
           body: first
-            ? `The first of the career came on ${date}: ${teamName(league, tid)} ${side.us}, ${teamName(league, side.opp)} ${side.them}. Every coach in the league has one of these. Only the next ones are hard.`
+            ? `The first of the career came on ${date}: ${nick(league, tid)} ${side.us}, ${nick(league, side.opp)} ${side.them}. Every coach in the league has one of these. Only the next ones are hard.`
             : undefined,
           gid: g.gid,
           mail: {
             from: 'Owner',
-            subject: first ? 'Your first win' : `Your first win with the ${nick(league, tid)}`,
+            subject: first ? 'Your first win' : `Your first win with ${nick(league, tid)}`,
             body: first
               ? `${side.us}-${side.them}. The first one is in. Let's not stop at one.`
-              : `${side.us}-${side.them} over the ${nick(league, side.opp)}. Welcome to ${league.teams[tid].region}. More of those.`,
+              : `${side.us}-${side.them} over ${nick(league, side.opp)}. Welcome to ${league.teams[tid].region}. More of those.`,
           },
         },
         3,
@@ -370,14 +370,14 @@ export function legacyGame(league: League, g: ScheduledGame) {
           {
             key: `streak:${league.season}:${n}`,
             head: pick(league, `streak:${league.season}:${n}`, [
-              `${n} straight for the ${nick(league, tid)}`,
-              `The ${nick(league, tid)} have won ${n} in a row`,
+              `${n} straight for ${nick(league, tid)}`,
+              `${nick(league, tid)} has won ${n} in a row`,
               `${n} in a row and counting`,
             ]),
-            text: `The run reached ${n} with ${side.us}-${side.them} over the ${nick(league, side.opp)} ${where(league, side)}. ${ts.won}-${ts.lost} now.`,
-            body: `Nobody has beaten the ${teamName(league, tid)} since ${streakStart(league, tid, n)}. ${n >= 15 ? `It's the kind of run a season is remembered by.` : `${league.coachName}'s team is the hottest in the league.`}`,
+            text: `The run reached ${n} with ${side.us}-${side.them} over ${nick(league, side.opp)} ${where(league, side)}. ${ts.won}-${ts.lost} now.`,
+            body: `Nobody has beaten ${nick(league, tid)} since ${streakStart(league, tid, n)}. ${n >= 15 ? `It's the kind of run a season is remembered by.` : `${league.coachName}'s team is the hottest in the league.`}`,
             gid: g.gid,
-            mail: { from: 'Media Relations', body: `${n} wins in a row, the latest over the ${nick(league, side.opp)}. You're ${ts.won}-${ts.lost}.` },
+            mail: { from: 'Media Relations', body: `${n} wins in a row, the latest over ${nick(league, side.opp)}. You're ${ts.won}-${ts.lost}.` },
           },
           3,
         );
@@ -397,11 +397,11 @@ export function legacyGame(league: League, g: ScheduledGame) {
           {
             key: `season:${league.season}:${n}`,
             head: pick(league, `season:${league.season}:${n}`, [
-              `The ${nick(league, tid)} reach ${n} wins`,
-              `${n} wins for ${league.coachName}'s ${nick(league, tid)}`,
-              `${n} and still going: the ${nick(league, tid)}`,
+              `${nick(league, tid)} reaches ${n} wins`,
+              `${n} wins for ${nick(league, tid)} under ${league.coachName}`,
+              `${n} and still going: ${nick(league, tid)}`,
             ]),
-            text: `No. ${n} came ${side.us}-${side.them} over the ${nick(league, side.opp)} with ${plural(Math.max(0, 82 - ts.won - ts.lost), 'game')} left.${firstEver ? ` A first ${n}-win season for ${league.coachName}.` : ''}`,
+            text: `No. ${n} came ${side.us}-${side.them} over ${nick(league, side.opp)} with ${plural(Math.max(0, 82 - ts.won - ts.lost), 'game')} left.${firstEver ? ` A first ${n}-win season for ${league.coachName}.` : ''}`,
             gid: g.gid,
             mail: { from: 'Media Relations', body: `${n} wins (${ts.won}-${ts.lost}).${firstEver ? ` The first ${n}-win season of your career.` : ''}` },
           },
@@ -452,17 +452,17 @@ function playoffMilestones(league: League, g: ScheduledGame, side: NonNullable<R
         head: first
           ? pick(league, `title:${league.season}`, [
               `Champions: ${coach} wins his first title`,
-              `The ${nick(league, tid)} are champions, and ${coach} has his ring`,
-              `${coach}'s ${nick(league, tid)} win it all`,
+              `${nick(league, tid)} wins the title, and ${coach} has his ring`,
+              `${coach} and ${nick(league, tid)} win it all`,
             ])
-          : pick(league, `title:${league.season}`, [`Title No. ${titles} for ${coach}`, `${coach} wins it all again`, `The ${nick(league, tid)} are champions once more`]),
-        text: `${games} over the ${teamName(league, side.opp)} in the Finals, closed out ${side.us}-${side.them} ${where(league, side)}.`,
-        body: `${teamName(league, tid)}, ${seasonLabel(league.season)} champions. ${first ? `It is the first title of ${coach}'s career` : `It is ${coach}'s ${ordinalWord(titles)} title`}, won ${games} against the ${nick(league, side.opp)}.`,
+          : pick(league, `title:${league.season}`, [`Title No. ${titles} for ${coach}`, `${coach} wins it all again`, `${nick(league, tid)} wins the title once more`]),
+        text: `${games} over ${nick(league, side.opp)} in the Finals, closed out ${side.us}-${side.them} ${where(league, side)}.`,
+        body: `${nick(league, tid)}, ${seasonLabel(league.season)} champions. ${first ? `It is the first title of ${coach}'s career` : `It is ${coach}'s ${ordinalWord(titles)} title`}, won ${games} against ${nick(league, side.opp)}.`,
         gid: g.gid,
         mail: {
           from: 'Media Relations',
           subject: first ? 'Your first title' : `Title No. ${titles}`,
-          body: `Champions, ${games} over the ${nick(league, side.opp)}.${first ? ' The first of your career.' : ''}`,
+          body: `Champions, ${games} over ${nick(league, side.opp)}.${first ? ' The first of your career.' : ''}`,
         },
       },
       3,
@@ -479,9 +479,9 @@ function playoffMilestones(league: League, g: ScheduledGame, side: NonNullable<R
       {
         key: 'series:first',
         head: pick(league, 'series:first', [`${coach} wins his first playoff series`, `A first series win for ${coach}`, `${coach} gets past the first round`]),
-        text: `${games} over the ${teamName(league, side.opp)} in the ${label}, closed out ${side.us}-${side.them} ${where(league, side)}.`,
+        text: `${games} over ${nick(league, side.opp)} in the ${label}, closed out ${side.us}-${side.them} ${where(league, side)}.`,
         gid: g.gid,
-        mail: { from: 'Media Relations', body: `Your first playoff series win: ${games} over the ${nick(league, side.opp)}.` },
+        mail: { from: 'Media Relations', body: `Your first playoff series win: ${games} over ${nick(league, side.opp)}.` },
       },
       3,
     );
@@ -490,10 +490,10 @@ function playoffMilestones(league: League, g: ScheduledGame, side: NonNullable<R
       league,
       {
         key: `fr:${tid}:series`,
-        head: `${coach}'s first series win with the ${nick(league, tid)}`,
-        text: `${games} over the ${nick(league, side.opp)} in the ${label}.`,
+        head: `${coach}'s first series win with ${nick(league, tid)}`,
+        text: `${games} over ${nick(league, side.opp)} in the ${label}.`,
         gid: g.gid,
-        mail: { from: 'Media Relations', body: `Your first series win with the ${nick(league, tid)}: ${games} over the ${nick(league, side.opp)}.` },
+        mail: { from: 'Media Relations', body: `Your first series win with ${nick(league, tid)}: ${games} over ${nick(league, side.opp)}.` },
       },
       2,
     );
@@ -505,11 +505,11 @@ function playoffMilestones(league: League, g: ScheduledGame, side: NonNullable<R
         key: `round:${round}`,
         head:
           round === 4
-            ? pick(league, 'round:4', [`${coach} is going to the Finals`, `The ${nick(league, tid)} win the ${s.conf === 'E' ? 'East' : 'West'}`])
+            ? pick(league, 'round:4', [`${coach} is going to the Finals`, `${nick(league, tid)} wins the ${s.conf === 'E' ? 'East' : 'West'}`])
             : `${coach} reaches the conference finals`,
-        text: `${games} over the ${nick(league, side.opp)} in the ${label}: a first ${round === 4 ? 'Finals' : 'conference finals'} of his career.`,
+        text: `${games} over ${nick(league, side.opp)} in the ${label}: a first ${round === 4 ? 'Finals' : 'conference finals'} of his career.`,
         gid: g.gid,
-        mail: { from: 'Media Relations', body: `Your first ${round === 4 ? 'Finals' : 'conference finals'}: ${games} over the ${nick(league, side.opp)}.` },
+        mail: { from: 'Media Relations', body: `Your first ${round === 4 ? 'Finals' : 'conference finals'}: ${games} over ${nick(league, side.opp)}.` },
       },
       round === 4 ? 3 : 2,
     );
@@ -532,11 +532,11 @@ export function winValue(w: Pick<SignatureWin, 'kind' | 'p' | 'round' | 'score'>
   return Math.round(base + upset * (w.kind === 'upset' ? 1 : 0.5) + close + (ot ? 2 : 0));
 }
 
-/** The record of the team he beat going in ("the 52-20 Celtics"), from its season now (the game counted). */
+/** The record of the team he beat going in ("52-20 Boston"), from its season now (the game counted). */
 function oppRecord(league: League, opp: number, gameType: string): string {
   const ts = league.teams[opp].seasons.find((x) => x.season === league.season);
-  if (!ts || gameType !== 'regular') return `the ${nick(league, opp)}`;
-  return `the ${ts.won}-${ts.lost} ${nick(league, opp)}`;
+  if (!ts || gameType !== 'regular') return nick(league, opp);
+  return `${ts.won}-${ts.lost} ${nick(league, opp)}`;
 }
 
 function noteSignatureWin(league: League, g: ScheduledGame, res: GameResult, side: NonNullable<ReturnType<typeof mySide>>) {
@@ -559,13 +559,13 @@ function noteSignatureWin(league: League, g: ScheduledGame, res: GameResult, sid
     const games = `${Math.max(s.highWins, s.lowWins)}-${Math.min(s.highWins, s.lowWins)}`;
     w =
       s.round === 4
-        ? { ...base, kind: 'title', round: 4, line: `Won the title ${games} over the ${nick(league, side.opp)}, ${side.us}-${side.them} ${at}` }
-        : { ...base, kind: 'series', round: s.round, line: `Closed out the ${nick(league, side.opp)} ${games} in the ${seriesLabel(s)}, ${side.us}-${side.them} ${at}` };
+        ? { ...base, kind: 'title', round: 4, line: `Won the title ${games} over ${nick(league, side.opp)}, ${side.us}-${side.them} ${at}` }
+        : { ...base, kind: 'series', round: s.round, line: `Closed out ${nick(league, side.opp)} ${games} in the ${seriesLabel(s)}, ${side.us}-${side.them} ${at}` };
   } else if (s) {
     // a win that kept the season alive: they had three wins before it
     const theirs = s.high === side.tid ? s.lowWins : s.highWins;
     if (theirs === 3)
-      w = { ...base, kind: 'elimination', round: s.round, line: `Down to the last game, beat the ${nick(league, side.opp)} ${side.us}-${side.them} ${at} to force another` };
+      w = { ...base, kind: 'elimination', round: s.round, line: `Down to the last game, beat ${nick(league, side.opp)} ${side.us}-${side.them} ${at} to force another` };
   }
   if (!w && pct !== undefined && pct <= UPSET_P)
     w = { ...base, kind: 'upset', line: `Beat ${oppRecord(league, side.opp, g.type)} as a ${pct}% underdog, ${side.us}-${side.them} ${at}` };
@@ -640,7 +640,7 @@ export function legacyDay(league: League) {
         {
           key: 'playoffs:first',
           head: pick(league, 'playoffs:first', [
-            `${league.coachName} takes the ${nick(league, tid)} to the playoffs`,
+            `${league.coachName} takes ${nick(league, tid)} to the playoffs`,
             `A first playoff berth for ${league.coachName}`,
             `${league.coachName} is in the playoffs`,
           ]),
@@ -654,9 +654,9 @@ export function legacyDay(league: League) {
         league,
         {
           key: `fr:${tid}:playoffs`,
-          head: `${league.coachName}'s first playoff trip with the ${nick(league, tid)}`,
+          head: `${league.coachName}'s first playoff trip with ${nick(league, tid)}`,
           text: `${ts.won}-${ts.lost} and ${seed}.`,
-          mail: { from: 'Media Relations', body: `Your first playoff trip with the ${nick(league, tid)}: ${ts.won}-${ts.lost}, ${seed}.` },
+          mail: { from: 'Media Relations', body: `Your first playoff trip with ${nick(league, tid)}: ${ts.won}-${ts.lost}, ${seed}.` },
         },
         2,
       );
@@ -674,7 +674,7 @@ export function legacyDay(league: League) {
           n === 1
             ? pick(league, `coy:${league.season}`, [`${league.coachName} is Coach of the Year`, `Coach of the Year: ${league.coachName}`])
             : `${league.coachName} is Coach of the Year again`,
-        text: `${ts ? `${ts.won}-${ts.lost} with the ${nick(league, tid)}` : `With the ${nick(league, tid)}`}${n > 1 ? `: his ${ordinalWord(n)}` : ''}.`,
+        text: `${ts ? `${ts.won}-${ts.lost} with ${nick(league, tid)}` : `With ${nick(league, tid)}`}${n > 1 ? `: his ${ordinalWord(n)}` : ''}.`,
         mail: {
           from: 'Owner',
           subject: 'Coach of the Year',
@@ -690,11 +690,11 @@ export function legacyDay(league: League) {
       {
         key: `cup:${league.season}`,
         head: `${league.coachName} lifts the In-Season Cup`,
-        text: `The ${teamName(league, tid)} won the ${seasonLabel(league.season)} In-Season Cup${aw.cupRunnerUp !== undefined ? ` over the ${nick(league, aw.cupRunnerUp)}` : ''}.`,
+        text: `${nick(league, tid)} won the ${seasonLabel(league.season)} In-Season Cup${aw.cupRunnerUp !== undefined ? ` over ${nick(league, aw.cupRunnerUp)}` : ''}.`,
         mail: {
           from: 'Media Relations',
           subject: 'In-Season Cup',
-          body: `The Cup is yours${aw.cupRunnerUp !== undefined ? `, won against the ${nick(league, aw.cupRunnerUp)}` : ''}. It goes in the cabinet.`,
+          body: `The Cup is yours${aw.cupRunnerUp !== undefined ? `, won against ${nick(league, aw.cupRunnerUp)}` : ''}. It goes in the cabinet.`,
         },
       },
       2,

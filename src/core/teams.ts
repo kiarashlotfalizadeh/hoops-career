@@ -17,6 +17,15 @@ export interface FranchiseDef {
   capacity: number;
 }
 
+/**
+ * The name copy calls a franchise by before there is a league (the team picker): its city, or with its nickname where
+ * two share one ("LA Cutters"). In a league it is `teamCity` (league/helpers.ts), by the same rule.
+ */
+export function franchiseCity(f: FranchiseDef): string {
+  if (!FRANCHISES.some((o) => o !== f && o.region === f.region)) return f.region;
+  return `${f.region === 'Los Angeles' ? 'LA' : f.region} ${f.name}`;
+}
+
 export const FRANCHISES: FranchiseDef[] = [
   {
     abbrev: 'ATL',

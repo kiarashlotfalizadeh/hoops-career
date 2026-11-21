@@ -13,7 +13,7 @@ import { autoDraftUserPick, finishDraftPhase, newSeason, simDay, startDraft, sta
 import { nextPick } from '../league/draft';
 import { stockMove } from '../league/prospects';
 import { cupTables } from '../league/cup';
-import { CAP_FOR, curTeamSeason, dayToDate, freeAgents, prospects, standardRoster, teamPlayers } from '../league/helpers';
+import { CAP_FOR, curTeamSeason, dayToDate, freeAgents, prospects, standardRoster, teamPlayers, teamCity } from '../league/helpers';
 import { askingContract, releasePlayer, valueScore } from '../league/contracts';
 import { userOffer } from '../league/freeAgency';
 import { takeOverTeam } from '../league/owner';
@@ -533,7 +533,7 @@ describe('two seasons of a fictional league', () => {
       expect(league.news.filter((n) => n.text.startsWith('Around the league')).every((n) => n.day >= league.day - 15)).toBe(true);
       expect(JSON.stringify(m).length).toBeLessThan(30_000);
       // a season of injuries doesn't push the Cup out of the news
-      expect(league.news.some((n) => n.season === league.season && (n.head ?? n.text).includes('win the In-Season Cup'))).toBe(true);
+      expect(league.news.some((n) => n.season === league.season && (n.head ?? n.text).includes('wins the In-Season Cup'))).toBe(true);
     }
 
     // the user's games make the front page on a handful of nights of a fictional league's regular season
@@ -716,7 +716,7 @@ describe('two seasons of a fictional league', () => {
       hotTakes(x, x.media!);
       const deal = x.news.slice(n).find((t) => t.kind === 'take' && t.pids[0] === star.pid)!;
       expect(deal.tids.sort((p, q) => p - q)).toEqual([a, b]);
-      expect(`${deal.head} ${deal.text}`).toContain(star.lastName === deal.head ? star.lastName : x.teams[b].name);
+      expect(`${deal.head} ${deal.text}`).toContain(star.lastName === deal.head ? star.lastName : teamCity(x, b));
       // (once)
       x.day++;
       hotTakes(x, x.media!);

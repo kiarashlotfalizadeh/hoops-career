@@ -11,6 +11,7 @@ import { shortName, teamPath, useSetParams } from '../shared';
 import { KIND_ONE } from './kinds';
 import { linkedText, mentions, newsDate } from './Linked';
 import './news.css';
+import { teamCity } from '../../../core/league/helpers';
 
 /** The current search with `story` set: a story row's link, keeping the tab's filters. */
 export function useStoryHref(): (id: number) => string {
@@ -74,7 +75,7 @@ function Story({ league, n }: { league: League; n: NewsItem }) {
             {tids.map((t) => (
               <Link key={`t${t}`} to={teamPath(t)} className="lg-pchip team">
                 <TeamLogo tid={t} size={18} decorative />
-                <span>{league.teams[t].name}</span>
+                <span>{teamCity(league, t)}</span>
               </Link>
             ))}
             {pids.slice(0, 8).map((pid) => (

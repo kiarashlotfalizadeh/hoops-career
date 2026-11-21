@@ -8,7 +8,7 @@
 
 import type { GameResult, League, Player, ScheduledGame } from '../types';
 import { seasonLabel } from '../constants';
-import { playerName } from '../league/helpers';
+import { playerName, teamCity } from '../league/helpers';
 import { seriesLabel } from '../league/playoffs';
 import { awardLadder } from '../league/awards';
 import { careerOnRecord, careerTotals, STAT_WORD, type MilestoneStat } from './milestones';
@@ -56,9 +56,9 @@ function revenge(league: League, p: Player, opp: number, name: string): Storylin
     .reverse()
     .find((t) => t.season >= left && (t.kind === 'trade' ? t.sides?.some((s) => s.tid === opp && s.players.some((x) => x.pid === p.pid)) : t.pid === p.pid && t.tids[0] === opp));
   const how = txn?.kind === 'trade' ? 'traded him' : txn && ['release', 'waive', 'buyout'].includes(txn.kind) ? 'let him go' : null;
-  const team = league.teams[opp];
+  const team = teamCity(league, opp);
   const since = how === 'traded him' ? `the ${seasonLabel(txn!.season)} trade` : how ? `they let him go in ${seasonLabel(txn!.season)}` : `he left after ${seasonLabel(left)}`;
-  const text = first ? `${name} faces the ${team.name} for the first time since ${since}.` : `${name} faces his old team, the ${team.name}.`;
+  const text = first ? `${name} faces ${team} for the first time since ${since}.` : `${name} faces his old team, ${team}.`;
   const recency = Math.max(0, 3 - (league.season - left));
   return { id: `revenge-${p.pid}`, kind: 'revenge', text, pids: [p.pid], tids: [opp, p.tid], weight: 42 + (first ? 18 : 0) + recency * 3 + Math.max(0, p.ovr - 75) };
 }
@@ -150,7 +150,7 @@ function rematch(league: League, a: number, b: number): Storyline | null {
   const winner = wa === 4 ? a : wb === 4 ? b : null;
   const text =
     winner !== null
-      ? `A rematch of last season's ${label}, which the ${league.teams[winner].name} won ${Math.max(wa, wb)}-${Math.min(wa, wb)}.`
+      ? `A rematch of last season's ${label}, which ${teamCity(league, winner)} won ${Math.max(wa, wb)}-${Math.min(wa, wb)}.`
       : `A rematch of last season's ${label}.`;
   return { id: `rematch-${games[0].seriesId}`, kind: 'rematch', text, pids: [], tids: [a, b], weight: 58 + round * 3 };
 }
@@ -203,7 +203,7 @@ export function storylines(league: League, g: Pick<ScheduledGame, 'gid' | 'home'
         res.push({
           id: `streak-${tid}-${n}`,
           kind: 'streak',
-          text: `The ${league.teams[tid].name} have ${n > 0 ? 'won' : 'lost'} ${Math.abs(n)} straight.`,
+          text: `${teamCity(league, tid)} has ${n > 0 ? 'won' : 'lost'} ${Math.abs(n)} straight.`,
           pids: [],
           tids: [tid],
           weight: 30 + 3 * Math.abs(n),

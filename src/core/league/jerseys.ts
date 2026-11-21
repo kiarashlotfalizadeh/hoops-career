@@ -5,7 +5,7 @@
 // taken, or retired there, picks a free one. Nothing here draws on the league's random stream.
 
 import type { AwardRecord, League, Player, Team } from '../types';
-import { addInbox, addNews, playerName, seasonTid, teamPlayers } from './helpers';
+import { addInbox, addNews, playerName, seasonTid, teamCity, teamPlayers } from './helpers';
 import { careerLeaders } from './records';
 
 /** Numbers a newcomer picks from first (any free number from 0-99 after that). */
@@ -183,12 +183,12 @@ export function retireNumbers(league: League, p: Player): number[] {
     const name = playerName(p);
     (team.retired ??= []).push({ jersey, pid: p.pid, name, season: league.season });
     out.push(tid);
-    addNews(league, { kind: 'retire', text: `The ${team.name} will retire ${name}'s No. ${jersey}.`, tids: [tid], pids: [p.pid] });
+    addNews(league, { kind: 'retire', text: `${teamCity(league, team)} will retire ${name}'s No. ${jersey}.`, tids: [tid], pids: [p.pid] });
     if (tid === league.userTid)
       addInbox(league, {
         from: 'Owner',
         subject: `No. ${jersey} to the rafters`,
-        body: `${name}'s No. ${jersey} goes up to the rafters at the home opener, and nobody wears it for the ${team.name} again.`,
+        body: `${name}'s No. ${jersey} goes up to the rafters at the home opener, and nobody wears it for ${teamCity(league, team)} again.`,
         tone: 'good',
         link: `/league/history?tid=${tid}`,
       });

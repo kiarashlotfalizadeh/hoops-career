@@ -34,7 +34,7 @@ const NAMES: Record<number, string> = { 1: 'Brunson', 2: 'Bridges', 3: 'Anunoby'
 const ctx = (o: Partial<AtmoCtx> = {}): AtmoCtx => ({
   gid: 7,
   user: 0,
-  teams: ['Knicks', '76ers'],
+  teams: ['New York', 'Philadelphia'],
   abbrevs: ['NYK', 'PHI'],
   arena: 'Madison Square Garden',
   name: (pid) => NAMES[pid] ?? `#${pid}`,
@@ -174,13 +174,13 @@ describe('the story of a live game', () => {
       logs.push(poss(1, [15, 2], [{ k: 'timeout', t: 1 }, miss(11)], { clockStart: 450, clockEnd: 440 }));
       const runs = allEvents(fold(logs)).filter((e) => e.kind === 'run');
       expect(runs.map((e) => [e.title, e.weight])).toEqual([
-        ['Knicks on an 8-0 run', 1],
-        ['Knicks on a 10-0 run', 2],
-        ['Knicks on a 15-0 run', 2],
+        ['New York on an 8-0 run', 1],
+        ['New York on a 10-0 run', 2],
+        ['New York on a 15-0 run', 2],
       ]);
       const to = allEvents(fold(logs)).find((e) => e.kind === 'timeout')!;
-      expect(to).toMatchObject({ title: '76ers call timeout', weight: 2 });
-      expect(to.line).toContain("The Knicks' 15-0 run");
+      expect(to).toMatchObject({ title: 'Philadelphia timeout', weight: 2 });
+      expect(to.line).toContain("New York's 15-0 run");
       expect(to.line).toContain('The Garden is on its feet');
       // the user's own timeout is in the play-by-play only
       expect(allEvents(fold(logs, ctx({ user: 1 }))).find((e) => e.kind === 'timeout')!.weight).toBe(1);
@@ -201,8 +201,8 @@ describe('the story of a live game', () => {
       expect(r.t.ties).toBe(1);
       expect(r.t.leadChanges).toBe(2);
       const titles = allEvents(r).map((e) => e.title);
-      expect(titles).toContain('76ers take the lead, 5-2');
-      expect(titles).toContain('Knicks back in front, 6-5');
+      expect(titles).toContain('Philadelphia takes the lead, 5-2');
+      expect(titles).toContain('New York back in front, 6-5');
     }
 
     // clutch time: the last five minutes within five, overtime included
@@ -227,8 +227,8 @@ describe('the story of a live game', () => {
           ctx(),
         );
       const at90 = late(90);
-      expect(at90.events.find((e) => e.kind === 'clutch')?.title).toBe('Knicks by 2, 1:30 to play');
-      expect(at90.events.find((e) => e.kicker === 'Go-ahead')).toMatchObject({ title: 'Brunson puts the Knicks in front', weight: 2 });
+      expect(at90.events.find((e) => e.kind === 'clutch')?.title).toBe('New York by 2, 1:30 to play');
+      expect(at90.events.find((e) => e.kicker === 'Go-ahead')).toMatchObject({ title: 'Brunson puts New York in front', weight: 2 });
       expect(late(12).events.find((e) => e.kicker === 'Go-ahead')!.weight).toBe(3);
       // once a period: the next possession in clutch time doesn't call it again
       const again = advance(at90.t, poss(1, [101, 101], [make(11)], { q: 4, clockStart: 80, clockEnd: 70 }), ctx());
@@ -288,7 +288,7 @@ describe('the story of a live game', () => {
       expect(routine.text.endsWith('.')).toBe(true);
       const winner = voiceLog(t, poss(0, [101, 100], [make(1)], { q: 4, clockStart: 4, clockEnd: 0 }), ctx())[0]!;
       expect(winner.tier).toBe(3);
-      expect(winner.text).toMatch(/Knicks/);
+      expect(winner.text).toMatch(/New York/);
       expect(winner.text.endsWith('!')).toBe(true);
     }
 
@@ -330,7 +330,7 @@ describe('the story of a live game', () => {
       expect(crowdLevel(away.t.crowd)).toBeLessThanOrEqual(1);
       const lines = allEvents(away).filter((e) => e.kind === 'crowd');
       expect(lines.length).toBe(1);
-      expect(lines[0].title).toMatch(/Madison Square Garden|The Garden|Knicks/);
+      expect(lines[0].title).toMatch(/Madison Square Garden|The Garden|New York/);
       // a neutral floor's crowd never hushes
       const neutral = fold(
         game(
@@ -373,10 +373,10 @@ describe('the story of a live game', () => {
       const logs = game([[0, 2], [1, 2], ...Array.from({ length: 16 }, (_, i) => [i % 2 === 0 ? 1 : 0, i % 2 === 0 ? 2 : i === 7 ? 2 : 0] as [0 | 1, number])], 2);
       const r = fold(logs);
       const story = breakStory(r.t, ctx(), 2, [[{ pid: 1, pts: 18 }], [{ pid: 15, pts: 12 }]]);
-      expect(story).toMatch(/^(Down|Trailing by) \d+ at the half\. The 76ers had an? \d+-\d+ second-quarter run\. Brunson (has|leads you with) 18\.$/);
+      expect(story).toMatch(/^(Down|Trailing by) \d+ at the half\. Philadelphia had an? \d+-\d+ second-quarter run\. Brunson (has|leads you with) 18\.$/);
       // short sentences, one thing each
       const q1 = breakStory({ ...r.t, runs: { 1: r.t.runs[2] } }, ctx(), 1, [[{ pid: 1, pts: 9 }], []]);
-      expect(q1).toMatch(/after one\. The 76ers had/);
+      expect(q1).toMatch(/after one\. Philadelphia had/);
       for (const x of q1.split(/(?<=\.) /)) expect(x.split(' ').length).toBeLessThanOrEqual(15);
     }
 

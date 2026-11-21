@@ -5,7 +5,7 @@
 
 import type { BoxLine, GameResult, League, Player, TeamBox } from '../types';
 import { hashString } from '../random';
-import { playerName, shortName } from '../league/helpers';
+import { playerName, shortName, teamCity } from '../league/helpers';
 import { coachTemper, playerVoice, type CoachTemper, type PlayerVoice } from '../league/voices';
 import { decidingFactors, type Factor, type GameReport } from './gameReport';
 import { COMEBACK_WP, wpStory } from './winProb';
@@ -187,8 +187,8 @@ function facts(league: League, res: GameResult, report?: GameReport | null): Fac
     ot: res.ot,
     us,
     them,
-    usName: league.teams[us.tid].name,
-    themName: league.teams[them.tid].name,
+    usName: teamCity(league, us.tid),
+    themName: teamCity(league, them.tid),
     voice,
     pogOurs,
     theirStar,
@@ -746,7 +746,7 @@ const LOST_ON: Partial<Record<Factor['category'], string[]>> = {
 
 function coachLine(f: Facts, gid: number, league: League): string {
   // the other coach's view: "they" are the user's team
-  const us = `the ${f.usName}`;
+  const us = f.usName;
   const comeback = f.low !== undefined && f.low <= COMEBACK_WP;
   if (!f.won) {
     if (comeback)
@@ -876,7 +876,7 @@ const BENCH: Record<CoachTemper, Partial<Record<CoachBeat, ((x: { us: string; st
       () => `Their sets depend on one screen. We took the screen away.`,
     ],
     cw: [
-      (x) => `${x.us} are well coached. We found one edge in the second half and stayed on it.`,
+      (x) => `${x.us} is well coached. We found one edge in the second half and stayed on it.`,
       () => `It was a possession game. We had three more of them.`,
       () => `We made one more adjustment than they did. Most nights that's the margin.`,
     ],
@@ -1058,7 +1058,7 @@ export function postGameQuotes(league: League, res: GameResult, report?: GameRep
   const star = cb === 'cstar' ? f.theirStar : cb === 'cl30' ? f.voice : undefined;
   const benchLine =
     bench?.length && pick(res.gid, `bench:${cb}`, [true, true, false])
-      ? pick(res.gid, `b:${cb}`, bench)({ us: `the ${f.usName}`, star: star ? lastName(league, star) : '', pts: star?.pts ?? 0 })
+      ? pick(res.gid, `b:${cb}`, bench)({ us: f.usName, star: star ? lastName(league, star) : '', pts: star?.pts ?? 0 })
       : coachLine(f, res.gid, league);
   out.push({ who: opp.coach.name, role: `${opp.abbrev} head coach`, tid: opp.tid, text: benchLine.charAt(0).toUpperCase() + benchLine.slice(1) });
   return out;

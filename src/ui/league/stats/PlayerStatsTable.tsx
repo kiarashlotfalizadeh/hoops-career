@@ -13,6 +13,7 @@ import { FilterField, FiltersButton, shortName, teamAbbrev, useQueryParam } from
 import { pctCell, qualifier, type StatRow } from './rows';
 import { SeasonSelect, TypeSelect, type StatSeason } from './season';
 import { plural } from '../../../core/format';
+import { teamCity } from '../../../core/league/helpers';
 
 const PAGE = 100;
 
@@ -231,7 +232,7 @@ export function PlayerStatsTable({ league, rows, s, playoffs }: { league: League
             <Chips label="Position" value={pos} onChange={setPos} options={(['all', ...POSITIONS] as const).map((x) => ({ id: x, label: x === 'all' ? 'All' : x }))} />
           </FilterField>
           <Toggle on={qual === 'q'} onChange={(v) => setQual(v ? 'q' : 'all')} label={`Qualified only: ${quali.label}`} />
-          <Toggle on={mine === '1'} onChange={(v) => setMine(v ? '1' : '0')} label={`${league.teams[league.userTid].name} only`} />
+          <Toggle on={mine === '1'} onChange={(v) => setMine(v ? '1' : '0')} label={`${teamCity(league, league.userTid)} only`} />
         </FiltersButton>
       </div>
       {filtered.length === 0 ? (

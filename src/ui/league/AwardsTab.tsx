@@ -1,7 +1,7 @@
 import { Fragment, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { League, Player, SeasonAwards } from '../../core/types';
-import { curTeamSeason, fmtDate, playerName } from '../../core/league/helpers';
+import { curTeamSeason, fmtDate, playerName, teamCity } from '../../core/league/helpers';
 import { awardRaces, type Cand as AwardCand } from '../../core/league/awards';
 import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
@@ -161,7 +161,7 @@ function Champions({ league, aw }: { league: League; aw: SeasonAwards }) {
               <span className="sub">
                 {aw.cupRunnerUp !== undefined && (
                   <>
-                    def. {league.teams[aw.cupRunnerUp].name}
+                    def. {teamCity(league, aw.cupRunnerUp)}
                     {score}
                   </>
                 )}

@@ -18,6 +18,7 @@ import { RookieWatch, SeasonHighlights } from './Highlights';
 import { bioFacts, careerOf, usePlayerTags } from './Hero';
 import { RETIRED } from '../../core/types';
 import { growthStory } from '../../core/league/devWatch';
+import { teamCity } from '../../core/league/helpers';
 
 /** His scouting profile: each skill as a percentile among every rostered player, best first when `top` trims it. */
 export function ScoutingProfile({ league, p, top, onAll }: { league: League; p: Player; top?: number; onAll?: () => void }) {
@@ -192,7 +193,7 @@ function LegendOverview({ league, p, honors }: { league: League; p: Player; hono
     by.get(s.tid)!.add(s.season);
   }
   const teams = [...by.entries()].map(([tid, ss]) => ({ tid, seasons: ss.size }));
-  const numbers = league.teams.flatMap((t) => (t.retired ?? []).filter((r) => r.pid === p.pid).map((r) => `${t.name} No. ${r.jersey}`));
+  const numbers = league.teams.flatMap((t) => (t.retired ?? []).filter((r) => r.pid === p.pid).map((r) => `${teamCity(league, t)} No. ${r.jersey}`));
   const totals = [
     { k: 'Games', v: c.gp.toLocaleString('en-US') },
     { k: 'Points', v: Math.round(c.pts * c.gp).toLocaleString('en-US') },
@@ -207,7 +208,7 @@ function LegendOverview({ league, p, honors }: { league: League; p: Player; hono
             <span className="tm-meta-in">
               {teams.map((t) => (
                 <span key={t.tid}>
-                  {league.teams[t.tid].name} · {t.seasons} {t.seasons === 1 ? 'season' : 'seasons'}
+                  {teamCity(league, t.tid)} · {t.seasons} {t.seasons === 1 ? 'season' : 'seasons'}
                 </span>
               ))}
             </span>

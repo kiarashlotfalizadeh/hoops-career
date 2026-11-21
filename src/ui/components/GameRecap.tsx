@@ -278,7 +278,7 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
                         .slice(0, 2)
                         .map((r) => {
                           const who = r.pid !== undefined ? `${nameOf(r.pid, '')}'s` : `${league.teams[r.tid]?.abbrev ?? '?'}'s`;
-                          const whose = r.scope === 'league' ? 'league' : `${league.teams[r.tid]?.name ?? 'franchise'}`;
+                          const whose = r.scope === 'league' ? 'league' : 'franchise';
                           const what = r.team && r.stat === 'margin' ? `${r.v}-point win` : recordWhat(r);
                           return `${who} ${what}, a ${whose} ${r.book === 'post' ? 'playoff ' : ''}record`;
                         })

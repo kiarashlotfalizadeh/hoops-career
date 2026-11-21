@@ -4,7 +4,7 @@
 // draft carries on as after a pick (to your next turn, unless it stops before every pick).
 import { Check, Ticket } from 'lucide-react';
 import type { DraftPick, League } from '../../core/types';
-import { playerName, sentence } from '../../core/league/helpers';
+import { playerName, sentence, teamCity } from '../../core/league/helpers';
 import { pickLabel, type TradeOffer } from '../../core/league/trades';
 import { pickName } from '../draft/common';
 import { makeItWork } from '../../core/league/tradeHelp';
@@ -56,8 +56,8 @@ function TradeFor({ league, dp, onDone }: { league: League; dp: DraftPick; onDon
       {!ask.offer ? (
         <Empty>
           {ask.why === 'salary'
-            ? `The ${t.name} would want salary back, and no one or two of your players make it match.`
-            : sentence(`Nothing you can offer gets the ${t.name} to move the ${pickLabel(league, dp)}`)}
+            ? `${teamCity(league, t)} would want salary back, and no one or two of your players make it match.`
+            : sentence(`Nothing you can offer gets ${teamCity(league, t)} to move the ${pickLabel(league, dp)}`)}
         </Empty>
       ) : (
         <>

@@ -658,7 +658,7 @@ it('negotiation and extensions: the ask, the walk-away price, counters and patie
     // like a signing: no trading him for three months
     expect(p.tradeLock).toEqual({ season: l.season, day: Math.max(DEC_15, l.day + 90) });
     expect(l.inbox[0].subject).toMatch(new RegExp(`${p.lastName} signs a 3-year, \\$[0-9.]+M extension`));
-    expect(l.news.at(-1)?.text).toMatch(/extension with the/);
+    expect(l.news.at(-1)?.text).toMatch(/extension with [A-Z]/);
     // released, he leaves this season's salary and the extension's on the books
     expect(releaseDeadMoney(l, p).map((d) => d.season)).toEqual([0, 1, 2, 3].map((i) => l.season + i));
     // after the season he isn't up for re-signing

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Check, ChevronLeft } from 'lucide-react';
-import { FRANCHISES, BBREF_TO_TID } from '../../core/teams';
+import { FRANCHISES, BBREF_TO_TID, franchiseCity } from '../../core/teams';
 import { keepFigures, ordinal, rankOf } from '../../core/format';
 import { TeamLogo } from '../components/TeamLogo';
 import { Fit, More, Ovr, Section, Segmented, Spinner, Toggle } from '../components/ui';
@@ -314,7 +314,7 @@ export default function NewLeague() {
                   onClick={() => setTid(i)}
                 >
                   <TeamLogo tid={i} size={42} decorative />
-                  <span className="nl-team-name">{fr.name}</span>
+                  <span className="nl-team-name">{franchiseCity(fr)}</span>
                   <span className="nl-team-sub">{rank ? rankOf(rank[i], FRANCHISES.length) : `${market(fr.pop)} market`}</span>
                 </button>
               ))}
@@ -322,7 +322,7 @@ export default function NewLeague() {
           {/* in reach while the grid scrolls: the pick shows on the button */}
           <div className="nl-cta">
             <button className="btn primary big block" disabled={!f} onClick={() => setStep('setup')}>
-              {f ? `Take over the ${f.name}` : 'Pick a team'}
+              {f ? `Take over ${franchiseCity(f)}` : 'Pick a team'}
             </button>
           </div>
         </>

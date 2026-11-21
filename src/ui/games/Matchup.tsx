@@ -16,7 +16,7 @@ import { byWorth, counterItem, useCounterWorth, worthText } from './matchup/useC
 import { setPlanItem } from '../../core/league/gamePlans';
 import { act } from '../../state/actions';
 import { GuideStrip } from '../components/GuideStrip';
-import { curTeamSeason, fmtDate } from '../../core/league/helpers';
+import { curTeamSeason, fmtDate, teamCity } from '../../core/league/helpers';
 import { confStandings } from '../../core/league/standings';
 import { neutralSite } from '../../core/league/games';
 import { gameProjection, nextUserGame } from '../../core/analysis/preview';
@@ -86,7 +86,7 @@ function MatchupScreen({ league, opp }: { league: League; opp: number }) {
       {tab === 'scout' && <ScoutTab league={league} opp={opp} />}
       {tab === 'plan' && <PlanTab league={league} opp={opp} />}
       {tab === 'matchups' && <MatchupPlanner league={league} opp={opp} />}
-      {today && <TipOff league={league} gid={preview.gid} opp={opp} name={league.teams[opp].name} />}
+      {today && <TipOff league={league} gid={preview.gid} opp={opp} name={teamCity(league, opp)} />}
     </main>
   );
 }
@@ -137,7 +137,7 @@ function TipOff({ league, gid, opp, name }: { league: League; gid: number; opp: 
         className="btn primary big grow"
         disabled={simming}
         onClick={() => nav('/live')}
-        aria-label={resume ? `Resume the game against the ${name}` : `Tip off against the ${name}${pending ? '. The staff is still looking at its counters' : ''}`}
+        aria-label={resume ? `Resume the game against ${name}` : `Tip off against ${name}${pending ? '. The staff is still looking at its counters' : ''}`}
       >
         <span className="mu-dock-tip">
           <span>

@@ -9,7 +9,7 @@ import { playerAge } from '../../playerGen';
 import { playerName } from '../helpers';
 import { worldRng } from '../world';
 import type { MediaState } from '../media';
-import { Voice, confName, f1, list, nth, perGame, poss, publish, rosters } from './voice';
+import { Voice, city, confName, f1, list, nth, perGame, poss, publish, rosters } from './voice';
 import { defendingChampion } from './past';
 
 /** Simulated seasons behind the predictions: once a season, so a sharper read is affordable. */
@@ -61,38 +61,38 @@ export function seasonPreview(league: League, m: MediaState) {
 function userPreview(league: League, v: Voice, pre: Preseason, odds: TeamOdds[], rost: Player[][]) {
   const tid = league.userTid;
   const t = league.teams[tid];
-  const N = t.name;
+  const N = city(league, tid);
   const row = pre.rows[tid];
   const o = odds[tid];
   const conf = confName(t.conf);
   const tr = tier(row.confRank, o.reach[4]);
   const head =
     tr === 'favourite'
-      ? v.say('pre-fav', [`The pick is the ${N}: ${row.wins} wins and a title`, `The ${N} open as the team to beat`, `Title or bust: the ${N} are the favourites`])
+      ? v.say('pre-fav', [`The pick is ${N}: ${row.wins} wins and a title`, `${N} opens as the team to beat`, `Title or bust: ${N} is the favourite`])
       : tr === 'contender'
         ? v.say('pre-con', [
-            `The ${N} are picked to finish ${nth(row.confRank)} in the ${conf}`,
-            `A contender's season: the ${N} projected for ${row.wins} wins`,
-            `The ${N} open among the ${poss(conf)} best`,
+            `${N} is picked to finish ${nth(row.confRank)} in the ${conf}`,
+            `A contender's season: ${N} projected for ${row.wins} wins`,
+            `${N} opens among the ${poss(conf)} best`,
           ])
         : tr === 'playoff'
           ? v.say('pre-po', [
-              `The ${N} are projected for ${row.wins} wins and a playoff place`,
-              `Playoffs expected: the ${N} picked ${nth(row.confRank)} in the ${conf}`,
-              `The ${poss(N)} bar: ${row.wins} wins and a series`,
+              `${N} is projected for ${row.wins} wins and a playoff place`,
+              `Playoffs expected: ${N} picked ${nth(row.confRank)} in the ${conf}`,
+              `${poss(N)} bar: ${row.wins} wins and a series`,
             ])
           : tr === 'bubble'
             ? v.say('pre-bub', [
-                `On the bubble: the ${N} are picked ${nth(row.confRank)} in the ${conf}`,
-                `The ${N} are projected for the play-in`,
-                `${row.wins} wins and a fight for the play-in: the ${poss(N)} season`,
+                `On the bubble: ${N} picked ${nth(row.confRank)} in the ${conf}`,
+                `${N} is projected for the play-in`,
+                `${row.wins} wins and a fight for the play-in: ${poss(N)} season`,
               ])
             : v.say('pre-lot', [
-                `The ${N} are picked to miss the playoffs`,
-                `A long season ahead: the ${N} projected for ${row.wins} wins`,
-                `The ${N} open in the lottery, by the projections`,
+                `${N} is picked to miss the playoffs`,
+                `A long season ahead: ${N} projected for ${row.wins} wins`,
+                `${N} opens in the lottery, by the projections`,
               ]);
-  const dek = `The projections have the ${N} at ${row.wins}-${82 - row.wins}, ${nth(row.confRank)} in the ${conf}. Their chances: ${pct(o.reach[0])} to make the playoffs, ${pct(o.reach[4])} to win the title.`;
+  const dek = `The projections have ${N} at ${row.wins}-${82 - row.wins}, ${nth(row.confRank)} in the ${conf}. Their chances: ${pct(o.reach[0])} to make the playoffs, ${pct(o.reach[4])} to win the title.`;
   const roster = rost[tid];
   const star = roster[0];
   const newcomers = roster.filter((p) => p.joinedSeason === league.season && p.draft.year !== league.season - 1).slice(0, 2);
@@ -113,33 +113,26 @@ function userPreview(league: League, v: Voice, pre: Preseason, odds: TeamOdds[],
           `Keep an eye on ${playerName(young)}: ${playerAge(young, league.season)}, with plenty of room to grow.`,
         ])
       : '',
-    pre.champ === tid
-      ? `They are the press's pick to win the title.`
-      : pre.champ !== undefined
-        ? `The title pick: the ${league.teams[pre.champ].region} ${league.teams[pre.champ].name}.`
-        : '',
+    pre.champ === tid ? `They are the press's pick to win the title.` : pre.champ !== undefined ? `The title pick: ${city(league, pre.champ)}.` : '',
   ];
   publish(league, { kind: 'preview', head, dek, body, tids: [tid], pids: [star, ...newcomers].filter(Boolean).map((p) => p!.pid), weight: 3 });
 }
 
 function leaguePreview(league: League, v: Voice, pre: Preseason, odds: TeamOdds[]) {
   const C = pre.champ !== undefined ? league.teams[pre.champ] : undefined;
+  const CN = C ? city(league, C.tid) : '';
   const head = C
-    ? v.say('pre-league', [
-        `Season preview: the ${C.name} are the pick`,
-        `${seasonLabel(league.season)} preview: everyone is chasing the ${C.name}`,
-        `The ${C.name} open as everyone's pick`,
-      ])
+    ? v.say('pre-league', [`Season preview: ${CN} is the pick`, `${seasonLabel(league.season)} preview: everyone is chasing ${CN}`, `${CN} opens as everyone's pick`])
     : `${seasonLabel(league.season)} season preview`;
   const top = (conf: 'E' | 'W') =>
     pre.rows
       .filter((r) => league.teams[r.tid].conf === conf)
       .sort((a, b) => a.confRank - b.confRank)
       .slice(0, 6)
-      .map((r) => `${r.confRank}. ${league.teams[r.tid].name} (${r.wins})`)
+      .map((r) => `${r.confRank}. ${city(league, r.tid)} (${r.wins})`)
       .join(', ');
   const mvp = (pre.mvp ?? []).map((pid) => league.players[pid]).filter(Boolean);
-  const dek = `${C ? `The ${C.region} ${C.name} open with a ${pct(odds[C.tid].reach[4])} chance at the title. ` : ''}${mvp.length ? `MVP favourites: ${list(mvp.map(playerName))}.` : ''}`;
+  const dek = `${C ? `${CN} opens with a ${pct(odds[C.tid].reach[4])} chance at the title. ` : ''}${mvp.length ? `MVP favourites: ${list(mvp.map(playerName))}.` : ''}`;
   // the biggest moves on last season: the projection against last season's wins
   const moves = league.teams
     .map((t) => {
@@ -154,13 +147,13 @@ function leaguePreview(league: League, v: Voice, pre: Preseason, odds: TeamOdds[
   const dc = defendingChampion(league);
   const body = [
     dc && dc.season === league.season - 1
-      ? `The defending champions: the ${league.teams[dc.tid].name}${dc.runner >= 0 ? `, ${dc.w}-${dc.l} over the ${league.teams[dc.runner].name} in the Finals` : ''}.${dc.mvp ? ` ${dc.mvp} was Finals MVP.` : ''}`
+      ? `The defending champion: ${city(league, dc.tid)}${dc.runner >= 0 ? `, ${dc.w}-${dc.l} over ${city(league, dc.runner)} in the Finals` : ''}.${dc.mvp ? ` ${dc.mvp} was Finals MVP.` : ''}`
       : '',
     `East: ${top('E')}.`,
     `West: ${top('W')}.`,
-    up && up.d >= 6 ? `The biggest climb on paper: the ${league.teams[up.tid].name}, from ${up.was} wins to a projected ${pre.rows[up.tid].wins}.` : '',
-    down && down.d <= -6 ? `The biggest fall: the ${league.teams[down.tid].name}, from ${down.was} to ${pre.rows[down.tid].wins}.` : '',
-    `And the ${league.teams[league.userTid].name}: ${nth(pre.rows[league.userTid].confRank)} in the ${confName(league.teams[league.userTid].conf)}, ${pre.rows[league.userTid].wins} wins.`,
+    up && up.d >= 6 ? `The biggest climb on paper: ${city(league, up.tid)}, from ${up.was} wins to a projected ${pre.rows[up.tid].wins}.` : '',
+    down && down.d <= -6 ? `The biggest fall: ${city(league, down.tid)}, from ${down.was} to ${pre.rows[down.tid].wins}.` : '',
+    `And ${city(league, league.userTid)}: ${nth(pre.rows[league.userTid].confRank)} in the ${confName(league.teams[league.userTid].conf)}, ${pre.rows[league.userTid].wins} wins.`,
   ];
   publish(league, { kind: 'preview', head, dek, body, tids: C ? [C.tid] : [], pids: mvp.map((p) => p.pid), weight: 2 });
 }

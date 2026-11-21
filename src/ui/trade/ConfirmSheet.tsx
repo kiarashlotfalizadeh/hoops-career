@@ -5,7 +5,7 @@
 import { ordinal } from '../../core/format';
 import { Handshake } from 'lucide-react';
 import type { League } from '../../core/types';
-import { CAP_FOR, playerName } from '../../core/league/helpers';
+import { CAP_FOR, playerName, teamCity } from '../../core/league/helpers';
 import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
 import { capSalary, evaluateTrade, type TradeEval, type TradeOffer } from '../../core/league/trades';
 import { changesStarters, tradeImpact, type TradeImpact } from '../../core/league/tradeImpact';
@@ -31,7 +31,7 @@ export function needsConfirm(league: League, offer: TradeOffer, ev: TradeEval): 
 
 export function ConfirmSheet({ league, offer, onClose, onConfirm }: { league: League; offer: TradeOffer | null; onClose: () => void; onConfirm: (o: TradeOffer) => void }) {
   return (
-    <Sheet open={!!offer} onClose={onClose} title={offer ? `Trade with the ${league.teams[offer.b.tid].name}?` : undefined}>
+    <Sheet open={!!offer} onClose={onClose} title={offer ? `Trade with ${teamCity(league, offer.b.tid)}?` : undefined}>
       {offer && <Body league={league} offer={offer} onClose={onClose} onConfirm={onConfirm} />}
     </Sheet>
   );

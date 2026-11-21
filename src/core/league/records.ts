@@ -16,7 +16,7 @@
 
 import type { BoxLine, GameResult, GameType, League, Player, PlayerStats, TeamSeason } from '../types';
 import { RETIRED } from '../types';
-import { addInbox, addNews, dateToDay, playerName, seasonTotals } from './helpers';
+import { addInbox, addNews, dateToDay, playerName, seasonTotals, teamCity } from './helpers';
 import { realCareerOnRecord } from '../analysis/milestones';
 import { seasonLabel } from '../constants';
 import { plural } from '../format';
@@ -311,8 +311,8 @@ export function recordNews(league: League, res: GameResult, notes0: RecordNote[]
     const opp = first.tid === res.home.tid ? res.away.tid : res.home.tid;
     // a stat that set or tied the league's record names the number once: a franchise record set with a share of the league's goes with it
     const shown = list.filter((n) => n.scope === 'league' || !list.some((m) => m.scope === 'league' && m.stat === n.stat));
-    // (how far back it reaches: "a Bulls record since 1996-97", in a league that has the NBA's past)
-    const whose = (n: RecordNote) => `${n.scope === 'league' ? 'league' : (league.teams[n.tid]?.name ?? 'franchise')} ${post(n)}record${recordSpan(league, n)}`;
+    // (how far back it reaches: "a franchise record since 1996-97", in a league that has the NBA's past)
+    const whose = (n: RecordNote) => `${n.scope === 'league' ? 'league' : 'franchise'} ${post(n)}record${recordSpan(league, n)}`;
     const parts = shown.map((n) => {
       const also = n.kind === 'tie' && list.find((m) => m.scope === 'team' && m.stat === n.stat && m.kind === 'record');
       return `${recordWhat(n)} (${n.kind === 'tie' ? `tying the ${whose(n)}${also ? `, a ${whose(also)}` : ''}` : `a ${whose(n)}`})`;
@@ -329,21 +329,21 @@ export function recordNews(league: League, res: GameResult, notes0: RecordNote[]
     const userGame = res.home.tid === user || res.away.tid === user;
     if (lg && !userGame && remarkable(lg)) {
       const what = recordWhat({ stat: lg.stat, team: lg.team, v: lg.v });
-      const oppName = league.teams[opp]?.name ?? ab(opp);
+      const oppName = league.teams[opp] ? teamCity(league, opp) : ab(opp);
       const span = recordSpan(league, lg);
-      const teamName = league.teams[first.tid]?.name ?? who;
+      const teamName = league.teams[first.tid] ? teamCity(league, first.tid) : who;
       // (a real league's record short of the NBA's older one is the most since 1996-97, and says whose stands)
       const head = span
         ? lg.team
-          ? `The ${teamName} put up ${what}, the most${span}`
+          ? `${teamName} put up ${what}, the most${span}`
           : `${who} scores ${what}, the most${span}`
         : lg.team
-          ? `The ${teamName} set a league record: ${what}`
+          ? `${teamName} sets a league record: ${what}`
           : `${who} sets a league record: ${what}`;
       addNews(league, {
         kind: 'record',
         head,
-        text: `${lg.team ? `Against the ${oppName}` : `For the ${league.teams[first.tid]?.name ?? ab(first.tid)} against the ${oppName}`}: the most in a game ${recordReach(league, lg, res.season)}${pastMarkWords(league, lg)}.`,
+        text: `${lg.team ? `Against ${oppName}` : `For ${teamName} against ${oppName}`}: the most in a game ${recordReach(league, lg, res.season)}${pastMarkWords(league, lg)}.`,
         tids: [first.tid, opp],
         pids: first.pid !== undefined ? [first.pid] : [],
         weight: 3,
@@ -397,7 +397,7 @@ function pastMarkWords(league: League, n: RecordNote): string {
   let out = '';
   if (n.team) {
     const prev = (book.league[kind].teams[n.stat as TeamRecStat] ?? []).map(teamMark).find((m) => m.v < n.v);
-    if (prev) out += `, past ${prev.v} by the ${league.teams[prev.tid]?.name ?? '?'} in ${label(prev.season)}`;
+    if (prev) out += `, past ${prev.v} by ${league.teams[prev.tid] ? teamCity(league, prev.tid) : '?'} in ${label(prev.season)}`;
   } else {
     const prev = (book.league[kind].players[n.stat as RecStat] ?? []).map((r) => gameMark(league, r)).find((m) => m.v < n.v);
     if (prev) out += `, past ${prev.name}'s ${prev.v} in ${label(prev.season)}`;
@@ -424,7 +424,8 @@ function seasonMarkNews(league: League, res: GameResult) {
   if (!ts) return;
   const user = league.userTid;
   const left = Math.max(0, 82 - ts.won - ts.lost);
-  const score = `${won.pts}-${lost.pts} over the ${league.teams[lost.tid]?.name ?? '?'}`;
+  const score = `${won.pts}-${lost.pts} over ${league.teams[lost.tid] ? teamCity(league, lost.tid) : '?'}`;
+  const T = teamCity(league, team);
   const tell = (head: string, text: string) => {
     addNews(league, { kind: 'record', head, text, tids: [tid], pids: [], weight: 3 });
     if (tid === user) addInbox(league, { from: 'Media Relations', subject: head, body: text, tone: 'good', link: '/league/history?view=records' });
@@ -436,21 +437,17 @@ function seasonMarkNews(league: League, res: GameResult) {
     const them = (b: WinsMark) => `the ${seasonLabel(b.season)} ${b.as} (${b.won}-${b.lost})`;
     const tail = left ? ` ${plural(left, 'game')} left.` : ' The regular season is over.';
     if (top && ts.won === top.won + 1)
-      tell(`${ts.won} wins: the ${team.name} pass the record`, `No. ${ts.won} came ${score}: the most wins in a season in league history, past ${them(top)}.${tail}`);
+      tell(`${ts.won} wins: ${T} passes the record`, `No. ${ts.won} came ${score}: the most wins in a season in league history, past ${them(top)}.${tail}`);
     else if (top && ts.won === top.won)
-      tell(`${ts.won} wins: the ${team.name} tie the record`, `No. ${ts.won} came ${score}. It ties ${them(top)} for the most wins in league history.${tail}`);
-    else if (second && ts.won === second.won)
-      tell(`${ts.won} wins for the ${team.name}`, `No. ${ts.won} came ${score}, level with ${them(second)}. Only ${them(top!)} won more.${tail}`);
+      tell(`${ts.won} wins: ${T} ties the record`, `No. ${ts.won} came ${score}. It ties ${them(top)} for the most wins in league history.${tail}`);
+    else if (second && ts.won === second.won) tell(`${ts.won} wins for ${T}`, `No. ${ts.won} came ${score}, level with ${them(second)}. Only ${them(top!)} won more.${tail}`);
   }
   const streak = ALL_TIME_TEAM.streak;
   if (league.past && (ts.streak === streak.v || ts.streak === streak.v + 1)) {
     const lakers = `the ${seasonLabel(streak.season)} ${streak.as} (${streak.v})`;
     if (ts.streak === streak.v)
-      tell(
-        `${ts.streak} straight: the ${team.name} match the record`,
-        `The run reached ${ts.streak} with ${score}. It ties ${lakers} for the longest winning streak in league history.`,
-      );
-    else tell(`${ts.streak} straight: the longest winning streak ever`, `The ${team.name} made it ${ts.streak} in a row with ${score}, past ${lakers}.`);
+      tell(`${ts.streak} straight: ${T} matches the record`, `The run reached ${ts.streak} with ${score}. It ties ${lakers} for the longest winning streak in league history.`);
+    else tell(`${ts.streak} straight: the longest winning streak ever`, `${T} made it ${ts.streak} in a row with ${score}, past ${lakers}.`);
   }
 }
 

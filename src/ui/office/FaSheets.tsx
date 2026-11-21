@@ -2,7 +2,7 @@
 import type { Player } from '../../core/types';
 import { FREE_AGENT } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
-import { TWO_WAY_MAX, shortName, twoWayRoster } from '../../core/league/helpers';
+import { TWO_WAY_MAX, shortName, twoWayRoster, teamCity } from '../../core/league/helpers';
 import { claimBlockedReason, twoWaySalary, twoWayYears, userClaim, waiverOrder, wantsTwoWay } from '../../core/league/contracts';
 import { signingClosedReason, userTwoWayOffer } from '../../core/league/freeAgency';
 import { useLeague } from '../../state/store';
@@ -77,8 +77,8 @@ export function WaiverSheet({ p, onClose }: { p: Player | undefined; onClose: ()
         <div className="col fo-sheet">
           <PlayerHead league={league} p={p} right={<OvrPot p={p} />} />
           <p className="fo-lede small">
-            Released by the {league.teams[w.from].region} {league.teams[w.from].name}. Clears {days > 1 ? `in ${days} days` : days === 1 ? 'tomorrow' : 'today'}. Until then, teams
-            claim him worst record first and take over his contract. Unclaimed, he&apos;s a free agent.
+            Released by {teamCity(league, w.from)}. Clears {days > 1 ? `in ${days} days` : days === 1 ? 'tomorrow' : 'today'}. Until then, teams claim him worst record first and
+            take over his contract. Unclaimed, he&apos;s a free agent.
           </p>
           <div className="fo-lines">
             {w.contract.salaries.map((amt, i) => {

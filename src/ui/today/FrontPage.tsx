@@ -8,7 +8,7 @@ import { ChevronRight } from 'lucide-react';
 import type { League, NewsItem } from '../../core/types';
 import { useLeagueMemo, useStore } from '../../state/store';
 import { confStandings } from '../../core/league/standings';
-import { fmtDate } from '../../core/league/helpers';
+import { fmtDate, teamCity } from '../../core/league/helpers';
 import { goalChance, goalWord } from '../../core/league/ownerGoals';
 import { Avatar, Section, Statline, keep } from '../components/ui';
 import { madeAtt } from '../../core/format';
@@ -46,11 +46,11 @@ export const NEWS_LABEL: Partial<Record<NewsItem['kind'], string>> = {
   release: 'Release',
 };
 
-/** "Beat the Celtics", "Lost at Boston": a result's headline when the press hasn't written one. */
+/** "Beat Boston at home", "Lost at Boston": a result's headline when the press hasn't written one. */
 function plainHead(league: League, r: Result): string {
-  const t = league.teams[r.opp];
-  if (r.won) return r.home ? `Beat the ${t.name} at home` : `Won at ${t.region}`;
-  return r.home ? `Lost to the ${t.name} at home` : `Lost at ${t.region}`;
+  const t = teamCity(league, r.opp);
+  if (r.won) return r.home ? `Beat ${t} at home` : `Won at ${t}`;
+  return r.home ? `Lost to ${t} at home` : `Lost at ${t}`;
 }
 
 /** The player of the game's line: "Brunson: 41 pts, 7 ast". */
@@ -139,7 +139,7 @@ function ResultPoster({ league, lead }: { league: League; lead: Extract<Lead, { 
     <Link
       to={`/game/${r.gid}`}
       className={`td-lead td-result ${r.won ? 'won' : 'lost'}`}
-      aria-label={`${r.won ? 'Won' : 'Lost'} ${scoreText(r)} ${r.home ? 'versus' : 'at'} ${opp.name}. ${story?.head ?? ''} Game report`}
+      aria-label={`${r.won ? 'Won' : 'Lost'} ${scoreText(r)} ${r.home ? 'versus' : 'at'} ${teamCity(league, opp)}. ${story?.head ?? ''} Game report`}
     >
       <span className="slab td-score" aria-hidden="true">
         <span className="td-score-over">
@@ -155,12 +155,12 @@ function ResultPoster({ league, lead }: { league: League; lead: Extract<Lead, { 
           <span className={`td-score-n them ${r.won ? 'lo' : ''}`}>{r.them}</span>
         </span>
         <span className="td-score-foot">
-          <span className="td-score-tm">{me.name}</span>
+          <span className="td-score-tm">{teamCity(league, me)}</span>
           <span className="td-score-by">
             {r.won ? 'Won' : 'Lost'} by {by}
           </span>
           <span className="td-score-tm them">
-            {r.home ? 'vs' : 'at'} {opp.name}
+            {r.home ? 'vs' : 'at'} {teamCity(league, opp)}
           </span>
         </span>
       </span>

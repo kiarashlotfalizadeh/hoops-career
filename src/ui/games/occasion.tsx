@@ -8,6 +8,7 @@ import { billingsFor, formGuide, type Billing } from '../../core/analysis/gameSt
 import { useLeagueMemo } from '../../state/store';
 import { useBack } from '../nav';
 import '../components/gameday.css';
+import { teamCity } from '../../core/league/helpers';
 
 /**
  * A row in a group that opens on the rest (a game's After the game, the Preview's More about
@@ -99,13 +100,13 @@ export function BillingLine({ billings, className = '' }: { billings: Billing[];
 }
 
 /**
- * An ordinary night's headline, where a billing would stand: "The Los Angeles Clippers in town", "At
- * the Denver Nuggets", "Against the Boston Celtics" (a neutral floor).
+ * An ordinary night's headline, where a billing would stand: "Toronto in town", "At Denver",
+ * "Against Boston" (a neutral floor).
  */
 export function nightTitle(league: League, g: ScheduledGame, neutral: boolean): string {
   const me = league.userTid;
-  const t = league.teams[g.home === me ? g.away : g.home];
-  return neutral ? `Against the ${t.region} ${t.name}` : g.home === me ? `The ${t.region} ${t.name} in town` : `At the ${t.region} ${t.name}`;
+  const t = teamCity(league, g.home === me ? g.away : g.home);
+  return neutral ? `Against ${t}` : g.home === me ? `${t} in town` : `At ${t}`;
 }
 
 const SEEN_KEY = 'hc-results-seen';
