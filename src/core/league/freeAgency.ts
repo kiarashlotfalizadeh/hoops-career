@@ -94,6 +94,7 @@ import {
 import { logMove } from './transactions';
 import { money, moneyExact } from '../format';
 import { askedOutReason, wantsOut } from './pulse';
+import { playerSays } from './voices';
 
 export { FA_DAYS };
 
@@ -1396,7 +1397,7 @@ export function userOffer(league: League, pid: number, amount: number, years: nu
   addInbox(league, {
     from: 'Assistant GM',
     subject: `${playerName(p)} signed`,
-    body: `${playerName(p)} agreed to ${years} year${years > 1 ? 's' : ''} at ${money(amount)} per season${extras.option ? `, with a ${extras.option} option on the last` : ''}${isException(route) ? `, using our ${EXCEPTIONS[route].name} for the season` : ''}. He has been added to the end of your rotation.`,
+    body: `“${playerSays(league, p, 'deal', `${season}:sign`)}”\n${playerName(p)} agreed to ${years} year${years > 1 ? 's' : ''} at ${money(amount)} per season${extras.option ? `, with a ${extras.option} option on the last` : ''}${isException(route) ? `, using our ${EXCEPTIONS[route].name} for the season` : ''}. He has been added to the end of your rotation.`,
     tone: 'good',
     link: `/player/${p.pid}`,
   });
@@ -1511,5 +1512,5 @@ export function userResign(league: League, pid: number, amount: number, years: n
   const h = hearOffer(league, p, 'resign', { amount, years, option: extras.option }, { min: 1, max: most });
   if (!h.accept) return { ok: false, reason: h.text, counter: h.counter };
   signPlayer(league, p, league.userTid, amount, years, { start: league.season + 1, option: extras.option });
-  return { ok: true, reason: `${playerName(p)} re-signs!` };
+  return { ok: true, reason: `${playerName(p)} re-signs! “${playerSays(league, p, 'deal', `${league.season}:resign`)}”` };
 }

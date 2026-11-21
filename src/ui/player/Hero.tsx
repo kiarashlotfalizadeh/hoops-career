@@ -27,6 +27,9 @@ import { careerOnRecord } from '../../core/analysis/milestones';
 import { ShareButton } from '../share/ShareButton';
 import { playerPosterOf, posterFile } from '../share/specs';
 import { roleRead } from '../../core/league/pulse';
+import { PLAYER_VOICE, playerVoice } from '../../core/league/voices';
+import { formStretch } from '../../core/league/legends';
+import { FormMark } from '../components/FormMark';
 
 /** A slab for a player with no team (a free agent, a prospect, a retired player): the neutral kit's colours. */
 const NO_TEAM: [string, string, string] = ['#2a3441', '#8a94a4', '#c4cfdc'];
@@ -54,7 +57,7 @@ function statusLine(league: League, p: Player): string {
           : '';
 }
 
-/** His marks in the order they matter (hurt, an award race, development, the Hall, a two-way deal, his archetype, his tier): the hero shows two, his Overview the rest. */
+/** His marks in the order they matter (hurt, a hot or cold stretch, an award race, development, the Hall, a two-way deal, his voice, his archetype, his tier): the hero shows two, his Overview the rest. */
 export function usePlayerTags(league: League, p: Player): { key: string; node: ReactNode }[] {
   // this season's award ladders, as the Awards tab draws them (once games are played)
   const races = useLeagueMemo(() => {
@@ -64,6 +67,8 @@ export function usePlayerTags(league: League, p: Player): { key: string; node: R
   const dev = p.tid >= 0 ? devTag(league, p) : null;
   // how he stands with his role, when he isn't content with it (your players; anyone, anywhere, who has asked for a trade: pulse.ts)
   const role = roleRead(league, p);
+  // on a tear or in a slump (the form the engine plays him at: league/legends.ts)
+  const form = formStretch(league, p);
   const inRaces = races
     ? RACES.flatMap(([k, label]) => {
         const i = races[k].findIndex((x) => x.c.p.pid === p.pid);
@@ -83,6 +88,7 @@ export function usePlayerTags(league: League, p: Player): { key: string; node: R
           },
         ]
       : []),
+    ...(form ? [{ key: 'form', node: <FormMark league={league} p={p} words /> }] : []),
     ...(role && role.word !== 'Content' ? [{ key: 'role', node: <Tag tone={role.tone === 'bad' ? 'bad' : 'warn'}>{role.word}</Tag> }] : []),
     ...inRaces.map((r) => ({
       key: r,
@@ -95,7 +101,19 @@ export function usePlayerTags(league: League, p: Player): { key: string; node: R
     ...(dev ? [{ key: 'dev', node: <DevTagChip tag={dev} /> }] : []),
     ...(p.hof ? [{ key: 'hof', node: <Tag tone="warn">Hall of Fame</Tag> }] : []),
     ...(p.contract.twoWay && p.tid >= 0 ? [{ key: 'twoway', node: <Tag>Two-way</Tag> }] : []),
-    ...(p.nick ? [{ key: 'nick', node: <Tag tone="warn">“{p.nick}”</Tag> }] : []),
+    // (how he talks to the press and across the table: league/voices.ts)
+    ...(p.tid >= FREE_AGENT
+      ? [
+          {
+            key: 'voice',
+            node: (
+              <span className="tag" title="How he talks: to the press, and in contract talks.">
+                {PLAYER_VOICE[playerVoice(league, p)]}
+              </span>
+            ),
+          },
+        ]
+      : []),
     { key: 'arch', node: <Tag>{p.archetype}</Tag> },
     {
       key: 'tier',

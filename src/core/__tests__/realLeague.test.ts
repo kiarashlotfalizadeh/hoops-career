@@ -18,6 +18,7 @@ import { CAP_FOR, curTeamSeason, freeAgents, payroll, revenueScale, standardRost
 import { askingContract, releasePlayer, valueScore } from '../league/contracts';
 import { userOffer } from '../league/freeAgency';
 import { FIRING_LINE, ownerEvaluation, takeOverTeam } from '../league/owner';
+import { ownerWords, verdictOf } from '../league/ownerVoice';
 import { levelOdds } from '../league/jobSecurity';
 import {
   forcedPayroll,
@@ -679,7 +680,9 @@ describe('two seasons of the real league', () => {
       delete l.ownerGoals;
       ownerEvaluation(l);
       expect(l.ownerReviews!.at(-1)).toMatchObject({ season: l.season, goals: [] });
-      expect(l.inbox[0].body).toMatch(/^I'm .*\. Wins: [+-]\d+ · Playoffs: [+-]\d+ · Finances: [+-]\d+\./);
+      // (his verdict in his own manner: ownerVoice.ts)
+      expect(l.inbox[0].body.startsWith(`${ownerWords(l).verdict[verdictOf(l.ownerMood.total)]} Wins: `)).toBe(true);
+      expect(l.inbox[0].body).toMatch(/ Wins: [+-]\d+ · Playoffs: [+-]\d+ · Finances: [+-]\d+\./);
     }
 
     // firing
@@ -730,7 +733,7 @@ describe('two seasons of the real league', () => {
       seasons(b.l, b.og, 1, true);
       expect(b.l.fired).toBeFalsy();
       expect(b.l.ownerReviews!.at(-1)!.grade).toBeLessThan(-0.85);
-      expect(b.l.inbox[0].body).toMatch(/serious conversation/);
+      expect(b.l.inbox[0].body).toContain(ownerWords(b.l).warning);
       seasons(b.l, b.og, 1, true);
       expect(b.l.fired).toBe(true);
       expect(b.l.ownerMood.total).toBeLessThan(FIRING_LINE);

@@ -1,15 +1,12 @@
-// Who people are when they talk: a player's voice in front of a microphone, a coach's, an owner's
-// quirk on top of what he wants, a rival front office's way of doing business, and the nicknames the
-// league gives its best. None of it is a mood to manage: nobody is happy or unhappy here, there are
-// no promises and no conversations. It is how the same facts sound coming from different people, and
-// (for owners and front offices) a small, stated lean in what they value. Everything is read from a
-// hash of the league and the person, the same all career, except a nickname, which is given once and
-// kept (Player.nick).
+// Who people are when they talk: a player's voice in front of a microphone and across a table from
+// his team, a coach's, an owner's quirk on top of what he wants, and a rival front office's way of
+// doing business. None of it is a mood to manage: nobody is happy or unhappy here, there are no
+// promises and no conversations. It is how the same facts sound coming from different people, and
+// (for owners and front offices) a small, stated lean in what they value and how often they deal.
+// Everything is read from a hash of the league and the person, the same all career.
 
 import type { GmTemper, League, Player, Team } from '../types';
-import { RETIRED } from '../types';
 import { hashString, mix32 } from '../random';
-import { composites } from '../ratings';
 
 const pickBy = <T>(key: string, list: readonly T[]): T => list[mix32(hashString(key)) % list.length];
 const unit = (key: string) => mix32(hashString(key)) / 4294967296;
@@ -47,6 +44,87 @@ export function playerVoice(league: Pick<League, 'id' | 'season'>, p: Pick<Playe
   for (const k of order) if ((x -= w[k]) <= 0) return k;
   return 'stoic';
 }
+
+/**
+ * The moments a player speaks for himself away from the floor: asking out (short of his minutes, or
+ * tired of losing), taking the request back, and across the table in contract talks (a deal done, a
+ * counter, a lowball heard, talks broken off).
+ */
+export type VoiceBeat = 'askRole' | 'askLosing' | 'settled' | 'deal' | 'counter' | 'lowball' | 'walk';
+
+const OFF_COURT: Record<PlayerVoice, Record<VoiceBeat, string[]>> = {
+  showman: {
+    askRole: ['People pay to watch me play. They cannot watch me sit.', 'I am a headliner. Find me a stage that knows it.'],
+    askLosing: ['I belong in games people stay up for. These are not those.', 'Nobody remembers a great player on a team like this. Move me somewhere that matters.'],
+    settled: ['The lights are back on. I am staying.', 'I have my stage again. Forget what I said.'],
+    deal: ['Tell the building I am not going anywhere.', 'Good. Now put my face on the tickets.'],
+    counter: ['I fill buildings. The number should look like it.', 'You are close. Stars cost a little more than close.'],
+    lowball: ['Was that a real offer? I thought it was a joke.', 'I have seen what the banners cost. Do not insult me.'],
+    walk: ['I am done talking. Somebody will pay for a show.', 'We are finished here. I will be on somebody else’s poster.'],
+  },
+  stoic: {
+    askRole: ['I want to play. I am not playing. Trade me.', 'My minutes are gone. I would like to go too.'],
+    askLosing: ['I want to win. That is not happening here.', 'Too much losing. Trade me.'],
+    settled: ['I am playing again. The request is withdrawn.', 'It is settled. I will stay.'],
+    deal: ['Fine. Where do I sign?', 'Good. Done.'],
+    counter: ['Not enough. This is my number.', 'More than that. Not much more.'],
+    lowball: ['No.', 'That is not a serious offer.'],
+    walk: ['We are done.', 'I have nothing more to say.'],
+  },
+  grinder: {
+    askRole: ['I did everything you asked and the minutes went anyway. Let me earn them somewhere else.', 'I cannot work my way off a bench I am never let off. Trade me.'],
+    askLosing: [
+      'I will outwork anybody, but the work has to count for something. It does not here.',
+      'I give this team everything every night and we are still going nowhere. I want out.',
+    ],
+    settled: ['I got my minutes back the only way I know how. I am staying.', 'I earned my way back in. Forget the request.'],
+    deal: ['Thank you. I will earn every dollar of it.', 'Good. I will be in the gym at six.'],
+    counter: ['I have earned more than that, one practice at a time.', 'I am not asking for a gift. I am asking for what the work is worth.'],
+    lowball: ['I have bled for this team. That offer says nobody noticed.', 'Nobody outworks me, and that is what you think it is worth?'],
+    walk: ['I do not beg. I will go and earn it somewhere else.', 'I am done asking. The work will speak to another team.'],
+  },
+  professor: {
+    askRole: ['My minutes are down and I have not gotten worse. That tells me where this is going.', 'I can read a rotation. I am not in this one, so trade me.'],
+    askLosing: [
+      'I have looked at this roster and at my age. The two timelines do not meet.',
+      'There is no version of this season that ends well, and I do not have many seasons to spend.',
+    ],
+    settled: ['The situation changed, so my answer does. I am staying.', 'I asked out for a reason, and the reason is gone.'],
+    deal: ['The terms are fair to both sides. I will sign.', 'That is the right number and the right length. Agreed.'],
+    counter: ['Look at what players like me signed for last summer. I am asking for that.', 'The market sets my price. You are a little under it.'],
+    lowball: ['I know what I am worth to the dollar, and so do you. Try again.', 'That figure is not supported by anything. I have checked.'],
+    walk: ['We are too far apart for more talk to help. I will see what the market says.', 'We have each said our number three times. It is not going to change today.'],
+  },
+  joker: {
+    askRole: ['I have the best seat in the building. I would like a worse one, on the floor.', 'My warmups are tired of me. Trade me somewhere I get to take them off.'],
+    askLosing: ['I have run out of jokes about losing, and I had a lot of them. I want out.', 'Even I cannot keep this locker room laughing. Send me somewhere fun.'],
+    settled: ['Never mind. I was being dramatic. I am good.', 'Forget I said anything. I like it here again.'],
+    deal: ['Deal. Dinner is on me. Somewhere cheap.', 'Sold. My mother will be thrilled. She wanted more, but she will be thrilled.'],
+    counter: ['I have a very expensive dog. Go a little higher.', 'Close. Add a little and I will stop telling this story at parties.'],
+    lowball: ['I laughed. Then I saw you were serious.', 'Good one. Now what is the real offer?'],
+    walk: ['I love you all, but I am hanging up now.', 'This has been fun. It has not been productive. Bye.'],
+  },
+  firebrand: {
+    askRole: ['I am better than the man playing my minutes, and everybody in that gym knows it. Trade me.', 'Nobody sits me. Not here, not anywhere. Get me out.'],
+    askLosing: ['I did not come here to lose and smile about it. Get me out.', 'Somebody here is fine with losing. I am not. Trade me.'],
+    settled: ['You fixed it. Good. Do not make me say it twice.', 'Fine. I am staying. Keep it this way.'],
+    deal: ['Good. Now go and get me some help.', 'That is what respect looks like. It took you long enough.'],
+    counter: ['That is not respect. This is my number.', 'You are paying me like somebody you can replace. You cannot.'],
+    lowball: ['Disrespectful. I will remember that number.', 'Is that what you think of me? Say it to my face.'],
+    walk: ['We are done. I will make sure you regret it twice a year.', 'I am not hearing another word. You had your chance.'],
+  },
+};
+
+/**
+ * What a player says for himself at one of those moments, in his own voice: the same words for the
+ * same moment (`key` tells two of the same kind apart: the season he asked, the offer he heard).
+ */
+export function playerSays(league: Pick<League, 'id' | 'season'>, p: Pick<Player, 'pid' | 'ovr' | 'bornYear' | 'tend'>, beat: VoiceBeat, key: string | number = ''): string {
+  return pickBy(`${league.id}:${p.pid}:says:${beat}:${key}`, OFF_COURT[playerVoice(league, p)][beat]);
+}
+
+/** Every line there is for a moment, in every voice (the tests read them). */
+export const offCourtLines = (beat: VoiceBeat): string[] => Object.values(OFF_COURT).flatMap((v) => v[beat]);
 
 // ---------------------------------------------------------------- coaches
 
@@ -146,8 +224,18 @@ export interface GmStyle {
   star: number;
   ownPick: number;
   ownCore: number;
-  /** How readily he deals with other AI teams. */
+  /**
+   * How readily he deals, against a straight shooter's 1: the share of days he is in the market at all
+   * (see takesCalls: against the league's busiest), how often he is then the one who picks up the
+   * phone first (aiTrades.ts weighs who shops by it), and, on average over the league's front
+   * offices, how many deals a day the league makes.
+   */
   busy: number;
+  /**
+   * Deadline fever: in the deadline's last days (trades.ts's FEVER), what he gives past an even deal,
+   * as a share of what he sends, for a trade that brings him its best player. Among AI teams only.
+   */
+  fever: number;
   /** What he says taking a deal and turning one down. */
   yes: string[];
   no: string[];
@@ -162,6 +250,7 @@ export const GM_STYLE: Record<GmTemper, GmStyle> = {
     ownPick: 0.88,
     ownCore: 1,
     busy: 1.25,
+    fever: 0.09,
     yes: ['Done. I did not come here to fold.', 'Send the paperwork before I change my mind.'],
     no: ['There is no star in this for me. Call back with one.', 'I do not get out of bed for that.'],
   },
@@ -173,6 +262,7 @@ export const GM_STYLE: Record<GmTemper, GmStyle> = {
     ownPick: 1.15,
     ownCore: 1,
     busy: 0.9,
+    fever: 0,
     yes: ['Fine. But I counted my picks twice.', 'It works. The picks stay where I can see them.'],
     no: ['You are asking for my picks. People always do.', 'Those picks are not for sale at that price.'],
   },
@@ -184,6 +274,7 @@ export const GM_STYLE: Record<GmTemper, GmStyle> = {
     ownPick: 1,
     ownCore: 1.12,
     busy: 0.75,
+    fever: 0,
     yes: ['It hurts to do it, but it is right for the team.', 'I will make the call to him myself. Deal.'],
     no: ['He has been here a long time. It would take more than that.', 'I do not move my guys for a fair price. Beat it.'],
   },
@@ -195,6 +286,7 @@ export const GM_STYLE: Record<GmTemper, GmStyle> = {
     ownPick: 1.03,
     ownCore: 1,
     busy: 1,
+    fever: 0,
     yes: ['I can live with that. Barely.', 'Pleasure doing business. For me.'],
     no: ['I win my trades. This is not one.', 'Try again when it hurts you a little.'],
   },
@@ -206,6 +298,7 @@ export const GM_STYLE: Record<GmTemper, GmStyle> = {
     ownPick: 0.97,
     ownCore: 0.96,
     busy: 1.4,
+    fever: 0.06,
     yes: ['Sure, let us shake it up.', 'Why not. I was getting bored of this roster.'],
     no: ['Even I cannot make that one work.', 'I like a deal as much as anyone. Not this one.'],
   },
@@ -217,6 +310,7 @@ export const GM_STYLE: Record<GmTemper, GmStyle> = {
     ownPick: 1,
     ownCore: 1,
     busy: 1,
+    fever: 0,
     yes: ['That is fair. Deal.', 'Works for both of us. Done.'],
     no: ['The value is not there yet.', 'Close, but it is not even.'],
   },
@@ -233,6 +327,31 @@ export const drawTempers = (league: Pick<League, 'id' | 'teams'>): Record<number
 
 export const gmStyle = (league: Pick<League, 'id' | 'gm'>, tid: number): GmStyle => GM_STYLE[gmTemper(league, tid)];
 
+/** The busiest front office in the league (but the user's): the one that is in the market every day. */
+function busiest(league: Pick<League, 'id' | 'gm' | 'teams' | 'userTid'>): number {
+  let most = 0;
+  for (const t of league.teams) if (t.tid !== league.userTid) most = Math.max(most, gmStyle(league, t.tid).busy);
+  return most || 1;
+}
+
+/**
+ * Whether a front office is in the market today: shopping its own players and taking other teams'
+ * calls. The league's busiest always is; the others on the share of days their `busy` is of his (in
+ * a league with a tinkerer, a straight shooter about five days in seven, a loyalist a little over
+ * half of them), the same answer all day and for every caller: a hash of the league, the day and the
+ * team, nothing drawn from the league's stream. A league of one temper is all in, every day.
+ */
+export function takesCalls(league: Pick<League, 'id' | 'gm' | 'teams' | 'userTid' | 'season' | 'day'>, tid: number): boolean {
+  const share = gmStyle(league, tid).busy / busiest(league);
+  return share >= 1 || unit(`${league.id}:${league.season}:${league.day}:${tid}:calls`) < share;
+}
+
+/** The league's front offices' average `busy` (but the user's team's): a league of tinkerers trades more than one of loyalists. */
+export function leagueBusy(league: Pick<League, 'id' | 'gm' | 'teams' | 'userTid'>): number {
+  const ai = league.teams.filter((t) => t.tid !== league.userTid);
+  return ai.length ? ai.reduce((a, t) => a + gmStyle(league, t.tid).busy, 0) / ai.length : 1;
+}
+
 /** "Shark · wins the trade or walks": a front office in a line, for the trade screens. */
 export const gmLine = (league: Pick<League, 'id' | 'gm'>, team: Pick<Team, 'tid'>) => {
   const s = gmStyle(league, team.tid);
@@ -242,77 +361,3 @@ export const gmLine = (league: Pick<League, 'id' | 'gm'>, team: Pick<Team, 'tid'
 /** What a front office says about a deal it took or turned down (the same words for the same deal). */
 export const gmSays = (league: Pick<League, 'id' | 'gm'>, tid: number, yes: boolean, key: string | number) =>
   pickBy(`${league.id}:${tid}:gm-says:${key}`, yes ? gmStyle(league, tid).yes : gmStyle(league, tid).no);
-
-// ---------------------------------------------------------------- nicknames
-
-/**
- * Nicknames by what a player is. Invented for the game: none is a real player's. A player gets one
- * when the league notices him (see earnNickname), drawn from the pool that fits him best and not in
- * use by anyone still playing.
- */
-const NICKS = {
-  giant: ['The Lighthouse', 'Skyline', 'The Crane', 'High Tide', 'The Steeple', 'Longshadow', 'Top Shelf', 'The Overpass'],
-  unicorn: ['The Glitch', 'The Mirage', 'Cheat Code', 'The Rumor', 'Northern Lights', 'The Blueprint'],
-  wall: ['The Padlock', 'Curfew', 'The Lid', 'Closing Time', 'The Customs Desk', 'Deadbolt'],
-  shooter: ['The Flamethrower', 'Long Distance', 'Raincloud', 'The Arsonist', 'Moneyline', 'Tracer', 'Area Code'],
-  scorer: ['The Furnace', 'Thirty Piece', 'The Faucet', 'Problem', 'The Avalanche', 'Overtime Pay', 'The Headline'],
-  maker: ['The Conductor', 'The Switchboard', 'The Architect', 'Easy Button', 'The Locksmith', 'Table Setter'],
-  stopper: ['The Shadow', 'Handcuffs', 'The Blanket', 'Lockjaw', 'The Toll Booth', 'Static'],
-  flyer: ['Springs', 'Jet Fuel', 'Liftoff', 'The Trampoline', 'Tailwind', 'No Stairs'],
-  glass: ['The Vacuum', 'The Janitor', 'Second Helping', 'The Magnet', 'Lost and Found'],
-  small: ['The Hornet', 'Pocket Rocket', 'The Wasp', 'Short Fuse', 'Quarter Stick'],
-  all: ['The Toolbox', 'Both Ends', 'The Whole Shift', 'Every Night', 'The Foreman'],
-} as const;
-
-type NickPool = keyof typeof NICKS;
-
-/** The pools that fit a player, best first. */
-function nickPools(p: Pick<Player, 'heightIn' | 'ratings' | 'pos'>): NickPool[] {
-  const c = composites(p.ratings);
-  const r = p.ratings;
-  const out: [NickPool, number][] = [
-    ['unicorn', p.heightIn >= 85 && (r.hnd >= 62 || r.tp >= 66) ? 30 : 0],
-    ['giant', p.heightIn >= 87 ? 22 : 0],
-    ['small', p.heightIn <= 73 ? 18 : 0],
-    ['shooter', Math.max(c.c3, c.pu3) - 62],
-    ['scorer', 0.55 * c.create + 0.45 * Math.max(c.midShot, c.pu3, c.rim) - 58],
-    ['maker', c.passing - 62],
-    ['wall', c.rimProt - 64],
-    ['stopper', c.perDef - 64],
-    ['flyer', r.ath - 74],
-    ['glass', (c.orb + r.dreb) / 2 - 66],
-    ['all', 4],
-  ];
-  return out
-    .filter(([, s]) => s > 0)
-    .sort((a, b) => b[1] - a[1])
-    .map(([k]) => k);
-}
-
-/** Whether the league would give this player a nickname: a generated player (a real one keeps his own name), good enough to be noticed. */
-export const nickWorthy = (p: Pick<Player, 'real' | 'ovr' | 'nick' | 'peak'>) => !p.real && !p.nick && (p.ovr >= 90 || !!p.peak);
-
-/**
- * Give a noticed player his nickname (see nickWorthy): the best-fitting one nobody active has.
- * Returns it, or null when he has one, doesn't qualify, or every fitting one is taken.
- */
-export function earnNickname(league: League, p: Player): string | null {
-  if (!nickWorthy(p)) return null;
-  const taken = new Set<string>();
-  for (const x of Object.values(league.players)) if (x.nick && x.tid !== RETIRED) taken.add(x.nick);
-  for (const pool of nickPools(p)) {
-    const names = NICKS[pool];
-    const start = mix32(hashString(`${league.id}:nick:${p.pid}`)) % names.length;
-    for (let i = 0; i < names.length; i++) {
-      const n = names[(start + i) % names.length];
-      if (!taken.has(n)) {
-        p.nick = n;
-        return n;
-      }
-    }
-  }
-  return null;
-}
-
-/** 'Dario "The Furnace" Okoye' for a nicknamed player's big moments; his plain name otherwise. */
-export const nickName = (p: Pick<Player, 'firstName' | 'lastName' | 'nick'>) => (p.nick ? `${p.firstName} "${p.nick}" ${p.lastName}` : `${p.firstName} ${p.lastName}`.trim());

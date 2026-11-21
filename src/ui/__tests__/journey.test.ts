@@ -18,6 +18,7 @@ import { gradeWord } from '../../core/league/legacyReview';
 import { NEWS_DAYS, needsYou } from '../today/messages';
 import { needsItems, needsYouOf } from '../today/needs';
 import type { AgendaItem } from '../../core/league/agenda';
+import { firingSaid, ownerWords } from '../../core/league/ownerVoice';
 
 const make = (): League => createLeague({ name: 'j', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 11 });
 
@@ -359,7 +360,10 @@ describe('the journey between screens', () => {
       const r = l.ownerReviews!.at(-1)!;
       const v = currentMoments(l).find((x) => x.kind === 'verdict')!;
       expect(v).toMatchObject({ key: `verdict-${l.season}-0`, title: gradeWord(r.grade), linkLabel: 'Full review' });
-      expect(v.sub).toMatch(/^“I'm .+\.” Season grade [+−]\d+, standing [+−]\d+ after 20-62\.$/);
+      expect(v.sub).toMatch(/^“.+\.” Season grade [+−]\d+, standing [+−]\d+ after 20-62\.$/);
+      // (in his own manner, by his quirk: ownerVoice.ts)
+      expect(v.sub.startsWith(`“${r.said}”`)).toBe(true);
+      expect(Object.values(ownerWords(l).verdict)).toContain(r.said);
       expect(v.lines).toHaveLength(Math.min(4, r.goals.length));
       // past it, the missed ultimatum: fired, in his words, with what's next
       f.tenureStart = f.season - 4;
@@ -367,7 +371,8 @@ describe('the journey between screens', () => {
       expect(f.fired).toBe(true);
       const fm = currentMoments(f).filter((x) => x.kind === 'fired' || x.kind === 'verdict');
       expect(fm.map((x) => x.kind)).toEqual(['fired']);
-      expect(fm[0].sub).toBe("“I told you at the break: reach the play-in. It didn't happen. We are going in a different direction.”");
+      expect(fm[0].sub).toBe(`“${firingSaid(f, { ultimatum: 'Reach the play-in' })}”`);
+      expect(fm[0].sub).toContain('reach the play-in. ');
       expect(fm[0].lines![0]).toMatch(/^20-62 · Missed the playoffs · season grade/);
       // they never wait in the digest behind a bigger moment, and the sack says the verdict itself
       const clinch = { key: 'c', kind: 'clinch' as const, over: '', title: '', sub: '' };

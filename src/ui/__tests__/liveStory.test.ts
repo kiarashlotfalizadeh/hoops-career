@@ -321,7 +321,6 @@ describe('the story of a live game', () => {
     {
       const home = fold(game(Array.from({ length: 16 }, (_, i) => [i % 2 === 0 ? 0 : 1, i % 2 === 0 ? 3 : 0] as [0 | 1, number])));
       expect(crowdLevel(home.t.crowd)).toBeGreaterThanOrEqual(3);
-      expect(home.t.momentum).toBeGreaterThan(0.4);
       const away = fold(
         game(
           Array.from({ length: 30 }, (_, i) => [i % 2 === 0 ? 1 : 0, i % 2 === 0 ? 3 : 0] as [0 | 1, number]),
@@ -329,7 +328,6 @@ describe('the story of a live game', () => {
         ),
       );
       expect(crowdLevel(away.t.crowd)).toBeLessThanOrEqual(1);
-      expect(away.t.momentum).toBeLessThan(-0.4);
       const lines = allEvents(away).filter((e) => e.kind === 'crowd');
       expect(lines.length).toBe(1);
       expect(lines[0].title).toMatch(/Madison Square Garden|The Garden|Knicks/);

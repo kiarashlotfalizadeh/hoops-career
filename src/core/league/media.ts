@@ -5,10 +5,7 @@
 // playoffs' previews, the wrap) and voice.ts (names, figures and phrasing). Nothing here draws from
 // the league's random stream, and nothing the press writes feeds back into a game, a trade or a
 // signing: the league plays out exactly as it would without it.
-import { earnNickname, nickWorthy } from './voices';
-import { publish } from './media/voice';
-import { playerName } from './helpers';
-import { hotTakes, receipts, type TakeState } from './media/takes';
+import { finalsTake, hotTakes, playoffTakes, receipts, type TakeState } from './media/takes';
 import type { League, NewsItem, ScheduledGame } from '../types';
 import { pressGame, roundup, ROUNDUP } from './media/nights';
 import { powerRankings } from './media/power';
@@ -108,6 +105,7 @@ export function mediaGame(league: League, g: ScheduledGame) {
   pressGame(league, g, m);
   careerMarks(league, m, g);
   jerseyNight(league, m, g);
+  playoffTakes(league, m, g);
 }
 
 export function mediaDay(league: League) {
@@ -123,8 +121,9 @@ export function mediaDay(league: League) {
     }
     monthlyHonors(league, m);
     playoffPreviews(league, m);
-    hotTakes(league, m);
   }
+  // the talking heads: through the season, its deadline and the summer's free agency (media/takes.ts)
+  hotTakes(league, m);
   // the night the Finals end, once the summer's retirements are in
   legendFarewells(league, m);
   moveColumns(league, m);
@@ -144,40 +143,17 @@ export function mediaSeasonStart(league: League) {
   // last season's weekly items have had their day: its rankings and roundups go (the honors stay on record)
   league.news = league.news.filter((n) => n.season >= league.season || !(n.kind === 'power' || isRoundup(n) || isWeekly(n)));
   seasonPreview(league, m);
-  nicknames(league);
   prune(league);
 }
 
 export function mediaSeasonEnd(league: League) {
   const m = (league.media ??= {});
   const wrap = seasonWrap(league, m);
+  finalsTake(league, m);
   receipts(league, m);
   // the season goes in the league's memory (see media/chronicle.ts), its wrap first among its stories
   chronicleSeason(league, league.season, wrap?.id);
   prune(league);
-}
-
-/**
- * On opening night the league names the players it has noticed (league/voices.ts): generated
- * players only, once each. One of the user's is a story; the rest are a line on the wire.
- */
-function nicknames(league: League) {
-  const named = Object.values(league.players)
-    .filter((p) => p.tid >= 0 && nickWorthy(p))
-    .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
-    .flatMap((p) => (earnNickname(league, p) ? [p] : []));
-  for (const p of named) {
-    const mine = p.tid === league.userTid;
-    const t = league.teams[p.tid];
-    publish(league, {
-      kind: 'general',
-      ...(mine ? { head: `They're calling ${p.lastName} "${p.nick}"` } : {}),
-      dek: `${playerName(p)} of the ${t.name} has a nickname now: "${p.nick}".`,
-      tids: [p.tid],
-      pids: [p.pid],
-      weight: mine ? 2 : 1,
-    });
-  }
 }
 
 const isRoundup = (n: NewsItem) => n.kind === 'game' && !n.head && n.text.startsWith(ROUNDUP);

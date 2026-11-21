@@ -43,7 +43,9 @@ export const CALL_WORTH: Record<string, CallWorth> = {
   'imp-hedge_roll:o>Go to Drop': w(2.2, 0.19, 0.074, 0.008, 203),
   'imp-switch_mismatch:o>Go to Drop': w(0.4, 0.17, -0.003, 0.008, 85),
   'pt-post>Double the post': w(0.3, 0.17, 0.02, 0.015, 28),
-  run: w(0.0, 0.05, -0.002, 0.002, 900),
+  // (re-measured 2026-11-21 on the engine with momentum, where the bench now offers it: a run of 6 or 7,
+  // 704 spots in 240 games, 24 paired endings each. The timeout ends their momentum and spends itself: still even)
+  run: w(0.04, 0.08, 0.003, 0.003, 704),
   lateFoul: w(-0.3, 0.02, 0.014, 0.002, 190, 'win'),
   lateUp3: w(0.0, 0.02, 0.004, 0.003, 66, 'win'),
   // (dropped: measured below even)

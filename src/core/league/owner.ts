@@ -10,6 +10,8 @@ import { REVIEWS_KEPT, currentGoals, goalsRecord, gradeOwnerGoals, resultText, s
 import { DEBT_LIMIT, booksLine, booksReview, booksVerdict } from './books';
 import { money } from '../format';
 import { canBeFired, seasonWeight, ULTIMATUM_MET, ultimatumVerdict } from './jobSecurity';
+import { firingSaid, ownerWords, verdictOf } from './ownerVoice';
+import { cameoAtReview } from './ownerCameos';
 
 /** Seasons the user has run his current team, counting this one (grace period, owner weighting). */
 export function seasonsInCharge(league: League): number {
@@ -93,7 +95,8 @@ export const FIRING_LINE = -0.5;
  * target. The review goes into the history (the last REVIEWS_KEPT seasons) and the inbox, goal by
  * goal; after the grace period, with job security on, a standing under FIRING_LINE gets the coach
  * fired, and so do a missed ultimatum and books that closed deeper in the red under his final
- * warning (see booksVerdict), whatever the season won.
+ * warning (see booksVerdict), whatever the season won. What he says about it (his verdict, the
+ * warning, the sack) is his own, by his quirk (ownerVoice.ts); what he decides is the same for all.
  */
 export function ownerEvaluation(league: League) {
   // a fired coach has no owner until he takes over another team
@@ -149,7 +152,9 @@ export function ownerEvaluation(league: League) {
   // cost stays off in full (it had come off the standing before the review, which a first season's
   // grade then replaced outright: a free concession)
   const cost = og?.cost ?? 0;
-  const total = clamp(grade * w + (prev.total + cost) * (1 - w) - cost + (verdict === 'met' ? ULTIMATUM_MET : 0), -1, 1);
+  // (and a side-bet of his he took up this season counts a little: ownerCameos.ts)
+  const cameo = cameoAtReview(league);
+  const total = clamp(grade * w + (prev.total + cost) * (1 - w) - cost + (verdict === 'met' ? ULTIMATUM_MET : 0) + cameo.bonus, -1, 1);
   const youth = blend('youth');
   league.ownerMood = { wins: blend('wins') ?? 0, playoffs: blend('playoffs') ?? 0, money: blend('money') ?? 0, total: r2(total), ...(youth !== undefined ? { youth } : {}) };
   const fireable = canBeFired(league);
@@ -157,8 +162,10 @@ export function ownerEvaluation(league: League) {
   // the books in the red: a warning becomes an ultimatum, an ultimatum a freeze, a freeze deeper in the red a final warning (none for a coach he fires)
   if (!fired) booksReview(league, books);
   const held = booksText ? 'books' : debtHeld ? 'debt' : impatient ? 'patience' : floored ? 'floor' : undefined;
-  // his first words on it: why he fired the coach, how he feels, or, past the debt limit, what it cost him
-  const feeling = total > 0.4 ? 'thrilled' : total > 0.1 ? 'pleased' : total > -0.2 ? 'patient, for now' : 'concerned';
+  // his first words on it, in his own manner (ownerVoice.ts): why he fired the coach, how the season
+  // left him, or, past the debt limit, what it cost him
+  const words = ownerWords(league);
+  const feeling = words.verdict[verdictOf(total)];
   const loss = -profit(league, tid);
   const debt = books?.past
     ? crowned === 'title'
@@ -167,13 +174,7 @@ export function ownerEvaluation(league: League) {
         : `We won, but the books closed ${money(-books.close)} in the red.`
       : `The books closed ${money(-books.close)} in the red. I can't carry that.`
     : null;
-  const said = fired
-    ? verdict === 'missed'
-      ? `I told you at the break: ${og!.ultimatum!.text.toLowerCase()}. It didn't happen. We are going in a different direction.`
-      : books?.fire
-        ? `The books closed ${money(-books.close)} in the red, deeper again under the freeze. I told you what that meant, and winning doesn't pay for it. We are going in a different direction.`
-        : 'The results have not been good enough. We are going in a different direction.'
-    : (debt ?? `I'm ${feeling}.`);
+  const said = fired ? firingSaid(league, verdict === 'missed' ? { ultimatum: og!.ultimatum!.text } : books?.fire ? { books: money(-books.close) } : 'results') : (debt ?? feeling);
   const review: OwnerReview = {
     season: league.season,
     tid,
@@ -218,21 +219,16 @@ export function ownerEvaluation(league: League) {
     });
     return;
   }
-  const answered = verdict === 'met' ? 'You answered my ultimatum. That counts for something.' : '';
-  const warning = total < -0.2 && fireable ? 'Another season like this and we will have a serious conversation.' : '';
+  const answered = [verdict === 'met' ? words.answered : '', cameo.line ?? ''].filter(Boolean).join('\n');
+  const warning = total < -0.2 && fireable ? words.warning : '';
   addInbox(league, {
     from: 'Owner',
     subject: 'Season review',
     body: og
-      ? [
-          `${debt ?? `I'm ${feeling}.`} Season grade ${fmt(grade)}, overall standing ${fmt(total)}. Both run −100 to +100, and 0 is my goals met exactly.`,
-          ...lines,
-          answered,
-          warning,
-        ]
+      ? [`${debt ?? feeling} Season grade ${fmt(grade)}, overall standing ${fmt(total)}. Both run −100 to +100, and 0 is my goals met exactly.`, ...lines, answered, warning]
           .filter(Boolean)
           .join('\n')
-      : `I'm ${feeling}. Wins: ${fmt(league.ownerMood.wins)} · Playoffs: ${fmt(league.ownerMood.playoffs)} · Finances: ${fmt(league.ownerMood.money)}.${warning ? ` ${warning}` : ''}`,
+      : `${feeling} Wins: ${fmt(league.ownerMood.wins)} · Playoffs: ${fmt(league.ownerMood.playoffs)} · Finances: ${fmt(league.ownerMood.money)}.${warning ? ` ${warning}` : ''}`,
     tone: total > 0.1 ? 'good' : total < -0.2 ? 'bad' : 'neutral',
     link: '/office/owner',
   });

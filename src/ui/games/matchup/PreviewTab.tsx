@@ -23,6 +23,7 @@ import { OppPlanNote } from '../../components/scouting';
 import { rosterNames } from '../../stats';
 import { teamPlayers } from '../../../core/league/helpers';
 import { Briefing } from './Briefing';
+import { FormMark } from '../../components/FormMark';
 import { Fold, TeamForm, useBillings } from '../occasion';
 
 export function PreviewTab({ league, game, onPlan }: { league: League; game: ScheduledGame; onPlan: () => void }) {
@@ -304,6 +305,8 @@ function StartingFives({
           <span className="mu-five-n">{name(p.pid) || pl.lastName}</span>
           <span className="mu-five-m">
             {p.pos} <Ovr v={p.ovr} size="sm" />
+            {/* (on a tear or in a slump on the night: the form the engine plays him at) */}
+            <FormMark league={league} p={pl} day={game.day} />
           </span>
           {p.for && <span className="mu-five-for ellipsis">for {name(p.for.pid) || p.for.name}</span>}
         </span>

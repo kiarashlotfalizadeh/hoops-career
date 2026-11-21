@@ -13,7 +13,7 @@ import { autoDraftUserPick, finishDraftPhase, newSeason, simDay, startDraft, sta
 import { nextPick } from '../league/draft';
 import { stockMove } from '../league/prospects';
 import { cupTables } from '../league/cup';
-import { curTeamSeason, dayToDate, freeAgents, prospects, standardRoster, teamPlayers } from '../league/helpers';
+import { CAP_FOR, curTeamSeason, dayToDate, freeAgents, prospects, standardRoster, teamPlayers } from '../league/helpers';
 import { askingContract, releasePlayer, valueScore } from '../league/contracts';
 import { userOffer } from '../league/freeAgency';
 import { takeOverTeam } from '../league/owner';
@@ -37,6 +37,14 @@ import {
   type CoachRecord,
 } from '../league/coaches';
 import { loadLeague, migrate, saveLeague } from '../../state/persistence';
+import { hashString, mix32 } from '../random';
+import { OWNER_QUIRK, PLAYER_VOICE, offCourtLines, ownerQuirk, playerSays, playerVoice } from '../league/voices';
+import { OWNER_WORDS, firingSaid, ownerWords, ultimatumSaid, verdictOf } from '../league/ownerVoice';
+import { CAMEO_BONUS, cameoAtReview, cameoOf, ownerCameoDay } from '../league/ownerCameos';
+import { PUNDITS, finalsTake, hotTakes, playoffTakes } from '../league/media/takes';
+import { FORM, FORM_WORD, formOf, formStretch } from '../league/legends';
+import { askFor, hearOffer } from '../league/negotiation';
+import { benchLines, quoteLines } from '../analysis/quotes';
 import { CAP } from '../constants';
 import type { GameResult, League, NewsItem } from '../types';
 
@@ -598,6 +606,406 @@ describe('two seasons of a fictional league', () => {
       };
       league.phase = 'regular';
       if (teamPlayers(league, us).length + 3 > CAP.rosterMax) expect(validateTrade(league, three).some((e) => e.includes('The most is'))).toBe(true);
+    }
+
+    // ---- the league's voices (league/voices.ts, ownerVoice.ts, ownerCameos.ts, media/takes.ts)
+
+    // the talking heads follow the calendar: every season's Finals get one take on what the title means, on its MVP
+    for (const end of ends) {
+      const aw = end.awards.find((a) => a.season === end.season)!;
+      const title = end.news.filter(
+        (n) => n.kind === 'take' && n.season === end.season && n.tids.length === 2 && n.tids[0] === aw.champion && n.tids[1] === aw.runnerUp && n.pids[0] === aw.finalsMvp,
+      );
+      expect(title.length).toBeGreaterThanOrEqual(1);
+      expect(Object.values(PUNDITS).some((x) => title.at(-1)!.by!.startsWith(x.name))).toBe(true);
+      // (and it is said once: the Finals' night again adds nothing)
+      const again = structuredClone(end);
+      const before = again.news.length;
+      finalsTake(again, again.media!);
+      expect(again.news.length).toBe(before);
+    }
+    // a playoff series earns its take the night it happens: a favourite down 0-2, a Game 7, a blown lead, a star swept, an upset
+    {
+      const [hi, lo] = [5, 9];
+      const stage = (wins: number[], seeds: [number, number] = [2, 7], star = 0) => {
+        const x = structuredClone(day25);
+        x.phase = 'playoffs';
+        delete x.media!.takes;
+        const best = teamPlayers(
+          x,
+          [hi, lo].find((t) => t !== wins.at(-1))!,
+        ).sort((a, b) => b.ovr - a.ovr)[0];
+        if (star) best.ovr = star;
+        const count = (tid: number) => wins.filter((w) => w === tid).length;
+        const done = count(hi) === 4 || count(lo) === 4;
+        x.playoffs = [
+          {
+            id: 'E1-0',
+            round: 1,
+            conf: 'E',
+            high: hi,
+            low: lo,
+            highSeed: seeds[0],
+            lowSeed: seeds[1],
+            highWins: count(hi),
+            lowWins: count(lo),
+            ...(done ? { winner: wins.at(-1)! } : {}),
+          },
+        ];
+        wins.forEach((w, i) => {
+          const other = w === hi ? lo : hi;
+          x.games.push({
+            gid: 9_000_000 + i,
+            season: x.season,
+            day: x.day - wins.length + i,
+            type: 'playoffs',
+            seriesId: 'E1-0',
+            home: { tid: w, pts: 110 },
+            away: { tid: other, pts: 100 },
+          } as unknown as GameResult);
+        });
+        const n = x.news.length;
+        const g = { gid: 9_000_000 + wins.length - 1, day: x.day, home: hi, away: lo, type: 'playoffs' as const, seriesId: 'E1-0' };
+        playoffTakes(x, x.media!, g);
+        const said = x.news.slice(n);
+        // (said once)
+        playoffTakes(x, x.media!, g);
+        expect(x.news.length).toBe(n + said.length);
+        return { said, best };
+      };
+      const one = (r: ReturnType<typeof stage>) => {
+        expect(r.said).toHaveLength(1);
+        expect(r.said[0]).toMatchObject({ kind: 'take', weight: 2 });
+        expect(r.said[0].by).toBeTruthy();
+        expect(r.said[0].body!.split('\n\n').length).toBeGreaterThanOrEqual(2);
+        return `${r.said[0].head} ${r.said[0].text} ${r.said[0].body}`;
+      };
+      // (nothing at 1-1, nor for a low favourite down 0-2)
+      expect(stage([hi, lo]).said).toHaveLength(0);
+      expect(stage([lo, lo], [4, 5]).said).toHaveLength(0);
+      expect(one(stage([lo, lo]))).toMatch(/0-2|two|[Tt]wice/);
+      expect(one(stage([hi, lo, hi, lo, hi, lo]))).toMatch(/Game 7|Seven games/);
+      // up 2-0 and out in six: the blown lead, by its number
+      expect(one(stage([lo, lo, hi, hi, hi, hi]))).toMatch(/2-0/);
+      expect(one(stage([hi, hi, hi, lo, lo, lo, lo]))).toMatch(/3-0/);
+      // a star swept (86+): his name on it; without one, a sweep is no take
+      const swept = stage([hi, hi, hi, hi], [2, 7], 90);
+      expect(one(swept)).toContain(swept.best.lastName);
+      expect(swept.said[0].pids).toEqual([swept.best.pid]);
+      expect(stage([hi, hi, hi, hi], [2, 7], 70).said).toHaveLength(0);
+      // a low seed's upset, by its seed
+      expect(one(stage([hi, lo, lo, hi, lo, lo], [1, 8]))).toMatch(/8 seed|frauds|grew up/);
+    }
+    // deadline week: a blockbuster is argued over the day after it's made; in free agency, the summer's big contract
+    {
+      const x = structuredClone(day25);
+      delete x.media!.takes;
+      const [a, b] = [6, 11];
+      const star = teamPlayers(x, a).sort((p, q) => q.ovr - p.ovr)[0];
+      star.ovr = 88;
+      const back = teamPlayers(x, b).sort((p, q) => q.ovr - p.ovr)[4];
+      x.day = x.tradeDeadlineDay;
+      const side = (tid: number, p: typeof star) => ({ tid, players: [{ pid: p.pid, name: p.lastName }], picks: [] });
+      x.transactions = [
+        ...(x.transactions ?? []),
+        { id: 99_001, season: x.season, day: x.day - 1, phase: 'regular', kind: 'trade', tids: [a, b], sides: [side(a, star), side(b, back)] },
+      ];
+      const n = x.news.length;
+      hotTakes(x, x.media!);
+      x.day++;
+      hotTakes(x, x.media!);
+      const deal = x.news.slice(n).find((t) => t.kind === 'take' && t.pids[0] === star.pid)!;
+      expect(deal.tids.sort((p, q) => p - q)).toEqual([a, b]);
+      expect(`${deal.head} ${deal.text}`).toContain(star.lastName === deal.head ? star.lastName : x.teams[b].name);
+      // (once)
+      x.day++;
+      hotTakes(x, x.media!);
+      expect(x.news.filter((t) => t.kind === 'take' && t.pids[0] === star.pid)).toHaveLength(1);
+      // the summer: a contract of a fifth of the cap or more
+      const y = structuredClone(day25);
+      delete y.media!.takes;
+      y.phase = 'freeAgency';
+      const signed = teamPlayers(y, 8).sort((p, q) => q.ovr - p.ovr)[0];
+      const cap = CAP_FOR(y, signed.contract.start).salaryCap;
+      y.transactions = [
+        ...(y.transactions ?? []),
+        { id: 99_002, season: y.season, day: y.day, phase: 'freeAgency', kind: 'sign', tids: [8], pid: signed.pid, name: signed.lastName, amount: Math.round(cap * 0.3), years: 4 },
+      ];
+      const m = y.news.length;
+      y.day++;
+      hotTakes(y, y.media!);
+      const take = y.news.slice(m).find((t) => t.kind === 'take')!;
+      expect(take).toMatchObject({ pids: [signed.pid], weight: 2 });
+      expect(take.tids[0]).toBe(8);
+      // (a small deal is nobody's take)
+      const z = structuredClone(day25);
+      delete z.media!.takes;
+      z.phase = 'freeAgency';
+      z.transactions = [
+        ...(z.transactions ?? []),
+        {
+          id: 99_003,
+          season: z.season,
+          day: z.day,
+          phase: 'freeAgency',
+          kind: 'sign',
+          tids: [8],
+          pid: signed.pid,
+          name: signed.lastName,
+          amount: Math.round(cap * 0.05),
+          years: 1,
+        },
+      ];
+      z.day++;
+      const k = z.news.length;
+      hotTakes(z, z.media!);
+      expect(z.news.slice(k).filter((t) => t.kind === 'take')).toHaveLength(0);
+    }
+
+    // a player's own words: across the table in contract talks and when he asks out, the same for the same moment
+    {
+      const x = structuredClone(created);
+      const fa = freeAgents(x).sort((p, q) => q.ovr - p.ovr)[0];
+      for (const beat of ['askRole', 'askLosing', 'settled', 'deal', 'counter', 'lowball', 'walk'] as const) {
+        const lines = offCourtLines(beat);
+        expect(new Set(lines).size).toBe(lines.length);
+        expect(lines).toContain(playerSays(x, fa, beat, 1));
+        expect(playerSays(x, fa, beat, 1)).toBe(playerSays(x, fa, beat, 1));
+        expect(lines.length).toBeGreaterThanOrEqual(12);
+      }
+      expect(Object.keys(PLAYER_VOICE)).toContain(playerVoice(x, fa));
+      const ask = askFor(x, fa, 'fa', 2);
+      const near = hearOffer(x, fa, 'fa', { amount: Math.round((ask * 0.87) / 50) * 50, years: 2 }, { min: 1, max: 4 });
+      if (!near.accept) {
+        const quote = /counters at .+ over \d years?\. “(.+)”$/.exec(near.text)?.[1];
+        expect(offCourtLines('counter')).toContain(quote);
+      }
+      const low = hearOffer(x, fa, 'fa', { amount: Math.round((ask * 0.5) / 50) * 50, years: 2 }, { min: 1, max: 4 });
+      expect(low.accept).toBe(false);
+      const said = /“(.+)”$/.exec(low.text)![1];
+      expect([...offCourtLines('lowball'), ...offCourtLines('walk')]).toContain(said);
+      // a trade request on the wire carries his words too (when the two seasons brought one that still has its body)
+      const asks = l.news.filter((n) => / asks the .+ for a trade$/.test(n.head ?? '') && n.body);
+      for (const n of asks) expect([...offCourtLines('askRole'), ...offCourtLines('askLosing')].some((q) => n.body!.includes(`“${q}”`))).toBe(true);
+    }
+    // the post-game lines: three or so a moment in each voice, and none serves two moments
+    {
+      const beats = ['hurt', 'wcomeback', 'w30', 'wup', 'wot', 'wstreak', 'wbig', 'wclose', 'w', 'lcollapse', 'l30', 'lup', 'lstreak', 'lclose', 'lbig', 'l'] as const;
+      const says = { pts: 31, n: 5, them: 'Them', mate: 'Mate' };
+      const seen = new Map<string, string>();
+      for (const b of beats) {
+        const lines = quoteLines(b, says);
+        expect(lines.length, b).toBeGreaterThanOrEqual(b === 'hurt' ? 9 : 14);
+        for (const line of lines) {
+          expect(seen.get(line), line).toBeUndefined();
+          seen.set(line, b);
+        }
+      }
+      const bench = ['ccomeback', 'cstar', 'cup', 'cbig', 'cw', 'ccollapse', 'cl30', 'clup', 'clbig', 'clclose', 'cl'] as const;
+      const heard = new Set<string>();
+      for (const b of bench) {
+        const lines = benchLines(b, { us: 'the Us', star: 'Star', pts: 41 });
+        // (two or three a temper)
+        expect(lines.length, b).toBeGreaterThanOrEqual(10);
+        for (const line of lines) {
+          expect(heard.has(line), line).toBe(false);
+          heard.add(line);
+        }
+      }
+    }
+
+    // the owner's own words, by his quirk: every verdict, warning, ultimatum and sack is his alone, and says what it must
+    {
+      const quirks = Object.keys(OWNER_QUIRK) as (keyof typeof OWNER_QUIRK)[];
+      expect(Object.keys(OWNER_WORDS).sort()).toEqual([...quirks].sort());
+      const all = quirks.flatMap((q) => {
+        const w = OWNER_WORDS[q];
+        const lines = [
+          ...Object.values(w.verdict),
+          w.warning,
+          w.answered,
+          w.title,
+          w.ultimatum('Win 40 games'),
+          w.fired.results,
+          w.fired.ultimatum('win 40 games'),
+          w.fired.books('$12.0M'),
+        ];
+        expect(w.ultimatum('Win 40 games')).toContain('Win 40 games, or ');
+        expect(w.fired.ultimatum('win 40 games')).toContain(': win 40 games. ');
+        expect(w.fired.books('$12.0M')).toContain('closed $12.0M in the red');
+        expect(w.title.startsWith('Champions.')).toBe(true);
+        return lines;
+      });
+      expect(new Set(all).size).toBe(all.length);
+      expect(verdictOf(0.5)).toBe('thrilled');
+      expect(verdictOf(0.2)).toBe('pleased');
+      expect(verdictOf(0)).toBe('patient');
+      expect(verdictOf(-0.3)).toBe('concerned');
+      // the user's owner speaks as his quirk does, wherever he speaks
+      const x = structuredClone(day25);
+      expect(ownerWords(x)).toBe(OWNER_WORDS[ownerQuirk(x, x.userTid)]);
+      expect(ultimatumSaid(x, 'Reach the play-in')).toBe(ownerWords(x).ultimatum('Reach the play-in'));
+      expect(firingSaid(x, { ultimatum: 'Reach the play-in' })).toBe(ownerWords(x).fired.ultimatum('reach the play-in'));
+      expect(firingSaid(x, { books: '$3.0M' })).toBe(ownerWords(x).fired.books('$3.0M'));
+      expect(firingSaid(x, 'results')).toBe(ownerWords(x).fired.results);
+    }
+    // his cameo: once a season at most, one note that asks for nothing; a side-bet met is noted and counts a little at the review
+    {
+      const u = day25.userTid;
+      const unit = (key: string) => mix32(hashString(key)) / 4294967296;
+      /** A copy of the league 25 days in whose owner has this quirk, in a season he has a cameo in him (or not). */
+      const withOwner = (quirk: string, on = true) => {
+        for (let i = 0; i < 4000; i++) {
+          const id = `cameo_${quirk}_${i}`;
+          if (ownerQuirk({ id }, u) !== quirk || unit(`${id}:${day25.season}:${u}:cameo`) < 0.67 !== on) continue;
+          const x = structuredClone(day25);
+          x.id = id;
+          x.fired = false;
+          return x;
+        }
+        throw new Error(`no league id for a ${quirk}`);
+      };
+      const opp = u === 0 ? 1 : 0;
+      const result = (x: League, day: number, us: number, them: number, line?: { pid: number; gs: boolean; min: number }) =>
+        x.games.push({
+          gid: 8_000_000 + day,
+          season: x.season,
+          day,
+          type: 'regular',
+          home: { tid: u, pts: us, players: line ? [line] : [] },
+          away: { tid: opp, pts: them, players: [] },
+        } as unknown as GameResult);
+      /** Walk the calendar (no games) to the day his note comes. */
+      const send = (x: League) => {
+        const mail = x.inbox.length;
+        for (; x.day < x.tradeDeadlineDay && !x.ownerCameo; x.day++) {
+          // (a hothead's waits for a blowout the night before)
+          if (ownerQuirk(x, u) === 'hothead' && x.day === 40) result(x, 39, 80, 115);
+          ownerCameoDay(x);
+          if (x.ownerCameo) break;
+        }
+        expect(x.inbox.length - mail).toBe(x.ownerCameo ? 1 : 0);
+        return x.ownerCameo;
+      };
+      for (const quirk of Object.keys(OWNER_QUIRK)) {
+        const x = withOwner(quirk);
+        const c = send(x)!;
+        expect(c, quirk).toMatchObject({ season: x.season, tid: u, quirk, day: x.day });
+        expect(cameoOf(x)).toBe(c);
+        const note = x.inbox[0];
+        expect(note).toMatchObject({ from: 'Owner', link: '/office/owner' });
+        expect(note.important).toBeFalsy();
+        expect(note.body.length).toBeGreaterThan(30);
+        expect(cameoAtReview(x)).toEqual({ bonus: 0 });
+        if (quirk === 'accountant' || quirk === 'ghost') {
+          // only him: nothing to do, nothing open
+          expect(c).toMatchObject({ ask: '', done: 'over' });
+          expect(c.until).toBeUndefined();
+        } else {
+          expect(c.done).toBeUndefined();
+          expect(c.ask.length).toBeGreaterThan(10);
+          expect(c.until!).toBeGreaterThanOrEqual(c.day);
+          // ignored, nothing happens: no mail, no cost
+          const idle = structuredClone(x);
+          const mail = idle.inbox.length;
+          for (idle.day++; idle.day <= c.until! + 2; idle.day++) ownerCameoDay(idle);
+          expect(idle.ownerCameo).toMatchObject({ done: 'over' });
+          expect(idle.inbox.length).toBe(mail);
+          expect(cameoAtReview(idle)).toEqual({ bonus: 0 });
+          // taken up: a night that does all of it (a win at home, a rout, his player starting and playing), or the trade
+          if (quirk === 'gambler')
+            x.transactions = [
+              ...(x.transactions ?? []),
+              {
+                id: 99_100,
+                season: x.season,
+                day: x.day,
+                phase: 'regular',
+                kind: 'trade',
+                tids: [u, opp],
+                sides: [
+                  { tid: u, players: [], picks: ['a 2030 2nd'] },
+                  { tid: opp, players: [{ pid: 1, name: 'A' }], picks: [] },
+                ],
+              },
+            ];
+          else result(x, x.day, 150, 60, c.pid !== undefined ? { pid: c.pid, gs: true, min: 30 } : undefined);
+          x.day++;
+          ownerCameoDay(x);
+          expect(x.ownerCameo, quirk).toMatchObject({ done: 'met' });
+          expect(x.inbox[0]).toMatchObject({ from: 'Owner', tone: 'good' });
+          expect(cameoAtReview(x).bonus).toBe(CAMEO_BONUS);
+          expect(cameoAtReview(x).line!.length).toBeGreaterThan(10);
+        }
+        // one a season: the rest of it brings no other
+        const mail = x.inbox.length;
+        for (x.day++; x.day < x.tradeDeadlineDay; x.day++) ownerCameoDay(x);
+        expect(x.inbox.length).toBe(mail);
+      }
+      // a season he has none in him; and none for a coach who was fired, or outside the season's games
+      expect(send(withOwner('meddler', false))).toBeUndefined();
+      const out = withOwner('ghost');
+      out.fired = true;
+      expect(send(out)).toBeUndefined();
+      const summer = withOwner('ghost');
+      summer.phase = 'freeAgency';
+      expect(send(summer)).toBeUndefined();
+    }
+
+    // form worth a word: a tear or a slump is the same form the engine plays, rare, and only while games are played
+    {
+      const ps = Object.values(day25.players).filter((p) => p.tid >= 0);
+      let hot = 0;
+      let cold = 0;
+      let n = 0;
+      for (const p of ps.slice(0, 200))
+        for (let day = 0; day < 160; day += 4) {
+          const f = formStretch(day25, p, day);
+          const v = formOf(day25, p.pid, day);
+          n++;
+          if (f === 'hot') hot++;
+          if (f === 'cold') cold++;
+          expect(f).toBe(v >= 1 + FORM.sd * FORM.tail ? 'hot' : v <= 1 - FORM.sd * FORM.tail ? 'cold' : null);
+        }
+      for (const share of [hot / n, cold / n]) {
+        expect(share).toBeGreaterThan(0.02);
+        expect(share).toBeLessThan(0.14);
+      }
+      expect(formStretch(day25, ps[0])).toBe(formStretch(day25, ps[0], day25.day));
+      expect(ps.every((p) => formStretch(created, p) === null)).toBe(true);
+      expect(formStretch(day25, { pid: ps[0].pid, tid: -1 })).toBeNull();
+      expect(FORM_WORD).toEqual({ hot: 'Hot stretch', cold: 'Cold stretch' });
+    }
+
+    // nicknames are gone: a save from the weeks the league gave them loses them and the stories that announced them
+    {
+      const old = structuredClone(day25) as League & { players: Record<number, { nick?: string }> };
+      const p = teamPlayers(old, old.userTid)[0];
+      (old.players[p.pid] as { nick?: string }).nick = 'The Furnace';
+      const stories = old.news.length;
+      old.news.push({
+        id: 7_000_001,
+        season: old.season,
+        day: 0,
+        kind: 'general',
+        text: `${p.firstName} ${p.lastName} of the ${old.teams[old.userTid].name} has a nickname now: "The Furnace".`,
+        tids: [old.userTid],
+        pids: [p.pid],
+      });
+      old.news.push({
+        id: 7_000_002,
+        season: old.season,
+        day: 0,
+        kind: 'draft',
+        text: `A Prospect, 7'4", "The Mirage" to the scouts already: the kind of prospect who comes along once in a decade.`,
+        tids: [],
+        pids: [],
+      });
+      const back = migrate(old);
+      expect('nick' in back.players[p.pid]).toBe(false);
+      expect(back.news.length).toBe(stories + 1);
+      expect(back.news.at(-1)!.text).toBe(`A Prospect, 7'4": the kind of prospect who comes along once in a decade.`);
+      expect(JSON.stringify(back.news)).not.toMatch(/nickname now|to the scouts already/);
     }
   });
 });

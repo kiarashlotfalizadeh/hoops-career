@@ -331,6 +331,23 @@
 .tag.brand {
   color: var(--accent-text);
 }
+/* a player's form, when it is a tear or a slump (FormMark): the words as a tag, or only the icon beside a name */
+.tag.form-tag.hot,
+.form-mark.hot {
+  color: var(--warn);
+}
+.tag.form-tag.cold,
+.form-mark.cold {
+  color: var(--info);
+}
+.tag.form-tag {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+.form-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
 
 /* a mouse or trackpad: controls answer the pointer before the press */
 @media (hover: hover) and (pointer: fine) {

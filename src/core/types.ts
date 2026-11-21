@@ -9,6 +9,7 @@ import type { JobOffer } from './league/jobs';
 import type { GuideStep } from './league/agenda';
 import type { OwnerGoals, OwnerReview } from './league/ownerGoals';
 import type { Books } from './league/books';
+import type { OwnerCameo } from './league/ownerCameos';
 import type { CallWorth, DeadlineCall, SkidCall } from './league/calls';
 import type { StaffPick, WeekCall } from './league/weekCall';
 import type { YouthLean } from './league/youthLean';
@@ -256,8 +257,6 @@ export interface Player {
    * ratings may go, in raw overall points (league/legends.ts). A generational prospect has one.
    */
   peak?: number;
-  /** The nickname the league gave him, once he was good enough to be noticed (league/voices.ts): generated players only. */
-  nick?: string;
   injuryProne: number; // 0..1
   ratingsHistory: RatingsSnapshot[];
   contract: Contract;
@@ -1580,6 +1579,8 @@ export interface League {
   ownerGoals?: OwnerGoals;
   /** The owner's reviews of the user's last seasons, oldest first (at most REVIEWS_KEPT). */
   ownerReviews?: OwnerReview[];
+  /** The owner's cameo this season, if he has had one (see ownerCameos.ts): a napkin lineup, a dare, a postcard. */
+  ownerCameo?: OwnerCameo;
   /** The owner's word on the user's books once they're in the red (see books.ts): a warning, an ultimatum, a freeze, a final warning. */
   books?: Books;
   /** The staff's calls the user has settled (see calls.ts), newest last. */

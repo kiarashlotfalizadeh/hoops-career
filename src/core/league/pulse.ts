@@ -26,6 +26,7 @@ import type { League, Player } from '../types';
 import { hashString } from '../random';
 import { addInbox, addNews, curTeamSeason, playerName, standardRoster, winPct } from './helpers';
 import { playerAge } from '../playerGen';
+import { playerSays } from './voices';
 
 /** Why a player asked out: short of his minutes, or tired of losing. */
 export type AskWhy = 'role' | 'losing';
@@ -386,20 +387,22 @@ function request(league: League, tid: number, p: Player, why: AskWhy, expects: n
   roomOf(league, tid)!.asked[p.pid] = { season: league.season, day: league.day, why };
   const name = playerName(p);
   const ts = curTeamSeason(league, tid);
+  // (how he put it, in his own voice: league/voices.ts)
+  const said = `“${playerSays(league, p, why === 'losing' ? 'askLosing' : 'askRole', league.season)}”`;
   const text =
     why === 'losing'
       ? `The ${t.name} are ${ts.won}-${ts.lost}. He wants to play for a winner.`
       : `He has played ${Math.round(week)} minutes a game lately. A player of his standing plays about ${expects}.`;
   const body =
     why === 'losing'
-      ? `${name} has told the ${t.name} he wants out.\n\nThey are ${ts.won}-${ts.lost} and going nowhere this season. He won't talk about a new deal while it stands.\n\nThe ${t.name} are taking calls. Winning would settle it. So would a trade.`
-      : `${name} has told the ${t.name} he wants out.\n\nHe has been short of a star's minutes for three weeks. He won't talk about a new deal while it stands.\n\nPlaying him settles it. So does a trade.`;
+      ? `${name} has told the ${t.name} he wants out.\n\n${said}\n\nThey are ${ts.won}-${ts.lost} and going nowhere this season. He won't talk about a new deal while it stands.\n\nThe ${t.name} are taking calls. Winning would settle it. So would a trade.`
+      : `${name} has told the ${t.name} he wants out.\n\n${said}\n\nHe has been short of a star's minutes for three weeks. He won't talk about a new deal while it stands.\n\nPlaying him settles it. So does a trade.`;
   addNews(league, { kind: 'rumor', head: `${name} asks the ${t.name} for a trade`, text, body, tids: [t.tid], pids: [p.pid], weight: mine ? 3 : 2 });
   if (!mine) return;
   addInbox(league, {
     from: 'Assistant GM',
     subject: `${name} has asked for a trade`,
-    body: `He expects about ${expects} minutes a game and has had ${Math.round(week)} lately. He won't sign a new deal while the request stands. Give him his minutes for a few weeks and he withdraws it.`,
+    body: `${said}\nHe expects about ${expects} minutes a game and has had ${Math.round(week)} lately. He won't sign a new deal while the request stands. Give him his minutes for a few weeks and he withdraws it.`,
     link: `/player/${p.pid}`,
     tone: 'bad',
     important: true,
@@ -422,7 +425,7 @@ function settle(league: League, tid: number, p: Player, why: AskWhy) {
   addInbox(league, {
     from: 'Assistant GM',
     subject: `${name} has withdrawn his request`,
-    body: why === 'losing' ? 'The team is back in it, and he will talk about a new deal.' : 'He is playing his minutes again, and will talk about a new deal.',
+    body: `“${playerSays(league, p, 'settled', league.season)}”\n${why === 'losing' ? 'The team is back in it, and he will talk about a new deal.' : 'He is playing his minutes again, and will talk about a new deal.'}`,
     link: `/player/${p.pid}`,
     tone: 'good',
   });

@@ -631,6 +631,25 @@ export function cornerstoneOf(league: League, tid: number): number | null {
   return pid;
 }
 
+/**
+ * Deadline fever: in the last `days` days up to the deadline (its day included), a front office with
+ * the temper for it (voices.ts's `fever`: a gunslinger, a tinkerer) goes past an even deal among AI
+ * teams for a trade that brings it the deal's best player, one of `ovr` or better: the players
+ * contenders are after. So deadline week now and then lands a deal nobody would make in December.
+ */
+export const FEVER = { days: 5, ovr: 80 };
+
+/** What team `tid` gives past even in this deal for the deadline's sake (a share of what it sends): see FEVER. */
+export function deadlineFever(league: League, tid: number, inPids: number[], outPids: number[]): number {
+  const left = league.tradeDeadlineDay - league.day;
+  if (league.phase !== 'regular' || left < 0 || left >= FEVER.days || tid === league.userTid) return 0;
+  const fever = gmStyle(league, tid).fever;
+  if (!fever) return 0;
+  const best = (pids: number[]) => pids.reduce((a, pid) => Math.max(a, league.players[pid]?.ovr ?? 0), 0);
+  const got = best(inPids);
+  return got >= FEVER.ovr && got > best(outPids) ? fever : 0;
+}
+
 /** A player as team `tid` sees him in a deal (with the user unless `aiDeal`). */
 function playerView(league: League, p: Player, tid: number, incoming: boolean, aiDeal: boolean): AssetView {
   const neutral = tradeValue(league, p, 'retool');
@@ -940,7 +959,8 @@ function judgeLegs(league: League, tid: number, ins: TradeLeg[], outs: TradeLeg[
   const valueIn = playersIn + picksIn + cashIn - (money.value + cut.value);
   // (what its front office wants beyond an even deal: a shark more, a tinkerer a little less among AI
   // teams; never less than even from the user, so no deal with him can be run in a circle for value)
-  const edge = tid === league.userTid ? 0 : aiDeal ? gmStyle(league, tid).edge : Math.max(0, gmStyle(league, tid).edge);
+  // In the deadline's last days a gunslinger or a tinkerer buying the deal's best player gives a little more still (see FEVER).
+  const edge = tid === league.userTid ? 0 : aiDeal ? gmStyle(league, tid).edge - deadlineFever(league, tid, inPids, outPids) : Math.max(0, gmStyle(league, tid).edge);
   const sent = playersOut + picksOut + cashOut;
   const ask = edge * Math.abs(sent);
   const valueOut = sent + ask;

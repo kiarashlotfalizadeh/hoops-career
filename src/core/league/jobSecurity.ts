@@ -25,6 +25,7 @@ import {
 import { BLEED_GRADE, DEBT_LIMIT, FREEZE_GRADE, booksOf, booksOutlook, frozen } from './books';
 import { addInbox, andList, curTeamSeason, revenueScale } from './helpers';
 import type { Forecast, TeamOdds } from '../analysis/odds';
+import { ultimatumSaid } from './ownerVoice';
 
 export type SeatHeat = 'secure' | 'steady' | 'warm' | 'hot';
 
@@ -302,7 +303,8 @@ export function maybeUltimatum(league: League, fc?: Forecast | null): Ultimatum 
     important: true,
     from: 'Owner',
     subject: 'An ultimatum',
-    body: `This season is heading the wrong way. ${u.text}, or I make a change this summer. Whatever else goes right.`,
+    // (in his own manner: ownerVoice.ts)
+    body: `${ultimatumSaid(league, u.text)} Whatever else goes right.`,
     tone: 'bad',
     link: '/office/owner',
   });

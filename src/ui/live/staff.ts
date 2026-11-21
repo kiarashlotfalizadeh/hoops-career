@@ -4,8 +4,9 @@
 // you; reads say what's working or not with nothing to change. Built on the live alerts (tired legs,
 // foul trouble, runs, their coach's adjustments, their play types running hot, the tactical edges
 // against you) plus who's scoring on whom from the possession logs: the defender of theirs you're
-// beating, your own actions stalling or working. No call on a scorer's hot streak: the engine has no
-// shooting hot hand, so a double for one answers noise and costs points. Every call was measured where
+// beating, your own actions stalling or working, and what the game's feel is doing right now (the
+// engine's FEEL: a hot hand of yours to feed, one of theirs, momentum either way and the timeout that
+// ends it). No double offered on a hot scorer: it measured as a cost. Every call was measured where
 // it fires (callWorth.ts): the ones that cost aren't made, and the rest say what they've been worth
 // (or that they're the staff's read, with no number yet). Pure.
 
@@ -13,7 +14,8 @@ import type { ReactNode } from 'react';
 import type { Tactics } from '../../core/types';
 import { FINISH_LABEL, type FinishType, type PossLog } from '../../core/sim/log';
 import { zScore } from '../../core/analysis/playTypes';
-import { callHold, liveAlerts, type AlertInput, type LiveAlert } from './alerts';
+import { aRun, callHold, liveAlerts, type AlertInput, type LiveAlert } from './alerts';
+import { hotHand } from './drawn';
 import { callCosts, callKey, worthLine } from '../../core/analysis/callWorth';
 
 export type StaffAction = { label: string } & (
@@ -197,6 +199,42 @@ export function staffNotes(a: StaffInput): StaffNote[] {
       });
     }
   }
+
+  // the game's feel, as the engine is playing it right now (FEEL): momentum of yours (theirs is the
+  // run alert, with the timeout that ends it), and the hot hands on the floor
+  if (me.mo && !a.atBreak)
+    out.push({
+      id: `mo-${me.score - me.run}`,
+      kind: 'read',
+      tone: 'good',
+      title: `Momentum is ours: ${aRun(me.run)}`,
+      text: 'Our shots fall easier until they score or call time.',
+      actions: [],
+      rank: 40,
+    });
+  const heat = (sd: typeof me) => sd.players.filter((p) => sd.on.includes(p.pid) && hotHand(p)).sort((x, y) => y.hot - x.hot || y.pts - x.pts)[0];
+  const ours = heat(me);
+  if (ours)
+    out.push({
+      id: `hot-${ours.pid}`,
+      kind: t.offense.hotHand ? 'read' : 'decision',
+      tone: 'good',
+      title: `${names(ours.pid)} has the hot hand`,
+      text: t.offense.hotHand ? 'He shoots better until he cools off, and we are feeding him.' : 'He shoots better until he cools off. Feed him while it lasts.',
+      actions: t.offense.hotHand ? [] : [{ kind: 'tactics', label: 'Feed the hot hand', apply: (x) => void (x.offense.hotHand = true) }],
+      rank: 62,
+    });
+  const theirs = heat(them);
+  if (theirs)
+    out.push({
+      id: `hot-${theirs.pid}`,
+      kind: 'read',
+      tone: 'warn',
+      title: `${names(theirs.pid)} has the hot hand`,
+      text: 'He shoots better until he misses or sits.',
+      actions: [],
+      rank: 55,
+    });
 
   // your own actions: stalling (lean away from them) or working (lean into them)
   for (const [k, v] of Object.entries(me.pt)) {

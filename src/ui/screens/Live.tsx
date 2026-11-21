@@ -36,7 +36,7 @@ import { courtFloor, type Woe } from '../live/Court';
 import { CourtView } from '../live/CourtView';
 import { occasionOf, postOf } from '../live/occasion';
 import { bodyOf } from '../live/court3d/puppet';
-import { drawnPlayer } from '../live/drawn';
+import { coldHand, drawnPlayer, hotHand } from '../live/drawn';
 import { offPlan, resetToPlan } from '../live/pills';
 import { BugMore, ScoreBug, gameContext } from '../live/ScoreBug';
 import { TacticsPanel } from '../live/TacticsPanel';
@@ -63,7 +63,6 @@ import { Touchline } from '../live/Touchline';
 import type { CallId } from '../../core/types';
 import { quickPills, subOptions } from '../live/session';
 import { foulLimit } from '../live/alerts';
-import { HOT_STREAK, isCold } from '../live/Lineup';
 import { changesLine, screenChanges } from '../tactics/changes';
 import { nightWatch } from '../games/data';
 import { teamPlayers } from '../../core/league/helpers';
@@ -342,9 +341,9 @@ export default function Live() {
   const calls = notes.filter((n) => n.kind === 'decision').length;
   const moreBench = league.settings.liveView === 'bench';
   // shooters on a streak wear a heat ring on the court
-  const hot = new Set(view.sides.flatMap((sd) => sd.players.filter((p) => p.streak >= HOT_STREAK).map((p) => p.pid)));
+  const hot = new Set(view.sides.flatMap((sd) => sd.players.filter(hotHand).map((p) => p.pid)));
   // and what the game has done to the ten on it, small, on each: worn down under his staff's own line, in foul
-  // trouble at the count they sit him at, shooting cold (the bench panel's own rules: Lineup.tsx)
+  // trouble at the count they sit him at, in a cold spell (the bench panel's own rules: Lineup.tsx)
   const woes = new Map<number, Woe>();
   view.sides.forEach((sd, k) => {
     const manage = sim.T[k].t.manage;
@@ -354,7 +353,7 @@ export default function Live() {
       const woe: Woe = {
         ...(p.energy < manage.fatigueSub && { tired: true }),
         ...(p.fouls >= limit && { fouls: p.fouls }),
-        ...(p.streak < HOT_STREAK && isCold(p) && { cold: true }),
+        ...(coldHand(p) && { cold: true }),
       };
       if (woe.tired || woe.fouls || woe.cold) woes.set(p.pid, woe);
     }
@@ -591,7 +590,6 @@ export default function Live() {
           context={context}
           wpHome={wpHome}
           run={nightRun ? { abbrev: nightRun.side === 0 ? home.abbrev : away.abbrev, a: nightRun.a, b: nightRun.b } : undefined}
-          momentum={night?.momentum}
           clutch={clutch}
           keyPlays={s.keyPlays}
           onLeave={over ? undefined : leave}
@@ -815,7 +813,7 @@ export default function Live() {
         {/* sideways: the drawer's head, with what the slim strip leaves out and the way to put it away */}
         {side && (
           <div className="lv-side-head">
-            <BugMore context={context} wpHome={wpHome} kits={kits} abbrevs={[home.abbrev, away.abbrev]} momentum={night?.momentum}>
+            <BugMore context={context} wpHome={wpHome} kits={kits} abbrevs={[home.abbrev, away.abbrev]} view={view}>
               {s.others.length > 0 && <ScoreTicker league={league} games={s.others} elapsed={view.elapsed} done={false} onOpen={() => setPanel('scores')} />}
             </BugMore>
             <button type="button" className="lv-side-x" onClick={() => setDrawer(false)} aria-label="Close the console">

@@ -268,8 +268,13 @@
   transition: left var(--dur) var(--ease-out);
 }
 
-.fo-ultimatum {
+.fo-ultimatum,
+.fo-cameo {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+/* (his side-bet is a small thing: tighter than the ultimatum over it) */
+.fo-cameo {
+  gap: 4px;
 }

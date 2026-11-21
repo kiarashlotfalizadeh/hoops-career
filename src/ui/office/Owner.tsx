@@ -51,6 +51,7 @@ import { CenterBar, HelpSheet, fmtGrade } from './common';
 import { useArrived } from './motion';
 import './office.css';
 import { keepFigures, money } from '../../core/format';
+import { cameoOf } from '../../core/league/ownerCameos';
 
 export default function Owner() {
   const league = useLeague();
@@ -83,6 +84,8 @@ export default function Owner() {
       {js.ultimatum && og && !review && <UltimatumCard league={league} js={js} />}
 
       {booksOf(league) && <BooksCard league={league} />}
+
+      <CameoCard league={league} />
 
       <PulseSection league={league} />
 
@@ -351,6 +354,22 @@ function UltimatumCard({ league, js }: { league: League; js: JobSecurity }) {
         {u.kind === 'wins' ? `${now} of ${u.target} so far.` : `So far: ${POSTSEASON[Math.max(0, now)].result}.`} Miss it and you're fired, whatever else goes right.
       </div>
       {u.kind === 'wins' && <Bar value={now} max={u.target} color={met ? 'var(--good)' : 'var(--bad)'} />}
+    </section>
+  );
+}
+
+/** The owner's side-bet this season, while it is open or once it was met (ownerCameos.ts): optional, and it says so. */
+function CameoCard({ league }: { league: League }) {
+  const c = cameoOf(league);
+  if (!c || !c.ask || c.done === 'over' || league.fired) return null;
+  return (
+    <section className="card fo-cameo" aria-label="A side-bet from the owner">
+      <div className="row">
+        <span className="over grow">His side-bet</span>
+        <Tag tone={c.done === 'met' ? 'good' : undefined}>{c.done === 'met' ? 'Done' : 'Optional'}</Tag>
+      </div>
+      <div className="bold">{c.ask}</div>
+      <div className="small dim2">{c.done === 'met' ? 'He noticed. It counts a little at his review.' : 'Do it and he remembers at his review. Skip it and nothing happens.'}</div>
     </section>
   );
 }

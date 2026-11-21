@@ -1,5 +1,5 @@
 // The live game's atmosphere, read from the possessions the court has drawn: the runs (a 12-0, a
-// 14-2), lead changes and ties, who has the momentum, how loud the building is, clutch time, the big
+// 14-2), lead changes and ties, how loud the building is, clutch time, the big
 // plays a broadcast calls as big plays, and the play-by-play's voice. Pure and deterministic: it folds
 // the possession logs one at a time (`advance`), never draws from a random source, and picks its
 // phrasings by hashing the game and the possession, so a game picked up from its journal reads the
@@ -94,10 +94,6 @@ export interface Tally {
   crowdAt: number;
   roared: boolean;
   hushed: boolean;
-  /** Who's on top lately, −1 (the away side) .. 1 (the home side). */
-  momentum: number;
-  /** Its running sum (points a trip, decayed). */
-  mo: number;
   /** The biggest run of each period (by its margin). */
   runs: Record<number, Run>;
   /** The run last called (its start) and the margin it had then. */
@@ -167,8 +163,6 @@ export function newTally(ctx: Pick<AtmoCtx, 'stakes'>): Tally {
     crowdAt: -CROWD_GAP,
     roared: false,
     hushed: false,
-    momentum: 0,
-    mo: 0,
     runs: {},
     called: null,
     clutch: false,
@@ -830,11 +824,6 @@ export function advance(t: Tally, log: PossLog, ctx: AtmoCtx): { t: Tally; event
       line: log.q >= 5 ? periodLabel(log.q) : undefined,
     });
   }
-
-  // momentum: the points a trip lately, home minus away, decayed
-  const diff = off === 0 ? n.score[0] - t.score[0] : -(n.score[1] - t.score[1]);
-  n.mo = t.mo * 0.85 + diff * 0.15;
-  n.momentum = clamp(n.mo / 1.4, -1, 1);
 
   // the crowd
   n.crowd = crowdAfter(t, log, ctx, run, clutchNow);

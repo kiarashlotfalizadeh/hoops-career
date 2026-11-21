@@ -467,6 +467,19 @@
     opacity var(--dur) var(--ease-in),
     translate var(--dur) var(--ease-in);
 }
+/* a run that is momentum (the engine's: the side on it shoots better): a flame before it, hotter at its top */
+.lv-lb-run > span.mo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+.lv-lb-run > span.mo > svg {
+  flex: none;
+}
+.lv-lb-run > span.mo-2 {
+  color: var(--bad);
+}
 /* the run is over: its line leaves, quicker than it came */
 .lv-lb-run > span.out {
   opacity: 0;

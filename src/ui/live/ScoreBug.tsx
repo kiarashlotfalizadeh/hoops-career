@@ -2,7 +2,8 @@
 // at stake; under it each team's block in its colour for the night (its name, the ball beside the team
 // that has it, timeouts left and team fouls, both labelled), the scores in the condensed black cut,
 // and between them the period and the clock on their plate, the shot clock beside it, and the run on
-// now under them; then the sliver of each team's chance to win (`WinBar`), and the night's other
+// now under them, with a flame once it is momentum (the engine's: the side on it shoots better until a
+// basket or a timeout ends it); then the sliver of each team's chance to win (`WinBar`), and the night's other
 // scores (`children`). On a phone held sideways it is a slim strip (`slim`): the way out, the blocks,
 // the scores and the clocks; what's at stake, the win bar and the other scores go to the console's
 // drawer (`BugMore`). The clocks and the score follow the court as it animates them (`ticker`; the
@@ -11,20 +12,21 @@
 // turns the clock's plate to the brand's red and says so; under five the shot clock shows tenths in
 // the warning colour. Every team colour is the kit's (teamColors.matchKits).
 import { useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
-import { ChevronLeft, Zap } from 'lucide-react';
+import { ChevronLeft, Flame, Zap } from 'lucide-react';
 import type { League, ScheduledGame, Team } from '../../core/types';
 import { cupLabel } from '../../core/league/cup';
 import { keepFigures } from '../../core/format';
 import { oddsWord } from '../../core/analysis/staffWords';
 import { fmtClock, periodLabel } from '../stats';
 import type { MatchKit } from '../teamColors';
-import type { Drawn } from './drawn';
+import { momentumOf, type Drawn } from './drawn';
+import { FEEL } from '../../core/sim/engine/feel';
 import type { Ticker } from './ticker';
 import { SHOT_WARN, shotText } from './shotClock';
 import { useChanged } from '../motion';
 
-/** A run this long gets a line under the clock. */
-const RUN_CHIP = 6;
+/** Unanswered points that get a line under the clock: where the engine's momentum starts. */
+const RUN_CHIP = FEEL.momentum.from;
 /** The most one trip scores (a four-point play): a bigger jump is a skip ahead, not a basket to pop. */
 const MAX_TRIP = 4;
 
@@ -112,7 +114,6 @@ export function ScoreBug({
   context,
   wpHome,
   run: night,
-  momentum = 0,
   clutch,
   keyPlays,
   onLeave,
@@ -136,8 +137,6 @@ export function ScoreBug({
   wpHome?: number;
   /** The run on now ("BOS 14-2"), as the night reads it; without it, the points unanswered. */
   run?: { abbrev: string; a: number; b: number } | null;
-  /** Who's on top lately, −1 (away) .. 1 (home): its side of the win bar stands thicker. */
-  momentum?: number;
   /** Clutch time: the last five minutes within five. */
   clutch?: boolean;
   /** Key plays on: the court fast-forwards to the next key play. */
@@ -162,20 +161,23 @@ export function ScoreBug({
   const [h, a] = [sideNow(view.sides[0]), sideNow(view.sides[1])];
   // "in the bonus": the team that shoots free throws on every foul
   const bonus = [a.bonus ? away.abbrev : '', h.bonus ? home.abbrev : ''].filter(Boolean);
-  const run = night ?? (h.run >= RUN_CHIP ? { abbrev: home.abbrev, a: h.run, b: 0 } : a.run >= RUN_CHIP ? { abbrev: away.abbrev, a: a.run, b: 0 } : null);
+  // the side with momentum, as the engine plays it (no carry-over into a period's first possession, as no run does)
+  const mo = brk || fresh ? null : momentumOf(view);
+  const moTeam = mo ? (mo.side === 0 ? home : away) : null;
+  // the run on now: the night's reading of it ("BOS 14-2"), else the points unanswered; and when the
+  // side with momentum isn't the one the night's run belongs to, its own unanswered run (the flame is its)
+  const plain = h.run >= RUN_CHIP ? { abbrev: home.abbrev, a: h.run, b: 0 } : a.run >= RUN_CHIP ? { abbrev: away.abbrev, a: a.run, b: 0 } : null;
+  const run = night && (!moTeam || night.abbrev === moTeam.abbrev) ? night : (plain ?? night ?? null);
   // a run that has ended leaves (its last words fade out) instead of blinking off
   const lastRun = useRef(run);
   if (run) lastRun.current = run;
   const runShown = brk ? null : (run ?? lastRun.current);
-  // the side with the momentum, and how strongly (0 none, 1, 2 surging)
-  const mo = Math.abs(momentum) >= 0.55 ? 2 : Math.abs(momentum) >= 0.3 ? 1 : 0;
-  const moHome = momentum > 0;
   const has = brk ? null : ball;
   const state = brk
     ? quarter === 2
       ? 'halftime'
       : `end of ${qLabel}`
-    : `${qLabel} ${fmtClock(clock)}${tight ? ', clutch time' : ''}${has !== null ? `, ${(has === 0 ? home : away).abbrev} ball` : ''}${bonus.length ? `, ${bonus.join(' and ')} in the bonus` : ''}${run ? `, ${run.abbrev} on a ${run.a}-${run.b} run` : ''}${mo ? `, momentum ${moHome ? home.abbrev : away.abbrev}` : ''}`;
+    : `${qLabel} ${fmtClock(clock)}${tight ? ', clutch time' : ''}${has !== null ? `, ${(has === 0 ? home : away).abbrev} ball` : ''}${bonus.length ? `, ${bonus.join(' and ')} in the bonus` : ''}${run ? `, ${run.abbrev} on a ${run.a}-${run.b} run` : ''}${moTeam ? `, ${moTeam.abbrev} has momentum until a basket or a timeout ends the run` : ''}`;
   const wp = wpHome !== undefined ? Math.min(1, Math.max(0, wpHome)) : null;
   // the shot clock beside the game clock while the game plays: its room is kept while it is off (at the
   // line, the game clock under it), so the clock never moves; a stop has none (screen readers aren't
@@ -257,7 +259,12 @@ export function ScoreBug({
           {!slim && (
             <span className="lv-lb-run num">
               {runShown && (
-                <span key={`${runShown.abbrev}-${runShown.a}`} className={run ? undefined : 'out'}>
+                <span
+                  key={`${runShown.abbrev}-${runShown.a}`}
+                  className={run ? (moTeam ? `mo mo-${mo!.level}` : undefined) : 'out'}
+                  title={run && moTeam ? `${moTeam.abbrev} has momentum: its shots fall easier until a basket or a timeout ends the run.` : undefined}
+                >
+                  {run && moTeam && <Flame size={11} aria-hidden="true" />}
                   {keepFigures(`${runShown.abbrev} ${runShown.a}-${runShown.b} run`)}
                 </span>
               )}
@@ -266,7 +273,7 @@ export function ScoreBug({
         </div>
         {side(home, h, 0)}
       </div>
-      {!slim && wp !== null && <WinBar wp={wp} kits={kits} abbrevs={[home.abbrev, away.abbrev]} momentum={momentum} />}
+      {!slim && wp !== null && <WinBar wp={wp} kits={kits} abbrevs={[home.abbrev, away.abbrev]} mo={mo} />}
       {!slim && children}
     </div>
   );
@@ -274,16 +281,14 @@ export function ScoreBug({
 
 /**
  * The sliver of each team's chance to win, in the kits' colours as they read on ink: away on the left,
- * home on the right, as the scores sit; the side with the momentum (−1 away .. 1 home) stands thicker.
+ * home on the right, as the scores sit; the side with momentum (the engine's: drawn.ts's momentumOf) stands thicker.
  */
-export function WinBar({ wp, kits, abbrevs, momentum = 0 }: { wp: number; kits: [MatchKit, MatchKit]; abbrevs: [string, string]; momentum?: number }) {
-  // the side with the momentum, and how strongly (0 none, 1, 2 surging)
-  const mo = Math.abs(momentum) >= 0.55 ? 2 : Math.abs(momentum) >= 0.3 ? 1 : 0;
+export function WinBar({ wp, kits, abbrevs, mo }: { wp: number; kits: [MatchKit, MatchKit]; abbrevs: [string, string]; mo?: ReturnType<typeof momentumOf> }) {
   return (
     <div className="lv-lb-wp" aria-hidden="true">
       <span className="lv-lb-wp-k">To win</span>
       <span className="lv-lb-wp-ab num">{abbrevs[1]}</span>
-      <span className={`lv-lb-wp-bar${mo ? ` mo-${mo} ${momentum > 0 ? 'mo-home' : 'mo-away'}` : ''}`}>
+      <span className={`lv-lb-wp-bar${mo ? ` mo-${mo.level} ${mo.side === 0 ? 'mo-home' : 'mo-away'}` : ''}`}>
         <i className="away" style={{ '--wp': 1 - wp, background: kits[1].night } as CSSProperties} />
         <i className="home" style={{ '--wp': wp, background: kits[0].night } as CSSProperties} />
       </span>
@@ -301,7 +306,7 @@ export function BugMore({
   wpHome,
   kits,
   abbrevs,
-  momentum,
+  view,
   children,
 }: {
   context?: string;
@@ -309,7 +314,8 @@ export function BugMore({
   kits: [MatchKit, MatchKit];
   /** [home, away]. */
   abbrevs: [string, string];
-  momentum?: number;
+  /** The drawn game: the side with momentum stands thicker on the win bar. */
+  view?: Drawn;
   children?: ReactNode;
 }) {
   const wp = wpHome !== undefined ? Math.min(1, Math.max(0, wpHome)) : null;
@@ -321,7 +327,7 @@ export function BugMore({
           <span className="lv-lb-ctx ellipsis">{context}</span>
         </div>
       )}
-      {wp !== null && <WinBar wp={wp} kits={kits} abbrevs={abbrevs} momentum={momentum} />}
+      {wp !== null && <WinBar wp={wp} kits={kits} abbrevs={abbrevs} mo={view ? momentumOf(view) : null} />}
       {children}
     </div>
   );

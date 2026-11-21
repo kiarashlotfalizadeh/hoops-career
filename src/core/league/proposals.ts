@@ -38,6 +38,7 @@ import { makeItWork } from './tradeHelp';
 import { plural } from '../format';
 import { guideWeeks } from './agenda';
 import { tradeRequests } from './pulse';
+import { takesCalls } from './voices';
 
 /** Offers open at once, at most (one per team). */
 export const MAX_OPEN = 4;
@@ -297,9 +298,10 @@ function fits(league: League, t: Team, p: Player): boolean {
 }
 
 /** Teams that can make an offer now: not the user's, and without one already open. */
+/** The AI teams that might call the user today: none with an offer already open, and only front offices taking calls (voices.ts's takesCalls). */
 const free = (league: League) => {
   const busy = new Set(openProposals(league).map((p) => p.tid));
-  return league.teams.filter((t) => t.tid !== league.userTid && !busy.has(t.tid));
+  return league.teams.filter((t) => t.tid !== league.userTid && !busy.has(t.tid) && takesCalls(league, t.tid));
 };
 
 /**

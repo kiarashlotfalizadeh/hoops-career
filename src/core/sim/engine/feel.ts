@@ -103,6 +103,17 @@ export function momentum(run: number, home: boolean): number {
   return Math.min(m.max, m.per * (1 + Math.floor((run - m.from) / 2))) * (home ? m.home : 1);
 }
 
+/** A run's momentum in a word for the screens: 0 none, 1 on, 2 at its top (see FEEL.momentum; none at all at life size). */
+export function momentumLevel(run: number): 0 | 1 | 2 {
+  const m = FEEL.momentum;
+  if (run < m.from || !m.per) return 0;
+  return m.per * (1 + Math.floor((run - m.from) / 2)) >= m.max ? 2 : 1;
+}
+
+/** Whether a shooter's streak is a hot hand, and whether his misses are a cold spell, as the engine counts them (see heat). */
+export const isHot = (streak: number) => streak >= FEEL.hot.from;
+export const isCold = (misses: number) => misses >= FEEL.hot.coldFrom;
+
 /**
  * How much of the room at the top a player has, 0..1 (see FEEL.tails): his raw overall past the top
  * of the league's scale (the best player it had when it was made), all of it FEEL.tails.span past.

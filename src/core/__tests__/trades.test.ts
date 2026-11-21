@@ -6,7 +6,7 @@
 import { expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { startRegularSeason } from '../league/season';
-import { GM_STYLE, gmLine, gmTemper } from '../league/voices';
+import { GM_STYLE, gmLine, gmTemper, leagueBusy, takesCalls } from '../league/voices';
 import { CAP_FOR, contractSeason, curTeamSeason, dateToDay, freeAgents, payroll, standardRoster, twoWayRoster } from '../league/helpers';
 import { DEC_15, DUMP_PER_FIRST, FIRST_VALUE, askingContract, marketSalary, releaseDeadMoney, releasePlayer, signPlayer, tradeValue, twoWaySalary } from '../league/contracts';
 import { capPayroll } from '../league/freeAgency';
@@ -55,6 +55,8 @@ import {
   type TradeLeg,
   type TradeOffer,
   type TradeSide,
+  FEVER,
+  deadlineFever,
 } from '../league/trades';
 import { canMakeWork, counterOffers, dealAddsText, makeDealWork, makeItWork } from '../league/tradeHelp';
 import { facilitatedDeal } from '../league/aiTrades';
@@ -496,6 +498,52 @@ it("valuation and the AI's verdict: talent over depth, strategy lenses within 15
     expect(Object.keys(made.gm!).length).toBe(made.teams.length);
     for (const t of made.teams) expect(gmLine(made, t)).toContain(GM_STYLE[gmTemper(made, t.tid)].label);
     expect(new Set(Object.values(made.gm!)).size).toBeGreaterThan(3);
+    // how busy a front office is: a league of one temper is in the market every day, and deals at the plain rate
+    const days = Array.from({ length: 300 }, (_, d) => d);
+    const inMarket = (lg: League, tid: number) => days.filter((day) => takesCalls({ ...lg, day }, tid)).length / days.length;
+    l.gm = Object.fromEntries(l.teams.map((t) => [t.tid, 'straight' as const]));
+    expect(leagueBusy(l)).toBe(1);
+    expect(inMarket(l, AI)).toBe(1);
+    // with a tinkerer in the league he is the one always in it; a loyalist sits out the days his `busy` is short of the tinkerer's
+    l.gm = { ...l.gm, [AI]: 'loyalist', 2: 'tinkerer', 3: 'gunslinger' };
+    expect(inMarket(l, 2)).toBe(1);
+    const share = (k: 'loyalist' | 'gunslinger' | 'straight') => GM_STYLE[k].busy / GM_STYLE.tinkerer.busy;
+    expect(Math.abs(inMarket(l, AI) - share('loyalist'))).toBeLessThan(0.08);
+    expect(Math.abs(inMarket(l, 3) - share('gunslinger'))).toBeLessThan(0.08);
+    expect(Math.abs(inMarket(l, 4) - share('straight'))).toBeLessThan(0.08);
+    expect(inMarket(l, AI)).toBeLessThan(inMarket(l, 4));
+    // (the same answer all day)
+    expect(takesCalls(l, AI)).toBe(takesCalls(l, AI));
+    expect(leagueBusy(l)).toBeGreaterThan(1);
+    // deadline fever: in the deadline's last days a gunslinger or a tinkerer gives past even for a deal that
+    // brings him its best player (80+); nobody else does, nor he earlier, nor for a lesser player, nor ever with the user
+    {
+      const [big, small] = [theirs[0], theirs[5]];
+      big.ovr = Math.max(big.ovr, FEVER.ovr + 2);
+      small.ovr = Math.min(small.ovr, FEVER.ovr - 4);
+      const at = (left: number, temper: NonNullable<League['gm']>[number], inP = big, outP = small) => {
+        l.gm = { ...l.gm, 5: temper };
+        l.day = l.tradeDeadlineDay - left;
+        return deadlineFever(l, 5, [inP.pid], [outP.pid]);
+      };
+      expect(at(0, 'gunslinger')).toBe(GM_STYLE.gunslinger.fever);
+      expect(at(FEVER.days - 1, 'tinkerer')).toBe(GM_STYLE.tinkerer.fever);
+      expect(GM_STYLE.gunslinger.fever).toBeGreaterThan(0);
+      expect(at(FEVER.days, 'gunslinger')).toBe(0);
+      expect(at(-1, 'gunslinger')).toBe(0);
+      expect(at(1, 'straight')).toBe(0);
+      expect(at(1, 'shark')).toBe(0);
+      // (selling the better player, or buying one under the bar: no fever)
+      expect(at(1, 'gunslinger', small, big)).toBe(0);
+      const lesser = theirs[6];
+      lesser.ovr = FEVER.ovr - 6;
+      expect(at(1, 'gunslinger', small, lesser)).toBe(0);
+      l.day = l.tradeDeadlineDay - 1;
+      expect(deadlineFever(l, U, [big.pid], [small.pid])).toBe(0);
+      // and a deal with the user is weighed as on any other day
+      l.gm = { ...l.gm, [AI]: 'gunslinger' };
+      expect(evaluateTrade(l, o).parts.ask).toBeGreaterThanOrEqual(0);
+    }
   }
 
   // adds up its verdict from the parts it reports

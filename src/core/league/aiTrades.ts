@@ -2,7 +2,8 @@
 // season with a rush at the deadline, on draft night, and over the summer and preseason), the
 // three-team deals they make when two teams can't get one done (facilitatedDeal: a third team with
 // room takes the salary), and the rumours of who is on the block (the AI's offers to the user are
-// in proposals.ts).
+// in proposals.ts). Each front office deals in its own way (voices.ts): how often it shops and takes
+// calls is its `busy`, and in the deadline's last days some go past an even deal (trades.ts's FEVER).
 import type { DraftPick, League, Player } from '../types';
 import { CAP } from '../constants';
 import { Rng, clamp } from '../random';
@@ -17,6 +18,7 @@ import {
   bestTpe,
   capSalary,
   dealDelta,
+  deadlineFever,
   executeDeal,
   executeTrade,
   findPick,
@@ -38,6 +40,7 @@ import {
 } from './trades';
 import { MAX_PICKS_OUT, dumpPackage } from './tradePackages';
 import { wantsOut } from './pulse';
+import { gmStyle, leagueBusy, takesCalls } from './voices';
 
 // ---------------------------------------------------------------- AI front offices
 
@@ -82,16 +85,18 @@ export function teamStrategyUpdate(league: League) {
  * AI-to-AI deals the league expects on a day of the regular season, the NBA's rhythm: a trickle
  * before December 15 (summer signings can't be traded until then), more into January, more again
  * after mid-January, about two a day in the deadline's last week and a rush on deadline day: some
- * 30 a season, nearly half of them in the last week (see aiToAiTrade).
+ * 30 a season, nearly half of them in the last week (see aiToAiTrade). That is a league of straight
+ * shooters: the league's own front offices move it by how busy they are on average (leagueBusy).
  */
 export function aiTradeRate(league: League): number {
   const left = league.tradeDeadlineDay - league.day;
   if (left < 0) return 0;
-  if (left === 0) return 6;
-  if (left < 7) return 2;
-  if (league.day < DEC_15) return 0.06;
-  if (league.day < dateToDay(league.season, 0, 15)) return 0.2;
-  return 0.36;
+  const busy = leagueBusy(league);
+  if (left === 0) return 6 * busy;
+  if (left < 7) return 2 * busy;
+  if (league.day < DEC_15) return 0.06 * busy;
+  if (league.day < dateToDay(league.season, 0, 15)) return 0.2 * busy;
+  return 0.36 * busy;
 }
 
 /** How many of something happen today, at `rate` a day on average (a Poisson draw from the league's stream). */
@@ -124,7 +129,7 @@ export function aiToAiTrade(league: League, rng: Rng) {
  */
 export function aiOffseasonTrades(league: League, rng: Rng, rate: number) {
   if (tradingClosedReason(league)) return;
-  const n = draws(rng, rate);
+  const n = draws(rng, rate * leagueBusy(league));
   for (let i = 0; i < n; i++) aiTradeOnce(league, rng);
 }
 
@@ -224,27 +229,40 @@ export function sellable(league: League, tid: number): Player[] {
   });
 }
 
-/** Teams that would buy him: contenders, and retooling teams for a player 76+ who is 30 or younger (or a star of any age who has asked out). */
+/**
+ * Teams that would buy him: contenders, and retooling teams for a player 76+ who is 30 or younger (or
+ * a star of any age who has asked out). Only front offices in the market today (voices.ts's
+ * takesCalls: a loyalist or a hoarder lets more days go by than a tinkerer).
+ */
 function buyersFor(league: League, seller: number, p: Player): number[] {
   const star = wantsOut(league, p) && p.ovr >= 80;
   return league.teams
-    .filter((t) => t.tid !== seller && t.tid !== league.userTid && (t.strategy === 'contend' || (t.strategy === 'retool' && p.ovr >= 76 && (star || age(league, p) <= 30))))
+    .filter(
+      (t) =>
+        t.tid !== seller &&
+        t.tid !== league.userTid &&
+        takesCalls(league, t.tid) &&
+        (t.strategy === 'contend' || (t.strategy === 'retool' && p.ovr >= 76 && (star || age(league, p) <= 30))),
+    )
     .map((t) => t.tid);
 }
 
 /**
  * A seller shops its best three sellable players to every team that would buy them (see
  * buyersFor) and takes the deal it likes best. Rebuilders are three times as likely to be the one
- * shopping as retooling teams, and so is a team with a player who has asked out; up to three
+ * shopping as retooling teams, and so is a team with a player who has asked out. Only front offices
+ * in the market today shop (voices.ts's takesCalls), and of those a busy one (a tinkerer, a
+ * gunslinger) makes the first call that much more often than a loyalist, by its `busy`. Up to three
  * sellers are tried.
  */
 function saleDeal(league: League, rng: Rng): TradeLeg[] | null {
-  const sellers = league.teams.filter((t) => t.tid !== league.userTid).map((t) => ({ t, list: sellable(league, t.tid) }));
+  // (of the front offices in the market today: see takesCalls)
+  const sellers = league.teams.filter((t) => t.tid !== league.userTid && takesCalls(league, t.tid)).map((t) => ({ t, list: sellable(league, t.tid) }));
   const pool = sellers.filter((x) => x.list.length);
   // (a request first on its team's list: the player it most needs to move)
   for (const x of pool) x.list.sort((a, b) => Number(wantsOut(league, b)) - Number(wantsOut(league, a)));
   for (let k = 0; k < 3 && pool.length; k++) {
-    const { t, list } = pool.splice(rng.weighted(pool.map((x) => (x.t.strategy === 'rebuild' || wantsOut(league, x.list[0]) ? 3 : 1))), 1)[0];
+    const { t, list } = pool.splice(rng.weighted(pool.map((x) => (x.t.strategy === 'rebuild' || wantsOut(league, x.list[0]) ? 3 : 1) * gmStyle(league, x.t.tid).busy)), 1)[0];
     let best: { deal: TradeOffer; v: number; p: Player; b: number } | null = null;
     for (const p of list.slice(0, 3)) {
       for (const b of buyersFor(league, t.tid, p)) {
@@ -311,12 +329,19 @@ export function onTheBlock(league: League, max = 3): BlockRumor[] {
 const STAR_TARGET = 85;
 
 /**
+ * How many of its best players a buyer keeps out of an offer for `vet`: three, two for a star, and
+ * one fewer for a front office with deadline fever in the deadline's last days (trades.ts's FEVER:
+ * a gunslinger puts his second-best player in for a star, which is how a blockbuster gets done).
+ */
+const keptFor = (league: League, buyer: number, vet: Player) => (vet.ovr >= STAR_TARGET ? 2 : 3) - (deadlineFever(league, buyer, [vet.pid], []) > 0 ? 1 : 0);
+
+/**
  * The buyer's offer for one player: salary that matches first (without sending an over-the-cap
  * seller more than it can take back, or taking a hard-capped buyer past its apron), then its two
  * most valuable young players and picks from the cheapest up (three at most, so better ones
  * replace the cheapest; two firsts at most) until the seller agrees; null unless both teams sign
  * off and the rules allow it. The buyer's three best players are off the table (its two best for
- * a star, 85+), and it keeps 13 in season; up to four of its players go (a 2-for-1 or 3-for-1
+ * a star, 85+; one fewer with deadline fever: see keptFor), and it keeps 13 in season; up to four of its players go (a 2-for-1 or 3-for-1
  * consolidates its depth into one better player), the seller waiving its end of the bench to make
  * room (see waiveForTrade).
  */
@@ -326,7 +351,7 @@ export function aiPackage(league: League, buyer: number, seller: number, vet: Pl
   const movable = (a: Player | DraftPick) => !tradedAwayBy(league, a, seller) && !('pid' in a && (untradeable(league, a) || justTraded(league, a)));
   const roster = tradeRoster(league, buyer).sort((x, y) => y.ovr - x.ovr);
   // (for a star, 85+, only its two best: a contender gives up its third-best player to land one)
-  const avail = roster.slice(vet.ovr >= STAR_TARGET ? 2 : 3).filter((p) => p.ovr < vet.ovr && movable(p));
+  const avail = roster.slice(keptFor(league, buyer, vet)).filter((p) => p.ovr < vet.ovr && movable(p));
   // the buyer keeps 13 in season; the seller waives to make room for what comes back
   const maxPkg = inSeason(league) ? Math.min(4, roster.length - CAP.rosterMin + 1) : 4;
   if (maxPkg < 1) return null;
@@ -432,7 +457,7 @@ export function facilitatedDeal(
   const sal = (p: Player) => capSalary(league, p.pid, s);
   const yes = (tid: number, legs: TradeLeg[]) => opts.agrees?.(tid, legs) ?? dealDelta(league, legs, tid) >= 0;
   const roster = tradeRoster(league, buyer).sort((x, y) => y.ovr - x.ovr || x.pid - y.pid);
-  const keep = opts.keep ?? new Set(roster.slice(0, vet.ovr >= STAR_TARGET ? 2 : 3).map((p) => p.pid));
+  const keep = opts.keep ?? new Set(roster.slice(0, keptFor(league, buyer, vet)).map((p) => p.pid));
   const avail = roster.filter((p) => !keep.has(p.pid) && p.ovr < vet.ovr && !untradeable(league, p) && !justTraded(league, p));
   const build = (third: number, fill: Player[], youth: Player[], toSeller: DraftPick[], toThird: DraftPick[]): TradeLeg[] => [
     { tid: seller, to: buyer, pids: [vet.pid], dpids: [] },
@@ -466,7 +491,7 @@ export function facilitatedDeal(
   const thirds =
     opts.thirds ??
     league.teams
-      .filter((t) => t.tid !== buyer && t.tid !== seller && t.tid !== league.userTid)
+      .filter((t) => t.tid !== buyer && t.tid !== seller && t.tid !== league.userTid && takesCalls(league, t.tid))
       .map((t) => ({ tid: t.tid, room: cap.salaryCap - capPayroll(league, t.tid, s) }))
       .filter((x) => x.room >= load || (fill.length === 1 && bestTpe(league, x.tid) >= load))
       .sort((x, y) => y.room - x.room || x.tid - y.tid)
@@ -579,7 +604,8 @@ function dumpDeal(league: League, rng: Rng, only?: number): TradeOffer | null {
     ];
     if (!tries.length && worst) tries.push({ bad: worst, saves: over });
     for (const { bad, saves } of tries) {
-      const takers = rng.shuffle(ai.filter((x) => x.tid !== t.tid && !tradedAwayBy(league, bad, x.tid))).slice(0, past ? ai.length : 6);
+      // (of the front offices taking calls today: see takesCalls)
+      const takers = rng.shuffle(ai.filter((x) => x.tid !== t.tid && takesCalls(league, x.tid) && !tradedAwayBy(league, bad, x.tid))).slice(0, past ? ai.length : 6);
       const sal = capSalary(league, bad.pid);
       for (const x of takers) {
         const taker = (o: TradeOffer) => teamDelta(league, o, x.tid) >= 0;
@@ -637,20 +663,21 @@ const COVET = 0.25;
  * Draft night, before an AI team picks: now and then it trades down or out of the pick. In the
  * first round (about one pick in eight) a team with a later first this draft moves up into it,
  * adding its cheapest picks until the team on the clock likes the deal; in the second (one in
- * ten) a team buys the pick with a future second. The team moving up covets a player on the board
+ * ten; both by how busy the front office on the clock is) a team buys the pick with a future second. The team moving up covets a player on the board
  * (the pick is worth COVET more to it); both teams sign off and the rules allow it, as for any AI
  * deal.
  */
 export function aiDraftTrade(league: League, rng: Rng, dp: DraftPick) {
   if (league.phase !== 'draft' || dp.tid === league.userTid || dp.pick === undefined) return;
-  if (!rng.chance(dp.round === 1 ? 0.12 : 0.1)) return;
+  // (as often as the team on the clock likes to deal: its front office's `busy`)
+  if (!rng.chance((dp.round === 1 ? 0.12 : 0.1) * gmStyle(league, dp.tid).busy)) return;
   const deal = withHoldsMemo(() => {
     const seller = dp.tid;
     const later = (tid: number) =>
       league.draftPicks.filter(
         (d) => d.tid === tid && d.season === league.season && d.round === dp.round && d.pick !== undefined && d.pick > dp.pick! && !tradedAwayBy(league, d, seller),
       );
-    const buyers = rng.shuffle(league.teams.filter((t) => t.tid !== seller && t.tid !== league.userTid)).slice(0, 8);
+    const buyers = rng.shuffle(league.teams.filter((t) => t.tid !== seller && t.tid !== league.userTid && takesCalls(league, t.tid))).slice(0, 8);
     for (const b of buyers) {
       const base = dp.round === 1 ? later(b.tid)[0] : undefined;
       if (dp.round === 1 && !base) continue;

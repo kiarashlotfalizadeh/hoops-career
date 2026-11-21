@@ -2,18 +2,12 @@ import { useRef, type CSSProperties } from 'react';
 import { Flame, Snowflake } from 'lucide-react';
 import type { GameSim } from '../../core/sim/engine';
 import type { GameManagement } from '../../core/types';
-import { madeAtt, plural } from '../../core/format';
+import { plural } from '../../core/format';
 import { Ovr, Section, Tag, Toggle } from '../components/ui';
 import { inkOn } from '../teamColors';
 import { foulLimit } from './alerts';
-import { subsLine, type Drawn, type DrawnPlayer } from './drawn';
+import { coldHand, hotHand, subsLine, type Drawn } from './drawn';
 import { useChanged } from '../motion';
-
-/** Made shots in a row that light the flame (the engine's Hot hand feeds a shooter from three). */
-export const HOT_STREAK = 3;
-
-/** Cold: six shots or more, a quarter of them or fewer in. */
-export const isCold = (p: Pick<DrawnPlayer, 'fgm' | 'fga'>) => p.fga >= 6 && p.fgm / p.fga <= 0.25;
 
 export interface SideInfo {
   abbrev: string;
@@ -57,7 +51,9 @@ function RowHead() {
 /**
  * The console's Players view, one list a question: your five (who's tired, who's in foul trouble), your
  * bench (who can come in), their five. The same row everywhere, so the eye compares down one set of
- * columns: his number, name and energy in a word, then OVR, minutes, points and fouls. Tap any player
+ * columns: his number, name and energy in a word, then OVR, minutes, points and fouls. A flame marks a
+ * hot hand and a snowflake a cold spell, exactly when the engine plays them (drawn.ts's hotHand and
+ * coldHand: he shoots better or worse for it). Tap any player
  * for his sheet: subs, his orders, his matchups, a Hack-a-player. Who's on and off comes from the game
  * itself (a sub has to be possible now); the numbers from the possession the court last drew (subsLine).
  */
@@ -104,17 +100,18 @@ export function Lineup({
     const fat = info[s].manage.fatigueSub * 100;
     const tone = l.energy < fat ? 'bad' : l.energy < fat + 15 ? 'warn' : 'good';
     const limit = foulLimit(view.q, info[s].manage.foulTrouble);
-    const hot = !!p && p.streak >= HOT_STREAK;
-    const cold = !!p && !hot && isCold(p);
+    const hot = !!p && hotHand(p);
+    const cold = !!p && coldHand(p);
     const rating = ovr(pid);
-    const more = `: ${ENERGY[tone]}, ${plural(l.min, 'minute')}, ${plural(l.pts, 'point')}, ${plural(l.fouls, 'foul')}. ${mine ? 'Subs and orders' : 'Stop him, guard him, Hack-a-player'}`;
+    const feel = hot ? 'Hot hand. He shoots better until he cools off.' : cold ? `${p.cold} straight misses. He shoots worse until one falls.` : '';
+    const more = `: ${ENERGY[tone]}, ${plural(l.min, 'minute')}, ${plural(l.pts, 'point')}, ${plural(l.fouls, 'foul')}. ${feel ? `${feel} ` : ''}${mine ? 'Subs and orders' : 'Stop him, guard him, Hack-a-player'}`;
     return (
       <button
         key={pid}
         className={`lv-pl${l.out ? ' out' : ''}${onNow.has(pid) && justIn(pid) ? ' in' : ''}`}
         onClick={() => onTap(pid, mine)}
         aria-haspopup="dialog"
-        title={hot ? `${p.streak} straight makes` : cold ? `${madeAtt(p.fgm, p.fga)} FG` : undefined}
+        title={feel || undefined}
       >
         <span className="lv-pl-num" style={{ background: info[s].kit[0], color: inkOn(info[s].kit[0]), borderColor: info[s].kit[1] } as CSSProperties}>
           {jersey(pid)}
@@ -126,12 +123,13 @@ export function Lineup({
             {hot && (
               <span className="lv-pl-mark hot" aria-hidden="true">
                 <Flame size={12} />
-                {p.streak}
+                Hot
               </span>
             )}
             {cold && (
               <span className="lv-pl-mark cold" aria-hidden="true">
                 <Snowflake size={12} />
+                Cold
               </span>
             )}
           </span>

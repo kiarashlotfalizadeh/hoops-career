@@ -103,7 +103,7 @@ export function subOptions(view: Drawn, userSide: 0 | 1, me: GameSim['T'][number
 /**
  * The Tactics tab's quick changes for the game as the court has drawn it, against `planned` (the
  * tactics the game tipped off with). Their threat is the player already targeted, else their leading
- * scorer (never a shooter's streak: the engine has no hot hand to double).
+ * scorer (never a shooter's streak: a double on a hot hand measured as a cost).
  */
 export function quickPills(view: Drawn, userSide: 0 | 1, tactics: Tactics, planned: Tactics, nameOf: (pid: number) => string): Pill[] {
   const me = view.sides[userSide];

@@ -15,6 +15,7 @@ import { OvrKey } from '../components/OvrKey';
 import { f1, latestLine, playerSeason, startingFive, type PerGame } from '../stats';
 import { tenDayLeft } from '../../core/league/tenDay';
 import { injuryName, plural } from '../../core/format';
+import { FormMark } from '../components/FormMark';
 import { devTag } from '../../core/league/devWatch';
 import { DevTagChip } from '../player/dev';
 // its rows' styles, wherever a roster shows (another team's page, not only the Team tab)
@@ -70,7 +71,7 @@ function RowTag({ league, p, mine }: { league: League; p: Player; mine: boolean 
   return dev ? <DevTagChip tag={dev} /> : null;
 }
 
-/** One player's row: a link to his page. */
+/** One player's row: a link to his page. A flame or a snowflake beside his name when he is on a tear or in a slump (FormMark). */
 export function RosterRow({ league, p, line, mine }: { league: League; p: Player; line: PerGame | null; mine: boolean }) {
   return (
     <Link to={`/player/${p.pid}`} className="tm-rl tm-rl-row">
@@ -79,6 +80,7 @@ export function RosterRow({ league, p, line, mine }: { league: League; p: Player
         <span className="ellipsis">
           {p.firstName} {p.lastName}
         </span>
+        <FormMark league={league} p={p} />
         <RowTag league={league} p={p} mine={mine} />
       </span>
       <span className="tm-rl-ovr">

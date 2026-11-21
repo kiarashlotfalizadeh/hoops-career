@@ -179,3 +179,26 @@ export function formOf(league: Pick<League, 'id' | 'season'>, pid: number, day: 
   const far = Math.max(0, Math.abs(v) - f.tail);
   return 1 + clamp(f.sd * v + Math.sign(v) * f.extra * far, f.min, f.max);
 }
+
+/** A stretch of form worth a word: a tear or a slump, the tail of FORM (its `tail` standard deviations out). */
+export type FormStretch = 'hot' | 'cold';
+
+export const FORM_WORD: Record<FormStretch, string> = { hot: 'Hot stretch', cold: 'Cold stretch' };
+
+/** What a stretch means, for a title or a screen reader. */
+export const FORM_ABOUT: Record<FormStretch, string> = {
+  hot: 'Playing above himself for a week or two.',
+  cold: 'Playing below himself for a week or two.',
+};
+
+/**
+ * The stretch a player is in on a day of the season (today by default), when it is one worth a word:
+ * the same form the engine plays him at that day (formOf), past the edge where a usual wobble becomes
+ * a tear or a slump. Null for a usual stretch, a player without a team, and outside the season's games.
+ */
+export function formStretch(league: Pick<League, 'id' | 'season' | 'day' | 'phase'>, p: Pick<Player, 'pid' | 'tid'>, day = league.day): FormStretch | null {
+  if (p.tid < 0 || !(league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs')) return null;
+  const edge = FORM.sd * FORM.tail;
+  const f = formOf(league, p.pid, day);
+  return f >= 1 + edge ? 'hot' : f <= 1 - edge ? 'cold' : null;
+}

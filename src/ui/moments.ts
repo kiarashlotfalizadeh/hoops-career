@@ -23,6 +23,7 @@ import { reviewPath, seasonReviewOf } from '../core/league/legacy';
 import { endText, gradeWord } from '../core/league/legacyReview';
 import { awardLine, awardPhrase } from '../core/league/media/history';
 import { isCareerMarkStory } from '../core/league/media/marks';
+import { ultimatumSaid } from '../core/league/ownerVoice';
 import { BIG_NIGHT, REC_LABEL, REC_STATS, TEAM_REC_STATS, bookFrom, gameMark, recordReach, recordSpan, recordWhat, teamMark, youngBook } from '../core/league/records';
 
 export type MomentKind =
@@ -612,10 +613,9 @@ function jobMoments(league: League): Moment[] {
       over: `${seasonLabel(season)} · The owner's ultimatum`,
       title: u.text,
       sub: "Miss it and you're fired, whatever else goes right.",
-      lines: [
-        u.kind === 'wins' ? `${(curTeamSeason(league, me).won ?? 0) - (og.from?.won ?? 0)} of ${u.target} so far.` : '',
-        `“This season is heading the wrong way. ${u.text}, or I make a change this summer.”`,
-      ].filter(Boolean),
+      lines: [u.kind === 'wins' ? `${(curTeamSeason(league, me).won ?? 0) - (og.from?.won ?? 0)} of ${u.target} so far.` : '', `“${ultimatumSaid(league, u.text)}”`].filter(
+        Boolean,
+      ),
       link: '/office/owner',
       linkLabel: 'See where it stands',
     });

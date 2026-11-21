@@ -74,6 +74,7 @@ import { deadlineDay } from './deadline';
 import { booksDaily, closeBooks } from './books';
 import { callsDaily } from './calls';
 import { ownerEvaluation } from './owner';
+import { ownerWords } from './ownerVoice';
 import { ownerCheckIn, setOwnerGoals } from './ownerGoals';
 import { applyPendingSettings } from './jobSecurity';
 import { coachingCarousel } from './coaches';
@@ -468,7 +469,8 @@ function endPlayoffs(league: League) {
     addInbox(league, {
       from: 'Owner',
       subject: 'Champions',
-      body: "You did it. The city is going to be partying for a week. Enjoy it, then let's do it again.",
+      // (in his own manner: ownerVoice.ts)
+      body: ownerWords(league).title,
       tone: 'good',
       link: '/league/history',
     });

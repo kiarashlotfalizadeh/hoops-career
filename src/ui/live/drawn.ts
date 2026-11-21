@@ -5,6 +5,7 @@
 
 import type { GameResult, SetId, TacticImpact } from '../../core/types';
 import type { GameSim } from '../../core/sim/engine';
+import { isCold, isHot, momentumLevel } from '../../core/sim/engine/feel';
 
 export interface DrawnPlayer {
   pid: number;
@@ -18,8 +19,14 @@ export interface DrawnPlayer {
   /** 0 ok, 1 fouled out, 2 injured or held out. */
   out: 0 | 1 | 2;
   on: boolean;
-  /** Field goals in a row: made (positive) or missed (negative), the latest shots first. */
+  /** Field goals in a row: made (positive) or missed (negative), the latest shots first (what a broadcast line counts). */
   streak: number;
+  /**
+   * The engine's own hot hand and cold spell (FEEL.hot), which is what moves his shooting: his heat
+   * (makes in a row, a miss or a sit taking some off) and his misses in a row since his last make or sit.
+   */
+  hot: number;
+  cold: number;
   /** His free-throw percentage (0..1), as the engine shoots them. */
   ftPct: number;
 }
@@ -29,6 +36,8 @@ export interface DrawnSide {
   timeouts: number;
   /** Unanswered points. */
   run: number;
+  /** The momentum that run gives this side, as the engine plays it (FEEL.momentum): 0 none, 1 on, 2 at its top. A basket of the other side's or a timeout ends it. */
+  mo: 0 | 1 | 2;
   /** Team fouls this period. */
   fouls: number;
   /** In the bonus: this team's opponent is in the penalty, so its fouls send this team to the line. */
@@ -104,6 +113,7 @@ export function snapshot(sim: GameSim, logs = 0): Drawn {
       score: t.score,
       timeouts: t.timeouts,
       run: t.run,
+      mo: momentumLevel(t.run),
       fouls: t.fouls,
       bonus: sim.bonus(sim.T[1 - i]),
       on: t.on.map((p) => p.pid),
@@ -119,6 +129,8 @@ export function snapshot(sim: GameSim, logs = 0): Drawn {
         out: p.out,
         on: p.on,
         streak: streak.get(p.pid) ?? 0,
+        hot: p.hot,
+        cold: p.cold,
         ftPct: p.ftPct,
       })),
       pt: (i === 0 ? box.home : box.away).playTypes,
@@ -140,6 +152,19 @@ export function snapshot(sim: GameSim, logs = 0): Drawn {
     pbpLen: sim.pbp.length,
     box,
   };
+}
+
+/** The hot hand, as the engine has it (he shoots better, and the ball finds him), and the cold spell (he shoots worse until one falls). */
+export const hotHand = (p: Pick<DrawnPlayer, 'hot'>) => isHot(p.hot);
+export const coldHand = (p: Pick<DrawnPlayer, 'hot' | 'cold'>) => !isHot(p.hot) && isCold(p.cold);
+
+/** The side with momentum now (see DrawnSide.mo) and how much, or null: only one side can be on a run. */
+export function momentumOf(v: Pick<Drawn, 'sides'>): { side: 0 | 1; level: 1 | 2; run: number } | null {
+  for (const side of [0, 1] as const) {
+    const s = v.sides[side];
+    if (s.mo) return { side, level: s.mo, run: s.run };
+  }
+  return null;
 }
 
 /** A player in the drawn game (either side). */

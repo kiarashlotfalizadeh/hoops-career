@@ -6,7 +6,7 @@ import { Rng, hashString, clamp } from '../random';
 import { FRANCHISES, BBREF_TO_TID } from '../teams';
 import { coachName, makeTeam } from '../teamFactory';
 import { seedFounding } from './legends';
-import { drawTempers, earnNickname, nickWorthy } from './voices';
+import { drawTempers } from './voices';
 import { activeCoach, seedCoaches } from './coaches';
 import { defPresetOf, nearestOffPreset, realStyle } from '../ai/style';
 import { DEFAULT_SCALE, genTendencies, generatePlayer, refreshPlayerDerived } from '../playerGen';
@@ -466,8 +466,6 @@ export function createLeague(opts: CreateOpts): League {
     }
   }
   league.gm = drawTempers(league);
-  // (a fictional league's best are already known by their nicknames: league/voices.ts)
-  for (const p of Object.values(league.players).sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)) if (p.tid >= 0 && nickWorthy(p)) earnNickname(league, p);
   league.ratingAnchors = ratingMeans(league);
   league.ratingSpreads = ratingSpreads(league);
   const realSeed = opts.seed && opts.seed.players.length ? opts.seed : null;

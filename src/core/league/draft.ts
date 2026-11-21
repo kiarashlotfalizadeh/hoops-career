@@ -10,7 +10,6 @@ import { logMove, logSwap } from './transactions';
 import { pickLabel } from './trades';
 import { ordinal } from '../format';
 import { seedGenerational } from './legends';
-import { earnNickname } from './voices';
 import { blurb, combineFor, consensusRead, consensusView, holdCombine, rankByConsensus, readRange, staffRead, teamRead, type Read } from './prospects';
 
 export const LOTTERY_ODDS = [140, 140, 140, 125, 105, 90, 75, 60, 45, 30, 20, 15, 10, 5];
@@ -57,11 +56,10 @@ export function generateDraftClass(league: League, year: number, rng: Rng, size 
     gen.ratings = shiftToOvr(gen.ratings, Math.round(prospectLevel(0) + 7), league.ovrScale);
     refreshPlayerDerived(gen, league.season, league.ovrScale);
     gen.tend = genTendencies(gen, rng);
-    earnNickname(league, gen);
     addNews(league, {
       kind: 'draft',
       head: `A generational prospect tops the ${year} class`,
-      text: `${playerName(gen)}, ${fmtHeight(gen.heightIn)}${gen.nick ? `, "${gen.nick}" to the scouts already` : ''}: the kind of prospect who comes along once in a decade.`,
+      text: `${playerName(gen)}, ${fmtHeight(gen.heightIn)}: the kind of prospect who comes along once in a decade.`,
       tids: [],
       pids: [gen.pid],
       weight: 3,

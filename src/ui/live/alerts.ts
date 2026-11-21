@@ -226,14 +226,16 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
       out.push({ id: `fouls-${p.pid}-5`, tone: 'warn', title: `${names(p.pid)} has 5 fouls`, text: "One more and he's out.", action: sit(p, 'Sit') });
   }
 
-  // a run the staff won't stop for you (it calls its own timeouts unless you handle subs)
-  if (them.run >= 8 && me.timeouts > 0 && !a.atBreak && !a.timeoutPending && !staffCallsTimeout(view, side, tactics.manage, a.manualSubs))
+  // their run, from the point it becomes momentum (the engine's FEEL.momentum: they shoot better until a
+  // basket of yours or a timeout ends it; at life size, from 8-0). Not when the staff is about to call
+  // time itself (it does at your own mark, unless you handle the subs)
+  if ((them.mo || them.run >= 8) && me.timeouts > 0 && !a.atBreak && !a.timeoutPending && !staffCallsTimeout(view, side, tactics.manage, a.manualSubs))
     out.push({
       // (one alert a run, however long it gets: a dismissal holds until the run ends)
       id: `run-${them.score - them.run}`,
       tone: 'warn',
       title: `${themTeam.abbrev} on ${aRun(them.run)}`,
-      text: 'A timeout rests legs and can stop it, but lets their coach adjust.',
+      text: them.mo ? 'Momentum is theirs: they shoot better until the run ends. A timeout ends it.' : 'A timeout rests legs and can stop it, but lets their coach adjust.',
       action: { kind: 'timeout', label: 'Timeout' },
     });
 

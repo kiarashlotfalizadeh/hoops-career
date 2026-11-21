@@ -16,7 +16,8 @@ import { Rng } from '../../core/random';
 import { cloneTactics } from '../../core/sim/tactics';
 import { DEFAULT_PPP } from '../../core/analysis/playTypes';
 import type { PossLog } from '../../core/sim/log';
-import { snapshot, streaks, type Drawn } from '../live/drawn';
+import { coldHand, hotHand, momentumOf, snapshot, streaks, type Drawn } from '../live/drawn';
+import { FEEL, heat, momentum } from '../../core/sim/engine/feel';
 import { tacticsDiff } from '../live/alerts';
 import { foulLimit, liveAlerts, newEvents, recentLevers, staffCallsTimeout, type AlertInput } from '../live/alerts';
 import { finisher, gameDecided, matchups, staffNotes, staffRead, sumBy, type StaffInput } from '../live/staff';
@@ -257,8 +258,41 @@ describe('the live assistant and the bench', () => {
       const run = liveAlerts(alertInput(g, view, { manualSubs: true })).find((x) => x.id.startsWith('run-'))!;
       expect(run.action?.kind).toBe('timeout');
       expect(run.title).toBe(`${g.league.teams[1].abbrev} on a 9-0 run`);
+      // (a run with no momentum behind it, as at life size: what a timeout does otherwise)
       expect(run.text).toMatch(/rests legs.*stop it.*their coach adjust/);
       expect(run.text).not.toMatch(/momentum/i);
+      // momentum (the engine's FEEL: from 6 unanswered, the side on it shoots better until a basket or
+      // a timeout ends it): the alert comes when it starts, before the staff's own 8-0, and says so
+      const hot = structuredClone(view);
+      hot.sides[1].run = FEEL.momentum.from;
+      hot.sides[1].mo = 1;
+      expect(momentum(FEEL.momentum.from, false)).toBeGreaterThan(0);
+      expect(momentumOf(hot)).toEqual({ side: 1, level: 1, run: FEEL.momentum.from });
+      expect(staffCallsTimeout(hot, 0, g.sim.baseTactics(0).manage, false)).toBe(false);
+      const mo = liveAlerts(alertInput(g, hot)).find((x) => x.id.startsWith('run-'))!;
+      expect(mo.title).toBe(`${g.league.teams[1].abbrev} on a ${FEEL.momentum.from}-0 run`);
+      expect(mo.text).toBe('Momentum is theirs: they shoot better until the run ends. A timeout ends it.');
+      expect(mo.action?.kind).toBe('timeout');
+      // ours is a read on the bench, with nothing to do about it; none at a break
+      const ours = structuredClone(view);
+      Object.assign(ours.sides[1], { run: 0, mo: 0 });
+      Object.assign(ours.sides[0], { run: 8, mo: 1 });
+      const read = staffNotes({ ...staffInput(g), view: ours }).find((n) => n.id.startsWith('mo-'))!;
+      expect(read).toMatchObject({ kind: 'read', tone: 'good', title: 'Momentum is ours: an 8-0 run', actions: [] });
+      expect(staffNotes({ ...staffInput(g), view: ours, atBreak: true }).some((n) => n.id.startsWith('mo-'))).toBe(false);
+      // the drawn game carries the engine's own run and momentum, a timeout ends both, and one side has it at most
+      const live = game(9);
+      for (let i = 0; i < 400 && !live.sim.over; i++) {
+        live.sim.step();
+        const d = snapshot(live.sim);
+        d.sides.forEach((sd, k) => expect(sd.mo > 0).toBe(momentum(live.sim.T[k].run, false) > 0));
+        expect(d.sides[0].mo && d.sides[1].mo).toBeFalsy();
+        if (momentumOf(d)) break;
+      }
+      const on = momentumOf(snapshot(live.sim))!;
+      expect(on.run).toBeGreaterThanOrEqual(FEEL.momentum.from);
+      live.sim.T[1 - on.side].timeouts = 5;
+      if (live.sim.callTimeout((1 - on.side) as 0 | 1) && live.sim.T[1 - on.side].toWait == null) expect(momentumOf(snapshot(live.sim))).toBeNull();
       // already called, or at a break: nothing to offer
       expect(liveAlerts(alertInput(g, view, { manualSubs: true, timeoutPending: true })).some((x) => x.id.startsWith('run-'))).toBe(false);
       expect(liveAlerts(alertInput(g, view, { manualSubs: true, atBreak: true })).some((x) => x.id.startsWith('run-'))).toBe(false);
@@ -356,18 +390,45 @@ describe('the live assistant and the bench', () => {
       expect([...sumBy(theirs, 'def').keys()].every((pid) => g.sim.T[0].players.some((p) => p.pid === pid))).toBe(true);
     }
 
-    // no call on their scorer's hot streak: the engine has no hot hand, so a double answers noise (and cost
-    // about a point a game when followed)
+    // the hot hand and the cold spell are the engine's own (FEEL.hot), on the court, the bench panel and the
+    // staff's notes alike: their scorer's is a read (no double offered: it measured as a cost), yours a
+    // call to feed him while the offense isn't told to
     {
       const g = game();
       play(g, 60);
+      // (as the sim has them: a player's heat and misses in the drawn game are the engine's counters)
+      const drawn = snapshot(g.sim);
+      for (const k of [0, 1] as const)
+        for (const sp of g.sim.T[k].players) expect(drawn.sides[k].players.find((p) => p.pid === sp.pid)).toMatchObject({ hot: sp.hot, cold: sp.cold });
+      expect(hotHand({ hot: FEEL.hot.from - 1 })).toBe(false);
+      expect(hotHand({ hot: FEEL.hot.from })).toBe(true);
+      expect(heat(FEEL.hot.from, 0)).toBeGreaterThan(0);
+      expect(coldHand({ hot: 0, cold: FEEL.hot.coldFrom - 1 })).toBe(false);
+      expect(coldHand({ hot: 0, cold: FEEL.hot.coldFrom })).toBe(true);
+      expect(heat(0, FEEL.hot.coldFrom)).toBeLessThan(0);
       const base = staffInput(g);
       const view = structuredClone(base.view);
+      for (const sd of view.sides) for (const p of sd.players) Object.assign(p, { hot: 0, cold: 0 });
       const them = view.sides[1];
       const star = them.players.find((p) => them.on.includes(p.pid))!;
+      // (a shot-log streak alone lights nothing: the mark follows what the engine plays)
       Object.assign(star, { pts: 16, fgm: 7, fga: 9, streak: 4 });
+      expect(staffNotes({ ...base, view }).some((n) => n.id.startsWith('hot-'))).toBe(false);
+      star.hot = FEEL.hot.from + 1;
       const notes = staffNotes({ ...base, view });
-      expect(notes.some((n) => n.id.startsWith('hot-') || n.actions.some((a) => /^Double /.test(a.label)))).toBe(false);
+      expect(notes.find((n) => n.id === `hot-${star.pid}`)).toMatchObject({ kind: 'read', tone: 'warn', actions: [], text: 'He shoots better until he misses or sits.' });
+      expect(notes.some((n) => n.actions.some((a) => /^Double /.test(a.label)))).toBe(false);
+      const mine = view.sides[0].players.find((p) => view.sides[0].on.includes(p.pid))!;
+      mine.hot = FEEL.hot.from;
+      const off = cloneTactics(base.tactics);
+      off.offense.hotHand = false;
+      const feed = staffNotes({ ...base, view, tactics: off }).find((n) => n.id === `hot-${mine.pid}`)!;
+      expect(feed).toMatchObject({ kind: 'decision', tone: 'good' });
+      expect(feed.actions.map((a) => a.label)).toEqual(['Feed the hot hand']);
+      const fed = cloneTactics(off);
+      (feed.actions[0] as { apply: (t: typeof fed) => void }).apply(fed);
+      expect(fed.offense.hotHand).toBe(true);
+      expect(staffNotes({ ...base, view, tactics: fed }).find((n) => n.id === `hot-${mine.pid}`)).toMatchObject({ kind: 'read', actions: [] });
     }
 
     // no call to attack the defender you're beating (a cost beyond its noise where it fires: callWorth.ts);

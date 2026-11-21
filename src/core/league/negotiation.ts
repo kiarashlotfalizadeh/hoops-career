@@ -9,6 +9,8 @@
 // terms) costs twice the patience and a little of his interest in the team. Out of patience, talks
 // break down for a while (see breakDown). Only the user negotiates: AI teams sign at the ask, and
 // a player's interest only ever drops for the user's team, so the league's economy is unchanged.
+// He answers in his own voice (voices.ts's playerSays): the figures and the rules are the same for
+// every player, the sentence after them is his.
 // Top free agents in the summer weigh competing offers instead (see userBid in freeAgency.ts).
 
 import type { League, Player, TalkTerms, Talks } from '../types';
@@ -37,6 +39,7 @@ import {
 } from './contracts';
 import { money, moneyExact } from '../format';
 import { freezeResignReason } from './books';
+import { playerSays } from './voices';
 
 export type TalkKind = Talks['kind'];
 
@@ -222,8 +225,16 @@ export function breakdownRule(league: League, kind: TalkKind): string {
 export const patienceText = (n: number) =>
   n > 0 ? `${(WORDS[n] ?? String(n)).replace(/^./, (c) => c.toUpperCase())} more offer${n === 1 ? '' : 's'} below his price and talks break down.` : 'Talks are over for now.';
 
-/** Out of patience: talks break off for a while, by the period they're in (see breakdownRule). */
+/** What he says at a moment in the talks, quoted, to follow the facts of it (the same words for the same offer). */
+const says = (league: League, p: Player, beat: 'deal' | 'counter' | 'lowball' | 'walk', key: string | number) =>
+  ` “${playerSays(league, p, beat, `${contractSeason(league)}:${key}`)}”`;
+
+/** Out of patience: talks break off for a while, by the period they're in (see breakdownRule), and he says so his way. */
 function breakDown(league: League, p: Player, t: Talks, kind: TalkKind): string {
+  return `${breakDownFacts(league, p, t, kind)}${says(league, p, 'walk', kind)}`;
+}
+
+function breakDownFacts(league: League, p: Player, t: Talks, kind: TalkKind): string {
   const name = playerName(p);
   delete t.counter;
   t.patience = 0;
@@ -294,8 +305,12 @@ export function hearOffer(
   if (t.counter && t.counter.years === cy && !t.counter.option) amount = Math.min(amount, t.counter.amount);
   t.counter = { amount, years: cy };
   const hurt = lowball ? ` That was a lowball: he's less keen on your team now.` : '';
-  // (his patience is on the sheet, next to the counter: see patienceText)
-  return { accept: false, counter: t.counter, text: `${name} counters at ${moneyExact(amount)} a season over ${yrs(cy)}.${hurt}` };
+  // (his patience is on the sheet, next to the counter: see patienceText; the last sentence is his own)
+  return {
+    accept: false,
+    counter: t.counter,
+    text: `${name} counters at ${moneyExact(amount)} a season over ${yrs(cy)}.${hurt}${says(league, p, lowball ? 'lowball' : 'counter', `${offer.amount}:${offer.years}`)}`,
+  };
 }
 
 /** Why extending him at `amount` a season is off under the owner's freeze: a raise on what he's paid now (past his minimum then), or null. */
@@ -325,7 +340,7 @@ export function userExtend(league: League, pid: number, amount: number, years: n
   addInbox(league, {
     from: 'Assistant GM',
     subject: `${playerName(p)} signs a ${years}-year, ${money(salaries.reduce((a, x) => a + x, 0))} extension`,
-    body: `${playerName(p)} is now signed through ${seasonLabel(contractExp(p.contract))}. The extension starts in ${seasonLabel(start)} at ${money(salaries[0])}${years > 1 ? ' with 8% annual raises' : ''}. It counts against that season's cap. His current salary doesn't change.`,
+    body: `${says(league, p, 'deal', 'extend').trim()}\n${playerName(p)} is now signed through ${seasonLabel(contractExp(p.contract))}. The extension starts in ${seasonLabel(start)} at ${money(salaries[0])}${years > 1 ? ' with 8% annual raises' : ''}. It counts against that season's cap. His current salary doesn't change.`,
     tone: 'good',
     link: `/player/${p.pid}`,
   });

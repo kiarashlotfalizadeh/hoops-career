@@ -295,6 +295,7 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   migratePulse(x);
   migrateReadings(x);
   migrateWording(x);
+  migrateNicknames(x);
   // god mode's switch and its count of edits: out of shape, they go (god mode off, an unedited league)
   if (x.settings.godMode !== undefined && typeof x.settings.godMode !== 'boolean') delete x.settings.godMode;
   if (x.godEdits !== undefined && !(int(x.godEdits) && x.godEdits >= 0)) delete x.godEdits;
@@ -326,6 +327,17 @@ function migrateWording(x: League) {
     }
   };
   for (const part of [x.news, x.inbox, x.chronicle, x.legacy, x.media, x.coaches]) walk(part, 0);
+}
+
+/**
+ * Nicknames are gone from the game (November 2026): a save from the weeks it gave them loses each
+ * player's, the stories that announced them, and the one line that quoted a prospect's.
+ */
+function migrateNicknames(x: League) {
+  for (const p of Object.values(x.players)) if ('nick' in p) delete (p as { nick?: unknown }).nick;
+  if (!Array.isArray(x.news)) return;
+  x.news = x.news.filter((n) => !(obj(n) && typeof n.text === 'string' && / has a nickname now: "/.test(n.text)));
+  for (const n of x.news) if (obj(n) && typeof n.text === 'string') n.text = n.text.replace(/, "[^"]+" to the scouts already/, '');
 }
 
 /**
