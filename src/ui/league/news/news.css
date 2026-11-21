@@ -408,3 +408,17 @@
 .lg-pw-row:nth-child(-n + 8) .lg-pw-mv.bad {
   animation: lg-nudge-down var(--dur-slow) var(--ease-out) 0.2s backwards;
 }
+
+/* a talking head's byline: on the wire over the dek, in the reader under the kind */
+.lg-news-by,
+.lg-story-by {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--bad);
+}
+.lg-news-by {
+  display: block;
+}
+.lg-story-by {
+  margin: 2px 0 8px;
+}

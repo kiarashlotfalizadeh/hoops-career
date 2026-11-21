@@ -1,6 +1,7 @@
 // Player development: age curves per attribute group, personal growth tendency,
 // training focus, coaching quality, practice intensity and playing time.
 
+import { keepPeak, peakSummer, scaleTop, volumeRoom } from './legends';
 import type { League, Player, RatingKey, TrainingFocus } from '../types';
 import { FREE_AGENT, RETIRED } from '../types';
 import { Rng, clamp, hashString } from '../random';
@@ -218,11 +219,13 @@ function lateVolume(p: Player, age: number) {
  */
 const THREE_SHARE = 0.18;
 const THREE_EXP = 1.5;
-function threeVolume(p: Player, statsSeason: number) {
+function threeVolume(p: Player, statsSeason: number, room = 0) {
   const st = seasonTotals(p, statsSeason);
   if (!st || !p.tend || st.teamFga < 400) return;
   const share = st.tpa / st.teamFga;
-  if (share > THREE_SHARE) p.tend.three = Math.round(Math.max(0.02, p.tend.three * Math.pow(THREE_SHARE / share, THREE_EXP)) * 1000) / 1000;
+  // (`room`: more of it for the rare player past the league's ceilings, see legends.ts)
+  const line = THREE_SHARE + room;
+  if (share > line) p.tend.three = Math.round(Math.max(0.02, p.tend.three * Math.pow(line / share, THREE_EXP)) * 1000) / 1000;
 }
 
 /**
@@ -239,14 +242,16 @@ function threeVolume(p: Player, statsSeason: number) {
  * 36-37%; at 0.35 and cubed, one league with 2 and none elsewhere). The first season, played on the
  * real lines, is untouched.
  */
-const USE_SHARE = 0.35;
-const USE_EXP = 3;
-function usageVolume(p: Player, statsSeason: number) {
+// (0.35 and cubed until 2026-11-21: the tails were opened on purpose, see legends.ts)
+const USE_SHARE = 0.37;
+const USE_EXP = 2;
+function usageVolume(p: Player, statsSeason: number, room = 0) {
   const st = seasonTotals(p, statsSeason);
   const team = st ? st.teamFga + 0.44 * st.teamFta + st.teamTov : 0;
   if (!st || !p.tend || team < 1000) return;
   const share = (st.fga + 0.44 * st.fta + st.tov) / team;
-  if (share > USE_SHARE) p.tend.use = Math.round(Math.max(0.1, p.tend.use * Math.pow(USE_SHARE / share, USE_EXP)) * 1000) / 1000;
+  const line = USE_SHARE + room;
+  if (share > line) p.tend.use = Math.round(Math.max(0.1, p.tend.use * Math.pow(line / share, USE_EXP)) * 1000) / 1000;
 }
 
 /**
@@ -410,15 +415,28 @@ const SHAPE_QS = [0.05, 0.15, 0.3, 0.5, 0.7, 0.85, 0.93, 0.975, 0.993, 1];
  * median), the shape inside them drifted: the band of 80-84 players filled up while the 85+ stars
  * thinned out.
  */
+/** The share of its own width the top stretch of the overall distribution keeps each summer (the others: half). */
+const TOP_OWN = 0.75;
+
 function anchorOverallSpread(league: League, pop: Player[]) {
-  const raws = pop.map((p) => ovrRaw(p.ratings)).sort((a, b) => a - b);
+  // (a player past the scale isn't part of the shape the others are held to)
+  const top = scaleTop(league);
+  const raws = pop
+    .map((p) => ovrRaw(p.ratings))
+    .filter((raw, i) => !pop[i].peak || raw <= top)
+    .sort((a, b) => a - b);
   if (raws.length < 40) return;
   const now = SHAPE_QS.map((f) => raws[Math.round(f * (raws.length - 1))]);
   const then = SHAPE_QS.map((f) => league.ovrScale.raw[OVR_ANCHORS.findIndex(([q]) => q === f)]);
   // where each quantile goes: every stretch's width halfway back to its width at creation, out from the median
   const mid = SHAPE_QS.indexOf(0.5);
   const to = [...now];
-  for (let i = mid + 1; i < now.length; i++) to[i] = to[i - 1] + (now[i] - now[i - 1] + then[i] - then[i - 1]) / 2;
+  // (the last stretch, the league's best player over its third or fourth best, keeps three quarters of its own
+  // width: one great player may stand further clear of the rest than the opening night's best did)
+  for (let i = mid + 1; i < now.length; i++) {
+    const own = i === now.length - 1 ? TOP_OWN : 0.5;
+    to[i] = to[i - 1] + own * (now[i] - now[i - 1]) + (1 - own) * (then[i] - then[i - 1]);
+  }
   for (let i = mid - 1; i >= 0; i--) to[i] = to[i + 1] - (now[i + 1] - now[i] + then[i + 1] - then[i]) / 2;
   const target = (raw: number) => {
     let i = 0;
@@ -430,7 +448,8 @@ function anchorOverallSpread(league: League, pop: Player[]) {
     const w = ovrWeights(p.ratings);
     const weight = RATING_KEYS.reduce((t, k) => t + (k === 'hgt' ? 0 : w[k]), 0);
     const raw = ovrRaw(p.ratings);
-    const shift = (target(raw) - raw) / weight;
+    // (the rare player with room past the league's best is held to the shape only as far as his peak: legends.ts)
+    const shift = (keepPeak(league, p, raw, target(raw)) - raw) / weight;
     if (Math.abs(shift) < 0.05) continue;
     for (const k of RATING_KEYS) if (k !== 'hgt') p.ratings[k] = clamp(Math.round((p.ratings[k] + shift) * 10) / 10, 1, 100);
   }
@@ -453,14 +472,17 @@ export function annualProgression(league: League, rng: Rng): { pid: number; delt
     const was = before.get(p.pid) ?? p.ovr;
     const drop = starDrop(was, playerAge(p, league.season), rng);
     if (drop > 0 && toDisplay(ovrRaw(p.ratings), league.ovrScale) > was - drop) p.ratings = shiftToOvr(p.ratings, Math.round(was - drop), league.ovrScale);
+    // a generational player's climb past the scale, while he's young (legends.ts)
+    peakSummer(league, p);
     refreshDerived(league, p);
     // tendencies follow the year's change in level: from the OVR of his latest snapshot, which they
     // were set for (in-season development and injuries since count too), or for a draftee without
     // one, from before this summer's development
     followTendencies(p, p.ratingsHistory[p.ratingsHistory.length - 1]?.ovr ?? before.get(p.pid) ?? p.ovr, rng);
     lateVolume(p, playerAge(p, league.season));
-    threeVolume(p, league.season - 1);
-    usageVolume(p, league.season - 1);
+    const more = volumeRoom(league, p);
+    threeVolume(p, league.season - 1, more.three);
+    usageVolume(p, league.season - 1, more.use);
     p.ratingsHistory.push({ season: league.season, ovr: p.ovr, pot: p.pot, r: { ...p.ratings }, ...(p.training !== 'balanced' ? { focus: p.training } : {}) });
     if (p.ratingsHistory.length > 25) p.ratingsHistory.shift();
     // older snapshots only chart OVR: full ratings on every one grew the save by a few hundred KB a season

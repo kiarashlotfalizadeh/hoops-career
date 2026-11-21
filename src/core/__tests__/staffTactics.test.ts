@@ -1,6 +1,7 @@
 // The staff acts on the season only on a paired measurement: the engine's tally of each setting's
 // trade-off orders where it looks, and a change it runs for the user goes in only when the games
 // played both ways say so (staffLever.ts), said by mail with Undo; the user's own tactics get a card.
+import { FEEL } from '../sim/engine/feel';
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { simDay, startRegularSeason } from '../league/season';
@@ -210,16 +211,27 @@ describe('the staff acts on the season', () => {
       for (const t of l.teams.slice(1)) {
         const st = coachStyle(t.coach);
         const { offense: o, defense: d } = t.tactics;
-        expect([o.pace, o.transition, o.threePoint, o.rimAttack, o.crashBoards, o.actions]).toEqual([st.pace, st.transition, st.threePoint, st.rimAttack, st.crash, st.actions]);
+        // (his tempo, shot profile and actions as they are; his leans on the settings the game plays louder than life
+        // at the size they have in life: half as far from the middle, pressure a little more of it)
+        const lean = (v: number, gain = FEEL.tactics.edge) => Math.round(50 + (v - 50) / gain);
+        const soft = 1 + (FEEL.tactics.edge - 1) * 0.45;
+        expect([o.pace, o.transition, o.threePoint, o.rimAttack, o.crashBoards, o.actions]).toEqual([
+          st.pace,
+          st.transition,
+          st.threePoint,
+          st.rimAttack,
+          lean(st.crash),
+          st.actions,
+        ]);
         const cov = coverageFor(fitRoster(teamPlayers(l, t.tid)), st);
         expect(d).toMatchObject({
           scheme: 'man',
           pnr: cov,
           switchOffBall: cov === 'switch',
-          help: st.help,
-          pressure: st.pressure,
-          physicality: st.physicality,
-          getBack: st.getBack,
+          help: lean(st.help),
+          pressure: lean(st.pressure, soft),
+          physicality: lean(st.physicality),
+          getBack: lean(st.getBack),
           press: 'none',
         });
         expect([t.tactics.offPreset, t.tactics.defPreset]).toEqual([nearestOffPreset(o), defPresetOf(cov, st.zone)]);

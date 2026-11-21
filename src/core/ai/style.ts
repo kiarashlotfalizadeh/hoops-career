@@ -226,6 +226,9 @@ export const coachStyle = (c: Pick<CoachProfile, 'style' | 'offPhilosophy' | 'de
  * The offsets were set (2026-11-10) against what each coverage measured for the real league's rosters:
  * the neutral read picked the measured best for 14 of 30 (Drop 18, Switch 6, Hedge 3, Ice 2, Blitz 1),
  * 0.21 a game short of it on average; before, Hedge 7 times where it measured best once (11 of 30, 0.29).
+ * Drop's, the blitz's and the switch's offsets moved (0.4 to -0.3, -0.8 to -0.5, -0.2 to -0.5) on 2026-11-21, when tactics came to be
+ * played louder than life (engine/feel.ts): a drop's pull-up room is worth twice what it was to a
+ * handler who can shoot it, and Drop measured best for 6 of 30 where the read still sent 19 to it.
  */
 export function coverageFor(players: Player[], style: Pick<CoachStyle, 'coverage' | 'pressure' | 'from'>, neutral = false): PnrCoverage {
   const top = [...players]
@@ -244,14 +247,14 @@ export function coverageFor(players: Player[], style: Pick<CoachStyle, 'coverage
   const diq6 = six.reduce((a, x) => a + x.p.ratings.diq, 0) / six.length;
   const rim = big.c.rimProt;
   const spd = big.p.ratings.spd;
-  const drop = 0.4 + (rim - 60) / 8 - (spd - 38) / 12;
+  const drop = -0.3 + (rim - 60) / 8 - (spd - 38) / 12;
   const score: Record<PnrCoverage, number> = {
     drop,
     hedge: Math.min(1.5, (spd - 44) / 6) + (big.p.ratings.diq - 50) / 15 - (rim - 60) / 12 - 1.2,
     // (capped: a fictional league's players rate higher on both ends, and read uncapped half its staffs switched)
-    switch: Math.min(1.2, (per6 - 51.5) / 1.2) - (spread - 32) / 10 + Math.min(0.5, (spd - 40) / 20) - 0.2,
+    switch: Math.min(1.2, (per6 - 51.5) / 1.2) - (spread - 32) / 10 + Math.min(0.5, (spd - 40) / 20) - 0.5,
     ice: (diq6 - 52) / 3 + drop * 0.4 - 1.1,
-    blitz: (steals - 54) / 2 + (style.pressure - 62) / 8 - 0.8,
+    blitz: (steals - 54) / 2 + (style.pressure - 62) / 8 - 0.5,
   };
   // (a coach of his own leans harder on his habit: a fictional league's players rate higher on both
   // ends, and read alone its staffs switched twice as often as the real league's)

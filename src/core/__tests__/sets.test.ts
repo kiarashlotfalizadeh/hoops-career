@@ -314,7 +314,9 @@ describe('sets in the engine', () => {
         // (Chicago's gap is the smallest, about 0.19 a run: forty games measure it to 0.05, ten only to 0.1;
         // Spain's against hedge came out about 0.05-0.14 over ten games when the playbooks were rebalanced, 2026-10-26,
         // and 0.095 against a 0.105 bar over thirty after the 2026-11 game-day round)
-        const games = id === 'chicago' || id === 'spain' ? 60 : 10;
+        // (Spain over a hundred since 2026-11-21: at the louder tactics gain a hedge gives up less behind it than it
+        // did against the rest, and the gap, about 0.08 a run, sat on its noise over sixty)
+        const games = id === 'spain' ? 100 : id === 'chicago' ? 60 : 10;
         const a = pairedValue(id, o, DEF[beats], games, 500);
         const b = pairedValue(id, o, DEF[kills], games, 500);
         expect(a.mean, `${id} vs ${beats}`).toBeGreaterThan(0);
@@ -323,8 +325,10 @@ describe('sets in the engine', () => {
       // the more the defense helps, the more open Hammer's corner
       const o = teamFor('hammer');
       // (thirty games: over ten the gap, about 0.14-0.25 a run, came out inside its noise on some engines)
-      const hi = pairedValue('hammer', o, { defense: { ...MAN.defense, help: 90 } }, 30, 500);
-      const lo = pairedValue('hammer', o, { defense: { ...MAN.defense, help: 10 } }, 30, 500);
+      // (sixty since 2026-11-21: at the louder tactics gain the help setting moves everything else in a game more than
+      // it moves the set, and the same gap sat inside its noise over thirty)
+      const hi = pairedValue('hammer', o, { defense: { ...MAN.defense, help: 90 } }, 60, 500);
+      const lo = pairedValue('hammer', o, { defense: { ...MAN.defense, help: 10 } }, 60, 500);
       expect(hi.mean - lo.mean).toBeGreaterThan(2 * Math.hypot(hi.se, lo.se));
     }
     {
@@ -363,15 +367,15 @@ describe('sets in the engine', () => {
       // the tactics rewrite, tactics v2: see engineDefense.test.ts)
       const expected = {
         ai: [
-          [136, 116, 88, 43, 15, 25, 10, 0],
-          [109, 112, 91, 20, 6, 33, 6, 0],
-          [118, 95, 90, 28, 5, 22, 14, 0],
+          [131, 124, 79, 49, 8, 21, 10, 0],
+          [105, 100, 91, 30, 8, 14, 5, 0],
+          [125, 118, 93, 23, 6, 30, 22, 1],
         ],
         // (taken again when play calls from the bench were retired, and the first and third games when garbage time came for both benches from late in the third quarter, with the team up big easing off and calling off its press; all of them again 2026-11-09, the game-day realism round, and its second round the same day)
         coached: [
-          [124, 118, 86, 45, 19, 20, 14, 0],
-          [127, 121, 95, 37, 8, 24, 9, 0],
-          [100, 119, 77, 36, 15, 30, 14, 0],
+          [127, 118, 95, 53, 14, 21, 16, 0],
+          [123, 113, 98, 40, 13, 18, 12, 0],
+          [108, 111, 78, 28, 12, 27, 20, 0],
         ],
       };
       const fp = (res: ReturnType<GameSim['result']>) => [res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot];

@@ -1211,3 +1211,18 @@ body:has(.fo-tt-verdict) .continue:not(.is-busy) {
     align-items: start;
   }
 }
+
+/* how the partner's front office does business, and its GM's words on the deal (league/voices.ts) */
+.fo-partner-gm {
+  margin-top: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.fo-dock-quote {
+  margin: 6px 0 2px;
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.4;
+  color: var(--text-dim);
+}

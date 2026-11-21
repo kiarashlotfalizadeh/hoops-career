@@ -9,6 +9,7 @@ import {
   ListOrdered,
   Medal,
   Megaphone,
+  MicVocal,
   Newspaper,
   PenLine,
   Telescope,
@@ -39,6 +40,7 @@ export const NEWS_KIND: Record<Kind, { label: string; icon: LucideIcon; color: s
   honor: { label: 'Honors', icon: Medal, color: 'var(--tier-elite)' },
   column: { label: 'Columns', icon: PenLine, color: 'var(--text-2)' },
   preview: { label: 'Previews', icon: Telescope, color: 'var(--info)' },
+  take: { label: 'Hot takes', icon: MicVocal, color: 'var(--bad)' },
 };
 
 /** One kind's name for a single story ("Trade", "Power rankings"). */
@@ -60,4 +62,5 @@ export const KIND_ONE: Record<Kind, string> = {
   honor: 'Honors',
   column: 'Column',
   preview: 'Preview',
+  take: 'Hot take',
 };

@@ -6,6 +6,7 @@
 import type { BoxLine, GameResult, League, Player, TeamBox } from '../types';
 import { hashString } from '../random';
 import { playerName, shortName } from '../league/helpers';
+import { coachTemper, playerVoice, type CoachTemper, type PlayerVoice } from '../league/voices';
 import { decidingFactors, type Factor, type GameReport } from './gameReport';
 import { COMEBACK_WP, wpStory } from './winProb';
 
@@ -211,74 +212,202 @@ export function pick<T>(gid: number, slot: string, list: T[]): T {
 /** His last name (his full name when a teammate shares it): the press options and their effects name one player each. */
 const lastName = (league: League, b: BoxLine) => (league.players[b.pid] ? shortName(league, league.players[b.pid]) : b.name);
 
-function voiceLine(f: Facts, gid: number, league: League): string {
+/** The moments a quote is for: what happened, from the speaker's side. */
+type Beat = 'hurt' | 'wcomeback' | 'w30' | 'wup' | 'wot' | 'wstreak' | 'wbig' | 'wclose' | 'w' | 'lcollapse' | 'l30' | 'lup' | 'lstreak' | 'lclose' | 'lbig' | 'l';
+
+/** What a line can name: his points, the streak's length, the other team, a hurt teammate. */
+interface Says {
+  pts: number;
+  n: number;
+  them: string;
+  mate: string;
+}
+type Line = (x: Says) => string;
+
+/** What anyone might say: the lines every voice shares. */
+const PLAIN: Record<Beat, Line[]> = {
+  hurt: [
+    (x) => `Seeing ${x.mate} go down took something out of all of us. We're hoping it's nothing serious.`,
+    (x) => `${x.mate} is a big part of what we do. Whoever steps in has to be ready.`,
+  ],
+  wcomeback: [
+    () => `Nobody in here flinched, even when it looked bad. We just kept chipping away.`,
+    () => `We stopped worrying about the scoreboard and just got stops. That's how you come back.`,
+  ],
+  w30: [
+    (x) => `${x.pts}? My teammates found me in great spots. I just had to knock them down.`,
+    () => `When it's going in like that you keep shooting. But the stops won us this one.`,
+  ],
+  wup: [() => `Nobody outside this locker room thought we'd win this one. We did.`, () => `We heard all week how good they are. We just went out and played our game.`],
+  wot: [() => `Five more minutes and we found another gear. Proud of this group.`, () => `Overtime is about who wants it more. Tonight that was us.`],
+  wstreak: [
+    (x) => `${x.n} straight. We're not satisfied, though: we want to keep this rolling.`,
+    (x) => `We're playing for each other right now. ${x.n} in a row doesn't happen by accident.`,
+  ],
+  wbig: [() => `We set the tone early and never let up. That's how we want to play every night.`, () => `When we defend like that, it's hard for anybody to stay with us.`],
+  wclose: [() => `Games like this show what we're made of. Everybody stayed together down the stretch.`, () => `We made the plays we had to make late. That's growth.`],
+  w: [
+    () => `Good team win. We moved the ball and got stops when we needed them.`,
+    () => `Everybody chipped in. That's the formula.`,
+    () => `We stuck to the game plan and it showed.`,
+  ],
+  lcollapse: [() => `We had that one, and we let it slip. That's on all of us.`, () => `You can't give a lead like that back in this league. It's going to sting.`],
+  l30: [() => `The points don't matter when we lose. I've got to make the right plays late.`, () => `I'd trade every one of those points for the win.`],
+  lup: [() => `We can't take anybody lightly in this league. Tonight showed that.`, () => `They wanted it more, and that's on us. It can't happen again.`],
+  lstreak: [(x) => `${x.n} in a row hurts. We have to look in the mirror and fix it together.`, () => `Nobody's coming to save us. We dig out of this as a group.`],
+  lclose: [() => `We had our chances. A couple of plays here or there and it's a different story.`, () => `That one's going to sting. We'll learn from the end of that game.`],
+  lbig: [() => `That one's on us. We didn't bring the energy and they made us pay.`, () => `Flush it. That wasn't us out there.`],
+  l: [
+    () => `They were the better team tonight. We'll watch the film and bounce back.`,
+    () => `Not our night. We'll be back in the gym tomorrow.`,
+    () => `We dug ourselves a hole with too many empty trips. That's fixable.`,
+  ],
+};
+
+/**
+ * The same moments in each player's own voice (league/voices.ts): two times in three he says it his
+ * way, where his voice has something for the moment.
+ */
+const OWN: Record<PlayerVoice, Partial<Record<Beat, Line[]>>> = {
+  showman: {
+    wcomeback: [() => `Down big on the road with everybody booing? That's my favorite kind of night.`, () => `They celebrated early. I saw it. I enjoyed what came next.`],
+    w30: [
+      (x) => `${x.pts}. And I left a few out there. Tell whoever has us next.`,
+      () => `The rim looked like the ocean tonight. I felt bad for them. For a second.`,
+      (x) => `Somebody in the front row told me I couldn't shoot. That was around point ${Math.max(2, x.pts - 20)}.`,
+    ],
+    wup: [() => `Y'all picked against us. I read all of it. Keep writing.`],
+    wot: [() => `Free basketball. The people paid for forty-eight and got a show.`],
+    wstreak: [(x) => `${x.n} straight. At some point it's not a streak, it's just who we are.`],
+    wbig: [() => `That was over by halftime. The second half was for the highlight reel.`, () => `I only played three quarters. I'd like that noted.`],
+    wclose: [() => `Give me the ball with the game on the line every single time. I sleep fine either way.`],
+    w: [() => `We put on a show and we got the win. That's a good night's work.`],
+    l30: [(x) => `${x.pts} and a loss. Put it in the trash. I mean it.`],
+    lbig: [() => `Embarrassing. I don't do embarrassing. Circle the next one.`],
+    lclose: [() => `I had the shot I wanted. I'll take it again tomorrow, and the day after.`],
+    l: [() => `They got one. Enjoy it. We see them again.`],
+  },
+  stoic: {
+    wcomeback: [() => `We kept playing.`, () => `It was a long game. We used all of it.`],
+    w30: [(x) => `${x.pts}. Shots went in. Next game.`, () => `It's one night. I've had bad ones too.`],
+    wstreak: [(x) => `${x.n}. The next one counts the same.`],
+    wbig: [() => `We did our jobs.`],
+    wclose: [() => `One more stop than them. That's all it was.`],
+    w: [() => `A win is a win.`, () => `We'll take it. On to the next.`],
+    lcollapse: [() => `We stopped doing what worked. Not complicated.`],
+    lstreak: [(x) => `${x.n} losses. Talking won't fix it.`],
+    lbig: [() => `Nothing to say about that one.`],
+    lclose: [() => `Came down to a shot. Theirs went in.`],
+    l: [() => `They played better. That's it.`],
+  },
+  grinder: {
+    wcomeback: [() => `That's conditioning. That's every wind sprint in September paying us back.`],
+    w30: [(x) => `${x.pts} is what happens when you get your shots up at six in the morning. I've been doing that for years.`],
+    wup: [() => `They've got the names. We've got the bruises. I'll take the bruises.`],
+    wstreak: [(x) => `${x.n} straight and I promise you practice tomorrow will be the hardest one yet.`],
+    wbig: [() => `We won the loose balls. Count them. That's the game right there.`],
+    wclose: [() => `Somebody had to get on the floor for that last one. I've got the floor burn to prove it.`],
+    w: [() => `Nothing pretty about it. Screens, box-outs, getting back. I love a night like that.`, () => `We outworked them. You can coach a lot of things. Not that.`],
+    lcollapse: [() => `We got comfortable. Comfortable gets you beat. I'll be in early tomorrow.`],
+    lstreak: [(x) => `${x.n} straight losses. You don't talk your way out of that. You work your way out.`],
+    lbig: [() => `They wanted every rebound more than we did. I take that personally.`],
+    l: [() => `Lost the 50-50 balls, lost the game. It usually goes like that.`],
+  },
+  professor: {
+    wcomeback: [() => `We went under on their screens in the third and it changed everything. Small thing, big swing.`],
+    w30: [
+      () => `They kept dropping their big, so I kept pulling up. If they adjust, I pass. They never adjusted.`,
+      (x) => `It wasn't a hot night, it was a coverage night. They gave me the same look for ${x.pts} points.`,
+    ],
+    wup: [() => `On paper they're better. Paper doesn't have to guard a pick-and-roll for forty-eight minutes.`],
+    wot: [() => `By overtime you know every set they have. It becomes a memory test. We passed.`],
+    wbig: [() => `We took away their first option on every trip. Most teams don't have a second one.`],
+    wclose: [() => `We got the matchup we wanted on the last three trips. That's not luck, that's the timeout.`],
+    w: [
+      () => `Shot quality. We got good ones, they got tough ones. Over a night that adds up.`,
+      () => `The game plan was right and we executed it. That's rarer than you'd think.`,
+    ],
+    lcollapse: [() => `They went zone and we stood around for six minutes. You can see it on the film. We'll all have to watch it.`],
+    l30: [() => `My points came easy and everybody else's came hard. That's a bad offense, whatever my line says.`],
+    lclose: [() => `Two possessions. A missed box-out and a late switch. That's the margin in this league.`],
+    lbig: [() => `They hunted the same matchup fifteen times and we never changed it. That's on all of us, staff included.`],
+    l: [() => `We lost the math. More threes for them, more turnovers for us. Hard to win that way.`],
+  },
+  joker: {
+    wcomeback: [() => `I told the guys at halftime we had them right where we wanted them. Nobody laughed. They're laughing now.`],
+    w30: [
+      (x) => `${x.pts}? My mom's going to say I should've had ${x.pts + 10}. She's undefeated.`,
+      () => `I blacked out somewhere in the second quarter. Somebody tell me what happened.`,
+    ],
+    wup: [() => `Somebody check on the experts. They looked pale.`],
+    wot: [() => `I had dinner plans. Worth it, though.`],
+    wstreak: [(x) => `${x.n} in a row. I haven't washed these socks since the first one. Don't stand too close.`],
+    wbig: [() => `Our bench played so much they asked for a raise at the buzzer.`],
+    wclose: [() => `My heart can't take many more of those. I'm not as young as my haircut.`],
+    w: [() => `We won, the music's loud, and I'm not buying dinner. Good night.`],
+    lstreak: [(x) => `${x.n} straight. I'd make a joke but my material's on a losing streak too.`],
+    lbig: [() => `I've seen the film already. I was in it. It's a horror movie.`],
+    lclose: [() => `I thought that last one was good. So did my eyes. The rim disagreed.`],
+    l: [() => `They hit everything. A guy made one off the shot clock, I think. Not our night.`],
+  },
+  firebrand: {
+    wcomeback: [() => `People left early. I hope the traffic was terrible.`],
+    w30: [(x) => `${x.pts}, and I'm still not on the national broadcast. Explain that to me.`, () => `Their guy was talking all night. Ask him how the fourth quarter went.`],
+    wup: [() => `Nobody respects us. Fine. Keep doing it. It's working out great.`, () => `They looked past us. You could see it in warmups. Big mistake.`],
+    wstreak: [(x) => `${x.n} straight and the rankings still have us behind teams we beat. Say something.`],
+    wbig: [() => `They quit in the third. I don't respect that and I told them so.`],
+    wclose: [() => `We got that one in spite of the whistle. I'll take the fine.`],
+    w: [() => `We're better than people say. We'll keep showing it until somebody admits it.`],
+    lcollapse: [() => `We got soft with a lead. I said it in the locker room and I'll say it here.`],
+    l30: [(x) => `${x.pts} and I got four free throws. Watch the tape and tell me that's right.`],
+    lup: [() => `We lost to a team we should beat by twenty. Somebody needs to be angry about that. I am.`],
+    lstreak: [(x) => `${x.n} straight. Some guys in there are too comfortable losing. I'm not one of them.`],
+    lbig: [() => `No effort. None. If that doesn't bother you, you're in the wrong business.`],
+    lclose: [() => `We played five on eight in the last minute. That's all I'll say.`],
+    l: [() => `They did nothing special. We beat ourselves. That's worse.`],
+  },
+};
+
+/** Every line a player might say for a moment, in any voice, and every line the other coach might (the tests read them). */
+export const quoteLines = (beat: Beat, x: Says): string[] => [...PLAIN[beat], ...Object.values(OWN).flatMap((v) => v[beat] ?? [])].map((f) => f(x));
+export const benchLines = (beat: CoachBeat, x: { us: string; star: string; pts: number }): string[] =>
+  Object.values(BENCH)
+    .flatMap((v) => v[beat] ?? [])
+    .map((f) => f(x));
+
+/** The moment a game was, from our locker room. */
+function beatOf(f: Facts): Beat {
   const v = f.voice!;
-  const name = (b: BoxLine) => lastName(league, b);
-  if (f.hurt && f.hurt.pid !== v.pid) {
-    return pick(gid, 'hurt', [
-      `Seeing ${name(f.hurt)} go down took something out of all of us. We're hoping it's nothing serious.`,
-      `${name(f.hurt)} is a big part of what we do. Whoever steps in has to be ready.`,
-    ]);
-  }
+  if (f.hurt && f.hurt.pid !== v.pid) return 'hurt';
   const comeback = f.low !== undefined && f.low <= COMEBACK_WP;
   if (f.won) {
-    if (comeback)
-      return pick(gid, 'wcomeback', [
-        `Nobody in here flinched, even when it looked bad. We just kept chipping away.`,
-        `That's a special win. We were in a deep hole and we climbed out together.`,
-        `We stopped worrying about the scoreboard and just got stops. That's how you come back.`,
-      ]);
-    if (v.pts >= 30)
-      return pick(gid, 'w30', [
-        `${v.pts}? Honestly, my teammates found me in great spots. I just had to knock them down.`,
-        `I was feeling it tonight, and the guys kept feeding me. That's trust.`,
-        `When it's going in like that you keep shooting. But the stops won us this one.`,
-      ]);
-    if (f.upset >= 10)
-      return pick(gid, 'wup', [`Nobody outside this locker room thought we'd win this one. We did.`, `We heard all week how good they are. We just went out and played our game.`]);
-    if (f.ot) return pick(gid, 'wot', [`Five more minutes and we found another gear. Proud of this group.`, `Overtime is about who wants it more. Tonight that was us.`]);
-    if (f.streak >= 3)
-      return pick(gid, 'wstreak', [
-        `${f.streak} straight. We're not satisfied, though: we want to keep this rolling.`,
-        `We're playing for each other right now. ${f.streak} in a row doesn't happen by accident.`,
-      ]);
-    if (f.margin >= 20)
-      return pick(gid, 'wbig', [
-        `We set the tone early and never let up. That's how we want to play every night.`,
-        `When we defend like that, it's hard for anybody to stay with us.`,
-      ]);
-    if (f.margin <= 4)
-      return pick(gid, 'wclose', [`Games like this show what we're made of. Everybody stayed together down the stretch.`, `We made the plays we had to make late. That's growth.`]);
-    return pick(gid, 'w', [
-      `Good team win. We moved the ball and got stops when we needed them.`,
-      `We did our jobs tonight. On to the next one.`,
-      `Everybody chipped in. That's the formula.`,
-      `We stuck to the game plan and it showed.`,
-    ]);
+    if (comeback) return 'wcomeback';
+    if (v.pts >= 30) return 'w30';
+    if (f.upset >= 10) return 'wup';
+    if (f.ot) return 'wot';
+    if (f.streak >= 3) return 'wstreak';
+    if (f.margin >= 20) return 'wbig';
+    if (f.margin <= 4) return 'wclose';
+    return 'w';
   }
-  if (comeback)
-    return pick(gid, 'lcollapse', [
-      `We had that one, and we let it slip. That's on all of us.`,
-      `You can't give a lead like that back in this league. It's going to sting.`,
-      `We stopped playing the way that got us the lead. Lesson learned, the hard way.`,
-    ]);
-  if (v.pts >= 30) return pick(gid, 'l30', [`The points don't matter when we lose. I've got to make the right plays late.`, `I'd trade every one of those points for the win.`]);
-  if (f.upset >= 10)
-    return pick(gid, 'lup', [`We can't take anybody lightly in this league. Tonight showed that.`, `They wanted it more, and that's on us. It can't happen again.`]);
-  if (f.streak <= -3)
-    return pick(gid, 'lstreak', [`${-f.streak} in a row hurts. We have to look in the mirror and fix it together.`, `Nobody's coming to save us. We dig out of this as a group.`]);
-  if (f.ot || f.margin <= 4)
-    return pick(gid, 'lclose', [
-      `We had our chances. A couple of plays here or there and it's a different story.`,
-      `That one's going to sting. We'll learn from the end of that game.`,
-    ]);
-  if (f.margin >= 20) return pick(gid, 'lbig', [`That one's on us. We didn't bring the energy and they made us pay.`, `Flush it. That wasn't us out there.`]);
-  return pick(gid, 'l', [
-    `They were the better team tonight. We'll watch the film and bounce back.`,
-    `We didn't execute down the stretch. We'll get it fixed.`,
-    `Not our night. We'll be back in the gym tomorrow.`,
-    `We dug ourselves a hole with too many empty trips. That's fixable.`,
-  ]);
+  if (comeback) return 'lcollapse';
+  if (v.pts >= 30) return 'l30';
+  if (f.upset >= 10) return 'lup';
+  if (f.streak <= -3) return 'lstreak';
+  if (f.ot || f.margin <= 4) return 'lclose';
+  if (f.margin >= 20) return 'lbig';
+  return 'l';
+}
+
+function voiceLine(f: Facts, gid: number, league: League): string {
+  const v = f.voice!;
+  const beat = beatOf(f);
+  const says: Says = { pts: v.pts, n: Math.abs(f.streak), them: f.themName, mate: f.hurt ? lastName(league, f.hurt) : '' };
+  const p = league.players[v.pid];
+  const own = p ? OWN[playerVoice(league, p)][beat] : undefined;
+  // (two times in three in his own voice, when it has a line for the moment)
+  const mine = own?.length && pick(gid, `own:${beat}`, [true, true, false]);
+  return pick(gid, beat, mine ? own! : PLAIN[beat])(says);
 }
 
 /** The other coach on what decided it, when the report names it. */
@@ -361,6 +490,82 @@ function coachLine(f: Facts, gid: number, league: League): string {
   return pick(gid, 'cl', [`${us.charAt(0).toUpperCase()}${us.slice(1)} played well. We'll regroup.`, `They executed better than we did. Simple as that.`]);
 }
 
+/** The moments the other coach speaks to: `c…` he won, `cl…` he lost. */
+type CoachBeat = 'ccomeback' | 'cstar' | 'cup' | 'cbig' | 'cw' | 'ccollapse' | 'cl30' | 'clup' | 'clbig' | 'clclose' | 'cl';
+
+function coachBeat(f: Facts): CoachBeat {
+  const comeback = f.low !== undefined && f.low <= COMEBACK_WP;
+  if (!f.won) return comeback ? 'ccomeback' : f.theirStar ? 'cstar' : f.upset >= 10 ? 'cup' : f.margin >= 20 ? 'cbig' : 'cw';
+  if (comeback) return 'ccollapse';
+  if (f.voice && f.voice.pts >= 30) return 'cl30';
+  return f.upset >= 10 ? 'clup' : f.margin >= 20 ? 'clbig' : f.ot || f.margin <= 4 ? 'clclose' : 'cl';
+}
+
+/** The same moments as each kind of coach says them (league/voices.ts): `us` is the user's team, `star` the player the night belonged to. */
+const BENCH: Record<CoachTemper, Partial<Record<CoachBeat, ((x: { us: string; star: string; pts: number }) => string)[]>>> = {
+  fiery: {
+    ccomeback: [() => `I broke a clipboard at halftime. Best clipboard I ever broke.`],
+    cstar: [(x) => `${x.star} was an animal tonight. I've been telling you people for months.`],
+    cup: [() => `Everybody wrote us off. I pinned it on the wall. It's coming down now.`],
+    cbig: [() => `That's the team I yell about in practice. Finally.`],
+    cw: [(x) => `${x.us} hit us in the mouth and we hit back. I loved every minute.`],
+    ccollapse: [() => `We choked. I'm not dressing it up. We had it and we choked.`],
+    cl30: [(x) => `${x.pts} for ${x.star}. I ran out of things to scream.`],
+    clup: [() => `That was a disgrace, and I told them in words I can't repeat here.`],
+    clbig: [() => `If I could have subbed out all five at once, I would have.`],
+    clclose: [() => `I've got some thoughts on the last whistle. My wallet says keep them to myself.`],
+    cl: [() => `Not good enough. Not close to good enough. Practice is at seven.`],
+  },
+  professor: {
+    ccomeback: [() => `We changed the coverage at the half and took away their first read. The rest followed from that.`],
+    cstar: [(x) => `We got ${x.star} the same look nine times because they never took it away.`],
+    cbig: [() => `Our shot profile was excellent. When you win the math by that much, the score takes care of itself.`],
+    cw: [(x) => `${x.us} are well coached. We found one edge in the second half and stayed on it.`],
+    ccollapse: [() => `They changed the matchup and we were two possessions late answering. That's my job, not the players'.`],
+    cl30: [(x) => `We tried four coverages on ${x.star}. He solved each one. That's a great player reading the game.`],
+    clbig: [() => `They got the shots they wanted and we got the shots they wanted us to take. That's a staff problem first.`],
+    clclose: [() => `One possession. We had the right play and the wrong spacing. We'll drill it.`],
+    cl: [(x) => `Credit to ${x.us}. They had a better plan tonight, and I mean that literally.`],
+  },
+  deadpan: {
+    ccomeback: [() => `We were behind. Then we weren't.`],
+    cstar: [(x) => `${x.star} played well.`],
+    cup: [() => `We won. I'm told that's a surprise.`],
+    cbig: [() => `We scored more than they did. By a lot.`],
+    cw: [() => `Fine. Next question.`],
+    ccollapse: [() => `We had a lead. We don't have it anymore.`],
+    cl30: [(x) => `${x.star} scored ${x.pts}. I was there. I saw it.`],
+    clbig: [() => `We lost. Next question.`],
+    clclose: [() => `Ball didn't go in. That happens.`],
+    cl: [() => `They were better. I don't have a second sentence.`],
+  },
+  salesman: {
+    ccomeback: [() => `This group never stops believing. Best locker room I've ever had, and I've had some great ones.`],
+    cstar: [(x) => `${x.star} is a superstar. Not becoming one. Is one. Write it down.`],
+    cup: [() => `I've said since camp this team is special. Tonight the rest of the league found out.`],
+    cbig: [() => `That's who we are. That's the standard. I couldn't be prouder.`],
+    cw: [() => `Another step. We're building something here and nights like this are the proof.`],
+    ccollapse: [() => `We'll grow from this. I honestly think this loss makes us better in April.`],
+    cl30: [(x) => `${x.star} was terrific, but I loved our fight. Loved it.`],
+    clbig: [() => `One bad night doesn't change what I know about this group.`],
+    clclose: [() => `We were a bounce away from beating a very good team. I'm encouraged. I really am.`],
+    cl: [() => `There was a lot to like in that game. No, really.`],
+  },
+  'old-school': {
+    ccomeback: [() => `We got on the floor for loose balls. Funny how the shots start falling after that.`],
+    cstar: [(x) => `${x.star} got his the hard way, at the rim, through contact. That's a ballplayer.`],
+    cup: [() => `They've got more talent. We've got more guys who'll take a charge.`],
+    cbig: [() => `We defended and we rebounded. The rest is decoration.`],
+    cw: [(x) => `That was a street fight, and I like our chances in those. Hats off to ${x.us}.`],
+    ccollapse: [() => `We stopped guarding people. You can't shoot your way out of that.`],
+    cl30: [(x) => `Nobody put a body on ${x.star} all night. In my day somebody would have.`],
+    clup: [() => `They wanted it more. I never thought I'd say that about one of my teams.`],
+    clbig: [() => `Soft. Start to finish. We'll fix that in practice, and they won't enjoy it.`],
+    clclose: [() => `You lose the glass late, you lose the game. Same as it was fifty years ago.`],
+    cl: [() => `We got out-toughed. No chalkboard fixes that.`],
+  },
+};
+
 /**
  * Post-game quotes for one of the user's games: his player of the game (or best player), and the
  * other team's coach (who talks about what decided it when the game `report` names it).
@@ -379,6 +584,14 @@ export function postGameQuotes(league: League, res: GameResult, report?: GameRep
     text: voiceLine(f, res.gid, league),
   });
   const opp = league.teams[f.them.tid];
-  out.push({ who: opp.coach.name, role: `${opp.abbrev} head coach`, tid: opp.tid, text: coachLine(f, res.gid, league) });
+  // (the other coach in his own manner two times in three, where it has a line for the night)
+  const cb = coachBeat(f);
+  const bench = BENCH[coachTemper(opp.coach.name)][cb];
+  const star = cb === 'cstar' ? f.theirStar : cb === 'cl30' ? f.voice : undefined;
+  const benchLine =
+    bench?.length && pick(res.gid, `bench:${cb}`, [true, true, false])
+      ? pick(res.gid, `b:${cb}`, bench)({ us: `the ${f.usName}`, star: star ? lastName(league, star) : '', pts: star?.pts ?? 0 })
+      : coachLine(f, res.gid, league);
+  out.push({ who: opp.coach.name, role: `${opp.abbrev} head coach`, tid: opp.tid, text: benchLine.charAt(0).toUpperCase() + benchLine.slice(1) });
   return out;
 }

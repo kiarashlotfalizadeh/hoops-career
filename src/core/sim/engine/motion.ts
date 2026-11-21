@@ -132,7 +132,7 @@ export const motionMethods = {
         const d = this.defOf(def, dr);
         const dAdv = (dr.c.create - d.c.perDef * this.dq(d)) / 20 + advOpen + (zone ? this.zoneHide(def, d) - zone.drive : 0);
         // (Hammer's baseline drive is run to kick it to the corner)
-        const kickP = play ? 0.75 + help * 0.3 : 0.45 + dr.c.passing / 200 + help * 0.3;
+        const kickP = play ? 0.75 + this.helpLife(def) * 0.3 : 0.45 + dr.c.passing / 200 + this.helpLife(def) * 0.3;
         if (this.rng.chance(clamp(kickP, 0.2, play ? 0.9 : 0.8))) {
           // the kick-out after the defense collapses
           const sh = play ? play.cast.b : this.kickTarget(off, dr);

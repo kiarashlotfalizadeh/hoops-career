@@ -300,7 +300,7 @@ export function verdict(res: GameResult, side: 0 | 1, report: GameReport): strin
   const say = (slot: string, list: string[]) => pick(res.gid, `verdict-${slot}`, list);
   const how = won
     ? ot
-      ? say('wot', [`We won it in ${ot}.`, `${ot.charAt(0).toUpperCase()}${ot.slice(1)}, and we found a way.`])
+      ? say('wot', [`We won it in ${ot}.`, `It took ${ot}, and we found a way.`])
       : m >= 20
         ? say('wbig', [`${An(m)} ${m}-point rout.`, `We won by ${m}, and it was never close.`, `Never in doubt: ${an(m)} ${m}-point win.`])
         : m <= 3

@@ -7,6 +7,7 @@
 // scripts/tactics-lab (levers, coverages by opponent, the AI league as it plays).
 
 import type { ActionType, DefScheme } from '../../types';
+import { FEEL } from './feel';
 
 export interface ZoneT {
   /** Openness its back line takes off the roll man, and the edge it takes off the ball-screen handler, an isolation, a post-up and a drive. */
@@ -29,7 +30,11 @@ export interface ZoneT {
   glass: number;
 }
 
-export const TK = {
+/**
+ * Every size at true-to-life scale (the comments' numbers and the NBA comparisons are at this
+ * scale). The engine plays TK, below: these at the game's tactics gain (FEEL.tactics, see played).
+ */
+const LIFE = {
   // ------------------------------------------------------------------ the half court's choices
   /**
    * How sharply the action weights steer the half court: an action's weight is (w / 50)^emph times
@@ -405,6 +410,105 @@ export const TK = {
    */
   aiSet: { at: 0.4, per: 0.006, min: 0.2, max: 0.65 },
 };
+
+type Tk = typeof LIFE;
+type Num<T> = { [K in keyof T]: T[K] extends number ? K : never }[keyof T];
+
+/**
+ * The table the engine plays: LIFE at the game's tactics gain (FEEL.tactics). An edge (openness, a
+ * rate's change: nothing at 0) is played `edge` times its size; a multiplier (nothing at 1) at its
+ * size to the power `mult`; who a look's room goes to counts `fit` times as sharply. Shares of the
+ * time, thresholds, references, the AI's habits, what chasing or pressing costs the legs and a
+ * mentality's risk stay as they are: a louder game has the same choices in it, each worth more. What a gain this size does to the league's averages is taken back
+ * in K.recenter.
+ */
+function played(g: { edge: number; mult: number; fit: number }): Tk {
+  const t = structuredClone(LIFE);
+  // (turnovers don't saturate as openness does: a look can only be so open, a turnover is always a
+  // whole trip. Their edges, and the all-in tactics built on them, are played at a softer gain)
+  const softly = 1 + (g.edge - 1) * SOFT;
+  const edge = <T extends object>(o: T, ...keys: Num<T>[]) => {
+    for (const k of keys) (o[k] as number) *= g.edge;
+  };
+  const soft = <T extends object>(o: T, ...keys: Num<T>[]) => {
+    for (const k of keys) (o[k] as number) *= softly;
+  };
+  const mult = <T extends object>(o: T, ...keys: Num<T>[]) => {
+    for (const k of keys) (o[k] as number) = Math.pow(o[k] as number, g.mult);
+  };
+  // (the defense keying on a one-note offense stays at life size: it is what holds the playbooks level, not a choice of its own)
+  edge(t.cov.drop, 'pull', 'rim', 'roll', 'pop');
+  // (what a hedge gives up behind it at the softer gain: at the full one it measured 0.7 a game under a roster's
+  // average coverage for every roster, a mobile big's included)
+  edge(t.cov.hedge, 'stall');
+  soft(t.cov.hedge, 'to', 'roll', 'kick');
+  edge(t.cov.ice, 'pull', 'rim', 'roll', 'kick');
+  soft(t.cov.ice, 'to');
+  edge(t.cov.switch, 'scramble', 'speed', 'slipOpen');
+  // (and the mismatch a switch leaves is gone at more often: a big posts the guard, a roller slips it. Without it a
+  // switch only took away what the other coverages give up at twice the size, and measured best for half the league)
+  t.cov.switch.post = Math.min(0.75, t.cov.switch.post * g.edge);
+  t.cov.switch.slip = Math.min(0.3, t.cov.switch.slip * g.edge);
+  soft(t.cov.blitz, 'to', 'hands', 'fourThree');
+  t.help *= g.edge;
+  t.use.per /= g.fit;
+  t.use.min = Math.pow(t.use.min, g.fit);
+  t.use.max = 1 + (t.use.max - 1) * g.fit;
+  edge(t.offBall, 'handoff', 'motion', 'scramble', 'glass');
+  soft(t.pressure, 'to', 'blowBy', 'convex', 'over');
+  edge(t.phys, 'foul', 'contest');
+  for (const z of Object.values(t.zone)) {
+    edge(z, 'roll', 'pnr', 'iso', 'post', 'drive', 'kick', 'pop', 'handoff', 'swing', 'cut');
+    mult(z, 'swingW', 'glass');
+    // (the share of cuts a zone takes away: more of them, never all)
+    z.cutW = Math.min(0.9, Math.max(-0.9, z.cutW * g.mult));
+  }
+  edge(t.zoneFit, 'hide');
+  // (a zone whose walls stand twice as tall is read twice as well by the time the offense has seen it all night)
+  edge(t.zoneRead, 'max');
+  edge(t.chase, 'catch', 'cap', 'c3', 'offScreen', 'beat');
+  mult(t.chase, 'touch', 'kickW', 'cutW');
+  // (crashing's cost to the legs is played with it: it is what the boards are bought with, and at life size
+  // beside boards twice as plentiful, crashing was a free half point a game for every roster)
+  edge(t.crash, 'orb', 'fade', 'low', 'leak', 'leakLow', 'edge', 'set', 'drain');
+  edge(t.getBack, 'per', 'edge', 'orb');
+  t.getBack.base = 1 + (t.getBack.base - 1) * g.edge;
+  edge(t.arc, 'forced');
+  edge(t.push, 'adv');
+  soft(t.push, 'to');
+  // (five-out's open paint at the softer gain: at the full one it measured best for 16 to 19 rosters of 30)
+  soft(t.shape.fiveOut, 'rim');
+  edge(t.shape.fiveOut, 'glass');
+  mult(t.shape.fiveOut, 'driveW', 'cutW', 'post');
+  edge(t.shape.horns, 'space', 'pnr', 'handoffW');
+  mult(t.shape.horns, 'motion');
+  edge(t.shape.twoIn, 'crowd', 'waste', 'bigs', 'glass');
+  mult(t.shape.twoIn, 'post', 'driveW');
+  edge(t.hunt, 'flow', 'flowAuto', 'isoW');
+  mult(t.hunt, 'pick');
+  soft(t.rim, 'to');
+  edge(t.rim, 'blk');
+  soft(t.double, 'to', 'toMin', 'toMax', 'kick', 'split');
+  edge(t.role, 'poaBlowBy', 'stopperContest', 'anchorKick', 'roamHelp', 'roamKick');
+  soft(t.role, 'poaTO');
+  mult(t.role, 'stopperTouch', 'anchorRim');
+  soft(t.press, 'baseTO', 'to', 'brokenAdv');
+  t.aiSet.at = Math.min(1, t.aiSet.at * FEEL.ato.aiSet);
+  t.aiSet.max = Math.min(1, t.aiSet.max * FEEL.ato.aiSet);
+  return t;
+}
+
+/** The share of the gain past 1 a turnover's edge is played at (see played). */
+const SOFT = 0.45;
+
+/** The true-to-life sizes, as written (the tests pin them, and what the game's gain makes of them). */
+export const TK_LIFE: Tk = LIFE;
+
+/** The tactics' constants as the engine plays them: see LIFE (the sizes) and played (the gain). */
+export const TK: Tk = played(FEEL.tactics);
+
+/** The help setting at life size (-LIFE.help .. +LIFE.help): what the chances and weights that read it were written for (its room is played at TK.help). */
+export const HELP_LIFE = LIFE.help;
 
 /** What a look's room is worth to a shooter of this skill for it (see TK.use): 1 at the league's average taker. */
 export function roomWorth(skill: number, avg: number): number {

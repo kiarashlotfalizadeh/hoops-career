@@ -8,6 +8,7 @@ import { TK } from './tk';
 import { GAME } from '../../constants';
 import { crunchTime } from '../../analysis/winProb';
 import { type SP, type ST, mix } from './state';
+import { FEEL } from './feel';
 import type { GameSim } from './game';
 
 export const rotationMethods = {
@@ -294,6 +295,11 @@ export const rotationMethods = {
     const outs = t.on.filter((p) => !lineup.includes(p));
     const ins = lineup.filter((p) => !p.on);
     if (!outs.length && !ins.length) return;
+    // (a stint on the bench cools a hot hand, and lets a cold one start over: FEEL.hot)
+    for (const p of outs) {
+      p.hot = Math.max(0, p.hot - FEEL.hot.sit);
+      p.cold = 0;
+    }
     this.setLineup(t, lineup);
     this.refreshMatchups();
     if (this.record && ins.length) {

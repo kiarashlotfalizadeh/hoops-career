@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
 import { GameSim, type SimTeamInput } from '../sim/engine';
-import { TK, type ZoneT } from '../sim/engine/tk';
+import { TK, TK_LIFE, type ZoneT } from '../sim/engine/tk';
+import { FEEL } from '../sim/engine/feel';
 import type { PossLog } from '../sim/log';
 import { applyPatch, pairedDelta, runLab, type LabSummary, type TacticsPatch } from '../ai/lab';
 import { archetype, composites } from '../ratings';
@@ -189,6 +190,8 @@ describe('engine tactics', () => {
           // (a timeout in a period's last seconds, with their ball, can see the period out: the play is
           // for this period, and the break clears it, as it does a queued set)
           if (!l || l.kind !== 'half' || !l.action || l.q !== q) continue;
+          // (a run-out stopped by a take foul is played on from the side: the play waits for a trip brought up the floor)
+          if (l.steps.some((x) => x.k === 'transition')) continue;
           trips++;
           if (l.action === 'post') ran++;
         }
@@ -326,7 +329,24 @@ describe('engine tactics', () => {
       // (written again from scratch 2026-11-10, the tactics rewrite: TK.zone, each edge at the size the engine
       // plays it, with no leverage on top: the walls about what the old ones played at 2x, the glass a
       // multiplier rather than a tag)
-      expect(TK.zone.zone23).toEqual({
+      // (the table at life size; the engine plays it at the game's tactics gain, sim/engine/feel.ts: its walls and its
+      // open looks times the edge, its glass and swing weight to the power of the multiplier's)
+      {
+        const g = FEEL.tactics;
+        const [life, loud] = [TK_LIFE.zone.zone23, TK.zone.zone23];
+        expect(g.edge).toBeGreaterThan(1.5);
+        expect(FEEL.purist.tactics).toEqual({ edge: 1, mult: 1, fit: 1 });
+        for (const k of ['roll', 'pnr', 'iso', 'post', 'drive', 'kick', 'pop', 'handoff', 'swing', 'cut'] as const) expect(loud[k]).toBeCloseTo(life[k] * g.edge, 9);
+        expect(loud.glass).toBeCloseTo(life.glass ** g.mult, 9);
+        expect(loud.swingW).toBeCloseTo(life.swingW ** g.mult, 9);
+        expect(loud.corner).toBe(life.corner);
+        // (a turnover's edge and the all-in tactics at a softer gain; what a tactic costs the legs, crashing aside, as it was)
+        expect(TK.cov.blitz.to / TK_LIFE.cov.blitz.to).toBeLessThan(g.edge);
+        expect(TK.cov.blitz.to).toBeGreaterThan(TK_LIFE.cov.blitz.to);
+        expect(TK.press.drain).toBe(TK_LIFE.press.drain);
+        expect(TK.key.per).toBe(TK_LIFE.key.per);
+      }
+      expect(TK_LIFE.zone.zone23).toEqual({
         roll: 1.0,
         pnr: 1.2,
         iso: 1.3,
@@ -361,10 +381,10 @@ describe('engine tactics', () => {
         out.push([res.home.pts, res.away.pts, res.home.t.fga, res.away.t.fga, res.home.t.tpa, res.away.t.tpa, res.home.t.orb, res.away.t.orb]);
       }
       expect(out).toEqual([
-        [87, 112, 94, 80, 50, 39, 16, 8],
-        [123, 115, 95, 90, 45, 43, 18, 12],
-        [124, 106, 100, 100, 48, 50, 24, 18],
-        [93, 125, 85, 103, 48, 38, 9, 21],
+        [97, 116, 103, 89, 53, 47, 20, 9],
+        [124, 114, 108, 105, 61, 57, 25, 25],
+        [123, 112, 100, 100, 47, 50, 25, 19],
+        [107, 105, 91, 92, 50, 35, 11, 15],
       ]);
     }
 

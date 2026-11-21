@@ -54,6 +54,10 @@ const story = (l: League, mine: Set<number>, n: Parameters<typeof addNews>[1]) =
 
 /** The user's best player. */
 const best = (l: League) => standardRoster(l, l.userTid).sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)[0];
+const bestGuard = (l: League) =>
+  standardRoster(l, l.userTid)
+    .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
+    .find((p) => p.pos === 'PG' || p.pos === 'SG')!;
 /** Hurt him for `games` games, a new injury. */
 const hurt = (p: ReturnType<typeof best>, games: number) => {
   p.injury = { type: 'Sprained ankle', gamesRemaining: games, gamesTotal: games, severity: 'moderate' };
@@ -184,8 +188,9 @@ describe('the Continue loop', () => {
         {
           progress: () => {
             addNews(l, { kind: 'milestone', head: 'x', text: '.', tids: [l.userTid], pids: [], weight: 3 });
-            // (out long enough that a trade is still an answer when it ends: a real choice)
-            if (++n === 2) hurt(best(l), 30);
+            // (out long enough that a trade is still an answer when it ends: a real choice. His best guard: the
+            // staff has cover or a trade to offer for one, which it may not for the roster's best player, a center)
+            if (++n === 2) hurt(bestGuard(l), 30);
           },
         },
       );

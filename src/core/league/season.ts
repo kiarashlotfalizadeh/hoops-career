@@ -49,6 +49,7 @@ import {
   resolveBids,
   taxTeamsTrim,
   trimRosters,
+  trimSigned,
 } from './freeAgency';
 import { MATCH_DAYS, acceptQualifyingOffers, resolveOfferSheets, restrictedFreeAgents } from './rfa';
 import {
@@ -566,6 +567,8 @@ export function finishDraftPhase(league: League): boolean {
     finishDraft(league);
     // option years are settled before re-signing: opt-outs and declines join the expiring list
     resolveOptions(league, rng);
+    // (a team that came out of the draft with more signed for next season than the summer allows makes room now)
+    trimSigned(league, (p) => releasePlayer(league, p, { news: false }));
   });
   league.phase = 'resign';
   league.day++;

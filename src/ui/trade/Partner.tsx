@@ -11,6 +11,7 @@ import { slabVars } from '../teamColors';
 import { STRATEGY_META } from '../office/common';
 import { RecentDeals } from '../league/MovesTab';
 import { money } from '../../core/format';
+import { gmLine } from '../../core/league/voices';
 
 /** A team's cap room as the trade slab says it: the figure, and which line it's measured from. */
 function capRoom(league: League, tid: number, season: number) {
@@ -76,7 +77,7 @@ export function TeamSheet({
                   {t.region} {t.name}
                 </span>
                 <span className="lr-meta">
-                  {STRATEGY_META[t.strategy].label} · {record(league, t.tid)}
+                  {STRATEGY_META[t.strategy].label} · {record(league, t.tid)} · {gmLine(league, t).split(' · ')[0]}
                 </span>
               </span>
             </button>
@@ -123,6 +124,8 @@ export function PartnerSlab({ league, tid, season, onPick }: { league: League; t
           </span>
         </div>
       </div>
+      {/* how its front office does business (league/voices.ts): it leans the values a little, and it talks like it */}
+      <div className="fo-partner-gm">Front office: {gmLine(league, t)}</div>
       <RecentDeals league={league} tid={tid} />
       <TeamSheet league={league} partner={tid} open={open} onClose={() => setOpen(false)} onPick={onPick} />
     </section>

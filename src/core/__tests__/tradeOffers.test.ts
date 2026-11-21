@@ -55,16 +55,22 @@ import { DRAFT_PROSPECT } from '../types';
 const U = 0;
 const AI = 1;
 
+/** Every front office a straight shooter: these tests are about the values, and the tempers (league/voices.ts) have a block of their own. */
+function straight(l: League): League {
+  l.gm = Object.fromEntries(l.teams.map((t) => [t.tid, 'straight' as const]));
+  return l;
+}
+
 function txLeague(rngSeed = 5): League {
-  return createLeague({ name: `tx${rngSeed}`, userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed });
+  return straight(createLeague({ name: `tx${rngSeed}`, userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed }));
 }
 
 function negLeague(rngSeed = 5): League {
-  return createLeague({ name: `neg${rngSeed}`, userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed });
+  return straight(createLeague({ name: `neg${rngSeed}`, userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed }));
 }
 
 function prLeague(rngSeed = 5, userTid = U): League {
-  const l = createLeague({ name: `pr${rngSeed}`, userTid, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed });
+  const l = straight(createLeague({ name: `pr${rngSeed}`, userTid, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed }));
   // offers and rumors draw on streams seeded by the league's id, which is made from the clock
   l.id = `pr${rngSeed}`;
   return l;
@@ -473,7 +479,7 @@ it("AI deals: offers to the user, AI-to-AI trades, the deadline's ramp, rumors a
   {
     let n = 0;
     let three = 0;
-    for (const seed of [5, 9]) {
+    for (const seed of [5, 9, 13]) {
       const l = prSeason(seed);
       const made = offersThroughDeadline(l, (p) => {
         // (a deal is its legs: two teams' offer, or a three-team offer with a third team taking the salary)

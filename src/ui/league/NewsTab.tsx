@@ -21,6 +21,7 @@ const ORDER: Kind[] = [
   'power',
   'honor',
   'column',
+  'take',
   'preview',
   'trade',
   'rumor',
@@ -140,6 +141,7 @@ export function NewsRow({ league, n }: { league: League; n: NewsItem }) {
             {n.head}
           </Link>
         )}
+        {n.by && <span className="lg-news-by">Hot take · {n.by}</span>}
         <span className={n.head ? 'lg-news-dek' : 'lg-news-text'}>{linkedText(n.text, ms)}</span>
         {!n.head && (restT.length > 0 || showP.length > 0) && (
           <span className="lg-news-meta">

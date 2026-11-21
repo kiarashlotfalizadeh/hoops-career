@@ -16,8 +16,10 @@ import { clamp } from '../random';
  * last fit's weights explained 71.6% of those seasons in all, this one 72.2%). OVR alone, every player there for every
  * game, had explained 61% and 69%, and missed the same rosters by 4-6 net points (10-15 wins) in
  * every league: under the Thunder and the Cavaliers, over the Kings, the 76ers and the Wizards.
+ * 2.13 → 2.26 on 2026-11-21: with tactics played louder than life (sim/engine/feel.ts) the league's teams
+ * sit about 6% further apart than their rosters said (forecast-check's slope 1.05-1.06; 1.00 at this rate).
  */
-export const ROSTER_NET = 2.13;
+export const ROSTER_NET = 2.26;
 /** Minutes by OVR rank in a typical rotation (240 in all), for what a roster is worth with its injured players out or back. */
 const SLOTS = [35, 34, 32, 30, 28, 24, 20, 16, 12, 9];
 /**

@@ -9,6 +9,7 @@ import { GAME } from '../../constants';
 import { SETS, isSetId } from '../sets';
 import { K } from './constants';
 import { TK } from './tk';
+import { FEEL } from './feel';
 import type { SP, ST, SetPlay, LateMode, ActionResult } from './state';
 import type { GameSim } from './game';
 
@@ -36,6 +37,8 @@ export const possessionMethods = {
     this.tripActs = 0;
     this.trap = false;
     this.scramble = 1;
+    this.atoOpen = 0;
+    this.atoAct = false;
     // a timeout stops play: the trip out of it starts with an inbound, whatever the ball was doing
     // before (a steal or a defensive board still counts as what the trip came from)
     const outOfTimeout = this.timeoutStep;
@@ -182,6 +185,15 @@ export const possessionMethods = {
 
     // ---- half court: the trip uses up the after-timeout play and a called one
     if (this.cur) this.cur.kind = 'half';
+    // out of a timeout the first action is something the bench drew up (or at least got organised
+    // for), as good as the coach who drew it; less when it's the defense that called time (FEEL.ato)
+    if (outOfTimeout && !this.inbound) {
+      const a = FEEL.ato;
+      const drawn = !!set || !!first;
+      const coach = clamp(a.at + a.per * ((off.team.coach?.tactics ?? 50) - 50), 0.4, 1.3);
+      this.atoOpen = Math.max(0, (drawn ? a.open : a.plain) * coach - (this.timeoutSide === off.side ? 0 : a.set));
+      if (this.atoOpen) this.impact('ato', o, this.atoOpen * 0.16);
+    }
     // (a trip against a zone is one more look at it: TK.zoneRead)
     if (this.zone(def)) off.zoneSeen++;
     // a defense that didn't crash the glass is back and set when the ball comes up the floor
@@ -262,7 +274,9 @@ export const possessionMethods = {
     set: { id: SetId; pid: number | null; ai?: boolean } | null = null,
   ) {
     // an inbounds play after a foul to give starts from a worse look
-    let carryOpen = (this.inbound ? -K.ftg.open : 0) + this.firstOpen;
+    let carryOpen = (this.inbound ? -K.ftg.open : 0) + this.firstOpen + this.atoOpen;
+    const ato = this.atoOpen > 0;
+    this.atoOpen = 0;
     this.inbound = false;
     this.firstOpen = 0;
     let ballFrom: SP | null = null;
@@ -398,7 +412,9 @@ export const possessionMethods = {
       // (a set run for a shooter is the staff getting him his look: he takes it whatever his share of
       // the threes tonight, see threeDamp; the damp is back at the next shot)
       if (play) play.cast.star.t3 = play.cast.star.t3o;
+      this.atoAct = ato && n === 0;
       const res = this.runAction(action, off, def, ctxOpen, ballFrom, late, forced || buzzer);
+      this.atoAct = false;
       this.calledActor = null;
       this.play = null;
       if (res === 'done') return;

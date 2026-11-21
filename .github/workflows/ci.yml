@@ -49,7 +49,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Star check (eight leagues of eight seasons; no leader over 39 a game or 81-point night, one season at most over 73 wins)
+      - name: Star check (eight leagues of eight seasons; the tails wide but bounded, no leader over 46 a game, no night over 95, 35-point scorers and 70-win teams rare)
         run: npm run star-check
         env:
           QUIET: '1'

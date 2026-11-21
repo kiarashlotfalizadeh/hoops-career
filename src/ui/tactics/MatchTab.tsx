@@ -122,7 +122,12 @@ export function MatchTab({ t, players }: { t: Tactics; players: Player[] }) {
           >
             <div className="list">
               <div className="tx-ctl">
-                <Toggle on={m.autoTimeouts} onChange={(x) => tweak((tt) => void (tt.manage.autoTimeouts = x))} label="Auto timeouts to stop runs" />
+                <Toggle
+                  on={m.autoTimeouts}
+                  onChange={(x) => tweak((tt) => void (tt.manage.autoTimeouts = x))}
+                  label="Auto timeouts to stop runs"
+                  help="A team on a run shoots better until a basket or a timeout ends it."
+                />
               </div>
               <div className="tx-ctl">
                 <Slider

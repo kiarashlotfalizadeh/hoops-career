@@ -1,5 +1,6 @@
 // Running scheduled games and folding results into the league.
 
+import { formOf, legendRooms } from './legends';
 import type { GameResult, League, Player, Rotation, ScheduledGame, StandingLine, Team, TeamSeason, TeamTotals } from '../types';
 import { GameSim, K, type SimTeamInput } from '../sim/engine';
 import { Rng, clamp } from '../random';
@@ -387,7 +388,12 @@ export function buildSimInput(
   game?: Pick<ScheduledGame, 'seriesId'> & Partial<Pick<ScheduledGame, 'gid' | 'day'>>,
 ): SimTeamInput {
   // (how tight its core is, as the pulse last read it: the engine turns it into a touch of execution)
-  return { ...teamSimInput(league, tid, day, type, opp, game), cohesion: cohesionOf(league, tid) };
+  const input = teamSimInput(league, tid, day, type, opp, game);
+  // each player's form that day (a stretch above or below himself: legends.ts), and the room at the
+  // top of the rare player past the league's best (the engine's FEEL.tails)
+  if (input.perf) for (const p of input.players) input.perf[p.pid] = (input.perf[p.pid] ?? 1) * formOf(league, p.pid, day);
+  const legend = legendRooms(league, input.players);
+  return { ...input, cohesion: cohesionOf(league, tid), ...(legend ? { legend } : {}) };
 }
 
 function teamSimInput(

@@ -20,6 +20,7 @@
 // standing and firing). A team that takes over mid-season gets goals from that day, prorated.
 // Nothing here draws from the league's random stream.
 
+import { OWNER_QUIRK, ownerQuirk, type OwnerQuirk } from './voices';
 import type { League, Player, Team, TeamSeason } from '../types';
 import { canBeFired, levelOdds, maybeUltimatum, seasonWeight } from './jobSecurity';
 import { clamp, hashString } from '../random';
@@ -241,6 +242,12 @@ export function personalityLine(who: OwnerPersonality, og?: Pick<OwnerGoals, 're
   return `${p.label} · ${who === 'win-now' && og?.rebuild && !og.rebuild.over ? "wants results, but he'll take a rebuild this season" : p.blurb}`;
 }
 
+/** His quirk in a line, for under his personality: "Hothead: takes every loss personally". */
+export function quirkLine(league: Pick<League, 'id'>, tid: number): string {
+  const q = OWNER_QUIRK[ownerQuirk(league, tid)];
+  return `${q.label}: ${q.blurb}`;
+}
+
 /** A franchise's owner's personality: the same every season of a league (a hash of the league and the team, never its random stream). */
 export function ownerPersonality(league: League, tid: number): OwnerPersonality {
   return (['builder', 'win-now', 'frugal'] as const)[hashString(`${league.id}:${tid}:owner`) % 3];
@@ -295,7 +302,8 @@ const OUTLOOK_SIMS = 500;
 export function leagueOutlook(league: League): TeamOutlook[] {
   const { left } = gamesLeft(league);
   const regular = league.phase === 'preseason' || league.phase === 'regular';
-  const fc = regular ? forecast(league, { sims: OUTLOOK_SIMS }) : null;
+  // (by the rosters alone: what an owner asks doesn't turn on the defense a coach happens to run, see forecast)
+  const fc = regular ? forecast(league, { sims: OUTLOOK_SIMS, tactics: false }) : null;
   const rosters = league.teams.map((): Player[] => []);
   for (const p of Object.values(league.players)) if (p.tid >= 0 && p.tid < rosters.length) rosters[p.tid].push(p);
   const rows = league.teams.map((t) => {
@@ -572,6 +580,20 @@ const LEAN: Record<OwnerPersonality, Partial<Record<OwnerGoalKind, number>>> = {
   builder: { wins: 0.9, postseason: 0.85, youth: 1.5 },
   frugal: { wins: 0.9, profit: 1.7, payroll: 1.7 },
 };
+/**
+ * ...and his quirk's lean on top (league/voices.ts): small, and only in what he weighs, never in what
+ * he asks for. A hothead grades the wins harder, an accountant the books, a sentimental one the kids.
+ */
+const QUIRK_LEAN: Record<OwnerQuirk, Partial<Record<OwnerGoalKind, number>>> = {
+  meddler: { postseason: 1.1 },
+  showman: { wins: 1.1, youth: 0.85 },
+  hothead: { wins: 1.15 },
+  sentimental: { youth: 1.2 },
+  gambler: { postseason: 1.15, payroll: 0.85 },
+  accountant: { profit: 1.15, payroll: 1.1 },
+  ghost: {},
+  traditionalist: {},
+};
 /** Wins the owner adds to (or takes off) what the roster should win, over a full season. */
 const WIN_NUDGE: Record<OwnerPersonality, number> = { 'win-now': 2, builder: -1, frugal: -1 };
 /** Profit the owner adds to the budget, over a full season, first-season $K. */
@@ -612,7 +634,8 @@ export function planOwnerGoals(league: League, tid: number, outlook: TeamOutlook
   const team = league.teams[tid];
   const ts = thisSeason(league, tid);
   const who = ownerPersonality(league, tid);
-  const lean = (k: OwnerGoalKind) => WEIGHT[k] * (LEAN[who][k] ?? 1);
+  const quirk = QUIRK_LEAN[ownerQuirk(league, tid)];
+  const lean = (k: OwnerGoalKind) => WEIGHT[k] * (LEAN[who][k] ?? 1) * (quirk[k] ?? 1);
   const o = outlook[tid];
   const regular = league.phase === 'preseason' || league.phase === 'regular';
   const opening = league.phase === 'preseason' || (ts?.won ?? 0) + (ts?.lost ?? 0) === 0;

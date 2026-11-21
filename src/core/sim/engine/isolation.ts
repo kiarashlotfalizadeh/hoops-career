@@ -53,7 +53,7 @@ export const isolationMethods = {
     const starDouble = def.t.defense.starPlan === 'double' && this.starTarget(def, off) === A;
     let doubled = false;
     if (starDouble) doubled = this.rng.chance(TK.double.p);
-    else if (adv > 0.7 && help > 0) doubled = this.rng.chance(0.5 * help);
+    else if (adv > 0.7 && help > 0) doubled = this.rng.chance(0.5 * this.helpLife(def));
     if (this.record) this.cur!.steps.push({ k: 'drive', pid: A.pid });
     if (doubled) return this.doubleTeam(off, def, A, finish, starDouble);
 
@@ -77,7 +77,7 @@ export const isolationMethods = {
       Math.pow(A.c.midShot / 50, 2.3) * pf.mid * 0.7 * Math.sqrt(A.tm) * ss,
       Math.pow(A.c.pu3 / 50, 2.5) * pf.three * 0.6 * A.t3 * ss,
       sizeEdge > 0.3 ? Math.pow(A.c.postScore / 50, 2) * sizeEdge : 0,
-      Math.pow(A.c.passing / 50, 1.2) * 0.8 * this.passT(A) * (1 + Math.max(0, help)),
+      Math.pow(A.c.passing / 50, 1.2) * 0.8 * this.passT(A) * (1 + Math.max(0, this.helpLife(def))),
       forced ? 0 : K.continueBase * (adv < -0.3 ? 1.4 : 0.5),
     ];
     const c = this.rng.weighted(opts);

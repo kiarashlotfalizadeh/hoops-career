@@ -725,6 +725,21 @@ export function trimRosters(league: League, release: (p: Player) => void, standa
 }
 
 /**
+ * After the draft and the options: an AI team with more players signed for next season than the summer
+ * allows (picks and picked-up options on top of a full roster) lets the least of them go, as trimRosters
+ * does when free agency opens. Its expiring deals aren't counted: they are decided in the re-sign window.
+ */
+export function trimSigned(league: League, release: (p: Player) => void) {
+  for (const t of league.teams) {
+    if (t.tid === league.userTid) continue;
+    const signed = standardRoster(league, t.tid)
+      .filter((p) => contractExp(p.contract) > league.season)
+      .sort((a, b) => rosterKeep(league, a) - rosterKeep(league, b));
+    while (signed.length > OFFSEASON_ROSTER_MAX) release(signed.shift()!);
+  }
+}
+
+/**
  * Opening night, after the cuts: a free agent left who is worth 66+ or rated 70+ (a camp's cut, a
  * veteran) joins the team whose last man he most clearly beats (by 2 points or more; a team that
  * isn't rebuilding counts a veteran's game now as much as his value) when letting that man go costs little (a camp

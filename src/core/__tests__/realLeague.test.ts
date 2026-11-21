@@ -703,10 +703,17 @@ describe('two seasons of the real league', () => {
         const probe = preseason(7, U, real);
         const outlook = leagueOutlook(probe);
         const fits = (og: OwnerGoals) => !!goal(og, money) && (goal(og, 'postseason')?.target ?? 0) >= 2 && !goal(og, 'youth');
-        const tid = probe.teams.find((t) => fits(planOwnerGoals(probe, t.tid, outlook)!))!.tid;
-        const l = preseason(7, tid, real);
-        start(l);
-        const og = structuredClone(currentGoals(l)!);
+        // (a team whose goals fit when you run it too: your staff's tactics aren't its old coach's, and since tactics
+        // count for more, sim/engine/feel.ts, its forecast can move a postseason round)
+        let l = probe;
+        let og: OwnerGoals | undefined;
+        for (const t of probe.teams.filter((x) => fits(planOwnerGoals(probe, x.tid, outlook)!))) {
+          l = preseason(7, t.tid, real);
+          start(l);
+          og = structuredClone(currentGoals(l)!);
+          if (fits(og)) break;
+        }
+        if (!og) throw new Error('no team fits');
         expect(fits(og)).toBe(true);
         l.tenureStart = l.season - 4;
         l.ownerMood = { wins: 0, playoffs: 0, money: 0, total: 0 };

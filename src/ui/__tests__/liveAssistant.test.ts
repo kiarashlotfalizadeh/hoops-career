@@ -671,7 +671,8 @@ describe('the live assistant and the bench', () => {
               id,
             ).toBe(true);
           if (id === 'chicago') expect(b.marks.some((m) => m.kind === 'pass' && m.hand)).toBe(true);
-          if (id === 'floppy' && !b.men.find((m) => m.star)!.ball) expect(b.men.find((m) => m.star)!.at.y).toBeLessThan(5);
+          // (in the paint by the basket: five feet from the baseline, or nudged a step up it when a big stands on his spot)
+          if (id === 'floppy' && !b.men.find((m) => m.star)!.ball) expect(b.men.find((m) => m.star)!.at.y).toBeLessThan(10);
           // (the same play asked twice is the same board)
           expect(playBoard(id, fp, named, names)).toEqual(b);
         }
@@ -744,7 +745,7 @@ describe('broadcast graphics', () => {
 
     // a game picked up part-way puts up only what happens after it: everything it already called for counts as shown
     {
-      const { views, logs } = playThrough(11);
+      const { views, logs } = playThrough(12);
       // from halfway on, the first snapshot with a big night or a double-double already on the court (not at a
       // break, where the team numbers come one at a time)
       const mid = views.slice(Math.floor(views.length / 2)).find((v) => v.clock > 0.05 && graphicCandidates(graphicInput(v, logs)).some((g) => g.kind !== 'team'))!;
@@ -864,7 +865,7 @@ describe('broadcast graphics', () => {
     // a list with nothing on it has no record to break, and the record is tonight's best
     {
       // (a game whose top two scorers aren't level)
-      const { views, logs } = playThrough(25);
+      const { views, logs } = playThrough(26);
       const end = views[views.length - 1];
       const [top, second] = [...end.box.home.players].sort((a, b) => b.pts - a.pts);
       expect(second.pts).toBeGreaterThan(0);

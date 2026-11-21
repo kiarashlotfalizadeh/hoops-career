@@ -42,7 +42,12 @@ export const GLOSSARY: GlossaryEntry[] = [
     group: 'Offense',
     text: "Named plays like Horns or Floppy, run for the player who fits them. They're the after-timeout play and the late play call.",
   },
-  { id: 'ato', term: 'After-timeout play (ATO)', group: 'Offense', text: 'The play your team runs on the first trip out of a timeout.' },
+  {
+    id: 'ato',
+    term: 'After-timeout play (ATO)',
+    group: 'Offense',
+    text: 'The play your team runs on the first trip out of a timeout. A drawn-up play starts more open, more so for a sharp tactician.',
+  },
   {
     id: 'hunt',
     term: 'Hunting a mismatch',

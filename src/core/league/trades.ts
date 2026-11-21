@@ -5,6 +5,7 @@
 // targets), tradePackages.ts (the best package for the user's assets), aiTrades.ts (AI front
 // offices and AI-to-AI deals); the AI's offers to the user are in proposals.ts.
 
+import { gmStyle } from './voices';
 import type { DraftPick, League, Player, TeamSeason } from '../types';
 import { CAP, MATCH_MID_PCT, MATCH_SMALL_PCT, seasonLabel } from '../constants';
 import { contractExp, playerAge, salaryFor } from '../playerGen';
@@ -145,6 +146,8 @@ export interface VerdictParts {
   /** Value of the cash coming in and going out. */
   cashIn: number;
   cashOut: number;
+  /** What its front office wants on top of an even deal, by its temper (league/voices.ts): counted in what it sends. */
+  ask: number;
   /** Value of the luxury tax and cap room the deal costs (negative: what it saves, at most `reliefCap`'s). */
   money: number;
   /** What the salary relief would have counted for, uncapped, when it was held to what dumping that salary costs (`dump`, see reliefCap) or, with the user, to a discount on the good players sent (`discount`, see userReliefCap). */
@@ -575,6 +578,10 @@ export function dealTerms(league: League, offer: TradeOffer): DealTerm[] {
  * hands this season is worth its neutral value to everyone, so it can't be flipped at a second
  * team's premium.
  */
+/** A star, to a front office that pays up for one (OVR), and the seasons after which a player is one of its own (see GmStyle). */
+const GM_STAR = 86;
+const GM_CORE_SEASONS = 3;
+
 function lens(own: number, neutral: number, incoming: boolean, aiDeal: boolean) {
   const band = 0.15 * Math.abs(neutral);
   return incoming ? Math.min(own, neutral + band) : Math.max(own, neutral - (aiDeal ? band : 0));
@@ -628,7 +635,13 @@ export function cornerstoneOf(league: League, tid: number): number | null {
 function playerView(league: League, p: Player, tid: number, incoming: boolean, aiDeal: boolean): AssetView {
   const neutral = tradeValue(league, p, 'retool');
   const strategy = league.teams[tid].strategy;
-  const own = strategy === 'retool' ? neutral : tradeValue(league, p, strategy);
+  // (its front office's own way of doing business: a gunslinger pays up for a star, a loyalist
+  // hates to move a player who has been his for years: league/voices.ts. The user's team has none,
+  // and the lens below still holds every team to the same band around the league's value)
+  const gm = tid === league.userTid ? null : gmStyle(league, tid);
+  const bias = !gm ? 1 : incoming ? (p.ovr >= GM_STAR ? gm.star : 1) : p.tid === tid && league.season - p.joinedSeason >= GM_CORE_SEASONS ? gm.ownCore : 1;
+  const base = strategy === 'retool' ? neutral : tradeValue(league, p, strategy);
+  const own = base > 0 ? base * bias : base;
   const f = flipped(league, p);
   const value = f ? neutral : lens(own, neutral, incoming, aiDeal);
   // (he asked out: it has to move him, see WANTS_OUT)
@@ -642,7 +655,9 @@ function playerView(league: League, p: Player, tid: number, incoming: boolean, a
 /** A draft pick as team `tid` sees it in a deal (with the user unless `aiDeal`). */
 function pickView(league: League, dp: DraftPick, tid: number, incoming: boolean, aiDeal: boolean): AssetView {
   const neutral = pickValue(league, dp);
-  const own = neutral * PICK_LENS[league.teams[tid].strategy];
+  // (a pick hoarder's own picks are worth more to him going out: league/voices.ts)
+  const gm = tid === league.userTid || incoming || dp.originalTid !== tid ? 1 : gmStyle(league, tid).ownPick;
+  const own = neutral * PICK_LENS[league.teams[tid].strategy] * gm;
   const f = flipped(league, dp);
   return { kind: 'pick', id: dp.dpid, value: f ? neutral : lens(own, neutral, incoming, aiDeal), neutral, own, flipped: f };
 }
@@ -923,7 +938,12 @@ function judgeLegs(league: League, tid: number, ins: TradeLeg[], outs: TradeLeg[
   }
   const cut = cutCost(league, tid, outPids, inPids);
   const valueIn = playersIn + picksIn + cashIn - (money.value + cut.value);
-  const valueOut = playersOut + picksOut + cashOut;
+  // (what its front office wants beyond an even deal: a shark more, a tinkerer a little less among AI
+  // teams; never less than even from the user, so no deal with him can be run in a circle for value)
+  const edge = tid === league.userTid ? 0 : aiDeal ? gmStyle(league, tid).edge : Math.max(0, gmStyle(league, tid).edge);
+  const sent = playersOut + picksOut + cashOut;
+  const ask = edge * Math.abs(sent);
+  const valueOut = sent + ask;
   const delta = valueIn - valueOut;
   const tooManyFirsts = outDpids.filter((d) => findPick(league, d)?.round === 1).length > MAX_FIRSTS_OUT;
   const parts: VerdictParts = {
@@ -935,6 +955,7 @@ function judgeLegs(league: League, tid: number, ins: TradeLeg[], outs: TradeLeg[
     picksOut,
     cashIn,
     cashOut,
+    ask,
     money: money.value,
     ...(reliefFull !== undefined ? { reliefFull, reliefKind } : {}),
     salaryIn,

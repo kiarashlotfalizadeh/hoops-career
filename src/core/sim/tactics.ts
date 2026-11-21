@@ -81,7 +81,7 @@ export const OFF_PRESETS: OffPreset[] = [
     tagline: 'Spacing, cutting, sharing',
     description: 'Constant movement, dribble handoffs and backdoor cuts with five shooters. Generates open threes.',
     bestFor: 'Many good shooters and passers, with no need for a dominant creator.',
-    values: { pace: 50, transition: 52, actions: { pnr: 55, iso: 20, post: 10, handoff: 64, motion: 85 }, threePoint: 70, rimAttack: 58, crashBoards: 45, huntMismatch: false },
+    values: { pace: 50, transition: 52, actions: { pnr: 62, iso: 20, post: 10, handoff: 64, motion: 76 }, threePoint: 68, rimAttack: 58, crashBoards: 50, huntMismatch: false },
   },
   {
     id: 'hub',
@@ -89,7 +89,7 @@ export const OFF_PRESETS: OffPreset[] = [
     tagline: 'Run it through the big',
     description: 'Elbow and post touches for a playmaking big. Guards cut and run off his handoffs.',
     bestFor: 'A center with elite passing and IQ.',
-    values: { pace: 48, transition: 50, actions: { pnr: 45, iso: 20, post: 58, handoff: 80, motion: 62 }, threePoint: 60, rimAttack: 60, crashBoards: 54, huntMismatch: false },
+    values: { pace: 48, transition: 50, actions: { pnr: 52, iso: 20, post: 52, handoff: 80, motion: 60 }, threePoint: 60, rimAttack: 60, crashBoards: 54, huntMismatch: false },
   },
   {
     id: 'paceSpace',

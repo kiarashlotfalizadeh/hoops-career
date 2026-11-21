@@ -109,7 +109,8 @@ export class LiveGame {
         const tactics = cloneTactics(o.tactics);
         const team = league.teams[tid];
         const coached = o.coach === undefined ? team : { ...team, coach: { ...team.coach, tactics: o.coach } };
-        return { ...base, team: o.plan ? planTeam(coached, tactics, structuredClone(o.plan)) : { ...coached, tactics } };
+        // (and his players' form as it was that night: it is read from the league's id, which a backup imported as a copy changes)
+        return { ...base, ...(o.perf ? { perf: { ...o.perf } } : {}), team: o.plan ? planTeam(coached, tactics, structuredClone(o.plan)) : { ...coached, tactics } };
       }
       // the user coaches this one: the assistant's adjustments at breaks are for simmed games
       const u = from?.user;
@@ -163,7 +164,7 @@ export class LiveGame {
       },
       edge: this.edge,
       coh: [sides[0].cohesion ?? 0, sides[1].cohesion ?? 0],
-      opp: { tactics: cloneTactics(theirs.team.tactics), ...(oppPlan ? { plan: structuredClone(oppPlan) } : {}), coach: theirs.team.coach.tactics },
+      opp: { tactics: cloneTactics(theirs.team.tactics), ...(oppPlan ? { plan: structuredClone(oppPlan) } : {}), coach: theirs.team.coach.tactics, perf: { ...theirs.perf } },
       steps: 0,
       q: this.sim.q,
       clock: this.sim.clock,

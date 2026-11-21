@@ -11,6 +11,7 @@ import { clamp } from '../../random';
 import { ROLE_USAGE } from '../../ratings';
 import { K } from './constants';
 import { TK } from './tk';
+import { FEEL } from './feel';
 import { type SP, type ST, type LateMode, ACTION_LIST } from './state';
 import type { GameSim } from './game';
 
@@ -41,7 +42,8 @@ export const usageMethods = {
         skill = (p.c.create + p.c.rim + p.c.c3) / 3;
     }
     let w = roleU * p.freedom * p.tu * p.tcr * Math.pow(Math.max(5, skill) / 50, K.usageExp) * (0.75 + 0.25 * p.energy) * p.perf;
-    if (t.t.offense.hotHand && p.hot >= 3) w *= 1.25;
+    // the ball finds a hot hand (FEEL.hot), more when the bench says to feed it
+    if (p.hot >= FEEL.hot.from) w *= t.t.offense.hotHand ? FEEL.hot.feedCall : FEEL.hot.feed;
     // a wing stopper on him keeps the ball out of his hands a little
     const st = this.T ? this.T[1 - t.side].guardOf.get(p.pid) : undefined;
     if (st?.drole === 'stopper') w *= Math.max(0.5, 1 - (1 - TK.role.stopperTouch) * st.dm);
@@ -53,7 +55,8 @@ export const usageMethods = {
       const share = (p.b.fga + 0.44 * p.b.fta + p.b.tov) / teamUse;
       const cap = this.T && this.chased(this.T[1 - t.side], t).includes(p) ? p.useCap - TK.chase.cap : p.useCap;
       if (share > cap) w *= Math.exp(-p.useDamp * (share - cap));
-      if (share > K.useCeil.level) w *= Math.exp(-K.useCeil.damp * (share - K.useCeil.level));
+      const ceil = K.useCeil.level + FEEL.tails.ceil * p.legend;
+      if (share > ceil) w *= Math.exp(-K.useCeil.damp * (share - ceil));
     }
     // even a heliocentric offense moves the ball: past ~2/3 of his team's actions, others get it
     if (p.b.tActs >= 20) {

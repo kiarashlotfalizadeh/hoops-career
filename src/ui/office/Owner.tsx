@@ -22,6 +22,7 @@ import {
   PATIENCE_STEP,
   PAYROLL_SCALE,
   personalityLine,
+  quirkLine,
   POSTSEASON,
   PROFIT_SCALE,
   REBUILD_OVER_FLOOR,
@@ -71,7 +72,7 @@ export default function Owner() {
     <main className="page fo-page">
       <PageHeader
         title="Owner"
-        sub={league.fired ? undefined : personalityLine(ownerPersonality(league, tid), shown)}
+        sub={league.fired ? undefined : `${personalityLine(ownerPersonality(league, tid), shown)}. ${quirkLine(league, tid)}.`}
         back
         backTo="/office"
         right={<GradingHelp league={league} />}

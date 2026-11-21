@@ -378,6 +378,21 @@ for (const id of SET_IDS) {
   };
 }
 // (a read always pays the defense)
+// (the game's feel, engine/feel.ts: a hot hand is real, a run feeds itself until a timeout or a basket ends it, a play drawn up in a timeout pays)
+IMPACT_TEXT['hot_hand:o'] = {
+  text: (X, _Y, w) => `${X} rode a hot hand${w}.`,
+  advice: 'A shooter with three straight makes shoots better. Change his defender in Matchups, or double him on the Plan.',
+  cat: 'shooting',
+};
+IMPACT_TEXT['momentum:o'] = {
+  text: (X, Y) => `${X} went on runs, and ${Y} let them build.`,
+  advice: 'A run of six or more feeds itself. A timeout ends it: lower the run your staff stops, or call one yourself.',
+  cat: 'shooting',
+};
+IMPACT_TEXT['ato:o'] = {
+  text: (X) => `${X} got good looks from the plays drawn up in timeouts.`,
+  advice: 'Set an after-timeout play in Tactics → Crunch time. The trip out of a timeout starts open.',
+};
 IMPACT_TEXT['set_read:d'] = {
   text: (X, _Y, w) => `${X} read the sets they kept seeing and jumped their passes${w}.`,
   advice: 'Call each set a few times a game, not every trip. Defenses read the ones they keep seeing.',

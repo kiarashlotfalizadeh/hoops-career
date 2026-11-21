@@ -75,7 +75,9 @@ function oneManTeam(l: League, tid: number): Player {
     return (s.fga + 0.44 * s.fta + s.tov) / (s.teamFga + 0.44 * s.teamFta + s.teamTov);
   };
   // their healthy player who already uses the most possessions, and nobody resting on back-to-backs
-  const star = players.filter((p) => !p.injury && line(p) && line(p)!.gp >= 5 && line(p)!.min >= 20 * line(p)!.gp).sort((a, b) => use(b) - use(a))[0];
+  // (one the scouting reads: in the rotation the staff projects for them)
+  const rotation = new Set(projectedRotation(l, tid, 8).map((x) => x.pid));
+  const star = players.filter((p) => rotation.has(p.pid) && !p.injury && line(p) && line(p)!.gp >= 5 && line(p)!.min >= 20 * line(p)!.gp).sort((a, b) => use(b) - use(a))[0];
   l.teams[tid].rotation.restB2B = [];
   for (const p of players) {
     const s = line(p);
@@ -85,6 +87,8 @@ function oneManTeam(l: League, tid: number): Player {
       s.fga = Math.round(0.38 * teamUse - 0.44 * s.fta - s.tov);
       s.min = Math.max(s.min, 34 * s.gp);
     } else {
+      // (nobody else near his share: over a few games a teammate on a tear can use as much, sim/engine/feel.ts)
+      s.fga = Math.min(s.fga, Math.max(0, Math.round(0.3 * (s.teamFga + 0.44 * s.teamFta + s.teamTov) - 0.44 * s.fta - s.tov)));
       s.tpa = Math.max(s.tpa, 6);
       s.tpm = Math.floor(s.tpa * 0.25);
       // and poor shooters by their ratings too (a percentage over a few games is mostly noise)

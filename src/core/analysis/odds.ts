@@ -11,6 +11,7 @@
 import type { League, Player } from '../types';
 import { Rng, hashString, mix32 } from '../random';
 import { ROSTER_NET, rosterWorth } from './worth';
+import { tacticsWorth } from './tacticsWorth';
 import { HOME_EDGE, MARGIN_SD, PRIOR_GAMES, blendNet, leagueRatings, phi } from './projection';
 import { expectedCohesion } from '../league/pulse';
 import { cohesionLift } from '../sim/engine/constants';
@@ -100,7 +101,7 @@ const WIN_PER_NET = 0.033;
 /** Points per 100 possessions a point of field-goal percentage is worth: about 88 shots at a little over two points each. */
 const COHESION_NET = 190;
 
-function setup(league: League, fixed: { gid: number; homeWon: boolean } | undefined, spread: number): Setup {
+function setup(league: League, fixed: { gid: number; homeWon: boolean } | undefined, spread: number, tactics = true): Setup {
   const n = league.teams.length;
   const ratings = leagueRatings(league);
   const left = new Array(n).fill(0);
@@ -129,7 +130,10 @@ function setup(league: League, fixed: { gid: number; homeWon: boolean } | undefi
   const extra = sched.map((s) => Math.max(0, target - s));
   const players = new Map<number, Player[]>();
   for (const p of Object.values(league.players)) if (p.tid >= 0 && p.tid < n) (players.get(p.tid) ?? players.set(p.tid, []).get(p.tid)!).push(p);
-  const worth = league.teams.map((t) => rosterWorth(players.get(t.tid) ?? [], Math.max(1, left[t.tid] + extra[t.tid])));
+  // (with what its defense is expected to be worth for these players: tacticsWorth.ts)
+  const worth = league.teams.map(
+    (t) => rosterWorth(players.get(t.tid) ?? [], Math.max(1, left[t.tid] + extra[t.tid])) + (tactics ? tacticsWorth(league, t.tid, players.get(t.tid) ?? []) : 0),
+  );
   const avg = worth.reduce((a, w) => a + w, 0) / Math.max(1, n);
   // what each core's cohesion is expected to be worth on the floor (pulse.ts, K.cohesion), against the
   // league's average: part of what the roster is worth before the games say so (their net rating has
@@ -242,10 +246,15 @@ export function lotteryTable(m: number) {
  * simulated seasons, and with `fixed` one game of today's schedule taken as won or lost first (the
  * preview's "a win takes you to..."), drawn from the same stream so the two read side by side.
  */
-export function forecast(league: League, opts: { sims?: number; fixed?: { gid: number; homeWon: boolean }; sd?: number } = {}): Forecast | null {
+/**
+ * `tactics` false: every team by its roster alone, none by the defense it runs (tacticsWorth.ts). What an owner asks
+ * of a team is read that way: the roster is his, the tactics are the coach's, and a coach can't lower the bar by
+ * playing a defense that doesn't fit.
+ */
+export function forecast(league: League, opts: { sims?: number; fixed?: { gid: number; homeWon: boolean }; sd?: number; tactics?: boolean } = {}): Forecast | null {
   if (!forecastable(league)) return null;
   const sims = opts.sims ?? FORECAST_SIMS;
-  const S = setup(league, opts.fixed, opts.sd ?? STRENGTH_SD);
+  const S = setup(league, opts.fixed, opts.sd ?? STRENGTH_SD, opts.tactics !== false);
   const { n } = S;
   const played = league.games.length;
   const base = hashString(`${league.id}:${league.season}:${league.phase}:${league.day}:${played}:odds`);
@@ -625,7 +634,7 @@ function projectPicks(league: League): PickProjection {
     const gp = won + (ts?.lost ?? 0);
     return { won, gp, left: Math.max(0, 82 - gp), playoff: !!ts && ts.playoffRound >= 1 };
   });
-  const worth = league.teams.map((t, tid) => rosterWorth(players.get(t.tid) ?? [], Math.max(1, rows[tid].left)));
+  const worth = league.teams.map((t, tid) => rosterWorth(players.get(t.tid) ?? [], Math.max(1, rows[tid].left)) + tacticsWorth(league, t.tid, players.get(t.tid) ?? []));
   const avg = worth.reduce((a, w) => a + w, 0) / Math.max(1, n);
   const pct: number[] = [];
   const sd: number[] = [];

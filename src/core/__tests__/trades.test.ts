@@ -6,6 +6,7 @@
 import { expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { startRegularSeason } from '../league/season';
+import { GM_STYLE, gmLine, gmTemper } from '../league/voices';
 import { CAP_FOR, contractSeason, curTeamSeason, dateToDay, freeAgents, payroll, standardRoster, twoWayRoster } from '../league/helpers';
 import { DEC_15, DUMP_PER_FIRST, FIRST_VALUE, askingContract, marketSalary, releaseDeadMoney, releasePlayer, signPlayer, tradeValue, twoWaySalary } from '../league/contracts';
 import { capPayroll } from '../league/freeAgency';
@@ -73,16 +74,22 @@ const U = 0;
 const AI = 1;
 const THIRD = 2;
 
+/** Every front office a straight shooter: these tests are about the values, and the tempers (league/voices.ts) have a block of their own. */
+function straight(l: League): League {
+  l.gm = Object.fromEntries(l.teams.map((t) => [t.tid, 'straight' as const]));
+  return l;
+}
+
 function txLeague(rngSeed = 5): League {
-  return createLeague({ name: `tx${rngSeed}`, userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed });
+  return straight(createLeague({ name: `tx${rngSeed}`, userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed }));
 }
 
 function negLeague(rngSeed = 5): League {
-  return createLeague({ name: `neg${rngSeed}`, userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed });
+  return straight(createLeague({ name: `neg${rngSeed}`, userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed }));
 }
 
 function termsLeague(rngSeed = 5): League {
-  const l = createLeague({ name: `terms${rngSeed}`, userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed });
+  const l = straight(createLeague({ name: `terms${rngSeed}`, userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed }));
   // a fixed id: the lottery breaks ties on it
   l.id = `terms${rngSeed}`;
   l.phase = 'regular';
@@ -448,6 +455,47 @@ it("valuation and the AI's verdict: talent over depth, strategy lenses within 15
     const tw = twoWayRoster(l, U)[0];
     expect(tw).toBeDefined();
     expect(capSalary(l, tw.pid)).toBe(0);
+  }
+
+  // front offices have tempers (league/voices.ts): a shark wants more than an even deal, a hoarder holds his own
+  // picks dearer, a gunslinger pays up for a star, and none takes less than even from the user
+  {
+    const l = negLeague();
+    expect(startRegularSeason(l)).toEqual([]);
+    const mine = standardRoster(l, U).sort((a, b) => b.ovr - a.ovr);
+    const theirs = standardRoster(l, AI).sort((a, b) => b.ovr - a.ovr);
+    const o = offer([mine[3].pid], [theirs[3].pid]);
+    const as = (temper: NonNullable<League['gm']>[number], off = o) => {
+      l.gm = { ...l.gm, [AI]: temper };
+      return evaluateTrade(l, off);
+    };
+    const even = as('straight');
+    expect(even.parts.ask).toBe(0);
+    const shark = as('shark');
+    expect(shark.parts.ask).toBeCloseTo(GM_STYLE.shark.edge * Math.abs(shark.valueOut - shark.parts.ask), 9);
+    expect(shark.parts.ask).toBeGreaterThan(0);
+    expect(shark.delta).toBeLessThan(even.delta);
+    expect(shark.valueOut).toBeCloseTo(shark.parts.playersOut + shark.parts.picksOut + shark.parts.cashOut + shark.parts.ask, 9);
+    // (a tinkerer deals for a little less among AI teams, never with the user)
+    expect(as('tinkerer').parts.ask).toBe(0);
+    expect(as('tinkerer').delta).toBeLessThanOrEqual(even.delta + 1e-9);
+    // his own first going out: dearer to a hoarder, and never under what it's worth to anyone
+    const first = l.draftPicks.find((d) => d.round === 1 && d.tid === AI && d.originalTid === AI)!;
+    const withPick = offer([mine[0].pid], [theirs[6].pid], [], [first.dpid]);
+    expect(as('hoarder', withPick).parts.picksOut).toBeGreaterThanOrEqual(as('straight', withPick).parts.picksOut);
+    expect(as('gunslinger', withPick).parts.picksOut).toBeGreaterThanOrEqual(pickValue(l, first) - 1e-9);
+    // a star coming in: a gunslinger pays more for him than a straight shooter, inside the same 15% band
+    const star = mine[0];
+    star.ovr = Math.max(star.ovr, 90);
+    const forStar = offer([star.pid], [theirs[0].pid]);
+    const paid = as('gunslinger', forStar).parts.playersIn;
+    expect(paid).toBeGreaterThanOrEqual(as('straight', forStar).parts.playersIn);
+    expect(paid).toBeLessThanOrEqual(tradeValue(l, star, 'retool') * 1.15 + 1e-9);
+    // every team of a new league has one, and says how it deals
+    const made = createLeague({ name: 'gm', userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 3 });
+    expect(Object.keys(made.gm!).length).toBe(made.teams.length);
+    for (const t of made.teams) expect(gmLine(made, t)).toContain(GM_STYLE[gmTemper(made, t.tid)].label);
+    expect(new Set(Object.values(made.gm!)).size).toBeGreaterThan(3);
   }
 
   // adds up its verdict from the parts it reports

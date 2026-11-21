@@ -9,6 +9,7 @@ import { defRoleFits, miscast, roleFits } from '../analysis/system';
 import { coachStyle, coverageFor, defPresetOf, nearestOffPreset, styleIdentity } from './style';
 import { defaultMinutesByDepth } from '../sim/rotationPlan';
 import { clamp } from '../random';
+import { FEEL } from '../sim/engine/feel';
 import { playerAge } from '../playerGen';
 
 export interface LineupEval {
@@ -600,34 +601,34 @@ const fitSum = (terms: Record<string, FitTerm[]>): Record<string, number> => Obj
  * Big for 14 and 18 rosters of two fictional leagues). The read tracks the measured worth at r 0.55
  * (slope 1.06), 0.63-0.69 on the fictional leagues. The playbooks differ by about 0.2 a game for most
  * rosters, so most read as a similar fit; the picker orders them by the read.
+ *
+ * Refit 2026-11-21 on the louder tactics gain (sim/engine/feel.ts) and the seed rebuilt on it (two seed sets of
+ * the real league and two fictional leagues, as before). Offense: the read tracks the measured worth at r 0.52
+ * on the real league (0.56-0.59 fictional); Balanced leads most reads by a little (the playbooks' means are
+ * within 0.2 a game of each other) and Hub Big now pays passers (+0.37 a point over 54). Defense: r 0.92 (0.84-
+ * 0.87). The defense was fitted once more the same day, after a switch's mismatches came to be attacked more and a
+ * hedge to give up less behind it: r 0.89 on the real league (0.79-0.84), its top Blitz 12, Drop 12 and the zone 6
+ * against a measured best of 9, 9 and 5 (Switch 5). Shapes: Five-Out pays spacing nearly twice as much (1.33 a point over 35).
  */
 const OFF_FIT: Record<string, FitModel> = {
-  balanced: { base: 1.6, terms: [] },
-  helio: { base: 0.9, terms: [] },
-  fiveOut: { base: -0.9, terms: [['size', -0.23, 47]] },
+  balanced: { base: 2, terms: [] },
+  helio: { base: 1.5, terms: [] },
+  fiveOut: { base: 0.3, terms: [['starCreator', -0.1, 67]] },
   hub: {
-    base: -1.2,
+    base: -2.7,
     terms: [
-      ['starCreator', -0.22, 67],
-      ['bigPassing', 0.05, 45],
-      ['passing', 0.18, 54],
+      ['passing', 0.37, 54],
+      ['starCreator', -0.17, 67],
     ],
   },
   paceSpace: {
-    base: 0.5,
-    terms: [
-      ['starCreator', 0.15, 67],
-      ['passing', 0.19, 54],
-    ],
-  },
-  grind: {
     base: -1.2,
     terms: [
-      ['size', 0.12, 47],
-      ['shooting', -0.09, 35],
-      ['passing', -0.17, 54],
+      ['starCreator', 0.29, 67],
+      ['athleticism', -0.2, 55],
     ],
   },
+  grind: { base: -0.9, terms: [['passing', -0.27, 54]] },
 };
 
 /**
@@ -642,56 +643,50 @@ const OFF_FIT: Record<string, FitModel> = {
  */
 const DEF_FIT: Record<string, FitModel> = {
   drop: {
-    base: 6.4,
+    base: 4.1,
     terms: [
-      ['athleticism', -0.28, 55],
-      ['steals', -0.26, 52],
+      ['steals', -0.47, 52],
+      ['athleticism', -0.42, 55],
+      ['size', -0.23, 47],
     ],
   },
   switch: {
-    base: 3,
+    base: 1.2,
     terms: [
-      ['steals', -0.46, 52],
-      ['athleticism', -0.34, 55],
+      ['steals', -0.56, 52],
+      ['athleticism', -0.32, 55],
     ],
   },
-  blitz: {
-    base: 2.7,
-    terms: [
-      ['steals', 0.1, 52],
-      ['athleticism', -0.3, 55],
-      ['perimeterD', 0.44, 53],
-    ],
-  },
+  blitz: { base: 7.9, terms: [['steals', 0.54, 52]] },
   ice: {
-    base: 2.9,
+    base: -1.4,
     terms: [
-      ['athleticism', -0.52, 55],
-      ['steals', -0.4, 52],
-      ['perimeterD', 0.43, 53],
+      ['athleticism', -0.59, 55],
+      ['steals', -0.29, 52],
     ],
   },
   hedge: {
-    base: 3,
+    base: -3.7,
     terms: [
-      ['steals', -0.25, 52],
-      ['athleticism', -0.19, 55],
+      ['steals', -0.5, 52],
+      ['depth', -0.19, -15],
+      ['athleticism', -0.25, 55],
     ],
   },
   zone: {
-    base: 3.3,
+    base: -1.1,
     terms: [
-      ['size', 0.96, 47],
-      ['steals', -0.41, 52],
-      ['athleticism', -0.4, 55],
+      ['size', 1.01, 47],
+      ['perimeterD', -1.46, 53],
+      ['depth', -0.27, -15],
     ],
   },
   chaos: {
-    base: -22,
+    base: -5.8,
     terms: [
-      ['athleticism', 2.17, 55],
-      ['steals', 2.02, 52],
-      ['perimeterD', -1.54, 53],
+      ['athleticism', 2.37, 55],
+      ['steals', 2.07, 52],
+      ['depth', 0.58, -15],
     ],
   },
 };
@@ -802,9 +797,9 @@ export function shapeFits(players: Player[], tactics?: Pick<Tactics, 'offense'>,
   const x = shapeInputs(players, tactics, order);
   return {
     fourOut: 0,
-    fiveOut: -0.2 + 0.71 * (x.spacing - 35),
-    horns: -0.7 + 0.16 * (x.creator - 67),
-    twoIn: -1.8 + 0.29 * (x.orb - 50),
+    fiveOut: 1.0 + 1.33 * (x.spacing - 35),
+    horns: -0.9,
+    twoIn: -2.9 + 0.46 * (x.orb - 50),
   };
 }
 
@@ -1004,6 +999,14 @@ function userPresetTactics(team: Team, players: Player[], sticky?: boolean): Tac
 /** An AI staff's playbook: its coach's style, the coverage his personnel calls for (see coverageFor), named for the nearest playbooks. */
 export function styleTactics(team: Team, players: Player[]): Tactics {
   const st = coachStyle(team.coach);
+  // A coach's style is read from what his real team does, so his leans on the settings the game plays
+  // louder than life (sim/engine/feel.ts: the glass, help, pressure, physicality, getting back) are set
+  // where they have their real effect: the same lean, at the size it has in life. His tempo, shot
+  // profile and mix of actions are what his team does, and stay as they are. Played at the full gain a
+  // real coach's lean cost or paid his team twice what it does (Chicago nine wins under its roster),
+  // and the league's teams were further apart than their rosters.
+  const lean = (v: number, gain = FEEL.tactics.edge) => Math.round(50 + (v - 50) / gain);
+  const soft = 1 + (FEEL.tactics.edge - 1) * 0.45;
   const base = team.tactics ? cloneTactics(team.tactics) : defaultTactics();
   const cov = coverageFor(fitRoster(players), st);
   base.offense = {
@@ -1012,7 +1015,7 @@ export function styleTactics(team: Team, players: Player[]): Tactics {
     transition: st.transition,
     threePoint: st.threePoint,
     rimAttack: st.rimAttack,
-    crashBoards: st.crash,
+    crashBoards: lean(st.crash),
     actions: { ...st.actions },
     huntMismatch: false,
   };
@@ -1021,10 +1024,10 @@ export function styleTactics(team: Team, players: Player[]): Tactics {
     scheme: 'man',
     pnr: cov,
     switchOffBall: cov === 'switch',
-    help: st.help,
-    pressure: st.pressure,
-    physicality: st.physicality,
-    getBack: st.getBack,
+    help: lean(st.help),
+    pressure: lean(st.pressure, soft),
+    physicality: lean(st.physicality),
+    getBack: lean(st.getBack),
     press: 'none',
   };
   base.offPreset = nearestOffPreset(base.offense);

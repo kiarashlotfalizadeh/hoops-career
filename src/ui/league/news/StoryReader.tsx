@@ -50,6 +50,7 @@ function Story({ league, n }: { league: League; n: NewsItem }) {
       <div className="lg-story-over over">
         {KIND_ONE[n.kind]} · {newsDate(league, n)}
       </div>
+      {n.by && <div className="lg-story-by">{n.by}</div>}
       <p className="lg-story-dek">{dek}</p>
       {paras.map((p, i) => (
         <p key={i} className="lg-story-p">

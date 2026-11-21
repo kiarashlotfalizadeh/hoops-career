@@ -12,7 +12,8 @@ import { ROLE_USAGE, defRoleFitsFrom } from '../../ratings';
 import { solveMatchups } from '../matchups';
 import { shapeOf } from '../tactics';
 import { K } from './constants';
-import { TK, type ZoneT, roomWorth } from './tk';
+import { HELP_LIFE, TK, type ZoneT, roomWorth } from './tk';
+import { FEEL } from './feel';
 import { type SP, type ST, NONE, mix } from './state';
 import type { GameSim } from './game';
 
@@ -195,7 +196,7 @@ export const defenseMethods = {
    * the helpers (drop parks the big at the rim; a scrambled transition defense has fewer back).
    */
   rimContester(this: GameSim, def: ST, own: SP | null, pull = 1): SP {
-    const help = Math.max(0.15, 1 + 0.8 * this.help(def));
+    const help = Math.max(0.15, 1 + 0.8 * this.helpLife(def));
     const ws = def.on.map((p) => {
       const w = Math.pow(Math.max(10, p.c.rimProt * this.dq(p)) / 50, 3);
       return p === own ? w * 2.2 : w * help * pull * (p.drole === 'anchor' ? Math.max(0.5, 1 + (TK.role.anchorRim - 1) * p.dm) : 1);
@@ -206,6 +207,11 @@ export const defenseMethods = {
   /** How far the help comes: -1 staying home .. +1 packing the paint, at TK.help's size. */
   help(this: GameSim, def: ST) {
     return ((def.t.defense.help - 50) / 50) * TK.help;
+  },
+
+  /** The help setting at its life size: for the chances and weights that read it (a second defender coming, who contests at the rim). */
+  helpLife(this: GameSim, def: ST) {
+    return ((def.t.defense.help - 50) / 50) * HELP_LIFE;
   },
 
   /** Ball pressure, -1 sagging .. +1 swarming. */
@@ -399,7 +405,10 @@ export const defenseMethods = {
     // (and late in a close game the side ahead is the one that gives it away: K.clutchD)
     const c = K.clutchD;
     const tight = this.q >= 4 && this.clock < c.sec && m !== 0 && Math.abs(m) <= c.within ? (m > 0 ? c.leadTO : c.trailTO) : 1;
-    return clamp(p * last * tight, 0.01, 0.4);
+    // (a side being run on gives it away more, and a play drawn up in a timeout is run with care: FEEL)
+    const mo = FEEL.momentum;
+    const rattled = mo.to && def.run >= mo.from ? 1 + mo.to * Math.min(1, (def.run - mo.from + 2) / 8) : 1;
+    return clamp(p * last * tight * rattled * (this.atoAct ? FEEL.ato.to : 1), 0.01, 0.4);
   },
 
   /** The handler's edge against ball pressure: an overplaying defender gets beaten off the dribble (more the harder he presses), a containing one stays in front. */
@@ -408,7 +417,7 @@ export const defenseMethods = {
     const pr = this.pressure(def);
     const beat = pr > 0 ? clamp(1 + (this.T[1 - def.side].secQ - k.secAvg) / k.secOpen, 0.25, 1.5) : 1;
     const edge = (k.blowBy * pr + k.convex * Math.max(0, pr) ** 2) * beat;
-    if (edge !== 0) this.impact('pressure_blowby', (1 - def.side) as 0 | 1, blowByTag(edge, from), h.pid);
+    if (edge !== 0) this.impact('pressure_blowby', (1 - def.side) as 0 | 1, blowByTag(edge, from) * K.blowByTag, h.pid);
     const dh = this.defOf(def, h);
     const poa = dh.drole === 'poa' ? TK.role.poaBlowBy * dh.dm : 0;
     if (poa) this.impact('role_poa', def.side, blowByTag(poa, from), h.pid);

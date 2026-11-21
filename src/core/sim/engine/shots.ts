@@ -8,6 +8,7 @@ import { clamp } from '../../random';
 import type { FinishType, PossStep } from '../log';
 import { K, engineDiag } from './constants';
 import { TK } from './tk';
+import { FEEL, heat, momentum } from './feel';
 import type { SP, ST, ShotOpts } from './state';
 import type { GameSim } from './game';
 
@@ -40,7 +41,7 @@ export const shotsMethods = {
   },
 
   threeDamp(this: GameSim, p: SP): number {
-    const over = p.b.tpa / p.b.tFga - K.threeUse.level;
+    const over = p.b.tpa / p.b.tFga - K.threeUse.level - FEEL.tails.three * p.legend;
     return over > 0 ? Math.exp(-K.threeUse.damp * over) : 1;
   },
 
@@ -170,13 +171,15 @@ export const shotsMethods = {
     if (s.pullup && three) p -= 0.012;
     // (a shooter past his share of the threes gets tougher ones from a man defense, or from the chaser
     // of a junk defense that is after him; a zone's open looks stay open: see K.threeUse.contest)
-    if (three && sh.b.tFga >= K.threeUse.from && (!this.zone(def) || this.lock(def, off, sh))) p -= K.threeUse.contest * Math.max(0, sh.b.tpa / sh.b.tFga - K.threeUse.level);
+    if (three && sh.b.tFga >= K.threeUse.from && (!this.zone(def) || this.lock(def, off, sh)))
+      p -= K.threeUse.contest * Math.max(0, sh.b.tpa / sh.b.tFga - K.threeUse.level - FEEL.tails.three * sh.legend);
     // (and one past his share of the possessions gets tougher looks of every kind, a junk defense's
     // chaser on him sooner: K.useContest, K.chaseCap)
     const teamUse = sh.b.tFga + 0.44 * sh.b.tFta + sh.b.tTov;
     if (teamUse >= 25) {
-      const level = K.useLevel - (this.chased(def, off).includes(sh) ? TK.chase.cap : 0);
-      p -= K.useContest * Math.max(0, (sh.b.fga + 0.44 * sh.b.fta + sh.b.tov) / teamUse - level);
+      // (the rare player past the league's ceilings has more of it to himself: FEEL.tails)
+      const level = sh.useCap - (this.chased(def, off).includes(sh) ? TK.chase.cap : 0);
+      p -= K.useContest * (1 - FEEL.tails.contest * sh.legend) * Math.max(0, (sh.b.fga + 0.44 * sh.b.fta + sh.b.tov) / teamUse - level);
     }
     // contesting defender quality
     const c = s.contest;
@@ -201,6 +204,10 @@ export const shotsMethods = {
     if (this.opts.edge) p += this.opts.edge[off.side];
     // a core that has played and won together (K.cohesion)
     p += off.coh;
+    // the hot hand and the cold one, and a side on a run (FEEL.hot, FEEL.momentum)
+    const hand = heat(sh.hot, sh.cold);
+    const mo = momentum(off.run, off.side === 0 && !this.opts.neutral);
+    p += hand + mo;
     p += this.env.shoot + this.env.team[off.side] + this.scoreEffect(off, def, three);
     if (s.finish !== 'putback') p += this.tempoOpen() * K.zoneOpen[zone];
     // late-game nerves: close and late, a player short on feel (offensive IQ) shoots a little worse, one with plenty a little better
@@ -219,7 +226,7 @@ export const shotsMethods = {
         this.impact(k, off.side, d * K.zoneOpen[zone] * value, sh.pid);
       }
     }
-    if (over) this.impact('pressure_blowby', off.side, over * K.zoneOpen[zone] * value, sh.pid);
+    if (over) this.impact('pressure_blowby', off.side, over * K.zoneOpen[zone] * value * K.blowByTag, sh.pid);
     if (shape) this.impact('shape_space', off.side, shape * K.zoneOpen[zone] * value, sh.pid);
     if (stopper) this.impact('role_stopper', def.side, stopper * value, sh.pid);
     // (the anchor's share of the rim's contests beyond what he'd get as anyone else, at his edge over an average contester)
@@ -228,6 +235,8 @@ export const shotsMethods = {
       this.impact('role_anchor', def.side, extra * ((c.c.rimProt * this.dq(c) - 50) / 50) * 0.07 * value, sh.pid);
     }
     if (sh.energy < 0.7) this.impact('fatigue', def.side, (1 - sh.energy) * 0.12 * value * 0.5, sh.pid);
+    if (hand > 0) this.impact('hot_hand', off.side, hand * value, sh.pid);
+    if (mo > 0) this.impact('momentum', off.side, mo * value, sh.pid);
 
     // block?
     let blocker: SP | null = null;
@@ -334,7 +343,8 @@ export const shotsMethods = {
         off.tot.ast++;
       }
       if (zone === 'rim' || zone === 'paint') off.ex.paint += 2;
-      sh.hot = Math.min(5, sh.hot + 1);
+      sh.hot = Math.min(9, sh.hot + 1);
+      sh.cold = 0;
       this.score(off, def, sh, value);
       const fouler = fouled ? this.shootingFouler(def, c, sh) : null;
       if (this.record) this.addPbp(off.side, `${sh.name} ${desc} — good${ast ? ` (${ast.name} assist)` : ''}${fouler ? `, and one! Foul on ${fouler.name}.` : '.'}`, 'make');
@@ -348,7 +358,11 @@ export const shotsMethods = {
       this.finishPoss(off, s.finish);
       return;
     }
-    sh.hot = Math.max(0, sh.hot - 1);
+    // (a miss the whistle wiped out is no miss: his streak stands)
+    if (!fouled) {
+      sh.hot = Math.max(0, sh.hot - FEEL.hot.miss);
+      sh.cold++;
+    }
     if (fouled) {
       const fouler = this.shootingFouler(def, c, sh);
       if (this.record) this.addPbp(off.side, `${sh.name} fouled on ${desc} by ${fouler.name}.`, 'foul');

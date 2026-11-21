@@ -5,6 +5,8 @@ import { CAP, RATED_SEASONS, ROOKIE_SCALE, SAVE_VERSION, START_SEASON } from '..
 import { Rng, hashString, clamp } from '../random';
 import { FRANCHISES, BBREF_TO_TID } from '../teams';
 import { coachName, makeTeam } from '../teamFactory';
+import { seedFounding } from './legends';
+import { drawTempers, earnNickname, nickWorthy } from './voices';
 import { activeCoach, seedCoaches } from './coaches';
 import { defPresetOf, nearestOffPreset, realStyle } from '../ai/style';
 import { DEFAULT_SCALE, genTendencies, generatePlayer, refreshPlayerDerived } from '../playerGen';
@@ -447,6 +449,8 @@ export function createLeague(opts: CreateOpts): League {
     const rostered = Object.values(league.players).filter((p) => p.tid >= 0 && !p.contract.twoWay);
     matchRealSpread(rostered, Object.values(league.players));
     league.ovrScale = buildOvrScale(rostered.map((p) => ovrRaw(p.ratings)));
+    // (some leagues start with a player already past their scale: legends.ts)
+    seedFounding(league);
     for (const p of Object.values(league.players)) {
       refreshPlayerDerived(p, season, league.ovrScale);
       p.tend = genTendencies(p, rng);
@@ -461,6 +465,9 @@ export function createLeague(opts: CreateOpts): League {
       p.faDays = FA_PRICE_CUT_DAYS;
     }
   }
+  league.gm = drawTempers(league);
+  // (a fictional league's best are already known by their nicknames: league/voices.ts)
+  for (const p of Object.values(league.players).sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)) if (p.tid >= 0 && nickWorthy(p)) earnNickname(league, p);
   league.ratingAnchors = ratingMeans(league);
   league.ratingSpreads = ratingSpreads(league);
   const realSeed = opts.seed && opts.seed.players.length ? opts.seed : null;

@@ -95,6 +95,7 @@ export function usePlayerTags(league: League, p: Player): { key: string; node: R
     ...(dev ? [{ key: 'dev', node: <DevTagChip tag={dev} /> }] : []),
     ...(p.hof ? [{ key: 'hof', node: <Tag tone="warn">Hall of Fame</Tag> }] : []),
     ...(p.contract.twoWay && p.tid >= 0 ? [{ key: 'twoway', node: <Tag>Two-way</Tag> }] : []),
+    ...(p.nick ? [{ key: 'nick', node: <Tag tone="warn">“{p.nick}”</Tag> }] : []),
     { key: 'arch', node: <Tag>{p.archetype}</Tag> },
     {
       key: 'tier',

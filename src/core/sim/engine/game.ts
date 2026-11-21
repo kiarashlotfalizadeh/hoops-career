@@ -15,6 +15,7 @@ import { cloneTactics, defRoleOf, withMentality } from '../tactics';
 import { SETS, bestFor, isCallId, readAfter, setFit } from '../sets';
 import { K, cohesionLift, ftChance } from './constants';
 import { TK } from './tk';
+import { FEEL } from './feel';
 import { type SP, type ST, type SetPlay, type SimTeamInput, type SimOptions, type InGameInjury, type Ctx, type Stint, newBox, ACTION_LIST, freedomMult, mix } from './state';
 import { coachMethods } from './coach';
 import { clockMethods } from './clock';
@@ -221,6 +222,9 @@ export class GameSim {
   lastTO = -Infinity;
   /** Timeouts taken this period by both sides, as of the last mandatory one's mark (see autoTimeouts). */
   mandatory = { q: 0, n: 0 };
+  /** Openness this trip's first half-court action starts with out of a timeout (FEEL.ato), and whether that action is being run now (its turnovers are fewer). */
+  atoOpen = 0;
+  atoAct = false;
   /** A set handed to the action about to run (it takes it: see takePlay). */
   play: SetPlay | null = null;
   /** The tally of the set (or clear-out isolation) this possession runs: its points go to it. */
@@ -305,9 +309,10 @@ export class GameSim {
         starter: false,
         ftPct: ftChance(p.ratings.ft),
         hot: 0,
+        cold: 0,
         perf: input.perf?.[p.pid] ?? 1,
         ...planRoles(p.ratings, p.pos),
-        tu: p.tend?.use ?? 1,
+        tu: (p.tend?.use ?? 1) * (1 + FEEL.tails.feature * (input.legend?.[p.pid] ?? 0)),
         t3: p.tend?.three ?? 1,
         t3o: p.tend?.three ?? 1,
         td: p.tend?.drive ?? 1,
@@ -318,8 +323,9 @@ export class GameSim {
         tdr: p.tend?.drb ?? 1,
         ttv: p.tend?.tov ?? 1,
         tpf: p.tend?.pf ?? 1,
-        useCap: K.useLevel,
+        useCap: K.useLevel + FEEL.tails.use * (input.legend?.[p.pid] ?? 0),
         useDamp: K.usageDamp,
+        legend: input.legend?.[p.pid] ?? 0,
         tm: p.tend?.mid ?? 1,
         tcn: p.tend?.corner ?? 1,
         tcr: p.tend?.create ?? 1,

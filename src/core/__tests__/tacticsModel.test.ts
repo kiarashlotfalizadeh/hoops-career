@@ -154,11 +154,15 @@ describe('tactics model', () => {
         // (the trap's turnovers come from the trappers' hands and feet: since the 2026-11-10 refit it pays a
         // roster quicker than the league's average and better on the ball, not quick hands alone)
         expect(def({ steals: 60, perimeterD: 60 }).blitz).toBeGreaterThan(def({ steals: 60, perimeterD: 60 }).drop);
-        expect(def({ steals: 52 }).drop).toBeGreaterThan(def({ steals: 52 }).blitz);
+        // (refit 2026-11-21 on the louder tactics gain: an average roster reads a shade better trapping than dropping,
+        // and slow hands still send it back to the drop)
+        expect(def({ steals: 46 }).drop).toBeGreaterThan(def({ steals: 46 }).blitz);
         expect(def({ steals: 60 }).blitz - def({ steals: 60 }).drop).toBeGreaterThan(def({ steals: 52 }).blitz - def({ steals: 52 }).drop);
-        expect(def({ perimeterD: 60 }).blitz - def({ perimeterD: 60 }).drop).toBeGreaterThan(def({ perimeterD: 50 }).blitz - def({ perimeterD: 50 }).drop);
+        // (the second refit that day reads the trap off quick hands alone; the zone is what good on-ball defenders are wasted in)
+        expect(def({ perimeterD: 60 }).zone - def({ perimeterD: 60 }).drop).toBeLessThan(def({ perimeterD: 50 }).zone - def({ perimeterD: 50 }).drop);
         expect(def({ steals: 44 }).drop).toBeGreaterThan(def({ steals: 44 }).blitz);
-        expect(off({ bigPassing: 90 }).hub - off({ bigPassing: 90 }).balanced).toBeGreaterThan(off({ bigPassing: 40 }).hub - off({ bigPassing: 40 }).balanced);
+        // (the refit reads Hub Big off the roster's passing as a whole: its big's own no longer adds to it)
+        expect(off({ passing: 64 }).hub - off({ passing: 64 }).balanced).toBeGreaterThan(off({ passing: 48 }).hub - off({ passing: 48 }).balanced);
         expect(off({ passing: 60 }).hub - off({ passing: 60 }).grind).toBeGreaterThan(off({ passing: 48 }).hub - off({ passing: 48 }).grind);
         expect(off({ starCreator: 74 }).helio - off({ starCreator: 74 }).hub).toBeGreaterThan(off({ starCreator: 56 }).helio - off({ starCreator: 56 }).hub);
       }

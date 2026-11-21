@@ -2,13 +2,15 @@ import type { DraftPick, League, Player } from '../types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../types';
 import { Rng, clamp, hashString } from '../random';
 import { contractExp, genTendencies, generatePlayer, refreshPlayerDerived } from '../playerGen';
-import { shiftToOvr } from '../ratings';
+import { fmtHeight, shiftToOvr } from '../ratings';
 import { TWO_WAY_MAX, addInbox, addNews, andList, curTeamSeason, playerName, prospects, standardRoster, teamPlayers, twoWayRoster, winPct } from './helpers';
 import { FA_PRICE_CUT_DAYS, askingContract, rookieContract, twoWaySalary, valueScore } from './contracts';
 import { numberTeam } from './jerseys';
 import { logMove, logSwap } from './transactions';
 import { pickLabel } from './trades';
 import { ordinal } from '../format';
+import { seedGenerational } from './legends';
+import { earnNickname } from './voices';
 import { blurb, combineFor, consensusRead, consensusView, holdCombine, rankByConsensus, readRange, staffRead, teamRead, type Read } from './prospects';
 
 export const LOTTERY_ODDS = [140, 140, 140, 125, 105, 90, 75, 60, 45, 30, 20, 15, 10, 5];
@@ -47,6 +49,23 @@ export function generateDraftClass(league: League, year: number, rng: Rng, size 
     p.contract = { start: year + 1, salaries: [0] };
     league.players[p.pid] = p;
     created.push(p);
+  }
+  // some classes have a generational prospect: room past the league's best, now and then a body nobody has (legends.ts)
+  const gen = seedGenerational(league, year, created);
+  if (gen) {
+    // (he arrives readier than any class's best: an 84 at 19 or 20, a starter from his first night)
+    gen.ratings = shiftToOvr(gen.ratings, Math.round(prospectLevel(0) + 7), league.ovrScale);
+    refreshPlayerDerived(gen, league.season, league.ovrScale);
+    gen.tend = genTendencies(gen, rng);
+    earnNickname(league, gen);
+    addNews(league, {
+      kind: 'draft',
+      head: `A generational prospect tops the ${year} class`,
+      text: `${playerName(gen)}, ${fmtHeight(gen.heightIn)}${gen.nick ? `, "${gen.nick}" to the scouts already` : ''}: the kind of prospect who comes along once in a decade.`,
+      tids: [],
+      pids: [gen.pid],
+      weight: 3,
+    });
   }
   // (the combine drawn now is replaced by the real one in May: see holdCombine)
   for (const p of created) p.prospect = { rank: 99, combine: combineFor(p, rng), blurb: blurb(p) };

@@ -31,11 +31,22 @@ import { askingContract, releasePlayer } from '../src/core/league/contracts';
 import { takeJob } from '../src/core/league/jobs';
 import { aiMatchVerdict, restrictedFreeAgents, sheetDecisionBlocked, userDecideSheet } from '../src/core/league/rfa';
 import { playerAge } from '../src/core/playerGen';
+import { roomOf } from '../src/core/league/legends';
 import { FRANCHISES } from '../src/core/teams';
 import type { League, Player } from '../src/core/types';
 
-/** No one has averaged more than 38.4 over a full season since 1963: a leader past 39 is the engine running away. */
-const MAX_PPG = 39;
+/**
+ * The tails are wide on purpose since 2026-11-21 (the user's ask: let the occasional unicorn, 40-point
+ * scorer or 74-win team happen instead of holding every extreme to 2025-26's best). A league now and
+ * then gets a generational player (league/legends.ts) with room past the engine's ceilings
+ * (sim/engine/feel.ts), every player runs hot and cold for a couple of weeks at a time, and the hot
+ * hand is real. So these limits no longer say "never past the NBA's records": they say rare, and not
+ * absurd. A leader may pass 40 (Chamberlain's 50.4 stands); none past MAX_PPG, and a 35-point scorer in
+ * at most one season in SEASONS_PER_35. A night may pass 81; none past MAX_GAME_PTS. A team may win 74,
+ * in at most one season in BEST_RECORD_ALLOWANCE over MAX_WINS. Each line below was a record guard
+ * (39, 80, 73 wins, one 35-point season in eight) until then.
+ */
+const MAX_PPG = 46;
 /**
  * Past 73 the real league has only Chamberlain's 100 and 78, Kobe Bryant's 81 and Bam Adebayo's 83
  * (March 2026), so a 74-80 night is past nearly all of history. What justifies the cap at 80 (73
@@ -46,7 +57,7 @@ const MAX_PPG = 39;
  * twice in the real league's last 46 seasons, and one in a check's few dozen seasons is the engine
  * running away.
  */
-const MAX_GAME_PTS = 80;
+const MAX_GAME_PTS = 95;
 /**
  * The outlier guards below sit a little past what the engine does since its extremes were tuned
  * (October 2026, 4 leagues x 12 seasons: the threes leader at most 5.6 a game, 26 nights of 10 made
@@ -58,11 +69,11 @@ const MAX_GAME_PTS = 80;
  * with the threes' volume ceilings (K.threeUse.contest, progression.ts threeVolume): over 64
  * seasons (eight leagues of eight) the leader at most 5.9 and 16 ten-three nights in a season.
  */
-const MAX_TPM = 6.2;
-const MAX_TPM10 = 25;
-const MAX_STL = 3.2;
-const MAX_MARGIN = 73;
-const MAX_TEAM_PTS = 180;
+const MAX_TPM = 7;
+const MAX_TPM10 = 35;
+const MAX_STL = 3.6;
+const MAX_MARGIN = 80;
+const MAX_TEAM_PTS = 185;
 /**
  * Seasons with a 35-PPG scorer: the NBA has had about a dozen in its history (four since 1985: Jordan
  * twice, Bryant, Harden), and an engine that made one perennial (Edwards at 35-37 in 6 of 8 seasons)
@@ -77,8 +88,8 @@ const MAX_TEAM_PTS = 180;
  * or without the tougher looks past a star's share (K.useContest), and a scorer at 35+ in four
  * seasons of eight.
  */
-const MAX_35_SEASONS = 3;
-const SEASONS_PER_35 = 8;
+const MAX_35_SEASONS = 5;
+const SEASONS_PER_35 = 4;
 /**
  * Seasons per one that may have a player 36 or older leading the league in points or made threes:
  * a 38-year-old Curry does it in some leagues' first season (he led it at 37 in 2025-26, with 4.4 a
@@ -91,14 +102,14 @@ const OLD_LEADER_ALLOWANCE = 5;
 const MAX_LONG_INJURIES = 8;
 const MAX_ACHILLES = 3.5;
 /** The best record ever is 73-9 (Golden State, 2015-16): a 74-win season is a record the engine shouldn't be breaking. */
-const MAX_WINS = 73;
+const MAX_WINS = 76;
 /**
  * Seasons per one that may still end with a record over MAX_WINS. The NBA has seen 70 wins three
  * times in 78 seasons, so a sim league that is right at the top should almost never get there; one
  * in twenty leaves room for a stacked roster and a lucky year, while an engine whose best team runs
  * 77-5 as a matter of course fails in every league.
  */
-const BEST_RECORD_ALLOWANCE = 20;
+const BEST_RECORD_ALLOWANCE = 16;
 /**
  * The league's shape (round-3 review, sim F1, F4, F7, F8). The NBA record streak is 33 and a
  * season's longest usually runs 12-16: at most 28 in nine seasons of ten, and none past
@@ -121,9 +132,9 @@ const BEST_RECORD_ALLOWANCE = 20;
  * foul-outs need engine work of their own and stay WATCH lines.
  */
 const MAX_STREAK = 28;
-const MAX_STREAK_EVER = 35;
+const MAX_STREAK_EVER = 40;
 const STREAK_SHARE = 0.9;
-const SEVENTY_ALLOWANCE = 8;
+const SEVENTY_ALLOWANCE = 5;
 const MAX_TITLE_POOL = 1 / 3;
 const TPM_LEADER = 5.2;
 const TPM_LEADER_SHARE = 0.75;
@@ -169,6 +180,8 @@ interface SeasonReport {
   /** The champion (abbrev, '-' if the playoffs didn't finish) and the regular season's foul-outs. */
   champ: string;
   foulOuts: number;
+  /** The tails (league/legends.ts): generational players in the league, those past the top of its scale, and the best of them (his room at the top, his points a game). */
+  tails: { gen: number; past: number; best: string; ppg: number; giants: number };
 }
 
 const quiet = !!process.env.QUIET;
@@ -227,6 +240,12 @@ function verdict(all: (SeasonReport & { seed: string })[]): boolean {
   const oldAllowed = Math.floor(all.length / OLD_LEADER_ALLOWANCE);
   if (old.length > oldAllowed)
     failures.push(`${old.length} of ${all.length} seasons had a league leader 36 or older (${oldAllowed} allowed): ${old.map((r) => `${at(r)} ${r.oldLeader}`).join(', ')}`);
+  // the tails, as they came out: reported, never a failure (rare by design; a check of 64 seasons has a handful)
+  const pastScale = all.filter((r) => r.tails.past > 0);
+  const tailBest = [...all].sort((a, b) => b.tails.ppg - a.tails.ppg)[0];
+  console.log(
+    `  TAILS: ${pastScale.length} of ${all.length} seasons with a player past the league's scale (generational players in a league at its last season: ${seeds.map((sd) => all.filter((r) => r.seed === sd).at(-1)?.tails.gen ?? 0).join(', ')}); the best of them ${tailBest?.tails.best ?? '-'}; 7'4"+ generated players in a league at its last season: ${seeds.map((sd) => all.filter((r) => r.seed === sd).at(-1)?.tails.giants ?? 0).join(', ')}`,
+  );
   const over = all.filter((r) => r.best.won > MAX_WINS);
   const allowed = Math.floor(all.length / BEST_RECORD_ALLOWANCE);
   if (over.length > allowed)
@@ -463,8 +482,19 @@ function playLeague(spec: string): SeasonReport[] {
     const abbrev = (tid: number) => league.teams[tid]?.abbrev ?? '-';
     const best = { team: abbrev(table[0].tid), won: table[0].won, lost: table[0].lost };
     const champ = abbrev(league.teams.find((t) => t.seasons.find((x) => x.season === season)?.playoffRound === 5)?.tid ?? -1);
+    const gens = Object.values(league.players).filter((p) => p.tid >= 0 && p.peak);
+    const past = gens.map((p) => ({ p, room: roomOf(league, p), ppg: rows.find((x) => x.p === p)?.ppg ?? 0 })).filter((x) => x.room > 0);
+    const top = [...past].sort((a, b) => b.ppg - a.ppg)[0];
+    const tails = {
+      gen: gens.length,
+      past: past.length,
+      best: top ? `${playerName(top.p)} (${playerAge(top.p, season)}, room ${top.room.toFixed(2)}, ${top.ppg.toFixed(1)} PPG)` : '-',
+      ppg: top?.ppg ?? 0,
+      giants: Object.values(league.players).filter((p) => p.tid >= 0 && !p.real && p.heightIn >= 88).length,
+    };
     reports.push({
       season,
+      tails,
       leader: { name: lead ? playerName(lead.p) : '-', ppg: lead?.ppg ?? 0 },
       game,
       best,

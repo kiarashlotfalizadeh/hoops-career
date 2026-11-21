@@ -8,6 +8,7 @@ import { READ_ON_IT, SET_K, castFor, readAfter, readSlots, setEdges, setLabel, s
 import { clamp } from '../../random';
 import { K } from './constants';
 import { TK } from './tk';
+import { FEEL } from './feel';
 import type { SP, ST, SetPlay } from './state';
 import type { GameSim } from './game';
 
@@ -27,13 +28,16 @@ export const setPlaysMethods = {
     const runs = off.setRuns.get(id) ?? 0;
     off.setRuns.set(id, runs + 1);
     const seen = readAfter(id, runs, def.team.coach?.tactics ?? 50);
-    const read = 2 * seen;
+    // (a set's edges and its read at the game's tactics gain, half of it: a called play is a tactic like any other,
+    // and one that already scored well over the half court's average at the library's doubled size)
+    const gain = 2 * (1 + (FEEL.tactics.edge - 1) * 0.5);
+    const read = gain * seen;
     const zone = this.zone(def);
     const d: DefRead = {
       cov: zone ? 'zone' : def.t.defense.pnr,
       scheme: this.schemeNow(def),
       switches: !zone && (def.t.defense.pnr === 'switch' || def.t.defense.switchOffBall),
-      help: this.help(def) / 2,
+      help: this.helpLife(def) / 2,
       pressure: this.pressure(def),
       locked: !!this.lock(def, off, cast.star),
     };
@@ -43,8 +47,8 @@ export const setPlaysMethods = {
     const k = ai ? clamp(TK.aiSet.at + TK.aiSet.per * ((off.team.coach?.tactics ?? 50) - 50), TK.aiSet.min, TK.aiSet.max) : 1;
     for (const [slot, e] of Object.entries(setEdges(cast, d)) as [Slot, number][]) {
       if (!e) continue;
-      open[slot] = 2 * e * k;
-      tags[slot] = [[`set_${id}`, 2 * e * k]];
+      open[slot] = gain * e * k;
+      tags[slot] = [[`set_${id}`, gain * e * k]];
     }
     if (read > 0)
       for (const slot of readSlots(cast)) {

@@ -347,7 +347,36 @@ export interface ArchetypeInfo {
   role: OffRole;
 }
 
+/**
+ * The few players a plain archetype undersells: the best at one thing in a league get a name of
+ * their own (his role in the offense stays his plain archetype's). Each line is a level only a
+ * handful of players reach.
+ */
+function signature(r: Ratings, c: Composites): string | null {
+  const shooting = (c.c3 + c.pu3) / 2;
+  const scoring = (c.create + c.pnrHandle) / 2;
+  if (r.hgt >= 76 && c.rimProt >= 60 && (r.tp >= 60 || r.hnd >= 55)) return 'Unicorn';
+  if (r.hgt >= 60 && c.passing >= 76) return 'Point Center';
+  if (scoring >= 74 && shooting >= 66 && c.perDef >= 62) return 'Two-Way Star';
+  if (shooting >= SIGNATURE.shooting) return 'Flamethrower';
+  if (scoring >= SIGNATURE.scoring && c.midShot >= 66) return 'Walking Bucket';
+  if (c.passing >= SIGNATURE.passing && r.hnd >= 66) return 'Maestro';
+  if (c.rimProt >= SIGNATURE.rimProt) return 'Paint Eraser';
+  if (c.perDef >= SIGNATURE.perDef) return 'Lockdown Artist';
+  if (c.orb >= SIGNATURE.orb && r.dreb >= 78) return 'Glass Eater';
+  if (r.ath >= 86 && c.rim >= 66) return 'Skywalker';
+  return null;
+}
+/** The levels a signature archetype takes (see signature). */
+const SIGNATURE = { shooting: 78, scoring: 76, passing: 80, rimProt: 80, perDef: 64, orb: 78 };
+
 export function archetype(r: Ratings): ArchetypeInfo {
+  const plain = plainArchetype(r);
+  const own = signature(r, composites(r));
+  return own ? { label: own, role: plain.role } : plain;
+}
+
+function plainArchetype(r: Ratings): ArchetypeInfo {
   const c = composites(r);
   const big = r.hgt >= 60;
   const wing = r.hgt >= 42 && r.hgt < 60;

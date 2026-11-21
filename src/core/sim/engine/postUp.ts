@@ -37,7 +37,7 @@ export const postUpMethods = {
     }
     if (fixed?.tag === 'mismatch_post') this.impact(fixed.tag, off.side, Math.max(0, (A.r.hgt - D.r.hgt) / 70) * K.advPts.post, A.pid);
     const starDouble = def.t.defense.starPlan === 'double' && this.starTarget(def, off) === A;
-    const doubleP = starDouble ? 0.75 : 0.08 + Math.max(0, help) * 0.3 + (adv > 0.6 ? 0.15 : 0);
+    const doubleP = starDouble ? 0.75 : 0.08 + Math.max(0, this.helpLife(def)) * 0.3 + (adv > 0.6 ? 0.15 : 0);
     if (this.rng.chance(doubleP)) return this.doubleTeam(off, def, A, 'post', starDouble, play);
     const pTO = this.toChance(K.toBase * 1.1, A, def, this.setJump(play, def, A));
     if (this.rng.chance(pTO)) {

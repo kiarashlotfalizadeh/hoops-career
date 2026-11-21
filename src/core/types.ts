@@ -251,6 +251,13 @@ export interface Player {
   pot: number; // display scale 40-99
   /** Hidden development tendency (-1..1): shifts how good his summers are on average (most through 25) and his potential before 26. */
   growth: number;
+  /**
+   * Hidden, and absent for nearly everyone: how far past the best player the league started with his
+   * ratings may go, in raw overall points (league/legends.ts). A generational prospect has one.
+   */
+  peak?: number;
+  /** The nickname the league gave him, once he was good enough to be noticed (league/voices.ts): generated players only. */
+  nick?: string;
   injuryProne: number; // 0..1
   ratingsHistory: RatingsSnapshot[];
   contract: Contract;
@@ -1208,7 +1215,8 @@ export interface NewsItem {
   /**
    * 'rumor': who is listening on a player before the trade deadline, and who has called. 'coach': a head coach fired or hired (see coaches.ts).
    * The press (media.ts, gameStory.ts): 'game' a game's story, 'power' the power rankings, 'honor' a weekly or monthly honor,
-   * 'column' a columnist's take (a trade graded, a team's start), 'preview' a preview (the season's predictions, a big night ahead).
+   * 'column' a columnist's take (a trade graded, a team's start), 'preview' a preview (the season's predictions, a big night ahead),
+   * 'take' a talking head's hot take (media/takes.ts: it carries a byline, `by`).
    */
   kind:
     | 'trade'
@@ -1227,7 +1235,8 @@ export interface NewsItem {
     | 'power'
     | 'honor'
     | 'column'
-    | 'preview';
+    | 'preview'
+    | 'take';
   /** The one-line news, or for a story the press wrote (one with `head`), its dek: the line under the headline. */
   text: string;
   tids: number[];
@@ -1238,6 +1247,8 @@ export interface NewsItem {
   body?: string;
   /** How big it is: 3 the front page, 2 a story, 1 or absent a brief. */
   weight?: 1 | 2 | 3;
+  /** A hot take's byline: the talking head who said it, and his show (media/takes.ts). The beat writers' stories have none. */
+  by?: string;
 }
 
 /** One of a season's biggest stories as the chronicle keeps it (League.chronicle): the news item's headline, without its body. */
@@ -1510,7 +1521,12 @@ export interface Settings {
   godMode?: boolean;
 }
 
+/** How a front office does business (league/voices.ts). */
+export type GmTemper = 'gunslinger' | 'hoarder' | 'loyalist' | 'shark' | 'tinkerer' | 'straight';
+
 export interface League {
+  /** Each front office's temper, by team (league/voices.ts). Absent (a save from before them): read from the league's id and the team, the same every time. */
+  gm?: Record<number, GmTemper>;
   id: string;
   name: string;
   version: number;
@@ -1726,7 +1742,12 @@ export interface LiveJournal {
    * a replay plays them as they were, whatever changed since (the league's id on a backup imported as
    * a copy, his rating).
    */
-  opp?: { tactics: Tactics; plan?: OppPlan; coach?: number };
+  opp?: {
+    tactics: Tactics;
+    plan?: OppPlan;
+    coach?: number;
+    /** His players' form at tip-off (SimTeamInput.perf): a replay plays it as it was. Absent in a journal from before form counted. */ perf?: Record<number, number>;
+  };
   /** Possessions played (engine steps) at the last checkpoint, and the period, clock and score (home, away) then: a replay must land on them. */
   steps: number;
   q: number;

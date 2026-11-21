@@ -1,6 +1,7 @@
 // The dock: their GM's live reaction to the deal (the verdict, a meter of how close it is, his
 // reasons), what it does to your cap and both rosters, always in view, and the
 // buttons (make it work, propose, force in god mode).
+import { gmSays } from '../../core/league/voices';
 import { useState } from 'react';
 import { ChevronDown, Handshake, Zap } from 'lucide-react';
 import type { League } from '../../core/types';
@@ -148,6 +149,12 @@ export function Dock({
       {fold && overpay && <TradeNotes notes={[overpay]} />}
       {!fold && (
         <>
+          {/* their GM in his own words, once the value is the question (not a rule) */}
+          {ev.ok && (
+            <p className="fo-dock-quote">
+              “{gmSays(league, offer.b.tid, ev.accept, `${offer.a.pids.join(',')}|${offer.b.pids.join(',')}|${offer.a.dpids.join(',')}|${offer.b.dpids.join(',')}`)}”
+            </p>
+          )}
           {/* their two main reasons (one when a rule problem already needs the room) */}
           {ev.notes.length > 0 && <TradeNotes notes={ev.notes.slice(0, ruleErrors.length ? 1 : 2)} />}
           {/* what each protection and swap does, a line each (the cash shows in its own control) */}

@@ -124,7 +124,9 @@ export interface SP {
   outAt?: number;
   starter: boolean;
   ftPct: number;
+  /** His makes in a row tonight (a miss takes a couple off: FEEL.hot), and his misses in a row. */
   hot: number;
+  cold: number;
   perf: number; // wear multiplier around 1
   guard: boolean;
   big: boolean;
@@ -145,6 +147,8 @@ export interface SP {
   /** usage share above which defenses load up: real players carry their own fitted usage */
   useCap: number;
   useDamp: number;
+  /** How much of the room at the top he has, 0..1 (FEEL.tails; SimTeamInput.legend): nearly everyone none. */
+  legend: number;
   /** shot-diet tendencies: mid-range, corner threes, self-creation */
   tm: number;
   tcn: number;
@@ -320,6 +324,8 @@ export interface SimTeamInput {
   adjust?: boolean;
   /** How tight the team's core is, 0..1 (league/pulse.ts): from K.cohesion.from up its shots fall a touch more. Absent: no lift. */
   cohesion?: number;
+  /** The room at the top each player has, 0..1 (FEEL.tails, league/legends.ts): only the players with any. */
+  legend?: Record<number, number>;
 }
 
 export interface SimOptions {

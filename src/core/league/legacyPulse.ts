@@ -5,6 +5,7 @@
 // press's preseason prediction, how the last month went, the crowds. This only presents and voices
 // the owner: who gets fired is still owner.ts's review alone. Nothing here draws from the league's
 // random stream; phrasing is chosen by worldRng from the occasion.
+import { QUIRK_LINES, ownerQuirk } from './voices';
 import type { League, Team, TeamSeason } from '../types';
 import { clamp } from '../random';
 import { worldRng } from './world';
@@ -298,6 +299,8 @@ function checkInMail(
   const gp = ts.won + ts.lost;
   const pace = Math.round((ts.won / Math.max(1, gp)) * SEASON_GAMES);
   const lines: string[] = [rng.pick(red ? BOOKS_OPENERS[who] : OPENERS[who][band])];
+  // (in his own manner: his quirk's line for a month like this, league/voices.ts)
+  lines.push(rng.pick(QUIRK_LINES[ownerQuirk(league, tid)][band]));
   // the month: the record since his last note (or since opening night), and how his mood moved
   const since = last ? [ts.won - last.won, ts.lost - last.lost] : [ts.won, ts.lost];
   const moved = last ? score - last.score : 0;

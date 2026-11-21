@@ -54,6 +54,15 @@ function baseline(h: number): Ratings {
 const SKILL_KEYS: (keyof Ratings)[] = ['ins', 'mid', 'tp', 'ft', 'hnd', 'pas', 'oiq', 'drw', 'post', 'perD', 'intD', 'stl', 'blk', 'diq', 'oreb', 'dreb'];
 const PHYS_KEYS: (keyof Ratings)[] = ['spd', 'ath', 'str', 'end'];
 
+/**
+ * The generator's tails: the chance a generated player's height comes from further out than the
+ * bell (a 7'5" center, a 5'9" guard), and the chance a big is a unicorn, with a wing's handle, shot
+ * and feet (`unicornSize`: how much smaller, in height rating, the body his skills start from).
+ * Rare on purpose: a 72-player draft class has a giant about one year in two and a unicorn about
+ * one year in three.
+ */
+export const GEN_TAILS = { height: 0.008, unicorn: 0.014, unicornSize: 26 };
+
 export interface GenOpts {
   heightIn?: number;
   /** Talent z-score: 0 = average NBA rotation player, +2.5 = star, -1.5 = fringe. */
@@ -62,10 +71,20 @@ export interface GenOpts {
 }
 
 export function genRatings(rng: Rng, o: GenOpts): { r: Ratings; heightIn: number } {
-  const heightIn = o.heightIn ?? clamp(Math.round(rng.normal(78.6, 3.3)), 70, 88);
+  // (the tails are his own stream's: the league's draws stay where they were)
+  const odd = new Rng(Math.imul(rng.state ^ 0x51ed270b, 0x9e3779b1));
+  // now and then a giant (to 7'7") or a very small guard: a height further out than the bell's
+  const outlier = o.heightIn === undefined && odd.chance(GEN_TAILS.height) ? (odd.chance(0.75) ? 1 : -1) * (2 + Math.abs(odd.normal(0, 1.6))) : 0;
+  const heightIn = o.heightIn ?? clamp(Math.round(rng.normal(78.6, 3.3) + outlier), outlier ? 68 : 70, outlier ? 91 : 88);
   const h = heightToRating(heightIn + rng.normal(0, 0.8)); // wingspan noise
+  // a unicorn: a big whose game is a smaller player's (his skills start from a body `unicornSize` points of height rating smaller)
+  const unicorn = h >= 58 && odd.chance(GEN_TAILS.unicorn);
   const r = baseline(h);
-  const pool = h >= 58 ? BIG_ARCH : h >= 44 ? WING_ARCH : GUARD_ARCH;
+  if (unicorn) {
+    const small = baseline(h - GEN_TAILS.unicornSize);
+    for (const k of ['spd', 'mid', 'tp', 'ft', 'hnd', 'pas', 'perD', 'stl'] as const) r[k] = small[k];
+  }
+  const pool = unicorn ? WING_ARCH : h >= 58 ? BIG_ARCH : h >= 44 ? WING_ARCH : GUARD_ARCH;
   const a1 = rng.pick(pool);
   let a2 = rng.pick(pool);
   if (a2 === a1) a2 = rng.pick(pool);

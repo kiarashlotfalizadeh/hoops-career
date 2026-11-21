@@ -110,7 +110,7 @@ export function InPossessionFine({ t }: Props) {
           on={t.offense.hotHand}
           onChange={(x) => tweak((tt) => void (tt.offense.hotHand = x))}
           label="Feed the hot hand"
-          help="A player who has hit several in a row gets more touches."
+          help="Three straight makes and a shooter is hot: he shoots better. This gets him the ball more."
         />
       </div>
     </>

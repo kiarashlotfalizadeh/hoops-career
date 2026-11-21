@@ -157,6 +157,8 @@ function isTactics(t: unknown): t is Tactics {
   );
 }
 
+const GM_TEMPERS = new Set(['gunslinger', 'hoarder', 'loyalist', 'shark', 'tinkerer', 'straight']);
+
 /** A setting read from a save is the same kind of value as the default it stands in for. */
 function sameKind(was: unknown, v: unknown): boolean {
   if (was === null) return v === null || int(v);
@@ -387,6 +389,14 @@ function migrateReadings(x: League) {
     const v = x.editVisit as unknown;
     if (!(obj(v) && isTactics(v.tactics) && obj(v.rotation) && nums(v.rotation.order) && numValues(v.rotation.minutes))) delete x.editVisit;
     else cleanTactics(v.tactics);
+  }
+  // (front offices' tempers: a known temper for a team in the league, or the entry goes and the team's is read from the league's id)
+  if (x.gm !== undefined) {
+    if (!obj(x.gm)) delete x.gm;
+    else {
+      const gm = x.gm as Record<string, unknown>;
+      for (const k of Object.keys(gm)) if (!GM_TEMPERS.has(gm[k] as string)) delete gm[k];
+    }
   }
   if (x.weekCall !== undefined && !(obj(x.weekCall) && int(x.weekCall.season) && int(x.weekCall.week) && int(x.weekCall.tid) && Array.isArray(x.weekCall.kinds))) delete x.weekCall;
   if (x.skidCall !== undefined && !(obj(x.skidCall) && int(x.skidCall.season) && int(x.skidCall.tid) && int(x.skidCall.gid) && int(x.skidCall.opp))) delete x.skidCall;
@@ -835,6 +845,7 @@ function liveIntact(l: League, j: unknown): boolean {
       obj(o) &&
       isTactics(o.tactics) &&
       (o.coach === undefined || num(o.coach)) &&
+      (o.perf === undefined || numValues(o.perf)) &&
       (o.plan === undefined || (obj(o.plan) && Array.isArray(o.plan.items) && o.plan.items.every((it) => obj(it) && obj(it.patch))))
     )
   )

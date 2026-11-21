@@ -20,7 +20,7 @@ import { createLeague, defaultSettings } from '../league/create';
 import { gameProjection, HOME_EDGE, matchupPreview, projectMargin, winChance } from '../analysis/preview';
 import { careerOnRecord, careerTotals, marksCrossed, milestonesIn, newsworthy } from '../analysis/milestones';
 import { storylines } from '../analysis/storylines';
-import { isLatestUserGame, postGameQuotes, recapFacts, streakAfter, threeStars } from '../analysis/quotes';
+import { benchLines, isLatestUserGame, postGameQuotes, quoteLines, recapFacts, streakAfter, threeStars } from '../analysis/quotes';
 import { buildGameReport, IMPACT_TEXT, impactSentence } from '../analysis/gameReport';
 import { billingsFor, christmasDay, gameStoryFor, rivalryOf, RIVALRY, storyGame } from '../analysis/gameStory';
 import { runLab } from '../ai/lab';
@@ -786,14 +786,12 @@ describe('game day', () => {
       expect(r.wpLow).toBeLessThanOrEqual(0.15);
       l.games[l.games.findIndex((x) => x.gid === r.gid)] = r;
       const [voice, coach] = postGameQuotes(l, r);
-      expect([
-        'Nobody in here flinched, even when it looked bad. We just kept chipping away.',
-        "That's a special win. We were in a deep hole and we climbed out together.",
-        "We stopped worrying about the scoreboard and just got stops. That's how you come back.",
-      ]).toContain(voice.text);
+      // (a comeback's line, in the plain voice or the player's own: league/voices.ts)
+      expect(quoteLines('wcomeback', { pts: 0, n: 0, them: '', mate: '' })).toContain(voice.text);
       expect([
         "We had control of that game and let it get away. That's on me.",
         `Credit to the ${l.teams[l.userTid].name}: they kept coming, and we stopped doing what built the lead.`,
+        ...benchLines('ccollapse', { us: `the ${l.teams[l.userTid].name}`, star: '', pts: 0 }),
       ]).toContain(coach.text);
     }
 
@@ -930,9 +928,15 @@ describe('game day', () => {
       };
       expect(games.length).toBeGreaterThan(11);
       const [voice, coach] = quotes(true);
-      expect(voice).toMatch(/can't take anybody lightly|wanted it more/);
-      expect(coach).toMatch(/counted us out|gave us a chance/);
-      for (const q of quotes(false)) expect(q).not.toMatch(/can't take anybody lightly|wanted it more|counted us out|gave us a chance/);
+      // (an upset's lines, in the plain voice or the speaker's own: league/voices.ts)
+      const upsetLoss = quoteLines('lup', { pts: 0, n: 0, them: '', mate: '' });
+      const upsetWin = ['People counted us out', 'Nobody gave us a chance', ...benchLines('cup', { us: '', star: '', pts: 0 })];
+      expect(upsetLoss).toContain(voice);
+      expect(upsetWin.some((x) => coach.startsWith(x.slice(0, 22)))).toBe(true);
+      for (const q of quotes(false)) {
+        expect(upsetLoss).not.toContain(q);
+        expect(upsetWin.some((x) => q.startsWith(x.slice(0, 22)))).toBe(false);
+      }
     }
 
     // the streak after a game matches the team's record after the latest one

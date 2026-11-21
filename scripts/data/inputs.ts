@@ -21,6 +21,8 @@ export const LOCK_PATH = process.env.HC_INPUT_LOCK ?? (process.env.HC_RAW_DIR ? 
 
 /** What the build writes next to its inputs (parsed caches, the profile kept for inspection), and the lock itself: not inputs. */
 const NOT_INPUT = /^matchups_\d+\.json$|^cache_.+\.json$|^nba_profile\.json$|^seed-inputs\.json$|^\.DS_Store$/;
+/** Folders kept beside the inputs that the seed isn't built from: the body models and the motion capture the 3D court is built from (scripts/blender, scripts/mocap), and the Synergy tables the AI coaches' styles are read from (src/data/realStyles.json). */
+const NOT_INPUT_DIR = /^(makehuman|mocap|synergy)$/;
 
 /** Each file under each root, as `${root name}/${path}` → its SHA-256 (a root nested in another is listed once, under its own name). */
 export function hashInputs(roots: Record<string, string>): Record<string, string> {
@@ -31,7 +33,7 @@ export function hashInputs(roots: Record<string, string>): Record<string, string
     for (const f of readdirSync(dir).sort()) {
       const path = join(dir, f);
       if (statSync(path).isDirectory()) {
-        if (!dirs.has(resolve(path))) walk(path, `${prefix}${f}/`);
+        if (!dirs.has(resolve(path)) && !NOT_INPUT_DIR.test(f)) walk(path, `${prefix}${f}/`);
       } else if (!NOT_INPUT.test(f)) out[`${prefix}${f}`] = createHash('sha256').update(readFileSync(path)).digest('hex');
     }
   };

@@ -8,7 +8,14 @@
 import type { ShotZone } from '../../types';
 
 export const K = {
-  zoneBase: { rim: 0.592, paint: 0.437, mid: 0.411, c3: 0.371, ab3: 0.336 } as Record<ShotZone, number>,
+  /**
+   * A shot's chance by zone for an average shooter with an average look. Down 0.005 inside the arc and
+   * 0.008 from three on 2026-11-21 (from 0.592, 0.437, 0.411, 0.371 and 0.336), when tactics came to be
+   * played louder than life (feel.ts): the room coverages leave goes to the players who can use it, so
+   * the league shot a point better overall and a point and a half better from three on the same
+   * ratings, and a seed fitted on that engine gave its real shooters lower ratings to make up for it.
+   */
+  zoneBase: { rim: 0.587, paint: 0.432, mid: 0.406, c3: 0.363, ab3: 0.328 } as Record<ShotZone, number>,
   zoneSkill: { rim: 0.15, paint: 0.13, mid: 0.13, c3: 0.1, ab3: 0.1 } as Record<ShotZone, number>,
   zoneOpen: { rim: 0.1, paint: 0.07, mid: 0.055, c3: 0.06, ab3: 0.06 } as Record<ShotZone, number>,
   foulRate: { rim: 0.204, paint: 0.104, mid: 0.04, c3: 0.014, ab3: 0.016 } as Record<ShotZone, number>,
@@ -239,7 +246,9 @@ export const K = {
    * leaders were past their lines again.
    */
   useLevel: 0.32,
-  usageDamp: 10.5,
+  // (10.5 until 2026-11-21, with useContest at 1.1 and useCeil at 0.355 and 40: loosened when the league's tails were
+  // opened on purpose, see feel.ts and league/legends.ts; star-check's limits moved with them)
+  usageDamp: 9,
   /**
    * ...and past useLevel the shots he still takes are tougher ones, by this much make probability per
    * unit of share over it (the defense is loaded up on him: 3 points of percentage at a 35% share),
@@ -249,7 +258,7 @@ export const K = {
    * was fitted to his real one), where the real league's 35% seasons are 32-34. The seed's ratings
    * are fitted with it, so the real league's own high-usage scorers keep their real lines.
    */
-  useContest: 1.1,
+  useContest: 0.85,
   /**
    * ...and past `level` it falls by exp(-damp) per unit more: a season's share past it is beyond all
    * but two real seasons of 1,354 since 2004 (Westbrook's 0.408 and Harden's 0.406; the 99.5th
@@ -258,7 +267,7 @@ export const K = {
    * level's usage) took the floor a star's share jumped in a summer: Edwards 0.32 to 0.40 and Mitchell
    * 0.31 to 0.39, with seasons of 34-39 points a game.
    */
-  useCeil: { level: 0.355, damp: 40 },
+  useCeil: { level: 0.37, damp: 30 },
   /**
    * A shooter's three-point volume levels off past `level` of his team's shots while he's on the
    * floor (see threeDamp; from `from` of them on), his three-point tendency falling by exp(-damp) per
@@ -346,15 +355,19 @@ export const K = {
    * shooters were damped and the AI's offenses refit (2026-10-25): each mismatch is still taken, and
    * worth less. At 0.5 the switch tags −1.10 against a measured −1.01. 0.95 since 2026-11-09, when the
    * game-day realism round (stint plan, tempo, the whistle) left switching measured at −1.46 (−0.63 before)
-   * and its tags at −0.09: now about −1.1.
+   * and its tags at −0.09: now about −1.1. 2.0 → 2.6 on 2026-11-21, at the louder tactics gain (feel.ts):
+   * switching everything measured −0.50 a game and tagged +0.40, the pull-up room it takes off a drop tagged
+   * at twice its old size.
    */
-  switchTag: 2.0,
+  switchTag: 2.6,
   /**
    * What physicality's "why" tags count of the tighter contests they estimate (the fouls they give away
    * count whole): solved from engineBalance's measure at two foul sizes (2026-11-10: rough it up at
    * TK.phys.foul 0.24 measured −0.51 a game and tagged −0.07; at 0.16, +0.07 and +0.60), about 0.63.
    */
-  physTag: { contest: 0.63 },
+  // (0.63 until 2026-11-21: at the louder gain roughing it up measured −0.71 and −0.09 a game on engines a random
+  // stream apart and tagged −0.68; at 0.82, about −0.4)
+  physTag: { contest: 0.82 },
   /**
    * Game-to-game conditions shared by both teams (SDs): tempo and foul calls. (And field-goal
    * percentage, 0.012, until 2026-11-09: in the NBA one team's shooting night says nothing about the
@@ -612,7 +625,9 @@ export const K = {
    * run-outs a team stops making are worth less than the ones it adds, as the half-court trips it
    * plays instead are its better ones. At half, -0.6.
    */
-  walkUpTag: 0.75,
+  // (0.75 until 2026-11-21: at the louder tactics gain walking it up measured −0.84, −0.20 and −0.13 a game on engines
+  // a random stream apart and tagged −0.57; at half, about −0.4)
+  walkUpTag: 0.5,
   /**
    * Crunch time: how much more often the ball finds the go-to player, and how much more his best action
    * is run; and the same for the staff's own go-to (the best scorer on the floor) when nobody is named.
@@ -649,6 +664,13 @@ export const K = {
    * part of theirs: see K.crashTag).
    */
   pressureTag: 0.67,
+  /**
+   * ...and what the blow-bys' and the overplay's tags count of theirs. At the louder tactics gain
+   * (feel.ts) backing off the ball measured −0.29 a game and tagged +0.30: the turnovers given up were
+   * priced right and the blow-bys saved at well over what the margin showed (2026-11-21; on a second engine a
+   * random stream apart it measured +0.17: the price sits between the two).
+   */
+  blowByTag: 0.75,
   /**
    * The share of a defender's turnovers that are his steals, against the action's own (stealBy): the
    * turnovers containing gives back are mostly live balls, so steals ran about 6% over the league's
