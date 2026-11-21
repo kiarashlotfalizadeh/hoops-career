@@ -1,0 +1,48 @@
+{
+  "title": "Privacy Policy",
+  "updated": "November 20, 2026",
+  "lead": "Zero accounts, zero analytics, everything stays on your device.",
+  "sections": [
+    {
+      "h": "What we collect",
+      "p": ["Nothing. Hoops Career has no accounts, no sign-in, no analytics, no ads and no trackers. There is no server of ours for your data to go to."]
+    },
+    {
+      "h": "Where your leagues live",
+      "p": [
+        "Your leagues and settings are saved in this device's own storage, by your browser or by the app. They stay there.",
+        "A backup is a file you export yourself. Where it goes after that is up to you."
+      ]
+    },
+    {
+      "h": "What goes over the network",
+      "p": [
+        "Only the game's own files, downloaded from the site that hosts it. After that the game runs offline. The only requests it makes are for newer versions of those same files.",
+        "Like any web host, the site's host (GitHub Pages) can log the IP address that downloads those files. We can't see those logs and don't keep any of our own."
+      ]
+    },
+    {
+      "h": "Cookies",
+      "p": ["None. A few preferences, such as light or dark, are kept in the browser's local storage on your device."]
+    },
+    {
+      "h": "Children",
+      "p": ["The game collects no personal information from anyone, children included."]
+    },
+    {
+      "h": "Deleting your data",
+      "p": [
+        "Delete a league from the main menu or from Settings. Clearing the site's data in your browser, or uninstalling the app, removes everything. No copy exists anywhere else."
+      ]
+    },
+    {
+      "h": "Changes",
+      "p": ["If this policy changes, the new text and its date appear on this page."]
+    },
+    {
+      "h": "Questions",
+      "p": ["Open an issue on the project's page."],
+      "link": { "label": "github.com/kiarashlotfalizadeh/hoops-career", "href": "https://github.com/kiarashlotfalizadeh/hoops-career/issues" }
+    }
+  ]
+}

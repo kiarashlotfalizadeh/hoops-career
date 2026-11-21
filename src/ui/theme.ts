@@ -29,21 +29,29 @@ function apply() {
   setNight(next === 'dark');
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', CHROME[next]);
   document.querySelector('meta[name="color-scheme"]')?.setAttribute('content', next);
-  if (Capacitor.isNativePlatform()) {
-    void import('@capacitor/status-bar')
-      .then(async ({ StatusBar, Style }) => {
-        await StatusBar.setStyle({ style: next === 'dark' ? Style.Dark : Style.Light });
-        if (Capacitor.getPlatform() === 'android') await StatusBar.setBackgroundColor({ color: CHROME[next] });
-      })
-      .catch(() => {});
-  }
+  statusBar(next);
   subs.forEach((fn) => fn());
+}
+
+let barLook: Theme | null = null;
+/** The phone's status bar in the look's ink and paper (the native app only; the one place that sets it). */
+function statusBar(look: Theme) {
+  if (!Capacitor.isNativePlatform() || barLook === look) return;
+  barLook = look;
+  void import('@capacitor/status-bar')
+    .then(async ({ StatusBar, Style }) => {
+      await StatusBar.setStyle({ style: look === 'dark' ? Style.Dark : Style.Light });
+      if (Capacitor.getPlatform() === 'android') await StatusBar.setBackgroundColor({ color: CHROME[look] });
+    })
+    .catch(() => {});
 }
 
 /** Set the look before the first paint (main.tsx), so a night-time launch never flashes paper. */
 export function initTheme() {
   if (typeof document === 'undefined') return;
   apply();
+  // (index.html has already put the look on the page, so apply() found nothing to change: the status bar still needs it)
+  statusBar(current);
   onDevicePrefs(apply);
   if (typeof matchMedia === 'function') matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply);
 }

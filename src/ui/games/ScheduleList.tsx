@@ -67,7 +67,7 @@ const keep = (f: ScheduleFilter, r: Row) =>
  * `split`: the user's own schedule on the Games hub, in two lists, leaving out `skip` (the game the
  * hub's card already shows). Otherwise one team's season in order, collapsed around its next game;
  * `h2hTid` marks its games against that team (the user's, on another club's page), `cupOnly` keeps
- * its NBA Cup games.
+ * its In-Season Cup games.
  */
 export function TeamScheduleList({
   league,
@@ -108,7 +108,7 @@ export function TeamScheduleList({
         const bill =
           user && !g.played && g.type !== 'allstar' ? billingsFor(league, g, tid, { light: g.day - league.day > NEAR_DAYS }).find((b) => !TEAM_STATE.has(b.tag)) : undefined;
         // (a Cup or play-in game's tag already says what its billing would)
-        return { g, opp, home, ...(bill && bill.weight >= 2 && !/^(NBA Cup|Cup |Play-In)/.test(bill.tag) ? { bill } : {}) };
+        return { g, opp, home, ...(bill && bill.weight >= 2 && !/^(In-Season Cup|Cup |Play-In)/.test(bill.tag) ? { bill } : {}) };
       }
       const story = stories?.get(`${res.season}-${res.day}`);
       const us = home ? res.home.pts : res.away.pts;
@@ -129,7 +129,13 @@ export function TeamScheduleList({
   if (!list.length) {
     const empty = (
       <div className="empty">
-        {filter === 'cup' ? 'No NBA Cup games on the schedule.' : filter === 'post' ? 'No postseason games yet.' : rows.length ? 'No games here.' : 'No games on the schedule yet.'}
+        {filter === 'cup'
+          ? 'No In-Season Cup games on the schedule.'
+          : filter === 'post'
+            ? 'No postseason games yet.'
+            : rows.length
+              ? 'No games here.'
+              : 'No games on the schedule yet.'}
       </div>
     );
     return headRight ? (

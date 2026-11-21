@@ -1,7 +1,7 @@
 // The League hub: everyone else, one section per path (/league/standings ... /league/history).
 // /league opens on what the phase is about: the standings, or the bracket in the postseason. Five
 // sections are the tab row, which fits a 360px phone without scrolling (eight once hid behind a
-// clipped, scrolling row): Standings, Playoffs (the NBA Cup a row under its poster while the Cup is on),
+// clipped, scrolling row): Standings, Playoffs (the In-Season Cup a row under its poster while the Cup is on),
 // Stats, Scores, News. Awards and History, the record of what's been won, are the header's two links.
 import { Suspense } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -39,7 +39,7 @@ const LABEL: Record<Tab, string> = {
 /** The section /league opens on: the bracket during the play-in and the playoffs, the standings otherwise. */
 const defaultLeagueTab = (league: League): Tab => (league.phase === 'playin' || league.phase === 'playoffs' ? 'playoffs' : 'standings');
 
-/** The NBA Cup has a tab while this season's Cup is still to come or was played this regular season. */
+/** The In-Season Cup has a tab while this season's Cup is still to come or was played this regular season. */
 const cupShown = (league: League) => !!league.cup && league.cup.season === league.season && (league.phase === 'preseason' || league.phase === 'regular');
 
 export default function LeagueHub() {
@@ -94,14 +94,14 @@ export default function LeagueHub() {
   );
 }
 
-/** The NBA Cup while it's on, as one row under Playoffs' poster: where it stands, a tap to its groups and bracket. */
+/** The In-Season Cup while it's on, as one row under Playoffs' poster: where it stands, a tap to its groups and bracket. */
 function CupLink({ league }: { league: League }) {
   const cup = league.cup;
   const where = !cup ? '' : cup.champion !== undefined ? `Won by the ${league.teams[cup.champion].name}` : cup.seeds ? 'Knockouts' : 'Group stage';
   return (
     <Link to="/league/cup" className="card listrow clickable lg-cuplink">
       <span className="grow">
-        <span className="lr-name">NBA Cup</span>
+        <span className="lr-name">In-Season Cup</span>
         {where && <span className="lr-meta">{where}</span>}
       </span>
       <ChevronRight size={18} className="dim" aria-hidden="true" />

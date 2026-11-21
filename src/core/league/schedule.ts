@@ -1,6 +1,6 @@
 // NBA-format 82-game schedule: 4 vs division, 3-4 vs conference, 2 vs other conference,
 // spread over ~5.5 months with an All-Star break, limited back-to-backs and no 3-in-3s or 4-in-5s. With the
-// NBA Cup, 80 games are scheduled up front (group games on Cup nights) and the last two per team
+// In-Season Cup, 80 games are scheduled up front (group games on Cup nights) and the last two per team
 // are added in the December knockout window once the groups are decided (cup.ts).
 
 import type { CupGroup, ScheduledGame, Team } from '../types';
@@ -105,12 +105,12 @@ export interface ScheduleResult {
   lastDay: number;
   allStarDay: number;
   tradeDeadlineDay: number;
-  /** NBA Cup groups and calendar; the knockout games are scheduled once the groups are decided. */
+  /** In-Season Cup groups and calendar; the knockout games are scheduled once the groups are decided. */
   cup?: CupSetup;
 }
 
 /**
- * Set aside what the NBA Cup needs from the 82-game matchups: each group's ten games (one per
+ * Set aside what the In-Season Cup needs from the 82-game matchups: each group's ten games (one per
  * pair, everyone hosting two), placed on the five Cup nights, and a home and an away game per
  * team for the knockout window (a cycle through each conference that never pairs groupmates).
  * Returns null, leaving the matchups untouched, if the league can't hold a Cup.
@@ -238,7 +238,7 @@ export function generateSchedule(teams: Team[], season: number, rng: Rng, startG
 export interface RealScheduleData {
   season: number;
   games: string[];
-  /** The NBA Cup: groups ("East A" -> tricodes), which games are group games, and the knockout days. */
+  /** The In-Season Cup: groups ("East A" -> tricodes), which games are group games, and the knockout days. */
   cup?: RealCupData;
 }
 

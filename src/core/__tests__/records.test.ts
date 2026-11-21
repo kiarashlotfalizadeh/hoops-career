@@ -177,6 +177,15 @@ describe('the record book', () => {
       const odd = structuredClone(l);
       (odd.players[pid] as unknown as { highs: unknown }).highs = { pts: [3, 2027] };
       expect(migrate(odd).players[pid].highs).toBeUndefined();
+      // a save from before the rename: its honours and headlines come back in the league's own words, its team names as they were
+      const old = structuredClone(l);
+      old.players[pid].awards.push({ season: old.season, type: 'All-NBA 1st Team' }, { season: old.season, type: 'NBA Cup MVP' });
+      old.news.push({ id: 1e6, season: old.season, day: 1, kind: 'general', text: 'Out of the NBA Cup, on to the NBA Finals.', tids: [], pids: [] });
+      old.teams[0].name = 'Hawks';
+      const renamed = migrate(old);
+      expect(renamed.players[pid].awards.slice(-2).map((a) => a.type)).toEqual(['All-League 1st Team', 'In-Season Cup MVP']);
+      expect(renamed.news.at(-1)!.text).toBe('Out of the In-Season Cup, on to the Finals.');
+      expect(renamed.teams[0].name).toBe('Hawks');
     }
 
     // record news stays quiet in the book's first season, then reports a league record once

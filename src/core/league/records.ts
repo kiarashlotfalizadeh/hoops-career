@@ -10,7 +10,7 @@
 // rule: a real player whose whole career is on record counts it all (LeBron James's points lead the
 // list from the first day, as his franchises' leaders do on their pages).
 //
-// The regular season (NBA Cup group games, quarterfinals and semifinals included) and the postseason
+// The regular season (In-Season Cup group games, quarterfinals and semifinals included) and the postseason
 // (play-in and playoffs) keep separate books; the Cup championship and the All-Star Game count in
 // neither, as they count in neither's stats.
 

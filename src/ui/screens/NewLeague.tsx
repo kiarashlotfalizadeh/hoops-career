@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Check, ChevronLeft } from 'lucide-react';
 import { FRANCHISES, BBREF_TO_TID } from '../../core/teams';
-import { ordinal, rankOf } from '../../core/format';
+import { keepFigures, ordinal, rankOf } from '../../core/format';
 import { TeamLogo } from '../components/TeamLogo';
 import { Fit, More, Ovr, Section, Segmented, Spinner, Toggle } from '../components/ui';
 import { ROLES, TEACHING_HELP, rememberRole, rememberTeaching, roleDefault, teachingDefault } from '../settingsOptions';
@@ -205,7 +205,7 @@ export default function NewLeague() {
         <>
           <button type="button" className={`nl-choice ${kind === 'real' ? 'on' : ''}`} aria-pressed={kind === 'real'} disabled={!seed} onClick={() => setKind('real')}>
             <span className="grow">
-              <h3>Real 2026-27 NBA</h3>
+              <h3>{keepFigures('Real 2026-27 rosters')}</h3>
               {seed && <span className="nl-body">{seed.players.length} real players and their contracts</span>}
               {!seedLoaded && (
                 <span className="row small dim nl-note">
@@ -227,7 +227,7 @@ export default function NewLeague() {
           <button type="button" className={`nl-choice ${kind === 'fictional' ? 'on' : ''}`} aria-pressed={kind === 'fictional'} onClick={() => setKind('fictional')}>
             <span className="grow">
               <h3>Fictional league</h3>
-              <span className="nl-body">Real franchises, generated players</span>
+              <span className="nl-body">The same 30 cities, generated players</span>
             </span>
             <span className="nl-check" aria-hidden="true">
               {kind === 'fictional' && <Check size={16} strokeWidth={3} />}
@@ -332,7 +332,7 @@ export default function NewLeague() {
         <>
           <section className="slab nl-chosen" style={slabVars(f.colors)} aria-label="Your team">
             <span className="nl-pick-over">
-              <span>{kind === 'real' ? 'Real 2026-27 NBA' : 'Fictional league'}</span>
+              <span>{kind === 'real' ? 'Real 2026-27 rosters' : 'Fictional league'}</span>
               <button className="btn sm" onClick={back}>
                 Change
               </button>

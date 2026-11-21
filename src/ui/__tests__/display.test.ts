@@ -225,7 +225,7 @@ describe('display helpers', () => {
       expect(new Set(venues.map(({ v }) => `${v.stands.aisle}|${v.stands.vom}`)).size, 'aisles and tunnels').toBe(9);
       expect(new Set(venues.map(({ v }) => `${v.stands.corners}|${v.stands.deck.join()}`)).size, 'corners and decks').toBe(8);
       expect(new Set(venues.map(({ v }) => JSON.stringify(v.stands))).size, 'stands').toBeGreaterThanOrEqual(20);
-      expect(contrast(neutralVenue('NBA Cup').apronInk, neutralVenue('NBA Cup').apron)).toBeGreaterThanOrEqual(3);
+      expect(contrast(neutralVenue('In-Season Cup').apronInk, neutralVenue('In-Season Cup').apron)).toBeGreaterThanOrEqual(3);
       // (and its floor is drawn its own way, not only recoloured: every laying, lane, centre, lettering and edge is
       // some floor's, few floors share all five, and the trim its details are drawn in stands off its paint)
       for (const key of ['laying', 'lane', 'centre', 'words', 'border'] as const)

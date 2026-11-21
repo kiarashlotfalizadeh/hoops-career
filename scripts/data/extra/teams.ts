@@ -1,8 +1,9 @@
 // Team naming across sources → Basketball Reference codes (what the seed uses).
 import { FRANCHISES } from '../../../src/core/teams';
+import { realName } from '../realNames';
 
 const BY_NAME: Record<string, string> = {};
-for (const f of FRANCHISES) BY_NAME[`${f.region} ${f.name}`.toLowerCase()] = f.bbref;
+for (const f of FRANCHISES) BY_NAME[realName(f).toLowerCase()] = f.bbref;
 // source-specific spellings
 Object.assign(BY_NAME, { 'la clippers': 'LAC', 'philadelphia sixers': 'PHI', 'la lakers': 'LAL' });
 

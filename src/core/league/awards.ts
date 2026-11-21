@@ -40,7 +40,7 @@ export function gamesThreshold(league: League, games = 65) {
 }
 
 /**
- * Who can win what. Since 2023-24 the MVP, DPOY, MIP, All-NBA and All-Defense need 65 games and
+ * Who can win what. Since 2023-24 the MVP, DPOY, MIP, All-League and All-Defense need 65 games and
  * 20 minutes a game; Rookie and Sixth Man of the Year don't, so they ask for a voter's 50 games
  * (Sixth Man for the 20 minutes too), both pro rata during the season. A sixth man came off the
  * bench in more games than he started.
@@ -234,11 +234,11 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
   give(awards.roy, 'Rookie of the Year');
   give(awards.smoy, 'Sixth Man of the Year');
   give(awards.mip, 'Most Improved Player');
-  allNba.forEach((team, i) => team.forEach((pid) => give(pid, `All-NBA ${['1st', '2nd', '3rd'][i]} Team`)));
+  allNba.forEach((team, i) => team.forEach((pid) => give(pid, `All-League ${['1st', '2nd', '3rd'][i]} Team`)));
   allDef.forEach((team, i) => team.forEach((pid) => give(pid, `All-Defensive ${['1st', '2nd'][i]} Team`)));
   allRookie.forEach((pid, i) => give(pid, `All-Rookie ${i < 5 ? '1st' : '2nd'} Team`));
   awardsStory(league, awards, coy?.abbrev);
-  // "Name: MVP, All-NBA 1st Team." for each of the user's winners, one sentence each
+  // "Name: MVP, All-League 1st Team." for each of the user's winners, one sentence each
   const mine = [...won].filter(([pid]) => league.players[pid].tid === league.userTid).map(([pid, types]) => `${playerName(league.players[pid])}: ${andList(types)}.`);
   if (coy?.tid === league.userTid) mine.push('You: Coach of the Year.');
   if (mine.length) {

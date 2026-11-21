@@ -2,7 +2,7 @@
 // the other saved leagues. Saves from before the redesign can't be opened: they're listed to keep (as a
 // file) or delete. Deleting offers a backup first; a save that won't open offers its season snapshot.
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ChevronRight, Download, Plus, Trash2 } from 'lucide-react';
 import { deleteLeague, listLeagues, loadLeague, openable, type LeagueMeta } from '../../state/persistence';
 import { exportLeague, exportRawSave } from '../../state/backup';
@@ -121,7 +121,7 @@ export default function Start() {
           <br />
           <span>Career</span>
         </h1>
-        <p className="st-tag">GM and head coach of a real NBA roster. Build it in the office, coach it on the floor.</p>
+        <p className="st-tag">GM and head coach in one, with a tactics layer that tells you why.</p>
         <Statline
           items={[
             { k: 'Teams', v: String(FRANCHISES.length) },
@@ -208,6 +208,10 @@ export default function Start() {
           </div>
         </Section>
       )}
+      <footer className="st-foot">
+        <span>Not affiliated with the NBA or NBPA.</span>
+        <Link to="/privacy">Privacy</Link>
+      </footer>
       <UnsavedSheet
         open={!!unsaved}
         title="Switch without saving?"

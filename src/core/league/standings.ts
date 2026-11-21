@@ -171,7 +171,7 @@ function ranker(league: League, season: number, all: Entry[]) {
 }
 
 /**
- * Home court in the NBA Finals: the better record, then head-to-head, record against the other
+ * Home court in the Finals: the better record, then head-to-head, record against the other
  * conference, point differential and the drawing. Returns the team that gets it.
  */
 export function finalsHomeCourt(league: League, a: number, b: number, season = league.season): number {

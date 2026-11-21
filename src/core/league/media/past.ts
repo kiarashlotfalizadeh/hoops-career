@@ -1,5 +1,5 @@
 // The NBA's past, for a real league: every Finals since 1947 and every MVP (League.past), and each
-// seed player's real honours (his MVPs, Finals MVPs, All-NBA and All-Star selections, titles...) put
+// seed player's real honours (his MVPs, Finals MVPs, All-League and All-Star selections, titles...) put
 // on his record before the first season, so his cards, his farewell, the Hall of Fame and the
 // press's "his third MVP" read true from day one, and the league opens with a defending champion.
 // Written by `npm run data:history` (scripts/data/history-apply.ts) to src/data/history.json from what
@@ -32,9 +32,9 @@ export const CODE_TYPE: Record<string, string> = {
   ROY: 'Rookie of the Year',
   '6MOY': 'Sixth Man of the Year',
   MIP: 'Most Improved Player',
-  NBA1: 'All-NBA 1st Team',
-  NBA2: 'All-NBA 2nd Team',
-  NBA3: 'All-NBA 3rd Team',
+  NBA1: 'All-League 1st Team',
+  NBA2: 'All-League 2nd Team',
+  NBA3: 'All-League 3rd Team',
   DEF1: 'All-Defensive 1st Team',
   DEF2: 'All-Defensive 2nd Team',
   AS: 'All-Star',

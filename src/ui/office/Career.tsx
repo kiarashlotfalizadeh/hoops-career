@@ -312,7 +312,7 @@ function YourPlayers({ league, k }: { league: League; k: CoachCareer }) {
   const best = gm.trades.find((t) => t.verdict === 'won');
   const worst = [...gm.trades].reverse().find((t) => t.verdict === 'lost');
   const c = gm.coached;
-  const honours = [c.mvp && `${c.mvp}× MVP`, c.fmvp && `${c.fmvp}× Finals MVP`, c.allNba && `${c.allNba}× All-NBA`, c.allStar && `${c.allStar}× All-Star`]
+  const honours = [c.mvp && `${c.mvp}× MVP`, c.fmvp && `${c.fmvp}× Finals MVP`, c.allNba && `${c.allNba}× All-League`, c.allStar && `${c.allStar}× All-Star`]
     .filter(Boolean)
     .join(', ');
   const any = gm.drafted.length || gm.trades.length || gm.titles.length || honours;
@@ -411,7 +411,7 @@ const bestText = (round: number) => (round === 5 ? 'Champion' : round === 4 ? 'F
 
 const TROPHY: Record<TrophyT['kind'], { icon: typeof Trophy; cls: string; name: string }> = {
   title: { icon: Trophy, cls: 'gold', name: 'Champions' },
-  cup: { icon: Trophy, cls: 'cup', name: 'NBA Cup' },
+  cup: { icon: Trophy, cls: 'cup', name: 'In-Season Cup' },
   conf: { icon: Crown, cls: 'conf', name: 'Conference title' },
   coy: { icon: Award, cls: 'coy', name: 'Coach of the Year' },
   cotm: { icon: Medal, cls: 'cotm', name: 'Coach of the Month' },

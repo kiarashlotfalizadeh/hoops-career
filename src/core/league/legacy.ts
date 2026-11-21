@@ -599,7 +599,7 @@ export const bestWinOf = (league: League, season: number, tid?: number) => legac
 
 /**
  * At the end of every day: his Coach of the Month honors into the cabinet, a first playoff berth, a
- * Coach of the Year or an NBA Cup, and the owner's and fans' pulse (weekly, with the owner's monthly
+ * Coach of the Year or an In-Season Cup, and the owner's and fans' pulse (weekly, with the owner's monthly
  * check-in; see legacyPulse.ts). In free agency, nothing.
  */
 export function legacyDay(league: League) {
@@ -662,7 +662,7 @@ export function legacyDay(league: League) {
       );
     }
   }
-  // Coach of the Year (voted when the regular season ends) and the NBA Cup
+  // Coach of the Year (voted when the regular season ends) and the In-Season Cup
   const aw = league.awards.find((a) => a.season === league.season);
   if (aw?.coy === tid && !has(league, `coy:${league.season}`) && (aw.coyCoach === undefined || aw.coyCoach === league.coachName)) {
     const n = (userCoach(league) ? coachCareer(league, userCoach(league)!).coy.length : 0) || 1;
@@ -689,11 +689,11 @@ export function legacyDay(league: League) {
       league,
       {
         key: `cup:${league.season}`,
-        head: `${league.coachName} lifts the NBA Cup`,
-        text: `The ${teamName(league, tid)} won the ${seasonLabel(league.season)} NBA Cup${aw.cupRunnerUp !== undefined ? ` over the ${nick(league, aw.cupRunnerUp)}` : ''}.`,
+        head: `${league.coachName} lifts the In-Season Cup`,
+        text: `The ${teamName(league, tid)} won the ${seasonLabel(league.season)} In-Season Cup${aw.cupRunnerUp !== undefined ? ` over the ${nick(league, aw.cupRunnerUp)}` : ''}.`,
         mail: {
           from: 'Media Relations',
-          subject: 'NBA Cup',
+          subject: 'In-Season Cup',
           body: `The Cup is yours${aw.cupRunnerUp !== undefined ? `, won against the ${nick(league, aw.cupRunnerUp)}` : ''}. It goes in the cabinet.`,
         },
       },
@@ -740,7 +740,7 @@ export interface Trophy {
 }
 
 /**
- * The honors cabinet: his titles, conference titles (Finals reached), Coaches of the Year and NBA Cups,
+ * The honors cabinet: his titles, conference titles (Finals reached), Coaches of the Year and In-Season Cups,
  * read from the league's history (kept for good), and the Coaches of the Month the legacy keeps.
  * Newest first.
  */
@@ -761,7 +761,7 @@ export function cabinet(league: League, k?: CoachCareer): Trophy[] {
     for (const a of league.awards) {
       if (a.cupWinner === undefined) continue;
       const l = career.lines.find((x) => x.season === a.season && x.tid === a.cupWinner);
-      if (l) out.push({ kind: 'cup', season: a.season, tid: l.tid, label: `NBA Cup ${seasonLabel(a.season)}` });
+      if (l) out.push({ kind: 'cup', season: a.season, tid: l.tid, label: `In-Season Cup ${seasonLabel(a.season)}` });
     }
   }
   // the Coaches of the Month as one piece ("14× Coach of the Month"): a month isn't a title's equal
@@ -856,7 +856,7 @@ export interface GmLegacy {
   drafted: Draftee[];
   trades: GradedTrade[];
   titles: TitleTeam[];
-  /** The honours his players won in his seasons with them: All-Star selections, MVPs, Finals MVPs, All-NBA. */
+  /** The honours his players won in his seasons with them: All-Star selections, MVPs, Finals MVPs, All-League. */
   coached: { allStar: number; mvp: number; fmvp: number; allNba: number; names: string[] };
   /** The press's read of his Hall of Fame case (see hofCase). */
   hof: { status: 'in' | 'building' | 'not yet'; line: string };
@@ -888,7 +888,7 @@ const HONOUR_ORDER: [string, (t: string) => boolean][] = [
   ['MVP', (t) => t === 'MVP'],
   ['Finals MVP', (t) => t === 'Finals MVP'],
   ['DPOY', (t) => t === 'Defensive Player of the Year'],
-  ['All-NBA', (t) => t.startsWith('All-NBA')],
+  ['All-League', (t) => t.startsWith('All-League')],
   ['All-Star', (t) => t === 'All-Star'],
   ['ROY', (t) => t === 'Rookie of the Year'],
 ];
@@ -1026,7 +1026,7 @@ export function gmLegacy(league: League, k: CoachCareer): GmLegacy {
   for (const p of Object.values(league.players)) {
     for (const a of p.awards) {
       if (a.season < league.startSeason) continue;
-      const kind = a.type === 'All-Star' ? 'allStar' : a.type === 'MVP' ? 'mvp' : a.type === 'Finals MVP' ? 'fmvp' : a.type.startsWith('All-NBA') ? 'allNba' : null;
+      const kind = a.type === 'All-Star' ? 'allStar' : a.type === 'MVP' ? 'mvp' : a.type === 'Finals MVP' ? 'fmvp' : a.type.startsWith('All-League') ? 'allNba' : null;
       if (!kind) continue;
       const line = [...p.stats].reverse().find((s) => s.season === a.season && !s.playoffs);
       if (!line || !mine.has(`${a.season}:${line.tid}`)) continue;

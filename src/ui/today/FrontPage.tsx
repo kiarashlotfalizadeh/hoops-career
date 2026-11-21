@@ -469,7 +469,7 @@ export function AllStarHero({ league }: { league: League }) {
   );
 }
 
-/** The NBA Cup as a cell of the season's strip while it runs: his group record and place, then his knockout round. */
+/** The In-Season Cup as a cell of the season's strip while it runs: his group record and place, then his knockout round. */
 export function useCupCell(league: League): { v: string; label: string } | null {
   return useLeagueMemo(() => {
     const cup = league.cup;
@@ -480,12 +480,12 @@ export function useCupCell(league: League): { v: string; label: string } | null 
       const live = alive.find((t) => t.winner === undefined);
       if (!live) return null;
       const round = live.round === 'final' ? 'Final' : live.round === 'sf' ? 'Semis' : 'QF';
-      return { v: round, label: `NBA Cup: in the ${live.round === 'final' ? 'final' : live.round === 'sf' ? 'semifinals' : 'quarterfinals'}` };
+      return { v: round, label: `In-Season Cup: in the ${live.round === 'final' ? 'final' : live.round === 'sf' ? 'semifinals' : 'quarterfinals'}` };
     }
     const t = cupTables(league).find((x) => x.group.tids.includes(me));
     const row = t?.rows.find((r) => r.tid === me);
     if (!t || !row) return null;
-    return { v: `${row.won}-${row.lost}`, label: `NBA Cup group ${t.group.id}: ${row.won}-${row.lost}, ${row.rank} of ${t.rows.length}` };
+    return { v: `${row.won}-${row.lost}`, label: `In-Season Cup group ${t.group.id}: ${row.won}-${row.lost}, ${row.rank} of ${t.rows.length}` };
   }, [league]);
 }
 

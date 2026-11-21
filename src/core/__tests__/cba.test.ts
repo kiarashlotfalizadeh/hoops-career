@@ -258,9 +258,9 @@ describe('the CBA', () => {
         p.experience = exp;
         expect(playerMax(l, p, l.season + 1, U)).toBe(Math.round(cap * pct));
       }
-      // All-NBA last season: the supermax for seven to nine seasons, with his own team only
+      // All-League last season: the supermax for seven to nine seasons, with his own team only
       p.experience = 8;
-      p.awards.push({ season: l.season, type: 'All-NBA 1st Team' });
+      p.awards.push({ season: l.season, type: 'All-League 1st Team' });
       expect(playerMax(l, p, l.season + 1, U)).toBe(Math.round(cap * 0.35));
       expect(playerMax(l, p, l.season + 1, AI)).toBe(Math.round(cap * 0.3));
       // off his rookie-scale deal: 30% (the Rose rule)

@@ -113,7 +113,7 @@ export interface SeedSchedule {
   start: string;
   /** "day:AWY@HOM" with NBA tricodes, regular season only. */
   games: string[];
-  /** NBA Cup groups, group games and knockout days (see RealCupData). */
+  /** In-Season Cup groups, group games and knockout days (see RealCupData). */
   cup?: RealCupData;
 }
 

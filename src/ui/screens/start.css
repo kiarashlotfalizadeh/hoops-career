@@ -152,6 +152,58 @@
   justify-content: center;
 }
 
+/* the small print under the menu: whose game this isn't, and the privacy page */
+.st-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+.st-foot a {
+  color: var(--text-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ------------------------------------------------------------ the privacy page: a column of plain text */
+.pv-page {
+  gap: 14px;
+}
+.pv-lead {
+  margin: 0;
+  max-width: 30ch;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+  color: var(--text);
+}
+.pv-sec h2 {
+  margin: 8px 0 4px;
+  font-size: 15.5px;
+  font-weight: 720;
+  color: var(--text);
+}
+.pv-sec p {
+  margin: 0 0 6px;
+  max-width: 62ch;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+.pv-sec a {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+
 /* ------------------------------------------------------------ New League */
 .nl-steps {
   display: grid;

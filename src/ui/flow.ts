@@ -54,7 +54,7 @@ export function liveScoreText(league: League, live: Pick<LiveStatus, 'score'>): 
   return us === them ? `Tied ${us}-${them}` : `${ab} ${us > them ? 'up' : 'down'} ${us}-${them}`;
 }
 
-const POST_ROUND = ['', 'first round', 'conference semifinals', 'conference finals', 'NBA Finals'];
+const POST_ROUND = ['', 'first round', 'conference semifinals', 'conference finals', 'Finals'];
 
 /** Where the league stood when a sim started, for `simSummary`. */
 export interface SimStart {
@@ -90,7 +90,7 @@ export function simSummary(before: SimStart, l: League): { text: string; tone: '
     const score = lost && `${Math.max(lost.highWins, lost.lowWins)}-${Math.min(lost.highWins, lost.lowWins)}`;
     const how = lost
       ? lost.round === 4
-        ? `Lost the NBA Finals: ${l.teams[lost.winner!].abbrev} won ${score}`
+        ? `Lost the Finals: ${l.teams[lost.winner!].abbrev} won ${score}`
         : `Out in the ${POST_ROUND[lost.round] ?? 'playoffs'}: ${l.teams[lost.winner!].abbrev} won ${score}`
       : l.playIn.some((g) => g.loser === me)
         ? 'Out in the play-in'

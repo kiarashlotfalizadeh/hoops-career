@@ -55,7 +55,7 @@ export const MUST_SEE: ReadonlySet<MomentKind> = new Set<MomentKind>(['ultimatum
 export interface Moment {
   key: string;
   kind: MomentKind;
-  /** The line over the headline: when and where ("2026-27 · NBA Finals"). */
+  /** The line over the headline: when and where ("2026-27 · Finals"). */
   over: string;
   /** The headline, in display capitals ("Champions"). */
   title: string;
@@ -90,8 +90,8 @@ export interface Moment {
   stale?: true;
 }
 
-const ROUND = ['', 'First Round', 'Conference Semifinals', 'Conference Finals', 'NBA Finals'];
-const NEXT = ['', 'the conference semifinals', 'the conference finals', 'the NBA Finals'];
+const ROUND = ['', 'First Round', 'Conference Semifinals', 'Conference Finals', 'Finals'];
+const NEXT = ['', 'the conference semifinals', 'the conference finals', 'the Finals'];
 
 /**
  * What came after a series won, as the bracket stands when the card shows (it can show a sim or more
@@ -528,7 +528,7 @@ function jerseyMoments(league: League): Moment[] {
   });
 }
 
-/** The NBA Cup's knockouts, from his side: through to them, or out of them (winning it is its own moment). */
+/** The In-Season Cup's knockouts, from his side: through to them, or out of them (winning it is its own moment). */
 function cupMoments(league: League): Moment[] {
   const cup = league.cup;
   const me = league.userTid;
@@ -558,7 +558,7 @@ function cupMoments(league: League): Moment[] {
     out.push({
       key: `cup-ko-${league.season}`,
       kind: 'cup',
-      over: `${seasonLabel(league.season)} · NBA Cup`,
+      over: `${seasonLabel(league.season)} · In-Season Cup`,
       title: 'Into the knockouts',
       sub: `The ${ordinalSeed(seed)} seed in the ${conf === 'E' ? 'East' : 'West'}${seed === 3 ? ', the wild card' : ''}.${through}${next}`,
       link: '/league/cup',
@@ -566,7 +566,7 @@ function cupMoments(league: League): Moment[] {
       rank: 1,
       season: league.season,
       day: league.day,
-      mail: mailOf(league, 'League Office', (x) => x === 'NBA Cup: into the knockouts'),
+      mail: mailOf(league, 'League Office', (x) => x === 'In-Season Cup: into the knockouts'),
       ...(over ? { stale: true as const } : {}),
     });
   }
@@ -576,7 +576,7 @@ function cupMoments(league: League): Moment[] {
     out.push({
       key: `cup-out-${league.season}`,
       kind: 'cup',
-      over: `${fmtDate(league.season, lost.day)} · NBA Cup ${round}`,
+      over: `${fmtDate(league.season, lost.day)} · In-Season Cup ${round}`,
       title: lost.round === 'final' ? 'Cup runners-up' : 'Out of the Cup',
       sub: `${them}-${us} to the ${league.teams[lost.winner!].name} in the ${round}.${lost.round === 'final' ? " The final doesn't count against the record." : ''}`,
       link: '/league/cup',
@@ -584,7 +584,7 @@ function cupMoments(league: League): Moment[] {
       rank: 0,
       season: league.season,
       day: lost.day,
-      mail: mailOf(league, 'League Office', (x) => x.startsWith('NBA Cup: out')).concat(mailOf(league, 'Owner', (x) => x === 'NBA Cup final')),
+      mail: mailOf(league, 'League Office', (x) => x.startsWith('In-Season Cup: out')).concat(mailOf(league, 'Owner', (x) => x === 'In-Season Cup final')),
     });
   }
   return out;
@@ -694,7 +694,7 @@ function finalsMoment(league: League): Moment | null {
   const g7 = f.w + f.l === 7;
   const night = clincherLine(f, us, them);
   const arc = seriesArc(f, us, them);
-  const over = `${seasonLabel(season)} · NBA Finals${f.last ? ` · Game ${f.last.n}` : ''}`;
+  const over = `${seasonLabel(season)} · Finals${f.last ? ` · Game ${f.last.n}` : ''}`;
   if (!f.won) {
     return {
       key: `finals-lost-${season}`,
@@ -796,7 +796,7 @@ export function currentMoments(league: League): Moment[] {
         finalsMoment(league) ?? {
           key: `title-${season}`,
           kind: 'title',
-          over: `${seasonLabel(season)} · NBA Finals`,
+          over: `${seasonLabel(season)} · Finals`,
           title: 'Champions',
           sub: `The ${team.region} ${nick} win the title, ${w}-${l} over the ${opp?.name ?? 'field'}.`,
           big: true,
@@ -817,7 +817,7 @@ export function currentMoments(league: League): Moment[] {
 
   const aw = league.awards.find((a) => a.season === season);
   if (aw?.cupWinner === me)
-    out.push({ key: `cup-${season}`, kind: 'cup', over: `${seasonLabel(season)} · NBA Cup`, title: 'Cup champions', sub: `The ${nick} lift the NBA Cup.`, big: true });
+    out.push({ key: `cup-${season}`, kind: 'cup', over: `${seasonLabel(season)} · In-Season Cup`, title: 'Cup champions', sub: `The ${nick} lift the In-Season Cup.`, big: true });
   if (aw) {
     for (const k of Object.keys(AWARD_NAME) as (keyof typeof AWARD_NAME)[]) {
       const pid = aw[k as 'mvp'];

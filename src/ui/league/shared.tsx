@@ -187,7 +187,7 @@ export interface Outcome {
   gold?: boolean;
 }
 
-const ROUND_FULL = ['Play-In', 'First Round', 'Conference Semifinals', 'Conference Finals', 'NBA Finals'];
+const ROUND_FULL = ['Play-In', 'First Round', 'Conference Semifinals', 'Conference Finals', 'Finals'];
 const ROUND_SHORT = ['Play-In', '1st Round', '2nd Round', 'Conf. Finals', 'Finals'];
 
 /** A playoff round's name (1-4; 0 is the play-in), in full or short for tight spots. Core's seriesLabel adds the conference ("East Semifinals"). */
@@ -298,9 +298,9 @@ export function accolades(p: Pick<Player, 'awards'>): { label: string; n: number
     { label: 'MVP', n: count((t) => t === 'MVP'), gold: true },
     { label: 'Finals MVP', n: count((t) => t === 'Finals MVP'), gold: true },
     { label: 'DPOY', n: count((t) => t === 'Defensive Player of the Year') },
-    { label: 'NBA Cup', n: count((t) => t === 'NBA Cup') },
-    { label: 'Cup MVP', n: count((t) => t === 'NBA Cup MVP') },
-    { label: 'All-NBA', n: count((t) => t.startsWith('All-NBA')) },
+    { label: 'In-Season Cup', n: count((t) => t === 'In-Season Cup') },
+    { label: 'Cup MVP', n: count((t) => t === 'In-Season Cup MVP') },
+    { label: 'All-League', n: count((t) => t.startsWith('All-League')) },
     { label: 'All-Star', n: count((t) => t === 'All-Star') },
     { label: 'All-Star MVP', n: count((t) => t === 'All-Star MVP') },
     { label: 'Three-Point Contest', n: count((t) => t === 'Three-Point Contest') },
@@ -328,7 +328,7 @@ export function accoladeScore(p: Player) {
         ? 12
         : a.type === 'Finals MVP'
           ? 6
-          : a.type.startsWith('All-NBA')
+          : a.type.startsWith('All-League')
             ? 4
             : a.type === 'Defensive Player of the Year'
               ? 4
@@ -336,7 +336,7 @@ export function accoladeScore(p: Player) {
                 ? 2
                 : a.type === 'Champion'
                   ? 1.5
-                  : a.type === 'NBA Cup MVP'
+                  : a.type === 'In-Season Cup MVP'
                     ? 1
                     : a.type === 'Hall of Fame' || HONOR_AWARDS.has(a.type)
                       ? 0
@@ -438,8 +438,8 @@ export function PosterSlab({
 }
 
 /**
- * A title won, in the winner's colours: the season's champions (Playoffs), the NBA Cup's winners
- * (NBA Cup) or a franchise's banners. The screen's one slab, at its top; `fig` is the final's score
+ * A title won, in the winner's colours: the season's champions (Playoffs), the In-Season Cup's winners
+ * (In-Season Cup) or a franchise's banners. The screen's one slab, at its top; `fig` is the final's score
  * or the series ("4-2"), `figLabel` what it was.
  */
 export function TitleSlab({

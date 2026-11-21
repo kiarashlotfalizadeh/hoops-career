@@ -99,14 +99,14 @@ describe('retired numbers', () => {
       const l = fresh();
       const p = career(l, [[A, 5]], { jerseys: { [A]: '11' } });
       expect(legendReason(l, p, A)).toBeNull();
-      // a title alone isn't, nor with one All-NBA selection; two make it
+      // a title alone isn't, nor with one All-League selection; two make it
       p.awards.push({ season: l.season, type: 'Champion' });
       expect(legendReason(l, p, A)).toBeNull();
-      p.awards.push({ season: l.season - 1, type: 'All-NBA 2nd Team' });
+      p.awards.push({ season: l.season - 1, type: 'All-League 2nd Team' });
       expect(legendReason(l, p, A)).toBeNull();
-      p.awards.push({ season: l.season - 2, type: 'All-NBA 3rd Team' });
-      expect(legendReason(l, p, A)).toBe('title and All-NBA');
-      // two All-NBA selections and four All-Star nods aren't, a fifth All-Star nod is
+      p.awards.push({ season: l.season - 2, type: 'All-League 3rd Team' });
+      expect(legendReason(l, p, A)).toBe('title and All-League');
+      // two All-League selections and four All-Star nods aren't, a fifth All-Star nod is
       for (let i = 0; i < 4; i++) p.awards.push({ season: l.season - i, type: 'All-Star' });
       p.awards = p.awards.filter((a) => a.type !== 'Champion');
       expect(legendReason(l, p, A)).toBeNull();
@@ -115,7 +115,7 @@ describe('retired numbers', () => {
       expect(retireNumbers(l, p)).toEqual([A]);
     }
 
-    // the Hall of Fame (with his main team), a Finals MVP, three All-NBA selections or the franchise scoring record are each enough
+    // the Hall of Fame (with his main team), a Finals MVP, three All-League selections or the franchise scoring record are each enough
     {
       const l = fresh();
       const hof = career(l, [[A, 5]], { jerseys: { [A]: '1' } });
@@ -125,8 +125,8 @@ describe('retired numbers', () => {
       fmvp.awards.push({ season: l.season, type: 'Finals MVP' });
       expect(legendReason(l, fmvp, A)).toBe('Finals MVP');
       const nba = career(l, [[B, 5]], { jerseys: { [B]: '3' } });
-      for (let i = 0; i < 3; i++) nba.awards.push({ season: l.season - i, type: `All-NBA ${['1st', '2nd', '3rd'][i]} Team` });
-      expect(legendReason(l, nba, B)).toBe('All-NBA');
+      for (let i = 0; i < 3; i++) nba.awards.push({ season: l.season - i, type: `All-League ${['1st', '2nd', '3rd'][i]} Team` });
+      expect(legendReason(l, nba, B)).toBe('All-League');
       // the most points for the franchise in this league's seasons, 15,000 at least
       const scorer = career(l, [[B, 5]], { jerseys: { [B]: '4' }, pts: Math.ceil(LEADER_POINTS / 5), tid: B });
       expect(legendReason(l, scorer, B)).toBe('scoring leader');

@@ -92,7 +92,7 @@ export const LEGEND_SEASONS = 5;
 export const LEADER_POINTS = 15_000;
 
 /** Why a franchise retires a player's number (see legendReason). */
-export type LegendReason = 'Hall of Fame' | 'MVP' | 'Finals MVP' | 'title and All-NBA' | 'All-NBA' | 'All-Star' | 'scoring leader';
+export type LegendReason = 'Hall of Fame' | 'MVP' | 'Finals MVP' | 'title and All-League' | 'All-League' | 'All-Star' | 'scoring leader';
 
 /** The team he won an award with: his postseason team for a title or the Finals MVP, otherwise the team he finished that regular season with. */
 export function awardTeam(p: Player, a: AwardRecord): number | null {
@@ -127,7 +127,7 @@ export function mainTeam(p: Player): number | null {
  * Why a franchise retires a retiring player's number, or null: he gave it five seasons and a career
  * it remembers there. A Hall of Famer's goes up with the team he played the most seasons for (a
  * seeded player's real seasons count: his whole career, in a league seeded with it); anyone's with a
- * team he won an MVP or a Finals MVP for, a title with two All-NBA selections there, three All-NBA or
+ * team he won an MVP or a Finals MVP for, a title with two All-League selections there, three All-League or
  * five All-Star selections there, or whose scoring record he holds (the most points for it in this
  * league's seasons, 15,000 at least). Played out for sixteen seasons in two real leagues seeded with
  * their players' careers, the stars a league opens with go up at the franchises they made their names
@@ -136,7 +136,7 @@ export function mainTeam(p: Player): number | null {
  * in a season) and two and a half to four a season from the thirteenth to the sixteenth, as the next
  * generation retires (33 and 39 in all). A league seeded with only its players' last three seasons
  * retired 22, one in its first four seasons, its first stars' numbers going up only where they had
- * five seasons in it. A Hall of Famer at every team he gave five seasons, a title with one All-NBA
+ * five seasons in it. A Hall of Famer at every team he gave five seasons, a title with one All-League
  * selection and a 10,000-point scoring record made it a quarter more.
  */
 export function legendReason(league: League, p: Player, tid: number): LegendReason | null {
@@ -144,11 +144,11 @@ export function legendReason(league: League, p: Player, tid: number): LegendReas
   if (p.hof && mainTeam(p) === tid) return 'Hall of Fame';
   const here = p.awards.filter((a) => awardTeam(p, a) === tid);
   const won = (type: string) => here.filter((a) => a.type === type).length;
-  const allNba = here.filter((a) => a.type.startsWith('All-NBA')).length;
+  const allNba = here.filter((a) => a.type.startsWith('All-League')).length;
   if (won('MVP')) return 'MVP';
   if (won('Finals MVP')) return 'Finals MVP';
-  if (won('Champion') && allNba >= 2) return 'title and All-NBA';
-  if (allNba >= 3) return 'All-NBA';
+  if (won('Champion') && allNba >= 2) return 'title and All-League';
+  if (allNba >= 3) return 'All-League';
   if (won('All-Star') >= 5) return 'All-Star';
   const leader = careerLeaders(league, 'pts', { tid, n: 1 })[0];
   if (leader?.pid === p.pid && leader.v >= LEADER_POINTS) return 'scoring leader';

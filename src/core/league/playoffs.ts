@@ -196,7 +196,7 @@ export function champion(league: League): number | undefined {
 
 export function seriesLabel(s: PlayoffSeries) {
   return s.round === 4
-    ? 'NBA Finals'
+    ? 'Finals'
     : s.round === 3
       ? `${s.conf === 'E' ? 'East' : 'West'} Finals`
       : s.round === 2

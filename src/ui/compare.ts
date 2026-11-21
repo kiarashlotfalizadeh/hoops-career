@@ -128,7 +128,7 @@ export function compareSections(league: League, pa: Player | undefined, pb: Play
     row('age', 'Age', (p) => playerAge(p, league.season), retired ? 'none' : 'low', 'int'),
     row('hgt', 'Height', (p) => p.heightIn, 'none', 'height'),
     row('wt', 'Weight', (p) => p.weightLb, 'none', 'lb'),
-    row('exp', 'NBA seasons', (p) => p.experience, 'none', 'int'),
+    row('exp', 'Seasons played', (p) => p.experience, 'none', 'int'),
   ];
 
   const skills = SKILLS.map((s) => row(s.key, s.label, (p) => pctile(s.key, s.get(composites(p.ratings), p)), 'high', 'pctile'));
@@ -230,23 +230,23 @@ export function compareSections(league: League, pa: Player | undefined, pb: Play
       title: 'This season',
       note: 'Per game in the regular season. Before he plays this season, his latest one.',
       rows: season,
-      empty: 'No NBA games yet.',
+      empty: 'No games yet.',
     },
     {
       id: 'career',
       title: 'Career',
       note:
         league.careersFrom !== undefined
-          ? 'Regular-season totals on record. A real player’s NBA career before this league counts too.'
+          ? 'Regular-season totals on record. A real player’s career before this league counts too.'
           : 'Regular-season totals on record. A real veteran’s last three seasons before this league count too.',
       rows: careerRows,
-      empty: 'No NBA games yet.',
+      empty: 'No games yet.',
     },
     {
       id: 'highs',
       title: 'Career highs',
       note: league.realHighs
-        ? `Regular-season games. A real player's whole NBA career, anyone else's since ${seasonLabel(since)}.`
+        ? `Regular-season games. A real player's whole career, anyone else's since ${seasonLabel(since)}.`
         : `Regular-season games since ${seasonLabel(since)}.`,
       rows: highs,
       empty: 'No games in this league yet.',

@@ -24,6 +24,7 @@ import { byId, formerNumbers, historyLines, loadSeasons } from './careers';
 import { seasonLabel } from '../../src/core/constants';
 import type { SeedData } from '../../src/core/league/create';
 import { FRANCHISES } from '../../src/core/teams';
+import { realName } from './realNames';
 import type { HistoryData, HistoryFinal } from '../../src/core/league/media/past';
 import { writeRecords } from './records-apply';
 
@@ -248,9 +249,9 @@ const CODE_TYPE: Record<string, string> = {
   ROY: 'Rookie of the Year',
   '6MOY': 'Sixth Man of the Year',
   MIP: 'Most Improved Player',
-  NBA1: 'All-NBA 1st Team',
-  NBA2: 'All-NBA 2nd Team',
-  NBA3: 'All-NBA 3rd Team',
+  NBA1: 'All-League 1st Team',
+  NBA2: 'All-League 2nd Team',
+  NBA3: 'All-League 3rd Team',
   DEF1: 'All-Defensive 1st Team',
   DEF2: 'All-Defensive 2nd Team',
   AS: 'All-Star',
@@ -383,7 +384,7 @@ async function writeHistory() {
   const finals: HistoryFinal[] = [...OLD_FINALS];
   const codeOf = (team: string): [string, string | undefined] => {
     if (CSV_TEAMS[team]) return [CSV_TEAMS[team][0], CSV_TEAMS[team][1]];
-    const f = FRANCHISES.find((x) => `${x.region} ${x.name}` === team || (x.abbrev === 'LAC' && team === 'LA Clippers'));
+    const f = FRANCHISES.find((x) => realName(x) === team || (x.abbrev === 'LAC' && team === 'LA Clippers'));
     if (!f) throw new Error(`No franchise for "${team}"`);
     return [f.abbrev, undefined];
   };

@@ -49,7 +49,7 @@ export interface SeasonReview {
   breakout?: { pid: number; name: string; from: number; to: number; line: string };
   /** Records set ("Franchise record: 61 wins"), at most four. */
   records: string[];
-  /** The season's honors for the coach and his players ("Coach of the Year", "Jalen Brunson: All-NBA 2nd Team"). */
+  /** The season's honors for the coach and his players ("Coach of the Year", "Jalen Brunson: All-League 2nd Team"). */
   honors: string[];
   /** The owner's and the fans' pulse through the season, and where both ended. */
   pulse?: PulsePoint[];
@@ -413,7 +413,7 @@ function seasonValue(s: PlayerStats): number {
 /** The awards a player won this season (the regular season's and the Finals MVP), in the order they're named. */
 function awardsOf(p: Player, season: number): string[] {
   const keep = ['MVP', 'Finals MVP', 'Defensive Player of the Year', 'Rookie of the Year', 'Sixth Man of the Year', 'Most Improved Player'];
-  return p.awards.filter((a) => a.season === season && (keep.includes(a.type) || a.type.startsWith('All-NBA'))).map((a) => a.type);
+  return p.awards.filter((a) => a.season === season && (keep.includes(a.type) || a.type.startsWith('All-League'))).map((a) => a.type);
 }
 
 /** The review of the season just ended for the user's team (null when he coached none of it). */
@@ -453,9 +453,9 @@ export function buildSeasonReview(league: League): SeasonReview | null {
   const records = recordsSet(league, season, tid);
   const honors: string[] = [];
   const aw = league.awards.find((a) => a.season === season);
-  if (ts.playoffRound === 5) honors.push('NBA champions');
+  if (ts.playoffRound === 5) honors.push('League champions');
   else if (ts.playoffRound === 4) honors.push(`${t.conf === 'E' ? 'East' : 'West'} champions`);
-  if (aw?.cupWinner === tid) honors.push('NBA Cup winners');
+  if (aw?.cupWinner === tid) honors.push('In-Season Cup winners');
   if (aw?.coy === tid && (aw.coyCoach === undefined || aw.coyCoach === league.coachName || !!me.aka?.includes(aw.coyCoach))) honors.push('Coach of the Year');
   const cotm = legacyOf(league).honors.filter((h) => h.season === season && h.tid === tid).length;
   if (cotm) honors.push(cotm > 1 ? `Coach of the Month ×${cotm}` : 'Coach of the Month');

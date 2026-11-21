@@ -270,7 +270,7 @@ export function RecordBook({ league }: { league: League }) {
     [post === 'post' ? 'Playoff run' : 'Season', book.season, 'No qualifying seasons yet.', ours],
     ['Team season', book.team, 'Starts when a regular season is over.', ours],
     [tid !== undefined ? 'With the franchise' : 'Career', book.career, 'No games yet.', league.past ? 'Players in this league' : undefined],
-    ['All-time', book.allTime, '', "The NBA's and this league's"],
+    ['All-time', book.allTime, '', "The real league's and this league's"],
   ];
   const bare = sections.every(([, recs]) => recs.every((r) => !r.lines.length));
   return (
@@ -321,9 +321,9 @@ export function RecordBook({ league }: { league: League }) {
                   <Help title="The record book">
                     {from < since ? (
                       <>
-                        <p className="lg-p">Single games reach back to {seasonLabel(from)}. They count every NBA game since then and every game here.</p>
+                        <p className="lg-p">Single games reach back to {seasonLabel(from)}. They count every real game since then and every game here.</p>
                         <p className="lg-p">Seasons count from {seasonLabel(since)}, this league&apos;s only.</p>
-                        <p className="lg-p">All-time holds the NBA&apos;s records from before {seasonLabel(from)} that still stand, beside this league&apos;s best.</p>
+                        <p className="lg-p">All-time holds the real records from before {seasonLabel(from)} that still stand, beside this league&apos;s best.</p>
                       </>
                     ) : (
                       <p className="lg-p">Seasons count from {seasonLabel(since)}, this league&apos;s only.</p>

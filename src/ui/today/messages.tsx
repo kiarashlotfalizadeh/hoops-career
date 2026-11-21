@@ -111,7 +111,7 @@ const LINK_LABELS: [RegExp, string][] = [
   [/^\/office\/trade/, 'Trade'],
   [/^\/office\/finances/, 'Finances'],
   [/^\/office\/?$/, 'Office'],
-  [/^\/league\/cup/, 'NBA Cup'],
+  [/^\/league\/cup/, 'In-Season Cup'],
   [/^\/league\/awards/, 'Awards'],
   [/^\/league\/playoffs/, 'Bracket'],
   [/^\/league\/news/, 'News'],

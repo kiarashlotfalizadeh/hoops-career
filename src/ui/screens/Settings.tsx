@@ -479,12 +479,15 @@ export default function Settings() {
                 <div className="set-link-m num">
                   v{__APP_VERSION__} · {__APP_BUILD__} · save format {league.version}
                 </div>
+                <Link to="/privacy" className="set-privacy">
+                  Privacy policy
+                </Link>
                 <More label="Data sources">
                   <div className="col small dim2" style={{ gap: 8 }}>
-                    <p className="set-p">Rosters and salaries: Basketball Reference. Schedule and NBA Cup: NBA.com. Future picks: RealGM. Opening-night injuries: ESPN.</p>
+                    <p className="set-p">Rosters and salaries: Basketball Reference. Schedule and cup groups: NBA.com. Future picks: RealGM. Opening-night injuries: ESPN.</p>
                     <p className="set-p">Every real season since 2003-04 comes from NBA.com box scores and play-by-play.</p>
                     <p className="set-p">Ratings come from the last three seasons, calibrated to each player's real line and impact. Fictional leagues use generated players.</p>
-                    <p className="set-p tiny dim">Team marks are original monograms in public team colors. Not affiliated with the NBA or its teams.</p>
+                    <p className="set-p tiny dim">Team marks are original monograms in public team colors. Team names are invented. Not affiliated with the NBA or NBPA.</p>
                   </div>
                 </More>
               </div>

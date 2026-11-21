@@ -452,7 +452,7 @@ describe('game day', () => {
       }
       const r = rivalryOf(lg, lg.userTid, opp);
       expect(r.hot).toBe(true);
-      expect(r.reasons[0]).toMatch(/knocked you out of last season's NBA Finals, 4-3/);
+      expect(r.reasons[0]).toMatch(/knocked you out of last season's Finals, 4-3/);
       const g = upcoming(lg).find((x) => x.home === opp || x.away === opp)!;
       expect(billingsFor(lg, g)[0]).toMatchObject({ tag: 'Rivalry', weight: 2 });
     }

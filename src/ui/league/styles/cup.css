@@ -1,5 +1,5 @@
-/* The NBA Cup: its knockouts and group tables. */
-/* ------------------------------------------------------------------ NBA Cup */
+/* The In-Season Cup: its knockouts and group tables. */
+/* ------------------------------------------------------------------ In-Season Cup */
 .bk-head.two,
 .bk-grid.two {
   grid-template-columns: repeat(2, minmax(0, 1fr));

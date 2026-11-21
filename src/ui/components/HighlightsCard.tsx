@@ -25,7 +25,7 @@ export function HighlightsCard({ league, res }: { league: League; res: GameResul
   const away = league.teams[res.away.tid];
   const kits = useMemo(() => matchKits(home.colors, away.colors), [home, away]);
   // the floor it was played on: the home team's, or the Cup final's neutral one
-  const floor = useMemo(() => courtFloor(home, kits[0], neutralSite(res), res.cup === 'final' ? 'NBA Cup' : '', postOf(league, res)), [home, kits, res, league]);
+  const floor = useMemo(() => courtFloor(home, kits[0], neutralSite(res), res.cup === 'final' ? 'In-Season Cup' : '', postOf(league, res)), [home, kits, res, league]);
   // names as the box score had them (players since traded or retired keep theirs)
   const nameOf = useMemo(() => {
     const per = [res.home, res.away].map((b) => {

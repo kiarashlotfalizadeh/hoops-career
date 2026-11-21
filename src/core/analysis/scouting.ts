@@ -81,7 +81,7 @@ export interface HeadToHeadGame {
   us: number;
   them: number;
   home: boolean;
-  /** The NBA Cup final, on a neutral floor: neither side was at home. */
+  /** The In-Season Cup final, on a neutral floor: neither side was at home. */
   cupFinal?: boolean;
 }
 

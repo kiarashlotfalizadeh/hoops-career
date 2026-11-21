@@ -1,4 +1,4 @@
-// The NBA Cup (in-season tournament). Six groups of five, drawn by last season's record, play
+// The In-Season Cup (in-season tournament). Six groups of five, drawn by last season's record, play
 // four group games each on Cup nights in November. The three group winners and the best
 // runner-up in each conference reach single-elimination knockouts in December: quarterfinals and
 // semifinals at the better seed (both count in the standings), then a championship on a neutral
@@ -365,7 +365,7 @@ function seedKnockouts(league: League, cup: CupState, rng: Rng) {
   const nm = (tid: number) => league.teams[tid].abbrev;
   addNews(league, {
     kind: 'general',
-    text: `NBA Cup knockouts set. East: ${cup.seeds.E.map(nm).join(', ')}. West: ${cup.seeds.W.map(nm).join(', ')}. Group winners first, then the wild card.`,
+    text: `In-Season Cup knockouts set. East: ${cup.seeds.E.map(nm).join(', ')}. West: ${cup.seeds.W.map(nm).join(', ')}. Group winners first, then the wild card.`,
     tids: [...cup.seeds.E, ...cup.seeds.W],
     pids: [],
   });
@@ -377,7 +377,7 @@ function seedKnockouts(league: League, cup: CupState, rng: Rng) {
     const other = opp.high === user ? opp.low : opp.high;
     addInbox(league, {
       from: 'League Office',
-      subject: 'NBA Cup: into the knockouts',
+      subject: 'In-Season Cup: into the knockouts',
       body: `You're the ${['1st', '2nd', '3rd', '4th'][seed - 1]} seed in the ${conf === 'E' ? 'East' : 'West'}${seed === 4 ? ' as the wild card' : ''}. Quarterfinal ${opp.high === user ? 'at home' : 'on the road'} against the ${teamName(league.teams[other])}. Quarterfinals and semifinals count in the standings. The championship doesn't.`,
       tone: 'good',
       link: '/league/cup',
@@ -386,7 +386,7 @@ function seedKnockouts(league: League, cup: CupState, rng: Rng) {
     const mine = userFixtures(league, placed);
     addInbox(league, {
       from: 'League Office',
-      subject: 'NBA Cup: out in the group stage',
+      subject: 'In-Season Cup: out in the group stage',
       body: `You missed the knockout round. Your last two regular-season games fall in its window.${mine ? `\n${mine}` : ''}`,
       tone: 'neutral',
       link: '/league/cup',
@@ -439,8 +439,8 @@ function finishCup(league: League, cup: CupState, final: CupTie) {
   aw.cupWinner = champ;
   aw.cupRunnerUp = runnerUp;
   aw.cupMvp = cup.mvp;
-  for (const p of teamPlayers(league, champ)) p.awards.push({ season: league.season, type: 'NBA Cup' });
-  if (cup.mvp !== undefined) league.players[cup.mvp].awards.push({ season: league.season, type: 'NBA Cup MVP' });
+  for (const p of teamPlayers(league, champ)) p.awards.push({ season: league.season, type: 'In-Season Cup' });
+  if (cup.mvp !== undefined) league.players[cup.mvp].awards.push({ season: league.season, type: 'In-Season Cup MVP' });
   const t = league.teams[champ];
   t.hype = Math.min(1, t.hype + 0.03);
   const score = `${Math.max(final.highPts!, final.lowPts!)}-${Math.min(final.highPts!, final.lowPts!)}`;
@@ -448,7 +448,7 @@ function finishCup(league: League, cup: CupState, final: CupTie) {
   // (the league's story of the night: the user's own final is his game's story too)
   addNews(league, {
     kind: 'award',
-    head: `The ${t.name} win the NBA Cup`,
+    head: `The ${t.name} win the In-Season Cup`,
     text: `They beat the ${teamName(league.teams[runnerUp])} ${score} in the championship in Las Vegas. Cup MVP: ${mvpName}.`,
     tids: [champ, runnerUp],
     pids: cup.mvp !== undefined ? [cup.mvp] : [],
@@ -457,7 +457,7 @@ function finishCup(league: League, cup: CupState, final: CupTie) {
   if (champ === league.userTid) {
     addInbox(league, {
       from: 'Owner',
-      subject: 'NBA Cup champions!',
+      subject: 'In-Season Cup champions!',
       body: `First trophy of the season. ${mvpName} was named Cup MVP. The fans loved it. Now let's carry it into the spring.`,
       tone: 'good',
       link: '/league/cup',
@@ -465,7 +465,7 @@ function finishCup(league: League, cup: CupState, final: CupTie) {
   } else if (runnerUp === league.userTid) {
     addInbox(league, {
       from: 'Owner',
-      subject: 'NBA Cup final',
+      subject: 'In-Season Cup final',
       body: `We fell ${score} to the ${teamName(t)} in the championship. A good run, and the final doesn't count against our record.`,
       tone: 'neutral',
       link: '/league/cup',
@@ -506,7 +506,7 @@ export function advanceCup(league: League, rng: Rng) {
       const mine = userFixtures(league, placed);
       addInbox(league, {
         from: 'League Office',
-        subject: 'NBA Cup: out in the quarterfinals',
+        subject: 'In-Season Cup: out in the quarterfinals',
         body: `The ${teamName(league.teams[out.winner!])} knocked you out of the Cup. Your last regular-season game falls in the knockout window.${mine ? `\n${mine}` : ''}`,
         tone: 'neutral',
         link: '/league/cup',
@@ -520,18 +520,18 @@ export function advanceCup(league: League, rng: Rng) {
     const [hi, lo] = crossGroup(league, rows.get(e)!, rows.get(w)!) <= 0 ? [e, w] : [w, e];
     addTie(league, cup, 'final', 'F', hi, lo, 1, 1, cup.finalDay);
     sortSchedule(league);
-    addNews(league, { kind: 'general', text: `NBA Cup championship set: ${teamName(league.teams[e])} vs ${teamName(league.teams[w])}.`, tids: [e, w], pids: [] });
+    addNews(league, { kind: 'general', text: `In-Season Cup championship set: ${teamName(league.teams[e])} vs ${teamName(league.teams[w])}.`, tids: [e, w], pids: [] });
   } else if (fin && fin.winner !== undefined) {
     finishCup(league, cup, fin);
   }
 }
 
-/** Short label for a game's Cup stage, e.g. "NBA Cup · East B" or "NBA Cup Semifinal". */
+/** Short label for a game's Cup stage, e.g. "Cup · East B" or "Cup Semifinal" (a chip's width). */
 export function cupLabel(league: League, g: { cup?: ScheduledGame['cup']; home: number; season?: number }): string | null {
   if (!g.cup) return null;
   if (g.cup === 'group') {
     const grp = league.cup?.groups.find((x) => x.tids.includes(g.home));
-    return grp && (g.season === undefined || g.season === league.cup?.season) ? `NBA Cup · ${grp.id}` : 'NBA Cup';
+    return grp && (g.season === undefined || g.season === league.cup?.season) ? `Cup · ${grp.id}` : 'In-Season Cup';
   }
-  return `NBA Cup ${CUP_ROUND_LABEL[g.cup]}`;
+  return `Cup ${CUP_ROUND_LABEL[g.cup]}`;
 }

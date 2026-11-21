@@ -20,7 +20,7 @@ import { QuarterTable } from './gameBlocks';
 import './gameday.css';
 import './gameBoard.css';
 
-/** "NBA Cup · Final", "West R1 · Game 3", "NBA Finals · Game 7", "Playoffs" (an older season's), "Play-In", "Regular season". */
+/** "In-Season Cup · Final", "West R1 · Game 3", "Finals · Game 7", "Playoffs" (an older season's), "Play-In", "Regular season". */
 export function gameTypeLabel(league: League, g: GameResult): string {
   const cup = cupLabel(league, { cup: g.cup, home: g.home.tid, season: g.season });
   if (cup) return cup;
@@ -33,7 +33,7 @@ export function gameTypeLabel(league: League, g: GameResult): string {
     ).length;
     // (short enough to share the slab's top line with the date and the crowd on a phone)
     const conf = s.conf === 'E' ? 'East' : 'West';
-    const round = s.round === 4 ? 'NBA Finals' : s.round === 3 ? `${conf} Finals` : s.round === 2 ? `${conf} Semis` : `${conf} R1`;
+    const round = s.round === 4 ? 'Finals' : s.round === 3 ? `${conf} Finals` : s.round === 2 ? `${conf} Semis` : `${conf} R1`;
     return `${round} · Game ${Math.max(1, n)}`;
   }
   return g.type === 'playin' ? 'Play-In' : 'Regular season';

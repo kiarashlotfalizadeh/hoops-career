@@ -383,7 +383,7 @@ export function defRoleFits(p: Player): Record<DefRole, number> {
 /**
  * A role fit on the fits' own scale, one to five (a fit of 70 or more is five): what the staff's own
  * rules compare (miscast, the AI's role picks). Not what the screens show: fits cluster at 45-65, so
- * on this scale a 3x All-NBA big read two stars at his natural roles. The screens rank a fit against
+ * on this scale a 3x All-League big read two stars at his natural roles. The screens rank a fit against
  * the league's rotation players at that role instead (roleStars).
  */
 export const fitStars = (v: number) => Math.max(1, Math.min(5, Math.round((v - 30) / 10)));

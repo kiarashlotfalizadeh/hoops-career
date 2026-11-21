@@ -74,8 +74,8 @@ function seriesName(id: string): { round: number; conf: 'E' | 'W' | 'F'; label: 
   const conf = m[1] as 'E' | 'W' | 'F';
   const round = Number(m[2]);
   const c = conf === 'W' ? 'West' : 'East';
-  const label = round === 4 ? 'NBA Finals' : round === 3 ? `${c} Finals` : round === 2 ? `${c} Semifinals` : `${c} First Round`;
-  const next = round === 4 ? 'title' : round === 3 ? 'NBA Finals' : round === 2 ? `${c} Finals` : `${c} Semifinals`;
+  const label = round === 4 ? 'Finals' : round === 3 ? `${c} Finals` : round === 2 ? `${c} Semifinals` : `${c} First Round`;
+  const next = round === 4 ? 'title' : round === 3 ? 'Finals' : round === 2 ? `${c} Finals` : `${c} Semifinals`;
   return { round, conf, label, next };
 }
 
@@ -496,7 +496,7 @@ function headline(league: League, f: Facts): { cat: string; head: string } {
     const round = f.res.cup === 'final' ? 'final' : f.res.cup === 'sf' ? 'semifinal' : 'quarterfinal';
     if (f.won)
       return f.res.cup === 'final'
-        ? pick('cup-win', [`${T} win the NBA Cup`, `${T} take the Cup, ${score} over ${O}`])
+        ? pick('cup-win', [`${T} win the In-Season Cup`, `${T} take the Cup, ${score} over ${O}`])
         : pick('cup-adv', [`${T} beat ${O}, into the Cup ${f.res.cup === 'qf' ? 'semifinals' : 'final'}`, `${T} advance in the Cup with ${score} win`]);
     return pick('cup-out', [`${O} knock ${T} out of the Cup`, `${poss(T)} Cup run ends in the ${round}`]);
   }
@@ -877,13 +877,13 @@ function kickerOf(f: Facts): string | undefined {
   const s = f.series;
   if (s) return s.w + s.l === 7 ? 'Game 7' : `${s.label} · Game ${s.w + s.l}`;
   if (f.playIn) return 'Play-In';
-  if (f.res.cup === 'final' || f.res.type === 'cup') return 'NBA Cup final';
-  if (f.res.cup && f.res.cup !== 'group') return `NBA Cup ${f.res.cup === 'sf' ? 'semifinal' : 'quarterfinal'}`;
+  if (f.res.cup === 'final' || f.res.type === 'cup') return 'In-Season Cup final';
+  if (f.res.cup && f.res.cup !== 'group') return `In-Season Cup ${f.res.cup === 'sf' ? 'semifinal' : 'quarterfinal'}`;
   if (f.opening) return f.res.day === 0 ? 'Opening night' : 'Season opener';
   if (f.christmas) return 'Christmas Day';
   if (f.rivalry.hot) return 'Rivalry night';
   if (f.homeOpener) return 'Home opener';
-  if (f.res.cup === 'group') return 'NBA Cup';
+  if (f.res.cup === 'group') return 'In-Season Cup';
   return undefined;
 }
 
@@ -1012,7 +1012,7 @@ const REAL_SERIES: Record<string, { season: number; winner: string; label: strin
   'DEN-OKC': { season: 2024, winner: 'OKC', label: 'West Semifinals', tally: '4-3' },
   'GSW-MIN': { season: 2024, winner: 'MIN', label: 'West Semifinals', tally: '4-1' },
   'MIN-OKC': { season: 2024, winner: 'OKC', label: 'West Finals', tally: '4-1' },
-  'IND-OKC': { season: 2024, winner: 'OKC', label: 'NBA Finals', tally: '4-3' },
+  'IND-OKC': { season: 2024, winner: 'OKC', label: 'Finals', tally: '4-3' },
 };
 
 /** A real league's series from REAL_SERIES between `a` and `b`, with its heat: 2½ in the league's first season, 1½ in its second, then none. */
@@ -1182,7 +1182,7 @@ export function billingsFor(league: League, g: ScheduledGame, tid = league.userT
       else if (l === 3) add({ tag: 'Elimination game', line: `Down ${l}-${w}: a loss ends the season`, weight: 3 }, 1);
       else if (w === 3)
         add({ tag: 'Closeout game', line: `Up ${w}-${l}: a win ${sn.round === 4 ? 'wins the title' : `takes the ${sn.label}`}`, weight: sn.round === 4 ? 3 : 2 }, 2);
-      else if (n === 1) add({ tag: sn.round === 4 ? 'NBA Finals' : 'Game 1', line: `The ${sn.label} opens ${at}`, weight: sn.round === 4 ? 3 : 2 }, 3);
+      else if (n === 1) add({ tag: sn.round === 4 ? 'Finals' : 'Game 1', line: `The ${sn.label} opens ${at}`, weight: sn.round === 4 ? 3 : 2 }, 3);
       else add({ tag: `Game ${n}`, line: `${sn.label}: ${w === l ? `tied ${w}-${l}` : w > l ? `you lead ${w}-${l}` : `you trail ${l}-${w}`}`, weight: sn.round === 4 ? 3 : 2 }, 4);
     }
   }
@@ -1201,7 +1201,7 @@ export function billingsFor(league: League, g: ScheduledGame, tid = league.userT
       0,
     );
   }
-  if (g.cup === 'final' || g.type === 'cup') add({ tag: 'NBA Cup final', line: 'A trophy on the line in Las Vegas', weight: 3 }, 1);
+  if (g.cup === 'final' || g.type === 'cup') add({ tag: 'In-Season Cup final', line: 'A trophy on the line in Las Vegas', weight: 3 }, 1);
   else if (g.cup === 'sf') add({ tag: 'Cup semifinal', line: 'Win and play for the Cup', weight: 2 }, 2);
   else if (g.cup === 'qf') add({ tag: 'Cup quarterfinal', line: 'Win and go to Las Vegas', weight: 2 }, 3);
 
@@ -1227,7 +1227,7 @@ export function billingsFor(league: League, g: ScheduledGame, tid = league.userT
       else add({ tag: 'Home opener', line: `The first game ${at} this season`, weight: 2 }, 6);
     }
     if (g.day === christmasDay(league.season)) add({ tag: 'Christmas Day', line: `One of the league's Christmas games, ${at}`, weight: 2 }, 1);
-    if (g.cup === 'group') add({ tag: 'NBA Cup', line: 'A group game: the best in each group go to the knockouts', weight: 1 }, 20);
+    if (g.cup === 'group') add({ tag: 'In-Season Cup', line: 'A group game: the best in each group go to the knockouts', weight: 1 }, 20);
   }
 
   const riv = rivalryOf(league, tid, opp);

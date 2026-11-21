@@ -145,6 +145,15 @@
 .set-p {
   margin: 0;
 }
+/* the privacy page's link, under the build line */
+.set-privacy {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 @media (hover: hover) and (pointer: fine) {
   a.set-link:hover,
   button.set-link:not(:disabled):hover {

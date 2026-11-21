@@ -100,7 +100,7 @@ export function StatsTab({ p, league }: { p: Player; league: League }) {
         <StatTable rows={rows} cols={shown} rowKey={(r) => r.key} />
       ) : (
         <div className="card">
-          <Empty>{po ? 'No playoff games yet.' : 'No NBA games yet.'}</Empty>
+          <Empty>{po ? 'No playoff games yet.' : 'No games yet.'}</Empty>
         </div>
       )}
       <div className="tm-foot">

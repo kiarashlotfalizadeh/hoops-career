@@ -90,7 +90,7 @@ const SCREENS: { title: string; to: string; meta: string; also?: string }[] = [
   { title: 'Standings', to: '/league/standings', meta: 'League · standings and playoff odds', also: 'odds table playoff chances' },
   { title: 'Draft lottery', to: '/league/standings?view=lottery', meta: 'League · the lottery odds and the draft order', also: 'draft order lottery odds picks tank' },
   { title: 'Playoffs', to: '/league/playoffs', meta: 'League · the bracket and the play-in', also: 'bracket play-in postseason' },
-  { title: 'NBA Cup', to: '/league/cup', meta: 'League · the in-season tournament', also: 'cup tournament' },
+  { title: 'In-Season Cup', to: '/league/cup', meta: 'League · the in-season tournament', also: 'cup tournament' },
   { title: 'League stats', to: '/league/stats', meta: 'League · leaders, players, teams, ratings', also: 'leaders statistics ratings 3p fg ft three point percentages' },
   { title: 'Scores', to: '/league/schedule', meta: 'League · every game around the league', also: 'scoreboard results' },
   { title: 'Awards', to: '/league/awards', meta: 'League · MVP race and the rest', also: 'mvp races all-nba' },

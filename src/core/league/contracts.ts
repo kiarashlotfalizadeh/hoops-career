@@ -317,13 +317,13 @@ export interface Ask {
 const ownTeam = (p: Player, tid: number) => p.tid === tid || p.rfa?.tid === tid;
 
 /**
- * Honors that earn a bigger max with his own team: All-NBA in his last season or two of his last
+ * Honors that earn a bigger max with his own team: All-League in his last season or two of his last
  * three, MVP in one of them, or Defensive Player of the Year in the last.
  */
 export function maxHonors(league: League, p: Player): boolean {
   const last = contractSeason(league) - 1;
   const recent = p.awards.filter((a) => a.season <= last && a.season >= last - 2);
-  const allNba = recent.filter((a) => a.type.startsWith('All-NBA'));
+  const allNba = recent.filter((a) => a.type.startsWith('All-League'));
   return (
     allNba.some((a) => a.season === last) ||
     allNba.length >= 2 ||

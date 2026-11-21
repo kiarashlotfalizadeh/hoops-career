@@ -19,13 +19,8 @@ function idle(): Promise<void> {
 
 export async function initNative() {
   if (!Capacitor.isNativePlatform()) return;
-  const [{ App }, { StatusBar, Style }] = await Promise.all([import('@capacitor/app'), import('@capacitor/status-bar')]);
-  try {
-    await StatusBar.setStyle({ style: Style.Light });
-    if (Capacitor.getPlatform() === 'android') await StatusBar.setBackgroundColor({ color: '#f3efe7' });
-  } catch {
-    /* status bar not available */
-  }
+  // (the status bar's look is the theme's to set: ui/theme.ts, before the first paint)
+  const { App } = await import('@capacitor/app');
   // a second Back soon after a failed save (while its warning shows) leaves anyway
   let leaveUnsavedUntil = 0;
   const exit = async () => {

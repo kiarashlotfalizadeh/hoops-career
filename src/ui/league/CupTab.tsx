@@ -44,7 +44,7 @@ export function CupTab({ league }: { league: League }) {
         {lastWinner?.cupWinner !== undefined && (
           <CupBanner league={league} season={lastWinner.season} tid={lastWinner.cupWinner} runnerUp={lastWinner.cupRunnerUp} mvp={lastWinner.cupMvp} />
         )}
-        <div className="card empty">No NBA Cup this season. It&apos;s drawn with each new schedule: groups in November, knockouts in December.</div>
+        <div className="card empty">No In-Season Cup this season. It&apos;s drawn with each new schedule: groups in November, knockouts in December.</div>
       </>
     );
   }
@@ -134,7 +134,7 @@ function CupPoster({ league, seeds, decided, koRound, status }: { league: League
   const me = league.userTid;
   const name = league.teams[me].name;
   const conf = league.teams[me].conf;
-  const over = `NBA Cup · ${seasonLabel(league.cup!.season)}`;
+  const over = `In-Season Cup · ${seasonLabel(league.cup!.season)}`;
   if (!seeds) return <Poster over={over} head={status} />;
   const through = seeds[conf].includes(me);
   if (!decided) return <Poster over={`${over} · if the groups ended today`} head={through ? `${name} would go through` : `${name} would miss the knockouts`} dek={status} />;
@@ -155,7 +155,7 @@ function CupPoster({ league, seeds, decided, koRound, status }: { league: League
 function CupHelp({ league }: { league: League }) {
   const cup = league.cup!;
   return (
-    <Help title="NBA Cup">
+    <Help title="In-Season Cup">
       <p className="lg-p">The three group winners and the best runner-up in each conference go through. The runner-up is the wild card, WC.</p>
       <p className="lg-p">
         The better seed hosts the quarterfinals, {dateRange(league, cup.qfDays[0], cup.qfDays[1])}, and the semifinals, {fmtDate(league.season, cup.sfDay)}. Both count in the
@@ -345,7 +345,7 @@ export function CupBanner({ league, season, tid, runnerUp, mvp, final }: { leagu
     <TitleSlab
       league={league}
       tid={tid}
-      over={`NBA Cup · ${seasonLabel(season)}`}
+      over={`In-Season Cup · ${seasonLabel(season)}`}
       // the final's score is the giant figure; without it (an earlier season's), whom they beat leads the line
       fig={score}
       figLabel={score ? `${beat ?? 'Won the final'} in the final` : undefined}

@@ -65,7 +65,7 @@ const kits = matchKits(q.has('away') ? ['#0c2340', '#c8102e', '#ffffff'] : home.
 const models = await loadModels();
 if (q.get('maps') === '0') models.anat = undefined;
 // (&post=playoffs|finals: a postseason night there, the floor's words and the building's shirt)
-const floor = courtFloor(home, kits[0], q.has('neutral'), 'NBA Cup', (q.get('post') as 'playoffs' | 'finals' | null) ?? undefined);
+const floor = courtFloor(home, kits[0], q.has('neutral'), 'In-Season Cup', (q.get('post') as 'playoffs' | 'finals' | null) ?? undefined);
 const scene = new CourtScene(canvas, paints.ball, paints.ballSeam, models, venueOf(floor));
 scene.lite(q.has('lite') ? (Math.min(3, Number(q.get('lite')) || 3) as 1 | 2 | 3) : 0);
 // (the app's face, which the lab's page doesn't load itself: the floor's lettering and the boards' are in it)

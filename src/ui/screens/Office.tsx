@@ -547,8 +547,8 @@ function CapHelp({ league, season }: { league: League; season: number }) {
         <b>Cap holds.</b> Until free agency opens, each expiring player holds cap room at about his ask. That is the striped part of the bar. Renounce him to free it.
       </p>
       <p>
-        <b>The max.</b> 25% of the cap up to six seasons in the league, 30% for seven to nine, 35% from ten. All-NBA, MVP or Defensive Player of the Year honors raise it with his
-        own team. Off his rookie deal he can get 30%, and with seven to nine seasons 35%: the supermax. A player worth about the max asks it of every team. Where he signs comes
+        <b>The max.</b> 25% of the cap up to six seasons in the league, 30% for seven to nine, 35% from ten. All-League, MVP or Defensive Player of the Year honors raise it with
+        his own team. Off his rookie deal he can get 30%, and with seven to nine seasons 35%: the supermax. A player worth about the max asks it of every team. Where he signs comes
         down to how much he likes each.
       </p>
       <p>

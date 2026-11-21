@@ -235,7 +235,7 @@ export const GLOSSARY: GlossaryEntry[] = [
     id: 'max',
     term: 'Max contract',
     group: 'Contracts',
-    text: 'The most a player can earn, by his seasons in the league. 25% of the cap up to six, 30% for seven to nine, 35% from ten. All-NBA, MVP or Defensive Player of the Year honors let his own team pay more.',
+    text: 'The most a player can earn, by his seasons in the league. 25% of the cap up to six, 30% for seven to nine, 35% from ten. All-League, MVP or Defensive Player of the Year honors let his own team pay more.',
   },
   { id: 'rookie', term: 'Rookie scale', group: 'Contracts', text: 'First-round picks sign set contracts by draft slot.' },
   {

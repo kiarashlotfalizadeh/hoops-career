@@ -187,7 +187,7 @@ describe('scouting and the staff', () => {
       expect(d.counters['cov-switch']).toMatch(/\+3\.0 points a game for them in your 2 meetings\.$/);
     }
 
-    // marks the NBA Cup final in the head-to-head: a neutral floor, nobody at home
+    // marks the In-Season Cup final in the head-to-head: a neutral floor, nobody at home
     {
       const m = played(6);
       const g = m.games.find((x) => x.home.tid === m.userTid || x.away.tid === m.userTid)!;

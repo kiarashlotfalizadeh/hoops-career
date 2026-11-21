@@ -49,7 +49,7 @@ a.lg-award:active {
 .lg-stack {
   gap: 16px;
 }
-/* a five (an All-NBA team, the All-Stars): mark, name and position, the line */
+/* a five (an All-League team, the All-Stars): mark, name and position, the line */
 .lg-five {
   display: flex;
   flex-direction: column;

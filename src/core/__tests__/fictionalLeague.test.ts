@@ -3,7 +3,7 @@
 // held by its coach; the user's with his team; unique names), records that add up to the teams'
 // seasons (a mid-season takeover splits one at the day it happened), a few firings and hirings a
 // season that never draw on the league's random stream, Coach of the Year credited to the right man,
-// renames, and saves. And a season start to finish: the NBA Cup's draw, knockouts and carry-over, the
+// renames, and saves. And a season start to finish: the In-Season Cup's draw, knockouts and carry-over, the
 // champion and the awards, the press over the season, the front page, the draft and the rollover;
 // trades checked against value and the roster limits.
 import 'fake-indexeddb/auto';
@@ -422,7 +422,7 @@ describe('two seasons of a fictional league', () => {
   }, 300_000);
 
   it('plays a season start to finish: the Cup, the champion and awards, the press, the front page, the draft and the rollover; trades by value and roster limits', () => {
-    // the NBA Cup draws six groups of five within each conference, everyone hosting two group games on Cup nights
+    // the In-Season Cup draws six groups of five within each conference, everyone hosting two group games on Cup nights
     {
       const league = created;
       const cup = league.cup!;
@@ -469,7 +469,7 @@ describe('two seasons of a fictional league', () => {
       const aw = league.awards.find((a) => a.season === league.season)!;
       expect(aw.cupWinner).toBe(cup.champion);
       expect(aw.cupMvp).toBeDefined();
-      expect(league.players[aw.cupMvp!].awards.some((a) => a.type === 'NBA Cup MVP')).toBe(true);
+      expect(league.players[aw.cupMvp!].awards.some((a) => a.type === 'In-Season Cup MVP')).toBe(true);
       checkFinalSchedule(league);
 
       // the championship doesn't count: records only include regular-season games
@@ -525,7 +525,7 @@ describe('two seasons of a fictional league', () => {
       expect(league.news.filter((n) => n.text.startsWith('Around the league')).every((n) => n.day >= league.day - 15)).toBe(true);
       expect(JSON.stringify(m).length).toBeLessThan(30_000);
       // a season of injuries doesn't push the Cup out of the news
-      expect(league.news.some((n) => n.season === league.season && (n.head ?? n.text).includes('win the NBA Cup'))).toBe(true);
+      expect(league.news.some((n) => n.season === league.season && (n.head ?? n.text).includes('win the In-Season Cup'))).toBe(true);
     }
 
     // the user's games make the front page on a handful of nights of a fictional league's regular season
@@ -549,7 +549,7 @@ describe('two seasons of a fictional league', () => {
       expect(cls.every((p) => p.prospect?.combine)).toBe(true);
     }
 
-    // it drafts and rolls over: two rounds of rookies, 80 games per team up front (the NBA Cup knockout window adds the last two per team)
+    // it drafts and rolls over: two rounds of rookies, 80 games per team up front (the In-Season Cup knockout window adds the last two per team)
     expect(rookies).toBe(60);
     expect(rolled.season).toBe(2028);
     expect(rolled.schedule.length).toBe(1200);

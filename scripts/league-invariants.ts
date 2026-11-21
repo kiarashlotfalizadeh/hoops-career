@@ -56,7 +56,7 @@ function walk(o: unknown, path: string): void {
 
 /** The most a deal can start at: his max, or with the honors for one (All-NBA, MVP, Defensive Player of the Year) 35% of the cap (see playerMax). */
 const topSalary = (p: Player, cap: ReturnType<typeof H.CAP_FOR>) =>
-  p.awards.some((a) => a.type.startsWith('All-NBA') || a.type === 'MVP' || a.type === 'Defensive Player of the Year')
+  p.awards.some((a) => a.type.startsWith('All-League') || a.type === 'MVP' || a.type === 'Defensive Player of the Year')
     ? Math.round(cap.salaryCap * 0.35)
     : cap.maxContract(p.experience);
 

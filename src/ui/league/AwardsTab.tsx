@@ -45,11 +45,11 @@ export function AwardsTab({ league }: { league: League }) {
   else if (isCurrent) status = started ? 'Award races so far' : 'Season not started';
   // the season's weekly and monthly honors (this season's and last, as the press keeps them)
   const honors = useLeagueMemo(() => seasonHonors(league, season), [league, season]);
-  // the season's awards, its All-NBA (and Defense, Rookie) teams once named, its All-Star weekend once picked
+  // the season's awards, its All-League (and Defense, Rookie) teams once named, its All-Star weekend once picked
   const views: { id: AwardsView; label: string }[] = [
     { id: 'awards', label: 'Awards' },
     ...(honors.length ? [{ id: 'honors' as const, label: 'Honors' }] : []),
-    ...(decided && aw ? [{ id: 'teams' as const, label: 'All-NBA' }] : []),
+    ...(decided && aw ? [{ id: 'teams' as const, label: 'All-League' }] : []),
     ...(aw && (aw.allStars.E.length > 0 || aw.saturday) ? [{ id: 'allstar' as const, label: 'All-Star' }] : []),
   ];
   const [raw, setView] = useQueryParam<AwardsView>('av', 'awards', ['awards', 'honors', 'teams', 'allstar']);
@@ -125,7 +125,7 @@ type AwardsView = 'awards' | 'honors' | 'teams' | 'allstar';
 
 // ---------------------------------------------------------------- winners
 
-/** The season's two titles: the champions and the NBA Cup's winners, with whom they beat and the Cup's MVP. */
+/** The season's two titles: the champions and the In-Season Cup's winners, with whom they beat and the Cup's MVP. */
 function Champions({ league, aw }: { league: League; aw: SeasonAwards }) {
   const final = league.cup?.season === aw.season ? league.cup.bracket.find((t) => t.round === 'final') : undefined;
   const score = final?.highPts !== undefined && final.lowPts !== undefined ? ` ${Math.max(final.highPts, final.lowPts)}-${Math.min(final.highPts, final.lowPts)}` : '';
@@ -154,7 +154,7 @@ function Champions({ league, aw }: { league: League; aw: SeasonAwards }) {
           <div className="lg-award">
             <TeamLogo tid={aw.cupWinner} size={40} decorative />
             <span className="lg-award-t">
-              <span className="lg-award-lb">NBA Cup</span>
+              <span className="lg-award-lb">In-Season Cup</span>
               <Link to={teamPath(aw.cupWinner)} className="nm ellipsis">
                 {league.teams[aw.cupWinner].region} {league.teams[aw.cupWinner].name}
               </Link>
@@ -282,7 +282,7 @@ function MajorAwards({ league, aw }: { league: League; aw: SeasonAwards }) {
   );
 }
 
-/** One or more fives in a panel, each under its name: the All-NBA teams, the All-Defensive teams, the All-Rookie teams. */
+/** One or more fives in a panel, each under its name: the All-League teams, the All-Defensive teams, the All-Rookie teams. */
 function Fives({ league, title, teams, season, kind = 'off' }: { league: League; title: string; teams: { name: string; pids: number[] }[]; season: number; kind?: 'off' | 'def' }) {
   const shown = teams.filter((t) => t.pids.length);
   if (!shown.length) return null;
@@ -334,7 +334,7 @@ function Teams({ league, aw }: { league: League; aw: SeasonAwards }) {
       : [{ name: 'All-Rookie Team', pids: aw.allRookie }];
   return (
     <div className="md-grid2">
-      <Fives league={league} title="All-NBA" teams={aw.allNba.map((pids, i) => ({ name: `All-NBA ${nth[i]} Team`, pids }))} season={aw.season} />
+      <Fives league={league} title="All-League" teams={aw.allNba.map((pids, i) => ({ name: `All-League ${nth[i]} Team`, pids }))} season={aw.season} />
       <div className="col lg-stack">
         <Fives league={league} title="All-Defensive" teams={aw.allDefense.map((pids, i) => ({ name: `All-Defensive ${nth[i]} Team`, pids }))} season={aw.season} kind="def" />
         <Fives league={league} title={rookies.length > 1 ? 'All-Rookie' : 'All-Rookie Team'} teams={rookies} season={aw.season} />

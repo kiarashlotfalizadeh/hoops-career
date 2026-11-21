@@ -18,7 +18,7 @@ import { countWord, honoursWhole } from './history';
 
 /** The award points a career is weighed by here (the Hall's own: see hallOfFameScore in season.ts). */
 const AWARD_POINTS: Record<string, number> = { MVP: 12, 'Finals MVP': 6, 'Defensive Player of the Year': 4, 'All-Star': 2, Champion: 1.5 };
-const awardPoints = (p: Player) => p.awards.reduce((s, a) => s + (AWARD_POINTS[a.type] ?? (a.type.startsWith('All-NBA') ? 4 : 0)), 0);
+const awardPoints = (p: Player) => p.awards.reduce((s, a) => s + (AWARD_POINTS[a.type] ?? (a.type.startsWith('All-League') ? 4 : 0)), 0);
 
 /** Seasons he played: his regular seasons with a game in them, wherever. */
 const seasonsPlayed = (p: Player) => new Set(p.stats.filter((s) => !s.playoffs && s.gp > 0).map((s) => s.season)).size;
@@ -42,14 +42,14 @@ function careerSize(p: Player): number {
 /** His honors in this league, biggest first, as a list: "two titles, an MVP and four All-Star selections". */
 function honorsText(p: Player): string {
   const n = (type: string) => p.awards.filter((a) => a.type === type).length;
-  const allNba = p.awards.filter((a) => a.type.startsWith('All-NBA')).length;
+  const allNba = p.awards.filter((a) => a.type.startsWith('All-League')).length;
   const parts: string[] = [];
   const say = (k: number, one: string, many: string) => k && parts.push(k === 1 ? one : `${countWord(k)} ${many}`);
   say(n('Champion'), 'a title', 'titles');
   say(n('MVP'), 'an MVP', 'MVPs');
   say(n('Finals MVP'), 'a Finals MVP', 'Finals MVPs');
   say(n('Defensive Player of the Year'), 'a Defensive Player of the Year', 'Defensive Player of the Year awards');
-  say(allNba, 'an All-NBA team', 'All-NBA teams');
+  say(allNba, 'an All-League team', 'All-League teams');
   say(n('All-Star'), 'an All-Star selection', 'All-Star selections');
   return list(parts);
 }

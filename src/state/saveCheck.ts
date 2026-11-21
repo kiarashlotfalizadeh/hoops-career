@@ -292,11 +292,38 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   migrateOwner(x);
   migratePulse(x);
   migrateReadings(x);
+  migrateWording(x);
   // god mode's switch and its count of edits: out of shape, they go (god mode off, an unedited league)
   if (x.settings.godMode !== undefined && typeof x.settings.godMode !== 'boolean') delete x.settings.godMode;
   if (x.godEdits !== undefined && !(int(x.godEdits) && x.godEdits >= 0)) delete x.godEdits;
   x.version = SAVE_VERSION;
   return x;
+}
+
+/** The league's own words for what a save from before the rename called by the real league's. */
+const reworded = (s: string) =>
+  s
+    .replace(/NBA Cup/g, 'In-Season Cup')
+    .replace(/(the )?NBA Finals/g, (_m, the: string | undefined) => `${the ?? ''}Finals`)
+    .replace(/All-NBA/g, 'All-League');
+
+/**
+ * Honours and headlines a save from before the rename keeps under the real league's names ("NBA Cup",
+ * "All-NBA 1st Team"): the award types the game counts by, and the news, mail, chronicle and legacy
+ * written with them. Team names stay as the save has them.
+ */
+function migrateWording(x: League) {
+  for (const p of Object.values(x.players))
+    if (Array.isArray(p.awards)) for (const a of p.awards) if (obj(a) && typeof a.type === 'string' && a.type.includes('NBA')) a.type = reworded(a.type);
+  const walk = (v: unknown, depth: number) => {
+    if (!v || typeof v !== 'object' || depth > 6) return;
+    for (const [k, c] of Object.entries(v)) {
+      if (typeof c === 'string') {
+        if (c.includes('NBA')) (v as Record<string, unknown>)[k] = reworded(c);
+      } else walk(c, depth + 1);
+    }
+  };
+  for (const part of [x.news, x.inbox, x.chronicle, x.legacy, x.media, x.coaches]) walk(part, 0);
 }
 
 /**

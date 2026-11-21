@@ -85,7 +85,7 @@ interface Setup {
   pace: number[];
   wins: number[];
   losses: number[];
-  /** Regular-season games each team hasn't scheduled yet (the NBA Cup's last two before the groups are decided), played against an average team. */
+  /** Regular-season games each team hasn't scheduled yet (the In-Season Cup's last two before the groups are decided), played against an average team. */
   extra: number[];
   /** The regular-season games still to play: home, away, and the margin a point of net rating between them is worth, in standard deviations. */
   home: Int32Array;
@@ -124,7 +124,7 @@ function setup(league: League, fixed: { gid: number; homeWon: boolean } | undefi
     left[g.away]++;
     games.push([g.home, g.away]);
   }
-  // with an NBA Cup, everyone plays 82: two of them aren't on the calendar until the groups are decided
+  // with an In-Season Cup, everyone plays 82: two of them aren't on the calendar until the groups are decided
   const target = league.cup?.season === league.season ? 82 : Math.max(0, ...sched);
   const extra = sched.map((s) => Math.max(0, target - s));
   const players = new Map<number, Player[]>();

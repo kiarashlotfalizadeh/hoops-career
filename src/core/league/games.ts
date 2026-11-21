@@ -369,7 +369,7 @@ export function ensureRotation(league: League, tid: number) {
   }
 }
 
-/** All-Star Games and the NBA Cup championship are on a neutral floor. */
+/** All-Star Games and the In-Season Cup championship are on a neutral floor. */
 export function neutralSite(g: Pick<ScheduledGame, 'type' | 'cup'>) {
   return g.type === 'allstar' || g.cup === 'final';
 }

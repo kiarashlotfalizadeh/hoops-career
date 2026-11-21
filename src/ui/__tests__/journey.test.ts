@@ -115,7 +115,7 @@ describe('the journey between screens', () => {
       l.playoffs[0].highWins = 4;
       l.playoffs[0].winner = 17;
       l.phase = 'draftLottery';
-      expect(simSummary(before, l)!.text).toBe(`Lost the NBA Finals: ${l.teams[17].abbrev} won 4-3`);
+      expect(simSummary(before, l)!.text).toBe(`Lost the Finals: ${l.teams[17].abbrev} won 4-3`);
     }
 
     // a title left to its moment

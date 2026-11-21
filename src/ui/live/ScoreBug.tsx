@@ -30,7 +30,7 @@ const MAX_TRIP = 4;
 
 /**
  * What's at stake beyond the regular season, for the scorebug's top line: "Playoffs · R1 G5 ·
- * Series tied 2-2", "Play-In", "NBA Cup · East A". `gameNo` is the game's number in its series.
+ * Series tied 2-2", "Play-In", "In-Season Cup · East A". `gameNo` is the game's number in its series.
  */
 export function gameContext(league: League, g: ScheduledGame, gameNo?: number): string | undefined {
   if (g.type === 'playin') return 'Play-In';

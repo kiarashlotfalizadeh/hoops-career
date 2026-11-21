@@ -175,7 +175,7 @@ export interface PlayerStats {
 
 export interface AwardRecord {
   season: number;
-  type: string; // 'MVP', 'DPOY', 'All-NBA 1st', 'Champion', 'All-Star', ...
+  type: string; // 'MVP', 'DPOY', 'All-League 1st', 'Champion', 'All-Star', ...
 }
 
 export interface RatingsSnapshot {
@@ -278,7 +278,7 @@ export interface Player {
   tradedFrom?: { tid: number; season: number; also?: number[]; /** The season day of that trade (older saves don't have it). */ day?: number };
   /** Signed as a free agent or re-signed: he can't be traded before this season day (NBA: December 15, or three months after signing). */
   tradeLock?: { season: number; day: number };
-  experience: number; // NBA seasons completed
+  experience: number; // seasons completed in the league
   retiredSeason?: number;
   hof?: boolean;
   /** Accumulated season wear 0..100 (load management). */
@@ -868,10 +868,10 @@ export interface DraftPick {
 
 // ---------------------------------------------------------------- games
 
-/** 'cup' is the NBA Cup championship game: it doesn't count in the standings or season stats. */
+/** 'cup' is the In-Season Cup championship game: it doesn't count in the standings or season stats. */
 export type GameType = 'regular' | 'playin' | 'playoffs' | 'allstar' | 'cup';
 
-/** NBA Cup stage of a game: group games and the quarter/semifinals are regular-season games. */
+/** In-Season Cup stage of a game: group games and the quarter/semifinals are regular-season games. */
 export type CupRound = 'group' | 'qf' | 'sf' | 'final';
 
 export interface ScheduledGame {
@@ -1630,7 +1630,7 @@ export interface League {
   editVisit?: { tactics: Tactics; rotation: Rotation };
   /** First season of the user's current job (owner grace period); defaults to startSeason. */
   tenureStart?: number;
-  /** This season's NBA Cup (absent for leagues whose conferences can't split into groups of five). */
+  /** This season's In-Season Cup (absent for leagues whose conferences can't split into groups of five). */
   cup?: CupState | null;
   /** AI trade offers to the user that are still open. */
   proposals?: Proposal[];
@@ -1781,7 +1781,7 @@ export interface CupTie {
 }
 
 /**
- * The NBA Cup: six groups of five play four group games each on Cup nights in November. Group
+ * The In-Season Cup: six groups of five play four group games each on Cup nights in November. Group
  * winners and the best runner-up in each conference reach the knockouts in December. Group,
  * quarterfinal and semifinal games count in the standings; the championship doesn't. Teams that
  * don't reach the knockouts (and quarterfinal losers) get their last games on open dates in the

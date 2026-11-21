@@ -37,7 +37,7 @@ export function nextGame(league: League): ScheduledGame | undefined {
 }
 
 /**
- * A team's regular season (schedule.ts plays 82; the last two of the NBA Cup's are set once its
+ * A team's regular season (schedule.ts plays 82; the last two of the In-Season Cup's are set once its
  * groups are done): a game says of how many, since "Game 7" alone reads like a series' seventh.
  */
 const SEASON_GAMES = 82;
@@ -307,7 +307,7 @@ function phaseCard(league: League): { over: string; title: string; line: string;
       const ahead = picks.length ? draftOrder(league).findIndex((d) => d.tid === me) : -1;
       return {
         over: off,
-        title: 'NBA Draft',
+        title: 'Draft',
         line: ahead > 0 ? `${pickText} The next is ${ahead} pick${ahead === 1 ? '' : 's'} away.` : picks.length ? pickText : 'Your picks are in.',
         link: { to: '/office/draft', label: 'Draft board' },
       };

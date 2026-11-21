@@ -63,7 +63,7 @@ export const OFF_PRESETS: OffPreset[] = [
     id: 'balanced',
     name: 'Balanced Attack',
     tagline: 'A bit of everything',
-    description: 'Modern NBA default. Pick-and-roll first, with ball movement and a healthy shot profile.',
+    description: 'The modern default. Pick-and-roll first, with ball movement and a healthy shot profile.',
     bestFor: 'Rosters without one dominant creator.',
     values: { pace: 52, transition: 55, actions: { pnr: 58, iso: 35, post: 25, handoff: 52, motion: 55 }, threePoint: 62, rimAttack: 60, crashBoards: 55, huntMismatch: false },
   },

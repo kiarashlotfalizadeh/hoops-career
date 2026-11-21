@@ -69,8 +69,8 @@ describe('screen logic', () => {
 
       // teams by abbreviation, city or name, with their matchup page beside them
       const okc = search(index, 'okc')[0];
-      expect(okc).toMatchObject({ kind: 'team', title: 'Oklahoma City Thunder' });
-      expect(search(index, 'celtics')[0]).toMatchObject({ kind: 'team', alt: { label: 'Matchup' } });
+      expect(okc).toMatchObject({ kind: 'team', title: 'Oklahoma City Twisters' });
+      expect(search(index, 'shamrocks')[0]).toMatchObject({ kind: 'team', alt: { label: 'Matchup' } });
       // your own team goes to Team, with no matchup against yourself
       const mine = index.find((e) => e.id === `t:${league.userTid}`)!;
       expect(mine).toMatchObject({ to: '/team', alt: undefined });

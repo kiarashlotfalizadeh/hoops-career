@@ -81,7 +81,7 @@ function confSlots(league: League, conf: 'E' | 'W'): Slot[][] {
 
 type Phase = 'none' | 'projected' | 'playin' | 'live' | 'done';
 
-/** `cup`: the NBA Cup's row while it's on (the hub's), under the poster: the bracket's hero comes first. */
+/** `cup`: the In-Season Cup's row while it's on (the hub's), under the poster: the bracket's hero comes first. */
 export function PlayoffsTab({ league, cup }: { league: League; cup?: ReactNode }) {
   const userConf = league.teams[league.userTid].conf;
   const [conf, setConf] = useQueryParam<'E' | 'W'>('conf', userConf, ['E', 'W']);
@@ -362,7 +362,7 @@ export function FinalsCard({ league, finals, onOpen }: { league: League; finals?
   );
   return (
     <Section
-      title="NBA Finals"
+      title="Finals"
       right={
         <span className="lg-sec-meta">
           {finals ? (finals.winner !== undefined ? 'Final' : finals.highWins + finals.lowWins ? `Game ${finals.highWins + finals.lowWins + 1} next` : 'Best of 7') : 'Best of 7'}

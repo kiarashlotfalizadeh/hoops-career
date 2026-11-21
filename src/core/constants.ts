@@ -120,7 +120,7 @@ export const PHASE_LABEL: Record<string, string> = {
   playin: 'Play-in tournament',
   playoffs: 'Playoffs',
   draftLottery: 'Draft lottery',
-  draft: 'NBA draft',
+  draft: 'Draft',
   resign: 'Re-sign period',
   freeAgency: 'Free agency',
 };

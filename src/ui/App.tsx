@@ -64,6 +64,7 @@ import { legacyRoutes } from './routes/legacy';
 
 const Start = lazyRetry(() => import('./screens/Start'));
 const NewLeague = lazyRetry(() => import('./screens/NewLeague'));
+const Privacy = lazyRetry(() => import('./screens/Privacy'));
 const BLOCKED = 'Close other Hoops Career tabs or windows to finish updating your saves.';
 
 /** Hand the user a file from a button; a cancelled share sheet is no failure. */
@@ -215,7 +216,7 @@ function statusLine(league: League): string {
     case 'draftLottery':
       return `Draft lottery · ${league.season}`;
     case 'draft':
-      return `${league.season} NBA draft`;
+      return `${league.season} draft`;
     case 'resign':
       return `Re-signing · ${league.season}`;
     case 'freeAgency':
@@ -721,6 +722,7 @@ export function App() {
             <Routes>
               <Route path="/start" element={<Start />} />
               <Route path="/new" element={<NewLeague />} />
+              <Route path="/privacy" element={<Privacy />} />
               {/* inside a league, team marks and avatars wear its teams' abbreviations and colours */}
               <Route
                 path="/*"

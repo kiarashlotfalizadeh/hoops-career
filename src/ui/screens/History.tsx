@@ -253,7 +253,7 @@ function SeasonPage({ league, season }: { league: League; season: number }) {
     ['Finals MVP', name(a.finalsMvp)],
     ['Defensive Player of the Year', name(a.dpoy)],
     ['Rookie of the Year', name(a.roy)],
-    ['NBA Cup', a.cupWinner !== undefined ? `${league.teams[a.cupWinner].region} ${league.teams[a.cupWinner].name}` : undefined],
+    ['In-Season Cup', a.cupWinner !== undefined ? `${league.teams[a.cupWinner].region} ${league.teams[a.cupWinner].name}` : undefined],
   ] as const)
     if (v) winners.push([k, v]);
   const me = userCoach(league);

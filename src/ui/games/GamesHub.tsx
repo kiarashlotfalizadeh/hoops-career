@@ -31,7 +31,7 @@ const FILTER_LABEL: Record<ScheduleFilter | 'opp', string> = {
   opp: 'By opponent',
   home: 'Home games',
   away: 'Away games',
-  cup: 'NBA Cup',
+  cup: 'In-Season Cup',
   post: 'Playoffs',
 };
 

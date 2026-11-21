@@ -253,7 +253,7 @@ const age = (league: League, p: Player) => playerAge(p, league.season);
 
 /**
  * Each team's regular-season games still to play, and its home games among them: every team plays 82
- * (41 at home), though only 80 are on the schedule on opening night while the NBA Cup's knockout
+ * (41 at home), though only 80 are on the schedule on opening night while the In-Season Cup's knockout
  * window is kept clear (see cup.ts).
  */
 function gamesLeft(league: League): { left: number[]; home: number[] } {

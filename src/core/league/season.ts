@@ -398,7 +398,7 @@ export function preLeagueLegacy(league: League, p: Player): number {
 /** Hall of Fame score: awards won in the league plus a real player's earlier career. */
 export function hallOfFameScore(league: League, p: Player): number {
   // (his real honours from before the league are on his record too: his earlier career counts once, below)
-  const awards = p.awards.reduce((s, a) => s + (a.season < league.startSeason ? 0 : (HOF_POINTS[a.type] ?? (a.type.startsWith('All-NBA') ? 4 : 0))), 0);
+  const awards = p.awards.reduce((s, a) => s + (a.season < league.startSeason ? 0 : (HOF_POINTS[a.type] ?? (a.type.startsWith('All-League') ? 4 : 0))), 0);
   return awards + preLeagueLegacy(league, p);
 }
 
@@ -435,7 +435,7 @@ function retirements(league: League, rng: Rng) {
       }
       // the franchises he was a legend for retire his number
       retireNumbers(league, p);
-      // news: still a good player, or a decorated career (a few All-Star or All-NBA nods)
+      // news: still a good player, or a decorated career (a few All-Star or All-League nods)
       if (p.ovr >= 76 || score >= 8 || wasTid === league.userTid) retiredNow.push(`${playerName(p)}${p.hof ? ' (Hall of Fame)' : ''}`);
     }
   }
@@ -459,7 +459,7 @@ function endPlayoffs(league: League) {
   for (const p of teamPlayers(league, champ)) p.awards.push({ season: league.season, type: 'Champion' });
   addNews(league, {
     kind: 'award',
-    text: `🏆 The ${teamName(league.teams[champ])} are ${league.season} NBA champions! Finals MVP: ${aw.finalsMvp !== undefined ? playerName(league.players[aw.finalsMvp]) : '—'}.`,
+    text: `🏆 The ${teamName(league.teams[champ])} are ${league.season} champions! Finals MVP: ${aw.finalsMvp !== undefined ? playerName(league.players[aw.finalsMvp]) : '—'}.`,
     tids: [champ],
     pids: aw.finalsMvp !== undefined ? [aw.finalsMvp] : [],
   });

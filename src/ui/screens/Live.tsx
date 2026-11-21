@@ -326,7 +326,7 @@ export default function Live() {
     return bodyOf(p?.heightIn ?? 78, p?.weightLb ?? 215, r?.str, r && { spd: r.spd, ath: r.ath, hnd: r.hnd, sht: Math.max(r.tp, r.mid) });
   };
   // whose floor: the home team's, or a neutral one for the Cup final; in the playoffs, dressed for them (the Finals' own way)
-  const floor = courtFloor(home, kits[0], neutral, game.game.cup === 'final' ? 'NBA Cup' : '', postOf(league, game.game));
+  const floor = courtFloor(home, kits[0], neutral, game.game.cup === 'final' ? 'In-Season Cup' : '', postOf(league, game.game));
   const myView = view.sides[userSide];
   const abbrevs = { us: me.team.abbrev, them: sim.T[1 - userSide].team.abbrev };
   const teams: [typeof home, typeof away] = [home, away];

@@ -1,5 +1,5 @@
 // The schedule: a generated one that keeps the NBA's rules and calendar, and the real 2026-27 one
-// from the seed (its games and NBA Cup groups, completed or replaced when the data falls short).
+// from the seed (its games and In-Season Cup groups, completed or replaced when the data falls short).
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
@@ -13,7 +13,7 @@ import { dayToDate } from '../league/helpers';
 const seed = seedJson as unknown as SeedData;
 const make = (s: SeedData | null) => createLeague({ name: 's', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: s, rngSeed: 9 });
 
-/** With the NBA Cup, 80 games per team are scheduled up front and two more once the groups are decided. */
+/** With the In-Season Cup, 80 games per team are scheduled up front and two more once the groups are decided. */
 function checkSchedule(league: ReturnType<typeof make>) {
   const games = league.schedule.filter((g) => g.type === 'regular');
   const perTeam = league.cup ? 80 : 82;
@@ -110,7 +110,7 @@ describe('schedule', () => {
     }
 
     if (!seed.schedule) return;
-    // the real 2026-27 schedule: the real games and the real NBA Cup groups
+    // the real 2026-27 schedule: the real games and the real In-Season Cup groups
     {
       const league = make(seed);
       const real = checkSchedule(league);

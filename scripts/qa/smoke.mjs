@@ -63,7 +63,7 @@ try {
   await page.getByText('New League').click();
   await page.getByText('Choose your team').click();
   await page.getByText('West', { exact: true }).click();
-  await page.getByRole('button', { name: /Thunder/ }).click();
+  await page.getByRole('button', { name: /Twisters/ }).click();
   await page.getByText(/Take over the/).click();
   await page.fill('input[placeholder="Your name"]', 'Smoke Coach');
   await page.getByText('Start career').click();
