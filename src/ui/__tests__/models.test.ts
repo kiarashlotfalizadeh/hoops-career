@@ -4,11 +4,12 @@
 // turned away, fails here and not as a blank court on someone's phone.
 import { DataTexture, RGFormat, ShaderLib, Texture, Vector3, type CanvasTexture } from 'three';
 import { describe, expect, it } from 'vitest';
+import type { PlayerLook } from '../../core/types';
 import { ANAT_MM, anatOf } from '../live/court3d/anat';
 import { knitTile, LAYERS, ribTile, skinTile, TILE } from '../live/court3d/detail';
 import { figureGeo, readFaces, RELIEF_MARK, seamSlopes, stuffMaterial, type Detail } from '../live/court3d/figure';
 import { merged, placed, readGlb, type Thing } from '../live/court3d/glb';
-import { lookOf, STYLES } from '../live/court3d/look';
+import { BEARDS, HAIR_DONE, HAIR_OWN, lookOf, SKINS, STYLES } from '../live/court3d/look';
 import { decodePng } from '../live/court3d/png';
 import { smoothed } from '../live/court3d/smooth';
 import { PARTS, POSE_NAMES, posed } from '../live/court3d/sideline';
@@ -747,6 +748,53 @@ describe("the 3D court's models", () => {
       expect(looks.filter((l) => l.age > 0.8).length).toBeGreaterThan(0);
       expect(Math.max(...looks.map((l) => l.sweat)) / Math.min(...looks.map((l) => l.sweat))).toBeGreaterThan(2);
       expect(Math.max(...looks.map((l) => l.lip)) - Math.min(...looks.map((l) => l.lip))).toBeGreaterThan(1.8);
+
+      // and the real players' looks (data/looks.json), which is what stands beside a star who looks like himself: every
+      // line a player of the seed, in words lookOf knows (one it doesn't is passed over, and the man made up); a
+      // light-skinned man's hair colour said, since his may be anything from black to blond; and the 300 men of the seed
+      // who played most last season all in it (ten a team: whoever is on the floor)
+      const seed = (await import('../../data/seed.json')).default as unknown as {
+        players: { id: string; stats: { season: number; playoffs: boolean; real?: boolean; min: number }[] }[];
+      };
+      const written = (await import('../../../data/looks.json')).default as Record<string, PlayerLook | undefined>;
+      const ids = new Set(seed.players.map((p) => p.id));
+      for (const [id, look] of Object.entries(written)) {
+        expect(ids.has(id), `${id} is in looks.json and not in the seed`).toBe(true);
+        expect(
+          Object.keys(look!).filter((k) => !['tone', 'hair', 'beard', 'hairColor', 'recede'].includes(k)),
+          id,
+        ).toEqual([]);
+        if (look!.tone !== undefined) expect(Number.isInteger(look!.tone) && look!.tone >= 0 && look!.tone < SKINS.length, `${id}: tone`).toBe(true);
+        if (look!.hair !== undefined)
+          expect(
+            STYLES.map((st) => st.name as string),
+            `${id}: hair`,
+          ).toContain(look!.hair);
+        if (look!.beard !== undefined) expect(BEARDS as readonly string[], `${id}: beard`).toContain(look!.beard);
+        if (look!.hairColor !== undefined)
+          expect(look!.hairColor in HAIR_OWN || look!.hairColor in HAIR_DONE || /^#[0-9a-f]{6}$/i.test(look!.hairColor), `${id}: hairColor`).toBe(true);
+        if (look!.tone !== undefined && look!.tone <= 2 && look!.hair !== undefined) expect(look!.hairColor, `${id}: a light-skinned man's hair colour`).toBeDefined();
+        if (look!.recede !== undefined) expect(look!.recede >= 0 && look!.recede <= 1, `${id}: recede`).toBe(true);
+      }
+      const played = (p: (typeof seed.players)[number]) => {
+        const real = p.stats.filter((st) => st.real && !st.playoffs);
+        const last = Math.max(...real.map((st) => st.season));
+        return real.filter((st) => st.season === last).reduce((n, st) => n + st.min, 0);
+      };
+      const busiest = [...seed.players].sort((a, b) => played(b) - played(a)).slice(0, 300);
+      expect(busiest.filter((p) => !written[p.id]).map((p) => p.id)).toEqual([]);
+      // a look given is as given, the rest still his number's; and a man with one, even an empty one (a real player
+      // nobody has written up), is made up plainly: nothing dyed, no hairline gone back, where one made-up man in
+      // sixteen has bleached his hair
+      const given = lookOf(77, { tone: 0, hair: 'crop', beard: 'full', hairColor: 'blond', recede: 0.5 });
+      expect([given.tone, STYLES[given.style].name, BEARDS[given.beard], given.hair, given.brows, given.recede]).toEqual([0, 'crop', 'full', HAIR_OWN.blond, HAIR_OWN.blond, 0.5]);
+      expect(lookOf(77, { hairColor: 'platinum' }).hair).toBe(HAIR_DONE.platinum);
+      expect(lookOf(77, { hairColor: 'platinum' }).brows).not.toBe(HAIR_DONE.platinum);
+      const natural = new Set<string>(Object.values(HAIR_OWN));
+      const plain = Array.from({ length: 3000 }, (_v, pid) => lookOf(pid, {}));
+      expect(looks.some((l) => !natural.has(l.hair) && l.hair !== l.brows)).toBe(true);
+      expect(plain.filter((l) => l.hair !== l.brows || l.recede !== 0)).toEqual([]);
+      expect(plain.map((l) => [l.tone, l.style, l.beard])).toEqual(looks.map((l) => [l.tone, l.style, l.beard]));
     }
 
     // the people round the floor: three bodies, each one skin on the player's own bones, with a face, a jaw and a fuller

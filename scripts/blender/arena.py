@@ -26,6 +26,11 @@ FAN_KNEE = (0.2, 1.2)
 FAN_THIGH = 1.2
 #: How high his elbow is as his arm hangs: the points of an arm under it are his forearm, which bends about it.
 FAN_ELBOW = 0.6
+#: An arm's root (crowd.ts ARM_ROOT: change both). How high on the arm as it hangs a point is all the arm's own, and how
+#: high it is all his trunk's: between the two it goes that share of the way round with the arm. His shoulder is skin
+#: over the joint, and the rings of it fan out round the joint as the arm goes up; what is under the joint goes all the
+#: way with the arm (a ring there that went part of the way had the arm leave him downward and come up in a hook).
+FAN_ROOT = (1.44, 1.635)
 
 
 # --- shapes this file needs that lib.py doesn't have (all in the game's frame) ---
@@ -511,13 +516,17 @@ def fan_pose(p, part, up=0.0, keen=True, clap=0.0):
         sh = FAN_SIT[0] + ((2.55 if keen else 0.75) - FAN_SIT[0]) * up
         el = FAN_SIT[1] + ((0.55 if keen else 1.5 + 0.12 * clap) - FAN_SIT[1]) * up
         reach = min(1.0, max(0.0, (FAN_ELBOW - y) / 1.1))
+        own = min(1.0, max(0.0, (FAN_ROOT[1] - y) / (FAN_ROOT[1] - FAN_ROOT[0])))
+        sh *= own
         if y < FAN_ELBOW:
             # (his forearm, about his elbow)
             ry, rz = y - FAN_ELBOW, z
             y, z = FAN_ELBOW + ry * cos(el) + rz * sin(el), rz * cos(el) - ry * sin(el)
         ry, rz = y - FAN_SHOULDER[1], z
         y, z = FAN_SHOULDER[1] + ry * cos(sh) + rz * sin(sh), rz * cos(sh) - ry * sin(sh)
-        x += side * up * (0.3 * (1 - reach) if keen else -(0.56 + 0.06 * clap) * reach)
+        # (his hands come in across him to clap; arms in the air go out from him the higher they are, as the shader has them)
+        t = min(1.0, max(0.0, (y - 1.2) / 1.6))
+        x += side * up * (0.3 * own * t * t * (3 - 2 * t) if keen else -(0.56 + 0.06 * clap) * reach)
     # the rest of him goes where the top of his thighs goes: up, and forward over his feet
     return (x, y + FAN_THIGH * sin(swing), z + FAN_THIGH * (1 - cos(swing)))
 
@@ -836,9 +845,11 @@ def fan(name):
         # (The top of it is not a dome on the arm's own line. The arm hangs outside his trunk, and a dome there stood
         # up beside his shoulder's slope as a ball in a socket, a cap he wore on each shoulder. It goes on up and in
         # along that slope instead, each ring nearer his neck than the one under it (`in`, ft toward his middle), and
-        # ends on his trunk's own shoulder: neck, slope, the round of the shoulder, the arm, one line.)
+        # ends on his trunk's own shoulder: neck, slope, the round of the shoulder, the arm, one line. Those rings are
+        # his shoulder's skin, and go only part of the way with the arm (FAN_ROOT): by the floor the first of them is
+        # inside his trunk and does not move at all, so nothing of the arm's top is ever swung out of him.)
         if near:
-            line = [(1.62, 0.07, 0.15, 0.13), (1.56, 0.14, 0.185, 0.055), (1.44, 0.18, 0.19, 0.0), (1.1, 0.16, 0.165, 0.0), (0.68, 0.128, 0.13, 0.0), (0.52, 0.128, 0.128, 0.0), (0.3, 0.132, 0.126, 0.0), (-0.2, 0.078, 0.07, 0.0), (-0.3, 0.094, 0.05, 0.0), (-0.42, 0.1, 0.047, 0.0), (-0.53, 0.086, 0.04, 0.0)]
+            line = [(1.635, 0.03, 0.1, 0.27), (1.62, 0.07, 0.15, 0.13), (1.56, 0.14, 0.185, 0.055), (1.5, 0.166, 0.19, 0.018), (1.42, 0.18, 0.19, 0.0), (1.1, 0.16, 0.165, 0.0), (0.68, 0.128, 0.13, 0.0), (0.52, 0.128, 0.128, 0.0), (0.3, 0.132, 0.126, 0.0), (-0.2, 0.078, 0.07, 0.0), (-0.3, 0.094, 0.05, 0.0), (-0.42, 0.1, 0.047, 0.0), (-0.53, 0.086, 0.04, 0.0)]
         else:
             line = [(1.62, 0.07, 0.14, 0.12), (1.54, 0.15, 0.175, 0.04), (1.38, 0.16, 0.165, 0.0), (1.0, 0.14, 0.145, 0.0), (0.68, 0.122, 0.125, 0.0), (0.52, 0.118, 0.12, 0.0), (0.1, 0.105, 0.105, 0.0), (-0.22, 0.075, 0.07, 0.0), (-0.33, 0.095, 0.05, 0.0), (-0.5, 0.08, 0.04, 0.0)]
         if low:

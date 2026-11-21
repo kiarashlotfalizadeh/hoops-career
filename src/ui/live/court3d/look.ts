@@ -1,8 +1,7 @@
 // What a man looks like: his skin's tone, his hair and how he wears it, his beard, the shape of his
-// face. All of it comes from his id, the same every night, and none of it from who he is: a real name
-// gets a look as made up as anyone's, unless the league's own data gives a player his (types.ts PlayerLook:
-// lookOf takes what is given and makes up the rest; the game ships with none). Plain data (no three.js), so the benches, the coaches and the
-// referees can take theirs from here too.
+// face. All of it comes from his id, the same every night, and none of it from who he is, unless the league's
+// own data gives a player his (types.ts PlayerLook, data/looks.json: lookOf takes what is given and makes up
+// the rest). Plain data (no three.js), so the benches, the coaches and the referees can take theirs from here too.
 
 import type { PlayerLook } from '../../../core/types';
 
@@ -230,9 +229,17 @@ const BROWN = '#553a25';
 const LIGHT_BROWN = '#7a5a38';
 const BLOND = '#a8875a';
 const AUBURN = '#6a3520';
+const RED = '#a5552a';
 /** What some men dye theirs: bleached, or nearly white. */
 const BLEACHED = '#b8925a';
 const PLATINUM = '#cfc2a4';
+/**
+ * Hair's colours by name, for a look that is written down (PlayerLook.hairColor). The first are a man's own: his brows
+ * and his beard are that colour too. The last two are what he has done to the hair on his head, as a hex is: his brows
+ * stay what his tone gives him.
+ */
+export const HAIR_OWN: Readonly<Record<string, string>> = { black: BLACK, dark: DARK_BROWN, brown: BROWN, light: LIGHT_BROWN, blond: BLOND, auburn: AUBURN, red: RED };
+export const HAIR_DONE: Readonly<Record<string, string>> = { bleached: BLEACHED, platinum: PLATINUM };
 
 /** Which colours of hair go with a tone of skin (the commoner ones more than once). */
 const HAIRS: readonly (readonly string[])[] = [
@@ -284,9 +291,12 @@ function pick(shares: readonly number[], roll: number): number {
 
 /**
  * A man's look, from his id: the same every time, and well spread over any roster. `real`: what of it is given and
- * not made up (types.ts PlayerLook: his tone, how he wears his hair, his beard, a dyed colour, his hairline): those
+ * not made up (types.ts PlayerLook: his tone, how he wears his hair, his beard, his hair's colour, his hairline): those
  * parts are as given, and everything else is still his id's, made up round them (the shape of his face goes with the
- * tone he has). A name or a value it doesn't know is passed over, not guessed at.
+ * tone he has). A name or a value it doesn't know is passed over, not guessed at. And a man with a look given, even an
+ * empty one (a real player nobody has written up: ui/live/looks.ts), is made up plainly: nothing dyed and no hairline
+ * gone back unless it says so. Those are what the eye goes to, and on a real name they were a mistake about him, not
+ * a detail: a starter bleached blond beside four men who look like themselves.
  */
 export function lookOf(pid: number, real?: PlayerLook): Look {
   const r = (salt: number) => hash(pid, salt);
@@ -305,9 +315,11 @@ export function lookOf(pid: number, real?: PlayerLook): Look {
   const grown = real?.beard === undefined ? -1 : (BEARDS as readonly string[]).indexOf(real.beard);
   const hairs = HAIRS[tone];
   const span = (salt: number, lo: number, hi: number) => lo + (hi - lo) * r(salt);
-  const own = hairs[Math.floor(r(3) * hairs.length) % hairs.length];
-  // (one man in sixteen or so has dyed what he can: bleached, now and then nearly white)
-  const dyed = DYED.includes(STYLES[style].name) && r(19) < 0.13 ? (r(20) < 0.7 ? BLEACHED : PLATINUM) : null;
+  const said = real?.hairColor;
+  const own = (said !== undefined ? HAIR_OWN[said] : undefined) ?? hairs[Math.floor(r(3) * hairs.length) % hairs.length];
+  const done = said === undefined ? null : (HAIR_DONE[said] ?? (/^#[0-9a-f]{6}$/i.test(said) ? said : null));
+  // (one made-up man in sixteen or so has dyed what he can: bleached, now and then nearly white)
+  const dyed = !real && DYED.includes(STYLES[style].name) && r(19) < 0.13 ? (r(20) < 0.7 ? BLEACHED : PLATINUM) : null;
   const kinds = Math.floor(r(14) * FACES.length) % FACES.length;
   const kind = FACES[kinds];
   // (a man's own, off his kind's by as much as a third of the way to either end)
@@ -316,7 +328,7 @@ export function lookOf(pid: number, real?: PlayerLook): Look {
   return {
     shape: shapeOf(r, tone, age),
     skin: SKINS[tone],
-    hair: (real?.hairColor && /^#[0-9a-f]{6}$/i.test(real.hairColor) ? real.hairColor : null) ?? dyed ?? own,
+    hair: done ?? dyed ?? own,
     brows: own,
     style,
     beard: grown >= 0 ? grown : pick(BEARD_SHARE, r(4)),
@@ -325,7 +337,7 @@ export function lookOf(pid: number, real?: PlayerLook): Look {
     eyes: EYES[tone < 2 && r(5) < 0.4 ? 4 + (r(6) < 0.5 ? 0 : 1) : Math.floor(r(6) * 4) % 4],
     brow: span(7, 0.35, 1),
     // (most men's hairline is where it was; one in eight or so has gone back at the temples, a few a long way)
-    recede: real?.recede !== undefined ? Math.min(1, Math.max(0, real.recede)) : r(21) < 0.12 ? span(22, 0.25, 0.8) : 0,
+    recede: real?.recede !== undefined ? Math.min(1, Math.max(0, real.recede)) : !real && r(21) < 0.12 ? span(22, 0.25, 0.8) : 0,
     notch: r(23) < 0.07,
     side: r(24) < 0.5 ? 1 : -1,
     cut: { sides: r(25), top: r(26) },

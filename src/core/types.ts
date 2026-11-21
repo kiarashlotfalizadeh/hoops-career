@@ -205,9 +205,10 @@ export interface DraftInfo {
 
 /**
  * How a player looks, where that is given and not made up from his number: each part named here is his own, and the
- * rest is still made up (the 3D court's look.ts). data/looks.json has these for the league's best-known players, by
- * Basketball Reference id: the court reads it when it draws a man (ui/live/looks.ts), and a seed built after it
- * carries them too (scripts/data/build-seed.ts). A player's own, here, comes before the file's.
+ * rest is still made up (the 3D court's look.ts), plainly: nothing dyed, no hairline gone back. data/looks.json has
+ * these for nearly every player the game ships with, by Basketball Reference id (written from memory of them, and
+ * yours to correct): the court reads it when it draws a man (ui/live/looks.ts), and a seed built after it carries them
+ * too (scripts/data/build-seed.ts). A player's own, here, comes before the file's.
  */
 export interface PlayerLook {
   /** His skin, lightest to darkest: 0 to 7 (look.ts SKINS). */
@@ -216,9 +217,13 @@ export interface PlayerLook {
   hair?: string;
   /** His beard: one of look.ts BEARDS ('none', 'stubble', 'goatee', 'beard', 'full', 'strap'). */
   beard?: string;
-  /** His hair's colour, where it is not his own (a hex: bleached, dyed). */
+  /**
+   * His hair's colour. His own, by name ('black', 'dark', 'brown', 'light', 'blond', 'auburn', 'red': look.ts HAIR_OWN;
+   * his brows and beard are that too), or what he has done to it ('bleached', 'platinum', or a hex). Left out, it is one
+   * that goes with his tone: say it for a light-skinned man, whose hair may be anything from black to blond.
+   */
   hairColor?: string;
-  /** How far his hairline has gone back at his temples, 0 to 1. */
+  /** How far his hairline has gone back at his temples, 0 to 1 (left out: not at all). */
   recede?: number;
 }
 

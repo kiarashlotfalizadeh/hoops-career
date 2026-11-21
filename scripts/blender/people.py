@@ -55,6 +55,7 @@ from figure import (  # noqa: E402
     TUCK,
     WAIST,
     WHITE,
+    ARM_INV,
     arm_frame,
     copy,
     crop,
@@ -140,6 +141,71 @@ def tree_of(obj):
 def cuffs(at):
     """A plane across each arm this far down it."""
     return [((arm_frame(s) @ Vector((0, -at, 0))).to_tuple(), (arm_frame(s).to_3x3() @ Vector((0, -1, 0))).to_tuple()) for s in (1, -1)]
+
+
+#: At a suit's wrist: how far off his skin the shirt's cuff stands, and the jacket's sleeve over it (ft). The gap between
+#: the two is the whole of the fix (see fit_sleeves): two skins a hair apart come through each other wherever either is
+#: thinned, and from across a floor the card can't tell which is in front.
+CUFF_OFF, SLEEVE_OFF = 0.022, 0.05
+#: How much of the cuff shows past the sleeve's end, and how far up inside the sleeve it starts (ft).
+CUFF_SHOWS, CUFF_UNDER = 0.05, 0.1
+
+
+def round_arm(tree, s, u, th):
+    """
+    His arm's skin (side s) this far down the arm and this far round it (0: out along its hinge; the arm's own frame):
+    how far out from the arm's line it is, that line's point there and the way out from it (the game's frame).
+    """
+    m = arm_frame(s)
+    d = m.to_3x3() @ Vector((math.cos(th), 0.0, math.sin(th)))
+    o = m @ Vector((0.0, -u, 0.0))
+    hit = tree.ray_cast(B(*(o + d * 0.6)), B(*(-d)))
+    return (0.6 - hit[3] if hit[0] is not None else 0.0), o, d
+
+
+def fit_sleeves(jacket, skin):
+    """
+    The jacket's sleeves, cut to his wrists: each sleeve's last hand's breadth is brought to SLEEVE_OFF off his own
+    wrist all the way round (measured, as his collar is on his neck), from as it hangs a foot above that. Pushed off
+    him by a number, made one skin, smoothed and thinned, a sleeve's end was wherever those left it: on his shirt's
+    cuff in one place and through it in the next.
+    """
+    for v in jacket.data.vertices:
+        p = G(v.co)
+        for s in (1, -1):
+            loc = ARM_INV[s] @ p
+            rho, u = math.hypot(loc.x, loc.z), -loc.y
+            if rho > 0.5 or rho < 1e-6 or not CUFF - 0.4 < u < CUFF + 0.12:
+                continue
+            r = round_arm(skin, s, u, math.atan2(loc.z, loc.x))[0]
+            if r <= 0:
+                continue
+            k = (rho + (r + SLEEVE_OFF - rho) * sstep(CUFF - 0.4, CUFF - 0.12, u)) / rho
+            v.co = B(*(arm_frame(s) @ Vector((loc.x * k, loc.y, loc.z * k))))
+    jacket.data.update()
+
+
+def shirt_cuff(skin, s, mat, n):
+    """
+    A shirt's cuff at one wrist: a band on his wrist itself, CUFF_OFF off his skin all the way round, from inside the
+    sleeve (it starts closer to him there, under the cloth) to CUFF_SHOWS past its end, where it turns in to his wrist.
+    Built on his arm, not cut from the shirt: it is where it is put, whatever thinning does to the rest.
+    """
+    rings = []
+    for u, off in ((CUFF - CUFF_UNDER, 0.014), (CUFF - 0.03, CUFF_OFF), (CUFF + CUFF_SHOWS - 0.008, CUFF_OFF), (CUFF + CUFF_SHOWS, 0.005)):
+        ring = []
+        for k in range(n):
+            r, o, d = round_arm(skin, s, u, 2 * math.pi * k / n)
+            ring.append(tuple(o + d * (r + off)))
+        rings.append(ring)
+    o = loft(rings, 'cuff', cap=False)
+    fix_normals(o)
+    me = o.data
+    mid = sum((v.co for v in me.vertices), Vector()) / len(me.vertices)
+    if sum(f.normal.dot(f.center - mid) * f.area for f in me.polygons) < 0:
+        me.flip_normals()
+    set_material(o, material(mat))
+    return tag(o, BY_PLACE)
 
 
 def neck(p, c):
@@ -670,29 +736,26 @@ def strip(rows, name, mat):
 def dress_staff(hi):
     """
     A suit: a jacket (its lapels a flap of their own down each side of the V it opens in, two buttons) over a
-    shirt (a collar with its points, a cuff past each sleeve's end) and a tie; trousers a material of their own,
-    so a jacket and trousers can differ; dark shoes. Only his head and hands show.
+    shirt (a collar with its points, a cuff past each sleeve's end, with room between the two) and a tie; trousers
+    a material of their own, so a jacket and trousers can differ; dark shoes. Only his head and hands show.
     """
     mid = thin(copy(hi, 'mid'), 44000)
     bpy.data.objects.remove(hi)
     body = skin_of(mid, 1500, [level(5.46), *cuffs(CUFF - 0.08)], lambda p: (p[1] > 5.46 and abs(p[0]) < 0.6) or down_arm(p) > CUFF - 0.08)
 
-    # the shirt: what shows of it in the jacket's V, and a cuff at each wrist
+    # the shirt: what shows of it in the jacket's V; and a cuff at each wrist, a band of its own on the wrist itself
     shirt = copy(mid, 'shirt')
-    push(shirt, lambda p: 0.02 + 0.012 * sstep(CUFF - 0.2, CUFF - 0.1, down_arm(p)))
-    cut(
-        shirt,
-        [level(5.58), level(4.05), *cuffs(CUFF - 0.1), *cuffs(CUFF + 0.05)],
-        lambda p: (4.05 < p[1] < 5.58 and abs(p[0]) < 0.5 and p[2] > 0 and down_arm(p) < 0.3) or CUFF - 0.1 < down_arm(p) < CUFF + 0.05,
-    )
+    push(shirt, lambda p: 0.02)
+    cut(shirt, [level(5.58), level(4.05)], lambda p: 4.05 < p[1] < 5.58 and abs(p[0]) < 0.5 and p[2] > 0 and down_arm(p) < 0.3)
     # (little of it shows: cut out first, then thinned, so that little keeps its shape)
-    thin(shirt, 900)
+    thin(shirt, 800)
     set_material(shirt, material(SHIRT))
     # its collar: a band round his neck, a leaf each side of the knot down to its point on his chest. It is on his
     # neck: each point of it a finger off his own skin at its own height (his neck is measured, all the way round: a
     # ring of one size stood off a neck thinner than it, and you could see down between the two)
     under = tree_of(shirt)
     skin = tree_of(mid)
+    wrists = [shirt_cuff(skin, s, SHIRT, 16 if DETAIL >= 1 else 8) for s in (1, -1)]
     rows = []
     for f in (0, 0.5, 1):
         row = []
@@ -731,6 +794,7 @@ def dress_staff(hi):
     relax(jacket, 8)
     thin(jacket, 6400)
     relax(jacket, 1)
+    fit_sleeves(jacket, skin)
     cloth = tree_of(jacket)
     hem = HIP - 0.42
     top_ = 5.74
@@ -778,7 +842,7 @@ def dress_staff(hi):
     bpy.data.objects.remove(mid)
     for o in (shirt, collar, jacket, tie):
         tag(o, BY_PLACE)
-    built = [body, shirt, collar, jacket, *flaps, *buttons, tie, trousers(2300, LEGS), *head_bits()]
+    built = [body, shirt, *wrists, collar, jacket, *flaps, *buttons, tie, trousers(2300, LEGS), *head_bits()]
     return built + dark_shoes()
 
 

@@ -267,6 +267,12 @@ function talkOf(seed: number): number {
 const SHOULDERS = [0.9, 0.97];
 const RIDE = [3.2, 0.8];
 const RIDERS = 0.7;
+/**
+ * An arm's root (FAN_MOVE fanAt, arena.py FAN_ROOT: change both): how high on it as it hangs (ft over his hips) a
+ * point is all the arm's own, and how high it is all his trunk's. Between the two it goes that share of the way
+ * round with the arm: his shoulder, skin over the joint (at 1.55), fanned out about it when the arm goes up.
+ */
+const ARM_ROOT = [1.44, 1.635];
 /** Someone leaving: how far along his row (ft) he goes toward the aisle before he is lost from it. */
 const FILE_OUT = 5.5;
 /** The visitors' baskets in a row (none of the home side's between) that have the home crowd sit back, and how long a slump takes to lift (s). */
@@ -446,13 +452,16 @@ const FAN_MOVE = /* glsl */ `
     // his own build: a belly out in front of him, shoulders broader or narrower (his arms out or in with them),
     // a bigger or smaller head (about his neck), arms thicker or thinner about their own middle
     float side = part < 2.5 ? 1.0 : -1.0;
+    float own = 1.0;
     if (part < 0.5) {
       p.z += build.x * smoothstep(0.0, 0.18, p.z) * smoothstep(-0.1, 0.45, p.y) * (1.0 - smoothstep(0.75, 1.35, p.y));
       p.x *= 1.0 + build.y * smoothstep(0.9, 1.45, p.y) * (1.0 - smoothstep(1.62, 1.78, p.y));
     } else if (part < 1.5) {
       p = vec3(0.0, 1.8, -0.04) + (p - vec3(0.0, 1.8, -0.04)) * (1.0 + build.z);
     } else {
-      float thick = 1.0 + build.w * step(p.y, 1.62);
+      // (how much of the arm's a point of it is: none at its root on his shoulder, all of it from under the joint)
+      own = clamp((${ARM_ROOT[1]} - p.y) / ${ARM_ROOT[1] - ARM_ROOT[0]}, 0.0, 1.0);
+      float thick = 1.0 + build.w * own;
       p.x = side * (0.67 + 0.6 * build.y) + (p.x - side * 0.67) * thick;
       p.z *= thick;
     }
@@ -467,7 +476,10 @@ const FAN_MOVE = /* glsl */ `
     if (part > 1.5) {
       // an arm: it swings from the shoulder, and its forearm (the points under the elbow as it hangs) about
       // the elbow. A pose is how far forward the upper arm is, how far the elbow is bent, and how far his
-      // hand comes in across him (under 0: out from him)
+      // hand comes in across him (under 0: out from him). The top of it is the skin over his shoulder, not a
+      // rod in a socket: its root (own 0) stays on his trunk, and each ring under that goes more of the way
+      // round with the arm (ARM_ROOT), fanned about the joint as a shoulder bunches when a hand goes up. All
+      // of it turned as one, the round of his shoulder swung out of his back and the arm's end hung off him
       vec3 piv = vec3(side * (0.69 + 0.6 * build.y), 1.55, 0.0);
       float clap = sin(uTime * (13.0 + 4.0 * fract(seed * 27.1)) + beat);
       bool cloth = part < 2.5 && towel > 0.0;
@@ -520,12 +532,13 @@ const FAN_MOVE = /* glsl */ `
       vec3 r = p - vec3(piv.x, 0.6, 0.0);
       if (p.y < 0.6) r = vec3(r.x, r.y * cos(pose.y) + r.z * sin(pose.y), r.z * cos(pose.y) - r.y * sin(pose.y));
       r.y -= 0.95;
-      r = vec3(r.x, r.y * cos(pose.x) + r.z * sin(pose.x), r.z * cos(pose.x) - r.y * sin(pose.x));
+      float fore = pose.x * own;
+      r = vec3(r.x, r.y * cos(fore) + r.z * sin(fore), r.z * cos(fore) - r.y * sin(fore));
       // (side to side about the shoulder: a towel fast and wide, empty hands slower)
-      float sw = wave * (cloth ? 0.6 * sin(uTime * 8.0 + beat * 4.0) : 0.38 * sin(uTime * 4.6 + beat));
+      float sw = own * wave * (cloth ? 0.6 * sin(uTime * 8.0 + beat * 4.0) : 0.38 * sin(uTime * 4.6 + beat));
       r.xy = vec2(r.x * cos(sw) - r.y * sin(sw), r.x * sin(sw) + r.y * cos(sw));
       p = piv + r;
-      p.x -= side * 0.6 * (max(pose.z, 0.0) * reach - max(-pose.z, 0.0) * smoothstep(1.2, 2.8, p.y));
+      p.x -= side * 0.6 * (max(pose.z, 0.0) * reach - max(-pose.z, 0.0) * own * smoothstep(1.2, 2.8, p.y));
     } else if (part > 0.5) {
       // his head, about his neck: toward the ball, loosely, and off round the building now and then (hardly at all
       // while a play is on, nor in a nervous end); down over his phone, if that is where he is, and down a little

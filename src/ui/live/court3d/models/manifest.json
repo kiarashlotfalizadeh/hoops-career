@@ -24,15 +24,15 @@
     }
   },
   "people": {
-    "sources": "d37a0c19e1046c8bb770b66c76694c6b4f26059eda38bf32823e0af598d618fc",
+    "sources": "f12b12e7de49bbb783cfeae0e6eaa4d7f309fcf1d030984892f857c85173cbcd",
     "pack": 3,
     "blender": "Blender 5.2.1 LTS",
-    "bytes": 1211000
+    "bytes": 1214472
   },
   "arena": {
-    "sources": "18081da5f87874e6fcbe64b55348b92d7517a46e72e7eca73f0e4e6e040c72c7",
+    "sources": "e65a4906945daa269656c85ccb83277e221fbef4f061ab43c83268381bae1a08",
     "pack": 3,
     "blender": "Blender 5.2.1 LTS",
-    "bytes": 911548
+    "bytes": 932144
   }
 }
