@@ -3,12 +3,10 @@
 // upset, an injury), picked by a hash of the game id so a game always reads the same and nothing is
 // drawn from the league's random stream.
 
-import type { BoxLine, GameResult, League, Player, TeamBox } from '../types';
+import type { BoxLine, GameResult } from '../types';
 import { hashString } from '../random';
-import { playerName, shortName, teamCity } from '../league/helpers';
-import { coachTemper, playerVoice, type CoachTemper, type PlayerVoice } from '../league/voices';
-import { decidingFactors, type Factor, type GameReport } from './gameReport';
-import { COMEBACK_WP, wpStory } from './winProb';
+import { type CoachTemper, type PlayerVoice } from '../league/voices';
+import { wpStory } from './winProb';
 
 export interface Quote {
   /** Who said it: "Jalen Brunson" or "Joe Mazzulla". */
@@ -18,32 +16,6 @@ export interface Quote {
   tid: number;
   pid?: number;
   text: string;
-}
-
-/** The game from the user's side, with the facts the templates read. */
-interface Facts {
-  won: boolean;
-  margin: number;
-  ot: number;
-  us: TeamBox;
-  them: TeamBox;
-  usName: string;
-  themName: string;
-  /** Our player of the game, or our best game: the voice of the locker room. */
-  voice: BoxLine | undefined;
-  pogOurs: boolean;
-  /** Their 30-point scorer, if any. */
-  theirStar: BoxLine | undefined;
-  /** The user's streak after this game (+n wins, -n losses), regular season only. */
-  streak: number;
-  /** The winner was this many places lower in the league standings going in (10+ is an upset). */
-  upset: number;
-  /** A player of ours hurt in this game. */
-  hurt: BoxLine | undefined;
-  /** What the game report says decided it (the biggest factor that went the winner's way). */
-  decided?: Factor['category'];
-  /** The winner's lowest win probability during the game, as the result keeps it (or its flow shows it). */
-  low?: number;
 }
 
 const gameScore = (b: BoxLine) => b.pts + 0.4 * b.fgm - 0.7 * b.fga - 0.4 * (b.fta - b.ftm) + 0.7 * b.orb + 0.3 * b.drb + b.stl + 0.7 * b.ast + 0.7 * b.blk - 0.4 * b.pf - b.tov;
@@ -60,93 +32,6 @@ export function threeStars(res: GameResult): { line: BoxLine; tid: number }[] {
   const pog = all.find((x) => x.line.pid === res.pog);
   const rest = all.filter((x) => x !== pog).sort((a, b) => score(b) - score(a));
   return [...(pog ? [pog] : []), ...rest].slice(0, 3).map(({ line, tid }) => ({ line, tid }));
-}
-
-const userSide = (league: League, res: GameResult) => (res.home.tid === league.userTid ? res.home : res.away.tid === league.userTid ? res.away : null);
-
-/** The user's games of a season in the order they were played. */
-function userGames(league: League, season: number) {
-  return league.games.filter((g) => g.season === season && (g.home.tid === league.userTid || g.away.tid === league.userTid));
-}
-
-/** Is this the user's latest game? (Streaks and injuries are about the latest one.) */
-export function isLatestUserGame(league: League, res: GameResult) {
-  const mine = league.games.filter((g) => g.home.tid === league.userTid || g.away.tid === league.userTid);
-  return mine[mine.length - 1]?.gid === res.gid;
-}
-
-/** The user's regular-season streak right after this game, from the stored results. */
-export function streakAfter(league: League, res: GameResult): number {
-  let streak = 0;
-  for (const g of userGames(league, res.season)) {
-    if (g.type === 'regular') {
-      const us = g.home.tid === league.userTid ? g.home : g.away;
-      const them = us === g.home ? g.away : g.home;
-      const won = us.pts > them.pts;
-      streak = won ? (streak > 0 ? streak + 1 : 1) : streak < 0 ? streak - 1 : -1;
-    }
-    if (g.gid === res.gid) break;
-  }
-  return streak;
-}
-
-/** League places between the winner and the loser going into the game, by regular-season record (both teams 10+ games in). */
-function upsetGap(league: League, res: GameResult): number {
-  if (res.type !== 'regular') return 0;
-  const rec = new Map<number, [number, number]>();
-  for (const g of league.games) {
-    if (g.season !== res.season || g.type !== 'regular') continue;
-    if (g.gid === res.gid) break;
-    const hw = g.home.pts > g.away.pts;
-    for (const [tid, w] of [
-      [g.home.tid, hw],
-      [g.away.tid, !hw],
-    ] as const) {
-      const r = rec.get(tid) ?? [0, 0];
-      r[w ? 0 : 1]++;
-      rec.set(tid, r);
-    }
-  }
-  const pct = (tid: number) => {
-    const r = rec.get(tid) ?? [0, 0];
-    return r[0] + r[1] ? r[0] / (r[0] + r[1]) : 0.5;
-  };
-  const gp = (tid: number) => (rec.get(tid) ?? [0, 0]).reduce((a, b) => a + b, 0);
-  const winner = res.home.pts > res.away.pts ? res.home.tid : res.away.tid;
-  const loser = winner === res.home.tid ? res.away.tid : res.home.tid;
-  if (gp(winner) < 10 || gp(loser) < 10) return 0;
-  const rank = (tid: number) => 1 + league.teams.filter((t) => pct(t.tid) > pct(tid)).length;
-  return rank(winner) - rank(loser);
-}
-
-/**
- * Whether a play-by-play line ("Jal. Williams is injured and leaves the game.") names this player:
- * teammates who share a last name are told apart by as much of the first name as it takes.
- */
-function injuredIn(league: League, b: BoxLine, text: string) {
-  const p = league.players[b.pid];
-  const at = text.indexOf(`${p?.lastName ?? b.name} is injured and leaves the game.`);
-  if (at < 0) return false;
-  const first = text.slice(0, at).trim().replace(/\.$/, '');
-  return !first || !!p?.firstName.startsWith(first);
-}
-
-/**
- * A player of ours hurt in this game: as the result keeps it, or for an older result from our side's
- * play-by-play, or (for the latest game) a fresh injury on someone who played.
- */
-function hurtInGame(league: League, res: GameResult, us: TeamBox): BoxLine | undefined {
-  const played = us.players.filter((b) => b.min > 0);
-  if (res.hurt) return played.find((b) => res.hurt!.includes(b.pid));
-  // (their player who shares one of our names isn't ours)
-  const side = us === res.home ? 0 : 1;
-  const named = res.pbp?.filter((e) => e.t === side && e.text.endsWith('is injured and leaves the game.'));
-  if (named?.length) return played.find((b) => named.some((e) => injuredIn(league, b, e.text)));
-  if (!isLatestUserGame(league, res)) return undefined;
-  return played.find((b) => {
-    const inj = league.players[b.pid]?.injury;
-    return !!inj && inj.gamesRemaining === inj.gamesTotal && inj.gamesTotal >= 3;
-  });
 }
 
 /**
@@ -171,35 +56,6 @@ export function recapFacts(res: GameResult, hurt: number[]): Pick<GameResult, 'h
   return { hurt, ...(low !== undefined ? { wpLow: Math.ceil(low * 1e4) / 1e4 } : {}) };
 }
 
-function facts(league: League, res: GameResult, report?: GameReport | null): Facts | null {
-  const us = userSide(league, res);
-  if (!us) return null;
-  const them = us === res.home ? res.away : res.home;
-  const won = us.pts > them.pts;
-  const played = us.players.filter((b) => b.min > 0);
-  const pogOurs = played.some((b) => b.pid === res.pog);
-  const voice = pogOurs ? played.find((b) => b.pid === res.pog) : [...played].sort((a, b) => gameScore(b) - gameScore(a))[0];
-  const theirStar = [...them.players].sort((a, b) => b.pts - a.pts).find((b) => b.pts >= 30);
-  const gap = upsetGap(league, res);
-  return {
-    won,
-    margin: Math.abs(us.pts - them.pts),
-    ot: res.ot,
-    us,
-    them,
-    usName: teamCity(league, us.tid),
-    themName: teamCity(league, them.tid),
-    voice,
-    pogOurs,
-    theirStar,
-    streak: res.type === 'regular' ? streakAfter(league, res) : 0,
-    upset: gap,
-    hurt: hurtInGame(league, res, us),
-    decided: report ? decidingFactors(report.factors, report.factors.length).find((x) => x.pts > 0 === won)?.category : undefined,
-    low: comebackLow(res),
-  };
-}
-
 /** One of the templates, the same one every time for this game and slot. */
 export function pick<T>(gid: number, slot: string, list: T[]): T {
   // (mixed again: neighbouring game ids otherwise land on the same template too often)
@@ -208,9 +64,6 @@ export function pick<T>(gid: number, slot: string, list: T[]): T {
   h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
   return list[((h ^ (h >>> 16)) >>> 0) % list.length];
 }
-
-/** His last name (his full name when a teammate shares it): the press options and their effects name one player each. */
-const lastName = (league: League, b: BoxLine) => (league.players[b.pid] ? shortName(league, league.players[b.pid]) : b.name);
 
 /** The moments a quote is for: what happened, from the speaker's side. */
 type Beat = 'hurt' | 'wcomeback' | 'w30' | 'wup' | 'wot' | 'wstreak' | 'wbig' | 'wclose' | 'w' | 'lcollapse' | 'l30' | 'lup' | 'lstreak' | 'lclose' | 'lbig' | 'l';
@@ -671,131 +524,8 @@ export const benchLines = (beat: CoachBeat, x: { us: string; star: string; pts: 
     .flatMap((v) => v[beat] ?? [])
     .map((f) => f(x));
 
-/** The moment a game was, from our locker room. */
-function beatOf(f: Facts): Beat {
-  const v = f.voice!;
-  if (f.hurt && f.hurt.pid !== v.pid) return 'hurt';
-  const comeback = f.low !== undefined && f.low <= COMEBACK_WP;
-  if (f.won) {
-    if (comeback) return 'wcomeback';
-    if (v.pts >= 30) return 'w30';
-    if (f.upset >= 10) return 'wup';
-    if (f.ot) return 'wot';
-    if (f.streak >= 3) return 'wstreak';
-    if (f.margin >= 20) return 'wbig';
-    if (f.margin <= 4) return 'wclose';
-    return 'w';
-  }
-  if (comeback) return 'lcollapse';
-  if (v.pts >= 30) return 'l30';
-  if (f.upset >= 10) return 'lup';
-  if (f.streak <= -3) return 'lstreak';
-  if (f.ot || f.margin <= 4) return 'lclose';
-  if (f.margin >= 20) return 'lbig';
-  return 'l';
-}
-
-function voiceLine(f: Facts, gid: number, league: League): string {
-  const v = f.voice!;
-  const beat = beatOf(f);
-  const says: Says = { pts: v.pts, n: Math.abs(f.streak), them: f.themName, mate: f.hurt ? lastName(league, f.hurt) : '' };
-  const p = league.players[v.pid];
-  const own = p ? OWN[playerVoice(league, p)][beat] : undefined;
-  // (two times in three in his own voice, when it has a line for the moment)
-  const mine = own?.length && pick(gid, `own:${beat}`, [true, true, false]);
-  return pick(gid, beat, mine ? own! : PLAIN[beat])(says);
-}
-
-/** The other coach on what decided it, when the report names it. */
-const WON_ON: Partial<Record<Factor['category'], string[]>> = {
-  turnovers: [
-    'We took care of the ball and turned their mistakes into points.',
-    'We made them pay for every turnover. That was the game.',
-    'Our hands were active tonight, and the steals turned into easy ones.',
-  ],
-  rebounding: [
-    'We won the glass, and that was the difference.',
-    'Second chances. We kept getting them, and they kept hurting.',
-    'We were tougher on the boards tonight. Simple as that.',
-  ],
-  shooting: ["We made shots tonight. When we do that, we're dangerous.", 'The ball was moving and the shots were falling.', 'Our shooters got good looks and knocked them down.'],
-  fouls: [
-    "We got to the line and they didn't. That adds up.",
-    'We kept attacking the rim, and the free throws came.',
-    'We put pressure on the rim all night. The whistle followed.',
-  ],
-};
-const LOST_ON: Partial<Record<Factor['category'], string[]>> = {
-  turnovers: [
-    "Too many turnovers. You can't give a good team extra possessions.",
-    "We kept giving it away, and they kept running. That's the game.",
-    "We were careless with the ball. That's on us to clean up.",
-  ],
-  rebounding: [
-    'They beat us on the glass. That was the game.',
-    "We didn't finish our defense with the rebound, and they made us pay.",
-    'Too many second chances for them. We have to box out.',
-  ],
-  shooting: ["They shot the ball well, and we didn't have an answer.", "We didn't make shots tonight, and they did.", "We got some good looks. They just didn't go down."],
-  fouls: [
-    'We fouled too much and put them on the line all night.',
-    'We were reaching instead of moving our feet. The free throws added up.',
-    "They lived at the line. We've got to defend without fouling.",
-  ],
-};
-
-function coachLine(f: Facts, gid: number, league: League): string {
-  // the other coach's view: "they" are the user's team
-  const us = f.usName;
-  const comeback = f.low !== undefined && f.low <= COMEBACK_WP;
-  if (!f.won) {
-    if (comeback)
-      return pick(gid, 'ccomeback', [
-        `Our guys never quit. Down like that, you keep chipping away, and they did.`,
-        `That's as resilient as I've seen this group. What a comeback.`,
-      ]);
-    if (f.theirStar)
-      return pick(gid, 'cstar', [
-        `${lastName(league, f.theirStar)} was special tonight. When he gets going like that, we're tough to beat.`,
-        `We rode ${lastName(league, f.theirStar)}, and he delivered.`,
-      ]);
-    if (f.upset >= 10) return pick(gid, 'cup', [`People counted us out against a team like ${us}. Our guys believed.`, `Nobody gave us a chance tonight. I love this group.`]);
-    if (f.margin >= 20) return pick(gid, 'cbig', [`Our guys came out ready. That was as complete a game as we've played.`, `Everything clicked tonight, on both ends.`]);
-    const why = f.decided && WON_ON[f.decided];
-    if (why) return pick(gid, 'cwon', why);
-    return pick(gid, 'cw', [`Tough, physical game. Credit to ${us}: they made us earn every point.`, `We got enough stops when it mattered. Good win for us.`]);
-  }
-  if (comeback)
-    return pick(gid, 'ccollapse', [
-      `We had control of that game and let it get away. That's on me.`,
-      `Credit to ${us}: they kept coming, and we stopped doing what built the lead.`,
-    ]);
-  const v = f.voice;
-  if (v && v.pts >= 30)
-    return pick(gid, 'cl30', [
-      `We threw everything at ${lastName(league, v)}. Sometimes a great player just beats you.`,
-      `${lastName(league, v)} was terrific. We have to be better.`,
-      `${v.pts} for ${lastName(league, v)}. We'll look at what we could have done differently on him.`,
-      `You live with some of those. ${lastName(league, v)} made a lot of tough shots.`,
-    ]);
-  if (f.upset >= 10) return pick(gid, 'clup', [`We didn't take them seriously enough, and they made us pay.`, `Give ${us} credit. They outworked us.`]);
-  if (f.margin >= 20) return pick(gid, 'clbig', [`We got beat in every way tonight. That starts with me.`, `That's not who we are. We'll regroup.`]);
-  if (f.ot || f.margin <= 4) return pick(gid, 'clclose', [`Proud of the fight. We just didn't make enough plays at the end.`, `Coin-flip game. It went their way tonight.`]);
-  const why = f.decided && LOST_ON[f.decided];
-  if (why) return pick(gid, 'clost', why);
-  return pick(gid, 'cl', [`${us.charAt(0).toUpperCase()}${us.slice(1)} played well. We'll regroup.`, `They executed better than we did. Simple as that.`]);
-}
-
 /** The moments the other coach speaks to: `c…` he won, `cl…` he lost. */
 type CoachBeat = 'ccomeback' | 'cstar' | 'cup' | 'cbig' | 'cw' | 'ccollapse' | 'cl30' | 'clup' | 'clbig' | 'clclose' | 'cl';
-
-function coachBeat(f: Facts): CoachBeat {
-  const comeback = f.low !== undefined && f.low <= COMEBACK_WP;
-  if (!f.won) return comeback ? 'ccomeback' : f.theirStar ? 'cstar' : f.upset >= 10 ? 'cup' : f.margin >= 20 ? 'cbig' : 'cw';
-  if (comeback) return 'ccollapse';
-  if (f.voice && f.voice.pts >= 30) return 'cl30';
-  return f.upset >= 10 ? 'clup' : f.margin >= 20 ? 'clbig' : f.ot || f.margin <= 4 ? 'clclose' : 'cl';
-}
 
 /** The same moments as each kind of coach says them (league/voices.ts): `us` is the user's team, `star` the player the night belonged to. */
 const BENCH: Record<CoachTemper, Partial<Record<CoachBeat, ((x: { us: string; star: string; pts: number }) => string)[]>>> = {
@@ -1033,33 +763,3 @@ const BENCH: Record<CoachTemper, Partial<Record<CoachBeat, ((x: { us: string; st
     ],
   },
 };
-
-/**
- * Post-game quotes for one of the user's games: his player of the game (or best player), and the
- * other team's coach (who talks about what decided it when the game `report` names it).
- */
-export function postGameQuotes(league: League, res: GameResult, report?: GameReport | null): Quote[] {
-  const f = facts(league, res, report);
-  if (!f || !f.voice) return [];
-  const out: Quote[] = [];
-  const v = f.voice;
-  const vp: Player | undefined = league.players[v.pid];
-  out.push({
-    who: vp ? playerName(vp) : v.name,
-    role: f.pogOurs ? 'Player of the game' : vp?.pos ? `${{ PG: 'Guard', SG: 'Guard', SF: 'Forward', PF: 'Forward', C: 'Center' }[vp.pos]}` : 'Player',
-    tid: f.us.tid,
-    pid: v.pid,
-    text: voiceLine(f, res.gid, league),
-  });
-  const opp = league.teams[f.them.tid];
-  // (the other coach in his own manner two times in three, where it has a line for the night)
-  const cb = coachBeat(f);
-  const bench = BENCH[coachTemper(opp.coach.name)][cb];
-  const star = cb === 'cstar' ? f.theirStar : cb === 'cl30' ? f.voice : undefined;
-  const benchLine =
-    bench?.length && pick(res.gid, `bench:${cb}`, [true, true, false])
-      ? pick(res.gid, `b:${cb}`, bench)({ us: f.usName, star: star ? lastName(league, star) : '', pts: star?.pts ?? 0 })
-      : coachLine(f, res.gid, league);
-  out.push({ who: opp.coach.name, role: `${opp.abbrev} head coach`, tid: opp.tid, text: benchLine.charAt(0).toUpperCase() + benchLine.slice(1) });
-  return out;
-}

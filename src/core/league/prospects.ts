@@ -186,7 +186,7 @@ export function seenPlayer(league: League, p: Player | undefined): Player | unde
   return { ...p, ovr: r.ovr, pot: r.pot, ratings: r.ovr === p.ovr ? p.ratings : shiftToOvr(p.ratings, r.ovr, league.ovrScale) };
 }
 
-/** A prospect at the consensus's read (OVR and POT), for what the league goes by before his ratings show: a two-way deal for a second-rounder, the undrafted who get a free-agent chance. Anyone else as he is. */
+/** A prospect at the consensus's read (OVR and POT), for what the league goes by before his ratings show: a second-rounder's deal, the undrafted who get a free-agent chance. Anyone else as he is. */
 export function consensusView(league: League, p: Player): Player {
   if (p.tid !== DRAFT_PROSPECT) return p;
   const r = consensusRead(league, p);

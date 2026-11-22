@@ -1,12 +1,3 @@
-/* Instructions' and Match's own controls: a control's label with its ⓘ, the
-   rows that open (Fine-tune, the late-game rules), the hunt and big-man notes, and picker rows that
-   open a sheet of choices. */
-.tx-phasebody {
-  gap: 10px;
-}
-.tx-phase-in {
-  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
-}
 /* a control's name with its ⓘ beside it */
 .tx-label {
   display: flex;
@@ -95,27 +86,7 @@
 .tx-fine-h > span:first-child {
   flex: 0 1 auto;
 }
-/* a line that goes somewhere (the next game's plan, Players): quiet text on a step-up ground */
-.tx-hunt {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: -6px;
-  padding: 9px 10px 9px 12px;
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  font-size: 12.5px;
-  line-height: 1.4;
-  color: var(--text-2);
-  transition: background var(--dur-fast) ease;
-}
-.tx-hunt:active {
-  background: var(--surface-2);
-}
-.tx-hunt svg {
-  flex: none;
-  color: var(--accent-text);
-}
+
 .tx-bigfit {
   display: flex;
   align-items: center;
@@ -128,8 +99,7 @@
 }
 
 /* picker rows: a setting and its choice, the choices in a sheet */
-.tx-pick + .tx-pick,
-.tx-pick + .tx-ctl {
+.tx-pick + .tx-pick {
   border-top: 1px solid var(--line);
 }
 .tx-pickrow {
@@ -207,4 +177,9 @@
 .tx-opt-c {
   flex: none;
   color: var(--text);
+}
+
+/* the core settings' second heading (Defense), a step under the offense's dials */
+.tx-core-h {
+  margin-top: 6px;
 }

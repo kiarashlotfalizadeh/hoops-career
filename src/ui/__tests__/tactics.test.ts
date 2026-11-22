@@ -6,7 +6,6 @@
 // takes it out again).
 import { describe, expect, it } from 'vitest';
 import { DEF_SPOTS, OFF_SPOTS, place, startersOf, strengthsOf, type BoardPlayer, type Spot } from '../tactics/formation';
-import { PHASES, phaseId } from '../tactics/phases';
 import { bestFit, byFit, handOverLine, shownFit, userStaffTactics } from '../tactics/fit';
 import { defenseLabel } from '../../core/sim/playbooks';
 import { screenChanges, changesLine } from '../tactics/changes';
@@ -106,15 +105,6 @@ describe('tactics in the UI', () => {
     // fewer than five placed without a fuss
     expect(place(OFF_SPOTS.fiveOut, [P(1, 'creator', 40)]).size).toBe(1);
     expect(place(OFF_SPOTS.fiveOut, []).size).toBe(0);
-
-    // the three phases, and an old link's phase as its new one
-    {
-      expect(PHASES.map((p) => p.id)).toEqual(['inPoss', 'inTrans', 'outPoss']);
-      expect(phaseId('defTrans')).toBe('inTrans');
-      expect(phaseId('outPoss')).toBe('outPoss');
-      expect(phaseId(null)).toBe('inPoss');
-      expect(phaseId('nonsense')).toBe('inPoss');
-    }
 
     // the board: the rotation's first five start and the rest are benched, anyone it leaves out last
     {
@@ -312,7 +302,7 @@ describe('tactics in the UI', () => {
         expect(kept.defense.pnr).toBe(saved.defense.pnr);
       }
 
-      // tonight's matchups or star target never saved
+      // tonight's matchups and star plan never saved: a star plan is an opponent's game plan's alone
       {
         const now = cloneTactics(planned);
         now.defense.matchups = { 7: 4, 9: 1 };
@@ -320,7 +310,7 @@ describe('tactics in the UI', () => {
         now.defense.starTarget = 7;
         const kept = keptTactics(saved, planned, now);
         expect(kept.defense.matchups).toEqual({ 40: 2 });
-        expect([kept.defense.starPlan, kept.defense.starTarget]).toEqual(['double', null]);
+        expect([kept.defense.starPlan, kept.defense.starTarget]).toEqual(['none', null]);
       }
 
       // what was taken off tonight taken off (a setting whose key the screens delete)

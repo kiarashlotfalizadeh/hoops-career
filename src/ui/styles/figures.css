@@ -66,7 +66,7 @@
   white-space: nowrap;
   font-size: min(1em, calc(100cqi / (var(--len, 5) * 0.55)));
 }
-/* a figure's note wraps under it ("1 open · +1 two-way"): three columns on a phone leave it little room */
+/* a figure's note wraps under it ("1 open · +3 expiring"): three columns on a phone leave it little room */
 .statline .s {
   font-size: 12px;
   line-height: 1.3;

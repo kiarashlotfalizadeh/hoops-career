@@ -23,11 +23,11 @@ Five tabs, one per role. Every screen belongs to exactly one (`tabFor` in `nav.t
 
 | Tab        | What it's for         | Lives here (and nowhere else)                                                                                                                                                                                                                                                                                                                    |
 | ---------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Today**  | What needs you now    | The agenda (decisions waiting), the staff's top advice, the next game at a glance, the inbox (`/inbox`), settings (`/settings`), god mode (`/god`), the glossary                                                                                                                                                                                 |
-| **Team**   | Who plays and how     | Your roster with its views (players, ratings, stats, contracts) at `/team`; rotation `/team/rotation`; tactics (one tactic: the board with shape and roles at both ends, instructions by phase, players' roles, game management, the system report) `/team/tactics`; lineups `/team/lineups`; your players' pages; compare                       |
-| **Games**  | When and against whom | Your schedule and results (`/games`); one **Matchup** page per opponent (`/games/:tid`: scouting, the game plan with the staff's counters, matchups, and on game day the preview with the staff's briefing; its slab carries the plan's state); the live game (`/live`); game reports (`/game/:gid`, opening on the staff's debrief)             |
+| **Today**  | What needs you now    | The next game (or the offseason phase's card), one action queue (blocking decisions, trade offers and requests, a starter hurt, the owner's warnings), the season's numbers in a strip, the inbox (`/inbox`), settings (`/settings`), god mode (`/god`), the glossary                                                                            |
+| **Team**   | Who plays and how     | Your roster with its views (players, ratings, stats, contracts) at `/team`; rotation `/team/rotation`; tactics in two tabs, System (the core levers on the surface, everything else in one Advanced drawer) and Season Analysis (`/team/tactics/analysis`); lineups `/team/lineups`; your players' pages; compare                                |
+| **Games**  | When and against whom | Your schedule and results (`/games`); one **Matchup** page per opponent (`/games/:tid`) in two tabs, Brief (win %, the teams' stat ranks side by side, the starting fives and who's out, their threats) and Game Plan (counters, matchups, special plans); the live game (`/live`); game reports (`/game/:gid`: Summary, Box, Shots, Flow)       |
 | **League** | Everyone else         | Five tabs: Standings (the odds, the lottery inside Odds), Playoffs (the Cup a row in it while it's on), Stats (ratings too), Scores (the schedule around the league) and News; Awards and History (`/league/history`: seasons, records, Hall of Fame, coaches) are links in its header; other teams' pages (`/teams/:tid`), other players' pages |
-| **Office** | The GM's desk         | The cap sheet and exceptions, trade (`/office/trade`), free agents, re-signing, the draft, picks, finances, the owner and job security (`/office/owner`), your career and job offers (`/office/career`)                                                                                                                                          |
+| **Office** | The GM's desk         | The cap sheet and the mid-level, trade (`/office/trade`), free agents, re-signing, the draft, picks, the owner and job security (`/office/owner`), your career and job offers (`/office/career`). No finances desk: tickets and budgets run themselves                                                                                           |
 
 Rules that follow from it:
 
@@ -39,7 +39,10 @@ Rules that follow from it:
 - **A change to the tactics reads in Tactics' own words** wherever it shows, in plan items and
   counters: described through `ui/tactics/changes.ts`, named as the control is.
 - **Money lives in Office.** Payroll appears once as a figure on Team → Roster's header line, and in
-  full only in Office.
+  full only in Office. The rules are few on purpose: a soft cap, the luxury tax, one mid-level
+  exception a season, Bird rights, 125% salary matching, two- and three-team trades. No aprons, hard
+  caps, cap holds, other exceptions, restricted free agency, two-way or 10-day deals, waivers or the
+  stretch: don't bring them back in copy either.
 - **A cap sheet never shows a negative room**: "Over the cap $X" or "Cap space $X"; for the tax, the
   bill and how far over the line, or the room under it. An existing contract says when it ends
   ("thru 27-28", "expiring", PO/TO); a new deal says how long it runs ("$12.0M × 4 yrs"). Use the
@@ -51,8 +54,8 @@ Rules that follow from it:
 - **Advice has one voice.** Everything the staff says comes through the assistant feed
   (`core/ai/assistant.ts`, drawn with `AssistantCards`): a screen shows the cards for its own area.
   Don't build a new tips box.
-- **Decisions have one list.** Anything the user must or may decide (cuts, offer sheets, offers,
-  10-days, his pick, a new job) is an agenda item (`core/league/agenda.ts`, drawn with
+- **Decisions have one list.** Anything the user must or may decide (cuts, offers, a trade request,
+  a starter hurt, his pick, a new job) is an agenda item (`core/league/agenda.ts`, drawn with
   `AgendaList`/`AgendaRow`), settled in place. Required items hold the Continue bar.
 - **A three-team deal is its legs** (`TradeLeg` in `core/league/trades.ts`: what one team sends
   another). The rules and every GM's verdict read any deal that way, two teams or three, so each
@@ -99,16 +102,16 @@ personalities, no conversations and no promises.
   (`text`) and a body, weighted 3 (front page), 2 (story) or 1 (brief). Front pages about the user's
   team stop long sims and can take the screen, so they're rare: a handful a season. Story links go
   to `/league/news?story=<id>` (`storyPath`).
-- **Game day is an occasion** (`core/analysis/gameStory.ts`): a game ahead has a billing
-  (`billingFor`), a game played has a story (`gameStoryFor`: headline, hero, what it means). The
-  result leads; the analysis sits under it.
+- **A game played has a story** (`core/analysis/gameStory.ts`, `gameStoryFor`: a headline for the
+  news). A game ahead has no billing, and the report leads with the numbers, not prose.
 - **Development shows** (`core/league/devWatch.ts`): arrows from where a player ended last season,
   quiet tags, the monthly report, Team → Growth.
 - **The career builds** (`core/league/legacy*.ts`): milestones, signature wins, the cabinet, the
   owner's and fans' pulse, the season review.
-- **Today is the front page** (`ui/today/FrontPage.tsx`, `front.ts`): the user's last result or top
-  story, the next game's billing, form and pulse, the league's headlines; after a long sim, "While you
-  were away" (`digest.ts`).
+- **Today is the next game and the action queue** (`ui/today/Today.tsx`): no lead story, headlines
+  or staff feed. After a long sim, "While you were away" (`digest.ts`). A long sim stops only for a
+  blocking decision, a trade offer or request, a starter's injury, the trade deadline and the
+  playoffs (`STOP_KINDS` in `core/league/agenda.ts`).
 - **Every locker room has a pulse** (`core/league/pulse.ts`, read once a week, a room per team): each
   player who expects minutes against what he plays ("Wants more minutes", "Unhappy with his role"),
   and how tight the five who play most are ("Strangers" to "Tight group": longer together and
@@ -166,13 +169,12 @@ personalities, no conversations and no promises.
    a line of them sits under a 2px ink rule (`.statline`), as a printed box score does. The one figure
    a hero leads with is the condensed black cut, as big as it can be. A figure appears once per screen (the record is in the top bar: a screen
    doesn't repeat it unless it's the subject).
-8. **Words before the fact, numbers for facts.** What has happened is a number: the box score,
-   standings, OVR and POT, ages, contracts, money, a goal the owner set. What a choice will do, or an
-   estimate of what it did, is the staff's opinion in words, from `core/analysis/staffWords.ts`
-   ("Should help", "Seems to hurt", "Better fit", "Slight favorite", "Big edge"). No points a game, no
-   win chance moving with a choice, no ± and no "measured over 240 games". The sim still measures, and
-   the staff still picks by it, but the player gets a hunch and has to find out. League odds, draft
-   projections and the lottery stay: they are the league's own boards, not a preview of a choice.
+8. **Numbers for facts and diagnostics, words only for untried predictions.** What has happened, or
+   what the game measured, is a number: the box score, standings, OVR and POT, contracts, money, a
+   game's win % before tip-off, the teams' stat ranks, and each factor's swing in points mid-game and
+   after it (`ptsFig`, `winPct` in `core/analysis/staffWords.ts`), with shooting luck kept apart from
+   what tactics did. Only a counter or a tactic not yet played stays the staff's opinion in words
+   ("Should help", "Seems to hurt", "Better fit").
 9. **Short copy.** See Copy.
 10. **Thumb first.** Primary actions sit low (the dock's play row, a screen's own `.dockbar`),
     targets are 44px, nothing important hides behind hover.
@@ -227,7 +229,7 @@ tokens so they tighten (or loosen) together. A control inside a padded box is co
 box's corner is the control's plus the padding: `.seg`).
 
 Figures are written by `src/core/format.ts`, the same way on every screen and in every message:
-`money` ("$12.3M"), `moneySigned` ("+$1.2M"), `moneyExact` (to the $10K for minimums, two-ways and
+`money` ("$12.3M"), `moneySigned` ("+$1.2M"), `moneyExact` (to the $10K for minimums and
 cash: "$1.27M"), `plural` ("1 game", "5 games"), `rankOf` ("7th of 30"), `madeAtt` ("34-90", in
 tables and sentences alike), `injuryName` and `outFor` ("Torn meniscus · out 8 games"). Don't
 write a new inline formatter. On screen a record, a series or a made-attempted never breaks at its
@@ -321,7 +323,7 @@ Archivo, variable in width and weight, for words and big figures; IBM Plex Mono 
 - Lists: `.card.flush` > `.list` > rows. `.listrow` (`--row-min`, 54px), `.lr-name`, `.lr-meta`
   (one line). Your own rows: a 10% wash of `--team`, no edge stripe.
 - **A roster row is two lines** (`team/RosterList`): the jersey; line 1 the name with at most one
-  mark (Out, else a 10-day deal, else the development tag), OVR beside POT in columns named once in
+  mark (Out, else the development tag), OVR beside POT in columns named once in
   the group's header; line 2, quieter, position · age and the four figures, each with its small
   label (MIN PTS REB AST) in fixed columns. The OVR change lives in Roster → Ratings and on the
   player's page. Every team's roster is the same component. Wider tables (Ratings, Stats,
@@ -659,17 +661,14 @@ package (ink plates, white type); the console is paper and card stock like every
   less than pressure would have made them"), never as a count the box score's factors could
   contradict.
 - Keep explanations that teach the game, but behind `Help`/`More`/`Term`.
-- Names of controls in advice must match the controls on screen (Team → Tactics sections: Tactic,
-  Instructions, Match, Analysis; Instructions' phases: In possession, Transition, Out of possession,
-  each with its headline decisions and a Fine-tune; a player's roles and instructions are on his sheet
+- Names of controls in advice must match the controls on screen (Team → Tactics: System and Season
+  Analysis; on System, the core levers and the Advanced drawer; a player's roles are on his sheet
   from the board).
-- **Tactics: big decisions on the surface, the rest one tap down.** Each phase of Instructions shows
-  at most three headline decisions (one control may move several settings: Play through sets the five
-  action weights, When a shot goes up the glass and getting back) and a Fine-tune with every setting
-  apart. Each section is its own path under the Team tabs (`/team/tactics/:sub`), so
-  a phone shows one row of tabs and one switch over the content; over each, a card holds the style,
-  its mentality and Change (the style sheet: Offense, Defense, Mentality); on Tactic it also holds
-  the assistant's switch and the staff's latest move. A section's own switch is its heading (`HeadSwitch`: the board's in/out of possession, the phase, the view).
+- **Tactics: the core levers on the surface, the rest in one drawer.** System shows the style and
+  playbook, mentality, the shape and scheme, ball-screen coverage, tempo, the shot profile, help and
+  pressure, and the players' roles (`tactics/CoreLevers.tsx`); every niche knob sits in one collapsed
+  Advanced drawer (`tactics/Advanced.tsx`), never nested deeper. Opponent-only plans (a star plan,
+  hack-a-player) live on the Matchup's Game Plan, not in the base tactics.
 - Inbox mail: a subject that says what happened and a one-line summary; detail below it. **Mail is
   for what changes a plan**: what a screen already shows (a short injury, "the season starts")
   doesn't get mail. One mail per pitch or event: a repeat replaces its earlier mail.

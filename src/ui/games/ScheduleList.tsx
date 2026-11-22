@@ -9,7 +9,7 @@ import { Fragment, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { GameResult, League, NewsItem, ScheduledGame } from '../../core/types';
-import { billingsFor, userGameNews, type Billing } from '../../core/analysis/gameStory';
+import { userGameNews } from '../../core/analysis/gameStory';
 import { curTeamSeason, dayToDate, fmtDate, teamCity } from '../../core/league/helpers';
 import { boxNames } from './report/names';
 import { neutralSite } from '../../core/league/games';
@@ -34,17 +34,9 @@ interface Row {
   them?: number;
   /** The regular-season record after it. */
   rec?: string;
-  /** The user's upcoming game: what it's billed as. */
-  bill?: Billing;
   /** The user's result: the press's story of it. */
   story?: NewsItem;
 }
-
-/** Games further off than this are marked only for what can't change (a rivalry, Christmas Day): see billingsFor's `light`. */
-const NEAR_DAYS = 7;
-
-/** Billings about the team's run rather than the game: every game ahead shares them. */
-const TEAM_STATE = new Set(['Streak on the line', 'Snap the skid']);
 
 const monthOf = (season: number, day: number) => dayToDate(season, day).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
@@ -104,11 +96,7 @@ export function TeamScheduleList({
       const opp = home ? g.away : g.home;
       const res = g.played ? byGid.get(g.gid) : undefined;
       if (!res) {
-        // (a streak is the team's, the same on every game ahead: a row marks what's about its own game)
-        const bill =
-          user && !g.played && g.type !== 'allstar' ? billingsFor(league, g, tid, { light: g.day - league.day > NEAR_DAYS }).find((b) => !TEAM_STATE.has(b.tag)) : undefined;
-        // (a Cup or play-in game's tag already says what its billing would)
-        return { g, opp, home, ...(bill && bill.weight >= 2 && !/^(In-Season Cup|Cup |Play-In)/.test(bill.tag) ? { bill } : {}) };
+        return { g, opp, home };
       }
       const story = stories?.get(`${res.season}-${res.day}`);
       const us = home ? res.home.pts : res.away.pts;
@@ -298,7 +286,7 @@ function GameRow({ r, league, tid, h2hTid, ranks, nth }: RowProps & { r: Row; nt
       );
   } else {
     // one fact: what the night is billed as, else how they stand
-    sub = r.bill ? <b className={`gs-bill w${r.bill.weight}`}>{r.bill.tag}</b> : oppLine(league, r.opp, ranks);
+    sub = oppLine(league, r.opp, ranks);
   }
   const ot = r.res?.ot ? (r.res.ot > 1 ? `${r.res.ot}OT` : 'OT') : '';
   return (

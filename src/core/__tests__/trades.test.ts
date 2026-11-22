@@ -7,18 +7,15 @@ import { expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { startRegularSeason } from '../league/season';
 import { GM_STYLE, gmLine, gmTemper, leagueBusy, takesCalls } from '../league/voices';
-import { CAP_FOR, contractSeason, curTeamSeason, dateToDay, freeAgents, payroll, standardRoster, twoWayRoster, teamCity } from '../league/helpers';
-import { DEC_15, DUMP_PER_FIRST, FIRST_VALUE, askingContract, marketSalary, releaseDeadMoney, releasePlayer, signPlayer, tradeValue, twoWaySalary } from '../league/contracts';
-import { capPayroll } from '../league/freeAgency';
+import { CAP_FOR, contractSeason, curTeamSeason, dateToDay, freeAgents, payroll, standardRoster, teamCity } from '../league/helpers';
+import { DEC_15, DUMP_PER_FIRST, FIRST_VALUE, askingContract, marketSalary, releaseDeadMoney, releasePlayer, signPlayer, tradeValue } from '../league/contracts';
 import { changesStarters, tradeImpact } from '../league/tradeImpact';
 import { ensureRotation } from '../league/games';
 import { decisionThreads } from '../league/legacyReview';
 import {
   CASH_PCT,
   PROTECTIONS,
-  bestTpe,
   bookTradedCash,
-  capSalary,
   cashRoom,
   cashValueFor,
   dealTerms,
@@ -58,19 +55,17 @@ import {
   FEVER,
   deadlineFever,
 } from '../league/trades';
-import { canMakeWork, counterOffers, dealAddsText, makeDealWork, makeItWork } from '../league/tradeHelp';
+import { counterOffers, dealAddsText, makeDealWork, makeItWork } from '../league/tradeHelp';
 import { facilitatedDeal } from '../league/aiTrades';
 import { neutralBalance } from '../league/tradePackages';
 import { aiChoose, draftPlayer, ensureFuturePicks, nextPick, runLottery } from '../league/draft';
 import { shareRevenue } from '../league/finances';
-import { signOfferSheet } from '../league/rfa';
 import { txnLine, txnText } from '../league/transactions';
 import { CAP } from '../constants';
 import { contractExp, playerAge } from '../playerGen';
 import { Rng } from '../random';
 import type { DraftPick, League, Player } from '../types';
 import { leagueBoard, revealOutlook } from '../league/prospects';
-import { FREE_AGENT } from '../types';
 
 const U = 0;
 const AI = 1;
@@ -291,10 +286,10 @@ it("valuation and the AI's verdict: talent over depth, strategy lenses within 15
     const [star, ...rest] = standardRoster(l, AI);
     shape(l, star, 85, 24, Math.round(cap.salaryCap * 0.2), 3);
     for (const p of rest) shape(l, p, 74, 28, cap.vetMin * 3, 2);
-    // far past the second apron, and the user with room for him
+    // far past the AI teams' top line, and the user with room for him
     for (const p of standardRoster(l, U)) p.contract = { start: l.season, salaries: [cap.minContract] };
     l.teams[U].deadMoney = [];
-    l.teams[AI].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: cap.secondApron + 20_000 - payroll(l, AI) });
+    l.teams[AI].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: cap.spendTop + 20_000 - payroll(l, AI) });
     const v = tradeValue(l, star);
     const ev = evaluateTrade(l, offer([], [star.pid]));
     expect(ev.parts.reliefKind).toBe('discount');
@@ -451,14 +446,6 @@ it("valuation and the AI's verdict: talent over depth, strategy lenses within 15
     expect(releaseDeadMoney(l, bust).map((d) => d.season)).toEqual([l.season]);
   }
 
-  // counts two-way pay out of trade salary (T13)
-  {
-    const l = txLeague();
-    const tw = twoWayRoster(l, U)[0];
-    expect(tw).toBeDefined();
-    expect(capSalary(l, tw.pid)).toBe(0);
-  }
-
   // front offices have tempers (league/voices.ts): a shark wants more than an even deal, a hoarder holds his own
   // picks dearer, a gunslinger pays up for a star, and none takes less than even from the user
   {
@@ -583,7 +570,7 @@ it("valuation and the AI's verdict: talent over depth, strategy lenses within 15
     const p = shapeAt(l, standardRoster(l, U)[0], 74, 27, 20_000);
     const tax = CAP_FOR(l).luxuryTax;
     // $1M under the tax line before the deal
-    l.teams[AI].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: tax - capPayroll(l, AI, l.season) - 1_000 });
+    l.teams[AI].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: tax - payroll(l, AI, l.season) - 1_000 });
     const ev = evaluateTrade(l, offer([p.pid], []));
     expect(ev.parts.taxCost).toBeGreaterThan(0);
     expect(ev.parts.payAfter - tax).toBeCloseTo(19_000, 0);
@@ -808,44 +795,29 @@ it('the rules: back-to-back firsts, protections going home, no trading straight 
     expect(untradeableReason(l, fall)).toBeNull();
   }
 
-  // past the first apron a team takes back no more salary than it sends; past the second it combines no salaries and sends no cash
-  {
-    const l = txLeague();
-    l.phase = 'regular';
-    const cap = CAP_FOR(l);
-    // just under the first apron, taking a $10M player for a $9M one
-    const mine = shape(l, standardRoster(l, U)[0], 70, 27, 9_000);
-    const theirs = shape(l, standardRoster(l, AI)[0], 72, 27, 10_000);
-    const to = (amount: number) => {
-      l.teams[U].deadMoney = l.teams[U].deadMoney.filter((d) => d.pid !== -1);
-      l.teams[U].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: amount - payroll(l, U) });
-    };
-    to(cap.firstApron - 5_000);
-    const deal = offer([mine.pid], [theirs.pid]);
-    expect(validateTrade(l, deal).filter((e) => /Salary doesn't match/.test(e))).toEqual([]);
-    to(cap.firstApron - 500);
-    expect(validateTrade(l, deal).find((e) => /Salary doesn't match/.test(e))).toMatch(/100% of \$9\.0M sent, over the first apron/);
-    // sending out more than it takes back is always fine
-    expect(validateTrade(l, offer([mine.pid], [])).filter((e) => /Salary doesn't match/.test(e))).toEqual([]);
-    // over the second apron: two contracts can't add up to take back a bigger one, and no cash goes out
-    const second = shape(l, standardRoster(l, U)[1], 66, 27, 2_000);
-    theirs.contract.salaries = [10_500, 10_500];
-    to(cap.secondApron + 5_000);
-    expect(validateTrade(l, offer([mine.pid, second.pid], [theirs.pid])).some((e) => /can't combine salaries/.test(e))).toBe(true);
-    expect(validateTrade(l, { a: { tid: U, pids: [], dpids: [], cash: 1_000 }, b: { tid: AI, pids: [], dpids: [] } }).some((e) => /can't send cash/.test(e))).toBe(true);
-  }
-
-  // salary matching runs by tiers of what a team sends: 200% of a small salary, plus 4.85% of the cap in the middle, 125% of a big one
+  // salary matching: a team over the cap after a trade takes back 125% of what it sends plus the buffer, whatever its payroll
   {
     const l = txLeague();
     l.phase = 'regular';
     const cap = CAP_FOR(l).salaryCap;
     const buf = Math.round((cap * CAP.tradeMatchBufferPct) / 10) * 10;
     expect(tradeMatchLimit(l, 0)).toBe(buf);
-    expect(tradeMatchLimit(l, 5_000)).toBe(10_000 + buf);
-    expect(tradeMatchLimit(l, 20_000)).toBe(20_000 + Math.round(cap * 0.0485));
+    expect(tradeMatchLimit(l, 5_000)).toBe(6_250 + buf);
     expect(tradeMatchLimit(l, 40_000)).toBe(50_000 + buf);
-    expect(tradeMatchLimit(l, 40_000, l.season, true)).toBe(40_000);
+    // deep in the tax the rule is the same: a $9M player brings back 125% of it plus the buffer, and not a dollar more
+    {
+      const mine = shape(l, standardRoster(l, U)[0], 70, 27, 9_000);
+      const theirs = shape(l, standardRoster(l, AI)[0], 72, 27, tradeMatchLimit(l, 9_000));
+      l.teams[U].deadMoney = [{ pid: -1, name: 'x', season: l.season, amount: CAP_FOR(l).luxuryTax + 30_000 - payroll(l, U) }];
+      const deal = offer([mine.pid], [theirs.pid]);
+      const mismatch = (o: typeof deal) => validateTrade(l, o).filter((e) => /Salary doesn't match/.test(e));
+      expect(mismatch(deal)).toEqual([]);
+      theirs.contract.salaries = theirs.contract.salaries.map((x) => x + 10);
+      expect(mismatch(deal)).toHaveLength(1);
+      // sending out more than it takes back is always fine, and so is cash
+      expect(mismatch(offer([mine.pid], []))).toEqual([]);
+      expect(validateTrade(l, { a: { tid: U, pids: [], dpids: [], cash: 1_000 }, b: { tid: AI, pids: [], dpids: [] } }).filter((e) => /cash/.test(e))).toEqual([]);
+    }
     // a team under the cap before the deal can absorb up to its space plus the buffer: a dump into room just works
     const full = CAP_FOR(l);
     for (const [t, amount] of [
@@ -864,38 +836,6 @@ it('the rules: back-to-back firsts, protections going home, no trading straight 
     expect(salaryMatchGap(l, offer([dumped.pid], []), 'b')).toBe(1_000 - buf);
   }
 
-  // an over-the-cap team's trade that sends out more salary than it takes back leaves a traded player exception for a year, which absorbs a player later
-  {
-    const l = txLeague();
-    l.phase = 'regular';
-    const cap = CAP_FOR(l);
-    // AI over the cap (not near an apron) sends a $12M player for a $4M one to a team with room: an $8M exception
-    // (the payrolls set after the players' salaries)
-    const big = shape(l, standardRoster(l, AI)[0], 72, 27, 12_000);
-    const small = shape(l, standardRoster(l, U)[0], 70, 27, 4_000);
-    for (const [t, amount] of [
-      [U, cap.salaryCap - 20_000],
-      [AI, cap.salaryCap + 10_000],
-    ] as const) {
-      l.teams[t].deadMoney = [];
-      l.teams[t].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: amount - payroll(l, t) });
-    }
-    const deal = offer([small.pid], [big.pid]);
-    expect(validateTrade(l, deal)).toEqual([]);
-    executeTrade(l, deal);
-    expect(l.teams[AI].tpes).toEqual([{ amount: 8_000, season: l.season, day: l.day }]);
-    expect(bestTpe(l, AI)).toBe(8_000);
-    // it absorbs a $7M player with nothing going back, and is used up by what it took
-    const target = shape(l, standardRoster(l, U)[1], 68, 27, 7_000);
-    const dump = offer([target.pid], []);
-    expect(validateTrade(l, dump)).toEqual([]);
-    executeTrade(l, dump);
-    expect(bestTpe(l, AI)).toBeLessThan(8_000);
-    // a year on it's gone
-    l.teams[AI].tpes = [{ amount: 8_000, season: l.season - 1, day: l.day }];
-    expect(bestTpe(l, AI)).toBe(0);
-  }
-
   // counts only next season's contracts against the 21-man offseason limit in trades
   {
     const l = txLeague();
@@ -908,65 +848,12 @@ it('the rules: back-to-back firsts, protections going home, no trading straight 
     expect(validateTrade(l, offer([], [theirs.pid])).filter((e) => /players \(max/.test(e))).toEqual([]);
   }
 
-  // after the season, an expiring two-way deal doesn't hold one of the three two-way slots in trades
-  {
-    const l = txLeague();
-    l.phase = 'draft';
-    const cs = contractSeason(l);
-    // two expiring two-ways (the fictional league's) and one signed through next season
-    signPlayer(
-      l,
-      freeAgents(l).find((p) => p.experience <= 2)!,
-      U,
-      twoWaySalary(l, cs),
-      2,
-      { start: cs, twoWay: true, news: false },
-    );
-    expect(twoWayRoster(l, U).length).toBe(3);
-    const theirs = twoWayRoster(l, AI)[0];
-    theirs.contract = { start: l.season, salaries: [twoWaySalary(l), twoWaySalary(l, cs)], twoWay: true };
-    expect(validateTrade(l, offer([], [theirs.pid])).filter((e) => /two-way/.test(e))).toEqual([]);
-    // in season all three hold a slot
-    l.phase = 'regular';
-    expect(validateTrade(l, offer([], [theirs.pid])).some((e) => /4 two-way players\. The most is 3\./.test(e))).toBe(true);
-  }
-
   // reads a one-sided deal as what it is: a dump taken off a team's hands, or picks bought for nothing
   {
     expect(tradeHeadline('Charlotte', ['Terry Rozier', '2028 2nd'], 1, 'Minnesota', [], 0)).toBe("Minnesota takes Terry Rozier off Charlotte's hands, with 2028 2nd for it");
     expect(tradeHeadline('Sacramento', [], 0, 'Dallas', ['Ben Simmons'], 1)).toBe("Sacramento takes Ben Simmons off Dallas' hands");
     expect(tradeHeadline('Sacramento', ['2029 2nd'], 0, 'Brooklyn', [], 0)).toBe('Brooklyn gets 2029 2nd from Sacramento');
     expect(tradeHeadline('Toronto', ['Scottie Barnes'], 1, 'New York', ['Mikal Bridges'], 1)).toBe('Toronto sends Scottie Barnes to New York for Mikal Bridges');
-  }
-
-  // an offer sheet a team has signed holds one of its spots: a trade can’t take it past the offseason limit
-  {
-    const l = termsLeague();
-    l.phase = 'freeAgency';
-    l.faDay = 1;
-    const next = contractSeason(l);
-    const cap = CAP_FOR(l, next);
-    // the user's roster for next season at 20
-    const mine = standardRoster(l, U);
-    for (const p of mine) p.contract = { start: next, salaries: [cap.vetMin] };
-    const extra = Object.values(l.players).filter((p) => p.tid === FREE_AGENT);
-    for (const p of extra.slice(0, 20 - mine.length)) {
-      p.tid = U;
-      p.contract = { start: next, salaries: [cap.vetMin] };
-    }
-    expect(tradeRoster(l, U)).toHaveLength(20);
-    const theirs = standardRoster(l, AI).find((p) => p.contract.salaries.length > 1)!;
-    const o = deal({}, { pids: [theirs.pid] });
-    const roster = () => validateTrade(l, o).filter((e) => e.includes('players. The most is'));
-    expect(roster()).toEqual([]);
-    // the user signs another team's restricted free agent to an offer sheet: it waits on his team
-    const r = extra[30];
-    r.rfa = { tid: THIRD, qo: cap.vetMin };
-    signOfferSheet(l, r, U, cap.vetMin * 2, 2, 'min', 1);
-    expect(roster()).toEqual([`${l.teams[U].abbrev} would have 22 players. The most is 21 in the offseason.`]);
-    // sending one of yours fixes it, so "what would make this work?" is worth asking
-    expect(validateTrade(l, o)).toHaveLength(1);
-    expect(canMakeWork(l, o)).toBe(true);
   }
 
   // three-team deals: a deal is its legs, and every team is judged on all it sends against all it gets

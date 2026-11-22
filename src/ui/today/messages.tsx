@@ -1,6 +1,5 @@
 // The inbox's pieces, shared by the Inbox screen and Today's unread list: a message row, and the
-// message in full in a sheet. A message that carries a decision (a trade offer, an offer sheet, a
-// 10-day contract ending) shows that decision's agenda row, settled in place; once it's off the
+// message in full in a sheet. A message that carries a decision (a trade offer) shows that decision's agenda row, settled in place; once it's off the
 // agenda, one dim line says how it was settled.
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
@@ -15,11 +14,9 @@ import { Sheet } from '../components/ui';
 import { inAppPath } from '../nav';
 import { senderOf, senderText } from './senders';
 
-/** The agenda item a message's decision is, by its id (`tradeOffer:<id>`, `offerSheet:<pid>`, `tenDay:<pid>`). */
+/** The agenda item a message's decision is, by its id (`tradeOffer:<id>`). */
 export function decisionId(m: InboxMessage): string | null {
   if (m.proposal !== undefined) return `tradeOffer:${m.proposal}`;
-  if (m.sheet !== undefined) return `offerSheet:${m.sheet}`;
-  if (m.tenDay !== undefined) return `tenDay:${m.tenDay}`;
   return null;
 }
 
@@ -109,7 +106,6 @@ const LINK_LABELS: [RegExp, string][] = [
   [/^\/office\/draft/, 'Draft board'],
   [/^\/office\/career/, 'Your career'],
   [/^\/office\/trade/, 'Trade'],
-  [/^\/office\/finances/, 'Finances'],
   [/^\/office\/?$/, 'Office'],
   [/^\/league\/cup/, 'In-Season Cup'],
   [/^\/league\/awards/, 'Awards'],
@@ -133,12 +129,7 @@ function settledLine(league: League, m: InboxMessage): string {
     const took = from && (league.transactions ?? []).some((t) => t.kind === 'trade' && t.season === m.season && t.day >= m.day && t.tids.includes(me) && t.tids.includes(from.tid));
     return took ? `Settled: you made a deal with ${teamCity(league, from)}.` : 'This offer is no longer open.';
   }
-  const pid = m.sheet ?? m.tenDay;
-  const p = pid !== undefined ? league.players[pid] : undefined;
-  if (!p) return 'Settled.';
-  if (p.tid === me) return m.sheet !== undefined ? 'Settled: he stayed with us.' : p.contract.tenDay ? 'Settled: he is on a 10-day contract.' : 'Settled: he is signed with us.';
-  if (p.tid >= 0) return `Settled: he joined ${teamCity(league, p.tid)}.`;
-  return 'Settled: he is a free agent.';
+  return 'Settled.';
 }
 
 /** A message in full: subject, who and when, the text, its decision (or how it was settled), its screen, and Mark unread. */

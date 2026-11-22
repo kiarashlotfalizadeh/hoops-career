@@ -392,7 +392,7 @@ function ContinueBar() {
     const live = liveInProgress(league);
     const today = userGameOnDay(league, league.day);
     if (fromBar && a.cmd === 'watchLive' && !live && today && league.settings.pregame !== false && !pathname.startsWith('/games/')) {
-      nav(`/games/${today.home === league.userTid ? today.away : today.home}?tab=preview`);
+      nav(`/games/${today.home === league.userTid ? today.away : today.home}`);
       return;
     }
     if (a.sim) setRunning(a.label);
@@ -466,7 +466,7 @@ function ContinueBar() {
           </div>
         )
       )}
-      <Sheet open={agendaOpen} onClose={() => setAgendaOpen(false)} title="Needs you first">
+      <Sheet open={agendaOpen} onClose={() => setAgendaOpen(false)} title="Settle these first">
         <AgendaList league={league} only="required" />
         {!flowActions(league).some((a) => a.agenda) && <div className="empty">All set. The season can move on.</div>}
       </Sheet>

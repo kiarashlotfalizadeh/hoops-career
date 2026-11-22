@@ -32,7 +32,7 @@ function PreviewRedirect() {
   if (g && g.played) return <Navigate to={`/game/${g.gid}`} replace />;
   const me = league.userTid;
   if (!g || (g.home !== me && g.away !== me)) return <Navigate to="/games" replace />;
-  return <Navigate to={`/games/${g.home === me ? g.away : g.home}?tab=preview`} replace />;
+  return <Navigate to={`/games/${g.home === me ? g.away : g.home}`} replace />;
 }
 
 export const gamesRoutes = (

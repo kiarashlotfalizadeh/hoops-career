@@ -140,7 +140,7 @@ function gamesWith(p: Player, tid: number): number {
  * less, a teenager far less; the end of the bench expects nothing.
  */
 export function expectedMinutes(league: League, p: Player): number {
-  if (p.tid < 0 || p.contract.twoWay || p.contract.tenDay) return 0;
+  if (p.tid < 0) return 0;
   const roster = standardRoster(league, p.tid).sort((a, b) => b.ovr - a.ovr || a.pid - b.pid);
   const rank = roster.findIndex((x) => x.pid === p.pid);
   if (rank < 0) return 0;

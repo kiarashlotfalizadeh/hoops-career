@@ -196,7 +196,7 @@
   }
 }
 
-/* a length the offer can't run (an offer sheet's single season) */
+/* a length the offer can't run */
 .fo-yr:disabled {
   opacity: 0.4;
   cursor: not-allowed;

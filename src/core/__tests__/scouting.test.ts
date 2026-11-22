@@ -13,7 +13,7 @@ import { shortName, teamPlayers, teamSeason } from '../league/helpers';
 import { huntPick } from '../analysis/guarding';
 import { previewMatchups } from '../analysis/matchupPreview';
 import { buildGameReport, decidingFactors } from '../analysis/gameReport';
-import { debrief, keyAdvice, luckLine, sameChange } from '../analysis/debrief';
+import { debrief, luckPts, sameChange } from '../analysis/debrief';
 import { createLeague, defaultSettings } from '../league/create';
 import { takeOverTeam } from '../league/owner';
 import { rankedPresets } from '../ai/coachAI';
@@ -353,7 +353,7 @@ describe('scouting and the staff', () => {
         league,
         league.schedule.find((x) => !x.played && (x.home === 0 || x.away === 0))!,
       );
-    // leads with the verdict and the edges, and its fixes change the tactics as they are now
+    // leads with the edges, and its fixes change the tactics as they are now
     {
       const league = structuredClone(fictional);
       let fixes = 0;
@@ -361,12 +361,6 @@ describe('scouting and the staff', () => {
         const res = firstGame(league);
         const rep = buildGameReport(league, res)!;
         const d = debrief(league, res, rep);
-        // the staff's read says how it went in words: the final above it has the score
-        expect(d.headline).not.toContain(`${res.home.pts}-${res.away.pts}`);
-        expect(d.headline).not.toContain(`${res.away.pts}-${res.home.pts}`);
-        expect(d.headline).toMatch(/^[A-Z].+\.$/);
-        // and the next-time rows don't repeat a key's number (the keys' list has it)
-        for (const a of d.advice) expect(a.title).not.toMatch(/goal [≤≥]/);
         expect(d.decided.length).toBeLessThanOrEqual(3);
         expect(d.opp).toBe(res.home.tid === 0 ? res.away.tid : res.home.tid);
         expect(d.advice.length).toBeLessThanOrEqual(5);
@@ -470,10 +464,10 @@ describe('scouting and the staff', () => {
         league.teams[0].tactics = applyPatch(league.teams[0].tactics, { defense: { scheme: 'zone23' } });
         // (big enough to top whatever luck the simulated game had)
         lost.impacts = [im('zone_3pt:o', them, 60), im('zone_paint:d', me, 2)];
-        const head = debrief(league, lost, buildGameReport(league, lost)!).headline;
-        expect(head).toMatch(/Our zone defense cost us more than it won back\.$/);
-        lost.impacts = [im('zone_glass:o', them, 25), im('zone_paint:d', me, 25.1)];
-        expect(debrief(league, lost, buildGameReport(league, lost)!).headline).not.toMatch(/tactical battle|game plan won/);
+        // a cost of our own setting, more than it won back, is a deciding edge against us
+        const d = debrief(league, lost, buildGameReport(league, lost)!);
+        expect(d.decided[0].pts).toBeLessThan(0);
+        expect(d.decided[0].key).toBe('zone_3pt:o');
         league.teams[0].tactics = applyPatch(league.teams[0].tactics, { defense: { scheme: 'man' } });
       }
       // his players hurt in it, and for how long
@@ -553,39 +547,11 @@ describe('scouting and the staff', () => {
       const looks = rep.factors.find((f) => f.category === 'shooting');
       expect(!!looks).toBe(Math.abs(efgSwing) >= 3);
       if (looks) expect(looks.title).toMatch(/got the better looks: worth/);
-      // the luck in words follows both sides' numbers: never "ours didn't" when ours fell above their looks too
+      // the luck in points, each side's own: made points less what its looks were worth
       res.xShots = side({ pts: fgPts(us) - 6, tpm: us.t.tpm }, { pts: fgPts(them) - 20, tpm: them.t.tpm });
-      expect(luckLine(res, me, false)).toBe('Their shots fell above their looks. That part was luck, not the plan.');
-      res.xShots = side({ pts: fgPts(us) + 20, tpm: us.t.tpm }, { pts: fgPts(them) - 20, tpm: them.t.tpm });
-      expect(luckLine(res, me, false)).toBe("Their shots fell and ours didn't. That part was luck, not the plan.");
-      // a threes key missed with the looks there reads as shots that didn't fall, missed without them as threes not taken
-      const fly = { id: 'fly', title: 'Let it fly', goal: '', dir: 'min' as const, target: us.t.tpm + 3, value: us.t.tpm, met: false };
-      res.xShots = side({ pts: fgPts(us), tpm: us.t.tpm + 3 }, { pts: fgPts(them), tpm: them.t.tpm });
-      expect(keyAdvice(league, fly, res, me)).toMatch(/^The threes were there and you took them/);
-      res.xShots = side({ pts: fgPts(us), tpm: us.t.tpm }, { pts: fgPts(them), tpm: them.t.tpm });
-      expect(keyAdvice(league, fly, res, me)).toMatch(/you didn't take them/);
-      // and a team that made more threes than its looks were worth beat the arc key on luck, not on the plan
-      const arc = { id: 'arc', title: 'Run them off the line', goal: '', dir: 'max' as const, target: them.t.tpm - 3, value: them.t.tpm, met: false };
-      res.xShots = side({ pts: fgPts(us), tpm: us.t.tpm }, { pts: fgPts(them), tpm: them.t.tpm - 4 });
-      expect(keyAdvice(league, arc, res, me)).toMatch(/That part was luck/);
-      // missed on the looks: it knows the plan played, and never asks for the Stay home that was already in
-      res.xShots = side({ pts: fgPts(us), tpm: us.t.tpm }, { pts: fgPts(them), tpm: them.t.tpm });
-      league.teams[0].tactics = applyPatch(league.teams[0].tactics, { defense: { help: 70 } });
-      expect(keyAdvice(league, arc, res, me)).toMatch(/\. Stay home on their shooters, or run/);
-      res.plan = [{ label: 'Stay home on shooters', end: 'def' }];
-      expect(keyAdvice(league, arc, res, me)).toMatch(/^Stay home was in, and their looks were still worth \d+ made threes\. Run their best shooter off the line/);
-      const move = {
-        kind: 'tactics' as const,
-        end: 'def' as const,
-        before: { us: { poss: 0, pts: 0 }, them: { poss: 0, pts: 0 } },
-        after: { us: { poss: 0, pts: 0 }, them: { poss: 0, pts: 0 } },
-      };
-      res.plan = undefined;
-      res.moves = [{ ...move, q: 3, clock: 252, text: 'Help defense: Balanced → Stay home' }];
-      expect(keyAdvice(league, arc, res, me)).toMatch(/Stay home only went in at Q3 4:12\. Start with it/);
-      res.moves = [{ ...move, q: 1, clock: 0, text: 'Pick-and-roll coverage: Drop → Hedge · Help defense: Balanced → Stay home' }];
-      expect(keyAdvice(league, arc, res, me)).toMatch(/^Stay home was in/);
-      res.moves = undefined;
+      expect(luckPts(res, me)).toBeCloseTo(6, 6);
+      expect(luckPts(res, (1 - me) as 0 | 1)).toBeCloseTo(20, 6);
+      expect(luckPts({ ...res, xShots: undefined }, me)).toBe(0);
     }
     // a free-throw gap against a physical defense comes with its lever; played clean, it says where it came from
     {

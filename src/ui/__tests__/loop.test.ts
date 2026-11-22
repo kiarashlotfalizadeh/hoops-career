@@ -1,33 +1,20 @@
-// The Continue loop: sims that stop for the right things (a new staff call, each playoff series of
-// his once as it starts and each morning after a loss that has him behind, the morning of one of his
-// biggest games, never a story) and say a call they passed, "Sim to the next big night" from a
-// game's billing as it reads each day, the Continue bar naming tonight's stakes, and big moments
-// that end a sim on one story, the biggest.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+// The Continue loop: sims that stop only for what needs an answer (a starter hurt, each playoff series
+// of his once as it starts and each morning after a loss that has him behind; never a story, never a
+// big night) and say what they passed, the Continue bar naming tonight's game, and big moments that
+// end a sim on one card, the biggest.
+import { describe, expect, it } from 'vitest';
 import type { League, ScheduledGame } from '../../core/types';
-import { billingFor, type Billing } from '../../core/analysis/gameStory';
 import { addNews, standardRoster, teamCity } from '../../core/league/helpers';
 import { userGameOnDay } from '../../core/league/games';
 import { runSim } from '../../state/simCore';
-import { newCall, openCallIds, settleCall, storeWorth, worthSig } from '../../core/league/calls';
+import { settleCall, storeWorth, worthSig } from '../../core/league/calls';
+import { agenda, simStopIds } from '../../core/league/agenda';
 import { schedulePlayoffDay } from '../../core/league/playoffs';
-import { flowActions, nextBigNight } from '../flow';
+import { flowActions } from '../flow';
 import { currentMoments, pickMoments, type Moment } from '../moments';
 import { testLeague } from '../../state/__tests__/fixtures';
 import { buildDigest, digestMark, shownResults, type DigestResult } from '../today/digest';
 import { isHisStory, isLeagueStory, topStory } from '../today/front';
-import { freshAdvice, STALE_DAYS } from '../today/staffAge';
-import type { AssistantCard } from '../../core/ai/assistant';
-
-vi.mock('../../core/analysis/gameStory', async (load) => {
-  const m = await load<typeof import('../../core/analysis/gameStory')>();
-  return { ...m, billingFor: vi.fn(() => null) };
-});
-
-/** Bill these games (by gid); every other night is ordinary. */
-function bill(nights: Record<number, Billing>) {
-  vi.mocked(billingFor).mockImplementation((_l, g) => nights[g.gid] ?? null);
-}
 
 /** A league that stops for things, with its mail read every day so a news stop can't get in first. */
 function stopping(name: string): League {
@@ -36,13 +23,15 @@ function stopping(name: string): League {
   return l;
 }
 /**
- * Each day: the mail read, so a news stop can't get in first, and the press's own front pages made
- * briefs, so only the stories a test writes can stop it (the real press writes plenty).
+ * Each day: the mail read, and no AI team's offer left standing (an offer stops a long sim: the
+ * tests here are about the other stops), and the press's own front pages made briefs, so only the
+ * stories a test writes are front pages (the real press writes plenty).
  */
 const quiet = (l: League, mine: Set<number> = new Set()) => {
   const from = l.nextMsgId;
   return () => {
     l.inbox.forEach((m) => (m.read = true));
+    delete l.proposals;
     for (const n of l.news) if (n.id >= from && !mine.has(n.id) && n.weight === 3) n.weight = 1;
   };
 };
@@ -68,11 +57,8 @@ const hurt = (p: ReturnType<typeof best>, games: number) => {
 const ahead = (l: League): ScheduledGame[] =>
   l.schedule.filter((g) => !g.played && g.day > l.day && (g.home === l.userTid || g.away === l.userTid)).sort((a, b) => a.day - b.day || a.gid - b.gid);
 
-beforeEach(() => vi.mocked(billingFor).mockImplementation(() => null));
-afterEach(() => vi.mocked(billingFor).mockReset());
-
 describe('the Continue loop', () => {
-  it('stops sims for the right things, sims to the next big night, names tonight on the Continue bar, and ends a sim on its biggest moment', async () => {
+  it('stops sims for the right things, names tonight on the Continue bar, and ends a sim on its biggest moment', async () => {
     // a front-page story about his team never stops a long sim (the digest leads with it); a new
     // staff call does, the day it opens: here his best player out for 20 games
     {
@@ -88,15 +74,20 @@ describe('the Continue loop', () => {
           progress: () => {
             hush();
             if (++n === 2) story(l, mine, { kind: 'milestone', head: 'Yours', text: '.', tids: [l.userTid], pids: [], weight: 3 });
-            if (n === 3) hurt(best(l), 20);
+            if (n === 3) {
+              hurt(best(l), 20);
+              // (measured as a real loss: a star the team holds up without is no call, and that turns on the night's matchup)
+              const id = `injury:${best(l).pid}:${best(l).injuryCount}`;
+              l.callWorth = { ...l.callWorth, [id]: { gid: ahead(l)[0].gid, sig: 0, day: l.day, pts: 3, raw: 3, se: 1 } };
+            }
           },
         },
       );
       expect(out).toEqual({ days: 3, stop: 'call' });
       expect(l.day).toBe(day0 + 3);
-      expect(openCallIds(l)).toEqual([`injury:${best(l).pid}:${best(l).injuryCount}`]);
-      // what the sim's end says: the call new since it started
-      expect(newCall(l, openCallIds(l), new Set())).toMatchObject({ card: { kind: 'injury' }, due: false });
+      expect(simStopIds(l)).toEqual([`injury:${best(l).pid}:${best(l).injuryCount}`]);
+      // what the sim's end says: the item new since it started
+      expect(agenda(l).find((i) => i.id === l.stopCall?.id)?.kind).toBe('injury');
     }
 
     // a sim through the playoffs stops the morning each series of his starts (Game 1 on the calendar,
@@ -137,17 +128,17 @@ describe('the Continue loop', () => {
       );
       expect(out).toEqual({ days: 2, stop: 'call' });
       expect(userGameOnDay(l, l.day)?.seriesId).toBe(`${conf}2-0`);
-      expect(openCallIds(l)).toEqual([`series:${l.season}:${conf}2-0`]);
+      expect(simStopIds(l)).toEqual([`series:${l.season}:${conf}2-0`]);
       // a week on: Game 1 and the games after it, no second stop for the series' start; only the morning
       // after a loss that has him behind (its call names the score: the staff's adjustment for that game)
       for (let i = 0; i < 4; i++) {
-        const before = new Set(openCallIds(l));
+        const before = new Set(simStopIds(l));
         const r = await runSim(l, { kind: 'week' }, { progress: quiet(l) });
         if (r.stop === 'target') break;
         const s = l.playoffs[0];
         expect(r.stop).toBe('call');
         expect(s.highWins).toBeLessThan(s.lowWins);
-        expect(newCall(l, openCallIds(l), before)?.card.id).toBe(`series:${l.season}:${conf}2-0:${s.highWins}-${s.lowWins}`);
+        expect(simStopIds(l).find((x) => !before.has(x))).toBe(`series:${l.season}:${conf}2-0:${s.highWins}-${s.lowWins}`);
       }
       expect(l.playoffs[0].highWins + l.playoffs[0].lowWins).toBeGreaterThan(1);
     }
@@ -174,19 +165,20 @@ describe('the Continue loop', () => {
           },
         },
       );
-      expect(out.stop, `${set}: ${openCallIds(l).join()}`).toBe('target');
+      expect(out.stop, `${set}: ${simStopIds(l).join()}`).toBe('target');
     }
 
     // a sim of a set number of days never stops for it, but a call that opened on the way is still said at its end
     {
       const l = stopping('days');
-      const before = new Set(openCallIds(l));
+      const before = new Set(simStopIds(l));
       let n = 0;
       const out = await runSim(
         l,
         { kind: 'days', n: 4 },
         {
           progress: () => {
+            delete l.proposals;
             addNews(l, { kind: 'milestone', head: 'x', text: '.', tids: [l.userTid], pids: [], weight: 3 });
             // (out long enough that a trade is still an answer when it ends: a real choice. His best guard: the
             // staff has cover or a trade to offer for one, which it may not for the roster's best player, a center)
@@ -195,112 +187,40 @@ describe('the Continue loop', () => {
         },
       );
       expect(out).toEqual({ days: 4, stop: 'target' });
-      expect(newCall(l, openCallIds(l), before)?.card.kind).toBe('injury');
+      expect(agenda(l).find((i) => simStopIds(l).includes(i.id) && !before.has(i.id))?.kind).toBe('injury');
     }
 
-    // a sim stops on the morning of one of his biggest games, before it is played
-    {
-      const l = stopping('biggame');
-      const g = ahead(l)[3];
-      bill({ [g.gid]: { tag: 'Game 7', line: 'Winner goes on.', weight: 3 } });
-      const out = await runSim(l, { kind: 'endRegular' }, { progress: quiet(l) });
-      expect(out.stop).toBe('bigGame');
-      expect(l.day).toBe(g.day);
-      expect(userGameOnDay(l, l.day)?.gid).toBe(g.gid);
-      // a big night of weight 2 isn't a reason to stop
-      const l2 = stopping('biggame2');
-      const g2 = ahead(l2)[1];
-      bill({ [g2.gid]: { tag: 'Rivalry', line: 'Again.', weight: 2 } });
-      // (a week that reaches past it)
-      expect(g2.day - l2.day).toBeLessThan(7);
-      expect((await runSim(l2, { kind: 'week' }, { progress: quiet(l2) })).stop).toBe('target');
-    }
-
-    // sim to the next big night: his next billed game of weight 2 or more, simmed to its morning
-    {
-      const l = testLeague('bignight');
-      const games = ahead(l);
-      const [small, big] = [games[1], games[4]];
-      bill({ [small.gid]: { tag: 'Back-to-back', line: '.', weight: 1 }, [big.gid]: { tag: 'Rivalry', line: 'Boston again.', weight: 2 } });
-      expect(nextBigNight(l)?.g.gid).toBe(big.gid);
-      const opt = flowActions(l).find((a) => a.id === 'bignight');
-      expect(opt?.sim).toEqual({ kind: 'bigNight', day: big.day });
-      expect(opt?.sub).toMatch(/^Rivalry · /);
-      await runSim(l, opt!.sim!);
-      expect(l.day).toBe(big.day);
-      expect(userGameOnDay(l, l.day)?.gid).toBe(big.gid);
-      // the billing is read each day it sims: a night that has become big on the way stops it there
-      const m = testLeague('bignight-on-the-way');
-      const [, , mid, , far] = ahead(m);
-      const farNight = { [far.gid]: { tag: 'Rivalry', line: '.', weight: 2 as const } };
-      bill(farNight);
-      let n = 0;
-      await runSim(
-        m,
-        { kind: 'bigNight', day: nextBigNight(m)!.g.day },
-        { progress: () => void (++n === 1 && bill({ ...farNight, [mid.gid]: { tag: 'Showdown', line: '.', weight: 2 } })) },
-      );
-      expect(m.day).toBe(mid.day);
-    }
-
-    // not offered when the next big night is simply the next game, or there is none
-    {
-      bill({});
-      const l = testLeague('nobig');
-      expect(flowActions(l).some((a) => a.id === 'bignight')).toBe(false);
-      const next = ahead(l)[0];
-      // (unless today is a game day: then the next game is today's)
-      if (!userGameOnDay(l, l.day)) {
-        bill({ [next.gid]: { tag: 'Rivalry', line: '.', weight: 3 } });
-        expect(flowActions(l).some((a) => a.id === 'bignight')).toBe(false);
-      }
-    }
-
-    // the Continue bar names what is on the line tonight, and Sim 1 month is on offer
+    // the Continue bar names tonight's game, Sim 1 month is on offer, and no sim aims at a "big night"
     {
       const l = testLeague('tonight');
       const g = userGameOnDay(l, l.day) ?? ahead(l)[0];
       l.day = g.day;
-      bill({ [g.gid]: { tag: 'Rivalry night', line: '.', weight: 2 } });
       const live = flowActions(l).find((a) => a.id === 'live');
-      expect(live?.sub).toMatch(/^Rivalry night · (vs|@) [A-Z]{3}/);
+      expect(live?.sub).toMatch(/^(vs|@) [A-Z]{3}.* · today$/);
       expect(flowActions(l).find((a) => a.id === 'month')?.sim).toEqual({ kind: 'month' });
+      expect(flowActions(l).some((a) => a.id === 'bignight')).toBe(false);
     }
 
-    // moments from the front page
+    // one card a sim, the biggest career moment: a title outranks the series on the way, and the rest wait
     {
-      const story = (key: string, rank: number): Moment => ({ key, kind: 'story', over: '', title: key, sub: '', rank });
-      // of the stories that come out together, only the biggest takes the screen
-      expect(pickMoments([story('a', 3), story('b', 9), story('c', 5)]).map((m) => m.key)).toEqual(['b']);
-      // a career moment outranks every story; a title outranks the series on the way
       const clinch: Moment = { key: 'clinch', kind: 'clinch', over: '', title: '', sub: '' };
-      expect(pickMoments([story('a', 9), clinch]).map((m) => m.key)).toEqual(['clinch']);
       const series: Moment = { key: 's', kind: 'series', over: '', title: '', sub: '' };
       const title: Moment = { key: 't', kind: 'title', over: '', title: '', sub: '', big: true };
       expect(pickMoments([series, title]).map((m) => m.key)).toEqual(['t']);
-      // one card, the biggest: the rest wait in the digest
       const award: Moment = { key: 'aw', kind: 'award', over: '', title: '', sub: '' };
       const cup: Moment = { key: 'cup', kind: 'cup', over: '', title: '', sub: '' };
-      expect(pickMoments([award, clinch, cup, story('a', 9)]).map((m) => m.key)).toEqual(['cup']);
+      expect(pickMoments([award, clinch, cup]).map((m) => m.key)).toEqual(['cup']);
+      expect(pickMoments([])).toEqual([]);
     }
 
-    // this season's front-page stories about his team read as moments, a milestone above a game
+    // the press's front pages about his team never take the screen: a story is no moment
     {
-      bill({});
       const l = testLeague('moments');
       const me = l.userTid;
-      // (the press's own stories from opening night aside)
-      const from = l.nextMsgId;
       const pid = Object.values(l.players).find((p) => p.tid === me)!.pid;
       addNews(l, { kind: 'milestone', head: 'Ten thousand', text: 'He got there.', tids: [me], pids: [pid], weight: 3 });
       addNews(l, { kind: 'game', head: 'At the buzzer', text: 'A win.', tids: [me, 3], pids: [], weight: 3 });
-      addNews(l, { kind: 'honor', head: 'A small one', text: '.', tids: [me], pids: [], weight: 2 });
-      addNews(l, { kind: 'milestone', head: 'Not his', text: '.', tids: [(me + 1) % 30], pids: [], weight: 3 });
-      const stories = currentMoments(l).filter((m) => m.kind === 'story' && Number(m.key.slice(5)) >= from);
-      expect(stories.map((m) => m.title).sort()).toEqual(['At the buzzer', 'Ten thousand']);
-      const [top] = pickMoments(stories);
-      expect(top).toMatchObject({ title: 'Ten thousand', sub: 'He got there.', pid });
-      expect(top.link).toMatch(/^\/league\/news\?story=\d+$/);
+      expect(currentMoments(l).some((m) => m.title === 'Ten thousand' || m.title === 'At the buzzer')).toBe(false);
     }
 
     // a long stretch's digest lists its 2 newest results and then its 3 biggest nights; a short one its newest
@@ -344,15 +264,6 @@ describe('the Continue loop', () => {
       addNews(l, { kind: 'milestone', head: 'New and big', text: '.', tids: [me], pids: [], weight: 3 });
       l.news.at(-1)!.day = 27;
       expect(topStory(l)?.head).toBe('New and big');
-    }
-
-    // From your staff: a card shown a week without being acted on gives way (it's in All advice), the days
-    // ahead come first, and an extension never sits on Today
-    {
-      const card = (id: string, area: AssistantCard['area'] = 'team'): AssistantCard => ({ id, area, tone: 'tip', title: id, line: '', weight: 50 });
-      const feed = [card('extend:1', 'office'), card('alert:lineup-1'), card('alert:wear-7'), card('open-spot', 'office')];
-      expect(freshAdvice(feed, {}, 100).map((c) => c.id)).toEqual(['alert:wear-7', 'alert:lineup-1', 'open-spot']);
-      expect(freshAdvice(feed, { 'alert:wear-7': 100 - STALE_DAYS, 'alert:lineup-1': 99 }, 100).map((c) => c.id)).toEqual(['alert:lineup-1', 'open-spot']);
     }
   }, 180_000);
 });

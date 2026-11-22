@@ -199,25 +199,7 @@
 .lv-mv-line {
   margin-top: 1px;
 }
-.lv-mv-v {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding-top: 1px;
-  font-size: 12px;
-  font-weight: 650;
-  white-space: nowrap;
-}
-.lv-mv-v.good {
-  color: var(--good);
-}
-.lv-mv-v.bad {
-  color: var(--bad);
-}
-.lv-mv-v.dim {
-  color: var(--text-dim);
-}
+
 .lv-mv-empty {
   padding: 2px 0;
 }

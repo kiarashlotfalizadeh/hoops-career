@@ -1,14 +1,11 @@
 import type { League } from '../types';
 import { clamp } from '../random';
 import { addInbox, contractSeason, curTeamSeason, revenueScale, teamPlayers, winPct } from './helpers';
-import { profit } from './finances';
 import { clearAllPlans } from './gamePlans';
 import { autoTactics } from '../ai/coachAI';
 import { defaultTactics } from '../sim/tactics';
 import { swapJobs } from './coaches';
 import { REVIEWS_KEPT, currentGoals, goalsRecord, gradeOwnerGoals, resultText, setOwnerGoals, type OwnerGoalKind, type OwnerReview } from './ownerGoals';
-import { DEBT_LIMIT, booksLine, booksReview, booksVerdict } from './books';
-import { money } from '../format';
 import { canBeFired, seasonWeight, ULTIMATUM_MET, ultimatumVerdict } from './jobSecurity';
 import { firingSaid, ownerWords, verdictOf } from './ownerVoice';
 import { cameoAtReview } from './ownerCameos';
@@ -43,20 +40,15 @@ export function takeOverTeam(league: League, tid: number) {
   // (the new team's playbook is no longer its old coach's style: the user's staff names and refits it)
   delete nu.tactics.identity;
   // the old team's game plans and the old scouting department's board don't come along, and
-  // nor does its business: pending free-agent offers, waiver claims, trade offers and untouchables
+  // nor does its business: pending free-agent offers, trade offers and untouchables
   clearAllPlans(league);
   delete league.draftBoard;
   delete league.faBids;
-  for (const p of Object.values(league.players)) {
-    if (p.waivers?.claim) delete p.waivers.claim;
-  }
   delete league.proposals;
   delete league.untouchable;
   // the old job's mail (its extension candidates, camp report, offers) is read: what's unread is the new job's
   for (const m of league.inbox) m.read = true;
   league.ownerMood = { wins: 0, playoffs: 0, money: 0, total: 0 };
-  // and the old owner's word on the old team's books
-  delete league.books;
   league.tenureStart = contractSeason(league);
   // the new owner's goals: from today in season; before opening night, or once the team's season is over, none yet
   if (league.phase === 'preseason') delete league.ownerGoals;
@@ -77,25 +69,23 @@ export function ownerMoneyScore(league: League, seasonProfit: number) {
 }
 
 /** The part of the owner's standing (League.ownerMood) each kind of goal feeds. */
-const PART: Record<OwnerGoalKind, 'wins' | 'playoffs' | 'money' | 'youth'> = { wins: 'wins', postseason: 'playoffs', profit: 'money', payroll: 'money', youth: 'youth' };
+const PART: Record<OwnerGoalKind, 'wins' | 'playoffs' | 'money' | 'youth'> = { wins: 'wins', postseason: 'playoffs', payroll: 'money', youth: 'youth' };
 
 /** The overall standing (−1..1) under which the owner fires the coach, once the grace period is over and job security is on. */
 export const FIRING_LINE = -0.5;
 
 /**
  * The owner's review after the playoffs: each of the season's goals graded −1..1 against its target
- * (see gradeGoal), the season's grade their weighted sum (held down by the floor, the rebuild clock
- * or the books under the freeze; lifted by a title), and the overall standing its running average:
+ * (see gradeGoal), the season's grade their weighted sum (held down by the floor or the rebuild
+ * clock; lifted by a title), and the overall standing its running average:
  * a new career's first season sets it, after that (and from the first season after a job change,
  * against the reputation he brought) each season counts 40%. The parts of the standing (wins,
  * playoffs, money and, once a season had a development goal, youth) are running averages of the goals
  * behind them, this owner's own from his first season; a part without a goal this season keeps its
  * value. A season without goals (a save from before them, picked up in the postseason) is graded on
- * the old absolute scale: wins against .500, the playoff round reached and profit against a fixed
- * target. The review goes into the history (the last REVIEWS_KEPT seasons) and the inbox, goal by
+ * the old absolute scale: wins against .500 and the playoff round reached. The review goes into the history (the last REVIEWS_KEPT seasons) and the inbox, goal by
  * goal; after the grace period, with job security on, a standing under FIRING_LINE gets the coach
- * fired, and so do a missed ultimatum and books that closed deeper in the red under his final
- * warning (see booksVerdict), whatever the season won. What he says about it (his verdict, the
+ * fired, and so does a missed ultimatum, whatever the season won. What he says about it (his verdict, the
  * warning, the sack) is his own, by his quirk (ownerVoice.ts); what he decides is the same for all.
  */
 export function ownerEvaluation(league: League) {
@@ -109,11 +99,10 @@ export function ownerEvaluation(league: League) {
   let floored = false;
   let impatient = false;
   let crowned: 'title' | 'run' | undefined;
-  let uncrowned = 0;
   if (og) {
     let f: true | undefined;
     let p: true | undefined;
-    ({ goals, grade, uncrowned, floored: f, impatient: p, crowned } = gradeOwnerGoals(league, og));
+    ({ goals, grade, floored: f, impatient: p, crowned } = gradeOwnerGoals(league, og));
     floored = !!f;
     impatient = !!p;
     for (const k of ['wins', 'playoffs', 'money', 'youth'] as const) {
@@ -126,17 +115,8 @@ export function ownerEvaluation(league: League) {
     const round = ts.playoffRound;
     parts.wins = clamp((winPct(ts) - 0.5) * 2.5, -1, 1);
     parts.playoffs = round >= 5 ? 1 : round === 4 ? 0.7 : round === 3 ? 0.45 : round === 2 ? 0.2 : round === 1 ? 0 : -0.25;
-    parts.money = ownerMoneyScore(league, profit(league, tid));
-    grade = parts.wins * 0.4 + parts.playoffs * 0.4 + parts.money * 0.2;
+    grade = parts.wins * 0.5 + parts.playoffs * 0.5;
   }
-  // the books closed past the debt limit: no title lifts the season (a passive Thunder coach lost
-  // $883.5M in a season and heard "I'm thrilled", the review found, round 3); under the freeze, closed
-  // in the red: no title lifts it past their cap
-  const books = booksVerdict(league);
-  const debtHeld = !!books?.past && !!crowned && uncrowned < grade;
-  if (debtHeld) grade = uncrowned;
-  const booksText = booksLine(books, grade);
-  if (books?.cap !== undefined) grade = Math.min(grade, books.cap);
   const prev = league.ownerMood;
   // how far one season moves his standing, and how long he waits to fire: see jobSecurity.ts
   const w = seasonWeight(league);
@@ -158,23 +138,12 @@ export function ownerEvaluation(league: League) {
   const youth = blend('youth');
   league.ownerMood = { wins: blend('wins') ?? 0, playoffs: blend('playoffs') ?? 0, money: blend('money') ?? 0, total: r2(total), ...(youth !== undefined ? { youth } : {}) };
   const fireable = canBeFired(league);
-  const fired = fireable && (total < FIRING_LINE || verdict === 'missed' || !!books?.fire);
-  // the books in the red: a warning becomes an ultimatum, an ultimatum a freeze, a freeze deeper in the red a final warning (none for a coach he fires)
-  if (!fired) booksReview(league, books);
-  const held = booksText ? 'books' : debtHeld ? 'debt' : impatient ? 'patience' : floored ? 'floor' : undefined;
-  // his first words on it, in his own manner (ownerVoice.ts): why he fired the coach, how the season
-  // left him, or, past the debt limit, what it cost him
+  const fired = fireable && (total < FIRING_LINE || verdict === 'missed');
+  const held = impatient ? 'patience' : floored ? 'floor' : undefined;
+  // his first words on it, in his own manner (ownerVoice.ts): why he fired the coach, or how the season left him
   const words = ownerWords(league);
   const feeling = words.verdict[verdictOf(total)];
-  const loss = -profit(league, tid);
-  const debt = books?.past
-    ? crowned === 'title'
-      ? loss > 0
-        ? `We won, and it cost me ${money(loss)}.`
-        : `We won, but the books closed ${money(-books.close)} in the red.`
-      : `The books closed ${money(-books.close)} in the red. I can't carry that.`
-    : null;
-  const said = fired ? firingSaid(league, verdict === 'missed' ? { ultimatum: og!.ultimatum!.text } : books?.fire ? { books: money(-books.close) } : 'results') : (debt ?? feeling);
+  const said = fired ? firingSaid(league, verdict === 'missed' ? { ultimatum: og!.ultimatum!.text } : 'results') : feeling;
   const review: OwnerReview = {
     season: league.season,
     tid,
@@ -189,9 +158,8 @@ export function ownerEvaluation(league: League) {
   };
   league.ownerReviews = [...(league.ownerReviews ?? []).filter((r) => r.season !== league.season), review].slice(-REVIEWS_KEPT);
   const lines = goals.map((g) => `${g.title} — ${resultText(g, g.result)} (${fmt(g.grade)})`);
-  // (a title is what the season is remembered for, unless the books hold it down)
-  if (crowned && (booksText || debtHeld)) lines.push(crowned === 'title' ? 'We won the title.' : 'Two rounds further than I asked for.');
-  else if (crowned)
+  // (a title is what the season is remembered for)
+  if (crowned)
     lines.push(
       crowned === 'title' ? 'We won the title. Nothing else this season takes that away.' : 'Two rounds further than I asked for. That is what I will remember about this season.',
     );
@@ -200,13 +168,6 @@ export function ownerEvaluation(league: League) {
     lines.push(`${rec.won}-${rec.games - rec.won} is under anything I can accept, so nothing else saves this season's grade.`);
   }
   if (impatient && og?.rebuild) lines.push(`${og.rebuild.year} seasons in a row without the postseason. I said we compete, and we didn't. Nothing else saves this season's grade.`);
-  if (debtHeld && books)
-    lines.push(`The books closed ${money(-books.close)} in the red, past the ${money(DEBT_LIMIT * revenueScale(league))} I'll carry. No result lifts a season like that.`);
-  if (booksText) lines.push(booksText);
-  // budgets cut under the league's standard: what they saved isn't profit he asked for (see ownerProfit)
-  const trimmed = curTeamSeason(league, tid).trimmed ?? 0;
-  if (og?.goals.some((g) => g.kind === 'profit') && trimmed >= 500 * revenueScale(league))
-    lines.push(`The staff and facilities budgets ran ${money(trimmed)} under the league's standard. That isn't profit I asked for, so it doesn't count.`);
   if (fired) {
     league.fired = true;
     addInbox(league, {
@@ -225,10 +186,10 @@ export function ownerEvaluation(league: League) {
     from: 'Owner',
     subject: 'Season review',
     body: og
-      ? [`${debt ?? feeling} Season grade ${fmt(grade)}, overall standing ${fmt(total)}. Both run −100 to +100, and 0 is my goals met exactly.`, ...lines, answered, warning]
+      ? [`${feeling} Season grade ${fmt(grade)}, overall standing ${fmt(total)}. Both run −100 to +100, and 0 is my goals met exactly.`, ...lines, answered, warning]
           .filter(Boolean)
           .join('\n')
-      : `${feeling} Wins: ${fmt(league.ownerMood.wins)} · Playoffs: ${fmt(league.ownerMood.playoffs)} · Finances: ${fmt(league.ownerMood.money)}.${warning ? ` ${warning}` : ''}`,
+      : `${feeling} Wins: ${fmt(league.ownerMood.wins)} · Playoffs: ${fmt(league.ownerMood.playoffs)}.${warning ? ` ${warning}` : ''}`,
     tone: total > 0.1 ? 'good' : total < -0.2 ? 'bad' : 'neutral',
     link: '/office/owner',
   });

@@ -1,12 +1,12 @@
-// Who the staff favours before a game, in words: "OKC · Slight favorite", or "Toss-up". Every pre-game
-// screen says it this way and never the figure (core/analysis/staffWords.ts).
+// Who is favoured before a game, as a figure: "OKC 62%". Every pre-game screen says it this way
+// (core/analysis/staffWords.ts: a chance to win is a fact about the two teams, not a forecast of a choice).
 import type { League } from '../../core/types';
-import { oddsWord } from '../../core/analysis/staffWords';
+import { winPct } from '../../core/analysis/staffWords';
 
-/** A game's favourite and how much of one, from the home side's chance to win (`abbrev` is empty for a toss-up). */
-export function favoriteOf(league: League, g: { home: number; away: number }, homeWin: number): { abbrev: string; word: string; line: string } {
-  const word = oddsWord(Math.max(homeWin, 1 - homeWin));
-  if (word === 'Toss-up') return { abbrev: '', word, line: word };
-  const abbrev = league.teams[homeWin >= 0.5 ? g.home : g.away].abbrev;
-  return { abbrev, word, line: `${abbrev} · ${word}` };
+/** A game's favourite and its chance to win, from the home side's (`line`: "OKC 62%"; an even game names the home side at 50%). */
+export function favoriteOf(league: League, g: { home: number; away: number }, homeWin: number): { abbrev: string; pct: string; line: string } {
+  const home = homeWin >= 0.5;
+  const abbrev = league.teams[home ? g.home : g.away].abbrev;
+  const pct = winPct(home ? homeWin : 1 - homeWin);
+  return { abbrev, pct, line: `${abbrev} ${pct}` };
 }

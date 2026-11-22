@@ -12,7 +12,7 @@ import { FINISH_LABEL } from '../../core/sim/log';
 import { IMPACT_TEXT, impactSentence, teamRef } from '../../core/analysis/gameReport';
 import { fmtDate, teamCity } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
-import { edgeWord } from '../../core/analysis/staffWords';
+import { ptsFig } from '../../core/analysis/staffWords';
 import { StatTable, Tag, type Col } from './ui';
 import { f1, ordinal, p0, p1, signed } from '../stats';
 import './scouting.css';
@@ -34,19 +34,13 @@ interface Cell {
 /** Where the numbers come from, for a heading: "12 games", "Last season, 82 games". */
 export const scoutSource = (d: ScoutData) => `${d.lastSeason ? `${seasonLabel(d.season)} season, ` : ''}${d.gp} game${d.gp === 1 ? '' : 's'}`;
 
-/**
- * League ranks: the ratings, the four factors at both ends and the shot mix. `part`: the ratings
- * alone ('main'), or the rest ('rest'), for a summary with the detail a tap down.
- */
-export function RankStrip({ d, part }: { d: ScoutData; part?: 'main' | 'rest' }) {
-  const n = d.teams;
-  const all: Cell[] = [
-    { k: 'Pace', r: d.pace, fmt: f1, style: true, help: 'Possessions a game (1st = fastest)' },
+/** A team's ranked numbers in the order every strip shows them: the ratings (four), then the four factors at both ends and the shot mix. */
+function rankCells(d: ScoutData): Cell[] {
+  return [
+    { k: 'Net', r: d.net, fmt: (v) => signed(v), help: 'Net rating: ORtg minus DRtg' },
     { k: 'ORtg', r: d.ortg, fmt: f1, help: 'Offensive rating: points per 100 possessions' },
     { k: 'DRtg', r: d.drtg, fmt: f1, help: 'Defensive rating: points allowed per 100 possessions (1st = fewest)' },
-    { k: 'Net', r: d.net, fmt: (v) => signed(v), help: 'Net rating: ORtg minus DRtg' },
-  ];
-  all.push(
+    { k: 'Pace', r: d.pace, fmt: f1, style: true, help: 'Possessions a game (1st = fastest)' },
     { k: 'eFG%', r: d.off.efg, fmt: p1, help: 'Effective field-goal percentage' },
     { k: 'TOV%', r: d.off.tov, fmt: p1, help: 'Turnovers per possession (1st = fewest)' },
     { k: 'ORB%', r: d.off.orb, fmt: p1, help: 'Share of their misses they rebound' },
@@ -57,7 +51,16 @@ export function RankStrip({ d, part }: { d: ScoutData; part?: 'main' | 'rest' })
     { k: 'Opp FTR', r: d.def.ftr, fmt: (v) => v.toFixed(2), help: 'Free throws they allow per opponent shot (1st = fewest)' },
     { k: '3PA rate', r: d.threeRate, fmt: p0, style: true, help: 'Share of their shots from three (1st = most)' },
     { k: 'Rim rate', r: d.rimRate, fmt: p0, style: true, help: 'Share of their shots at the rim (1st = most)' },
-  );
+  ];
+}
+
+/**
+ * League ranks: the ratings, the four factors at both ends and the shot mix. `part`: the ratings
+ * alone ('main'), or the rest ('rest'), for a summary with the detail a tap down.
+ */
+export function RankStrip({ d, part }: { d: ScoutData; part?: 'main' | 'rest' }) {
+  const n = d.teams;
+  const all = rankCells(d);
   const cells = part === 'main' ? all.slice(0, 4) : part === 'rest' ? all.slice(4) : all;
   return (
     <div className="scout-ranks" role="list" aria-label="League ranks">
@@ -70,6 +73,49 @@ export function RankStrip({ d, part }: { d: ScoutData; part?: 'main' | 'rest' })
           </span>
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Two teams' league ranks side by side (`a` on the left: the user's team on a matchup page): a row a
+ * number, each team's figure with its rank under its abbreviation. `part` 'main': the ratings alone.
+ */
+export function RankCompare({ league, a, b, part }: { league: League; a: ScoutData; b: ScoutData; part?: 'main' }) {
+  const [ca, cb] = [rankCells(a), rankCells(b)];
+  const rows = ca.map((x, i) => ({ x, y: cb[i] })).slice(0, part === 'main' ? 4 : undefined);
+  const cell = (c: Cell, d: ScoutData) => (
+    <td>
+      <span className="num scout-cmp-v">{isFinite(c.r.v) ? c.fmt(c.r.v) : '—'}</span>{' '}
+      <span className="num scout-cmp-r" style={{ color: rankTone(c.r, d.teams, !!c.style) }}>
+        {ordinal(c.r.rank)}
+      </span>
+    </td>
+  );
+  return (
+    <div className="tablewrap">
+      <table className="stats scout-cmp">
+        <thead>
+          <tr>
+            <th className="l">
+              <span className="sr-only">Number</span>
+            </th>
+            <th>{league.teams[a.tid].abbrev}</th>
+            <th>{league.teams[b.tid].abbrev}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ x, y }) => (
+            <tr key={x.k} title={x.help}>
+              <th scope="row" className="l">
+                {x.k}
+              </th>
+              {cell(x, a)}
+              {cell(y, b)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -174,7 +220,7 @@ export function HeadToHead({ league, d }: { league: League; d: ScoutData }) {
             {effects.map((e) => (
               <Fragment key={`${e.key}|${e.forUser}`}>
                 <span>
-                  <Tag tone={e.forUser ? 'good' : 'bad'}>{edgeWord(e.perGame)}</Tag>
+                  <Tag tone={e.forUser ? 'good' : 'bad'}>{ptsFig(e.forUser ? e.perGame : -e.perGame)}</Tag>
                 </span>
                 <span>{IMPACT_TEXT[e.key] && impactSentence(e.key, teamRef(league, e.forUser ? me : opp), teamRef(league, e.forUser ? opp : me))}</span>
               </Fragment>

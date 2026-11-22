@@ -13,7 +13,7 @@ import { INJURY_TYPES } from '../../core/league/injuries';
 import { checkPlayerEdit, editPlayer, movable, yearsLeft, type ContractEdit, type PlayerEdit } from '../../core/league/godMode';
 import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useStore } from '../../state/store';
-import { Chips, Ovr, Segmented, Sheet, Slider, Toggle } from '../components/ui';
+import { Chips, Ovr, Segmented, Sheet, Slider } from '../components/ui';
 
 import { Field, Foot, HEIGHTS, Select, applyEdit, teamOptions, useEditBlock, whole } from './common';
 import { money } from '../../core/format';
@@ -50,7 +50,6 @@ interface Form {
   amount: string;
   years: number;
   option: 'none' | 'player' | 'team';
-  twoWay: boolean;
   /** The contract fields the user changed: the rest stay as they are (a free agent who joins a team signs his asking deal). */
   touched: Partial<Record<keyof ContractEdit, true>>;
 }
@@ -77,7 +76,6 @@ export function formOf(league: League, p: Player): Form {
     amount: ((ask?.amount ?? salaryFor(p, cs)) / 1000).toFixed(1),
     years: ask?.years ?? Math.max(1, yearsLeft(league, p)),
     option: p.contract.option ?? 'none',
-    twoWay: !!p.contract.twoWay,
     touched: {},
   };
 }
@@ -115,7 +113,6 @@ export function editOf(base: Form, f: Form): PlayerEdit {
     // a new salary runs for the seasons shown (left to itself, a deal that's up would get one)
     if (f.touched.years || f.touched.amount) c.years = f.years;
     if (f.touched.option) c.option = f.option === 'none' ? null : f.option;
-    if (f.touched.twoWay) c.twoWay = f.twoWay;
     if (Object.keys(c).length) e.contract = c;
   }
   return e;
@@ -370,12 +367,6 @@ function ContractTab({ league, p, f, set }: TabProps & { league: League; p: Play
         />
         {f.years < 2 && <span className="tiny dim">A one-season deal has no option.</span>}
       </div>
-      <Toggle
-        on={f.twoWay}
-        onChange={(twoWay) => touch('twoWay', { twoWay })}
-        label="Two-way contract"
-        help="Outside the 15 roster spots, the cap and the tax. Each team has three two-way slots."
-      />
     </div>
   );
 }

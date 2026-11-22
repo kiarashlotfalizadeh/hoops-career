@@ -252,7 +252,7 @@ const keptWords = (words: [string, string, string][] | undefined) => {
 };
 
 /**
- * The staff's latest reading this season, as Tactics → Analysis lists it: the change, which way it
+ * The staff's latest reading this season, as Tactics → Season Analysis lists it: the change, which way it
  * leaned, and one line (when, and what came of it). Null before the first.
  */
 export function leverReport(league: League): { lean: Lean; title: string; meta: string } | null {
@@ -388,8 +388,8 @@ export function leverCard(league: League): Alert | null {
     tone: 'alert',
     title: `${r.label}: should help`,
     body: `${changeLine(words)}. The staff's read on ${fmtDate(league.season, r.day)}.`,
-    // (where the change is made: the scheme on the board's out-of-possession end, the rest in an Instructions phase)
-    link: patch.defense?.scheme ? '/team/tactics?side=out' : `/team/tactics/instructions${patch.defense ? '?phase=outPoss' : ''}`,
+    // (where the change is made: the scheme on the board's out-of-possession end, the rest in the System's settings)
+    link: patch.defense?.scheme ? '/team/tactics?side=out' : '/team/tactics',
     fix: { kind: 'patch', patch, label: r.label },
   };
 }

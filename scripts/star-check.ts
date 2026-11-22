@@ -29,7 +29,6 @@ import { nextPick } from '../src/core/league/draft';
 import { expiringPlayers, userOffer, userResign } from '../src/core/league/freeAgency';
 import { askingContract, releasePlayer } from '../src/core/league/contracts';
 import { takeJob } from '../src/core/league/jobs';
-import { aiMatchVerdict, restrictedFreeAgents, sheetDecisionBlocked, userDecideSheet } from '../src/core/league/rfa';
 import { playerAge } from '../src/core/playerGen';
 import { roomOf } from '../src/core/league/legends';
 import { FRANCHISES } from '../src/core/teams';
@@ -582,9 +581,7 @@ function playLeague(spec: string): SeasonReport[] {
       if (p.ovr >= 72) userResign(league, p.pid, ask.amount, ask.years);
     }
     startFreeAgency(league);
-    for (let k = 0; k < 5 && !newSeason(league); k++)
-      for (const p of restrictedFreeAgents(league, league.userTid).filter((x) => x.rfa!.sheet))
-        userDecideSheet(league, p.pid, aiMatchVerdict(league, p).match && !sheetDecisionBlocked(league, p.pid, true));
+    newSeason(league);
     if (league.phase !== 'preseason') throw new Error(`The new season didn't start (phase ${league.phase})`);
   }
   if (!quiet) {

@@ -6,7 +6,6 @@ import { useState } from 'react';
 import { ChevronDown, Handshake, Zap } from 'lucide-react';
 import type { League } from '../../core/types';
 import { CAP_FOR, inSeason, payroll, rosterMaxNow } from '../../core/league/helpers';
-import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
 import { TRADE_WAIVE_MAX, capSalary, salaryMatchGap, tradeRoster, valueVerdict, type TradeEval, type TradeOffer } from '../../core/league/trades';
 import { canMakeWork } from '../../core/league/tradeHelp';
 import { useLeagueMemo, useStore } from '../../state/store';
@@ -74,28 +73,23 @@ export function Dock({
   const simming = useStore((s) => !!s.sim);
   const cap = CAP_FOR(league, season);
   const key = JSON.stringify(offer);
-  // in the summer each team's cap holds replay its re-signing plan: work them out once per offer, not every render
+  // whether their side matches and the deal can be made to work: worked out once per offer, not every render
   const capView = useLeagueMemo(
-    () =>
-      withHoldsMemo(() => ({
-        capPay: capPayroll(league, user, season),
-        theyreOver: !empty && salaryMatchGap(league, offer, 'b') > 0,
-        workable: !empty && canMakeWork(league, offer),
-      })),
+    () => ({
+      theyreOver: !empty && salaryMatchGap(league, offer, 'b') > 0,
+      workable: !empty && canMakeWork(league, offer),
+    }),
     // key stands for the offer (a new object every render)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [league, user, season, empty, key],
   );
-  // two-way pay sits outside the cap: it neither counts nor matches
   const out = offer.a.pids.reduce((a, pid) => a + capSalary(league, pid, season), 0);
   const inc = offer.b.pids.reduce((a, pid) => a + capSalary(league, pid, season), 0);
-  // between the season and free agency your payroll counts the cap holds of the players you'd re-sign
-  const holds = capView.capPay - payroll(league, user, season);
-  const after = capView.capPay - out + inc;
-  // what the deal does to your luxury tax (on the payroll, not the holds)
-  const tax = empty ? null : taxLine(league, payroll(league, user, season), payroll(league, user, season) - out + inc, season);
-  // standard roster spots (two-way players don't count)
-  const std = (pids: number[]) => pids.filter((pid) => !league.players[pid]?.contract.twoWay).length;
+  const pay = payroll(league, user, season);
+  const after = pay - out + inc;
+  // what the deal does to your luxury tax
+  const tax = empty ? null : taxLine(league, pay, after, season);
+  const std = (pids: number[]) => pids.length;
   // after the season, only next season's contracts count (expiring deals are leaving)
   const rosterAfter = tradeRoster(league, user).length - std(offer.a.pids) + std(offer.b.pids);
   const theirAfter = tradeRoster(league, offer.b.tid).length - std(offer.b.pids) + std(offer.a.pids);
@@ -174,16 +168,11 @@ export function Dock({
                 <Tick value={after}>{money(after)}</Tick>
               </div>
               <div className="s num">
-                {after > cap.secondApron
-                  ? `${money(after - cap.secondApron)} over the 2nd apron`
-                  : after > cap.firstApron
-                    ? `${money(after - cap.firstApron)} over the 1st apron`
-                    : after > cap.luxuryTax
-                      ? `${money(after - cap.luxuryTax)} over the tax`
-                      : after > cap.salaryCap
-                        ? `${money(after - cap.salaryCap)} over the cap`
-                        : `${money(cap.salaryCap - after)} cap space`}
-                {holds > 0 ? `, incl. ${money(holds)} holds` : ''}
+                {after > cap.luxuryTax
+                  ? `${money(after - cap.luxuryTax)} over the tax`
+                  : after > cap.salaryCap
+                    ? `${money(after - cap.salaryCap)} over the cap`
+                    : `${money(cap.salaryCap - after)} cap space`}
               </div>
             </div>
             <div>
@@ -191,8 +180,8 @@ export function Dock({
               <div className="v num" style={{ color: rosterAfter > maxSize || (theirAfter > maxSize && !waives) ? 'var(--bad)' : undefined }}>
                 <Tick value={rosterAfter}>{rosterAfter}</Tick> · <Tick value={theirAfter}>{theirAfter}</Tick>
               </div>
-              {/* (in season an AI team waives its end of the bench to make room) */}
-              <div className="s">{waives && theirAfter > maxSize ? `${abbrev} would waive ${theirAfter - maxSize}` : `you · ${abbrev}`}</div>
+              {/* (in season an AI team releases its end of the bench to make room) */}
+              <div className="s">{waives && theirAfter > maxSize ? `${abbrev} would release ${theirAfter - maxSize}` : `you · ${abbrev}`}</div>
             </div>
           </div>
           {tax && <div className={`tiny num ${tax.tone}`}>{tax.text}</div>}

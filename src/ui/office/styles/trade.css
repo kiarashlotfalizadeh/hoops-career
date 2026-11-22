@@ -1181,10 +1181,7 @@ body:has(.fo-tt-verdict) .continue:not(.is-busy) {
     flex: none;
   }
 }
-.fo-tt-why {
-  font-size: 13px;
-  color: var(--text-dim);
-}
+
 .fo-tt-v {
   display: flex;
   align-items: center;

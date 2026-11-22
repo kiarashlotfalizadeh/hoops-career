@@ -10,7 +10,6 @@ import { faAdvance, finishDraftPhase, newSeason, simDay } from '../../core/leagu
 import { nextPick } from '../../core/league/draft';
 import { curTeamSeason, fmtDate } from '../../core/league/helpers';
 import { userGameOnDay } from '../../core/league/games';
-import { billingFor } from '../../core/analysis/gameStory';
 import { takeOverTeam } from '../../core/league/owner';
 import { validateTrade } from '../../core/league/trades';
 import type { League } from '../../core/types';
@@ -68,10 +67,8 @@ describe('Play menu', () => {
     while (flowActions(nx)[0].id !== 'next') nx.day++;
     const next = nx.schedule.filter((g) => !g.played && g.day > nx.day && (g.home === nx.userTid || g.away === nx.userTid)).sort((a, b) => a.day - b.day)[0];
     const nextHome = next.home === nx.userTid;
-    // (a billed game leads with its billing: "Rivalry · Fri, Oct 23 · @ BOS 0-0")
-    const nextTag = billingFor(nx, next)?.tag;
     expect(flowActions(nx)[0].sub).toBe(
-      `${nextTag ? `${nextTag} · ` : ''}${fmtDate(nx.season, next.day, { weekday: 'short', month: 'short', day: 'numeric' })} · ${nextHome ? 'vs' : '@'} ${nx.teams[nextHome ? next.away : next.home].abbrev} 0-0`,
+      `${fmtDate(nx.season, next.day, { weekday: 'short', month: 'short', day: 'numeric' })} · ${nextHome ? 'vs' : '@'} ${nx.teams[nextHome ? next.away : next.home].abbrev} 0-0`,
     );
 
     // "Watch & coach live" names tonight's opponent and its record; in the playoffs, the series
@@ -81,9 +78,8 @@ describe('Play menu', () => {
     const home = g.home === tn.userTid;
     const opp = home ? g.away : g.home;
     const ts = curTeamSeason(tn, opp);
-    const tag = billingFor(tn, g)?.tag;
     const vs = `${home ? 'vs' : '@'} ${tn.teams[opp].abbrev} ${ts.won}-${ts.lost}`;
-    expect(flowActions(tn)[0]).toMatchObject({ label: 'Watch & coach live', sub: tag ? `${tag} · ${vs}` : `${vs} · today` });
+    expect(flowActions(tn)[0]).toMatchObject({ label: 'Watch & coach live', sub: `${vs} · today` });
     // a playoff game shows the series from the user's side
     tn.playoffs = [{ id: 'E1-0', round: 1, conf: 'E', high: opp, low: tn.userTid, highSeed: 1, lowSeed: 8, highWins: 2, lowWins: 1 }];
     g.type = 'playoffs';

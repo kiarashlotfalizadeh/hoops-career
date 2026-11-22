@@ -9,7 +9,7 @@ import type { League, Player } from '../../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT } from '../../core/types';
 import { fmtHeight, ovrColor } from '../../core/ratings';
 import { playerName } from '../../core/league/helpers';
-import { askingContract, waiverSalary } from '../../core/league/contracts';
+import { askingContract } from '../../core/league/contracts';
 import { playerAge, salaryFor } from '../../core/playerGen';
 import { FRANCHISES } from '../../core/teams';
 import { useLeague, useLeagueMemo } from '../../state/store';
@@ -33,14 +33,12 @@ function contractOf(league: League, p: Player): { main: string; sub?: string } {
   if (p.tid >= 0) {
     // the season contracts count against (next season's in the offseason), or this one for a contract that's up
     const s = salaryFor(p, capSeason(league)) ? capSeason(league) : league.season;
-    if (p.contract.tenDay) return { main: `${money(salaryFor(p, s), 2)}`, sub: '10-day contract' };
     // an existing deal says when it ends, as every desk says it ("thru 30-31 PO", "expiring")
-    return { main: money(salaryFor(p, s)), sub: p.contract.twoWay ? 'Two-way deal' : contractEnd(league, p, s) };
+    return { main: money(salaryFor(p, s)), sub: contractEnd(league, p, s) };
   }
   if (p.tid === FREE_AGENT) {
-    if (p.waivers) return { main: money(waiverSalary(league, p)), sub: 'On waivers' };
     const ask = askingContract(league, p, league.userTid);
-    return { main: `${money(ask.amount)} ${forYears(ask.years)}`, sub: p.rfa ? `asking · ${league.teams[p.rfa.tid]?.abbrev ?? ''} can match` : 'asking' };
+    return { main: `${money(ask.amount)} ${forYears(ask.years)}`, sub: 'asking' };
   }
   if (p.tid === DRAFT_PROSPECT) return { main: `#${p.prospect?.rank ?? '—'} on the board`, sub: `${p.draft.year} draft` };
   return { main: '—' };
@@ -82,7 +80,7 @@ function Head({ league, p, pid, onPick, side, look }: { league: League; p: Playe
   }
   const team = p.tid >= 0 ? league.teams[p.tid] : null;
   const deal = contractOf(league, p);
-  const status = p.tid === FREE_AGENT ? (p.rfa ? 'Restricted FA' : 'Free agent') : p.tid === DRAFT_PROSPECT ? 'Prospect' : 'Retired';
+  const status = p.tid === FREE_AGENT ? 'Free agent' : p.tid === DRAFT_PROSPECT ? 'Prospect' : 'Retired';
   return (
     <div className={`slab no-court cmp-head ${side}`} style={{ '--slab': look.slab, '--slab-2': look.trim } as CSSProperties}>
       <div className="cmp-top">

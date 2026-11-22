@@ -1,9 +1,10 @@
 // The matchup page: everything about one opponent in one place. The hero is the next meeting as a
-// board (the two teams in their colours, their records, who the staff favours in words), what the
-// night is billed as, the season series and your plan against them; then the sections: Preview (when
-// the next game against them is the user's next game), Scout, Plan (with the staff's counters) and
-// Matchups. On game day a dock tips the game off or sims it, and a sim lands on the result: the game's
-// report, which opens on the night's story. The night after a meeting, its result leads the page.
+// board (the two teams in their colours, their records, the favourite's chance to win), the season
+// series and your plan against them; then two sections: Brief (the two teams as numbers: league
+// ranks side by side, the starting fives and who's out, their threats, the scouting a tap down) and
+// Game Plan (your plan, the staff's counters, who guards whom, the special plans). On game day a dock
+// tips the game off or sims it, and a sim lands on the result: the game's report. The night after a
+// meeting, its result leads the page.
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronRight, Eye } from 'lucide-react';
 import type { GameResult, League } from '../../core/types';
@@ -20,8 +21,7 @@ import { curTeamSeason, fmtDate, teamCity } from '../../core/league/helpers';
 import { confStandings } from '../../core/league/standings';
 import { neutralSite } from '../../core/league/games';
 import { gameProjection, nextUserGame } from '../../core/analysis/preview';
-import { gameStoryFor } from '../../core/analysis/gameStory';
-import { GameTop, nightTitle, useBillings } from './occasion';
+import { GameTop } from './occasion';
 import { favoriteOf } from './favorite';
 import { Empty, Help, PageHeader, keep } from '../components/ui';
 import { GameBoard, type BoardSide } from '../components/FinalSlab';
@@ -29,22 +29,24 @@ import { ordinal } from '../stats';
 import { TabBar, useQueryParam } from '../league/shared';
 import { gameTag, liveSeries, meetings, planStatus } from './data';
 import { seasonSeries, seriesParts } from './series';
-import { PreviewTab } from './matchup/PreviewTab';
-import { ScoutTab } from './matchup/ScoutTab';
+import { BriefTab } from './matchup/BriefTab';
 import { PlanTab } from './matchup/PlanTab';
-import { MatchupPlanner } from '../components/MatchupPlanner';
 import './games.css';
 
-type Tab = 'preview' | 'scout' | 'plan' | 'matchups';
-const LABEL: Record<Tab, string> = { preview: 'Preview', scout: 'Scout', plan: 'Plan', matchups: 'Matchups' };
+type Tab = 'brief' | 'plan';
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'brief', label: 'Brief' },
+  { id: 'plan', label: 'Game Plan' },
+];
+/** Links from before the page had two sections: the Lab, its counters and Matchups are the Game Plan's (Preview and Scout open the Brief). */
+const OLD_PLAN_TABS = ['test', 'lab', 'matchups'];
 
 export default function Matchup() {
   const league = useLeague();
   const { tid } = useParams();
   const [params] = useSearchParams();
   const opp = Number(tid);
-  // (links from before the Lab was retired: Test, its counters and the Lab tab open the Plan)
-  if (params.get('tab') === 'test' || params.get('tab') === 'lab') return <Navigate to={`/games/${tid}?tab=plan`} replace />;
+  if (OLD_PLAN_TABS.includes(params.get('tab') ?? '')) return <Navigate to={`/games/${tid}?tab=plan`} replace />;
   const team = Number.isInteger(opp) ? league.teams[opp] : undefined;
   if (!team || opp === league.userTid)
     return (
@@ -61,11 +63,14 @@ export default function Matchup() {
 function MatchupScreen({ league, opp }: { league: League; opp: number }) {
   const next = meetings(league, opp)[0];
   const upNext = useLeagueMemo(() => nextUserGame(league), [league]);
-  // the preview is for the user's next game: when that's against them
-  const preview = next && upNext?.gid === next.gid ? next : undefined;
-  const tabs: Tab[] = [...(preview ? (['preview'] as const) : []), 'scout', 'plan', 'matchups'];
-  const [tab, setTab] = useQueryParam<Tab>('tab', preview ? 'preview' : 'scout', tabs);
-  const today = !!preview && preview.day === league.day;
+  // the user's next game is against them: its fives are set as it will tip off, and it can be played from here
+  const mine = !!next && upNext?.gid === next.gid;
+  const [tab, setTab] = useQueryParam<Tab>(
+    'tab',
+    'brief',
+    TABS.map((t) => t.id),
+  );
+  const today = mine && next.day === league.day;
   return (
     <main className="page">
       <GameTop
@@ -77,16 +82,14 @@ function MatchupScreen({ league, opp }: { league: League; opp: number }) {
           </Link>
         }
       />
-      {/* the full poster on the first section; on the others it's one line, so the section starts on the first screen */}
-      <Hero league={league} opp={opp} onPlan={tab === 'plan' ? undefined : () => setTab('plan')} compact={tab !== tabs[0]} />
-      {tab === tabs[0] && <JustPlayed league={league} opp={opp} />}
+      {/* the full board on the Brief; on the Game Plan it's one line, so the plan starts on the first screen */}
+      <Hero league={league} opp={opp} onPlan={tab === 'plan' ? undefined : () => setTab('plan')} compact={tab !== 'brief'} />
+      {tab === 'brief' && <JustPlayed league={league} opp={opp} />}
       {opp === nextOpponent(league) && guideStepOpen(league, 'scout') && <ScoutGuide league={league} opp={opp} />}
-      <TabBar value={tab} onChange={setTab} options={tabs.map((id) => ({ id, label: LABEL[id] }))} label="Matchup sections" />
-      {tab === 'preview' && preview && <PreviewTab key={preview.gid} league={league} game={preview} onPlan={() => setTab('plan')} />}
-      {tab === 'scout' && <ScoutTab league={league} opp={opp} />}
+      <TabBar value={tab} onChange={setTab} options={TABS} label="Matchup sections" />
+      {tab === 'brief' && <BriefTab key={next?.gid ?? -1} league={league} opp={opp} game={next} next={mine} />}
       {tab === 'plan' && <PlanTab league={league} opp={opp} />}
-      {tab === 'matchups' && <MatchupPlanner league={league} opp={opp} />}
-      {today && <TipOff league={league} gid={preview.gid} opp={opp} name={teamCity(league, opp)} />}
+      {today && <TipOff league={league} gid={next.gid} opp={opp} name={teamCity(league, opp)} />}
     </main>
   );
 }
@@ -154,8 +157,8 @@ function TipOff({ league, gid, opp, name }: { league: League; gid: number; opp: 
 }
 
 /**
- * The hero: the next meeting as a board (away on the left, the two records, who the staff favours under
- * them when there's a meeting left), what the night is billed as, the season series and your plan for them (`onPlan`: a tap to it; none on the Plan tab).
+ * The hero: the next meeting as a board (away on the left, the two records, the favourite's chance to
+ * win under them when there's a meeting left), the season series and your plan for them (`onPlan`: a tap to it; none on the Game Plan tab).
  */
 function Hero({ league, opp, onPlan, compact }: { league: League; opp: number; onPlan?: () => void; compact?: boolean }) {
   const me = league.userTid;
@@ -165,9 +168,8 @@ function Hero({ league, opp, onPlan, compact }: { league: League; opp: number; o
   const series = liveSeries(league, opp);
   const h2h = useLeagueMemo(() => seasonSeries(league, opp), [league, opp]);
   const ranks = useLeagueMemo(() => new Map([...confStandings(league, 'E'), ...confStandings(league, 'W')].map((r) => [r.tid, r.confRank])), [league]);
-  // the preview's chance to win, from the home side (the same reading the Preview and the game use), said in words
+  // the chance to win, from the home side (the same reading the game's own win chance starts from)
   const proj = useLeagueMemo(() => (g ? gameProjection(league, g) : null), [league, g]);
-  const [bill] = useBillings(league, g);
   // (the preseason's calendar is the regular season's: its day 0 is opening night, not today)
   const pre = league.phase === 'preseason';
   const day = (d: number) =>
@@ -207,21 +209,15 @@ function Hero({ league, opp, onPlan, compact }: { league: League; opp: number; o
         {proj && (
           <div className="gd-bd-foot">
             <span>
-              <b>{favoriteOf(league, { home: homeTid, away: awayTid }, proj.win).line}</b>
+              <b>{favoriteOf(league, { home: homeTid, away: awayTid }, proj.win).line} to win</b>
+              {` · by ${Math.abs(proj.margin).toFixed(1)}`}
             </span>
-            <Help title="The staff's read">
-              <p>From both teams&apos; form, pace and home court, and early on their rotations. One game can go either way.</p>
+            <Help title="Chance to win">
+              <p>From both teams&apos; net ratings, tonight&apos;s rotations and home court. Your game plan isn&apos;t in it: what a plan does is found out on the floor.</p>
             </Help>
           </div>
         )}
       </GameBoard>
-      {/* the poster's headline: what the night is billed as, or on an ordinary night who and where */}
-      {g && (
-        <div className="mu-hero-bill">
-          <h2 className={`mu-hero-h w${bill ? bill.weight : 1}`}>{bill ? bill.tag : nightTitle(league, g, neutralSite(g))}</h2>
-          {bill && <div className="mu-hero-l">{bill.line}</div>}
-        </div>
-      )}
       {(h2h.total > 0 || (g && onPlan)) && (
         <div className="mu-hero-foot">
           {h2h.total > 0 && (
@@ -239,7 +235,7 @@ function Hero({ league, opp, onPlan, compact }: { league: League; opp: number; o
               )}
             </span>
           )}
-          {/* (the Plan tab shows the plan itself) */}
+          {/* (the Game Plan tab shows the plan itself) */}
           {g && onPlan && (
             <button className={`mu-planlink${plan.set ? ' set' : ''}`} onClick={onPlan}>
               {plan.text} <ChevronRight size={15} aria-hidden="true" />
@@ -251,7 +247,7 @@ function Hero({ league, opp, onPlan, compact }: { league: League; opp: number; o
   );
 }
 
-/** The day after a meeting with them: its result and headline lead the page, a tap from the report. */
+/** The day after a meeting with them: its result leads the page, a tap from the report. */
 function JustPlayed({ league, opp }: { league: League; opp: number }) {
   const me = league.userTid;
   const last = useLeagueMemo(() => {
@@ -262,20 +258,20 @@ function JustPlayed({ league, opp }: { league: League; opp: number }) {
     }
     return r && r.season === league.season && r.day >= league.day - 1 && [r.home.tid, r.away.tid].includes(opp) ? r : undefined;
   }, [league, me, opp]);
-  const story = useLeagueMemo(() => (last ? gameStoryFor(league, last.gid) : null), [league, last]);
-  if (!last || !story) return null;
+  if (!last) return null;
   const [us, them] = last.home.tid === me ? [last.home.pts, last.away.pts] : [last.away.pts, last.home.pts];
+  const won = us > them;
   return (
-    <Link to={`/game/${last.gid}`} className={`mu-last ${story.won ? 'w' : 'l'}`} aria-label={`Final, ${story.won ? 'won' : 'lost'} ${us}-${them}: ${story.head}. Game report`}>
+    <Link to={`/game/${last.gid}`} className={`mu-last ${won ? 'w' : 'l'}`} aria-label={`Final, ${won ? 'won' : 'lost'} ${us}-${them}. Game report`}>
       <span className="mu-last-score">
-        <span className="mu-last-wl">{story.won ? 'W' : 'L'}</span>
+        <span className="mu-last-wl">{won ? 'W' : 'L'}</span>
         <span className="num">
           {us}-{them}
         </span>
       </span>
       <span className="mu-last-t">
         <span className="mu-last-k">Final{last.ot ? ` · ${last.ot > 1 ? `${last.ot}OT` : 'OT'}` : ''}</span>
-        <span className="mu-last-h">{story.head}</span>
+        <span className="mu-last-h">Game report</span>
       </span>
       <ChevronRight size={16} aria-hidden="true" />
     </Link>

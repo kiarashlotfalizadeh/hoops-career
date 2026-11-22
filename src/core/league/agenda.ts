@@ -1,11 +1,10 @@
 // The agenda: the decisions waiting on the user, read from the league as it stands. Required items
 // are the ones the league won't move on without (the same checks the season loop makes: a roster
-// over or under its limits on opening night, an offer sheet on one of his restricted free agents,
-// a coach without a team, his pick on the clock); the Continue bar waits on them and names the first.
+// over or under its limits on opening night, a coach without a team, his pick on the clock); the Continue bar waits on them and names the first.
 // Optional items (the staff's calls, see calls.ts: a star hurt, the playoff odds gone, the owner's
 // floor in danger, the trade deadline, a playoff series starting, a losing skid gone on, the books
 // in the red, a week's trade-off, the one the last sim stopped for first; offers, one
-// item each, 10-day contracts running out, job offers, the guided first week) never block. Each
+// item each, job offers, the guided first week) never block. Each
 // item can be settled where it stands: the staff's suggestion and any quick choices are
 // AgendaActions that resolveAgenda carries out, and `to` opens the screen that has the whole
 // decision. Nothing here is stored except the guided week's progress (League.onboarding).
@@ -13,12 +12,10 @@ import { needsDeploying } from './rosterNeed';
 import { QUALITY_META, type QualityId } from '../analysis/system';
 import type { League, Player } from '../types';
 import { CAP } from '../constants';
-import { addInbox, fmtDate, freeAgents, playerName, standardRoster, teamPlayers, twoWayRoster, TWO_WAY_MAX } from './helpers';
+import { addInbox, fmtDate, freeAgents, playerName, standardRoster, teamPlayers } from './helpers';
 import { FIRED_REASON, askingContract, releaseDeadMoney, releasePlayer, releasedBy, valueScore } from './contracts';
 import { marqueeFA, offerBlockedReason, signingClosedReason, userOffer } from './freeAgency';
 import { acceptProposal, declineProposal, offerSubject, openProposals, proposalError, proposalThird } from './proposals';
-import { restrictedFreeAgents, sheetDecisionBlocked, userDecideSheet } from './rfa';
-import { tenDayBlockedReason, tenDayEndBlockedReason, tenDayRestBlockedReason, userEndTenDay, userTenDay, userTenDayRest } from './tenDay';
 import { autoDraftUserPick, continueDraft } from './season';
 import { nextPick } from './draft';
 import { userGameOnDay } from './games';
@@ -28,11 +25,20 @@ import { ultimatumVerdict } from './jobSecurity';
 import { resolveCall, staffCalls, type CallAction, type CallChoice, type CallKind, type CallMeasure } from './calls';
 import { answerRequest, openRequests, roleRead } from './pulse';
 
-export type AgendaKind =
-  'fired' | 'cuts' | 'signings' | 'twoWays' | 'offerSheet' | 'draftPick' | 'tenDay' | 'tradeOffer' | 'jobOffers' | 'ultimatum' | 'deploy' | 'tradeRequest' | 'guide' | CallKind;
+export type AgendaKind = 'fired' | 'cuts' | 'signings' | 'draftPick' | 'tradeOffer' | 'jobOffers' | 'ultimatum' | 'deploy' | 'tradeRequest' | 'guide' | CallKind;
 
 /** The agenda's kinds that are the staff's calls (see calls.ts): Needs you puts them first, and the digest and the Play options show them. */
-export const CALL_KINDS: ReadonlySet<AgendaKind> = new Set<CallKind>(['injury', 'odds', 'floor', 'deadline', 'series', 'books', 'skid', 'week']);
+export const CALL_KINDS: ReadonlySet<AgendaKind> = new Set<CallKind>(['injury', 'odds', 'floor', 'deadline', 'series']);
+
+/**
+ * What a long sim stops for, beyond a decision the league waits on (`required`): an AI team's trade
+ * offer, a player's trade request, a starter's injury, the trade deadline, and a playoff series or
+ * play-in game of his starting. Nothing else stops one: the rest waits in the action queue.
+ */
+export const STOP_KINDS: ReadonlySet<AgendaKind> = new Set<AgendaKind>(['tradeOffer', 'tradeRequest', 'injury', 'deadline', 'series']);
+
+/** Whether an item of the queue stops a long sim the day it opens. */
+export const stopsSim = (i: Pick<AgendaItem, 'kind' | 'required'>) => i.required || STOP_KINDS.has(i.kind);
 
 /** A step of the guided first week. */
 export type GuideStep = 'rotation' | 'playbook' | 'scout' | 'coach';
@@ -42,9 +48,7 @@ export type AgendaAction =
   /** `pids`: several at once (the staff's picks for the opening-night cuts), `pid` the first of them. */
   | { kind: 'release'; pid: number; pids?: number[] }
   | { kind: 'sign'; pid: number }
-  | { kind: 'sheet'; pid: number; match: boolean }
   | { kind: 'autoPick' }
-  | { kind: 'tenDay'; pid: number; choice: 'again' | 'rest' | 'end' }
   | { kind: 'proposal'; id: number; accept: boolean }
   | { kind: 'guide'; step: GuideStep }
   | { kind: 'hideGuide' }
@@ -126,13 +130,13 @@ function releaseChoice(league: League, p: Player): AgendaChoice {
 /**
  * The free agent the staff would sign first for an open spot: the most valuable one who'd take his
  * asking deal and whom the cap and the rules let the user sign at it now (a top free agent who weighs
- * offers, a restricted free agent and a player on waivers are decisions for the Free Agents screen).
+ * offers is a decision for the Free Agents screen).
  */
 export function bestSigning(league: League): { p: Player; amount: number; years: number } | null {
   if (signingClosedReason(league)) return null;
   const me = league.userTid;
   const pool = freeAgents(league)
-    .filter((p) => !p.waivers && !p.rfa && !releasedBy(league, p, me) && !marqueeFA(league, p))
+    .filter((p) => !releasedBy(league, p, me) && !marqueeFA(league, p))
     .map((p) => ({ p, v: valueScore(league, p) }))
     .sort((a, b) => b.v - a.v || a.p.pid - b.p.pid);
   for (const { p } of pool.slice(0, 60)) {
@@ -358,46 +362,6 @@ export function agenda(league: League): AgendaItem[] {
         to: '/office/free-agents',
         ...signingSuggestion(league),
       });
-    const tw = twoWayRoster(league, me);
-    if (tw.length > TWO_WAY_MAX) {
-      const first = cutOrder(league, tw)[0];
-      items.push({
-        id: 'twoWays',
-        kind: 'twoWays',
-        required: true,
-        title: `Release ${plural(tw.length - TWO_WAY_MAX, 'two-way player')}`,
-        line: `${tw.length} on two-way deals · ${TWO_WAY_MAX} allowed.`,
-        tone: 'bad',
-        to: '/team',
-        suggestion: releaseChoice(league, first),
-      });
-    }
-  }
-
-  // an offer sheet on one of his restricted free agents: the summer waits for his answer
-  for (const p of teamlessRfas(league)) {
-    const sheet = p.rfa!.sheet!;
-    const team = league.teams[sheet.tid];
-    items.push({
-      id: `offerSheet:${p.pid}`,
-      kind: 'offerSheet',
-      required: true,
-      title: `Match ${team.abbrev}'s offer sheet for ${playerName(p)}?`,
-      line: `Matching keeps him on exactly those terms. Two days to decide.`,
-      tone: 'warn',
-      to: '/office/free-agents',
-      due: `Decide by ${short(league, sheet.until)}`,
-      choices: [
-        { label: 'Match', action: { kind: 'sheet', pid: p.pid, match: true }, blocked: sheetDecisionBlocked(league, p.pid, true) ?? undefined, tone: 'good' },
-        {
-          label: 'Let him go',
-          action: { kind: 'sheet', pid: p.pid, match: false },
-          blocked: sheetDecisionBlocked(league, p.pid, false) ?? undefined,
-          confirm: `${playerName(p)} joins ${team.abbrev}.`,
-        },
-      ],
-      pids: [p.pid],
-    });
   }
 
   // the draft: his pick on the clock
@@ -414,28 +378,6 @@ export function agenda(league: League): AgendaItem[] {
         to: '/office/draft',
         suggestion: { label: "Take the staff's pick", action: { kind: 'autoPick' } },
       });
-  }
-
-  // 10-day contracts: the one ending next decides on its last day (by itself he just leaves)
-  for (const p of teamPlayers(league, me)) {
-    const c = p.contract.tenDay;
-    if (!c || c.until - league.day > 2) continue;
-    items.push({
-      id: `tenDay:${p.pid}`,
-      kind: 'tenDay',
-      required: false,
-      title: `${playerName(p)}'s 10-day contract ends`,
-      line: 'Sign him again, keep him for the rest of the season, or let him go.',
-      tone: 'info',
-      to: `/player/${p.pid}`,
-      due: `Ends ${short(league, c.until)}`,
-      choices: [
-        { label: 'Second 10-day', action: { kind: 'tenDay', pid: p.pid, choice: 'again' }, blocked: tenDayBlockedReason(league, me, p) ?? undefined },
-        { label: 'Rest of season', action: { kind: 'tenDay', pid: p.pid, choice: 'rest' }, blocked: tenDayRestBlockedReason(league, p) ?? undefined, tone: 'good' },
-        { label: 'Let him go', action: { kind: 'tenDay', pid: p.pid, choice: 'end' }, blocked: tenDayEndBlockedReason(league, p) ?? undefined },
-      ],
-      pids: [p.pid],
-    });
   }
 
   // trade offers from AI teams
@@ -550,10 +492,11 @@ export function agenda(league: League): AgendaItem[] {
   return items;
 }
 
-/** The user's restricted free agents with an offer sheet waiting on his answer (as newSeasonBlockedReason reads them). */
-function teamlessRfas(league: League): Player[] {
-  if (league.phase !== 'freeAgency') return [];
-  return restrictedFreeAgents(league, league.userTid).filter((p) => !!p.rfa!.sheet);
+/** The ids of what stops a long sim, open now (a sim checks them each morning: one not there when it started stops it). */
+export function simStopIds(league: League): string[] {
+  return agenda(league)
+    .filter(stopsSim)
+    .map((i) => i.id);
 }
 
 /** The first required item's headline, or null when the league can move on. */
@@ -579,10 +522,6 @@ export function resolveAgenda(league: League, a: AgendaAction): { ok: boolean; t
       const r = userOffer(league, a.pid, ask.amount, ask.years);
       return { ok: r.ok, text: r.ok ? `${playerName(p)} signed: ${money(ask.amount)} × ${plural(ask.years, 'yr')}.` : r.reason };
     }
-    case 'sheet': {
-      const r = userDecideSheet(league, a.pid, a.match);
-      return { ok: r.ok, text: r.reason };
-    }
     case 'autoPick': {
       const dp = nextPick(league);
       if (!dp || dp.tid !== league.userTid) return { ok: false, text: 'It is not your pick.' };
@@ -590,10 +529,6 @@ export function resolveAgenda(league: League, a: AgendaAction): { ok: boolean; t
       autoDraftUserPick(league);
       const took = teamPlayers(league, league.userTid).find((p) => !mine.has(p.pid));
       return { ok: true, text: took ? `The staff took ${playerName(took)}.` : 'The staff made your pick.' };
-    }
-    case 'tenDay': {
-      const r = a.choice === 'again' ? userTenDay(league, a.pid) : a.choice === 'rest' ? userTenDayRest(league, a.pid) : userEndTenDay(league, a.pid);
-      return { ok: r.ok, text: r.reason };
     }
     case 'proposal': {
       if (!a.accept) {

@@ -44,7 +44,7 @@ function seedPayrolls(seed: SeedData): Record<number, number> {
 /**
  * The team step's pick before the user makes one: the team ranked nearest the middle (`rank`: each
  * roster's strength rank, see seedRanks) whose roster is legal on opening night and whose payroll is
- * under the tax line, so a newcomer's first hour isn't cuts, an apron goal and a contender's demands.
+ * under the tax line, so a newcomer's first hour isn't cuts, a payroll goal and a contender's demands.
  * Null when none qualifies (the step asks for a pick). Its first season has to meet its owner's
  * opening goals more often than not, which scripts/forecast-check.ts plays out in every real league
  * it runs: the Wizards (October 2026) are projected for 26 wins, the owner asks about 25, and they
@@ -108,7 +108,7 @@ export interface TeamPreview {
 export function teamPreviews(league: League): Record<number, TeamPreview> {
   const outlook = leagueOutlook(league);
   const by: Record<number, { name: string; ovr: number }[]> = {};
-  for (const p of Object.values(league.players)) if (p.tid >= 0 && !p.contract.twoWay) (by[p.tid] ??= []).push({ name: `${p.firstName[0]}. ${p.lastName}`, ovr: p.ovr });
+  for (const p of Object.values(league.players)) if (p.tid >= 0) (by[p.tid] ??= []).push({ name: `${p.firstName[0]}. ${p.lastName}`, ovr: p.ovr });
   for (const list of Object.values(by)) list.sort((a, b) => b.ovr - a.ovr);
   const strength = (t: number) => (by[t] ?? []).slice(0, 8).reduce((a, x) => a + x.ovr, 0) / Math.max(1, Math.min(8, by[t]?.length ?? 0));
   const order = league.teams.map((t) => t.tid).sort((a, b) => strength(b) - strength(a));

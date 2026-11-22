@@ -309,17 +309,15 @@ describe('the journey between screens', () => {
         title: 'Out of the Cup',
         sub: `104-99 to ${teamCity(l, 3)} in the quarterfinal.`,
       });
-      // one shows, the ones that keep wait; a story doesn't, and nothing waits past WAIT_DAYS
-      const story = { key: 'st', kind: 'story' as const, over: '', title: '', sub: '', rank: 9, season: l.season, day: 40 };
+      // one shows, the ones that keep wait, and nothing waits past WAIT_DAYS
       const at = { season: l.season, day: 40 };
-      const first = scheduleMoments([], [...m, story], [], at);
+      const first = scheduleMoments([], m, [], at);
       expect(first.show.map((x) => x.kind)).toEqual(['cup']);
       // (one card a sim: the biggest tells four of the rest as lines, and only what's past that waits)
       expect(first.show[0].folded).toHaveLength(4);
       expect(first.show[0].lines!.slice(-4).every((x) => x.includes(' · '))).toBe(true);
       expect(first.wait.length).toBe(m.length - 1 - 4);
       expect(first.wait.some((x) => first.show[0].folded!.includes(x.key))).toBe(false);
-      expect(first.wait.some((x) => x.kind === 'story')).toBe(false);
       const next = scheduleMoments([], [], first.wait, at);
       expect(next.show).toEqual([first.wait[0]]);
       // (past WAIT_DAYS only a farewell or a banner night still waits: once in a career; never into the next season)
@@ -433,17 +431,17 @@ describe('the journey between screens', () => {
         item('tradeOffer:2', 'tradeOffer'),
         item('tradeOffer:3', 'tradeOffer'),
         item('guide', 'guide'),
-        item('tenDay:1', 'tenDay'),
+        item('signings', 'signings'),
         item('cuts', 'cuts', true),
         item('odds:1', 'odds'),
       ];
       const items = needsItems(l, agendaOrder);
-      expect(items.map((i) => i.id)).toEqual(['odds:1', 'cuts', 'guide', 'tenDay:1', 'tradeOffers']);
+      expect(items.map((i) => i.id)).toEqual(['odds:1', 'cuts', 'guide', 'signings', 'tradeOffers']);
       // the offers' row names the teams, the first to lapse first, and opens them all
       const ab = (tid: number) => l.teams[tid].abbrev;
       expect(items.at(-1)).toMatchObject({ title: `3 trade offers: ${ab(9)}, ${ab(12)}, ${ab(5)}`, to: '/office/trade?tab=offers', required: false });
       // one offer is its own row
-      expect(needsItems(l, agendaOrder.slice(2)).map((i) => i.id)).toEqual(['odds:1', 'cuts', 'guide', 'tenDay:1', 'tradeOffer:3']);
+      expect(needsItems(l, agendaOrder.slice(2)).map((i) => i.id)).toEqual(['odds:1', 'cuts', 'guide', 'signings', 'tradeOffer:3']);
       // and the count is the rows, the offers' one counted once
       const needs = needsYouOf(l);
       expect(needs.count).toBe(needs.items.length + needs.mail.length + (needs.deadline !== null ? 1 : 0) + (needs.backup ? 1 : 0));

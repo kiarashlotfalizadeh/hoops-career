@@ -1,9 +1,9 @@
-// Team → Tactics' hero: one card over every section, the style the team runs (its offensive
-// playbook, the defensive identity, the mentality; a tap on Change opens the style sheet). On the
-// Tactic section it also holds who runs it: the assistant's switch and the staff's change in force
+// Team → Tactics' hero: one card over both sections, the style the team runs (its offensive
+// playbook, the defensive identity, the mentality; a tap on Change opens the style sheet). On
+// System it also holds who runs it: the assistant's switch and the staff's change in force
 // (StaffMoveNote, with Undo). Under the board there, the system's two strengths and two
 // weaknesses from the system report (they move as you edit, so every lever shows what it buys and
-// what it costs), a tap from every grade on Analysis. The style reads as the team plays it: a playbook
+// what it costs), a tap from every grade on Season Analysis. The style reads as the team plays it: a playbook
 // whose settings have moved (by the user, or by the staff on a change it measured) is "Custom Drop",
 // as Matchup → Plan names it.
 import { useState } from 'react';
@@ -27,8 +27,7 @@ const ORDER: Grade[] = ['F', 'D', 'C', 'C+', 'B', 'B+', 'A', 'A+'];
 const offName = (t: Tactics) => (offenseLabel(t) === 'Custom' ? 'Custom offense' : offenseLabel(t));
 
 /**
- * The card over every section: the style in use, Change (the style sheet); with `manage` (the Tactic
- * section), the assistant's switch and the staff's change in force under it.
+ * The card over both sections: the style in use, Change (the style sheet); with `manage` (System), the assistant's switch and the staff's change in force under it.
  */
 export function TacticsHero({ manage = false }: { manage?: boolean }) {
   const league = useLeague();
@@ -94,7 +93,7 @@ function AssistantSwitch({ t }: { t: Tactics }) {
   );
 }
 
-/** Under the board on the Tactic section: the system's two best and two worst grades, a tap from all of them. */
+/** Beside the board on System: the system's two best and two worst grades, a tap from all of them. */
 export function StrengthsCard({
   report,
   was,
@@ -103,7 +102,7 @@ export function StrengthsCard({
   report: SystemReport;
   /** The report as this visit found it: a grade that has moved since shows where it was. */
   was: SystemReport;
-  /** Opens Analysis at the report. */
+  /** Opens Season Analysis. */
   onAnalysis: () => void;
 }) {
   const { strengths, weaknesses } = strengthsOf(report);
@@ -138,7 +137,7 @@ export function StrengthsCard({
           <span className="tx-hero-k">Weaknesses</span>
           {weaknesses.map(grade)}
         </span>
-        <span className="sr-only">All grades on Analysis.</span>
+        <span className="sr-only">All grades on Season Analysis.</span>
       </button>
     </Section>
   );

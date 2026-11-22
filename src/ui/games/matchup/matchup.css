@@ -10,34 +10,7 @@
 .mu-rec {
   font-size: 0.56em;
 }
-/* the night it's billed as, printed on the paper under the board: the poster's headline */
-.mu-hero-bill {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.mu-hero-h {
-  margin: 0;
-  font-family: var(--head);
-  font-stretch: var(--head-w);
-  font-weight: 900;
-  font-size: 30px;
-  line-height: 0.98;
-  letter-spacing: -0.04em;
-  text-wrap: balance;
-}
-.mu-hero-h.w3 {
-  font-size: clamp(31px, 8.8vw, 36px);
-}
-.mu-hero-h.w1 {
-  font-size: 26px;
-}
-.mu-hero-l {
-  font-size: 15.5px;
-  line-height: 1.42;
-  color: var(--text-2);
-  text-wrap: pretty;
-}
+
 .mu-hero-foot {
   display: flex;
   align-items: center;
@@ -91,64 +64,11 @@
   color: var(--text-dim);
 }
 
-.mu-stakes {
-  font-size: 13.5px;
-  color: var(--text-2);
-}
-
-/* keys to the game */
-.mu-key {
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
-  gap: 12px;
-  padding: 11px var(--row-px);
-  min-height: var(--row-min);
-}
-.mu-key-n {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 900;
-  font-size: 30px;
-  line-height: 0.9;
-  color: var(--text);
-}
-.mu-key-t {
-  display: block;
-  font-weight: 660;
-  font-size: 14.5px;
-}
-.mu-key-g {
-  display: block;
-  font-size: 13.5px;
-  color: var(--text-2);
-  margin-top: 1px;
-}
-/* each key opens on why */
-.mu-keyd > summary {
-  list-style: none;
-  cursor: pointer;
-}
-.mu-keyd > summary::-webkit-details-marker {
-  display: none;
-}
-.mu-keyd > summary:active {
-  background: var(--surface);
-}
 @media (hover: hover) and (pointer: fine) {
-  .mu-keyd > summary:hover,
   .mu-last:hover,
   .mu-hack:hover {
     background: color-mix(in srgb, var(--surface) 60%, transparent);
   }
-}
-.mu-keyd[open] > summary .mu-key-n {
-  color: var(--accent-text);
-}
-.mu-key-why {
-  padding: 0 var(--row-px) 12px calc(var(--row-px) + 30px);
-  font-size: 12.5px;
-  line-height: 1.4;
-  color: var(--text-dim);
 }
 
 /* the injury report */
@@ -260,17 +180,6 @@
 .mu-five-for {
   font-size: 12px;
   color: var(--warn);
-}
-
-/* storylines */
-.mu-story {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 9px var(--row-px);
-  min-height: var(--row-min);
-  font-size: 14px;
-  line-height: 1.4;
 }
 
 /* plan items and the staff's counters */
@@ -425,26 +334,6 @@
   letter-spacing: -0.03em;
 }
 
-.mu-note-input {
-  width: 100%;
-  min-height: 84px;
-  resize: vertical;
-  padding: 10px var(--row-px);
-  border-radius: var(--radius);
-  border: 1px solid transparent;
-  background: var(--raised);
-  box-shadow: var(--shadow-card);
-  color: var(--text);
-  font: inherit;
-  font-stretch: var(--text-w);
-  font-size: 14.5px;
-  line-height: 1.4;
-}
-.mu-note-input:focus {
-  outline: 2px solid var(--accent-text);
-  outline-offset: 1px;
-}
-
 /* threats: their key players */
 .mu-threat {
   display: flex;
@@ -506,33 +395,6 @@
   color: var(--info);
 }
 
-/* the staff's plan on the Preview: the read, then his counters for tonight in a group, one primary under them */
-.mu-brief {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.mu-brief-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: var(--row-min);
-  padding: var(--row-py) var(--row-px);
-}
-.mu-brief-item > .grow {
-  min-width: 0;
-}
-.mu-brief-go {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 12px var(--row-px) 14px;
-}
-.list > .mu-brief-go {
-  border-top: 1px solid var(--line);
-}
-
 /* the starting fives' foot: who's out, resting or worn, and the game-time decisions */
 .mu-five-foot {
   padding: 12px var(--row-px);
@@ -564,21 +426,7 @@
   gap: 10px;
   padding: 14px var(--row-px) 16px;
 }
-.mu-forms {
-  flex-direction: row;
-  justify-content: space-between;
-}
-.mu-story + .mu-story {
-  border-top: 1px solid var(--line);
-}
 
-/* the slab's form: the last five as pills, then the record in words */
-.mu-form {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-}
 /* the night after a meeting: its result and headline, a tap to the report */
 .mu-last {
   display: grid;
@@ -633,40 +481,6 @@
   text-wrap: balance;
 }
 
-/* the other billings in What it's worth */
-
-.mu-occ-more {
-  display: flex;
-  flex-direction: column;
-  margin: 6px 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: 13.5px;
-  line-height: 1.4;
-  color: var(--text-2);
-}
-.mu-occ-more li {
-  padding: 7px 0;
-  border-top: 1px solid var(--line);
-}
-.mu-occ-more b {
-  color: var(--text);
-  font-weight: 660;
-}
-/* both teams' last five, in Form */
-.mu-proj-fs {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-.mu-proj-fs > .mu-proj-ab {
-  font-family: var(--head);
-  font-stretch: 108%;
-  font-size: 14px;
-  font-weight: 860;
-  letter-spacing: -0.02em;
-  color: var(--text);
-}
 /* a part inside a section (Scout's Where to attack under How they play) */
 .mu-sub-h {
   margin-top: 10px;
@@ -675,15 +489,6 @@
   font-size: 16px;
   font-weight: 860;
   letter-spacing: -0.02em;
-}
-/* Scout's form line under the ranks: the last five as letters, then the record in words */
-.mu-form {
-  margin-top: 12px;
-  font-size: 13.5px;
-  color: var(--text-2);
-}
-.mu-form .over {
-  min-width: 40px;
 }
 
 /* ------------------------------------------------------------ the plan moving
@@ -709,4 +514,9 @@
 }
 .mu-cand.mu-added .mu-cand-act > * {
   animation: pop var(--dur-slow) var(--ease-spring) backwards;
+}
+
+/* what the night is, as facts over the brief: an elimination game, a back-to-back */
+.mu-tags {
+  margin-bottom: -4px;
 }

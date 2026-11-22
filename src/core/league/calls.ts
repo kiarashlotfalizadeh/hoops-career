@@ -1,6 +1,6 @@
 // The staff's calls: the moments in a season that need the user's answer, each a Needs-you card on
 // Today with the staff's call one tap away (see agenda.ts for how cards are drawn and settled). A
-// starter (one of the five best) goes down for ten games or more (the call: a 10-day for cover, the staff's rotation, or a
+// starter (one of the five best) goes down for ten games or more (the call: a free agent signed for cover, the staff's rotation, or a
 // trade for a long absence before the deadline, with what he's worth measured and where his minutes
 // go; no cover when he measures as no real loss); the playoff odds under 5% two weeks running for a team the owner expects in the postseason
 // (the call: tell him it's a rebuild, before the deadline); a team on pace under the owner's win
@@ -29,7 +29,7 @@
 // INJURY_AGE of his games is ridden out. Nothing here draws from the league's random stream.
 import type { GamePlanItem, GameResult, League, PlayInGame, PlayoffSeries, Player, Pos, ScheduledGame } from '../types';
 import { FREE_AGENT } from '../types';
-import { fmtDate, payroll, playerName, revenueScale, standardRoster, teamCity } from './helpers';
+import { fmtDate, payroll, playerName, standardRoster, teamCity } from './helpers';
 import { confStandings } from './standings';
 import { money, plural } from '../format';
 import {
@@ -49,15 +49,13 @@ import {
   goalWord,
   YOUNG_AGE,
 } from './ownerGoals';
-import { frozenBooksOutlook, seasonWeight } from './jobSecurity';
-import { tenDayBlockedReason, tenDayClosedReason, userTenDay, wantsTenDay } from './tenDay';
-import { booksOf, booksOutlook, deeperText, frozen, FROZEN_BUDGET, warnWindow } from './books';
-import { aiTicketPrice, attendanceFor, budgetCostPerSeason, seasonEndCash } from './finances';
+import { seasonWeight } from './jobSecurity';
+import { marqueeFA, offerBlockedReason, signingClosedReason, userOffer } from './freeAgency';
 import { filterTargets, maxTakeBack, onBlock, tradeTargets } from './tradeFinder';
 import { makeItWork } from './tradeHelp';
 import { packageFor } from './tradePackages';
 import { executeTrade, teamAccepts, tradingClosedReason, validateTrade, type TradeOffer } from './trades';
-import { tradeValue } from './contracts';
+import { askingContract, tradeValue, releasedBy } from './contracts';
 import { assetText, cleanProposals } from './proposals';
 import { ensureRotation, userGameOnDay } from './games';
 import { seriesLabel } from './playoffs';
@@ -70,7 +68,7 @@ import { autoRotation } from '../ai/coachAI';
 import { WORTH_MIN, withChange, worthCall, type CounterWorth, type LeagueChange } from '../ai/counterWorth';
 import { counterCandidates } from '../ai/advisor';
 import { buildGameReport, type Factor } from '../analysis/gameReport';
-import { answerWeek, isWeekId, notePick, openWeekId, vsAt, weekCard, weekDaily } from './weekCall';
+import { notePick, vsAt, weekDaily } from './weekCall';
 
 /** A star: one of the team's three best players by OVR (a skid's read names them out). */
 export const STAR_RANK = 3;
@@ -120,16 +118,10 @@ export const DEADLINE_DAYS = 5;
 export const DUE_SOON = 10;
 /** Games out that make a trade for cover a real answer to a star's injury (before the deadline). */
 export const TRADE_OUT = 20;
-/** The oldest a 10-day cover the staff calls for a rebuild (or an owner's youth goal) can be: an older one only takes the young players' minutes. */
+/** The oldest a free agent the staff calls in as cover for a rebuild (or an owner's youth goal) can be: an older one only takes the young players' minutes. */
 export const YOUNG_COVER = 25;
 /** Settled calls kept, newest last. */
 const DONE_KEPT = 60;
-/**
- * What pricing tickets where the gate peaks must bring over the home games left (first-season $K)
- * to be one of the books' calls: about a fifth of the owner's warning line.
- */
-export const TICKET_GAIN = 1_000;
-
 /**
  * A losing skid that's a call: this many straight losses, or SKID_LOST of the last SKID_OF, past his
  * record (SKID_EXCESS). One
@@ -159,7 +151,7 @@ export const INJURY_AGE = 3;
  */
 export const SKID_EXCESS = 2;
 
-export type CallKind = 'injury' | 'odds' | 'floor' | 'deadline' | 'series' | 'books' | 'skid' | 'week';
+export type CallKind = 'injury' | 'odds' | 'floor' | 'deadline' | 'series';
 
 /** A losing skid's call (League.skidCall), worked out the morning it opened: about the next game. */
 export interface SkidCall {
@@ -366,10 +358,6 @@ function hurtStars(league: League): { p: Player; id: string }[] {
 const oddsId = (league: League) => `odds:${league.season}`;
 const floorId = (league: League) => `floor:${league.season}`;
 const deadlineId = (league: League) => `deadline:${league.season}`;
-const booksId = (league: League) => `books:${league.books!.season}:${league.books!.day}`;
-/** A step from an earlier review the books' close still projects to repeat: its reminder in the weeks before the deadline. */
-const booksDueId = (league: League) => `books:${league.season}:close`;
-
 /** Whether the deadline's call is open: its last DEADLINE_DAYS days, deadline day included. */
 const deadlineOpen = (league: League) => league.phase === 'regular' && league.day <= league.tradeDeadlineDay && league.tradeDeadlineDay - league.day <= DEADLINE_DAYS;
 /** The deadline's call answered (stood pat, or a deal of his since): Today's deadline row has nothing left to say. */
@@ -430,7 +418,7 @@ function projectedSeasonGrade(league: League, og: NonNullable<ReturnType<typeof 
   const wg = wins ? gradeGoal(league, og, wins.goal, wins.projected) : undefined;
   const sum = prog.reduce((a, p) => a + p.goal.weight * gradeGoal(league, og, p.goal, p.projected, wg), 0);
   const post = prog.find((p) => p.goal.kind === 'postseason');
-  return Math.min(sum, wins ? floorCap(og, wins.projected, og.games) : 1, post ? patienceCap(og, post.projected) : 1, frozenBooksOutlook(league)?.cap ?? 1);
+  return Math.min(sum, wins ? floorCap(og, wins.projected, og.games) : 1, post ? patienceCap(og, post.projected) : 1);
 }
 
 /** The forecast's wins at its 10th, 30th, 50th, 70th and 90th percentiles, as z-scores of its spread. */
@@ -669,11 +657,6 @@ const skidMax = (s: SkidCall) => ((s.rung ?? 1) > 1 ? 2 : 1);
 /** Counters the staff puts in when he's behind in a series: one, two down two games, three facing elimination. */
 const behindMax = (w: number, l: number) => (l === 3 ? 3 : l - w >= 2 ? 2 : 1);
 
-/** A skid's card stands: its second step or later, its counters decided, while deals can still be made (a trade is the bigger change). */
-function skidCard(league: League, s: SkidCall | null): s is SkidCall {
-  return !!s && (s.rung ?? 1) > 1 && !!s.put && !tradingClosedReason(league);
-}
-
 /** The ids of the calls that may be open now, before asking whether each has a real choice in it. */
 function candidateIds(league: League): string[] {
   if (league.fired) return [];
@@ -684,71 +667,7 @@ function candidateIds(league: League): string[] {
   if (oddsCall(league)) ids.push(oddsId(league));
   if (floorCall(league)) ids.push(floorId(league));
   if (deadlineOpen(league)) ids.push(deadlineId(league));
-  // the books: the step the owner took (its call, once), or in the weeks before the deadline a step
-  // from an earlier review the close projects to repeat; none in the postseason, once they've closed
-  const b = league.phase === 'playin' || league.phase === 'playoffs' ? undefined : booksOf(league);
-  if (b && !settled(league, booksId(league))) ids.push(booksId(league));
-  else if (b && b.stage !== 'warning' && b.season < league.season && warnWindow(league) && booksOutlook(league).judged < 0) ids.push(booksDueId(league));
-  const skid = skidOpen(league);
-  if (skidCard(league, skid)) ids.push(skidId(skid));
-  // (last: what a sim says it stopped for is the first new one, and the week's is the least of them)
-  const week = openWeekId(league);
-  if (week) ids.push(week);
   return ids.filter((id) => !settled(league, id) && !dealt(league, id));
-}
-
-const DUE = '~due';
-/** The id openCallIds gives a call still open within DUE_SOON days of its due date: new then, so a long sim stops for it once more. */
-export const dueId = (id: string) => `${id}${DUE}`;
-
-/**
- * What a long sim checks each day (nothing to work out on most days): the ids of the calls open now,
- * and dueId for each still open within DUE_SOON days of its due date.
- */
-export function openCallIds(league: League): string[] {
-  const ids = candidateIds(league);
-  // (the week's call is known open without drawing its card: most days it's the only one)
-  if (ids.every(isWeekId)) return ids;
-  const week = ids.filter(isWeekId);
-  return [...staffCalls(league, { skipWeek: true }).flatMap((c) => (c.dueDay !== undefined && c.dueDay - league.day <= DUE_SOON ? [c.id, dueId(c.id)] : [c.id])), ...week];
-}
-
-/**
- * The first call in `ids` (from openCallIds) not in `before`: the call a sim stopped for or passed,
- * and whether it's one still open as its due date nears rather than a new one.
- */
-export function newCall(league: League, ids: readonly string[], before: ReadonlySet<string>): { card: CallCard; due: boolean } | null {
-  const id = ids.find((x) => !before.has(x));
-  if (id === undefined) return null;
-  const due = id.endsWith(DUE);
-  const card = staffCalls(league).find((c) => c.id === (due ? id.slice(0, -DUE.length) : id));
-  return card ? { card, due } : null;
-}
-
-/** What cutting the user's budgets to the league standard saves over the rest of the season (between seasons, over next season), or 0 when none is over it. */
-function budgetCutSaves(league: League): number {
-  const t = league.teams[league.userTid];
-  const year = (['coaching', 'health', 'facilities'] as const).reduce(
-    (a, k) => a + Math.max(0, budgetCostPerSeason(league, t.budget[k]) - budgetCostPerSeason(league, Math.min(t.budget[k], FROZEN_BUDGET))),
-    0,
-  );
-  return (year * (seasonEndCash(league, league.userTid).left || 82)) / 82;
-}
-
-/**
- * The ticket price where the user's gate peaks at today's demand (see aiTicketPrice), and what it
- * brings over his home games left (next season's 41 between seasons), or null when that's under
- * TICKET_GAIN (or the postseason is on: its prices follow).
- */
-function ticketLever(league: League): { price: number; gain: number } | null {
-  const t = league.teams[league.userTid];
-  if (league.phase === 'playin' || league.phase === 'playoffs') return null;
-  const ts = t.seasons.find((x) => x.season === league.season);
-  const home = league.phase === 'regular' || league.phase === 'preseason' ? Math.max(0, 41 - (ts ? ts.homeWon + ts.homeLost : 0)) : 41;
-  const price = aiTicketPrice(league, t);
-  const gate = (x: number) => (attendanceFor(league, { ...t, budget: { ...t.budget, ticketPrice: x } }) * x) / 1000;
-  const gain = home * (gate(price) - gate(t.budget.ticketPrice));
-  return gain >= TICKET_GAIN * revenueScale(league) ? { price, gain } : null;
 }
 
 // ---------------------------------------------------------------- the deadline's call
@@ -776,9 +695,9 @@ export function dealChange(league: League, offer: TradeOffer): { change: LeagueC
   };
 }
 
-/** One of the owner's money or youth goals as a deal moves it: where it projects now and with the deal. */
+/** The owner's payroll or youth goal as a deal moves it: where it projects now and with the deal. */
 export interface DealGoal {
-  kind: 'profit' | 'payroll' | 'youth';
+  kind: 'payroll' | 'youth';
   target: number;
   now: number;
   with: number;
@@ -788,9 +707,8 @@ export interface DealGoal {
 const gamesLeft = (league: League) => league.schedule.filter((g) => !g.played && g.type === 'regular' && (g.home === league.userTid || g.away === league.userTid)).length;
 
 /**
- * What a deal does to the owner's money and youth goals this season: the profit as it projects with
- * the books' close moved by the deal (its salary for the games left, the tax), the payroll against his
- * line, and the young players' minutes as the staff's rotation hands them out with it over the games left.
+ * What a deal does to the owner's payroll and youth goals this season: the payroll against his line,
+ * and the young players' minutes as the staff's rotation hands them out with it over the games left.
  */
 export function dealGoals(league: League, offer: TradeOffer): DealGoal[] {
   const og = currentGoals(league);
@@ -807,8 +725,7 @@ export function dealGoals(league: League, offer: TradeOffer): DealGoal[] {
   const out: DealGoal[] = [];
   for (const p of ownerProgress(league, og)) {
     const g = p.goal;
-    if (g.kind === 'profit') out.push({ kind: 'profit', target: g.target, now: p.projected, with: p.projected + seasonEndCash(view, me).end - seasonEndCash(league, me).end });
-    else if (g.kind === 'payroll') out.push({ kind: 'payroll', target: g.target, now: p.now, with: payroll(view, me) });
+    if (g.kind === 'payroll') out.push({ kind: 'payroll', target: g.target, now: p.now, with: payroll(view, me) });
     else if (g.kind === 'youth')
       out.push({ kind: 'youth', target: g.target, now: p.projected, with: Math.round(p.projected + (young(view, change) - young(league, base)) * gamesLeft(league)) });
   }
@@ -818,19 +735,16 @@ export function dealGoals(league: League, offer: TradeOffer): DealGoal[] {
 /** The deal costs a goal: it ends under the target (a payroll: over the line) and worse than without it. */
 const costsGoal = (d: DealGoal) => (d.kind === 'payroll' ? d.with > d.target && d.with > d.now : d.with < d.target && d.with < d.now);
 
-/** A goal as a deal moves it, in a sentence: "Profit: $12.0M on pace with it, $25.5M without. The owner's goal: $25.5M." */
+/** A goal as a deal moves it, in a sentence: "Payroll: $182.0M with it, $171.5M without. The owner's line: $187.9M." */
 function dealGoalText(d: DealGoal): string {
   const n = (x: number) => x.toLocaleString('en-US');
-  const cash = (x: number) => (x < 0 ? `a ${money(-x)} loss` : money(x));
-  return d.kind === 'profit'
-    ? `Profit: ${cash(d.with)} on pace with it, ${cash(d.now)} without. The owner's goal: ${cash(d.target)}.`
-    : d.kind === 'payroll'
-      ? `Payroll: ${money(d.with)} with it, ${money(d.now)} without. The owner's line: ${money(d.target)}.`
-      : d.with < d.target
-        ? `Young players' minutes fall short of the owner's ${n(d.target)} with it.`
-        : d.with < d.now
-          ? "Young players lose minutes with it, but the owner's goal holds."
-          : 'Young players get more minutes with it.';
+  return d.kind === 'payroll'
+    ? `Payroll: ${money(d.with)} with it, ${money(d.now)} without. The owner's line: ${money(d.target)}.`
+    : d.with < d.target
+      ? `Young players' minutes fall short of the owner's ${n(d.target)} with it.`
+      : d.with < d.now
+        ? "Young players lose minutes with it, but the owner's goal holds."
+        : 'Young players get more minutes with it.';
 }
 
 /** A player a deal brings in, with what he costs: "James Harden: 37, $96.5M over 3 seasons, a player option on the last". */
@@ -935,7 +849,7 @@ function ageInjuries(league: League) {
   for (const { p, id } of hurtStars(league)) {
     if (settled(league, id) || p.injury!.gamesTotal - p.injury!.gamesRemaining < INJURY_AGE) continue;
     // (read before the first is settled: a card with a real choice in it is one Needs you showed)
-    shown ??= new Set(staffCalls(league, { skipWeek: true }).map((c) => c.id));
+    shown ??= new Set(staffCalls(league).map((c) => c.id));
     const looked = league.callLook?.id === id;
     settleCall(league, id);
     notePick(
@@ -1018,7 +932,7 @@ export function callNeeds(league: League): CallMeasure[] {
   if (s && sg && !(league.callWorth?.[skidId(s)]?.gid === sg.gid)) out.set(skidId(s), countersFor(league, skidId(s), s.opp, sg, skidMax(s)).measure);
   const b = seriesBehind(league);
   if (b && !settled(league, b.id) && !(league.callWorth?.[b.id]?.gid === b.g.gid)) out.set(b.id, countersFor(league, b.id, b.opp, b.g, behindMax(b.w, b.l)).measure);
-  if (candidateIds(league).some((id) => !isWeekId(id))) for (const c of staffCalls(league, { skipWeek: true })) if (c.measure) out.set(c.measure.key, c.measure);
+  if (candidateIds(league).length) for (const c of staffCalls(league)) if (c.measure) out.set(c.measure.key, c.measure);
   return [...out.values()];
 }
 
@@ -1106,15 +1020,12 @@ export type CallAction =
    * measures them in the worker first and passes them in; none, or none passed: his playbook as it is).
    */
   | { kind: 'staffPlan'; id: string; opp: number; items?: GamePlanItem[] }
-  | { kind: 'tenDay'; id: string; pid: number }
+  /** Sign a free agent at his asking deal, as cover for an injured starter. */
+  | { kind: 'sign'; id: string; pid: number }
   | { kind: 'staffRotation'; id: string }
   | { kind: 'concede'; id: string }
   | { kind: 'easeFloor'; id: string }
   | { kind: 'trade'; id: string; offer: TradeOffer }
-  | { kind: 'budgetCut'; id: string }
-  | { kind: 'ticketPrice'; id: string; price: number }
-  /** The week's card on the young players: the staff's rotation leans to them (see youthLean.ts). */
-  | { kind: 'youthLean'; id: string }
   /**
    * A look for a trade on the screen `to` opens (Trade → Find filtered for the need, or the trading
    * block): the call stays open until a trade of his from it on (see dealt), or his other answer.
@@ -1150,13 +1061,27 @@ function blockLook(league: League, id: string, label: string, p: Player | undefi
   return p && !tradingClosedReason(league) ? { label, action: { kind: 'look', id }, to: `/office/trade?give=${p.pid}` } : null;
 }
 
-/** The best free agent who'd take a 10-day contract now, for cover (null when none can be signed). */
-function tenDayCover(league: League, pos: string): Player | null {
-  if (tenDayClosedReason(league)) return null;
+/** How many free agents the staff looks through for cover, best first. */
+const COVER_LOOK = 40;
+
+/**
+ * The free agent the staff would sign for cover at `pos`, with his asking deal: the best one (his
+ * position counts a little) whom the cap and the roster let the user sign at it now. Null when
+ * signings are closed or nobody can be signed (a top free agent weighing offers isn't cover).
+ */
+function coverSigning(league: League, pos: string): { p: Player; amount: number; years: number } | null {
+  if (signingClosedReason(league)) return null;
   const me = league.userTid;
-  const pool = Object.values(league.players).filter((p) => p.tid === FREE_AGENT && !p.waivers && wantsTenDay(league, p, me));
   const same = (p: Player) => (p.pos === pos ? 1 : 0);
-  return pool.sort((a, b) => b.ovr + 2 * same(b) - (a.ovr + 2 * same(a)) || a.pid - b.pid).find((p) => !tenDayBlockedReason(league, me, p)) ?? null;
+  const pool = Object.values(league.players)
+    .filter((p) => p.tid === FREE_AGENT && !marqueeFA(league, p) && !releasedBy(league, p, me))
+    .sort((a, b) => b.ovr + 2 * same(b) - (a.ovr + 2 * same(a)) || a.pid - b.pid)
+    .slice(0, COVER_LOOK);
+  for (const p of pool) {
+    const ask = askingContract(league, p, me);
+    if (!offerBlockedReason(league, p, ask.amount, ask.years)) return { p, amount: ask.amount, years: ask.years };
+  }
+  return null;
 }
 
 /**
@@ -1201,8 +1126,8 @@ function minutesOf(league: League, pid: number): { to: Player[]; fit?: League['t
 /** "Friday @ BOS", "tonight vs MIA". */
 const gameText = (league: League, g: ScheduledGame) => `${g.day === league.day ? 'tonight' : fmtDate(league.season, g.day, { weekday: 'long' })} ${vsAt(league, g)}`;
 
-/** The staff's calls open now, as cards. `skipWeek`: not the week's (a sim's daily look: openWeekId says whether it's open). */
-export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): CallCard[] {
+/** The staff's calls open now, as cards. */
+export function staffCalls(league: League): CallCard[] {
   const open = new Set(candidateIds(league));
   if (!open.size) return [];
   const cards: CallCard[] = [];
@@ -1271,8 +1196,8 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
     const worth = league.callWorth?.[id] ?? null;
     // measured as no real loss: cover can't win back what isn't lost (the staff never calls for more than its own read)
     const missed = !worth || (worth.pts ?? 0) >= WORTH_MIN;
-    const any = tenDayCover(league, p.pos);
-    const cover = missed && any && (!young || playerAge(any, league.season) <= YOUNG_COVER) ? any : null;
+    const any = coverSigning(league, p.pos);
+    const cover = missed && any && (!young || playerAge(any.p, league.season) <= YOUNG_COVER) ? any : null;
     const manual = team.rotation.manual;
     const out = p.injury!.gamesRemaining;
     // a trade for cover is a real answer to a long absence while deals can still be made, for a star
@@ -1283,7 +1208,11 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
         : null;
     const ride: CallChoice = { label: 'Ride it out', action: { kind: 'settle', id } };
     const suggestion: CallChoice = cover
-      ? { label: `Sign ${playerName(cover)} to a 10-day`, action: { kind: 'tenDay', id, pid: cover.pid }, confirm: `${cover.pos} · ${cover.ovr} OVR, for ten days at the minimum.` }
+      ? {
+          label: `Sign ${playerName(cover.p)}`,
+          action: { kind: 'sign', id, pid: cover.p.pid },
+          confirm: `${cover.p.pos} · ${cover.p.ovr} OVR, ${money(cover.amount)} × ${plural(cover.years, 'yr')}.`,
+        }
       : manual
         ? { label: 'Let the staff redo the rotation', action: { kind: 'staffRotation', id } }
         : ride;
@@ -1315,13 +1244,13 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
         : !missed
           ? `The team measures about as well without him. ${to}`
           : young && any
-            ? `${to} A veteran on a 10-day would only take them from the young players.`
+            ? `${to} A veteran signed for cover would only take them from the young players.`
             : `${to}${look ? ` A trade is the other way. Find lists ${p.pos}s better than your fifth best that fit your cap.` : ''}`;
     cards.push({
       id,
       kind: 'injury',
       title: `${playerName(p)} is out ${plural(out, 'game')}`,
-      line: `${cover ? "The staff's call: a 10-day for cover." : manual ? "The staff's call: hand them the rotation while he's out." : "The staff's call: ride it out."}${value}`,
+      line: `${cover ? "The staff's call: sign cover." : manual ? "The staff's call: hand them the rotation while he's out." : "The staff's call: ride it out."}${value}`,
       detail: why,
       tone: 'bad',
       to: look?.to ?? '/team',
@@ -1514,143 +1443,6 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
     });
   }
 
-  const b = booksOf(league);
-  const bid = b && (open.has(booksId(league)) ? booksId(league) : open.has(booksDueId(league)) ? booksDueId(league) : null);
-  if (b && bid) {
-    const id = bid;
-    const p = seasonEndCash(league, me);
-    // as the owner reads them: the tax and inherited salary he signed off on aren't held against the books (see booksOutlook)
-    const o = booksOutlook(league);
-    // where the close is heading: this season's in season, next season's between seasons (none in the postseason: it has closed)
-    const between = !['preseason', 'regular', 'playin', 'playoffs'].includes(league.phase);
-    const taxNote = p.tax <= 0 ? '' : o.sanctioned > 0 ? `That leaves out the ${money(o.sanctioned)} of tax he signed off on.` : `That's after a ${money(p.tax)} luxury tax.`;
-    const heading =
-      p.left > 0
-        ? `${between ? "next season's books project" : 'projected'} ${money(Math.abs(o.judged))} in the ${o.judged < 0 ? 'red' : 'black'}${between ? '' : " when the regular season's books close"}`
-        : '';
-    const closed = money(-(b.close ?? team.cash));
-    // the levers, each only when he can pull it now: the budgets (not under the freeze: it has cut
-    // them), the ticket price, and salary out while deals can be made (the freeze allows those)
-    const save = frozen(league) ? 0 : budgetCutSaves(league);
-    const ticket = ticketLever(league);
-    const cut: CallChoice | null =
-      save > 0 ? { label: 'Cut the budgets', action: { kind: 'budgetCut', id }, confirm: `Coaching, health and facilities go to the league standard (${FROZEN_BUDGET}).` } : null;
-    // (no second tap: a price can be changed back on Finances)
-    const price: CallChoice | null = ticket ? { label: `Price tickets at $${ticket.price}`, action: { kind: 'ticketPrice', id, price: ticket.price } } : null;
-    // (salary out: the trading block for his biggest contract outside his two most valuable players)
-    const core = new Set(
-      [...standardRoster(league, me)]
-        .sort((x, y) => tradeValue(league, y) - tradeValue(league, x))
-        .slice(0, 2)
-        .map((x) => x.pid),
-    );
-    const dump = standardRoster(league, me)
-      .filter((x) => !core.has(x.pid))
-      .sort((x, y) => salaryFor(y, league.season) - salaryFor(x, league.season) || x.pid - y.pid)[0];
-    const shed = blockLook(league, id, 'Shed salary', dump);
-    const noted: CallChoice = { label: 'Not now', action: { kind: 'settle', id } };
-    // the staff's call: whichever of the budgets and the tickets brings more, else salary out
-    const levers = [
-      { c: cut, v: save },
-      { c: price, v: ticket?.gain ?? 0 },
-    ]
-      .filter((x): x is { c: CallChoice; v: number } => !!x.c)
-      .sort((x, y) => y.v - x.v);
-    const suggestion = levers[0]?.c ?? shed ?? noted;
-    // the gap the next step turns on: to the black (the warning, the ultimatum), or under the freeze
-    // to no deeper than the last close (else to the black); and how much of it the staff's call covers
-    const floor = (b.stage === 'freeze' || b.stage === 'final') && b.close !== undefined && p.end < b.close ? b.close : 0;
-    const gap = p.left > 0 ? Math.max(0, floor - p.end) : 0;
-    const covers = levers[0] && suggestion === levers[0].c ? levers[0].v : 0;
-    const share =
-      gap > 0 && covers > 0
-        ? covers >= gap
-          ? `, enough to close the ${money(gap)} gap`
-          : `. On its own it won't close the ${money(gap)} gap${shed ? ', so salary has to go too' : ', and no deals can be made now'}`
-        : '';
-    // the call on the row; what it brings, and how much of the gap, a tap down
-    const call =
-      suggestion === cut
-        ? 'cut the staff budgets to the league standard'
-        : suggestion === price
-          ? `price tickets at $${ticket!.price}`
-          : suggestion === shed
-            ? `shed salary${league.phase === 'regular' ? ' before the deadline' : ''}`
-            : '';
-    const brings =
-      suggestion === cut
-        ? `The cut saves ${money(save)}${between ? ' a season' : ' over the rest of the season'}${share}.`
-        : suggestion === price
-          ? `The staff thinks $${ticket!.price} is where the gate peaks${share}.`
-          : suggestion === shed && gap > 0
-            ? `${money(gap)} to find.`
-            : '';
-    const next = between ? "when next season's books close" : 'when the books close';
-    // what digging deeper brings, in the Owner page's words (past the debt limit, or in the grace years)
-    const deeper = deeperText(league, between);
-    const Heading = heading ? `${capitalize(heading)}.` : '';
-    const lines: Record<typeof b.stage, string> = {
-      warning: `${Heading} Still in the red then, and the owner gives you an ultimatum.`,
-      ultimatum: `${id === booksDueId(league) ? Heading : `The books closed ${closed} in the red.`} Still in the red ${next}, and he freezes the budget.`,
-      freeze: "Minimum deals only, no raises and no trades that add salary. It lasts until a season's books close in the black.",
-      final: deeper,
-    };
-    const detail = [
-      ...(b.stage === 'freeze' ? [deeper] : []),
-      ...(heading && (b.stage === 'freeze' || b.stage === 'final' || (b.stage === 'ultimatum' && id !== booksDueId(league))) ? [Heading] : []),
-      ...(heading ? [`${b.stage === 'warning' ? "Playoff money doesn't count. " : ''}${taxNote}`.trim()] : []),
-      brings,
-    ].filter(Boolean);
-    const titles: Record<typeof b.stage, string> = {
-      warning: 'The books are heading into the red',
-      ultimatum: "The owner's ultimatum: the books",
-      freeze: 'The budget is frozen',
-      final: "The owner's final warning: the books",
-    };
-    cards.push({
-      id,
-      kind: 'books',
-      title: titles[b.stage],
-      line: `${lines[b.stage].trim()}${call ? ` The staff's call: ${call}.` : ''}`,
-      ...(detail.length ? { detail: detail.join('\n') } : {}),
-      tone: 'bad',
-      to: '/office/finances',
-      suggestion,
-      choices: [levers[1]?.c, shed, noted].filter((x): x is CallChoice => !!x && x !== suggestion),
-    });
-  }
-  // a skid that has gone on: what's behind it, the counters the staff put in, and a trade while deals can be made
-  const skid = skidOpen(league);
-  if (skidCard(league, skid) && open.has(skidId(skid))) {
-    const id = skidId(skid);
-    // the call follows what's behind it: shots that didn't fall ride it out (a trade doesn't fix luck);
-    // the matchups, the looks, a star out, a trade (the measured counters are in already)
-    const look = findLook(league, id, 'Look for a trade', fifthBest(league) + 1);
-    const ride: CallChoice = { label: 'Ride it out', action: { kind: 'settle', id } };
-    const deals = `Deals until ${fmtDate(league.season, league.tradeDeadlineDay)}.`;
-    cards.push({
-      id,
-      kind: 'skid',
-      title: skidTitle(skid),
-      line: `The staff's call: ${
-        skid.luck
-          ? 'ride it out. The box scores say the shots will come back.'
-          : look
-            ? "look for a trade. Counters alone haven't turned it."
-            : 'ride it out. Nobody on the market is a fix.'
-      }`,
-      // what's behind it, the counters the staff put in, and the window for a deal, a tap down
-      detail: [skid.diag, skid.put, skid.luck ? "A trade doesn't change the shots." : '', look ? deals : ''].filter(Boolean).join('\n'),
-      tone: 'warn',
-      to: `/games/${skid.opp}?tab=plan`,
-      ...(skid.luck || !look ? { suggestion: ride, choices: look ? [look] : [] } : { suggestion: look, choices: [ride] }),
-    });
-  }
-
-  // the week's card: a trade-off the staff measured both sides of (see weekCall.ts)
-  const week = opts.skipWeek ? null : weekCard(league);
-  if (week && open.has(week.id)) cards.push(week);
-
   // a call is a choice: one whose only answer is to carry on isn't opened (one measuring its choice is,
   // meanwhile), nor is one whose other answer is a bare link (a look counts only where there's someone to find: see findLook)
   return cards.filter((c) => c.measuring || [c.suggestion, ...(c.choices ?? [])].some((x) => x && !x.blocked && x.action.kind !== 'settle'));
@@ -1661,8 +1453,6 @@ export function resolveCall(league: League, a: CallAction): { ok: boolean; text:
   let r: { ok: boolean; text: string };
   switch (a.kind) {
     case 'settle':
-      // (the week's card answered with things as they were: see answerWeek)
-      if (isWeekId(a.id)) answerWeek(league, {});
       r = { ok: true, text: '' };
       break;
     case 'open':
@@ -1684,9 +1474,15 @@ export function resolveCall(league: League, a: CallAction): { ok: boolean; text:
       };
       break;
     }
-    case 'tenDay': {
-      const t = userTenDay(league, a.pid);
-      r = { ok: t.ok, text: t.reason };
+    case 'sign': {
+      const fa = league.players[a.pid];
+      if (!fa || fa.tid !== FREE_AGENT) {
+        r = { ok: false, text: 'He is no longer a free agent.' };
+        break;
+      }
+      const ask = askingContract(league, fa, league.userTid);
+      const t = userOffer(league, a.pid, ask.amount, ask.years);
+      r = { ok: t.ok, text: t.ok ? `${playerName(fa)} signed: ${money(ask.amount)} × ${plural(ask.years, 'yr')}.` : t.reason };
       break;
     }
     case 'staffRotation':
@@ -1719,19 +1515,6 @@ export function resolveCall(league: League, a: CallAction): { ok: boolean; text:
       }
       break;
     }
-    case 'budgetCut': {
-      const budget = league.teams[league.userTid].budget;
-      for (const k of ['coaching', 'health', 'facilities'] as const) budget[k] = Math.min(budget[k], FROZEN_BUDGET);
-      r = { ok: true, text: 'Budgets cut to the league standard.' };
-      break;
-    }
-    case 'ticketPrice':
-      Object.assign(league.teams[league.userTid].budget, { ticketPrice: a.price, priceSet: true });
-      r = { ok: true, text: `Tickets priced at $${a.price}.` };
-      break;
-    case 'youthLean':
-      r = answerWeek(league, { youth: true });
-      break;
   }
   if (r.ok) settleCall(league, a.id);
   return r;

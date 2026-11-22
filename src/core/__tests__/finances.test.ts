@@ -7,12 +7,10 @@ import {
   arenaCapacity,
   assessLuxuryTax,
   attendanceFor,
-  budgetCostPerSeason,
   gameFinances,
   luxuryTaxBill,
   MERCH_PER_GAME,
   NATIONAL_REVENUE,
-  profit,
   referencePrice,
   REVENUE_SHARING,
   shareRevenue,
@@ -25,8 +23,7 @@ import { salaryFor } from '../playerGen';
 import { OWNER_PROFIT_RANGE, OWNER_PROFIT_TARGET, ownerMoneyScore } from '../league/owner';
 import { newSeason, simDay, startRegularSeason } from '../league/season';
 import { CAP, TAX_BRACKET_PCT } from '../constants';
-import { booksOutlook, booksReview, booksVerdict, sanctionedTax } from '../league/books';
-import { PAYROLL_SLACK, currentGoals, forcedPayroll, goalResult, ownerProgress, planOwnerGoals, seasonBudget } from '../league/ownerGoals';
+import { PAYROLL_SLACK, currentGoals, forcedPayroll, ownerProgress, planOwnerGoals } from '../league/ownerGoals';
 import { releaseDeadMoney, releasePlayer, signPlayer } from '../league/contracts';
 import type { League } from '../types';
 
@@ -225,53 +222,17 @@ describe('finances (L1, L15)', () => {
       expect(home(0.1, 15)).toBeLessThan(home(0.5, 41) * (5 / 6));
     }
 
-    // one money story: the luxury tax a win-now owner's goal allows (to the first apron) doesn't count
-    // on the books, and any other owner's goal allows none
-    {
-      const l = league();
-      expect(startRegularSeason(l)).toEqual([]);
-      const u = l.userTid;
-      const cap = CAP_FOR(l);
-      // the payroll $5M into the tax
-      l.teams[u].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: cap.luxuryTax + 5_000 - payroll(l, u) });
-      const og = l.ownerGoals!;
-      const goal = (title: string, target: number) => {
-        og.goals = og.goals.filter((g) => g.kind !== 'payroll' && g.kind !== 'profit');
-        og.goals.push({ kind: 'payroll', title, target, weight: 0.2 });
-      };
-      goal('Stay under the first apron', cap.firstApron);
-      const tax = luxuryTaxBill(l, payroll(l, u), l.season, taxRepeater(l, u));
-      expect(tax).toBeGreaterThan(0);
-      expect(sanctionedTax(l)).toBe(tax);
-      const o = booksOutlook(l);
-      expect(o.judged - o.end).toBe(tax);
-      // the regular season's close just that far in the red: no step, in the black once his tax is out
-      curTeamSeason(l, u).closeCash = -tax + 100;
-      expect(booksVerdict(l)).toBeNull();
-      booksReview(l);
-      expect(curTeamSeason(l, u).signedOff).toBe(tax);
-      // the same close under "stay under the luxury tax": an ultimatum (a second season in charge)
-      const m = structuredClone(l);
-      delete curTeamSeason(m, u).signedOff;
-      m.tenureStart = m.season - 1;
-      m.ownerGoals!.goals = m.ownerGoals!.goals.filter((g) => g.kind !== 'payroll');
-      m.ownerGoals!.goals.push({ kind: 'payroll', title: 'Stay under the luxury tax', target: cap.luxuryTax, weight: 0.2 });
-      expect(sanctionedTax(m)).toBe(0);
-      expect(booksVerdict(m)).toMatchObject({ stage: 'ultimatum' });
-    }
-
     // a payroll the coach inherited past the owner's line (a contract signed before he came, raised on
-    // schedule) is the owner's: the goal asks him to add nothing to it, and the books count neither its
-    // tax nor its salary past the line against him; what he adds on top still counts
+    // schedule) is the owner's: the goal asks him to add nothing to it; what he adds on top still counts
     {
       const l = league();
       expect(startRegularSeason(l)).toEqual([]);
       const u = l.userTid;
       const cap = CAP_FOR(l);
       const star = standardRoster(l, u)[0];
-      star.contract = { start: l.season, salaries: [salaryFor(star, l.season) + cap.firstApron + 20_000 - payroll(l, u)] };
+      star.contract = { start: l.season, salaries: [salaryFor(star, l.season) + cap.spendLine + 20_000 - payroll(l, u)] };
       const forced = forcedPayroll(l, u);
-      expect(forced).toBeGreaterThan(cap.firstApron);
+      expect(forced).toBeGreaterThan(cap.spendLine);
       const og = planOwnerGoals(l, u)!;
       const g = og.goals.find((x) => x.kind === 'payroll')!;
       expect(g.title).toBe('Add nothing to the payroll you inherited');
@@ -279,17 +240,14 @@ describe('finances (L1, L15)', () => {
       expect(g.target).toBe(Math.ceil((forced + PAYROLL_SLACK * cap.luxuryTax) / 100) * 100);
       l.ownerGoals = og;
       const pay = payroll(l, u);
-      const upTo = Math.min(pay, forced);
-      expect(sanctionedTax(l)).toBe(luxuryTaxBill(l, upTo, l.season, taxRepeater(l, u)) + upTo - g.line!);
-      // a trade of the inherited star for a player on the same salary leaves the sign-off where opening
-      // night set it (read off the contracts still inherited, it had gone from $61M to nothing)
+      // a trade of the inherited star for a player on the same salary: the payroll is the same, and what
+      // he inherited no longer counts the star
       {
         const m = structuredClone(l);
         const other = (u + 1) % m.teams.length;
         const mine = m.players[star.pid];
         const theirs = standardRoster(m, other)[0];
         theirs.contract = { start: m.season, salaries: [salaryFor(mine, m.season)] };
-        const before = sanctionedTax(m);
         [mine.tid, theirs.tid] = [other, u];
         m.transactions = [
           ...(m.transactions ?? []),
@@ -309,15 +267,11 @@ describe('finances (L1, L15)', () => {
         ];
         expect(payroll(m, u)).toBe(pay);
         expect(forcedPayroll(m, u)).toBeLessThan(forced - 10_000);
-        expect(sanctionedTax(m)).toBe(before);
       }
-      // a signing of his own on top of it is his: the tax it adds isn't signed off
+      // a signing of his own on top of it is his: what he inherited stays what it was
       const fa = freeAgents(l)[0];
-      const before = sanctionedTax(l);
       signPlayer(l, fa, u, 5_000, 1, { news: false });
       expect(forcedPayroll(l, u)).toBe(forced);
-      expect(sanctionedTax(l)).toBe(before);
-      expect(luxuryTaxBill(l, payroll(l, u), l.season, taxRepeater(l, u))).toBeGreaterThan(before - (upTo - g.line!));
       // a deal of his own he cuts is his dead money, not the owner's
       const kept = forcedPayroll(l, u);
       releasePlayer(l, fa, { news: false });
@@ -331,20 +285,12 @@ describe('finances (L1, L15)', () => {
       const u = l.userTid;
       const cap = CAP_FOR(l);
       const star = standardRoster(l, u)[0];
-      star.contract = { start: l.season, salaries: [salaryFor(star, l.season) + cap.firstApron + 20_000 - payroll(l, u)] };
+      star.contract = { start: l.season, salaries: [salaryFor(star, l.season) + cap.spendLine + 20_000 - payroll(l, u)] };
       const cut = standardRoster(l, u).find((p) => p.pid !== star.pid && releaseDeadMoney(l, p).some((d) => d.season === l.season && d.amount > 2_000))!;
       const before = forcedPayroll(l, u);
       releasePlayer(l, cut, { news: false });
       expect(forcedPayroll(l, u)).toBeGreaterThanOrEqual(before - cap.vetMin);
-      while (standardRoster(l, u).length < CAP.rosterMin)
-        signPlayer(
-          l,
-          freeAgents(l).find((p) => !p.contract.twoWay)!,
-          u,
-          cap.vetMin,
-          1,
-          { news: false },
-        );
+      while (standardRoster(l, u).length < CAP.rosterMin) signPlayer(l, freeAgents(l)[0], u, cap.vetMin, 1, { news: false });
       expect(startRegularSeason(l)).toEqual([]);
       const g = currentGoals(l)!.goals.find((x) => x.kind === 'payroll')!;
       expect(g.title).toBe('Add nothing to the payroll you inherited');
@@ -352,40 +298,17 @@ describe('finances (L1, L15)', () => {
       expect(ownerProgress(l).find((x) => x.goal.kind === 'payroll')!.status).not.toBe('behind');
     }
 
-    // the profit target is the budget at the league's standard levers: tickets at $30 and every budget
-    // maxed the night he sets it doesn't lower it, and an honest coach's target is what it was
+    // the franchise runs its own money: the owner asks for no profit, and opening night prices the
+    // tickets where the gate peaks whatever price the save came with
     {
-      const honest = league();
-      const gamed = structuredClone(honest);
-      Object.assign(gamed.teams[gamed.userTid].budget, { ticketPrice: 30, priceSet: true, coaching: 100, health: 100, facilities: 100 });
-      expect(startRegularSeason(honest)).toEqual([]);
-      expect(startRegularSeason(gamed)).toEqual([]);
-      const target = (x: League) => currentGoals(x)!.goals.find((g) => g.kind === 'profit')?.target;
-      expect(target(honest)).toBeDefined();
-      expect(target(gamed)).toBe(target(honest));
-      // (the projection reads his own levers: what they cost shows there)
-      const proj = (x: League) => ownerProgress(x).find((g) => g.goal.kind === 'profit')!.projected;
-      expect(proj(gamed)).toBeLessThan(proj(honest) - 10_000);
-      expect(seasonBudget(honest, honest.userTid, true).op).toBeCloseTo(seasonBudget(honest, honest.userTid).op, -2);
-      // budgets cut under the standard: what they save isn't profit he asked for (every budget at 1 had
-      // banked the Bulls $29.6M a season and a profit grade of +87 against +13)
-      {
-        const cut = structuredClone(honest);
-        Object.assign(cut.teams[cut.userTid].budget, { coaching: 1, health: 1, facilities: 1 });
-        for (let d = 0; d < 5; d++) simDay(cut);
-        const ts = curTeamSeason(cut, cut.userTid);
-        expect(ts.won + ts.lost).toBeGreaterThan(0);
-        expect(ts.trimmed).toBeCloseTo(((ts.won + ts.lost) * 3 * (budgetCostPerSeason(cut, 50) - budgetCostPerSeason(cut, 1))) / 82, 0);
-        const og = currentGoals(cut)!;
-        expect(
-          goalResult(
-            cut,
-            og,
-            og.goals.find((g) => g.kind === 'profit')!,
-          ),
-        ).toBeCloseTo(profit(cut, cut.userTid) - ts.trimmed!, 3);
-        expect(ownerProgress(cut).find((g) => g.goal.kind === 'profit')!.text).toMatch(/, not counting \$[\d.]+M of budget cuts$/);
-      }
+      const l = league();
+      const odd = structuredClone(l);
+      odd.teams[odd.userTid].budget.ticketPrice = 30;
+      expect(startRegularSeason(l)).toEqual([]);
+      expect(startRegularSeason(odd)).toEqual([]);
+      expect(currentGoals(l)!.goals.map((g) => g.kind)).not.toContain('profit');
+      expect(odd.teams[odd.userTid].budget.ticketPrice).toBe(l.teams[l.userTid].budget.ticketPrice);
+      expect(ownerProgress(l).length).toBe(currentGoals(l)!.goals.length);
     }
   }, 180_000);
 });

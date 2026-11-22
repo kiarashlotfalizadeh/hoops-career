@@ -24,7 +24,6 @@
   letter-spacing: -0.01em;
   color: var(--text-2);
 }
-.td-lead-go,
 .td-gd-go {
   position: relative;
   display: inline-flex;
@@ -46,66 +45,7 @@
   flex-direction: column;
   padding: 18px 20px 18px;
 }
-.td-score-figs {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 16px;
-}
-/* the score: the condensed black cut, as big as it fits; the loser's figure a step back */
-.td-score-n {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 900;
-  font-size: clamp(84px, 27vw, 128px);
-  line-height: 0.8;
-  letter-spacing: -0.035em;
-  font-variant-numeric: tabular-nums;
-  color: #fff;
-}
-.td-score-n.lo {
-  /* (3:1 or better on any slab: large text) */
-  color: color-mix(in srgb, #fff 66%, var(--slab));
-}
-.td-score-foot {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-}
-.td-score-tm {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-family: var(--head);
-  font-stretch: 112%;
-  font-weight: 820;
-  font-size: 14px;
-  letter-spacing: -0.02em;
-  color: #fff;
-}
-.td-score-tm.them {
-  text-align: right;
-}
-/* by how much: a white pill printed in the slab's colour */
-.td-score-by {
-  padding: 6px 11px;
-  border-radius: var(--radius-pill);
-  background: #fff;
-  color: var(--slab);
-  font-family: var(--head);
-  font-stretch: 112%;
-  font-weight: 820;
-  font-size: 12.5px;
-  letter-spacing: -0.015em;
-  white-space: nowrap;
-}
-/* under the slab, on the paper: the kicker, the headline, its line, the box score's figures */
-.td-lead-kick {
-  margin-top: 20px;
-}
+
 .td-lead-head {
   display: block;
   margin-top: 6px;
@@ -118,9 +58,7 @@
   color: var(--text);
   text-wrap: balance;
 }
-.td-result > .slab + .td-lead-head {
-  margin-top: 20px;
-}
+
 .td-lead-dek {
   display: block;
   margin: 10px 0 0;
@@ -129,9 +67,7 @@
   color: var(--text-2);
   text-wrap: pretty;
 }
-.td-result .statline {
-  margin-top: 18px;
-}
+
 .td-lead:active .td-lead-head {
   color: var(--text-2);
 }
@@ -142,36 +78,6 @@
     text-decoration-color: var(--line-3);
     text-underline-offset: 6px;
   }
-}
-
-/* a story about the team: the black headline on the paper is the poster */
-.td-lead-over {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-}
-.td-story .td-lead-head {
-  margin-top: 10px;
-  font-size: 34px;
-}
-.td-story.w1 .td-lead-head,
-.td-story.w2 .td-lead-head {
-  font-size: 30px;
-}
-.td-lead-by {
-  display: flex;
-  align-items: flex-start;
-  gap: 11px;
-  margin-top: 12px;
-}
-.td-lead-by .avatar {
-  width: 34px;
-  height: 34px;
-  margin-top: 1px;
-}
-.td-lead-by .td-lead-dek {
-  margin: 0;
 }
 
 /* ------------------------------------------------------------ the poster on game day */
@@ -384,27 +290,6 @@
   max-width: 44ch;
 }
 
-/* the season's end: the owner's word in quotes, then the season's best a line each */
-.td-end-said {
-  margin: 8px 0 0;
-  font-family: var(--head);
-  font-stretch: var(--head-w);
-  font-size: 18px;
-  font-weight: 760;
-  line-height: 1.25;
-  letter-spacing: -0.015em;
-  color: #fff;
-  text-wrap: pretty;
-}
-.td-end-best {
-  font-size: 14.5px;
-  font-weight: 560;
-  line-height: 1.4;
-}
-.td-end-best li + li {
-  margin-top: 6px;
-}
-
 /* a tablet: the poster grows with the page, the dek keeps a reading measure */
 @media (min-width: 640px) {
   .td-score,
@@ -412,22 +297,14 @@
   .td-phase {
     padding: 22px 26px 24px;
   }
-  .td-score-n,
   .td-gd-pct {
     font-size: 150px;
   }
-  .td-score-tm,
-  .td-score-by {
-    font-size: 16px;
-  }
-  .td-lead-head,
-  .td-story .td-lead-head {
+
+  .td-lead-head {
     font-size: 42px;
   }
-  .td-story.w1 .td-lead-head,
-  .td-story.w2 .td-lead-head {
-    font-size: 36px;
-  }
+
   .td-lead-head {
     max-width: 22em;
   }
@@ -525,70 +402,6 @@
   min-width: 0;
 }
 
-/* ------------------------------------------------------------ the next game, as one card */
-.td-next {
-  display: flex;
-  align-items: center;
-  gap: 13px;
-  min-height: 72px;
-  padding: 14px 16px;
-  color: inherit;
-  text-decoration: none;
-  transition:
-    transform 0.08s ease,
-    box-shadow var(--dur-fast) ease;
-}
-.td-next:active {
-  transform: scale(0.99);
-}
-.td-next > svg:first-child {
-  flex: none;
-}
-.td-next .grow {
-  min-width: 0;
-}
-.td-next-t {
-  display: block;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-family: var(--head);
-  font-stretch: 112%;
-  font-weight: 860;
-  font-size: 17px;
-  line-height: 1.15;
-  letter-spacing: -0.025em;
-}
-.td-next-m {
-  display: block;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  margin-top: 4px;
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--text-dim);
-}
-/* his starters hurt, under the game's line */
-.td-next-out {
-  margin-top: 2px;
-  white-space: normal;
-  color: var(--bad);
-}
-/* the chance to win: the box score's figure, big, its label under it */
-.td-next-win {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 3px;
-}
-.td-next-k {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-dim);
-}
-
 /* ------------------------------------------------------------ your season: a line of figures under an ink rule */
 .td-strip {
   display: grid;
@@ -678,48 +491,6 @@
   }
   .td-word {
     font-size: 21px;
-  }
-}
-
-/* ------------------------------------------------------------ the news: headlines in the headline cut, on card stock */
-.td-hl {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-height: var(--row-min);
-  padding: 14px var(--row-px) 15px;
-  color: inherit;
-  text-decoration: none;
-  transition: background var(--dur-fast) ease;
-}
-.td-hl:active {
-  background: var(--surface);
-}
-.td-hl-over {
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  color: var(--text-dim);
-}
-.td-hl-head {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  font-family: var(--head);
-  font-stretch: 108%;
-  font-weight: 820;
-  font-size: 17px;
-  line-height: 1.18;
-  letter-spacing: -0.025em;
-  color: var(--text);
-  text-wrap: balance;
-}
-@media (hover: hover) and (pointer: fine) {
-  .td-hl:hover {
-    background: color-mix(in srgb, var(--surface) 60%, var(--raised));
   }
 }
 
@@ -1260,37 +1031,13 @@
    the blocks under it (the page's own staggered rise). What a sim changes while Today is open ticks
    or pops in; nothing here loops. */
 
-/* a result landing: your score slams in from its corner, theirs a beat later, then the margin */
-.td-score-n {
-  transform-origin: left bottom;
-  animation: slam 0.42s var(--ease-out) 0.1s backwards;
-}
-.td-score-n.them {
-  transform-origin: right bottom;
-  animation-delay: 0.2s;
-}
-.td-score-by {
-  animation: pop var(--dur-slow) var(--ease-spring) 0.42s backwards;
-}
-.td-score-tm {
-  animation: fade var(--dur-slow) ease 0.3s backwards;
-}
-/* the words under a poster: the kicker, the headline, its line, the figures, one after another */
-.td-lead-kick,
-.td-lead-over {
-  animation: fade var(--dur-slow) ease 0.12s backwards;
-}
 .td-lead-head {
   animation: rise-sm var(--dur-slow) var(--ease-out) 0.16s backwards;
 }
-.td-lead-dek,
-.td-lead-by {
+.td-lead-dek {
   animation: rise-sm var(--dur-slow) var(--ease-out) 0.22s backwards;
 }
-.td-lead-by .td-lead-dek {
-  animation: none;
-}
-.td-result .statline,
+
 .td-foot-s {
   animation: rise-sm var(--dur-slow) var(--ease-out) 0.28s backwards;
 }
@@ -1340,12 +1087,10 @@
 .td-lead:active {
   scale: 0.99;
 }
-.td-lead-go svg,
 .td-gd-go svg,
 .td-page .card-link svg {
   transition: translate var(--dur-fast) var(--ease-out);
 }
-.td-lead:active .td-lead-go svg,
 .td-gd-go:active svg,
 .td-page .card-link:active svg {
   translate: 3px 0;
@@ -1370,14 +1115,6 @@
 }
 .td-count {
   display: inline-block;
-}
-
-/* the next game's card: the arrow of a row that goes somewhere */
-.td-next-win {
-  transition: translate var(--dur-fast) var(--ease-out);
-}
-.td-next:active .td-next-win {
-  translate: 2px 0;
 }
 
 /* your season: the rule is drawn, the last five land one by one (oldest first), a word a sim
@@ -1421,20 +1158,16 @@
 }
 
 /* the news and More: rows one after another, the first few */
-.td-news > .td-hl,
 .td-more > * {
   animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
   animation-delay: calc(var(--stagger) * var(--i, 3));
 }
-.td-news > :nth-child(1),
 .td-more > :nth-child(1) {
   --i: 0;
 }
-.td-news > :nth-child(2),
 .td-more > :nth-child(2) {
   --i: 1;
 }
-.td-news > :nth-child(3),
 .td-more > :nth-child(3) {
   --i: 2;
 }

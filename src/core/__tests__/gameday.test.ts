@@ -14,26 +14,22 @@ import { loadLeague, migrate, saveLeague } from '../../state/persistence';
 import { buildSimInput, ensureRotation, userGameOnDay } from '../league/games';
 import { advanceDay, simDay } from '../league/season';
 import { GAME_TIME_PERF, clearedToPlay, isQuestionable, setGameTime } from '../league/injuries';
-import { curTeamSeason, statsLine, teamPlayers, teamCity } from '../league/helpers';
+import { statsLine, teamPlayers } from '../league/helpers';
 import { setPlanMatchup } from '../league/gamePlans';
 import { createLeague, defaultSettings } from '../league/create';
 import { gameProjection, HOME_EDGE, matchupPreview, projectMargin, winChance } from '../analysis/preview';
 import { careerOnRecord, careerTotals, marksCrossed, milestonesIn, newsworthy } from '../analysis/milestones';
-import { storylines } from '../analysis/storylines';
-import { benchLines, isLatestUserGame, postGameQuotes, quoteLines, recapFacts, streakAfter, threeStars } from '../analysis/quotes';
-import { buildGameReport, IMPACT_TEXT, impactSentence } from '../analysis/gameReport';
-import { billingsFor, christmasDay, gameStoryFor, rivalryOf, RIVALRY, storyGame } from '../analysis/gameStory';
+import { threeStars } from '../analysis/quotes';
+import { IMPACT_TEXT, impactSentence } from '../analysis/gameReport';
+import { christmasDay, gameStoryFor, storyGame } from '../analysis/gameStory';
 import { runLab } from '../ai/lab';
 import { wpSeries } from '../analysis/winProb';
-import { gameStakes } from '../analysis/odds';
-import { gameKeys } from '../analysis/keys';
 import { previewMatchups } from '../analysis/matchupPreview';
 import { scoutData } from '../analysis/scouting';
 import { guardingPlan } from '../analysis/guarding';
 import { scoutTeam } from '../ai/advisor';
 import { GameSim } from '../sim/engine';
 import { Rng } from '../random';
-import { seasonLabel } from '../constants';
 import type { GameResult, League, Player, ScheduledGame } from '../types';
 
 afterEach(() => clearLive());
@@ -104,7 +100,7 @@ describe('game day', () => {
     return { l, g, star };
   }
 
-  it("tells each of the user's games as a story, writes it into the news, and bills the games ahead", () => {
+  it("tells each of the user's games as a story and writes it into the news", () => {
     // every game of the user has a story, the same every time, and none for other teams from his side
     const base = snap(24);
     /** A copy of the league with the user's `n`th game (from the end) changed by `fn`. */
@@ -165,7 +161,7 @@ describe('game day', () => {
         .map((_, k) => k)
         .filter((k, _, ks) => k + 3 < ks.length && won(games.at(-k - 2)!) && !(won(games.at(-k - 3)!) && won(games.at(-k - 4)!)))
         .map((k) => k + 1);
-      const afterWin = afterWins.find((n) => !/streak/.test(routOn(n).head))!;
+      const afterWin = afterWins.find((n) => !/streak|straight/.test(routOn(n).head))!;
       const rout = routOn(afterWin);
       expect(rout.head).toMatch(/rout|blows out|off the floor/);
 
@@ -272,7 +268,6 @@ describe('game day', () => {
       });
       expect(run.story.head).toMatch(/6 straight|6 in a row|6th straight/);
       expect(run.story.means).not.toContain('6th straight win');
-      expect(streakAfter(run.l, run.g)).toBe(6);
     }
 
     // series states: a 3-1 lead, Game 7 forced, a Game 7 won, eliminated
@@ -384,136 +379,9 @@ describe('game day', () => {
       expect(heads(b)).toEqual(heads(a));
       expect(b.rng).toBe(a.rng);
     }
-
-    // billing
-    const l = snap(6);
-    const upcoming = (lg: League) => lg.schedule.filter((g) => !g.played && g.type === 'regular' && (g.home === lg.userTid || g.away === lg.userTid)).sort((a, b) => a.day - b.day);
-    const byAbbrev = (lg: League, ab: string) => lg.teams.find((t) => t.abbrev === ab)!.tid;
-    /** `n` close meetings of the user's team with `opp` added to last season's results. */
-    const closeGames = (lg: League, opp: number, n: number) => {
-      const tmpl = userGames(lg)[0];
-      for (let i = 0; i < n; i++) {
-        const g = structuredClone(tmpl);
-        g.gid = 800000 + i;
-        g.season = lg.season - 1;
-        g.type = 'regular';
-        g.home.tid = opp;
-        g.away.tid = lg.userTid;
-        g.home.pts = 101;
-        g.away.pts = 99;
-        lg.games.unshift(g);
-      }
-    };
-
-    // a name is not a rivalry: Brooklyn and New York need heat to be billed as one
-    {
-      // (the test league's user team is the Knicks)
-      expect(l.teams[l.userTid].abbrev).toBe('NYK');
-      const bkn = byAbbrev(l, 'BKN');
-      // (an old division rivalry, but no playoff series between them in the real league's last spring)
-      expect(rivalryOf(l, l.userTid, bkn).hot).toBe(false);
-      const g = upcoming(l).find((x) => x.home === bkn || x.away === bkn)!;
-      expect(billingsFor(l, g, l.userTid, { light: true }).map((x) => x.tag)).not.toContain('Rivalry');
-      // three close meetings make it one
-      const lg = structuredClone(l);
-      closeGames(lg, bkn, 3);
-      const r = rivalryOf(lg, lg.userTid, bkn);
-      expect(r.hot).toBe(true);
-      expect(r.score).toBeGreaterThanOrEqual(RIVALRY);
-      expect(billingsFor(lg, g, lg.userTid, { light: true })).toContainEqual(expect.objectContaining({ tag: 'Rivalry', weight: 2 }));
-      // but not against a bad team
-      const ts = lg.teams[bkn].seasons.find((x) => x.season === lg.season)!;
-      ts.won = 2;
-      ts.lost = 12;
-      closeGames(lg, bkn, 1);
-      expect(rivalryOf(lg, lg.userTid, bkn).hot).toBe(false);
-    }
-
-    // a real league's first season carries last spring's real series: Boston and New York
-    expect(rivalryOf(l, l.userTid, byAbbrev(l, 'BOS')).hot).toBe(true);
-
-    // close games and a playoff series build a rivalry
-    {
-      const lg = structuredClone(l);
-      const opp = lg.teams.find((t) => t.conf !== lg.teams[lg.userTid].conf && rivalryOf(lg, lg.userTid, t.tid).score === 0)!.tid;
-      // last season's series: four of their wins to three, all close
-      const tmpl = userGames(lg)[0];
-      for (let i = 0; i < 7; i++) {
-        const g = structuredClone(tmpl);
-        g.gid = 900000 + i;
-        g.season = lg.season - 1;
-        g.type = 'playoffs';
-        g.seriesId = 'F4-0';
-        g.home.tid = opp;
-        g.away.tid = lg.userTid;
-        g.home.pts = 100 + (i < 4 ? 3 : -3);
-        g.away.pts = 100;
-        lg.games.unshift(g);
-      }
-      const r = rivalryOf(lg, lg.userTid, opp);
-      expect(r.hot).toBe(true);
-      expect(r.reasons[0]).toMatch(/knocked you out of last season's Finals, 4-3/);
-      const g = upcoming(lg).find((x) => x.home === opp || x.away === opp)!;
-      expect(billingsFor(lg, g)[0]).toMatchObject({ tag: 'Rivalry', weight: 2 });
-    }
-
-    // Christmas Day, and opening night before the first game
-    {
-      const lg = structuredClone(l);
-      const g = upcoming(lg)[3];
-      g.day = christmasDay(lg.season);
-      expect(billingsFor(lg, g).map((b) => b.tag)).toContain('Christmas Day');
-      const fresh = snap(0);
-      const first = upcoming(fresh)[0];
-      expect(billingsFor(fresh, first)[0]).toMatchObject({ weight: 3 });
-      expect(['Opening night', 'Season opener']).toContain(billingsFor(fresh, first)[0].tag);
-    }
-
-    // Game 7, an elimination game and a closeout
-    {
-      const lg = structuredClone(l);
-      const opp = upcoming(lg)[0].home === lg.userTid ? upcoming(lg)[0].away : upcoming(lg)[0].home;
-      lg.playoffs = [{ id: 'E1-0', round: 1, conf: 'E', high: lg.userTid, low: opp, highSeed: 1, lowSeed: 8, highWins: 3, lowWins: 3 }];
-      const g: ScheduledGame = { gid: 999999, day: lg.day + 1, home: lg.userTid, away: opp, type: 'playoffs', seriesId: 'E1-0' };
-      expect(billingsFor(lg, g)[0]).toMatchObject({ tag: 'Game 7', weight: 3 });
-      lg.playoffs[0].highWins = 2;
-      expect(billingsFor(lg, g)[0]).toMatchObject({ tag: 'Elimination game', weight: 3 });
-      lg.playoffs[0].highWins = 3;
-      lg.playoffs[0].lowWins = 1;
-      expect(billingsFor(lg, g)[0].tag).toBe('Closeout game');
-    }
-
-    // a player facing the team he left, the first time since
-    {
-      const lg = structuredClone(l);
-      const g = upcoming(lg).find(
-        (x) => !lg.games.some((r) => [r.home.tid, r.away.tid].includes(x.home === lg.userTid ? x.away : x.home) && [r.home.tid, r.away.tid].includes(lg.userTid)),
-      )!;
-      const opp = g.home === lg.userTid ? g.away : g.home;
-      // their best player spent last season with the user's team
-      const p = Object.values(lg.players)
-        .filter((x) => x.tid === opp && !x.injury)
-        .sort((a, b) => b.ovr - a.ovr)[0];
-      const row = structuredClone(p.stats.find((s) => s.gp > 0) ?? p.stats[0]);
-      p.stats = p.stats.filter((s) => s.season !== lg.season - 1);
-      const at = p.stats.findIndex((s) => s.season >= lg.season);
-      p.stats.splice(at < 0 ? p.stats.length : at, 0, { ...row, season: lg.season - 1, tid: lg.userTid, gp: 60, playoffs: false });
-      const b = billingsFor(lg, g);
-      const rev = b.find((x) => x.tag === 'Revenge game')!;
-      expect(rev).toBeTruthy();
-      expect(rev.line).toContain(p.lastName);
-      expect(rev.line).toMatch(/first time/);
-      // (left out of a light billing: it can change before then)
-      expect(billingsFor(lg, g, lg.userTid, { light: true }).some((x) => x.tag === 'Revenge game')).toBe(false);
-    }
-
-    // billing draws nothing from the league
-    const rng = l.rng;
-    for (const g of upcoming(l)) billingsFor(l, g);
-    expect(l.rng).toBe(rng);
   }, 120_000);
 
-  it('plays questionable players only when the user clears them, keeps the projection and the post-game facts with each result, and quotes them', async () => {
+  it('plays questionable players only when the user clears them, keeps the projection and the post-game facts with each result', async () => {
     // game-time decisions are for players one game from back from a minor or moderate injury, not a concussion or a long one
     {
       const p = (injury: Player['injury']) => ({ injury }) as Player;
@@ -724,75 +592,12 @@ describe('game day', () => {
       expect(careerTotals(a).pts).toBeGreaterThanOrEqual(9999);
     }
 
-    // storylines say what the data shows: a revenge game, a milestone in reach, a streak, two No. 1 picks
-    {
-      const l = snap(opener);
-      const g = userGameOnDay(l, l.day)!;
-      const opp = opponent(l, g);
-      const [mine, theirs] = [teamPlayers(l, l.userTid), teamPlayers(l, opp)].map((ps) => ps.filter((p) => !p.injury).sort((x, y) => y.ovr - x.ovr));
-      // he played all of last season for them, and hasn't met them since
-      const traded = mine[0];
-      traded.stats.push({ ...statsLine({ ...traded, stats: [] } as Player, l.season - 1, opp, false), gp: 70, pts: 1400 });
-      // a young player 6 points from 1,000 for his career, averaging 15
-      const kid = theirs[1];
-      kid.experience = 1;
-      kid.stats = [{ ...statsLine({ ...kid, stats: [] } as Player, l.season - 1, opp, false), gp: 66, pts: 994 }];
-      l.teams[opp].seasons.find((s) => s.season === l.season)!.streak = 5;
-      for (const p of [mine[2], theirs[2]]) p.draft = { ...p.draft, round: 1, pick: 1, year: 2020 };
-      const stories = storylines(l, g);
-      const text = stories.map((s) => s.text);
-      expect(text).toContain(`${traded.lastName} faces ${teamCity(l, opp)} for the first time since he left after ${seasonLabel(l.season - 1)}.`);
-      // (by his full name when another player in the game shares his last name)
-      expect(
-        text.some((t) => [kid.lastName, `${kid.firstName} ${kid.lastName}`].some((n) => t === `${n} needs 6 points for 1,000 in his career. He averages 15.1 points a game.`)),
-      ).toBe(true);
-      // (a postseason night doesn't count toward a career's regular-season totals)
-      expect(storylines(l, { ...g, type: 'playoffs' }).some((s) => s.kind === 'milestone')).toBe(false);
-      expect(text).toContain(`${teamCity(l, opp)} has won 5 straight.`);
-      // (the best No. 1 pick on each side: there may be real ones)
-      const picks = stories.find((s) => s.kind === 'picks')!;
-      expect(picks.pids.map((pid) => l.players[pid].tid).sort()).toEqual([l.userTid, opp].sort());
-      expect(picks.pids.every((pid) => l.players[pid].draft.pick === 1 && l.players[pid].draft.round === 1)).toBe(true);
-      // sorted by weight; a player who won't play is left out
-      expect(stories.map((s) => s.weight)).toEqual([...stories.map((s) => s.weight)].sort((x, y) => y - x));
-      expect(storylines(l, g, new Set([kid.pid])).some((s) => s.pids.includes(kid.pid))).toBe(false);
-    }
-
     // the three stars put the player of the game first, then the best two games on either side
     for (const r of snap(3).games.slice(0, 20)) {
       const stars = threeStars(r);
       expect(stars).toHaveLength(3);
       expect(stars[0].line.pid).toBe(r.pog);
       expect(new Set(stars.map((s) => s.line.pid)).size).toBe(3);
-    }
-
-    // a comeback from 15% or less gets its own words, from both sides
-    {
-      const l = snap(opener + 1);
-      const r = structuredClone(userGames(l)[0]);
-      const usHome = r.home.tid === l.userTid;
-      // down 20 late in the third, won by 3
-      const ours = [2, -4, -10, -15, -20, -20, -12, -6, -1, 3];
-      r.flow = ours.map((m) => (usHome ? m : -m));
-      r.flowPeriods = [0, 2, 4, 7];
-      r.flowT = [300, 700, 1000, 1400, 2000, 2150, 2300, 2600, 2850, 2880];
-      r.flowPoss = [0, 1, 1, 0];
-      r.edge = 0;
-      r.ot = 0;
-      const [us, them] = usHome ? [r.home, r.away] : [r.away, r.home];
-      us.pts = them.pts + 3;
-      // (what the quotes read is kept as the game is recorded: taken again from this flow, nobody hurt)
-      Object.assign(r, recapFacts(r, []));
-      expect(r.wpLow).toBeLessThanOrEqual(0.15);
-      l.games[l.games.findIndex((x) => x.gid === r.gid)] = r;
-      const [voice, coach] = postGameQuotes(l, r);
-      // (a comeback's line, in the plain voice or the player's own: league/voices.ts)
-      expect(quoteLines('wcomeback', { pts: 0, n: 0, them: '', mate: '' })).toContain(voice.text);
-      expect([
-        "We had control of that game and let it get away. That's on me.",
-        `Credit to ${teamCity(l, l.userTid)}: they kept coming, and we stopped doing what built the lead.`,
-        ...benchLines('ccollapse', { us: teamCity(l, l.userTid), star: '', pts: 0 }),
-      ]).toContain(coach.text);
     }
 
     // post-game stakes: only the user's regular-season games carry the standings move
@@ -820,133 +625,6 @@ describe('game day', () => {
       const back = (await loadLeague(l.id))!;
       expect(userGames(back).map((g) => g.stakes)).toEqual(userGames(l).map((g) => g.stakes));
       expect(userGames(back).every((g) => g.stakes)).toBe(true);
-    }
-
-    // quotes are the same every time for a game and draw nothing from the league
-    {
-      const l = snap(20);
-      const rng = l.rng;
-      for (const g of userGames(l)) {
-        const a = postGameQuotes(l, g, buildGameReport(l, g));
-        const b = postGameQuotes(l, g, buildGameReport(l, g));
-        expect(a).toEqual(b);
-        expect(a.length).toBe(2);
-        expect(a[0].tid).toBe(l.userTid);
-        expect(a[1].tid).not.toBe(l.userTid);
-        for (const q of a) expect(q.text.length).toBeGreaterThan(10);
-      }
-      expect(l.rng).toBe(rng);
-      // not the user's game: nothing to say
-      const other = l.games.find((g) => g.home.tid !== l.userTid && g.away.tid !== l.userTid)!;
-      expect(postGameQuotes(l, other)).toEqual([]);
-    }
-
-    // they name the teammate hurt in the game, told apart from one with the same last name
-    {
-      const l = snap(10);
-      const g = structuredClone(userGames(l).at(-1)!);
-      const us = g.home.tid === l.userTid ? g.home : g.away;
-      const voice = postGameQuotes(l, g)[0].pid;
-      const other = us.players.find((b) => b.min > 0 && b.pid !== voice && !g.hurt!.includes(b.pid))!;
-      const p = l.players[other.pid];
-      // kept with the result as it was recorded: whoever it names
-      expect(postGameQuotes(l, { ...g, hurt: [other.pid] })[0].text).toContain(p.lastName);
-      // an older result, read from the play-by-play
-      delete g.hurt;
-      delete g.wpLow;
-      const ours = (us === g.home ? 0 : 1) as 0 | 1;
-      const line = (who: string, t = ours) => [{ q: 2, clock: 300, t, text: `${who} ${p.lastName} is injured and leaves the game.`, hs: 0, as: 0 }];
-      g.pbp = line(`${p.firstName.slice(0, 3)}.`);
-      expect(postGameQuotes(l, g)[0].text).toContain(p.lastName);
-      // another player of that name (not ours) was the one hurt: a teammate told apart, or theirs
-      g.pbp = line('Zz.');
-      expect(postGameQuotes(l, g)[0].text).not.toContain(p.lastName);
-      g.pbp = line('', (1 - ours) as 0 | 1);
-      expect(postGameQuotes(l, g)[0].text).not.toContain(p.lastName);
-    }
-
-    // a game's quotes read the same once it isn't the latest, and once its flow is gone
-    {
-      const l = snap(8);
-      // what they read is kept with each of the user's results, and only theirs
-      for (const g of l.games) {
-        const mine = g.home.tid === l.userTid || g.away.tid === l.userTid;
-        expect(g.hurt !== undefined, `game ${g.gid}`).toBe(mine);
-        if (!mine) continue;
-        const us = g.home.tid === l.userTid ? g.home : g.away;
-        for (const pid of g.hurt!) expect(us.players.find((b) => b.pid === pid)!.min).toBeGreaterThan(0);
-        expect(recapFacts(g, g.hurt!)).toEqual({ hurt: g.hurt, ...(g.wpLow !== undefined ? { wpLow: g.wpLow } : {}) });
-      }
-      const g = userGames(l).at(-1)!;
-      const quotes = (res: GameResult) => postGameQuotes(l, res, buildGameReport(l, res));
-      const before = quotes(g);
-      // a teammate who played picks up a fresh injury after it: still not one he got in this game
-      const us = g.home.tid === l.userTid ? g.home : g.away;
-      const mate = us.players.find((b) => b.min > 0 && b.pid !== before[0].pid && !g.hurt!.includes(b.pid))!;
-      l.players[mate.pid].injury = { type: 'Sprained Ankle', gamesRemaining: 6, gamesTotal: 6, severity: 'moderate' };
-      expect(quotes(g)).toEqual(before);
-      l.players[mate.pid].injury = null;
-      // newer games, then a new season taking the flow and play-by-play (see newSeason)
-      for (let i = 0; i < 5; i++) simDay(l);
-      expect(isLatestUserGame(l, g)).toBe(false);
-      const bare: GameResult = { ...g, pbp: undefined, shots: undefined, flow: undefined, flowPeriods: undefined, flowT: undefined, flowPoss: undefined };
-      expect(quotes(bare)).toEqual(before);
-    }
-
-    // an upset loss reads as one, and a loss to a much better team does not
-    {
-      const l = snap(30);
-      const games = userGames(l).filter((g) => g.type === 'regular');
-      const last = games.at(-1)!;
-      const at = l.games.indexOf(last);
-      const opp = last.home.tid === l.userTid ? last.away.tid : last.home.tid;
-      const quotes = (userBetter: boolean) => {
-        const m = structuredClone(l);
-        // every game before it: the user's team wins them all and they lose them all, or the other way round
-        for (const g of m.games.slice(0, at)) {
-          if (g.type !== 'regular') continue;
-          for (const [tid, wins] of [
-            [m.userTid, userBetter],
-            [opp, !userBetter],
-          ] as const) {
-            const side = g.home.tid === tid ? g.home : g.away.tid === tid ? g.away : null;
-            if (!side) continue;
-            const other = side === g.home ? g.away : g.home;
-            if (side.pts > other.pts !== wins) [side.pts, other.pts] = [other.pts, side.pts];
-          }
-        }
-        // tonight they win by ten, and nothing else stands out: nobody hurt, no comeback, no 30-point night
-        const g = m.games[at];
-        const us = g.home.tid === m.userTid ? g.home : g.away;
-        const them = us === g.home ? g.away : g.home;
-        [us.pts, them.pts] = [100, 110];
-        for (const b of [...us.players, ...them.players]) b.pts = Math.min(b.pts, 20);
-        g.hurt = [];
-        delete g.wpLow;
-        for (const p of Object.values(m.players)) if (p.tid === m.userTid) p.injury = null;
-        return postGameQuotes(m, g).map((q) => q.text);
-      };
-      expect(games.length).toBeGreaterThan(11);
-      const [voice, coach] = quotes(true);
-      // (an upset's lines, in the plain voice or the speaker's own: league/voices.ts)
-      const upsetLoss = quoteLines('lup', { pts: 0, n: 0, them: '', mate: '' });
-      const upsetWin = ['People counted us out', 'Nobody gave us a chance', ...benchLines('cup', { us: '', star: '', pts: 0 })];
-      expect(upsetLoss).toContain(voice);
-      expect(upsetWin.some((x) => coach.startsWith(x.slice(0, 22)))).toBe(true);
-      for (const q of quotes(false)) {
-        expect(upsetLoss).not.toContain(q);
-        expect(upsetWin.some((x) => q.startsWith(x.slice(0, 22)))).toBe(false);
-      }
-    }
-
-    // the streak after a game matches the team's record after the latest one
-    {
-      const l = snap(25);
-      const last = userGames(l)
-        .filter((g) => g.type === 'regular')
-        .at(-1)!;
-      expect(isLatestUserGame(l, last)).toBe(true);
-      expect(streakAfter(l, last)).toBe(curTeamSeason(l, l.userTid).streak);
     }
 
     // what the quotes read survives a save, and a damaged one goes
@@ -1111,8 +789,6 @@ describe('game day', () => {
       scoutData(l, opp);
       previewMatchups(l, opp);
       guardingPlan(l, opp);
-      gameKeys(l, g);
-      gameStakes(l, g.gid, l.userTid);
       expect(gameProjection(l, g)).toEqual(first);
       ensureRotation(l, g.home);
       ensureRotation(l, g.away);

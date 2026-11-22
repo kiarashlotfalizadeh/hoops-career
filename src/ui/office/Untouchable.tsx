@@ -9,8 +9,7 @@ import { edit } from '../../state/actions';
 import { Toggle } from '../components/ui';
 
 export function UntouchableToggle({ league, p }: { league: League; p: Player }) {
-  // two-way players are never asked for anyway
-  if (p.tid !== league.userTid || p.contract.twoWay) return null;
+  if (p.tid !== league.userTid) return null;
   const on = isUntouchable(league, p.pid);
   return (
     <Toggle

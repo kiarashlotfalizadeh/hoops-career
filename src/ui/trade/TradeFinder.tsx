@@ -6,7 +6,6 @@ import { MessageSquare, SlidersHorizontal, X } from 'lucide-react';
 import type { League, Pos } from '../../core/types';
 import { POSITIONS } from '../../core/types';
 import { playerName } from '../../core/league/helpers';
-import { withHoldsMemo } from '../../core/league/freeAgency';
 import { type TradeOffer } from '../../core/league/trades';
 import { pickName } from '../draft/common';
 import { filterTargets, maxTakeBack, tradeTargets } from '../../core/league/tradeFinder';
@@ -55,15 +54,11 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
   };
   const s = capSeason(league);
   // every AI team's tradeable players, once per league change (filtering and sorting is cheap)
-  const data = useLeagueMemo(
-    () =>
-      withHoldsMemo(() => {
-        const rows = tradeTargets(league);
-        const all = Object.values(league.players).filter((p) => p.tid >= 0 && p.tid !== league.userTid).length;
-        return { rows, locked: all - rows.length, match: maxTakeBack(league, league.userTid) };
-      }),
-    [league],
-  );
+  const data = useLeagueMemo(() => {
+    const rows = tradeTargets(league);
+    const all = Object.values(league.players).filter((p) => p.tid >= 0 && p.tid !== league.userTid).length;
+    return { rows, locked: all - rows.length, match: maxTakeBack(league, league.userTid) };
+  }, [league]);
   const maxSalary = state.salary === 'match' ? data.match : state.salary;
   const rows = filterTargets(data.rows, { pos: state.pos, minOvr: state.minOvr, maxAge: state.maxAge, maxSalary, available: state.available, sort: state.sort });
   // the filters past position live in a sheet: its button counts the ones changed from the default
@@ -139,7 +134,7 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
                     </div>
                   </div>
                   <div className="fo-money">
-                    <div className="a">{p.contract.twoWay ? 'Two-way' : salaryText(league, salary)}</div>
+                    <div className="a">{salaryText(league, salary)}</div>
                     <div className="b">{contractEnd(league, p, s)}</div>
                   </div>
                 </button>

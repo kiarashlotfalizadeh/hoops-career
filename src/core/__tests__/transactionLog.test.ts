@@ -7,22 +7,10 @@ import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { newSeason } from '../league/season';
-import { CAP_FOR, contractSeason, curTeamSeason, freeAgents, playerName, standardRoster, twoWayRoster } from '../league/helpers';
-import {
-  WAIVER_DAYS,
-  askingContract,
-  convertTwoWay,
-  decideTeamOption,
-  extensionAsk,
-  releasePlayer,
-  resolveWaivers,
-  signPlayer,
-  userBuyout,
-  userClaim,
-  wantsTwoWay,
-} from '../league/contracts';
+import { CAP_FOR, contractSeason, freeAgents, playerName, standardRoster } from '../league/helpers';
+import { askingContract, decideTeamOption, extensionAsk, releasePlayer, signPlayer, userBuyout } from '../league/contracts';
 import { userExtend } from '../league/negotiation';
-import { FA_DAYS, fillRosters, renouncePlayer, userOffer, userResign, userTwoWayOffer } from '../league/freeAgency';
+import { FA_DAYS, fillRosters, userOffer, userResign } from '../league/freeAgency';
 import { executeTrade, pickLabel } from '../league/trades';
 import { draftPlayer } from '../league/draft';
 import { logTxn, playerTxns, pruneTransactions, teamTxns, tradesBetween, txnLine, txnText } from '../league/transactions';
@@ -131,7 +119,7 @@ describe('transaction log', () => {
       expect(text(l, signing, { pid: signing.pid! })).toMatch(new RegExp(`^Signed with ${l.teams[U].abbrev}: 1 yr / \\$`));
     }
 
-    // it logs each of the user's moves once: signing, re-signing, extension, release, waiver claim, buyout, two-way deal, conversion
+    // it logs each of the user's moves once: signing, re-signing, extension, release, buyout
     {
       const l = league();
       const vetMin = CAP_FOR(l).vetMin;
@@ -143,27 +131,14 @@ describe('transaction log', () => {
       const ask = askingContract(l, exp, U);
       const re = one(l, () => expect(userResign(l, exp.pid, ask.amount, ask.years).ok).toBe(true));
       expect(re).toMatchObject({ kind: 'resign', tids: [U], pid: exp.pid, name: playerName(exp), amount: exp.contract.salaries[0], years: ask.years, phase: 'resign', user: true });
-      const renounced = shape(l, standardRoster(l, U)[1], 66, 30, 3_000, 1);
-      renounced.contract.start = l.season;
-      expect(one(l, () => renouncePlayer(l, renounced.pid))).toMatchObject({ kind: 'renounce', tids: [U], pid: renounced.pid });
 
       l.phase = 'preseason';
-      const fa = freeAgents(l).find((p) => askingContract(l, p, U).amount <= vetMin && !wantsTwoWay(l, p, U))!;
+      const fa = freeAgents(l).find((p) => askingContract(l, p, U).amount <= (p.experience < 3 ? CAP_FOR(l).minContract : vetMin))!;
       const faAsk = askingContract(l, fa, U);
       const signed = one(l, () => expect(userOffer(l, fa.pid, faAsk.amount, faAsk.years).ok).toBe(true));
       expect(signed).toMatchObject({ kind: 'sign', tids: [U], pid: fa.pid, amount: fa.contract.salaries[0], years: faAsk.years, phase: 'preseason' });
 
-      // a two-way deal into a free slot, then a conversion to a standard contract
-      const pre = twoWayRoster(l, U).length;
-      for (const p of twoWayRoster(l, U)) releasePlayer(l, p, { news: false });
-      expect((l.transactions ?? []).filter((t) => t.kind === 'release')).toHaveLength(pre);
-      const young = freeAgents(l).find((p) => wantsTwoWay(l, p, U))!;
-      const tw = one(l, () => expect(userTwoWayOffer(l, young.pid).ok).toBe(true));
-      expect(tw).toMatchObject({ kind: 'twoWay', tids: [U], pid: young.pid, years: young.contract.salaries.length });
-      while (standardRoster(l, U).length >= 21) releasePlayer(l, standardRoster(l, U)[0], { news: false });
-      expect(one(l, () => expect(convertTwoWay(l, young.pid).ok).toBe(true))).toMatchObject({ kind: 'convert', pid: young.pid, amount: young.contract.salaries[0] });
-
-      // opening night on: an extension, a release onto waivers, a buyout
+      // opening night on: an extension, a release, a buyout
       while (standardRoster(l, U).length > 14) releasePlayer(l, standardRoster(l, U)[0], { news: false });
       l.phase = 'regular';
       l.day = 20;
@@ -184,12 +159,8 @@ describe('transaction log', () => {
         2,
       );
       const w = one(l, () => releasePlayer(l, cut));
-      expect(cut.waivers).toBeDefined();
-      expect(w).toMatchObject({ kind: 'waive', tids: [U], pid: cut.pid, amount: 8_000 });
-      expect(text(l, w, { tid: U })).toBe(`Waived ${playerName(cut)} · $8.0M in dead money`);
-      // (he clears or is claimed before the claim below)
-      l.day += WAIVER_DAYS;
-      resolveWaivers(l);
+      expect(w).toMatchObject({ kind: 'release', tids: [U], pid: cut.pid, amount: 8_000 });
+      expect(text(l, w, { tid: U })).toBe(`Released ${playerName(cut)} · $8.0M in dead money`);
 
       signPlayer(l, freeAgents(l)[0], U, vetMin, 1, { news: false });
       const vet = shape(
@@ -205,20 +176,11 @@ describe('transaction log', () => {
       expect(b.amount).toBeGreaterThan(0);
       expect(text(l, b, { pid: vet.pid })).toMatch(new RegExp(`^Bought out by ${l.teams[U].abbrev}, giving back \\$`));
 
-      // a claim on a player an AI team waived: the user has the worst record, so first claim
-      for (const t of l.teams) Object.assign(curTeamSeason(l, t.tid), { won: 10, lost: 10 });
-      Object.assign(curTeamSeason(l, U), { won: 2, lost: 18 });
+      // an AI team's release in the news is logged too, and isn't the user's move
       const theirs = shape(l, standardRoster(l, AI)[0], 66, 25, vetMin, 2);
-      const aw = one(l, () => releasePlayer(l, theirs));
-      expect(aw).toMatchObject({ kind: 'waive', tids: [AI] });
-      expect(aw.user).toBeUndefined();
-      expect(userClaim(l, theirs.pid).ok).toBe(true);
-      l.day += WAIVER_DAYS;
-      const c = one(l, () => resolveWaivers(l));
-      expect(theirs.tid).toBe(U);
-      expect(c).toMatchObject({ kind: 'claim', tids: [U, AI], pid: theirs.pid, amount: vetMin, years: 2, user: true });
-      expect(text(l, c, { tid: U })).toMatch(new RegExp(`^Claimed ${playerName(theirs)} off waivers from ${l.teams[AI].abbrev} · \\$`));
-      expect(text(l, c, { tid: AI })).toBe(`${playerName(theirs)} claimed off waivers by ${l.teams[U].abbrev}`);
+      const ar = one(l, () => releasePlayer(l, theirs));
+      expect(ar).toMatchObject({ kind: 'release', tids: [AI] });
+      expect(ar.user).toBeUndefined();
     }
 
     // it logs the user's team options and draft picks, and the first round's
@@ -250,11 +212,10 @@ describe('transaction log', () => {
       const l = league();
       l.phase = 'regular';
       const from = l.nextTxnId ?? 1;
-      // an AI team down to 11 and filled back to 13 with minimum deals, a quiet two-way deal
+      // an AI team down to 11 and filled back to 13 with minimum deals
       while (standardRoster(l, AI).length > 11) releasePlayer(l, standardRoster(l, AI)[0], { news: false });
       fillRosters(l, new Rng(3));
       expect(standardRoster(l, AI).length).toBe(13);
-      signPlayer(l, freeAgents(l)[0], 2, CAP_FOR(l).minContract, 2, { twoWay: true, news: false });
       expect((l.transactions ?? []).filter((t) => t.id >= from)).toEqual([]);
       // nor a minimum deal, in the news or not: camp bodies, most of them cut on opening night
       signPlayer(l, freeAgents(l)[0], 3, CAP_FOR(l).vetMin, 2);

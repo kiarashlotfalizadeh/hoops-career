@@ -117,7 +117,7 @@ export function SeasonReviewView({ league, season }: { league: League; season: n
                 </div>
               ))
             ) : (
-              <div className="fo-goal tiny dim">Graded on wins, the playoffs and profit, from before his goals.</div>
+              <div className="fo-goal tiny dim">Graded on wins and the playoffs, from before his goals.</div>
             )}
             {/* the season against his ask and the press's prediction, under his grades */}
             <ExpectationRows r={r} />

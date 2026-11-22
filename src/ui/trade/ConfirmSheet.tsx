@@ -5,8 +5,7 @@
 import { ordinal } from '../../core/format';
 import { Handshake } from 'lucide-react';
 import type { League } from '../../core/types';
-import { CAP_FOR, playerName, teamCity } from '../../core/league/helpers';
-import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
+import { CAP_FOR, playerName, teamCity, payroll } from '../../core/league/helpers';
 import { capSalary, evaluateTrade, type TradeEval, type TradeOffer } from '../../core/league/trades';
 import { changesStarters, tradeImpact, type TradeImpact } from '../../core/league/tradeImpact';
 import { pickName } from '../draft/common';
@@ -42,13 +41,12 @@ function Body({ league, offer, onClose, onConfirm }: { league: League; offer: Tr
   const s = capSeason(league);
   const key = JSON.stringify(offer);
   const info = useLeagueMemo(
-    () =>
-      withHoldsMemo(() => {
-        const ev = evaluateTrade(league, offer);
-        const out = offer.a.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
-        const inc = offer.b.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
-        return { ev, out, inc, after: capPayroll(league, user, s) - out + inc, im: tradeImpact(league, offer) };
-      }),
+    () => {
+      const ev = evaluateTrade(league, offer);
+      const out = offer.a.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
+      const inc = offer.b.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
+      return { ev, out, inc, after: payroll(league, user, s) - out + inc, im: tradeImpact(league, offer) };
+    },
     // key stands for the offer
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [league, key, user, s],

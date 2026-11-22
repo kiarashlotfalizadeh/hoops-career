@@ -19,7 +19,6 @@ import { teamCity } from '../../core/league/helpers';
 import { FRANCHISES } from '../../core/teams';
 import type { PossLog } from '../../core/sim/log';
 import { playTypeBaselines } from '../../core/analysis/playTypes';
-import { gameKeys } from '../../core/analysis/keys';
 import { fmtClock, periodLabel, rosterNames } from '../stats';
 import { matchKits } from '../teamColors';
 import { buildScript, standing, type Script, type Standing } from './choreo';
@@ -240,9 +239,6 @@ export function useLiveGame() {
   const showScores = league.settings.liveScores !== false;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const others = useMemo(() => (game && showScores ? otherGames(league, game.game.gid, game.game.day, league.userTid) : []), [game, showScores]);
-  // tonight's keys to the game, as the preview set them (from the games before today)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const keys = useMemo(() => (game ? gameKeys(league, game.game) : []), [game]);
   // what the graphics know about the players from before tip-off (tonight's game isn't in the stats yet)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const before = useMemo(() => (game ? playersBefore(league, game.sim, game.game.type) : new Map()), [game]);
@@ -962,7 +958,6 @@ export function useLiveGame() {
     baselines,
     keyPlays,
     others,
-    keys,
     over,
     // the broadcast
     ticker,

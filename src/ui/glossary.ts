@@ -103,7 +103,7 @@ export const GLOSSARY: GlossaryEntry[] = [
     id: 'starplan',
     term: 'Star plan (double-team)',
     group: 'Defense',
-    text: "A second defender goes at their main creator when he attacks. Worth it against a star who can't pass out of it.",
+    text: "A second defender goes at their main creator when he attacks. Worth it against a star who can't pass out of it. Set it in an opponent's Game Plan.",
   },
   {
     id: 'foultogive',
@@ -187,35 +187,10 @@ export const GLOSSARY: GlossaryEntry[] = [
     text: "Payroll over the tax line pays by brackets, from 1.5× to 3.25× and more. Each bracket is 3.68% of the cap. A repeat taxpayer pays 1 more on each. Half the tax goes to teams that didn't pay.",
   },
   {
-    id: 'apron',
-    term: 'Aprons',
-    group: 'Contracts',
-    text: "Two lines above the tax. Over the first, a team can't take back more salary than it sends. Over the second, it can't combine salaries, send cash or use a mid-level.",
-  },
-  {
-    id: 'exception',
-    term: 'Exceptions',
-    group: 'Contracts',
-    text: 'Ways to sign a free agent over the cap, one signing each a season. The mid-level, the taxpayer mid-level, the bi-annual and the room exception each have an entry.',
-  },
-  {
     id: 'mle',
     term: 'Mid-level exception (MLE)',
     group: 'Contracts',
-    text: 'Signs a free agent over the cap for up to 8.5% of it. Up to four years, once a season, with a hard cap at the first apron.',
-  },
-  {
-    id: 'tmle',
-    term: 'Taxpayer mid-level',
-    group: 'Contracts',
-    text: 'The mid-level for a team the full one would push past the first apron. Up to 3.7% of the cap for two years, hard-capped at the second apron.',
-  },
-  { id: 'room', term: 'Room exception', group: 'Contracts', text: 'A smaller exception for a team that used its cap space this season. Up to 5.7% of the cap for two years.' },
-  {
-    id: 'bae',
-    term: 'Bi-annual exception (BAE)',
-    group: 'Contracts',
-    text: 'A small exception for a team under the first apron, not two seasons running. Up to 3.3% of the cap for two years, hard-capped at the first apron.',
+    text: 'Signs a free agent over the cap for up to 8.5% of it. Up to four years, one signing a season.',
   },
   {
     id: 'bird',
@@ -223,18 +198,11 @@ export const GLOSSARY: GlossaryEntry[] = [
     group: 'Contracts',
     text: 'A team can re-sign its own players over the cap. A trade keeps the clock. Three seasons with it: up to his max for five years. Two, Early Bird: up to 175% of his salary. One: 120%.',
   },
-  { id: 'hold', term: 'Cap hold', group: 'Contracts', text: "An unsigned player's placeholder on his team's cap. It lasts until he re-signs, is renounced or free agency opens." },
   {
     id: 'matching',
     term: 'Salary matching',
     group: 'Contracts',
-    text: 'A team over the cap can take back 200% of a small salary it sends. A middle salary plus 4.85% of the cap, or 125% of a big one. Over the first apron, no more than it sends.',
-  },
-  {
-    id: 'tpe',
-    term: 'Traded player exception',
-    group: 'Contracts',
-    text: 'Salary an over-the-cap team sent out beyond what it took back. For a year, under the first apron, it can take in that much without matching.',
+    text: 'A team over the cap after a trade can take back up to 125% of the salary it sends, plus a little. A team under the cap takes back any salary.',
   },
   {
     id: 'max',
@@ -250,25 +218,10 @@ export const GLOSSARY: GlossaryEntry[] = [
     text: "A final season the player or the team can pick up or decline. It's decided after the draft.",
   },
   { id: 'extension', term: 'Extension', group: 'Contracts', text: "A new deal signed in the old one's final season. It starts when that one ends." },
-  { id: 'dead', term: 'Dead money', group: 'Contracts', text: 'Salary still owed to released players. It counts on the cap, and a stretch spreads it over more seasons.' },
+  { id: 'dead', term: 'Dead money', group: 'Contracts', text: 'Salary still owed to released players. It counts on the cap and the payroll.' },
   { id: 'buyout', term: 'Buyout', group: 'Contracts', text: 'A veteran gives back part of what he’s owed to be released.' },
 
   // roster
-  { id: 'twoway', term: 'Two-way contract', group: 'Roster', text: 'Up to three players outside the 15-man roster and the cap.' },
-  {
-    id: 'tenday',
-    term: '10-day contract',
-    group: 'Roster',
-    text: 'From January 5, a minimum deal that ends by itself after ten days. Two per player per team, then he signs for the season or leaves.',
-  },
-  {
-    id: 'rfa',
-    term: 'Restricted free agent (RFA)',
-    group: 'Roster',
-    text: 'A young player whose team made him a qualifying offer. Other teams can make him an offer sheet. His team has two days to match it.',
-  },
-  { id: 'qo', term: 'Qualifying offer (QO)', group: 'Roster', text: 'A one-year offer that makes a young player a restricted free agent.' },
-  { id: 'waivers', term: 'Waivers', group: 'Roster', text: 'A player released in season with guaranteed money left. For two days other teams can claim his contract.' },
   {
     id: 'protection',
     term: 'Pick protection',
@@ -345,7 +298,7 @@ export const GLOSSARY: GlossaryEntry[] = [
     id: 'custom',
     term: 'Custom (playbook)',
     group: 'The game',
-    text: 'A playbook whose settings have moved, as in Custom Drop. Instructions shows what moved, with Put back.',
+    text: 'A playbook whose settings have moved, as in Custom Drop. Tactics → System says how many moved, with Put back.',
   },
   {
     id: 'archetype',

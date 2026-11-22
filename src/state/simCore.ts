@@ -1,12 +1,11 @@
 // What the sim worker runs: days of the season up to a target, and the phase changes. Pure league
 // code (no DOM, no store), so the same functions run in the worker and, where there are no workers
 // (tests, a browser that can't start one), on a copy of the league in this thread.
-import type { GameResult, League, NewsItem, Settings } from '../core/types';
+import type { GameResult, League, Settings } from '../core/types';
 import { faAdvance, finishDraftPhase, newSeason, regularGamesLeft, simDay, startDraft, startFreeAgency, startRegularSeason } from '../core/league/season';
 import { userGameOnDay } from '../core/league/games';
 import { schedulePlayoffDay } from '../core/league/playoffs';
-import { billingFor } from '../core/analysis/gameStory';
-import { dueId, openCallIds } from '../core/league/calls';
+import { simStopIds } from '../core/league/agenda';
 import { staffMorning } from '../core/league/callMeasure';
 import { markOffersSeen } from '../core/league/proposals';
 
@@ -21,9 +20,7 @@ export type SimTarget =
   /** Through the play-in and the playoffs in one go (for teams that are out). */
   | { kind: 'endPlayoffs' }
   /** A month of the calendar (30 days), stopping for what's worth stopping for, as a week does. */
-  | { kind: 'month' }
-  /** To the morning of a big night (`day`, the user's game with a billing): see flow.ts's nextBigNight. */
-  | { kind: 'bigNight'; day: number };
+  | { kind: 'month' };
 
 /** The phase changes, by name (a worker can't be handed a function). */
 export type TaskOp =
@@ -39,17 +36,15 @@ export interface SimProgress {
 }
 
 /**
- * Why a sim stopped short of its target: the user stopped it, mail that needs an answer (an
- * important message: the owner, a job offer, an offer sheet), a new staff call (see calls.ts: a
- * star hurt, the playoff odds gone, the owner's floor, the trade deadline, a playoff series or
- * play-in game starting, the books) or one still open as its due date nears, or the morning of one
- * of his biggest games. What only happened (a milestone, a streak, a front-page story) waits in the
- * digest.
+ * Why a sim stopped short of its target: the user stopped it, the job itself (the owner's ultimatum,
+ * the sack), or something that needs an answer (see agenda.ts's stopsSim: a decision the league
+ * waits on, a trade offer, a trade request, a starter hurt, the trade deadline, a playoff series or
+ * play-in game starting). What only happened waits in the digest.
  */
-export type SimStop = 'target' | 'stopped' | 'news' | 'call' | 'bigGame';
+export type SimStop = 'target' | 'stopped' | 'news' | 'call';
 
 /** The Continue loop's settings (each on unless set false). */
-export type LoopSettings = Pick<Settings, 'stopForBigGames' | 'digest'>;
+export type LoopSettings = Pick<Settings, 'digest'>;
 
 /** A Continue-loop setting: on unless it's been turned off. */
 export const loopSetting = (l: Pick<League, 'settings'>, k: keyof LoopSettings) => l.settings[k] !== false;
@@ -73,10 +68,6 @@ export function targetDone(l: League, target: SimTarget, startDay: number, start
       return l.day - startDay >= 7;
     case 'month':
       return l.day - startDay >= MONTH_DAYS;
-    case 'bigNight':
-      // the day it was aimed at, or the first night on the way that's big now (a billing is read
-      // from the standings and the streaks of the day: the one aimed at can fall away, another come up)
-      return l.day >= target.day || (l.day > startDay && bigNightNow(l));
     case 'untilUserGame':
       if (l.day === startDay) return false;
       if (l.phase === 'playoffs') schedulePlayoffDay(l);
@@ -102,8 +93,6 @@ export function estimateTotal(l: League, target: SimTarget): number {
       return 7;
     case 'month':
       return MONTH_DAYS;
-    case 'bigNight':
-      return Math.max(1, target.day - l.day);
     case 'untilUserGame':
       return 3;
     case 'allStar':
@@ -134,30 +123,25 @@ export interface SimHooks {
  * Play days until `target` (or a stop): the league in hand moves on in place. Each morning (and the
  * one it starts on) the staff measures what its picks and the open cards wait on and makes its picks
  * (staffMorning: whatever the sim's length or settings, so a long sim and a short one make the same
- * ones). Under `stopOnNews`, a sim stops early (except one of a set number of days) for what needs an
- * answer: an important unread message, a staff call that wasn't open when it started (or came due
- * since: see openCallIds; each playoff series of his once, the morning it starts, when a counter
- * measures as a gain; the week's card when the week poses a trade-off), with its numbers in, or the
- * morning of one of his biggest games
- * (with a setting of its own). The call it stopped for is kept (League.stopCall: Needs you leads with
- * it). Stopping early changes nothing that's played: the next sim carries on from the same day.
+ * ones). Under `stopOnNews`, a sim stops early (except one of a set number of days) only for what
+ * needs an answer and wasn't open when it started (agenda.ts's stopsSim): a decision the league waits
+ * on, an AI team's trade offer, a player's trade request, a starter hurt, the trade deadline, a
+ * playoff series or play-in game of his starting. What it stopped for is kept (League.stopCall: the
+ * action queue leads with it). Stopping early changes nothing that's played: the next sim carries on
+ * from the same day.
  */
 export async function runSim(l: League, target: SimTarget, hooks: SimHooks = {}): Promise<{ days: number; stop: SimStop }> {
-  // (it starts from a screen whose Needs you lists every open offer: their dates stand from here)
+  // (it starts from a screen whose queue lists every open offer: their dates stand from here)
   markOffersSeen(l);
   const startDay = l.day;
   const startPhase = l.phase;
   const total = estimateTotal(l, target);
-  const bigNews = () => l.inbox.filter((m) => !m.read && m.important).length;
-  const newsBefore = bigNews();
   // the owner's ultimatum and the sack stop any sim, whatever the settings: nobody sims past them unseen
   const ultimatum = () => (l.ownerGoals?.ultimatum ? l.ownerGoals.season : undefined);
   const [firedBefore, ultimatumBefore] = [!!l.fired, ultimatum()];
   const stops = l.settings.stopOnNews !== false && target.kind !== 'days';
-  // (a call open when it started, or settled, doesn't stop it again; one coming due is a new id)
-  const callsBefore = new Set(stops ? openCallIds(l) : []);
-  // (a sim to the next game, or to a big night, stops there anyway)
-  const bigGames = stops && loopSetting(l, 'stopForBigGames') && target.kind !== 'untilUserGame' && target.kind !== 'bigNight';
+  // (what was open when it started doesn't stop it again)
+  const before = new Set(stops ? simStopIds(l) : []);
   const every = hooks.checkpointDays ?? 20;
   let days = 0;
   /** The staff's morning: its measuring said on the progress bar, a stop asked for meanwhile honoured. */
@@ -167,11 +151,11 @@ export async function runSim(l: League, target: SimTarget, hooks: SimHooks = {})
       between: hooks.yieldDay,
       onMeasure: () => hooks.progress?.({ label: 'The staff is measuring', done: days, total: Math.max(total, days) }),
     });
-  /** A call opened since the sim started (or come due): it stops the sim, and Needs you leads with it. */
+  /** Something that needs an answer opened since the sim started: it stops the sim, and the queue leads with it. */
   const called = () => {
-    const id = openCallIds(l).find((x) => !callsBefore.has(x));
+    const id = simStopIds(l).find((x) => !before.has(x));
     if (id === undefined) return false;
-    l.stopCall = { id: id.endsWith(dueId('')) ? id.slice(0, -dueId('').length) : id, season: l.season, day: l.day };
+    l.stopCall = { id, season: l.season, day: l.day };
     return true;
   };
   // (the morning it starts on first: a live game, a phase change or a change of his since the last sim can leave it to do)
@@ -188,34 +172,10 @@ export async function runSim(l: League, target: SimTarget, hooks: SimHooks = {})
       return { days, stop: 'target' };
     }
     if ((l.fired && !firedBefore) || (ultimatum() !== undefined && ultimatum() !== ultimatumBefore)) return { days, stop: 'news' };
-    // smart stop: big news for your team during a long sim (routine injuries just land in the inbox)
-    if (stops && days > 1 && bigNews() > newsBefore) return { days, stop: 'news' };
     if (stops && called()) return { days, stop: 'call' };
-    if (bigGames && bigNightToday(l)) return { days, stop: 'bigGame' };
     if (days % every === 0) await hooks.checkpoint?.(l);
     await hooks.yieldDay?.();
   }
-}
-
-/** The press's opinions (the power rankings, a column, a preview), as against what happened. */
-export const OPINION: ReadonlySet<NewsItem['kind']> = new Set(['power', 'column', 'preview']);
-
-/** A front-page story (weight 3) about the user's team that's an event, not an opinion: the digest leads with it, and it can take the screen. */
-export const isFrontPage = (l: League, n: NewsItem) => n.weight === 3 && n.tids.includes(l.userTid) && !OPINION.has(n.kind);
-
-/** The user plays one of his biggest games today (a billing of weight 3: a Game 7, a homecoming...). */
-export function bigNightToday(l: League): boolean {
-  const g = userGameOnDay(l, l.day);
-  return !!g && billingFor(l, g)?.weight === 3;
-}
-
-/** The smallest billing that makes a night big ("Sim to the next big night": flow.ts's BIG_NIGHT). */
-const BIG_NIGHT = 2;
-
-/** The user plays a big night today, as its billing reads now. */
-function bigNightNow(l: League): boolean {
-  const g = userGameOnDay(l, l.day);
-  return !!g && (billingFor(l, g)?.weight ?? 0) >= BIG_NIGHT;
 }
 
 export function runTask(l: League, op: TaskOp): TaskResult {

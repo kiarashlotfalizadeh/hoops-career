@@ -139,9 +139,6 @@ export const COACH_TEMPER: Record<CoachTemper, string> = {
   'old-school': 'Toughness first, always',
 };
 
-/** A coach's temper, from his name: it follows him from job to job. */
-export const coachTemper = (name: string): CoachTemper => pickBy(`coach-temper:${name}`, ['fiery', 'professor', 'deadpan', 'salesman', 'old-school'] as const);
-
 // ---------------------------------------------------------------- owners
 
 /**

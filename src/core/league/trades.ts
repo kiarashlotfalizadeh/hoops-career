@@ -1,5 +1,5 @@
 // Trades: a deal and what it's worth. Validation (roster size, 125% salary matching when over the
-// cap, cap holds, the Stepien rule), AI valuation with team strategy, deal terms
+// cap, the Stepien rule), AI valuation with team strategy, deal terms
 // (protections, swaps, cash), the reasons behind a verdict, and carrying a deal out. Around it:
 // tradeHelp.ts ("what would make this work?", counter-offers), tradeFinder.ts (value tiers and
 // targets), tradePackages.ts (the best package for the user's assets), aiTrades.ts (AI front
@@ -7,11 +7,10 @@
 
 import { gmStyle } from './voices';
 import type { DraftPick, League, Player, TeamSeason } from '../types';
-import { CAP, MATCH_MID_PCT, MATCH_SMALL_PCT, seasonLabel } from '../constants';
+import { CAP, seasonLabel } from '../constants';
 import { contractExp, playerAge, salaryFor } from '../playerGen';
 import {
   CAP_FOR,
-  TWO_WAY_MAX,
   contractSeason,
   addNews,
   andList,
@@ -27,13 +26,11 @@ import {
   rosterMaxNow,
   standardRoster,
   teamCity,
-  twoWayRoster,
 } from './helpers';
 import {
   type Strategy,
   FIRST_VALUE,
   contractBurden,
-  hardCapLine,
   leaveTeam,
   marketSalary,
   pendingOption,
@@ -47,14 +44,12 @@ import {
   valueScore,
 } from './contracts';
 import { teamTaxBill } from './finances';
-import { capPayroll, withHoldsMemo } from './freeAgency';
 import { numberTeam } from './jerseys';
 import { logTrade } from './transactions';
 import { wantsOut } from './pulse';
 import { leagueBoard, revealOutlook } from './prospects';
 import { money, moneyExact } from '../format';
 import { Rng, hashString, mix32 } from '../random';
-import { freezeTradeReason } from './books';
 import { type PickProjection, pickProjection } from '../analysis/odds';
 
 export interface TradeSide {
@@ -750,23 +745,16 @@ export const MAX_FIRSTS_OUT = 2;
 const TAX_VALUE: Record<Strategy, number> = { contend: 0.5, retool: 0.75, rebuild: 1 };
 const ROOM_VALUE: Record<Strategy, number> = { contend: 0.02, retool: 0.04, rebuild: 0.1 };
 /**
- * What crossing an apron costs a team in a deal (lost tools: see the apron rules), and what getting
- * back under one is worth. Past the second, a team can't combine salaries or send cash, its far
- * first is frozen and it has no exception but the minimum: about half a first. At 4, contenders past
- * it found no dump worth making and stayed there all season.
- */
-const APRON_VALUE = { first: 2, second: 8 };
-/**
  * Crossing the tax line costs more than the tax itself: a team under it shares in the league's tax
  * pot (see assessLuxuryTax), so a deal that takes a team over (or back under) moves about 5% of the
  * cap besides, valued like the tax.
  */
 const TAX_LINE_SHARE = 0.05;
 
-/** Salary that counts in trades: two-way pay sits outside the cap, so it neither counts nor matches. */
+/** A player's salary as a trade counts it (0 for one who is gone). */
 export function capSalary(league: League, pid: number, s = contractSeason(league)): number {
   const p = league.players[pid];
-  return !p || p.contract.twoWay ? 0 : salaryFor(p, s);
+  return p ? salaryFor(p, s) : 0;
 }
 
 /**
@@ -790,8 +778,8 @@ function nextPayroll(league: League, tid: number, s: number): number {
 
 /**
  * What a deal's salary does to a team's books: the value of the luxury tax (its progressive
- * brackets, a repeater's included) and cap room it adds (or saves), an apron crossed either way,
- * and the dollars behind it. A contract running past this season adds next season's tax on the
+ * brackets, a repeater's included) and cap room it adds (or saves), the tax line crossed either
+ * way, and the dollars behind it. A contract running past this season adds next season's tax on the
  * team's committed payroll then, at NEXT_TAX_WEIGHT: a burden is dearer to a team it keeps in the tax.
  */
 function moneyCost(
@@ -804,14 +792,14 @@ function moneyCost(
 ): { value: number; lines: number; payBefore: number; payAfter: number; taxCost: number } {
   const s = contractSeason(league);
   const cap = CAP_FOR(league, s);
-  const before = capPayroll(league, tid, s);
+  const before = payroll(league, tid, s);
   const after = before + inSal - outSal;
   const tax = (x: number) => teamTaxBill(league, tid, x, s);
   const room = (x: number) => Math.max(0, cap.salaryCap - x);
   const taxCost = tax(after) - tax(before);
   const strategy = league.teams[tid].strategy;
   const line = (cap.salaryCap * TAX_LINE_SHARE * TAX_VALUE[strategy]) / 1000;
-  const over = (x: number) => (x > cap.luxuryTax ? line : 0) + (x > cap.firstApron ? APRON_VALUE.first : 0) + (x > cap.secondApron ? APRON_VALUE.second : 0);
+  const over = (x: number) => (x > cap.luxuryTax ? line : 0);
   let nextTax = 0;
   if (inNext !== outNext) {
     const next = nextPayroll(league, tid, s + 1);
@@ -828,7 +816,7 @@ function moneyCost(
 }
 
 /**
- * Salary relief counts for what it saves a team (its tax, its room, an apron), but no more than what
+ * Salary relief counts for what it saves a team (its tax, its room), but no more than what
  * shedding that salary costs on the market: the price of a salary dump (a first-round pick per
  * DUMP_PER_FIRST of the cap, see contractBurden, at a neutral lens) on the salary shed this season
  * and, at NEXT_TAX_WEIGHT, next season, as the tax savings count them. A team past the tax still
@@ -848,7 +836,7 @@ function reliefCap(league: League, salaryIn: number, salaryOut: number, inNext: 
  * USER_RELIEF_SHARE of the value of the good players it sends: a taxpayer sells the user a good
  * player at a discount, not for what his salary costs it. Priced at the dump rate alone (reliefCap),
  * Miami would still have let a team with room have Bam Adebayo (worth 69) for about 15. Among AI
- * teams the dump rate holds: their dumps are how taxpayers get under the tax and the aprons.
+ * teams the dump rate holds: their dumps are how taxpayers get under the tax.
  */
 export const USER_RELIEF_SHARE = 0.25;
 
@@ -880,7 +868,7 @@ function asFirsts(v: number): string {
  */
 function cutCost(league: League, tid: number, out: number[], inc: number[]): { value: number; count: number } {
   const before = tradeRoster(league, tid);
-  const after = [...before.filter((p) => !out.includes(p.pid)), ...inc.map((pid) => league.players[pid]).filter((p) => !p.contract.twoWay)];
+  const after = [...before.filter((p) => !out.includes(p.pid)), ...inc.map((pid) => league.players[pid])];
   if (after.length <= CAP.rosterMax) return { value: 0, count: 0 };
   const strategy = league.teams[tid].strategy;
   const waived = (roster: Player[]) =>
@@ -941,7 +929,7 @@ function judgeLegs(league: League, tid: number, ins: TradeLeg[], outs: TradeLeg[
   const outNext = salaryOf(outPids, next);
   const money = moneyCost(league, tid, salaryIn, salaryOut, inNext, outNext);
   // (the tax and room it saves count up to what shedding that salary costs on the market, see
-  // reliefCap; getting back under the tax line or an apron counts on top)
+  // reliefCap; getting back under the tax line counts on top)
   const saved = -(money.value - money.lines);
   const most = saved > 0 ? reliefCap(league, salaryIn, salaryOut, inNext, outNext) : Infinity;
   let reliefFull = saved > most ? -money.value : undefined;
@@ -1057,77 +1045,39 @@ export function untradeable(league: League, p: Player): { kind: 'expiring' | 'op
 export const untradeableReason = (league: League, p: Player): string | null => untradeable(league, p)?.why ?? null;
 
 /**
- * The standard roster a trade counts: after the season, only players under contract for next
- * season (expiring deals are leaving, or are re-signed into their own spot). Hardship 10-day
- * players sit beyond the 15 spots (see tenDay.ts), so they don't count.
+ * The roster a trade counts: after the season, only players under contract for next season
+ * (expiring deals are leaving, or are re-signed into their own spot).
  */
 export function tradeRoster(league: League, tid: number): Player[] {
   const cs = contractSeason(league);
-  return standardRoster(league, tid).filter((p) => contractExp(p.contract) >= cs && !p.contract.tenDay?.hardship);
+  return standardRoster(league, tid).filter((p) => contractExp(p.contract) >= cs);
 }
 
 /** Players an AI team may waive to make room for a trade's arrivals: up to this many past the limit. */
 export const TRADE_WAIVE_MAX = 3;
-
-// ---------------------------------------------------------------- traded player exceptions
-
-/** A traded player exception (see executeTrade): open for a year from the trade. */
-export type Tpe = NonNullable<League['teams'][number]['tpes']>[number];
-
-/** Is this traded player exception still open: until the same day a season on. */
-export const tpeOpen = (league: League, x: Tpe) => league.season < x.season + 1 || (league.season === x.season + 1 && league.day < x.day);
-
-/** A team's open traded player exceptions, the biggest first. */
-export const openTpes = (league: League, tid: number): Tpe[] =>
-  (league.teams[tid].tpes ?? []).filter((x) => tpeOpen(league, x)).sort((a, b) => b.amount - a.amount || a.season - b.season || a.day - b.day);
-
-/** The traded player exception a team would absorb salary into: its biggest open one (0 without one). */
-export const bestTpe = (league: League, tid: number) => openTpes(league, tid)[0]?.amount ?? 0;
 
 // ---------------------------------------------------------------- salary matching
 
 /** Trade matching's buffer ($K): 0.16% of the cap. */
 const matchBuffer = (league: League, s: number) => Math.round((CAP_FOR(league, s).salaryCap * CAP.tradeMatchBufferPct) / 10) * 10;
 
-/**
- * The most salary a team over the cap after a trade may take back for `out` sent: by the 2023
- * CBA's tiers (see MATCH_SMALL_PCT), 200% plus the buffer for a small salary, out plus 4.85% of the
- * cap in the middle, 125% plus the buffer above; over the first apron after the trade, no more than
- * it sends.
- */
-export function tradeMatchLimit(league: League, out: number, s = contractSeason(league), apron = false): number {
-  if (apron) return out;
-  const cap = CAP_FOR(league, s).salaryCap;
-  const buf = matchBuffer(league, s);
-  if (out <= cap * MATCH_SMALL_PCT) return out * 2 + buf;
-  if (out <= cap * MATCH_MID_PCT) return out + Math.round(cap * MATCH_SMALL_PCT);
-  return Math.round(out * 1.25) + buf;
+/** The most salary a team over the cap after a trade may take back for `out` sent: 125% of it plus the buffer. */
+export function tradeMatchLimit(league: League, out: number, s = contractSeason(league)): number {
+  return Math.round(out * CAP.tradeMatch) + matchBuffer(league, s);
 }
 
 /** The least salary a team must send to take back `inSal` (the inverse of tradeMatchLimit). */
-function matchNeeds(league: League, inSal: number, s: number, apron: boolean): number {
-  if (inSal <= 0) return 0;
-  if (apron) return inSal;
-  const cap = CAP_FOR(league, s).salaryCap;
-  const buf = matchBuffer(league, s);
-  const small = (inSal - buf) / 2;
-  if (small <= cap * MATCH_SMALL_PCT) return Math.max(0, small);
-  const mid = inSal - Math.round(cap * MATCH_SMALL_PCT);
-  if (mid <= cap * MATCH_MID_PCT) return mid;
-  return (inSal - buf) / 1.25;
+function matchNeeds(league: League, inSal: number, s: number): number {
+  return inSal <= 0 ? 0 : Math.max(0, (inSal - matchBuffer(league, s)) / CAP.tradeMatch);
 }
 
 /**
- * How a side's salary works out in a deal: payroll after it, which apron that leaves it over, and
- * what it may take in. That's the most of matching (a traded player exception included) and, for a
- * team under the cap before the deal, its room: what it sends plus its cap space plus the buffer
- * (`room`, 0 for a team already over the cap).
+ * How a side's salary works out in a deal: payroll after it and what it may take in. That's the
+ * most of matching (125% of what it sends, plus the buffer) and, for a team under the cap before
+ * the deal, its room: what it sends plus its cap space plus the buffer (`room`, 0 for a team already
+ * over the cap).
  */
-export function matchInfo(
-  league: League,
-  offer: TradeOffer,
-  side: 'a' | 'b',
-): { inSal: number; outSal: number; after: number; overCap: boolean; apron1: boolean; apron2: boolean; tpe: number; room: number; limit: number } {
+export function matchInfo(league: League, offer: TradeOffer, side: 'a' | 'b'): { inSal: number; outSal: number; after: number; overCap: boolean; room: number; limit: number } {
   return matchInfoOf(league, offer[side].tid, offer[side].pids, offer[side === 'a' ? 'b' : 'a'].pids);
 }
 
@@ -1138,15 +1088,10 @@ export function matchInfoOf(league: League, tid: number, out: number[], inc: num
   const sum = (pids: number[]) => pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
   const outSal = sum(out);
   const inSal = sum(inc);
-  const before = capPayroll(league, tid, s);
+  const before = payroll(league, tid, s);
   const after = before - outSal + inSal;
-  const apron1 = after > cap.firstApron;
-  const apron2 = after > cap.secondApron;
-  // a traded player exception absorbs salary only for a team that stays under the first apron
-  const tpe = apron1 ? 0 : bestTpe(league, tid);
-  // (room never takes a team past the cap by more than the buffer, so never near an apron)
   const room = before < cap.salaryCap ? outSal + cap.salaryCap - before + matchBuffer(league, s) : 0;
-  return { inSal, outSal, after, overCap: after > cap.salaryCap, apron1, apron2, tpe, room, limit: Math.max(room, tradeMatchLimit(league, outSal, s, apron1) + tpe) };
+  return { inSal, outSal, after, overCap: after > cap.salaryCap, room, limit: Math.max(room, tradeMatchLimit(league, outSal, s)) };
 }
 
 /** "the 2028 1st" or a player's name, for rule messages. */
@@ -1154,8 +1099,7 @@ export const assetName = (league: League, a: Player | DraftPick) => ('pid' in a 
 
 /**
  * Extra salary a side must send for its team to pass salary matching (0 when it passes): see
- * tradeMatchLimit, with any traded player exception it can use, or its cap room. Payroll includes cap holds between
- * the season and free agency.
+ * tradeMatchLimit, or its cap room.
  */
 export function salaryMatchGap(league: League, offer: TradeOffer, side: 'a' | 'b'): number {
   return matchGap(league, matchInfo(league, offer, side));
@@ -1164,7 +1108,7 @@ export function salaryMatchGap(league: League, offer: TradeOffer, side: 'a' | 'b
 /** The same from a team's salary in a deal of any shape (see matchInfoOf). */
 export function matchGap(league: League, m: ReturnType<typeof matchInfo>): number {
   if (!m.overCap || m.inSal <= m.limit) return 0;
-  const byMatch = Math.max(0, matchNeeds(league, m.inSal - m.tpe, contractSeason(league), m.apron1) - m.outSal);
+  const byMatch = Math.max(0, matchNeeds(league, m.inSal, contractSeason(league)) - m.outSal);
   // (a team with room can instead send the rest dollar for dollar)
   return m.room > 0 ? Math.min(byMatch, m.inSal - m.room) : byMatch;
 }
@@ -1219,7 +1163,7 @@ function sidesOf(legs: TradeLeg[], tid: number): { mine: TradeSide; other: { pid
 
 /**
  * What the rules say about a deal of two teams or three, read as its legs (see TradeLeg): each
- * team's roster, salary matching, aprons, hard cap and picks are checked on everything it sends
+ * team's roster, salary matching and picks are checked on everything it sends
  * against everything it gets, whoever from; a leg's own terms (a protection, a swap, cash) between
  * the two teams it joins.
  */
@@ -1229,9 +1173,7 @@ export function validateDeal(league: League, legs: TradeLeg[]): string[] {
   if (league.fired && tids.includes(league.userTid)) errors.push('You were fired: take over another team to make trades.');
   const closed = tradingClosedReason(league);
   if (closed) errors.push(closed);
-  const twoWay = (pid: number) => !!league.players[pid]?.contract.twoWay;
   const maxSize = rosterMaxNow(league);
-  const s = contractSeason(league);
   const moving = new Set(legs.flatMap((l) => l.dpids));
   for (const tid of tids) {
     const { mine, other, outs } = sidesOf(legs, tid);
@@ -1255,11 +1197,10 @@ export function validateDeal(league: League, legs: TradeLeg[]): string[] {
       if (a && tradedAwayBy(league, a, mine.tid))
         errors.push(`${abbrev} traded ${assetName(league, a)} away this season and can't get ${'pid' in a ? 'him' : 'it'} back until next season.`);
     }
-    // standard roster spots: the cap only binds a team taking in bodies, the floor one sending them out
-    const out = mine.pids.filter((pid) => !twoWay(pid)).length;
-    const inc = other.pids.filter((pid) => !twoWay(pid)).length;
-    // (in free agency an offer sheet the team signed, and the user's pending offer to a top free
-    // agent, hold a spot until they're decided: see summerRoster)
+    // roster spots: the cap only binds a team taking in bodies, the floor one sending them out
+    const out = mine.pids.length;
+    const inc = other.pids.length;
+    // (in free agency the user's pending offer to a top free agent holds a spot until it's decided: see summerRoster)
     const roster = tradeRoster(league, mine.tid).length;
     const held = inc > out && league.phase === 'freeAgency' ? summerRoster(league, mine.tid) - roster : 0;
     const size = roster - out + inc + held;
@@ -1272,37 +1213,9 @@ export function validateDeal(league: League, legs: TradeLeg[]): string[] {
           : `${abbrev} would have ${size} players. The most is ${maxSize}${inSeason(league) ? '' : ' in the offseason'}.`,
       );
     if (inSeason(league) && out > inc && size < CAP.rosterMin) errors.push(`${abbrev} would drop to ${size} players. The in-season minimum is ${CAP.rosterMin}.`);
-    const twIn = other.pids.filter(twoWay).length;
-    // (after the season, as on the standard roster, only next season's two-way deals hold a slot)
-    const twAfter = twoWayRoster(league, mine.tid).filter((p) => contractExp(p.contract) >= s).length - mine.pids.filter(twoWay).length + twIn;
-    if (twIn > 0 && twAfter > TWO_WAY_MAX) errors.push(`${abbrev} would have ${twAfter} two-way players. The most is ${TWO_WAY_MAX}.`);
     const m = matchInfoOf(league, mine.tid, mine.pids, other.pids);
-    const { inSal, outSal } = m;
+    const { inSal } = m;
     if (matchGap(league, m) > 0) errors.push(`Salary doesn't match: ${abbrev} takes in ${money(inSal)} against a ${matchLimitText(league, m)}.`);
-    // the user's budget frozen by his owner (see books.ts): no taking on salary, no cash out
-    if (mine.tid === league.userTid) {
-      const frozen = freezeTradeReason(league, inSal, outSal, mine.cash ?? 0);
-      if (frozen) errors.push(frozen);
-    }
-    const cap = CAP_FOR(league, s);
-    // over the second apron after the deal: no combining salaries to take back a bigger one, no cash
-    // out, and its far-off first is frozen (the NBA's is seven drafts out; the latest on the books stands in)
-    if (m.apron2 && inSal > 0) {
-      const biggest = Math.max(0, ...mine.pids.map((pid) => capSalary(league, pid)));
-      if (mine.pids.filter((pid) => capSalary(league, pid) > 0).length > 1 && inSal > biggest)
-        errors.push(`${abbrev} would be over the second apron, ${money(cap.secondApron)}. It can't combine salaries to take back more than its biggest sent, ${money(biggest)}.`);
-    }
-    if (m.apron2 && (mine.cash ?? 0) > 0) errors.push(`${abbrev} would be over the second apron (${money(cap.secondApron)}): it can't send cash in a trade.`);
-    if (m.apron2) {
-      const frozen = frozenFirst(league, mine.tid);
-      if (frozen && mine.dpids.includes(frozen.dpid))
-        errors.push(`${abbrev} would be over the second apron, ${money(cap.secondApron)}. Its ${frozen.season} first is frozen, so it can't be traded.`);
-    }
-    // a team that used the mid-level or the bi-annual is hard-capped at the first apron for the
-    // season (the taxpayer mid-level at the second): no trade can take it past the line
-    const line = hardCapLine(league, mine.tid, s);
-    if (line && inSal > outSal && m.after > line.amount)
-      errors.push(`${abbrev} used the ${line.what} this season, so it's hard-capped at the ${line.name}, ${money(line.amount)}. This trade would take it past.`);
     const stepien = stepienOf(league, legs, mine.tid, mine.dpids);
     if (stepien) errors.push(stepien);
     // each leg's own terms, between the two teams it joins; its cash against all the team sends
@@ -1326,32 +1239,15 @@ export function validateDeal(league: League, legs: TradeLeg[]): string[] {
   return [...new Set(errors)];
 }
 
-/** "a $14.1M limit (200% of $7.0M sent + $0.3M)": what salary matching lets a side take back, in words. */
+/** "a $17.8M limit, 125% of $14.0M sent + $0.3M": what salary matching lets a side take back, in words. */
 function matchLimitText(league: League, m: ReturnType<typeof matchInfo>): string {
   const s = contractSeason(league);
-  const cap = CAP_FOR(league, s).salaryCap;
   const buf = matchBuffer(league, s);
   if (m.room > 0 && m.room >= m.limit) {
     const space = m.room - m.outSal - buf;
     return `${money(m.limit)} limit, ${m.outSal > 0 ? `${money(m.outSal)} sent + ` : ''}its ${money(space)} of cap space + ${money(buf)}`;
   }
-  const base = m.limit - m.tpe;
-  const rule = m.apron1
-    ? `100% of ${money(m.outSal)} sent, over the first apron after it`
-    : m.outSal <= 0
-      ? 'the buffer alone with no salary sent'
-      : m.outSal <= cap * MATCH_SMALL_PCT
-        ? `200% of ${money(m.outSal)} sent + ${money(buf)}`
-        : m.outSal <= cap * MATCH_MID_PCT
-          ? `${money(m.outSal)} sent + ${money(Math.round(cap * MATCH_SMALL_PCT))}`
-          : `125% of ${money(m.outSal)} sent + ${money(buf)}`;
-  return `${money(base)} limit, ${rule}${m.tpe ? `, plus its ${money(m.tpe)} traded player exception` : ''}`;
-}
-
-/** The first a team over the second apron can't trade: its own in the latest draft on the books (the NBA freezes the one seven drafts out). */
-export function frozenFirst(league: League, tid: number): DraftPick | undefined {
-  const own = league.draftPicks.filter((d) => d.round === 1 && d.originalTid === tid && d.tid === tid);
-  return own.sort((a, b) => b.season - a.season)[0];
+  return `${money(m.limit)} limit, ${m.outSal <= 0 ? 'the buffer alone with no salary sent' : `125% of ${money(m.outSal)} sent + ${money(buf)}`}`;
 }
 
 /**
@@ -1405,7 +1301,7 @@ function termErrors(league: League, moving: Set<number>, mine: TradeSide, to: nu
 }
 
 export function evaluateTrade(league: League, offer: TradeOffer): TradeEval {
-  return withHoldsMemo(() => evaluate(league, offer));
+  return evaluate(league, offer);
 }
 
 /**
@@ -1459,31 +1355,29 @@ export interface DealEval {
  * say yes. A team in a deal with the user judges it as it judges any deal with him (see judge).
  */
 export function evaluateDeal(league: League, legs: TradeLeg[]): DealEval {
-  return withHoldsMemo(() => {
-    const errors = validateDeal(league, legs);
-    const tids = dealTeams(legs);
-    const aiDeal = !tids.includes(league.userTid);
-    const teams = tids
-      .filter((tid) => tid !== league.userTid)
-      .map((tid): DealVerdict => {
-        const v = judgeLegs(
-          league,
-          tid,
-          legs.filter((l) => l.to === tid),
-          legs.filter((l) => l.tid === tid),
-          aiDeal,
-        );
-        const message = v.tooManyFirsts
-          ? `No more than ${MAX_FIRSTS_OUT} firsts out in one deal`
-          : v.accept
-            ? v.delta > Math.abs(v.valueOut) * 0.25
-              ? "They'd jump at it"
-              : "They'd take it"
-            : valueVerdict(v).label;
-        return { tid, accept: v.accept, delta: v.delta, valueIn: v.valueIn, valueOut: v.valueOut, message, parts: v.parts };
-      });
-    return { ok: errors.length === 0, errors, teams, accept: errors.length === 0 && teams.length > 0 && teams.every((t) => t.accept) };
-  });
+  const errors = validateDeal(league, legs);
+  const tids = dealTeams(legs);
+  const aiDeal = !tids.includes(league.userTid);
+  const teams = tids
+    .filter((tid) => tid !== league.userTid)
+    .map((tid): DealVerdict => {
+      const v = judgeLegs(
+        league,
+        tid,
+        legs.filter((l) => l.to === tid),
+        legs.filter((l) => l.tid === tid),
+        aiDeal,
+      );
+      const message = v.tooManyFirsts
+        ? `No more than ${MAX_FIRSTS_OUT} firsts out in one deal`
+        : v.accept
+          ? v.delta > Math.abs(v.valueOut) * 0.25
+            ? "They'd jump at it"
+            : "They'd take it"
+          : valueVerdict(v).label;
+      return { tid, accept: v.accept, delta: v.delta, valueIn: v.valueIn, valueOut: v.valueOut, message, parts: v.parts };
+    });
+  return { ok: errors.length === 0, errors, teams, accept: errors.length === 0 && teams.length > 0 && teams.every((t) => t.accept) };
 }
 
 // ---------------------------------------------------------------- why: notes on a verdict
@@ -1514,7 +1408,7 @@ export function neutralSplit(parts: Pick<VerdictParts, 'incoming' | 'outgoing'>,
 
 /**
  * Short plain-English reasons behind side B's verdict, the ones that move it most first: its
- * strategy's view of the players and picks coming in, the tax and the waivers the deal costs it,
+ * strategy's view of the players and picks coming in, the tax and the releases the deal costs it,
  * depth for talent, assets that changed hands this season, the two-firsts limit, and a warning when side A (you) gives up much more neutral value than it
  * gets: the AI saying yes doesn't make it a good deal. Only what is true of this offer, and big
  * enough to matter.
@@ -1694,8 +1588,6 @@ export function executeDeal(league: League, legs: TradeLeg[]) {
     sides.map((x) => ({ ...x.mine, swaps: x.outs.flatMap((l) => l.swaps ?? []) })),
     (dpid) => pickLabel(league, findPick(league, dpid)!, { protection: protection(dpid) }),
   );
-  // traded player exceptions, read before anything moves
-  const books = sides.map((x) => ({ tid: x.mine.tid, m: matchInfoOf(league, x.mine.tid, x.mine.pids, x.other.pids) }));
   const move = (pids: number[], to: number) => {
     for (const pid of pids) {
       const p = league.players[pid];
@@ -1733,7 +1625,6 @@ export function executeDeal(league: League, legs: TradeLeg[]) {
   }
   // a player the user marked untouchable is unmarked when he leaves
   if (league.untouchable) league.untouchable = league.untouchable.filter((pid) => league.players[pid]?.tid === league.userTid);
-  for (const { tid, m } of books) settleTpes(league, tid, m);
   const pids = legs.flatMap((l) => l.pids);
   if (tids.length === 2) {
     const none = (tid: number): TradeSide => ({ tid, pids: [], dpids: [] });
@@ -1775,30 +1666,9 @@ export function tradeHeadline(a: string, aList: string[], aPlayers: number, b: s
 }
 
 /**
- * A trade's traded player exceptions for one team over the cap after it: salary taken in beyond
- * what matching allows came out of its biggest open exception, and salary sent out beyond what it
- * took back (a minimum's worth or more) opens a new one for that much, for a year.
- */
-function settleTpes(league: League, tid: number, m: ReturnType<typeof matchInfo>) {
-  if (!m.overCap) return;
-  const t = league.teams[tid];
-  const s = contractSeason(league);
-  // (salary its cap room covered uses no exception)
-  const used = m.inSal <= m.room ? 0 : m.inSal - tradeMatchLimit(league, m.outSal, s, m.apron1);
-  let list = (t.tpes ?? []).filter((x) => tpeOpen(league, x));
-  if (used > 0 && m.tpe > 0) {
-    const big = openTpes(league, tid)[0];
-    list = list.map((x) => (x === big ? { ...x, amount: Math.max(0, x.amount - used) } : x)).filter((x) => x.amount >= 10);
-  }
-  if (m.outSal - m.inSal >= CAP_FOR(league, s).minContract) list.push({ amount: Math.round((m.outSal - m.inSal) / 10) * 10, season: league.season, day: league.day });
-  if (list.length) t.tpes = list;
-  else delete t.tpes;
-}
-
-/**
  * In season, an AI team a trade left over 15 waives the players it would miss least: value, less
  * for a release that leaves little dead money (a minimum deal, an expiring one), so a big contract
- * stays unless he's clearly the worst. Hardship 10-day players don't count (see tradeRoster).
+ * stays unless he's clearly the worst.
  */
 export function waiveForTrade(league: League, tid: number) {
   if (tid === league.userTid || !inSeason(league)) return;

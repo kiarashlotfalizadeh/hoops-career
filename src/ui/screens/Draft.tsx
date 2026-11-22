@@ -145,7 +145,7 @@ export default function Draft() {
             </p>
             <p>
               <b>Rookie scale.</b> First-round picks sign 4-year rookie-scale deals, cheaper the later the pick. Year 4 is a team option. Second-rounders get 2-year minimum deals,
-              not guaranteed until opening night. AI teams with full rosters sign theirs to two-way deals.
+              not guaranteed until opening night.
             </p>
             <p>
               <b>Big board.</b> Rank is the league&apos;s consensus order of the class, mixing potential and current ability. Proj. is where the league&apos;s mock drafts have him

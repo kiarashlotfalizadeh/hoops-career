@@ -103,7 +103,6 @@ const SCREENS: { title: string; to: string; meta: string; also?: string }[] = [
   { title: 'Re-sign', to: '/office/resign', meta: 'Office · your expiring contracts and extensions', also: 'extend extension extensions expiring contract contracts' },
   { title: 'Draft', to: '/office/draft', meta: 'Office · the board, the combine, mock drafts', also: 'prospects combine mock big board' },
   { title: 'Picks & moves', to: '/office/assets', meta: 'Office · your draft picks and transactions', also: 'picks assets' },
-  { title: 'Finances', to: '/office/finances', meta: 'Office · revenue, expenses, ticket prices', also: 'money budget tickets revenue' },
   { title: 'Owner', to: '/office/owner', meta: 'Office · job security and his goals', also: 'job security goals' },
   { title: 'Career', to: '/office/career', meta: 'Office · your record and job offers', also: 'jobs offers resume' },
 ];

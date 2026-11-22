@@ -194,11 +194,6 @@ export function biggestSwings(series: WpPoint[], n = 3, min = 0.05, gap = 120): 
   return out;
 }
 
-/** A winner's chance that moved this little on its best possession: the game was never in doubt, so no turning point is named. */
-export const TURN_MIN = 0.1;
-/** A winner whose chance fell this low came back (from the loser's side, a lead let slip). */
-export const COMEBACK_WP = 0.15;
-
 /** What win probability says about how a game went for its winner. */
 export interface WpStory {
   /** The winner: 0 home, 1 away. */

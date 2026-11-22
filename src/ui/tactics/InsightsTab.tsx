@@ -1,4 +1,4 @@
-// Tactics → Analysis → Season: the engine's tally of your season (each setting's trade-off netted on
+// Tactics → Season Analysis, the season: the engine's tally of your season (each setting's trade-off netted on
 // one row, each other effect it tracks on its own, biggest first, each tagged with which way it went)
 // and how teams see you: your scouting report as an opponent reads it. The tally is what happened, never
 // advice: it isn't a counterfactual (it has read a coverage as the worse one where paired games found it

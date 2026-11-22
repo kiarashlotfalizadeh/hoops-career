@@ -1,16 +1,14 @@
-// Team → Tactics, Football Manager's way. Four sections with their own paths under the hub's tabs,
-// one boxed switch: Tactic (/team/tactics: the board with your five, the staff's word, the strengths
-// and weaknesses, the bench), Instructions (/team/tactics/instructions: the three phases of play),
-// Match (/team/tactics/match: crunch time and game management) and Analysis
-// (/team/tactics/analysis: the system report and the season), each its own module in src/ui/tactics.
-// Over each, one card holds the style in use (tactics/Hero), and on Tactic who runs it; a section's
-// own switch (the board's end, the phase, the view) is its heading. Advice in core links here by the
-// old ?tab= ids (playbook, roles, players, offense, defense, manage, insights, report, familiarity),
-// which open the section that now holds them. The plan's strengths and weaknesses move as you change
-// a setting, so every lever shows what it buys and what it costs. Edits save as they're made; while
-// this visit has any, a compact dock says what they did to the grades and offers Undo and Done (which
-// hands the Continue bar back, and has the staff measure the change over the next games:
-// tactics/editWatch.ts).
+// Team → Tactics, two sections with their own paths under the hub's tabs, one boxed switch: System
+// (/team/tactics: the style card, the board with your five, shape, scheme and roles, the core
+// settings, the staff's word, the grades, the bench, and one Advanced drawer with every niche
+// setting) and Season Analysis (/team/tactics/analysis: what your changes measured, the season's
+// tally, how teams see you, every grade), each built from modules in src/ui/tactics. Nothing here
+// names an opponent: that is the matchup page's Game Plan. Advice in core links here by the old
+// ?tab= ids and section paths, which open the section that now holds them. The plan's strengths and
+// weaknesses move as you change a setting, so every lever shows what it buys and what it costs. Edits
+// save as they're made; while this visit has any, a compact dock says what they did to the grades and
+// offers Undo and Done (which hands the Continue bar back, and has the staff measure the change over
+// the next games: tactics/editWatch.ts).
 import { useMemo, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Check, Undo2 } from 'lucide-react';
@@ -24,52 +22,32 @@ import { useQueryParam } from '../league/shared';
 import { tacticsSig, undoTo, visitStart } from '../tactics/edit';
 import { StrengthsCard, TacticsHero } from '../tactics/Hero';
 import { TacticTab } from '../tactics/TacticTab';
-import { InstructionsTab } from '../tactics/InstructionsTab';
-import { MatchTab } from '../tactics/MatchTab';
-import { ANALYSIS_VIEWS, AnalysisTab, type AnalysisView } from '../tactics/AnalysisTab';
-import { phaseId, type Phase } from '../tactics/phases';
+import { CoreLevers } from '../tactics/CoreLevers';
+import { Advanced } from '../tactics/Advanced';
+import { AnalysisTab } from '../tactics/AnalysisTab';
 import { settleEdits } from '../tactics/editWatch';
 import { EditMeasureBar } from '../tactics/EditLedger';
 import type { BoardSide } from '../tactics/Board';
 import './tactics.css';
 
-type Tab = 'tactic' | 'instructions' | 'match' | 'analysis';
-/** The sections' old ids, which advice and search still link to. */
-type OldTab = 'playbook' | 'roles' | 'players' | 'offense' | 'defense' | 'manage' | 'insights' | 'report' | 'familiarity';
+type Tab = 'system' | 'analysis';
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'tactic', label: 'Tactic' },
-  { id: 'instructions', label: 'Instructions' },
-  { id: 'match', label: 'Match' },
-  { id: 'analysis', label: 'Analysis' },
+  { id: 'system', label: 'System' },
+  { id: 'analysis', label: 'Season Analysis' },
 ];
 
-const OLD: Record<OldTab, Tab> = {
-  playbook: 'tactic',
-  roles: 'tactic',
-  players: 'tactic',
-  offense: 'instructions',
-  defense: 'instructions',
-  manage: 'match',
-  insights: 'analysis',
-  report: 'analysis',
-  familiarity: 'analysis',
-};
+/** The old ?tab= ids advice and search still link by: everything but the analysis is the System. */
+const OLD_ANALYSIS = ['insights', 'report', 'familiarity', 'analysis'];
 /** A section's path. */
-export const tacticsPath = (tab: Tab) => (tab === 'tactic' ? '/team/tactics' : `/team/tactics/${tab}`);
+export const tacticsPath = (tab: Tab) => (tab === 'system' ? '/team/tactics' : '/team/tactics/analysis');
 
-/**
- * A link by the old ?tab= ids: the section's path, its other params kept (an old Defense link opens
- * Instructions out of possession, an old Insights one Analysis at the season).
- */
+/** A link by an old ?tab= id: the section's path, its other params kept. */
 function OldLink({ raw, search }: { raw: string; search: string }) {
   const q = new URLSearchParams(search);
-  q.delete('tab');
-  if (raw === 'defense' && !q.has('phase')) q.set('phase', 'outPoss');
-  if (raw === 'insights' && !q.has('view')) q.set('view', 'season');
-  const tab = (OLD as Record<string, Tab>)[raw] ?? (TABS.some((x) => x.id === raw) ? (raw as Tab) : 'tactic');
+  for (const k of ['tab', 'phase', 'view']) q.delete(k);
   const qs = q.toString();
-  return <Navigate to={`${tacticsPath(tab)}${qs ? `?${qs}` : ''}`} replace />;
+  return <Navigate to={`${tacticsPath(OLD_ANALYSIS.includes(raw) ? 'analysis' : 'system')}${qs ? `?${qs}` : ''}`} replace />;
 }
 
 export default function Tactics() {
@@ -83,11 +61,7 @@ function TacticsScreen() {
   const league = useLeague();
   const nav = useNavigate();
   const { sub } = useParams();
-  const tab: Tab = TABS.find((x) => x.id === sub)?.id ?? 'tactic';
-  const [rawPhase, setPhase] = useQueryParam<string>('phase', 'inPoss');
-  // (an old phase reads as its new one)
-  const phase: Phase = phaseId(rawPhase);
-  const [view, setView] = useQueryParam<AnalysisView>('view', 'report', ANALYSIS_VIEWS);
+  const tab: Tab = sub === 'analysis' ? 'analysis' : 'system';
   const [side, setSide] = useQueryParam<BoardSide>('side', 'in', ['in', 'out']);
   const team = league.teams[league.userTid];
   const t = team.tactics;
@@ -110,19 +84,21 @@ function TacticsScreen() {
       {/* the sections: the one boxed switch under the hub's tabs, each its own path */}
       <Segmented value={tab} options={TABS} onChange={(x) => nav(tacticsPath(x), { replace: true })} label="Tactics sections" />
       <fieldset className="tx-fieldset" disabled={simming}>
-        {/* the style in use; on Tactic, who runs it */}
-        <TacticsHero manage={tab === 'tactic'} />
-        {tab === 'tactic' && (
-          <TacticTab players={players} side={side} setSide={setSide}>
-            {/* the first-hour guide and the staff's advice, under the board (the board leads the page; one home for both) */}
-            <GuideStrip step="playbook" keep="Keep this playbook" />
-            <AssistantCards league={league} areas={['tactics']} max={2} />
-            <StrengthsCard report={report} was={base} onAnalysis={() => nav(tacticsPath('analysis'), { replace: true })} />
-          </TacticTab>
+        {/* the style in use; on System, who runs it */}
+        <TacticsHero manage={tab === 'system'} />
+        {tab === 'system' && (
+          <>
+            <TacticTab players={players} side={side} setSide={setSide}>
+              <CoreLevers t={t} />
+              {/* the first-hour guide and the staff's advice (one home for both) */}
+              <GuideStrip step="playbook" keep="Keep this playbook" />
+              <AssistantCards league={league} areas={['tactics']} max={2} />
+              <StrengthsCard report={report} was={base} onAnalysis={() => nav(tacticsPath('analysis'), { replace: true })} />
+            </TacticTab>
+            <Advanced t={t} players={players} />
+          </>
         )}
-        {tab === 'instructions' && <InstructionsTab t={t} players={players} phase={phase} setPhase={setPhase} />}
-        {tab === 'match' && <MatchTab t={t} players={players} />}
-        {tab === 'analysis' && <AnalysisTab view={view} setView={setView} report={report} was={changed ? base : undefined} />}
+        {tab === 'analysis' && <AnalysisTab report={report} was={changed ? base : undefined} />}
       </fieldset>
 
       {changed && !simming && (

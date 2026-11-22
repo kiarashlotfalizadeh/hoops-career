@@ -131,11 +131,9 @@ export function AssetList({
 export function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League; p: Player; name: string; season: number; on: boolean; onToggle: () => void }) {
   const locked = untradeable(league, p);
   const flag = locked ? (
-    <span className="fo-flag bad">{p.contract.tenDay ? '10-day' : { expiring: 'Expiring', option: 'Option', signed: 'Signed' }[locked.kind]}</span>
+    <span className="fo-flag bad">{{ expiring: 'Expiring', option: 'Option', signed: 'Signed' }[locked.kind]}</span>
   ) : p.injury ? (
     <span className="fo-flag bad">{outTag(p)}</span>
-  ) : p.contract.twoWay ? (
-    <span className="fo-flag">2W</span>
   ) : null;
   return (
     <button className={`fo-asset ${on ? 'on' : ''}`} onClick={onToggle} aria-pressed={on}>
@@ -146,7 +144,7 @@ export function PlayerAsset({ league, p, name, season, on, onToggle }: { league:
       <div className="grow">
         <div className="fo-asset-name">
           <span className="fo-name">{name}</span>
-          {/* one flag: why he can't be traded, else his injury, else a two-way deal, else a cornerstone his team builds around */}
+          {/* one flag: why he can't be traded, else his injury, else a cornerstone his team builds around */}
           {flag ?? (availability(league, p) === 'franchise' ? <AvailFlag avail="franchise" /> : null)}
         </div>
         <div className="fo-meta fo-wrap">

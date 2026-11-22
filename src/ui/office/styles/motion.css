@@ -195,10 +195,7 @@
 .fo-pending-item {
   animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
 }
-/* qualified: the row answers */
-.fo-qualify.on > svg {
-  animation: pop var(--dur-slow) var(--ease-spring);
-}
+
 /* a player re-signed: his row settles into the signed list */
 .fo-confirm-row {
   animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
@@ -218,7 +215,6 @@
 }
 /* a goal's bar fills from its foot; a grade grows out from the centre line, to the side it fell on */
 .fo-goal .bar > div,
-.fo-att .bar > div,
 .fo-now .bar > div {
   transform-origin: left center;
   animation: grow-x 0.6s var(--ease-out) 0.1s backwards;
@@ -272,36 +268,6 @@
 }
 
 /* ------------------------------------------------------------ finances */
-/* the season's costs are laid end to end; the profit columns grow from the zero line */
-.fo-stack {
-  animation: wipe 0.7s var(--ease-move) 0.08s backwards;
-}
-.fo-minichart .pos > .b {
-  transform-origin: center bottom;
-  animation: grow-y 0.55s var(--ease-out) backwards;
-}
-.fo-minichart .neg > .b {
-  transform-origin: center top;
-  animation: grow-y 0.55s var(--ease-out) backwards;
-}
-.fo-minichart > div:nth-child(2) .b {
-  animation-delay: 40ms;
-}
-.fo-minichart > div:nth-child(3) .b {
-  animation-delay: 80ms;
-}
-.fo-minichart > div:nth-child(4) .b {
-  animation-delay: 120ms;
-}
-.fo-minichart > div:nth-child(5) .b {
-  animation-delay: 160ms;
-}
-.fo-minichart > div:nth-child(n + 6) .b {
-  animation-delay: 200ms;
-}
-.fo-minichart .v {
-  animation: fade var(--dur-slow) ease 0.25s backwards;
-}
 
 /* ------------------------------------------------------------ the career */
 /* the cabinet: each honor is set on its shelf */

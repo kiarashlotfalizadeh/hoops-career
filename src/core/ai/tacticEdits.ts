@@ -474,7 +474,7 @@ export function saveCheck(league: League, id: number, w: CounterWorth, games: nu
     call === 'gain'
       ? `${replayed} It seems to have helped. I'd keep it.`
       : call === 'cost'
-        ? `${replayed} It seems to have hurt. Put it back from Team → Tactics → Analysis.`
+        ? `${replayed} It seems to have hurt. Put it back from Team → Tactics → Season Analysis.`
         : `${replayed} ${evenText(e.check, games)}`;
   addInbox(league, {
     from: `${lead.name}, lead assistant`,

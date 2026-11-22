@@ -1,6 +1,6 @@
 // A roster as rows, the same for your team (Team → Roster) and any other (/teams/:tid): tonight's
-// five, the bench, then the two-way deals. A row is two lines beside the jersey. The first: the name
-// with one mark at most (out, else a 10-day deal, else a development tag: Breakout, Rising, Prospect,
+// five, then the bench. A row is two lines beside the jersey. The first: the name
+// with one mark at most (out, else a development tag: Breakout, Rising, Prospect,
 // Declining), then OVR and POT in columns named once in the group's header. The second, quieter:
 // position and age, then minutes, points, rebounds and assists a game, each labelled. His OVR change
 // this season is on the Ratings view and his page, not on the row.
@@ -13,7 +13,6 @@ import { playerAge } from '../../core/playerGen';
 import { Avatar, Ovr } from '../components/ui';
 import { OvrKey } from '../components/OvrKey';
 import { f1, latestLine, playerSeason, startingFive, type PerGame } from '../stats';
-import { tenDayLeft } from '../../core/league/tenDay';
 import { injuryName, plural } from '../../core/format';
 import { FormMark } from '../components/FormMark';
 import { devTag } from '../../core/league/devWatch';
@@ -50,29 +49,20 @@ function GroupHead({ label }: { label: string }) {
   );
 }
 
-/** A row's one mark, the most pressing first: out, else a 10-day deal (yours), else his development tag. */
-function RowTag({ league, p, mine }: { league: League; p: Player; mine: boolean }) {
+/** A row's one mark, the most pressing first: out, else his development tag. */
+function RowTag({ league, p }: { league: League; p: Player }) {
   if (p.injury)
     return (
       <span className="tag bad" title={injuryName(p.injury.type)}>
         Out {plural(p.injury.gamesRemaining, 'game')}
       </span>
     );
-  const td = mine && p.contract.tenDay;
-  if (td) {
-    const left = tenDayLeft(league, p);
-    return (
-      <span className="tag warn" title={td.hardship ? 'Hardship 10-day' : undefined}>
-        10-day · {left > 1 ? `${left} days left` : 'last day'}
-      </span>
-    );
-  }
   const dev = devTag(league, p);
   return dev ? <DevTagChip tag={dev} /> : null;
 }
 
 /** One player's row: a link to his page. A flame or a snowflake beside his name when he is on a tear or in a slump (FormMark). */
-export function RosterRow({ league, p, line, mine }: { league: League; p: Player; line: PerGame | null; mine: boolean }) {
+export function RosterRow({ league, p, line }: { league: League; p: Player; line: PerGame | null }) {
   return (
     <Link to={`/player/${p.pid}`} className="tm-rl tm-rl-row">
       <Avatar p={p} />
@@ -81,7 +71,7 @@ export function RosterRow({ league, p, line, mine }: { league: League; p: Player
           {p.firstName} {p.lastName}
         </span>
         <FormMark league={league} p={p} />
-        <RowTag league={league} p={p} mine={mine} />
+        <RowTag league={league} p={p} />
       </span>
       <span className="tm-rl-ovr">
         <span className="sr-only">OVR </span>
@@ -122,7 +112,7 @@ export function RosterRows({ league, label, players, foot }: { league: League; l
       <div className="tm-rl-group">
         <GroupHead label={label} />
         {players.map((p) => (
-          <RosterRow key={p.pid} league={league} p={p} line={lines.get(p.pid) ?? null} mine={p.tid === league.userTid} />
+          <RosterRow key={p.pid} league={league} p={p} line={lines.get(p.pid) ?? null} />
         ))}
       </div>
       {foot}
@@ -133,13 +123,11 @@ export function RosterRows({ league, label, players, foot }: { league: League; l
 /** The whole roster in its groups, with the line under it that says what the figures are. */
 export function RosterList({ league, roster }: { league: League; roster: Player[] }) {
   if (!roster.length) return <div className="card empty">No players on the roster.</div>;
-  const mine = roster[0].tid === league.userTid;
   // the five who start the next game: an injured starter is listed with the bench until he's back
   const starters = startingFive(roster);
   const groups: [string, Player[]][] = [
     ['Starters', roster.filter((p) => starters.has(p.pid))],
-    ['Bench', roster.filter((p) => !starters.has(p.pid) && !p.contract.twoWay)],
-    ['Two-way', roster.filter((p) => !starters.has(p.pid) && p.contract.twoWay)],
+    ['Bench', roster.filter((p) => !starters.has(p.pid))],
   ];
   const { lines, current, any } = rosterLines(league, roster);
   return (
@@ -150,7 +138,7 @@ export function RosterList({ league, roster }: { league: League; roster: Player[
             <div key={label} className="tm-rl-group">
               <GroupHead label={label} />
               {list.map((p) => (
-                <RosterRow key={p.pid} league={league} p={p} line={lines.get(p.pid) ?? null} mine={mine} />
+                <RosterRow key={p.pid} league={league} p={p} line={lines.get(p.pid) ?? null} />
               ))}
             </div>
           ) : null,

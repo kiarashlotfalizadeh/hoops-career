@@ -1,6 +1,5 @@
-// The game plan's defender to attack and its junk defense on the players their offense runs through
-// (the matchup page's Plan). How to guard each of their players is set with who guards him, on
-// Matchups (see MatchupPlanner).
+// The game plan's defender to target and its junk defense on the players their offense runs through
+// (the matchup page's Game Plan). Who guards each of their players is on the same tab (see MatchupPlanner).
 import type { DefScheme, League, Player } from '../../core/types';
 import { effectiveTactics, removePlanItem, setPlanItem } from '../../core/league/gamePlans';
 import { huntPick } from '../../core/analysis/guarding';
@@ -36,7 +35,7 @@ export function AttackCard({ league, opp, fold }: { league: League; opp: number;
   const sorted = [...theirs].sort((a, b) => per(a) - per(b) || a.pid - b.pid);
   if (!theirs.length) return null;
   const help = (
-    <Help title="Attack a defender">Your isolations, post-ups and ball screens go at the man he guards. It pays against a real weak link and costs some ball movement.</Help>
+    <Help title="Target a defender">Your isolations, post-ups and ball screens go at the man he guards. It pays against a real weak link and costs some ball movement.</Help>
   );
   const body = (
     <div className="mu-group">
@@ -56,11 +55,11 @@ export function AttackCard({ league, opp, fold }: { league: League; opp: number;
     </div>
   );
   return fold ? (
-    <Fold title="Attack a defender" peek={target !== null ? `Attack ${names(target)}` : 'Nobody'} help={help}>
+    <Fold title="Target a defender" peek={target !== null ? names(target) : 'Nobody'} help={help}>
       <div className="mu-fold">{body}</div>
     </Fold>
   ) : (
-    <Section title="Attack a defender" right={help}>
+    <Section title="Target a defender" right={help}>
       {body}
     </Section>
   );

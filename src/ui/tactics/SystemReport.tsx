@@ -1,4 +1,4 @@
-// The system report on Team → Tactics → Analysis: your system's grade at seven things at each end,
+// The system report on Team → Tactics → Season Analysis: your system's grade at seven things at each end,
 // against the league's other systems, each a tap from what it's made of (the players who carry it,
 // then what each setting adds or takes away). The grades move as you change a setting.
 import { useState } from 'react';

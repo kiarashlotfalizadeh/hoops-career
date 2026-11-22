@@ -1,5 +1,5 @@
 // Opponent-specific game plans for the user's team: changes to the base tactics (and planned
-// matchups) that apply only against one opponent, for the next game, a playoff series or the season.
+// matchups) that apply only against one opponent, for the next game or a playoff series.
 
 import type { GamePlan, GamePlanItem, League, PlanScope, ScheduledGame, Tactics } from '../types';
 import { applyPatch, cloneTactics, withoutGameSpecific } from '../sim/tactics';
@@ -16,8 +16,8 @@ export const planMade = (p: GamePlan) => p.items.length > 0 || Object.keys(p.mat
 /** Whether the user made a plan himself: a counter he put in (the staff's own silent picks aren't his), or a matchup. */
 export const planByUser = (p: GamePlan) => p.items.some((x) => !x.staff) || Object.keys(p.matchups ?? {}).length > 0;
 
-/** A plan still has something in it (a note alone counts). */
-const hasContent = (p: GamePlan) => planMade(p) || !!p.note;
+/** A plan still has something in it. */
+const hasContent = planMade;
 
 /**
  * The plan that applies against `opp` (in `game`, when given): none once a series plan's series is

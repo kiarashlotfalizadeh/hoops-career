@@ -1,5 +1,4 @@
-// Contract talks between the user and a player's agent: re-signing, free agency (offer sheets too)
-// and extensions. His ask is open (askingContract, extensionAsk): offered on his terms, it signs
+// Contract talks between the user and a player's agent: re-signing, free agency and extensions. His ask is open (askingContract, extensionAsk): offered on his terms, it signs
 // him on the spot. What he'd take is a little lower, his walk-away price, which he keeps to himself:
 // 0-12% under the ask, from a hash of the league, season, team and player (so asking again can't
 // reroll it), lower for a player keen on the team (its record, market, the role on offer), later
@@ -16,7 +15,7 @@
 import type { League, Player, TalkTerms, Talks } from '../types';
 import { seasonLabel } from '../constants';
 import { clamp, hashString } from '../random';
-import { contractExp, extensionStart, playerAge, salaryFor } from '../playerGen';
+import { contractExp, extensionStart, playerAge } from '../playerGen';
 import { CAP_FOR, addInbox, contractSeason, fmtDate, playerName } from './helpers';
 import {
   type Ask,
@@ -38,7 +37,6 @@ import {
   valueScore,
 } from './contracts';
 import { money, moneyExact } from '../format';
-import { freezeResignReason } from './books';
 import { playerSays } from './voices';
 
 export type TalkKind = Talks['kind'];
@@ -147,14 +145,12 @@ export function talkBounds(league: League, p: Player, kind: TalkKind): { min: nu
 /**
  * The salaries a deal at `amount` over `years` writes if he signs it in these talks, as the signing
  * itself writes them (userResign, userOffer, userBid, userExtend): every total the contract sheet
- * shows, his counter's included, is this, so the preview and the deal signed never differ. Another
- * team's restricted free agent signs an offer sheet, written at 5% raises (see rfa.ts).
+ * shows, his counter's included, is this, so the preview and the deal signed never differ.
  */
 export function talkSalaries(league: League, p: Player, kind: TalkKind, amount: number, years: number): number[] {
   if (kind === 'extend') return extensionSalaries(league, p, amount, years);
   const start = contractSeason(league);
-  const sheet = kind === 'fa' && !!p.rfa && p.rfa.tid !== league.userTid;
-  return makeContract(league, amount, years, start, p.experience, sheet ? { raise: 0.05 } : signingTerms(league, p, league.userTid, start)).salaries;
+  return makeContract(league, amount, years, start, p.experience, signingTerms(league, p, league.userTid, start)).salaries;
 }
 
 /** His price for a deal on these terms, as a multiple of his ask: 3% a year away from the length he wants, 4% off for a player option, 6% more for a team option. */
@@ -313,13 +309,6 @@ export function hearOffer(
   };
 }
 
-/** Why extending him at `amount` a season is off under the owner's freeze: a raise on what he's paid now (past his minimum then), or null. */
-export function extensionFrozenReason(league: League, p: Player, amount: number): string | null {
-  const exp = contractExp(p.contract);
-  const cap = CAP_FOR(league, exp + 1);
-  return freezeResignReason(league, amount, salaryFor(p, exp), p.experience >= 3 ? cap.vetMin : cap.minContract, 'extending him');
-}
-
 /**
  * The user extends one of his players (see extensionBlockedReason): a negotiation like any other,
  * on the extension's ask (see hearOffer), with no options (any option on his deal is picked up).
@@ -328,7 +317,7 @@ export function extensionFrozenReason(league: League, p: Player, amount: number)
 export function userExtend(league: League, pid: number, amount: number, years: number): OfferResult {
   const p = league.players[pid];
   if (!p) return { ok: false, reason: 'Player not found.' };
-  const blocked = extensionBlockedReason(league, p) ?? extensionRefusal(league, p) ?? extensionFrozenReason(league, p, amount);
+  const blocked = extensionBlockedReason(league, p) ?? extensionRefusal(league, p);
   if (blocked) return { ok: false, reason: blocked };
   const maxYears = extensionMaxYears(p);
   if (years < 1 || years > maxYears) return { ok: false, reason: `His extension can run 1 to ${maxYears} years.` };

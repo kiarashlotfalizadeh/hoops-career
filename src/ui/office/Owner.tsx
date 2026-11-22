@@ -7,11 +7,9 @@ import { Link } from 'react-router-dom';
 import { TriangleAlert } from 'lucide-react';
 import type { League } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
-import { CAP_FOR, curTeamSeason, revenueScale } from '../../core/league/helpers';
+import { CAP_FOR, curTeamSeason } from '../../core/league/helpers';
 import { FIRING_LINE, seasonsInCharge } from '../../core/league/owner';
 import { GRACE, SEASON_WEIGHT, seasonWeight, seatHeat, type JobSecurity, type SeatHeat } from '../../core/league/jobSecurity';
-import { BLEED_GRADE, DEBT_LIMIT, FREEZE_GRADE, booksOf, booksOutlook, deeperText } from '../../core/league/books';
-import { seasonEndCash } from '../../core/league/finances';
 import {
   CONCEDE_COST,
   FLOOR_GRADE,
@@ -24,7 +22,6 @@ import {
   personalityLine,
   quirkLine,
   POSTSEASON,
-  PROFIT_SCALE,
   REBUILD_OVER_FLOOR,
   REBUILD_SEASONS,
   WIN_FLOOR,
@@ -52,6 +49,14 @@ import { useArrived } from './motion';
 import './office.css';
 import { keepFigures, money } from '../../core/format';
 import { cameoOf } from '../../core/league/ownerCameos';
+
+/** What held a reviewed season's grade down, in a line (see OwnerReview.held; a save from when the books could hold one says so plainly). */
+const HELD: Record<string, string> = {
+  floor: 'Under his floor: nothing else could lift this grade.',
+  patience: 'Past his rebuild allowance and out of the postseason. Nothing else could lift this grade.',
+  books: 'The books held this grade down.',
+  debt: 'The books held this grade down.',
+};
 
 export default function Owner() {
   const league = useLeague();
@@ -82,8 +87,6 @@ export default function Owner() {
       <Seat league={league} js={js} seasonsIn={seasonsIn} />
 
       {js.ultimatum && og && !review && <UltimatumCard league={league} js={js} />}
-
-      {booksOf(league) && <BooksCard league={league} />}
 
       <CameoCard league={league} />
 
@@ -167,7 +170,7 @@ export default function Owner() {
               ? "He sets next season's goals on opening night."
               : league.phase === 'regular'
                 ? 'He sets his goals for the rest of the season tomorrow.'
-                : 'This season is graded on wins, the playoffs and profit.'}
+                : 'This season is graded on wins and the playoffs.'}
           </div>
         </Section>
       )}
@@ -199,7 +202,7 @@ export default function Owner() {
                             {g.title}: {resultText(g, g.result)} · {fmtGrade(g.grade)}
                           </div>
                         ))
-                      : 'Graded on wins, the playoffs and profit.'}
+                      : 'Graded on wins and the playoffs.'}
                   </div>
                 )}
               </PastReview>
@@ -374,89 +377,14 @@ function CameoCard({ league }: { league: League }) {
   );
 }
 
-const BOOKS_LABEL = { warning: 'Warning', ultimatum: 'Ultimatum', freeze: 'Budget frozen', final: 'Final warning' } as const;
-
-/** What held a reviewed season's grade down, in a line (see OwnerReview.held). */
-const HELD = {
-  floor: 'Under his floor: nothing else could lift this grade.',
-  patience: 'Past his rebuild allowance and out of the postseason. Nothing else could lift this grade.',
-  books: 'The books closed in the red under the freeze. Not even a title could lift this grade.',
-  debt: "The books closed past his debt limit. A title couldn't lift this grade.",
-} as const;
-
-const redOrBlack = (x: number) => `${money(Math.abs(x))} in the ${x < 0 ? 'red' : 'black'}`;
-
-/**
- * The books in the red: the step he has taken, what it means, and the one figure he judges: where
- * the regular season's books close (projected in season, the close itself in the postseason, next
- * season's between seasons), the luxury tax he signed off on not counted against the coach (see
- * sanctionedTax).
- */
-function BooksCard({ league }: { league: League }) {
-  const b = booksOf(league)!;
-  const o = booksOutlook(league);
-  const left = seasonEndCash(league, league.userTid).left;
-  const between = isOff(league);
-  const closed = b.close ?? league.teams[league.userTid].cash;
-  const tax = o.tax > 0 ? `, after ${money(o.tax)} in luxury tax` : '';
-  const signed = o.tax > 0 && o.sanctioned > 0 ? ` The ${money(o.sanctioned)} he signed off on doesn't count.` : '';
-  const proj =
-    left === 0 && !between
-      ? `The regular season's books closed ${redOrBlack(o.judged)}${tax}. The review reads that, not the playoff gates.${signed}`
-      : between
-        ? `Next season's books project ${redOrBlack(o.judged)}${tax}.${signed}`
-        : `Projected at the regular season's close: ${redOrBlack(o.judged)}${tax}.${signed}`;
-  // what closing deeper in the red brings, as the review will read it (the final warning, or past the debt limit the sack)
-  const deeper = deeperText(league, between);
-  return (
-    <section className="card fo-ultimatum" aria-label="The books">
-      <div className="row">
-        <TriangleAlert size={18} className="bad" aria-hidden="true" />
-        <span className="over grow">The books</span>
-        <Tag tone="bad">{BOOKS_LABEL[b.stage]}</Tag>
-      </div>
-      <h2>{b.stage === 'warning' && b.close === undefined ? `${money(-Math.min(0, o.judged))} in the red when the books close` : `Closed ${money(-closed)} in the red`}</h2>
-      <div className="small dim2">
-        {b.stage === 'warning'
-          ? b.close === undefined
-            ? `Luxury tax in, playoff money out. Still in the red at the close, and he gives you an ultimatum.${signed}`
-            : "You inherited this payroll, so it's a warning this time. Still in the red next season, and he gives you an ultimatum."
-          : b.stage === 'ultimatum'
-            ? 'Back in the black when the next books close, or he freezes the budget.'
-            : b.stage === 'freeze'
-              ? 'Minimum deals only, no raises, no trade that adds salary. It lasts until a season closes in the black.'
-              : `The freeze stands. ${deeper}`}{' '}
-        {(b.stage !== 'warning' || b.close !== undefined) && proj}
-      </div>
-      {b.stage === 'freeze' && (
-        <More label="What the freeze means">
-          <div className="small dim2 fo-help">
-            <p>No raises means no re-signing, extending, qualifying or matching above what he&apos;s paid. No trade may send cash. Staff budgets stay at the league standard.</p>
-            <p>A frozen season closed in the red grades {fmtGrade(FREEZE_GRADE)} at best, title or not.</p>
-            {deeper && <p>{deeper}</p>}
-          </div>
-        </More>
-      )}
-      <Link to="/office/finances" className="card-link">
-        Finances
-      </Link>
-    </section>
-  );
-}
-
 /** How the owner grades the season and decides, in full. */
 function GradingHelp({ league }: { league: League }) {
-  const scale = revenueScale(league);
   const cap = CAP_FOR(league);
   // what a season counts once the first one has set the standing (see seasonWeight)
   const weight = Math.round(SEASON_WEIGHT * 100);
   const rows: { k: string; how: string }[] = [
     { k: 'Wins', how: `Each win above or below his target counts ${Math.round(100 / WIN_SCALE)}. It reaches ±100 at ${WIN_SCALE} wins either way.` },
     { k: 'Postseason', how: 'Reaching his goal is +30, and each round beyond it 30 more. Each round short costs 35. The play-in counts as a round.' },
-    {
-      k: 'Profit',
-      how: `Every ${money((PROFIT_SCALE * scale) / 10)} above or below his target counts 10, up to ±100 at ${money(PROFIT_SCALE * scale)}. Savings from budgets under the league standard don't count.`,
-    },
     {
       k: 'Payroll',
       how: `Under his line is +15, up to +30 with room to spare. Over it costs 25, down to −100 at ${money(PAYROLL_SCALE * cap.luxuryTax)} over.`,
@@ -469,8 +397,9 @@ function GradingHelp({ league }: { league: League }) {
   return (
     <HelpSheet title="How the owner judges you">
       <p>
-        On opening night he sets three or four goals from your roster. The win total is the season forecast&apos;s read. The postseason goal never asks for a round the forecast
-        thinks is out of reach. For a rebuild, minutes for the young players replace it. The money goal is a profit target at the league&apos;s standard prices and budgets.
+        On opening night he sets two or three goals from your roster. The win total is the season forecast&apos;s read. The postseason goal never asks for a round the forecast
+        thinks is out of reach. For a rebuild, minutes for the young players replace it. Near the luxury tax he sets a payroll line too. The franchise runs its own money: tickets
+        and budgets are never yours to answer for.
       </p>
       <p>After the playoffs each goal is graded −100 to +100. Their weights make the season&apos;s grade.</p>
       {rows.map((r) => (
@@ -514,24 +443,7 @@ function GradingHelp({ league }: { league: League }) {
         enough to win the cost back, and a little more. One that clears the floor just pays it. Part of the win goal moves to the young players&apos; minutes.
       </p>
       <p>
-        <b>The books.</b> The luxury tax and every loss come out of the franchise&apos;s cash. He judges it the day the regular season&apos;s books close, tax paid. The playoff
-        gates come after: his bonus, not your cover.
-      </p>
-      <p>
-        <b>In the red.</b> Heading into the red in the three weeks before the deadline, he warns you. Closed in the red at the review, he gives an ultimatum. At the next, he
-        freezes the budget. Then it&apos;s minimum deals only, no raises, no trade that adds salary, and staff budgets at the league standard.
-      </p>
-      <p>
-        <b>The freeze.</b> A frozen season closed in the red grades {fmtGrade(FREEZE_GRADE)} at best, title or not. Deeper in the red than the season before brings a final warning,{' '}
-        {fmtGrade(BLEED_GRADE)} at best. Deeper again gets you fired.
-      </p>
-      <p>
-        <b>Debt.</b> Past {money(DEBT_LIMIT * scale)} in the red, no title lifts a season&apos;s grade. A close past it, deeper than the season before, goes straight to the freeze.
-        Under the freeze, it gets you fired.
-      </p>
-      <p>
-        <b>Owners.</b> A win-now owner weighs the playoffs more. He lets a contender pay some tax, up to the first apron. A builder cares about the young players. A frugal one
-        wants more profit.
+        <b>Owners.</b> A win-now owner weighs the playoffs more. A builder cares about the young players. A frugal one watches the luxury tax.
       </p>
     </HelpSheet>
   );

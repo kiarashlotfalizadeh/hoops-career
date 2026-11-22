@@ -1,34 +1,28 @@
-// The CBA's tiers as the game models them: Bird rights (full, Early Bird, none) and what each lets a
-// team pay its own player, the five-year deal and 8% raises only on full Bird rights, the max (25,
-// 30, 35% of the cap) with the Rose-rule max and the supermax a player's honors earn with his own
-// team, a star asking the max of everyone, a team that released a player not signing him again that
-// season, AI teams' contract options, second-rounders stashed on two-way deals, role veterans bought
-// out and signed by contenders for the minimum, AI teams waiving their end of the bench after a
-// trade, what AI teams pay to keep their own, and a good free agent's old team bringing him back
-// over the cap. The signing exceptions: the mid-level (8.5% of the cap, 4 years, under the first
-// apron), the taxpayer mid-level past it (3.7%, 2 years, under the second), the room exception that
-// replaces it once a team has used cap space (5.7%, 2 years) and the bi-annual (3.3%, 2 years, under
-// the first apron, not two seasons running, not after the room exception); offer sheets and the
-// user's pending offers hold them, and hold a spot under the 21-man summer limit.
+// The CBA as the game models it: a soft cap, the luxury tax, one mid-level exception and Bird
+// rights. Bird rights (full, Early Bird, none) and what each lets a team pay its own player, the
+// five-year deal and 8% raises only on full Bird rights, the max (25, 30, 35% of the cap) with the
+// Rose-rule max and the supermax a player's honors earn with his own team, a star asking the max
+// of everyone, a team that released a player not signing him again that season, AI teams' contract
+// options, role veterans bought out and signed by contenders for the minimum, AI teams releasing
+// their end of the bench after a trade, what AI teams pay to keep their own, a good free agent's
+// old team bringing him back over the cap, and the mid-level (8.5% of the cap, 4 years, one signing
+// a season, whatever the payroll), which a pending offer holds.
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
-import { CAP_FOR, OFFSEASON_ROSTER_MAX, contractSeason, freeAgents, payroll, standardRoster, statsLine, teamPlayers, twoWayRoster } from '../league/helpers';
+import { CAP_FOR, contractSeason, freeAgents, payroll, standardRoster } from '../league/helpers';
 import {
-  BAE_PCT,
   EXCEPTIONS,
   MAX_ASK,
   MLE_PCT,
-  ROOM_PCT,
-  TMLE_PCT,
   aiBuyouts,
   aiOption,
+  aiMleRoom,
   aiRoute,
   askingContract,
   birdTier,
   exceptionAmount,
   exceptionRoom,
   exceptionUsedReason,
-  hardCapLine,
   maxYearsWith,
   marketSalary,
   mleRoom,
@@ -43,7 +37,6 @@ import {
   signPlayer,
   signingRoute,
   spendRoute,
-  summerRoster,
   teamAppeal,
   summerFloor,
   valueScore,
@@ -61,16 +54,12 @@ import {
   userOffer,
   userResign,
 } from '../league/freeAgency';
-import { aiMatchVerdict, qualifyingOffer, resolveOfferSheets, setRfaHold, sheetDecisionBlocked, signOfferSheet, userDecideSheet } from '../league/rfa';
 import { aiPackage } from '../league/aiTrades';
 import { executeTrade, tradeRoster, validateTrade } from '../league/trades';
-import { draftPlayer, ensureFuturePicks } from '../league/draft';
-import { faAdvance } from '../league/season';
-import { generatePlayer, DEFAULT_SCALE, blankStats, contractExp } from '../playerGen';
-import { Rng } from '../random';
+import { blankStats } from '../playerGen';
 import { CAP } from '../constants';
 import type { League, Player } from '../types';
-import { DRAFT_PROSPECT, FREE_AGENT } from '../types';
+import { FREE_AGENT } from '../types';
 
 const U = 0;
 const AI = 1;
@@ -122,7 +111,7 @@ function payTo(l: League, tid: number, amount: number) {
 }
 
 function freeAgent(l: League, ovr = 70, i = 0): Player {
-  const p = freeAgents(l).filter((x) => !x.rfa)[i];
+  const p = freeAgents(l)[i];
   p.ovr = p.pot = ovr;
   p.bornYear = l.season - 27;
   p.experience = 5;
@@ -130,57 +119,8 @@ function freeAgent(l: League, ovr = 70, i = 0): Player {
   return p;
 }
 
-/** Free agency with every team over the cap and without the mid-level; `open` gives a team room. */
-function summer() {
-  const l = createLeague({ name: 'sr5', userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 5 });
-  l.id = 'rfa_5';
-  l.phase = 'freeAgency';
-  l.faDay = 0;
-  const s = contractSeason(l);
-  const cap = CAP_FOR(l, s);
-  for (const t of l.teams) {
-    t.deadMoney = [{ pid: -1, name: 'x', season: s, amount: cap.salaryCap }];
-    t.mleSeason = s;
-    t.baeSeason = s;
-  }
-  const open = (tid: number, space?: number) => {
-    const t = l.teams[tid];
-    t.deadMoney = [];
-    t.strategy = 'retool';
-    for (const p of teamPlayers(l, tid)) p.contract = { start: s, salaries: [cap.vetMin] };
-    if (space !== undefined) t.deadMoney.push({ pid: -2, name: 'y', season: s, amount: cap.salaryCap - payroll(l, tid, s) - space });
-  };
-  return { l, s, cap, open };
-}
-
-/** A restricted free agent of team `tid`: a young 76 off a cheap deal, qualified. */
-function rfa(l: League, tid: number): Player {
-  const p = freeAgents(l).find((x) => !x.rfa)!;
-  p.ovr = p.pot = 76;
-  p.bornYear = l.season - 23;
-  p.injury = null;
-  p.experience = 2;
-  p.contract = { start: l.season - 1, salaries: [3000, 3000] };
-  p.draft = { year: l.season - 3, round: 2, pick: 40, tid };
-  p.stats = p.stats.filter((x) => x.season !== l.season);
-  p.tid = tid;
-  statsLine(p, l.season, tid, false).gp = 60;
-  p.rfa = { tid, qo: qualifyingOffer(l, p) };
-  setRfaHold(l, p);
-  p.tid = FREE_AGENT;
-  p.asking = undefined;
-  p.asking = askingContract(l, p);
-  p.faDays = 5;
-  return p;
-}
-
-const fillTo = (l: League, tid: number, n: number, s: number) => {
-  while (standardRoster(l, tid).length < n) signPlayer(l, freeAgents(l).filter((x) => !x.rfa)[0], tid, CAP_FOR(l, s).vetMin, 1, { news: false, start: s });
-};
-const atAsk = (l: League, p: Player, years: number) => Math.ceil((askingContract(l, p, U).amount * (1 + Math.abs(years - askingContract(l, p, U).years) * 0.03)) / 50) * 50;
-
 describe('the CBA', () => {
-  it('Bird rights, the max, releases, AI options, two-way stashes, buyouts, keeping their own, the signing exceptions and aprons, offer sheets', () => {
+  it('Bird rights, the max, releases, AI options, buyouts, keeping their own, the mid-level exception', () => {
     // Bird rights: full after three seasons with the team, Early Bird after two, none after one, and a trade keeps the clock
     {
       const l = league();
@@ -239,7 +179,7 @@ describe('the CBA', () => {
       // a free agent
       l.phase = 'freeAgency';
       l.faDay = 5;
-      const fa = freeAgents(l).find((x) => !x.rfa && askingContract(l, x, U).amount <= CAP_FOR(l, l.season + 1).vetMin)!;
+      const fa = freeAgents(l).find((x) => askingContract(l, x, U).amount <= CAP_FOR(l, l.season + 1).vetMin)!;
       expect(maxYearsWith(l, fa, U)).toBe(4);
       expect(userOffer(l, fa.pid, CAP_FOR(l, l.season + 1).vetMin * 2, FA_YEARS + 1).reason).toMatch(/1 to 4 years/);
     }
@@ -276,7 +216,7 @@ describe('the CBA', () => {
     {
       const l = league();
       l.phase = 'freeAgency';
-      const [star, mid] = freeAgents(l).filter((p) => !p.rfa);
+      const [star, mid] = freeAgents(l);
       for (const [p, ovr] of [
         [star, 94],
         [mid, 79],
@@ -298,7 +238,7 @@ describe('the CBA', () => {
       }
     }
 
-    // releases bar the team that released a player from signing him again that season, but not a 10-day contract that ran out
+    // a release makes him a free agent at once, and bars the team that released him from signing him again that season
     {
       const l = league();
       l.phase = 'regular';
@@ -306,14 +246,11 @@ describe('the CBA', () => {
       releasePlayer(l, p, { news: false });
       expect(releasedBy(l, p, U)).toBe(true);
       expect(releasedBy(l, p, AI)).toBe(false);
-      delete p.waivers;
+      expect(p.tid).toBe(FREE_AGENT);
       expect(userOffer(l, p.pid, CAP_FOR(l).vetMin * 3, 1).reason).toMatch(/released .* this season/);
       l.season++;
       expect(releasedBy(l, p, U)).toBe(false);
       l.season--;
-      const q = standardRoster(l, U)[4];
-      releasePlayer(l, q, { news: false, ended: true });
-      expect(q.released).toBeUndefined();
     }
 
     // AI options: a player option on the final season for a good player 32 or younger, likelier the better he is; a team option on a cheap deal for a young one; nothing on one-year deals
@@ -345,28 +282,6 @@ describe('the CBA', () => {
       expect(share(70, 22, 3_000).to).toBeGreaterThan(0.2);
       expect(share(70, 27, 3_000).to).toBe(0);
       expect(aiOption(l, pool[0], 30_000, 1)).toBeUndefined();
-    }
-
-    // the draft stashes an AI team's second-rounder on a two-way deal when a two-way slot is open for next season, counting only next season's deals
-    {
-      const l = league();
-      l.phase = 'draft';
-      const tid = AI;
-      // three two-ways whose deals run out this season: they don't hold next season's slots
-      for (const p of twoWayRoster(l, tid)) p.contract = { start: l.season, salaries: [600], twoWay: true };
-      while (twoWayRoster(l, tid).length < 3) signPlayer(l, freeAgents(l)[0], tid, 600, 1, { twoWay: true, news: false });
-      for (const p of twoWayRoster(l, tid)) p.contract = { start: l.season, salaries: [600], twoWay: true };
-      ensureFuturePicks(l, l.season);
-      const p = generatePlayer(new Rng(5), { pid: l.nextPid++, season: l.season, tid: DRAFT_PROSPECT, age: 20, talent: -1.5, scale: DEFAULT_SCALE });
-      l.players[p.pid] = p;
-      Object.assign(p, { ovr: 48, pot: 56 });
-      p.draft = { year: l.season, round: 0, pick: 0, tid: null };
-      const dp = { dpid: 99_999, season: l.season, round: 2 as const, originalTid: tid, tid, pick: 15 };
-      l.draftPicks.push(dp);
-      expect(valueScore(l, p)).toBeLessThan(64);
-      draftPlayer(l, dp, p.pid);
-      expect(p.contract.twoWay).toBe(true);
-      expect(contractExp(p.contract)).toBe(l.season + 2);
     }
 
     // non-contenders buy out role veterans only (30+, deal up within a season, outside their six best, under 82), who sign with a contender for the minimum
@@ -406,7 +321,7 @@ describe('the CBA', () => {
       expect(found).toBe(true);
     }
 
-    // an AI team a trade takes past 15 waives its end of the bench; the user never goes past 15
+    // an AI team a trade takes past 15 releases its end of the bench; the user never goes past 15
     {
       const l = league();
       l.phase = 'regular';
@@ -449,7 +364,7 @@ describe('the CBA', () => {
       ).toBe(true);
     }
 
-    // AI teams pay a young star up to just under the second apron (never past it), a contender's 80+ starter to the tax line, and a rebuilder's veteran less than its young players
+    // AI teams pay a young star up to just under their top line (never past it), a contender's 80+ starter to the tax line, and a rebuilder's veteran less than its young players
     {
       const l = league();
       const cap = CAP_FOR(l, l.season);
@@ -457,10 +372,10 @@ describe('the CBA', () => {
       for (const strategy of ['contend', 'retool', 'rebuild'] as const) {
         t.strategy = strategy;
         expect(payrollBudget(cap, t, 88, { core: true, young: true })).toBe(aiTopLine(cap));
-        expect(aiTopLine(cap)).toBeLessThan(cap.secondApron);
+        expect(aiTopLine(cap)).toBeLessThan(cap.spendTop);
       }
       t.strategy = 'contend';
-      expect(payrollBudget(cap, t, 84, { core: true, young: false })).toBe(cap.firstApron);
+      expect(payrollBudget(cap, t, 84, { core: true, young: false })).toBe(cap.spendLine);
       expect(payrollBudget(cap, t, 80, { core: false, young: false })).toBe(cap.luxuryTax);
       expect(payrollBudget(cap, t, 76, { core: false, young: false })).toBeLessThan(cap.luxuryTax);
       t.strategy = 'rebuild';
@@ -484,13 +399,14 @@ describe('the CBA', () => {
         anchor.contract = { start: l.season, salaries: [anchor.contract.salaries[0] ?? 1_000, 0] };
         anchor.contract.salaries[1] = pay - payroll(l, AI, s);
       };
-      // over the cap, his ask still within the first apron (a contender's budget for its core)
+      // over the cap, his ask still within a contender's budget for its core
       books(cap.salaryCap + 5_000);
       const bid = () => faInterest(l, p).find((o) => o.tid === AI);
       expect(bid()?.bird).toBe(true);
       expect(bid()!.amount).toBe(askingContract(l, p, AI).amount);
-      // past its budget for him: no bid on his rights (and no space or exception to pay him with)
-      books(cap.firstApron);
+      // past its budget for him: no bid on his rights (and no space or mid-level to pay him with)
+      books(cap.spendLine);
+      l.teams[AI].mleSeason = s;
       expect(bid()).toBeUndefined();
       // and what its budget leaves under his summer floor isn't an offer he weighs against the user's
       // either (bidRivals): losing the user's floor bid to it signed RJ Barrett for 35% of his value
@@ -508,8 +424,7 @@ describe('the CBA', () => {
 
     // a good free agent nobody could pay goes back to his old team on his Bird rights as the market
     // closes (and bids on them in the market, see birdRoom), within what it pays to keep one
-    // (keepCeiling: never past the second apron); not to a
-    // team that released him
+    // (keepCeiling: never past the AI's top line); not to a team that released him
     {
       const l = league();
       l.phase = 'freeAgency';
@@ -524,7 +439,8 @@ describe('the CBA', () => {
         anchor.contract = { start: l.season, salaries: [anchor.contract.salaries[0] ?? 1_000, 0] };
         anchor.contract.salaries[1] = pay - payroll(l, AI, s);
       };
-      books(cap.secondApron);
+      books(cap.spendTop);
+      l.teams[AI].mleSeason = s;
       expect(faInterest(l, p).some((o) => o.tid === AI)).toBe(false);
       aiLateReturns(l);
       expect(p.tid).toBe(FREE_AGENT);
@@ -540,197 +456,68 @@ describe('the CBA', () => {
       expect(q.tid).toBe(FREE_AGENT);
     }
 
-    // the room exception replaces the mid-level once a team has signed a free agent with cap space: 5.7% of the cap, two years, once
+    // the mid-level: 8.5% of the cap for up to four years, one signing a season, whatever the payroll
     {
       const l = excLeague();
       const s = contractSeason(l);
       const cap = CAP_FOR(l, s);
-      payTo(l, U, cap.salaryCap - 5_000);
       const p = freeAgent(l);
-      expect(exceptionAmount(l, 'room', s)).toBe(Math.round((cap.salaryCap * ROOM_PCT) / 10) * 10);
-      expect(exceptionRoom(l, U, 'room', s)).toBe(0);
-      expect(exceptionUsedReason(l, U, 'room', s)).toMatch(/Only after a cap-space signing/);
-      expect(mleRoom(l, U, s)).toBe(Math.round((cap.salaryCap * MLE_PCT) / 10) * 10);
+      const mle = Math.round((cap.salaryCap * MLE_PCT) / 10) * 10;
+      expect(exceptionAmount(l, 'mle', s)).toBe(mle);
+      expect(EXCEPTIONS.mle.years).toBe(4);
+      expect(routeYears('mle')).toBe(4);
+      // under the cap a signing uses the space, and the mid-level stays
+      payTo(l, U, cap.salaryCap - 5_000);
       expect(signingRoute(l, U, 4_000, s, p)).toBe('space');
       spendRoute(l, U, 'space', s);
-      expect(l.teams[U].spaceSeason).toBe(s);
-      expect(mleRoom(l, U, s)).toBe(0);
-      expect(exceptionUsedReason(l, U, 'mle', s)).toMatch(/brings the room exception instead/);
-      expect(exceptionRoom(l, U, 'room', s)).toBe(exceptionAmount(l, 'room', s));
-      // beyond the space left: the room exception, for two years at most
-      const amount = exceptionAmount(l, 'bae', s) + 500;
-      expect(signingRoute(l, U, amount, s, p, 2)).toBe('room');
-      expect(signingRoute(l, U, amount, s, p, 3)).toBeNull();
-      spendRoute(l, U, 'room', s);
-      expect(exceptionRoom(l, U, 'room', s)).toBe(0);
-      // and no bi-annual after it that season
-      expect(exceptionUsedReason(l, U, 'bae', s)).toMatch(/Not after the room exception/);
-      expect(signingRoute(l, U, amount, s, p, 2)).toBeNull();
-    }
-
-    // a team that used the mid-level first gets no room exception
-    {
-      const l = excLeague();
-      const s = contractSeason(l);
+      expect(mleRoom(l, U, s)).toBe(mle);
+      // past the space left: the mid-level, for four years at most; the minimum fits anywhere
+      expect(signingRoute(l, U, 6_000, s, p, 4)).toBe('mle');
+      expect(signingRoute(l, U, 6_000, s, p, 5)).toBeNull();
+      expect(signingRoute(l, U, mle + 10, s, p)).toBeNull();
+      expect(signingRoute(l, U, cap.vetMin, s, p, 5)).toBe('min');
+      // no line above the cap closes it: past the tax it still pays in full
+      payTo(l, U, cap.luxuryTax + 20_000);
+      expect(mleRoom(l, U, s)).toBe(mle);
+      expect(exceptionRoom(l, U, 'mle', s)).toBe(mle);
+      // once a season
       spendRoute(l, U, 'mle', s);
-      spendRoute(l, U, 'space', s);
-      expect(exceptionUsedReason(l, U, 'room', s)).toMatch(/one or the other/);
+      expect(mleRoom(l, U, s)).toBe(0);
+      expect(exceptionUsedReason(l, U, s)).toBe('Used this season.');
+      expect(exceptionUsedReason(l, U, s + 1)).toBeNull();
+      expect(signingRoute(l, U, 6_000, s, p, 2)).toBeNull();
+      // an AI team takes it for the length a player wants, cut to its four years otherwise
+      payTo(l, AI, cap.salaryCap + 1_000);
+      expect(aiRoute(l, AI, 6_000, s, p, 3)).toBe('mle');
+      expect(aiRoute(l, AI, 6_000, s, p, 5)).toBe('mle');
+      // but an AI front office doesn't take it past its top line: the rules allow it, its habits don't
+      payTo(l, AI, aiTopLine(cap) - 4_000);
+      expect(signingRoute(l, AI, 6_000, s, p, 3)).toBe('mle');
+      expect(aiMleRoom(l, AI, s)).toBe(4_000);
+      expect(aiRoute(l, AI, 6_000, s, p, 3)).toBeNull();
+      expect(aiRoute(l, AI, 4_000, s, p, 3)).toBe('mle');
+      spendRoute(l, AI, 'mle', s);
+      expect(aiRoute(l, AI, 4_000, s, p, 3)).toBeNull();
     }
 
-    // the bi-annual: 3.3% of the cap for two years, under the first apron after signing, the smallest exception first
+    // a pending offer on the mid-level holds it: no second signing leans on it until it's decided
     {
       const l = excLeague();
       const s = contractSeason(l);
       const cap = CAP_FOR(l, s);
       payTo(l, U, cap.salaryCap + 1_000);
-      const p = freeAgent(l);
-      const bae = Math.round((cap.salaryCap * BAE_PCT) / 10) * 10;
-      expect(exceptionRoom(l, U, 'bae', s)).toBe(bae);
-      expect(EXCEPTIONS.bae.years).toBe(2);
-      // a cheap signing doesn't use up the mid-level; a longer or bigger one does
-      expect(signingRoute(l, U, bae, s, p)).toBe('bae');
-      expect(signingRoute(l, U, bae, s, p, 3)).toBe('mle');
-      expect(signingRoute(l, U, bae + 10, s, p)).toBe('mle');
-      expect(signingRoute(l, U, bae, s, p, 2, 'mle')).toBe('mle');
-      // past the tax line the full mid-level and the bi-annual still pay, up to the first apron
-      payTo(l, U, cap.luxuryTax + 1_000);
-      expect(exceptionRoom(l, U, 'bae', s)).toBe(bae);
-      payTo(l, U, cap.firstApron - 2_000);
-      expect(exceptionRoom(l, U, 'bae', s)).toBe(2_000);
-      expect(mleRoom(l, U, s)).toBe(2_000);
-    }
-
-    // the bi-annual: not two seasons running, and it hard-caps the team at the first apron in trades like the mid-level
-    {
-      const l = excLeague('regular');
-      const s = l.season;
-      spendRoute(l, U, 'bae', s);
-      expect(exceptionUsedReason(l, U, 'bae', s)).toBe('Used this season.');
-      expect(exceptionUsedReason(l, U, 'bae', s + 1)).toMatch(/not two seasons running/);
-      expect(exceptionUsedReason(l, U, 'bae', s + 2)).toBeNull();
-      const cap = CAP_FOR(l, s);
-      expect(hardCapLine(l, U, s)).toMatchObject({ amount: cap.firstApron, name: 'first apron' });
-      // a trade that takes the payroll past the first apron is refused
-      payTo(l, U, cap.firstApron - 1_000);
-      const big = standardRoster(l, AI).sort((a, b) => b.contract.salaries[0] - a.contract.salaries[0])[0];
-      big.contract = { start: s, salaries: [20_000, 20_000] };
-      big.tradeLock = undefined;
-      const errs = validateTrade(l, { a: { tid: U, pids: [], dpids: [] }, b: { tid: AI, pids: [big.pid], dpids: [] } });
-      expect(errs.some((e) => /used the bi-annual exception this season, so it's hard-capped at the first apron/.test(e))).toBe(true);
-    }
-
-    // the taxpayer mid-level pays 3.7% of the cap for two years for a team the full mid-level would take past the first apron, up to the second, and hard-caps it there
-    {
-      const l = excLeague();
-      const s = contractSeason(l);
-      const cap = CAP_FOR(l, s);
-      const p = freeAgent(l);
-      const tmle = Math.round((cap.salaryCap * TMLE_PCT) / 10) * 10;
-      expect(EXCEPTIONS.tmle.years).toBe(2);
-      // under the first apron the full mid-level pays: the taxpayer one is only the fallback (last in the order)
-      payTo(l, U, cap.luxuryTax);
-      expect(signingRoute(l, U, tmle, s, p, 2)).toBe('mle');
-      // past it, only the taxpayer mid-level, and no bi-annual
-      payTo(l, U, cap.firstApron + 1_000);
-      expect(mleRoom(l, U, s)).toBe(0);
-      expect(exceptionRoom(l, U, 'bae', s)).toBe(0);
-      expect(exceptionRoom(l, U, 'tmle', s)).toBe(tmle);
-      expect(signingRoute(l, U, tmle, s, p, 2)).toBe('tmle');
-      expect(signingRoute(l, U, tmle, s, p, 3)).toBeNull();
-      // up to the second apron
-      payTo(l, U, cap.secondApron - 1_500);
-      expect(exceptionRoom(l, U, 'tmle', s)).toBe(1_500);
-      payTo(l, U, cap.secondApron + 1);
-      expect(exceptionRoom(l, U, 'tmle', s)).toBe(0);
-      // one mid-level or the other, and the taxpayer one hard-caps at the second apron
-      spendRoute(l, U, 'tmle', s);
-      expect(exceptionUsedReason(l, U, 'mle', s)).toMatch(/one or the other/);
-      expect(hardCapLine(l, U, s)).toMatchObject({ amount: cap.secondApron, name: 'second apron' });
-    }
-
-    // AI teams take the exception that allows the length a player wants, cut to the longest otherwise
-    {
-      const l = excLeague();
-      const s = contractSeason(l);
-      const cap = CAP_FOR(l, s);
-      payTo(l, AI, cap.salaryCap + 1_000);
-      const p = freeAgent(l);
-      const bae = exceptionAmount(l, 'bae', s);
-      expect(aiRoute(l, AI, bae, s, p, 2)).toBe('bae');
-      expect(aiRoute(l, AI, bae, s, p, 3)).toBe('mle');
-      expect(aiRoute(l, AI, bae, s, p, 5)).toBe('mle');
-      expect(routeYears('mle')).toBe(4);
-      spendRoute(l, AI, 'mle', s);
-      expect(aiRoute(l, AI, bae, s, p, 4)).toBe('bae');
-    }
-
-    // an offer sheet on an exception reserves it, and gets it back when it's matched
-    {
-      const R = 2;
-      const l = excLeague();
-      const s = contractSeason(l);
-      payTo(l, U, CAP_FOR(l, s).salaryCap + 1_000);
-      const p = freeAgent(l, 74);
-      p.bornYear = l.season - 23;
-      p.rfa = { tid: R, qo: 3_000, hold: 3_000 };
-      // a young player on a cheap sheet: his team matches
-      signOfferSheet(l, p, U, 3_000, 2, 'bae', l.faDay);
-      expect(l.teams[U].baeSeason).toBe(s);
-      expect(exceptionRoom(l, U, 'bae', s)).toBe(0);
-      resolveOfferSheets(l);
-      expect(p.tid).toBe(R);
-      expect(l.teams[U].baeSeason).toBeUndefined();
-    }
-
-    // an offer sheet on cap space ends the team's mid-level while it waits: matched, it's back; not, the room exception replaces it
-    {
-      const l = excLeague();
-      const s = contractSeason(l);
-      const cap = CAP_FOR(l, s);
-      payTo(l, AI, cap.salaryCap - 20_000);
-      const [p, p2] = [0, 2].map((i) => {
-        const x = freeAgent(l, 74, i);
-        x.bornYear = l.season - 23;
-        x.rfa = { tid: U, qo: 3_000, hold: 3_000 };
-        return x;
-      });
-      const q = freeAgent(l, 70, 1);
-      signOfferSheet(l, p, AI, 15_000, 3, 'space', l.faDay);
-      // the $5M of space it leaves can't be topped up with the mid-level
-      expect(exceptionUsedReason(l, AI, 'mle', s)).toMatch(/offer sheet on cap space is pending/);
-      expect(mleRoom(l, AI, s)).toBe(0);
-      expect(signingRoute(l, AI, 10_000, s, q)).toBeNull();
-      // matched: the space was never used
-      expect(userDecideSheet(l, p.pid, true).ok).toBe(true);
-      expect(exceptionUsedReason(l, AI, 'mle', s)).toBeNull();
-      expect(signingRoute(l, AI, 10_000, s, q)).toBe('space');
-      // not matched: he joins on the space, and the room exception replaces the mid-level
-      signOfferSheet(l, p2, AI, 15_000, 3, 'space', l.faDay);
-      expect(userDecideSheet(l, p2.pid, false).ok).toBe(true);
-      expect(p2.tid).toBe(AI);
-      expect(l.teams[AI].spaceSeason).toBe(s);
-      expect(exceptionUsedReason(l, AI, 'mle', s)).toMatch(/brings the room exception instead/);
-      expect(payroll(l, AI, s)).toBeLessThanOrEqual(cap.salaryCap);
-    }
-
-    // a pending offer leans on its exception, and cap space can't be used while one needs the mid-level
-    {
-      const l = excLeague();
-      const s = contractSeason(l);
-      const cap = CAP_FOR(l, s);
-      payTo(l, U, cap.salaryCap - 20_000);
       const star = freeAgent(l, 80, 0);
       const role = freeAgent(l, 66, 1);
       l.faBids = [{ pid: star.pid, amount: 12_000, years: 3, day: 0, decideDay: 2, route: 'mle' }];
       expect(userExceptionRoom(l, 'mle', s, role.pid)).toBe(0);
-      expect(userExceptionRoom(l, 'bae', s, role.pid)).toBe(exceptionAmount(l, 'bae', s));
+      expect(userExceptionRoom(l, 'mle', s, star.pid)).toBe(exceptionAmount(l, 'mle', s));
       expect(offerRoute(l, role, 4_000, s)).toBeNull();
-      expect(offerBlockedReason(l, role, 4_000, 2)).toMatch(/cost you the mid-level\. Your pending mid-level offer to/);
+      expect(offerBlockedReason(l, role, 4_000, 2)).toMatch(/Your pending offer to .* uses your mid-level exception/);
       l.faBids = [];
-      expect(offerRoute(l, role, 4_000, s)).toBe('space');
+      expect(offerRoute(l, role, 4_000, s)).toBe('mle');
     }
 
-    // a user signing on the bi-annual records it and says so
+    // a user signing on the mid-level records it and says so
     {
       const l = excLeague('regular');
       const s = l.season;
@@ -738,80 +525,10 @@ describe('the CBA', () => {
       payTo(l, U, CAP_FOR(l, s).salaryCap + 1_000);
       const p = freeAgent(l, 66);
       p.asking = { amount: 4_000, years: 2 };
-      const ask = { amount: 4_000, years: 2 };
-      const res = userOffer(l, p.pid, ask.amount + 1_000, 2);
+      const res = userOffer(l, p.pid, 5_000, 2);
       expect(res.ok).toBe(true);
-      expect(l.teams[U].baeSeason).toBe(s);
-      expect(l.teams[U].mleSeason).toBeUndefined();
-      expect(l.inbox[0].body).toMatch(/using our bi-annual exception/);
-    }
-
-    // a pending offer sheet holds a summer roster spot on every path that adds a player
-    {
-      const [R, B] = [1, 2];
-
-      // the user's own: re-signing his restricted free agent waits for a spot, so the sheet can't take him to 22
-      {
-        const { l, s, cap, open } = summer();
-        open(U, 40_000);
-        open(R);
-        const mine = rfa(l, U);
-        const theirs = rfa(l, R);
-        // R can't match (its payroll is past what it will spend)
-        l.teams[R].deadMoney.push({ pid: -4, name: 'z', season: s, amount: cap.luxuryTax });
-        fillTo(l, U, OFFSEASON_ROSTER_MAX - 1, s);
-        expect(userOffer(l, theirs.pid, atAsk(l, theirs, 3), 3).ok).toBe(true);
-        expect(summerRoster(l, U)).toBe(OFFSEASON_ROSTER_MAX);
-        const ask = askingContract(l, mine, U);
-        expect(userResign(l, mine.pid, ask.amount, ask.years).reason).toMatch(/roster is full for next season \(21, counting your pending offers and offer sheets\)/);
-        // nor can he match a sheet on his own man
-        signOfferSheet(l, mine, B, askingContract(l, mine, B).amount, 3, 'min', 0);
-        expect(sheetDecisionBlocked(l, mine.pid, true)).toMatch(/Matching needs a roster spot/);
-        expect(userDecideSheet(l, mine.pid, true).ok).toBe(false);
-        resolveOfferSheets(l);
-        expect(theirs.tid).toBe(U);
-        expect(standardRoster(l, U).length).toBe(OFFSEASON_ROSTER_MAX);
-      }
-
-      // an AI team with a sheet of its own pending at 20 can't match another, and stays at 21
-      {
-        const { l, s, open } = summer();
-        open(U, 40_000);
-        open(R);
-        open(B);
-        const rRfa = rfa(l, R);
-        const bRfa = rfa(l, B);
-        l.teams[B].deadMoney.push({ pid: -4, name: 'z', season: s, amount: CAP_FOR(l, s).luxuryTax });
-        fillTo(l, R, OFFSEASON_ROSTER_MAX - 1, s);
-        signOfferSheet(l, bRfa, R, askingContract(l, bRfa, R).amount, 3, 'min', 1);
-        expect(summerRoster(l, R)).toBe(OFFSEASON_ROSTER_MAX);
-        expect(userOffer(l, rRfa.pid, atAsk(l, rRfa, 3), 3).ok).toBe(true);
-        expect(aiMatchVerdict(l, rRfa)).toMatchObject({ match: false, why: expect.stringMatching(/no roster spot/) });
-        resolveOfferSheets(l);
-        expect(rRfa.tid).toBe(U);
-        expect(bRfa.tid).toBe(R);
-        expect(standardRoster(l, R).length).toBe(OFFSEASON_ROSTER_MAX);
-      }
-
-      // advancing a week goes a day at a time while a sheet on your restricted free agent waits for your call
-      {
-        const { l, open } = summer();
-        open(U, 40_000);
-        open(B, 40_000);
-        const mine = rfa(l, U);
-        l.faDay = 3;
-        signOfferSheet(l, mine, B, askingContract(l, mine, B).amount, 3, 'space', 3);
-        expect(mine.rfa!.sheet!.until).toBe(4);
-        faAdvance(l, 7);
-        // one day on, his last match day: still his to decide
-        expect(l.faDay).toBe(4);
-        expect(mine.tid).toBe(FREE_AGENT);
-        expect(mine.rfa?.sheet).toBeDefined();
-        // left unanswered, the next day lets him go
-        faAdvance(l, 7);
-        expect(mine.tid).toBe(B);
-        expect(l.faDay).toBeGreaterThan(5);
-      }
+      expect(l.teams[U].mleSeason).toBe(s);
+      expect(l.inbox[0].body).toMatch(/using our mid-level exception/);
     }
   }, 180_000);
 });

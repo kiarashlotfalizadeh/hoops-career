@@ -16,7 +16,7 @@ import { ChevronLeft, Flame, Zap } from 'lucide-react';
 import type { League, ScheduledGame, Team } from '../../core/types';
 import { cupLabel } from '../../core/league/cup';
 import { keepFigures } from '../../core/format';
-import { oddsWord } from '../../core/analysis/staffWords';
+import { winPct } from '../../core/analysis/staffWords';
 import { fmtClock, periodLabel } from '../stats';
 import type { MatchKit } from '../teamColors';
 import { momentumOf, type Drawn } from './drawn';
@@ -245,7 +245,7 @@ export function ScoreBug({
       <div
         className="lv-lb-main live-bug"
         role="group"
-        aria-label={`${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}, ${state}${wp !== null ? `. ${home.abbrev}: ${oddsWord(wp)}` : ''}`}
+        aria-label={`${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}, ${state}${wp !== null ? `. ${home.abbrev} ${winPct(wp)} to win` : ''}`}
       >
         {side(away, a, 1)}
         <div className={`lv-lb-mid${shotRoom ? ' has-shot' : ''}`} aria-hidden="true">
@@ -287,12 +287,16 @@ export function WinBar({ wp, kits, abbrevs, mo }: { wp: number; kits: [MatchKit,
   return (
     <div className="lv-lb-wp" aria-hidden="true">
       <span className="lv-lb-wp-k">To win</span>
-      <span className="lv-lb-wp-ab num">{abbrevs[1]}</span>
+      <span className="lv-lb-wp-ab num">
+        {abbrevs[1]} {winPct(1 - wp)}
+      </span>
       <span className={`lv-lb-wp-bar${mo ? ` mo-${mo.level} ${mo.side === 0 ? 'mo-home' : 'mo-away'}` : ''}`}>
         <i className="away" style={{ '--wp': 1 - wp, background: kits[1].night } as CSSProperties} />
         <i className="home" style={{ '--wp': wp, background: kits[0].night } as CSSProperties} />
       </span>
-      <span className="lv-lb-wp-ab num">{abbrevs[0]}</span>
+      <span className="lv-lb-wp-ab num">
+        {winPct(wp)} {abbrevs[0]}
+      </span>
     </div>
   );
 }

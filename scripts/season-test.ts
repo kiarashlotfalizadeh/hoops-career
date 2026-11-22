@@ -10,7 +10,6 @@ import { nextPick } from '../src/core/league/draft';
 import { expiringPlayers, userOffer, userResign } from '../src/core/league/freeAgency';
 import { askingContract, releasePlayer } from '../src/core/league/contracts';
 import { takeJob } from '../src/core/league/jobs';
-import { aiMatchVerdict, restrictedFreeAgents, sheetDecisionBlocked, userDecideSheet } from '../src/core/league/rfa';
 import { ovrRaw } from '../src/core/ratings';
 
 const seedIdx = process.argv.indexOf('--seed');
@@ -104,10 +103,7 @@ for (let s = 0; s < seasons; s++) {
     if (p.ovr >= 72) console.log('resign', playerName(p), userResign(league, p.pid, ask.amount, ask.years).reason);
   }
   startFreeAgency(league);
-  // an offer sheet on one of the user's restricted free agents waits for his call: decide it as his staff would
-  for (let k = 0; k < 5 && !newSeason(league); k++)
-    for (const p of restrictedFreeAgents(league, league.userTid).filter((x) => x.rfa!.sheet))
-      userDecideSheet(league, p.pid, aiMatchVerdict(league, p).match && !sheetDecisionBlocked(league, p.pid, true));
+  newSeason(league);
   if (league.phase !== 'preseason') throw new Error(`The new season didn't start (phase ${league.phase})`);
   const sizes = league.teams.map((t) => teamPlayers(league, t.tid).length);
   const pays = league.teams.map((t) => payroll(league, t.tid) / 1000);

@@ -9,21 +9,18 @@ import type { League, ScheduledGame } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
 import { liveInProgress } from '../../state/live';
 import { curTeamSeason, fmtDate, teamCity, teamPlayers } from '../../core/league/helpers';
-import { keepFigures, ordinal, outFor, plural } from '../../core/format';
+import { keepFigures, ordinal, outFor } from '../../core/format';
 import { cupLabel } from '../../core/league/cup';
 import { matchupPreview, type SidePreview } from '../../core/analysis/preview';
 import { draftOrder } from '../../core/league/draft';
 import { expiringPlayers } from '../../core/league/freeAgency';
 import { seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
-import { keep } from '../components/ui';
 import { flowActions, liveScoreText, stillAlive } from '../flow';
 import { rosterNames } from '../stats';
 import { picksText } from '../draft/common';
 import { rosterLine } from '../office/basis';
-import { billingTitle, useBillings } from '../games/occasion';
 import { favoriteOf } from '../games/favorite';
-import { gameProjection } from '../../core/analysis/preview';
 import { goalsWhy, planOwnerGoals, previewTitle } from '../../core/league/ownerGoals';
 import { quietSeriesStart } from '../../core/league/calls';
 
@@ -62,23 +59,6 @@ function outText(league: League, s: SidePreview): string {
   return all.slice(0, 2).join(', ') + (all.length > 2 ? ` +${all.length - 2} more` : '');
 }
 
-/**
- * The user's starters who are hurt, the longest out first: "Out: Davis 5 games, Sarr 3" (empty when
- * none is). His starters are the five with the most starts this season (the most minutes, then the
- * best, before there are any), so a starter who went down is still one.
- */
-export function startersOut(league: League): string {
-  const me = league.userTid;
-  const ps = teamPlayers(league, me);
-  const line = (p: (typeof ps)[number]) => p.stats.find((s) => s.season === league.season && s.tid === me && !s.playoffs);
-  const five = [...ps].sort((a, b) => (line(b)?.gs ?? 0) - (line(a)?.gs ?? 0) || (line(b)?.min ?? 0) - (line(a)?.min ?? 0) || b.ovr - a.ovr || a.pid - b.pid).slice(0, 5);
-  const out = five.filter((p) => p.injury && p.injury.gamesRemaining > 0).sort((a, b) => b.injury!.gamesRemaining - a.injury!.gamesRemaining);
-  if (!out.length) return '';
-  const names = rosterNames(ps);
-  const games = (n: number, first: boolean) => (n > 82 ? 'for the season' : first ? plural(n, 'game') : `${n}`);
-  return `Out: ${out.map((p, i) => `${names(p.pid) || p.lastName} ${games(p.injury!.gamesRemaining, !i)}`).join(', ')}`;
-}
-
 /** Days to the trade deadline while it's a week or less away (0: today), or null. */
 export function deadlineIn(league: League): number | null {
   const d = league.phase === 'regular' ? league.tradeDeadlineDay - league.day : -1;
@@ -99,8 +79,8 @@ function kindOf(league: League, g: ScheduledGame, playoffTag?: string): string {
 }
 
 /**
- * Today's hero on game day: the night's billing as its headline, the two teams and their records,
- * at most two tags (what's at stake, the missing plan) and who's out. The form guides, the staff's
+ * Today's hero while there is a game ahead: who is favoured and by how much, the two teams and their
+ * records, at most two tags (what's at stake, the missing plan) and who's out. The form guides, the staff's
  * scouting and the rest are on the Matchup page, a tap away. `noPlan`: the staff would say there's
  * no game plan for this opponent yet (a tag here, not a card below).
  */
@@ -112,10 +92,6 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
   const live = liveInProgress(league);
   const kind = kindOf(league, g, pv?.playoff?.tag);
   const series = pv?.playoff;
-  // what the night is billed as: the biggest as the headline, the next as a tag (the series' stakes are in it)
-  const bills = useBillings(league, g);
-  const billed = new Set(bills.map((b) => b.tag));
-  const staked = billed.has('Game 7') || billed.has('Elimination game') || billed.has('Closeout game') || billed.has('Play-In');
   const tags: { text: string; stake?: boolean; to?: string }[] = [];
   if (live?.gid === g.gid) tags.push({ text: `Live · ${liveScoreText(league, live)}` });
   // (the missing plan is a link to the Plan tab, the one tag here with something to do, in the first
@@ -123,30 +99,25 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
   const firstWeek = league.season === league.startSeason && (league.phase === 'preseason' || league.day < 7);
   if (noPlan && firstWeek) tags.push({ text: 'No game plan yet', to: `/games/${opp}?tab=plan` });
   // (a closeout, an elimination game or Game 7 says the series score in its line)
-  if (series && series.wins + series.losses > 0 && !staked)
+  if (series && series.wins + series.losses > 0)
     tags.push({
       text:
         series.wins === series.losses
           ? `Series tied ${series.wins}-${series.losses}`
           : `${league.teams[series.wins > series.losses ? me : opp].abbrev} leads ${Math.max(series.wins, series.losses)}-${Math.min(series.wins, series.losses)}`,
     });
-  if (staked) {
-    // (the billing says it)
-  } else if (series?.elimination || pv?.playIn?.elimination) tags.push({ text: 'Elimination game', stake: true });
+  if (series?.elimination || pv?.playIn?.elimination) tags.push({ text: 'Elimination game', stake: true });
   else if (series?.clinch) tags.push({ text: 'A win takes the series', stake: true });
   else if (pv?.playIn) tags.push({ text: 'Winner is the 7th seed', stake: true });
-  for (const b of bills.slice(1, 3)) if (b.weight >= 2) tags.push({ text: b.tag });
   if (noPlan && !firstWeek) tags.push({ text: 'No game plan yet' });
   const outs = pv ? [pv.us, pv.them].map((s) => ({ tid: s.tid, text: outText(league, s) })).filter((x) => x.text) : [];
   const t = league.teams[opp];
   const home = g.home === me;
-  // the night's name as the headline on the paper ("Rivalry night in Denver"), its reason as the dek
-  const top = bills[0];
-  const head = top ? `${billingTitle(top)} ${home ? `vs ${teamCity(league, t)}` : `in ${t.region}`}` : home ? `${teamCity(league, t)} in town` : `On the road in ${t.region}`;
-  // (a series or play-in game starting tonight whose counters measured no gain: no call stops for it, the staff says so here)
-  const quiet = useLeagueMemo(() => (g.day === league.day ? quietSeriesStart(league) : null), [league, g.day]);
-  const dek = top && quiet ? `${top.line.replace(/\.?$/, '.')} ${quiet}` : (top?.line ?? quiet ?? '');
-  // the preview's chance to win (from our side), said in words: who the staff favours
+  // who and where, plainly
+  const head = home ? `${teamCity(league, t)} in town` : `At ${teamCity(league, t)}`;
+  // (a series or play-in game starting tonight whose counters measured no gain: nothing stops for it, the staff says so here)
+  const dek = useLeagueMemo(() => (g.day === league.day ? quietSeriesStart(league) : null), [league, g.day]) ?? '';
+  // the preview's chance to win (from our side): the favourite and its figure
   const fav = pv && favoriteOf(league, { home: pv.us.tid, away: pv.them.tid }, pv.projection.win);
   return (
     <section className="td-gameday" aria-label="Next game">
@@ -160,13 +131,13 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
           </Link>
         </div>
         <div className="td-gd-main">
-          {/* who the staff favours, in the poster's type at a size a phrase fits */}
+          {/* the favourite's chance to win, in the poster's type */}
           {fav && (
             <div className="td-gd-win">
               <span className="td-gd-pct" style={{ fontSize: 'clamp(30px, 9vw, 48px)', lineHeight: 1, letterSpacing: '-0.02em' }}>
-                {fav.word}
+                {fav.pct}
               </span>
-              <span className="td-gd-k">{fav.abbrev || "The staff's read"}</span>
+              <span className="td-gd-k">{fav.abbrev} to win</span>
             </div>
           )}
           {/* away over home, as the scoreboard lists them */}
@@ -219,44 +190,6 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
         </div>
       )}
     </section>
-  );
-}
-
-/**
- * The next game when it isn't today (the lead story has the top of Today): one row, the opponent,
- * when, the billing, and the way to its Matchup page.
- */
-export function NextGameRow({ league, g }: { league: League; g: ScheduledGame }) {
-  const me = league.userTid;
-  const opp = g.home === me ? g.away : g.home;
-  const bills = useBillings(league, g);
-  const r = curTeamSeason(league, opp);
-  const t = league.teams[opp];
-  // the preview's chance to win (from the home side), said in words
-  const proj = useLeagueMemo(() => gameProjection(league, g), [league, g]);
-  const fav = favoriteOf(league, g, proj.win);
-  // (his starters hurt: the game's own preview names them on game day, this row the days before)
-  const out = useLeagueMemo(() => startersOut(league), [league]);
-  return (
-    <Link
-      to={`/games/${opp}`}
-      className="card td-next"
-      aria-label={`Next game, ${whenLabel(league, g.day)}: ${g.home === me ? 'versus' : 'at'} ${teamCity(league, t)}. ${fav.line}.${out ? ` ${out}.` : ''} Matchup`}
-    >
-      <TeamLogo tid={opp} size={40} decorative />
-      <span className="grow">
-        <span className="td-next-t">
-          {g.home === me ? 'vs' : 'at'} {teamCity(league, t)}
-        </span>
-        {/* (when, the billing if it has one, their record: "Game 29 of 82" is on the game's own page) */}
-        <span className="td-next-m">{keep([whenLabel(league, g.day), bills[0]?.tag, `${r.won}-${r.lost}`].filter(Boolean).join(' · '))}</span>
-        {out && <span className="td-next-m td-next-out">{out}</span>}
-      </span>
-      <span className="td-next-win">
-        {fav.abbrev && <span className="td-next-k">{fav.abbrev}</span>}
-        <span className="td-next-k">{fav.word}</span>
-      </span>
-    </Link>
   );
 }
 

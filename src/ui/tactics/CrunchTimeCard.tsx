@@ -2,13 +2,14 @@ import type { ActionType, Player, SetId, Tactics } from '../../core/types';
 import { ACTIONS } from '../../core/types';
 import { ACTION_META } from '../../core/sim/tactics';
 import { SETS, SET_IDS, isSetId } from '../../core/sim/sets';
-import { Help, Section } from '../components/ui';
+import { Help } from '../components/ui';
 import { rosterNames } from '../stats';
 import { PickRow } from './Pick';
 
 /**
- * Match's crunch time: who takes over in crunch time, and the play after your timeouts (an action, or
- * one of the sets for a player you name or the best fit on the floor).
+ * Advanced's crunch time: who takes over in crunch time, and the play after your timeouts (an action,
+ * or one of the sets for a player you name or the best fit on the floor), under the drawer's own
+ * kind of heading.
  */
 export function CrunchTimeCard({ t, edit, players }: { t: Tactics; edit: (fn: (t: Tactics) => void) => void; players: Player[] }) {
   const names = rosterNames(players);
@@ -26,9 +27,9 @@ export function CrunchTimeCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
   const forOne = isSetId(ato) || ato === 'iso';
   const playerSub = (p: Player) => `${p.pos} · OVR ${p.ovr}${p.injury ? ' · Out' : ''}`;
   return (
-    <Section
-      title="Crunch time"
-      right={
+    <>
+      <div className="tx-fine-h tx-fine-sub">
+        <span className="over">Crunch time</span>
         <Help title="Crunch time">
           <p>
             <b>Go-to player:</b> in a close game&apos;s last two minutes, the ball finds him much more. The offense runs more of what he does best.
@@ -38,8 +39,7 @@ export function CrunchTimeCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
           </p>
           <p>In live games you call the late plays yourself, built around your go-to player.</p>
         </Help>
-      }
-    >
+      </div>
       <div className="card flush list">
         <PickRow
           label="Go-to player"
@@ -79,6 +79,6 @@ export function CrunchTimeCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
           />
         )}
       </div>
-    </Section>
+    </>
   );
 }

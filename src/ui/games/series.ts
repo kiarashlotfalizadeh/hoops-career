@@ -54,9 +54,6 @@ export function seriesText(s: SeasonSeries): string {
   return [p.record, p.left, p.last && `last ${p.last}`].filter(Boolean).join(' · ');
 }
 
-/** A streak as a standings table writes it: "W3", "L2" ('' for none). */
-export const streakText = (streak: number) => (streak > 0 ? `W${streak}` : streak < 0 ? `L${-streak}` : '');
-
 /** "6-4 in last 10" from a team's last results (1 a win, 0 a loss); '' before any. */
 export function lastTenText(results: readonly number[]): string {
   if (!results.length) return '';

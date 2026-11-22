@@ -13,9 +13,8 @@
 
 import type { DraftPick, League, Player, Proposal, Team } from '../types';
 import { Rng, hashString } from '../random';
-import { CAP_FOR, addInbox, andList, contractSeason, curTeamSeason, fmtDate, playerName, sentence, shortName, standardRoster, teamCity } from './helpers';
+import { CAP_FOR, addInbox, andList, contractSeason, curTeamSeason, fmtDate, playerName, sentence, shortName, standardRoster, teamCity, payroll } from './helpers';
 import { tradeValue } from './contracts';
-import { capPayroll, withHoldsMemo } from './freeAgency';
 import { nextPick } from './draft';
 import {
   capSalary,
@@ -168,7 +167,7 @@ export function cleanProposals(league: League) {
   if (!league.proposals?.length) return;
   holdUnseen(league);
   const open = league.proposals;
-  const keep = withHoldsMemo(() => open.filter((p) => !proposalError(league, p)));
+  const keep = open.filter((p) => !proposalError(league, p));
   if (keep.length !== open.length) league.proposals = keep;
 }
 
@@ -437,7 +436,7 @@ function tryDump(league: League, rng: Rng): Pitch | null {
   const user = league.userTid;
   const cs = contractSeason(league);
   const tax = CAP_FOR(league, cs).luxuryTax;
-  for (const t of rng.shuffle(free(league).filter((x) => capPayroll(league, x.tid, cs) > tax)).slice(0, 4)) {
+  for (const t of rng.shuffle(free(league).filter((x) => payroll(league, x.tid, cs) > tax)).slice(0, 4)) {
     // its worst contracts first, up to DUMP_TRIES: a burden that three picks (two firsts at most)
     // can't pay off isn't one it can dump, so the next one is tried
     const bad = standardRoster(league, t.tid)
@@ -465,14 +464,14 @@ const TRIES: Record<Proposal['kind'], ((league: League, rng: Rng) => Pitch | nul
 /** One offer, of the first of `kinds` that finds one; `lastDay` caps how long it stands. */
 function makeOffer(league: League, rng: Rng, kinds: Proposal['kind'][], lastDay?: number): Proposal | null {
   if (openProposals(league).length >= MAX_OPEN) return null;
-  // the searches only read the league: each team's cap holds are worked out once
-  const pitch = withHoldsMemo(() => {
+  // (the searches only read the league)
+  const pitch = (() => {
     for (const k of kinds) {
       const x = TRIES[k]?.(league, rng);
       if (x) return x;
     }
     return null;
-  });
+  })();
   return pitch ? post(league, pitch, rng, lastDay) : null;
 }
 
@@ -504,7 +503,7 @@ export function openingProposal(league: League) {
 export function freeAgencyProposals(league: League) {
   if (league.phase !== 'freeAgency' || league.fired) return;
   const cs = contractSeason(league);
-  if (capPayroll(league, league.userTid, cs) >= CAP_FOR(league, cs).salaryCap) return;
+  if (payroll(league, league.userTid, cs) >= CAP_FOR(league, cs).salaryCap) return;
   const rng = offerRng(league, 'dumps');
   for (let i = 0; i < 2; i++) if (!makeOffer(league, rng, ['dump'])) break;
 }
@@ -522,15 +521,13 @@ export function draftProposals(league: League) {
   if (league.inbox.some((m) => m.season === league.season && m.day === league.day && m.pitch === pitch)) return;
   const rng = offerRng(league, `pick:${dp.dpid}`);
   const n = rng.chance(0.5) ? 2 : 1;
-  const found = withHoldsMemo(() =>
-    rng
-      .shuffle(free(league))
-      .slice(0, 8)
-      .flatMap((t) => {
-        const pkg = packageFor(league, t.tid, { pids: [], dpids: [dp.dpid] });
-        return pkg && fair(league, pkg.offer) ? [pkg] : [];
-      }),
-  );
+  const found = rng
+    .shuffle(free(league))
+    .slice(0, 8)
+    .flatMap((t) => {
+      const pkg = packageFor(league, t.tid, { pids: [], dpids: [dp.dpid] });
+      return pkg && fair(league, pkg.offer) ? [pkg] : [];
+    });
   for (const pkg of found.sort((a, b) => b.myValue - a.myValue || a.tid - b.tid).slice(0, n))
     post(
       league,

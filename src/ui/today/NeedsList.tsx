@@ -1,4 +1,4 @@
-// Needs you as rows (see needs.ts for what's in it and in what order), for Today's section and the
+// The action queue as rows (see needs.ts for what's in it and in what order), for Today's section and the
 // bell's sheet: each decision as its agenda row, settled in place (the staff's calls first, AI
 // teams' offers as one row), then the deadline's last week, mail that needs him and a backup due.
 // The bell opens it over any screen, with the inbox a row away. And the calls alone, for the digest
@@ -62,10 +62,10 @@ export function NeedsSheet({ open, onClose }: { open: boolean; onClose: () => vo
   const nav = useNavigate();
   const unread = league.inbox.filter((m) => !m.read).length;
   return (
-    <Sheet open={open} onClose={onClose} title="Needs you">
+    <Sheet open={open} onClose={onClose} title="Action queue">
       <div className="col td-bell">
         {needs.rows > 0 ? (
-          <div className="td-needs" role="list" aria-label="Needs you">
+          <div className="td-needs" role="list" aria-label="Action queue">
             {needRows(league, needs, (m) => nav(`/inbox?m=${m.id}`))}
           </div>
         ) : (

@@ -1,15 +1,13 @@
 // The live screen with no game on: no game for your team today (and the way to the next one), or the
-// final card (the result as an event: the score counting up, the night's headline, the player of the
-// game and what it means, with Game report and Next game, which names it) over the night's recap.
+// final card (the result as an event: the score counting up, with Game report and Next game, which
+// names it) over the night's summary in numbers.
 import { Activity, ChevronsRight } from 'lucide-react';
 import type { GameResult, League, Team } from '../../core/types';
 import { Empty, PageHeader } from '../components/ui';
-import { GameRecap } from '../components/GameRecap';
+import { SummaryTab } from '../games/report/SummaryTab';
 import { FinalSlab } from '../components/FinalSlab';
 import { HighlightsCard } from '../components/HighlightsCard';
 import { stillAlive } from '../flow';
-import { useLeagueMemo } from '../../state/store';
-import { gameStoryFor } from '../../core/analysis/gameStory';
 import { useFirstShowing } from '../games/occasion';
 
 /** No game for your team today: why, and Sim to next game (named: `next`) when there is one to sim to. */
@@ -38,8 +36,8 @@ export function NoGame({ league, canSim, next, busy, onNext }: { league: League;
 }
 
 /**
- * The final card: the result as a broadcast's final graphic, with the report (its Why, the recap
- * being here) and the next game; a game the Play menu finished says so and offers its box score.
+ * The final card: the result as a broadcast's final graphic, with the report (its box, shots and
+ * flow, the summary being here) and the next game; a game the Play menu finished says so and offers its box score.
  * `next` names the next game ("Sat, Feb 13 · @ PHI 37-19") when there is one.
  */
 export function LiveFinal({
@@ -67,7 +65,6 @@ export function LiveFinal({
   busy: boolean;
   onNext: () => void;
 }) {
-  const story = useLeagueMemo(() => (result ? gameStoryFor(league, result.gid) : null), [league, result]);
   const moment = useFirstShowing(result ? `${league.id}:${result.gid}` : undefined);
   return (
     <main className="page lv-final">
@@ -80,7 +77,7 @@ export function LiveFinal({
         {announce}
       </div>
       {result ? (
-        <FinalSlab res={result} league={league} story={story} moment={moment}>
+        <FinalSlab res={result} league={league} moment={moment} linescore>
           {!final && <div className="lv-simmed small">Played out from the Play menu: the result stands.</div>}
           <div className="lv-final-go">
             <button className="btn primary" onClick={() => onReport(result.gid)}>
@@ -97,7 +94,7 @@ export function LiveFinal({
       ) : (
         <Empty>{final ? 'Final.' : 'This game was simulated.'}</Empty>
       )}
-      {result && <GameRecap res={result} league={league} highlights={final ? <HighlightsCard league={league} res={result} /> : undefined} />}
+      {result && <SummaryTab res={result} league={league} highlights={final ? <HighlightsCard league={league} res={result} /> : undefined} />}
     </main>
   );
 }

@@ -12,7 +12,6 @@ import { worldRng } from './world';
 import { addInbox, dateToDay, fmtDate, teamCity } from './helpers';
 import { arenaCapacity } from './finances';
 import { jobSecurity, seatHeat, type SeatHeat } from './jobSecurity';
-import { frozen } from './books';
 import { currentGoals, ownerPersonality, SEASON_GAMES, type OwnerPersonality } from './ownerGoals';
 import { confStandings } from './standings';
 import { arenaOf, legacyOf, type LegacyState, type PulsePoint } from './legacy';
@@ -230,13 +229,6 @@ const OPENERS: Record<OwnerPersonality, Record<Band, string[]>> = {
   },
 };
 
-/** How he opens while the budget is frozen over the books, whatever the record: the money comes first. */
-const BOOKS_OPENERS: Record<OwnerPersonality, string[]> = {
-  'win-now': ["Winning doesn't pay for the hole in the books.", "I'll pay for a winner. I won't pay for this deficit."],
-  builder: ["The plan doesn't work if the books don't.", 'We can build without bleeding money. Right now we are bleeding it.'],
-  frugal: ["The books are still in the red. Nothing else matters until they aren't.", "I don't care how full the seats are while we're losing money."],
-};
-
 const CLOSERS: Record<OwnerPersonality, string[]> = {
   'win-now': ['Win the next one.', 'I want more.', "Don't make me write a longer note."],
   builder: ['Keep building.', 'Stay with the plan.', 'Keep the young guys growing.'],
@@ -292,13 +284,11 @@ function checkInMail(
   const tid = league.userTid;
   const who = ownerPersonality(league, tid);
   const rng = worldRng(league, 'owner', league.season, tid, month);
-  // (the budget frozen over the books: no "best kind of month" while the money bleeds)
-  const red = frozen(league);
-  const band = red && bandOf(score) === 'good' ? 'ok' : bandOf(score);
+  const band = bandOf(score);
   const t = league.teams[tid];
   const gp = ts.won + ts.lost;
   const pace = Math.round((ts.won / Math.max(1, gp)) * SEASON_GAMES);
-  const lines: string[] = [rng.pick(red ? BOOKS_OPENERS[who] : OPENERS[who][band])];
+  const lines: string[] = [rng.pick(OPENERS[who][band])];
   // (in his own manner: his quirk's line for a month like this, league/voices.ts)
   lines.push(rng.pick(QUIRK_LINES[ownerQuirk(league, tid)][band]));
   // the month: the record since his last note (or since opening night), and how his mood moved
@@ -333,7 +323,7 @@ function checkInMail(
   const f = fanScore(league);
   lines.push(`${fanLine(league, tid, f)}.`);
   lines.push(rng.pick(CLOSERS[who]));
-  const mood = ownerWord(red ? Math.min(score, 51) : score).word.toLowerCase();
+  const mood = ownerWord(score).word.toLowerCase();
   return {
     from: 'Owner',
     subject: `${MONTHS[month]} check-in: ${mood}`,

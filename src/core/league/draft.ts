@@ -1,10 +1,10 @@
 import type { DraftPick, League, Player } from '../types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../types';
 import { Rng, clamp, hashString } from '../random';
-import { contractExp, genTendencies, generatePlayer, refreshPlayerDerived } from '../playerGen';
+import { genTendencies, generatePlayer, refreshPlayerDerived } from '../playerGen';
 import { fmtHeight, shiftToOvr } from '../ratings';
-import { TWO_WAY_MAX, addInbox, addNews, andList, curTeamSeason, playerName, prospects, standardRoster, teamCity, teamPlayers, twoWayRoster, winPct } from './helpers';
-import { FA_PRICE_CUT_DAYS, askingContract, rookieContract, twoWaySalary, valueScore } from './contracts';
+import { addInbox, addNews, andList, curTeamSeason, playerName, prospects, teamCity, teamPlayers, winPct } from './helpers';
+import { FA_PRICE_CUT_DAYS, askingContract, rookieContract, valueScore } from './contracts';
 import { numberTeam } from './jerseys';
 import { logMove, logSwap } from './transactions';
 import { pickLabel } from './trades';
@@ -258,8 +258,6 @@ export function draftPlayer(league: League, dp: DraftPick, pid: number) {
   // how the room (and, for his own pick, the user's staff) read him tonight: what a draft grade compares his career with
   const room = readRange(consensusRead(league, p));
   const staff = dp.tid === league.userTid ? readRange(staffRead(league, p)) : null;
-  // the value a team sees in him tonight: the room's read (the truth shows once he's on a roster)
-  const seen = consensusView(league, p);
   p.tid = dp.tid;
   p.draft = {
     year: league.season,
@@ -269,14 +267,6 @@ export function draftPlayer(league: League, dp: DraftPick, pid: number) {
     read: { ovr: room.ovr, pot: room.pot, rank: p.prospect?.rank, ...(staff ? { staff: { ovr: staff.ovr, pot: staff.pot } } : {}) },
   };
   p.contract = rookieContract(league, dp.pick!, dp.round, league.season + 1);
-  // an AI team stashes its second-rounder on a two-way deal when it has a two-way slot for next
-  // season (deals running out this season don't hold one) and either a roster that's nearly set
-  // (11 signed for next season) or a pick who isn't ready (worth under 64)
-  const committed = standardRoster(league, dp.tid).filter((x) => x.pid !== pid && contractExp(x.contract) > league.season).length;
-  const twoWaysNext = twoWayRoster(league, dp.tid).filter((x) => contractExp(x.contract) > league.season).length;
-  if (dp.round === 2 && dp.tid !== league.userTid && twoWaysNext < TWO_WAY_MAX && (committed >= 11 || valueScore(league, seen) < 64)) {
-    p.contract = { start: league.season + 1, salaries: [twoWaySalary(league, league.season + 1), twoWaySalary(league, league.season + 2)], twoWay: true };
-  }
   p.joinedSeason = league.season + 1;
   p.birdSince = league.season + 1;
   // a pick traded away this season can't come straight back as the player it became

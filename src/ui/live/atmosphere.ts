@@ -187,9 +187,6 @@ function fill(s: string, vars: Record<string, string | number | undefined>): str
 
 const ORD = ['th', 'st', 'nd', 'rd'];
 export const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (ORD[n % 10] ?? 'th')}`;
-const QWORD = ['', 'first', 'second', 'third', 'fourth'];
-/** "second-quarter", "overtime". */
-const periodAdj = (q: number) => (q <= 4 ? `${QWORD[q]}-quarter` : q === 5 ? 'overtime' : `${ordinal(q - 4)}-overtime`);
 /** "the 3rd", "overtime". */
 const periodThe = (q: number) => (q <= 4 ? `the ${ordinal(q)}` : q === 5 ? 'overtime' : `the ${ordinal(q - 4)} overtime`);
 
@@ -875,43 +872,4 @@ export function pickCall(events: readonly AtmoEvent[], last: number | null): Atm
   if (top.weight >= 3 || last === null) return top;
   const gap = top.q >= 4 && top.clock <= CLUTCH_CLOCK ? CALL_GAP_CLUTCH : CALL_GAP;
   return top.at - last >= gap ? top : null;
-}
-
-// ------------------------------------------------------------------ the breaks
-
-/**
- * The story so far at a break, in two or three short sentences: the score ("Down 7 after one."), what
- * made it (a big run, a seesaw, the period won or lost by a lot, a buzzer-beater), and who's carrying
- * you (or their scorer, when he's the story).
- */
-export function breakStory(t: Tally, ctx: AtmoCtx, q: number, scorers: [{ pid: number; pts: number }[], { pid: number; pts: number }[]]): string {
-  const u = ctx.user;
-  const o = (1 - u) as 0 | 1;
-  const lead = t.score[u] - t.score[o];
-  const key = [ctx.gid, q, 'story'];
-  const when = q === 1 ? 'after one' : q === 2 ? 'at the half' : q === 3 ? 'after three' : q === 4 ? 'after regulation' : `after ${periodLabel(q)}`;
-  const state =
-    lead === 0
-      ? `Tied at ${t.score[0]} ${when}.`
-      : lead > 0
-        ? `${pick(['Up', 'Ahead by'], ...key, 's')} ${lead} ${when}.`
-        : `${pick(['Down', 'Trailing by'], ...key, 's')} ${-lead} ${when}.`;
-  const run = t.runs[q];
-  const per = t.periods[q] ?? [0, 0];
-  const pm = per[u] - per[o];
-  let cause = '';
-  if (run && run.a - run.b >= 10) {
-    const what = `${run.a}-${run.b} ${periodAdj(q)} run`;
-    const an = run.a === 8 || run.a === 11 || run.a === 18 ? 'an' : 'a';
-    cause = `${run.side === u ? 'You' : ctx.teams[o]} had ${an} ${what}.`;
-  } else if (t.leadChanges >= 6 && Math.abs(lead) <= 6) cause = `${t.leadChanges} lead changes so far.`;
-  // (after the first, its score is the game's: said once)
-  else if (Math.abs(pm) >= 6 && q > 1 && q <= 4) cause = pm > 0 ? `You took ${periodThe(q)} ${per[u]}-${per[o]}.` : `You lost ${periodThe(q)} ${per[o]}-${per[u]}.`;
-  else if (t.buzzers[q] !== undefined) cause = `${ctx.name(t.buzzers[q])} beat the buzzer to end it.`;
-  const mine = scorers[u][0];
-  const theirs = scorers[o][0];
-  let star = '';
-  if (theirs && theirs.pts >= 20 && (!mine || theirs.pts >= mine.pts + 6)) star = `${ctx.name(theirs.pid)} has ${theirs.pts} for ${ctx.teams[o]}.`;
-  else if (mine && mine.pts >= 8) star = pick([`${ctx.name(mine.pid)} has ${mine.pts}.`, `${ctx.name(mine.pid)} leads you with ${mine.pts}.`], ...key, 'star');
-  return [state, cause, star].filter(Boolean).join(' ');
 }

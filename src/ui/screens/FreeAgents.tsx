@@ -1,6 +1,6 @@
-// Office → Free agents: everyone you could sign (and claim off waivers), filtered and sorted, with
-// your cap room on top and, while free agency runs, the market and its days. The sheets live in
-// src/ui/office/ (ContractSheet, FaSheets, TenDayPanel); ?offer=pid opens a player's.
+// Office → Free agents: everyone you could sign, filtered and sorted, with your cap room on top
+// and, while free agency runs, the market and its days. ?offer=pid opens a player's contract sheet
+// (src/ui/office/ContractSheet).
 import { fills, hurts, needCache, needMinutes, needMove, needOptions, needText, teamNeed } from '../../core/league/rosterNeed';
 import { NeedNote } from '../office/NeedNote';
 import { useState } from 'react';
@@ -8,25 +8,20 @@ import { useSearchParams } from 'react-router-dom';
 import { Lock, SlidersHorizontal } from 'lucide-react';
 import { FaHelp } from '../office/FaHelp';
 import { FaDock, FaMarket } from '../office/FaMarket';
-import { FaRow, type FaListMode } from '../office/FaRow';
-import { TwoWaySheet, WaiverSheet } from '../office/FaSheets';
+import { FaRow } from '../office/FaRow';
 import type { Pos } from '../../core/types';
 import { POSITIONS } from '../../core/types';
-import { CAP } from '../../core/constants';
-import { CAP_FOR, TWO_WAY_MAX, freeAgents, payroll, rosterMaxNow, standardRoster, twoWayRoster } from '../../core/league/helpers';
-import { EXCEPTIONS, EXCEPTION_ORDER, askingContract, onWaivers, teamAppeal, twoWaySalary, valueScore, wantsTwoWay } from '../../core/league/contracts';
-import { bidHolds, capPayroll, offerRoute, signingClosedReason, userExceptionRoom } from '../../core/league/freeAgency';
-import { HARDSHIP_OUT, TEN_DAYS, hardship, tenDayClosedReason, wantsTenDay } from '../../core/league/tenDay';
+import { CAP_FOR, freeAgents, payroll, rosterMaxNow, standardRoster } from '../../core/league/helpers';
+import { askingContract, teamAppeal, valueScore } from '../../core/league/contracts';
+import { bidHolds, offerRoute, signingClosedReason, userMleRoom } from '../../core/league/freeAgency';
 import { playerAge } from '../../core/playerGen';
 import { useLeague, useLeagueMemo } from '../../state/store';
-import { Chips, Empty, PageHeader, Section, Segmented, Sheet, Statline } from '../components/ui';
+import { Chips, Empty, PageHeader, Section, Sheet, Statline } from '../components/ui';
 import { Fig } from '../office/motion';
 import { Callout, capRoomFig, capSeason, floorText, rosterFig, shortSeason } from '../office/common';
 import { Term } from '../components/Glossary';
 import { FA_DAYS, faDayNumber } from '../../core/league/season';
 import { ContractSheet } from '../office/ContractSheet';
-import { MyRfas } from '../office/RfaPanel';
-import { TenDaySheet } from '../office/TenDayPanel';
 import { FilterSelect } from '../trade/TradeFinder';
 import { money, moneyExact } from '../../core/format';
 
@@ -38,44 +33,27 @@ export default function FreeAgents() {
   const s = capSeason(league);
   const cap = CAP_FOR(league, s);
   const pay = payroll(league, tid, s);
-  // until free agency opens, the user's own expiring players hold cap room (as on the Office cap sheet),
-  // and in free agency so do the user's pending offers to top free agents
-  // (in free agency capPayroll counts the market's holds: your restricted free agents' and your offer sheets')
-  const holds = capPayroll(league, tid, s) - pay + bidHolds(league);
+  // the user's pending offers to top free agents on cap space hold their room
+  const holds = bidHolds(league);
   const space = cap.salaryCap - pay - holds;
-  // the exceptions open to a signing now, largest first (each net of the pending offers that lean on them)
-  const exceptions = EXCEPTION_ORDER.map((k) => ({ k, room: userExceptionRoom(league, k, s) }))
-    .filter((x) => x.room > 0)
-    // (the taxpayer mid-level only once the full one can't pay as much)
-    .filter((x, _, all) => x.k !== 'tmle' || (all.find((y) => y.k === 'mle')?.room ?? 0) < x.room)
-    .sort((a, b) => b.room - a.room);
-  // two-way players don't use one of the 15 standard spots; the offseason allows 21 until opening night
+  // what the mid-level can still pay (none while a pending offer has it)
+  const mle = userMleRoom(league, s);
+  // the offseason allows 21 until opening night
   const n = standardRoster(league, tid).length;
   const max = rosterMaxNow(league);
-  const tw = twoWayRoster(league, tid).length;
   const closed = signingClosedReason(league);
-  // 10-day contracts: January 5 to the end of the regular season, with hardship spots beyond 15
-  const tenDayOpen = !tenDayClosedReason(league);
-  const hs = hardship(league, tid);
   const [pos, setPos] = useState<'all' | Pos>('all');
   const [minOvr, setMinOvr] = useState(0);
   const [sort, setSort] = useState<SortKey>('value');
   // null: the screen's own pick (see `signableFirst` below); a tap on the chip makes it the user's
   const [signablePick, setOnlySignable] = useState<boolean | null>(null);
-  const [twoWayMode, setTwoWayMode] = useState(false);
-  const [tenDayMode, setTenDayMode] = useState(false);
-  const tenDays = tenDayMode && tenDayOpen;
-  const [tenDaySel, setTenDaySel] = useState<number | null>(null);
   const [limit, setLimit] = useState(40);
   // a player page's "Make an offer" opens his sheet here (?offer=pid)
   const [params, setParams] = useSearchParams();
   const linked = Number(params.get('offer'));
-  const [sel, setSel] = useState<number | null>(() => (league.players[linked] && !league.players[linked].waivers ? linked : null));
-  const [twoWaySel, setTwoWaySel] = useState<number | null>(null);
-  const [waiverSel, setWaiverSel] = useState<number | null>(() => (league.players[linked]?.waivers ? linked : null));
+  const [sel, setSel] = useState<number | null>(() => (league.players[linked] ? linked : null));
   const closeSheet = () => {
     setSel(null);
-    setWaiverSel(null);
     if (params.has('offer')) setParams({}, { replace: true });
   };
   const fa = league.phase === 'freeAgency';
@@ -83,33 +61,22 @@ export default function FreeAgents() {
 
   const all = useLeagueMemo(
     () =>
-      // players on waivers are listed too: they can be claimed, not signed
-      [...freeAgents(league), ...onWaivers(league)].map((p) => {
+      freeAgents(league).map((p) => {
         const ask = askingContract(league, p, tid);
-        return {
-          p,
-          ask,
-          appeal: teamAppeal(league, tid, p),
-          val: valueScore(league, p),
-          age: playerAge(p, league.season),
-          route: p.waivers ? null : offerRoute(league, p, ask.amount, s),
-          twoWay: !p.waivers && wantsTwoWay(league, p, tid),
-          tenDay: wantsTenDay(league, p, tid),
-        };
+        return { p, ask, appeal: teamAppeal(league, tid, p), val: valueScore(league, p), age: playerAge(p, league.season), route: offerRoute(league, p, ask.amount, s) };
       }),
     [league, tid, s],
   );
 
-  // what the user could actually do today: the window is open and there's a spot to fill (a hardship one for a 10-day)
-  const canAdd = !closed && (twoWayMode ? tw < TWO_WAY_MAX : tenDays ? n < max + hs.spots : n < max);
-  // (your own restricted free agent re-signs with Bird rights; one who signed an offer sheet waits on it)
-  const signable = (r: (typeof all)[number]) => !r.p.waivers && !r.p.rfa?.sheet && canAdd && (twoWayMode || tenDays || !!r.route || r.p.rfa?.tid === tid);
+  // what the user could actually do today: the window is open and there's a spot to fill
+  const canAdd = !closed && n < max;
+  const signable = (r: (typeof all)[number]) => canAdd && !!r.route;
   // over the cap (the best asks need room he hasn't got): the list opens on who he can sign, one tap
   // from everyone. With nobody he can sign (a full roster, the window shut) it shows everyone
   const signableFirst = (space <= 0 || n >= max) && all.some(signable);
   const onlySignable = signablePick ?? signableFirst;
   const rows = all
-    .filter((r) => (pos === 'all' || r.p.pos === pos) && r.p.ovr >= minOvr && (!twoWayMode || r.twoWay) && (!tenDays || r.tenDay) && (!onlySignable || signable(r)))
+    .filter((r) => (pos === 'all' || r.p.pos === pos) && r.p.ovr >= minOvr && (!onlySignable || signable(r)))
     .sort((a, b) => {
       switch (sort) {
         case 'ovr':
@@ -125,7 +92,6 @@ export default function FreeAgents() {
       }
     });
 
-  const mode: FaListMode = twoWayMode ? 'twoWay' : tenDays ? 'tenDay' : 'standard';
   // the roster's need (Team → Tactics's weakest quality), and which of the rows in view would fill it
   const shownKey = rows
     .slice(0, limit)
@@ -160,7 +126,7 @@ export default function FreeAgents() {
         // (in free agency the deals are next season's: the day says more)
         sub={fa ? `Day ${faDayNumber(league)} of ${FA_DAYS} · ${all.length} available` : `${all.length} available · ${shortSeason(s)} deals`}
         back
-        right={<FaHelp league={league} s={s} space={space} exceptions={exceptions} />}
+        right={<FaHelp league={league} s={s} space={space} mle={mle} />}
       />
 
       {closed && (
@@ -169,70 +135,38 @@ export default function FreeAgents() {
         </Callout>
       )}
 
-      {/* the desk's poster: what you can spend, as big as it fits; the roster and the best exception under the rule */}
+      {/* the desk's poster: what you can spend, as big as it fits; the roster and the mid-level under the rule */}
       <section className="fo-room" aria-label="Your room">
         <div className="over">{room.k}</div>
         <div className="fo-room-v num">
           <Fig value={space} text={room.v} />
         </div>
-        {/* (the holds said with their amount, as on the Office's cap sheet: pending offers and sheets hold room too) */}
-        <div className="fo-room-s">{holds > 0 ? `after ${money(holds)} in holds` : space > 0 ? 'to spend on free agents' : 'sign for the minimum or with an exception'}</div>
+        {/* (pending offers on cap space hold their room) */}
+        <div className="fo-room-s">
+          {holds > 0
+            ? `after ${money(holds)} held for your offers`
+            : space > 0
+              ? 'to spend on free agents'
+              : mle > 0
+                ? 'sign for the minimum or with your mid-level'
+                : 'sign for the minimum'}
+        </div>
         {/* (under the salary floor the difference is paid at the season's end anyway: money to spend) */}
         {floorText(pay, cap) && <div className="fo-room-floor small">{floorText(pay, cap)}</div>}
         <Statline
           items={[
             // (in the offseason up to 21 can sign: past 15, cut down by opening night)
             rosterFig(league),
-            exceptions.length
-              ? {
-                  k: 'Best exception',
-                  v: money(exceptions[0].room),
-                  color: 'var(--good)',
-                  s: `${EXCEPTIONS[exceptions[0].k].short}${exceptions.length > 1 ? ` +${exceptions.length - 1} more` : ''}`,
-                }
-              : { k: <Term id="exception">Exceptions</Term>, v: 'None', s: `minimum ${moneyExact(cap.vetMin)}` },
+            mle > 0
+              ? { k: <Term id="mle">Mid-level</Term>, v: money(mle), color: 'var(--good)', s: 'one signing a season' }
+              : { k: <Term id="mle">Mid-level</Term>, v: 'Used', s: `minimum ${moneyExact(cap.vetMin)}` },
           ]}
         />
       </section>
 
       {fa && <FaMarket onOpen={setSel} />}
 
-      <MyRfas onResign={setSel} />
-
-      {/* the list's kind: free agents' own asks, two-way offers, 10-day contracts */}
-      <Segmented
-        label="Contracts shown"
-        value={mode}
-        onChange={(m) => (setTwoWayMode(m === 'twoWay'), setTenDayMode(m === 'tenDay'), setLimit(40))}
-        options={[
-          { id: 'standard' as const, label: 'Free agents' },
-          { id: 'twoWay' as const, label: `Two-way · ${tw}/${TWO_WAY_MAX}` },
-          ...(tenDayOpen ? [{ id: 'tenDay' as const, label: '10-day' }] : []),
-        ]}
-      />
-      {(twoWayMode || tenDays || (onlySignable && !canAdd)) && (
-        <div className="col fo-fa-notes">
-          {onlySignable && !canAdd && (
-            <div className="small warn">
-              {closed ??
-                (twoWayMode
-                  ? `All ${TWO_WAY_MAX} two-way slots are taken.`
-                  : tenDays
-                    ? `Your roster is full at ${max}${hs.spots ? ` plus ${hs.spots} hardship` : ''}.`
-                    : `Your roster is full at ${max}. Release or trade someone to sign one.`)}
-            </div>
-          )}
-          {twoWayMode && <div className="tiny dim">Three seasons or fewer, open to a two-way. It pays {moneyExact(twoWaySalary(league, s))}, off the cap.</div>}
-          {tenDays && (
-            <div className="tiny dim">
-              The minimum for {TEN_DAYS} days, then it ends by itself.{' '}
-              {hs.out >= HARDSHIP_OUT
-                ? `${hs.out} players out 3+ games: ${hs.spots} hardship spot${hs.spots === 1 ? '' : 's'} past ${CAP.rosterMax}.`
-                : `Hardship spots open with ${HARDSHIP_OUT} players out. ${hs.out} now.`}
-            </div>
-          )}
-        </div>
-      )}
+      {onlySignable && !canAdd && <div className="small warn">{closed ?? `Your roster is full at ${max}. Release or trade someone to sign one.`}</div>}
 
       <Sheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filters">
         <div className="col fo-filter-sheet">
@@ -286,7 +220,7 @@ export default function FreeAgents() {
         </div>
       </Sheet>
 
-      {mode === 'standard' && <NeedNote league={league} need={needs.need} options={needs.options} />}
+      <NeedNote league={league} need={needs.need} options={needs.options} />
 
       {rows.length === 0 ? (
         <>
@@ -311,19 +245,7 @@ export default function FreeAgents() {
           <div className="card flush">
             <div className="list wide2">
               {rows.slice(0, limit).map(({ p, ask, appeal, route }) => (
-                <FaRow
-                  key={p.pid}
-                  league={league}
-                  p={p}
-                  ask={ask}
-                  appeal={appeal}
-                  route={route}
-                  mode={mode}
-                  s={s}
-                  space={space}
-                  fill={needs.fill.get(p.pid)}
-                  onOpen={() => (p.waivers ? setWaiverSel(p.pid) : twoWayMode ? setTwoWaySel(p.pid) : tenDays ? setTenDaySel(p.pid) : setSel(p.pid))}
-                />
+                <FaRow key={p.pid} league={league} p={p} ask={ask} appeal={appeal} route={route} space={space} fill={needs.fill.get(p.pid)} onOpen={() => setSel(p.pid)} />
               ))}
             </div>
             {rows.length > limit && (
@@ -338,9 +260,6 @@ export default function FreeAgents() {
       {fa && <FaDock />}
 
       <ContractSheet pid={sel} mode="fa" onClose={closeSheet} />
-      <TwoWaySheet p={twoWaySel !== null ? league.players[twoWaySel] : undefined} onClose={() => setTwoWaySel(null)} />
-      <TenDaySheet p={tenDaySel !== null ? league.players[tenDaySel] : undefined} onClose={() => setTenDaySel(null)} />
-      <WaiverSheet p={waiverSel !== null ? league.players[waiverSel] : undefined} onClose={closeSheet} />
     </main>
   );
 }

@@ -104,10 +104,7 @@ export function assistantFeed(league: League): AssistantCard[] {
       area: 'office',
       tone: 'tip',
       title: `${CAP.rosterMax - std} open roster spot${CAP.rosterMax - std === 1 ? '' : 's'}`,
-      line:
-        std < CAP.rosterMin
-          ? `Below the ${CAP.rosterMin}-man minimum. The league fills it if you don't.`
-          : 'A minimum deal or a 10-day contract fills it without touching the cap.',
+      line: std < CAP.rosterMin ? `Below the ${CAP.rosterMin}-man minimum. The league fills it if you don't.` : 'A minimum deal fills it, over the cap or not.',
       to: '/office/free-agents',
       weight: std < CAP.rosterMin ? 85 : 20,
     });

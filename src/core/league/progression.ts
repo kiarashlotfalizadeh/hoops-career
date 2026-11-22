@@ -341,8 +341,7 @@ export function anchorPopulation(league: League): Player[] {
   }
   const out: Player[] = [];
   for (const ps of byTeam.values()) {
-    for (const p of ps) if (p.contract.twoWay) out.push(p);
-    const standard = ps.filter((p) => !p.contract.twoWay).map((p) => ({ p, raw: ovrRaw(p.ratings) }));
+    const standard = ps.map((p) => ({ p, raw: ovrRaw(p.ratings) }));
     standard.sort((a, b) => b.raw - a.raw || a.p.pid - b.p.pid);
     for (const x of standard.slice(0, 15)) out.push(x.p);
   }

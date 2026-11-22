@@ -60,7 +60,6 @@ function summer(rngSeed = 5) {
   for (const t of l.teams) {
     t.deadMoney = [{ pid: -1, name: 'x', season: s, amount: cap.salaryCap }];
     t.mleSeason = s;
-    t.baeSeason = s;
     t.strategy = 'retool';
   }
   const r = l.teams[R];
@@ -326,7 +325,7 @@ describe('AI front offices', () => {
         const old = ps.map((p) => ({ ...p, bornYear: L.season - 31 }));
         const top = new Set(
           old
-            .filter((p) => !p.contract.twoWay && !p.injury)
+            .filter((p) => !p.injury)
             .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
             .slice(0, 5)
             .map((p) => p.pid),
@@ -358,7 +357,7 @@ describe('AI front offices', () => {
       teamSeason(lead, L.season).won = 60;
       expect(seedLocked(L, lead.tid)).toBe(true);
       expect(seedLocked(L, second.tid)).toBe(false);
-      const ps = teamPlayers(L, lead.tid).filter((p) => !p.contract.twoWay && !p.injury);
+      const ps = teamPlayers(L, lead.tid).filter((p) => !p.injury);
       const best = [...ps].sort((a, b) => b.ovr - a.ovr || a.pid - b.pid);
       const rested = new Map<number, number>();
       for (let d = 0; d < 6; d++) {

@@ -234,10 +234,6 @@
   letter-spacing: -0.03em;
 }
 
-.fo-sec-links {
-  gap: 14px;
-}
-
 /* the sheet's foot: the contracts table on Team, the rules behind their "?" */
 .fo-capsheet-foot {
   display: flex;

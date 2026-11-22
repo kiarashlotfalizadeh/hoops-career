@@ -8,15 +8,12 @@ import * as S from '../src/core/league/season';
 import * as H from '../src/core/league/helpers';
 import * as C from '../src/core/league/contracts';
 import * as FA from '../src/core/league/freeAgency';
-import * as R from '../src/core/league/rfa';
 import * as N from '../src/core/league/negotiation';
-import * as TD from '../src/core/league/tenDay';
 import { nextPick } from '../src/core/league/draft';
 import { finalsHomeCourt, standings } from '../src/core/league/standings';
 import { cupTables } from '../src/core/league/cup';
 import { missesAllStarGame } from '../src/core/league/awards';
 import { takeOverTeam } from '../src/core/league/owner';
-import { frozen } from '../src/core/league/books';
 import * as TR from '../src/core/league/trades';
 import { makeItWork } from '../src/core/league/tradeHelp';
 import * as P from '../src/core/league/proposals';
@@ -24,7 +21,6 @@ import { openStint, registryProblems, userCoach } from '../src/core/league/coach
 import { contractExp, extensionStart, playerAge, salaryFor } from '../src/core/playerGen';
 import { CAP, seasonLabel } from '../src/core/constants';
 import { arenaCapacity, aiTicketPrice, attendanceFor, MERCH_PER_GAME, LOCAL_TV_PER_GAME } from '../src/core/league/finances';
-import { booksOutlook, sanctionedTax } from '../src/core/league/books';
 import { pickProjection } from '../src/core/analysis/odds';
 import * as REC from '../src/core/league/records';
 import type { League, Player } from '../src/core/types';
@@ -84,16 +80,12 @@ function check() {
   }
   for (const t of L.teams) {
     const n = std(t.tid).length;
-    // (through the draft and the re-sign window, as for the standard roster, the two-way deals that run into next season)
-    const tw = H.twoWayRoster(L, t.tid).filter((p) => !(ph === 'draft' || ph === 'resign') || contractExp(p.contract) > L.season).length;
     const who = `${t.abbrev}${t.tid === L.userTid ? '*' : ''}`;
-    // standard roster: 13-15 in season, plus hardship 10-days beyond 15; two-way deals sit outside it (max 3)
-    const hardship = std(t.tid).filter((p) => p.contract.tenDay?.hardship).length;
-    if (H.inSeason(L) && (n < CAP.rosterMin || n - hardship > CAP.rosterMax)) bad('roster size in season', `${who} ${n} (${hardship} hardship)`);
+    // the roster: 13-15 in season
+    if (H.inSeason(L) && (n < CAP.rosterMin || n > CAP.rosterMax)) bad('roster size in season', `${who} ${n}`);
     // through the draft and the re-sign window expiring deals still sit on the roster; count next season's contracts
     const signed = ph === 'draft' || ph === 'resign' ? H.standardRoster(L, t.tid).filter((p) => contractExp(p.contract) > L.season).length : n;
     if (signed > H.OFFSEASON_ROSTER_MAX) bad('roster above offseason limit', `${who} ${signed}`);
-    if (tw > H.TWO_WAY_MAX) bad('too many two-way players', `${who} ${tw}`);
     if (ph === 'preseason' && t.tid !== L.userTid && n < CAP.rosterMin) bad('AI roster <13 in preseason', `${who} ${n}`);
     if (new Set(t.rotation.order).size !== t.rotation.order.length) bad('dup pid in rotation', who);
     for (const pid of t.rotation.order) if (L.players[pid]?.tid !== t.tid) bad('rotation has non-roster pid', `${who} ${nm(pid)}`);
@@ -111,13 +103,7 @@ function check() {
       if (H.inSeason(L) && !L.teams[p.tid].rotation.order.includes(p.pid)) bad('rostered but not in rotation', nm(p.pid));
       const cap = H.CAP_FOR(L, p.contract.start);
       const first = p.contract.salaries[0];
-      // (a 10-day contract's one salary is the minimum prorated: see checkContracts)
-      if (
-        !p.contract.twoWay &&
-        !p.contract.tenDay &&
-        p.contract.start > L.startSeason &&
-        (first > topSalary(p, cap) + 10 || first < cap.minContract - 1 || p.contract.salaries.length > 5)
-      )
+      if (p.contract.start > L.startSeason && (first > topSalary(p, cap) + 10 || first < cap.minContract - 1 || p.contract.salaries.length > 5))
         bad('contract outside min/max/5yr', `${nm(p.pid)} ${JSON.stringify(p.contract)}`);
       if ((ph === 'preseason' || ph === 'regular') && p.draft.round > 0 && p.draft.year === season - 1 && p.experience !== 0)
         bad('rookie experience != 0', `${nm(p.pid)} exp ${p.experience}`);
@@ -127,7 +113,7 @@ function check() {
     if (next) {
       const start = extensionStart(p.contract)!;
       const cap = H.CAP_FOR(L, start);
-      if (p.tid < 0 || p.contract.twoWay) bad('extension off a standard roster deal', `${nm(p.pid)} tid ${p.tid} ${JSON.stringify(p.contract)}`);
+      if (p.tid < 0) bad('extension off a roster deal', `${nm(p.pid)} tid ${p.tid} ${JSON.stringify(p.contract)}`);
       if (start <= season) bad('extension not taken over', `${nm(p.pid)} ${JSON.stringify(p.contract)}`);
       if (
         !next.salaries.length ||
@@ -139,9 +125,6 @@ function check() {
         bad('extension outside min/max/5yr', `${nm(p.pid)} ${JSON.stringify(p.contract)}`);
     }
     if (p.tid === -1 && !(p.asking && p.asking.amount > 0)) bad('FA without asking price', nm(p.pid));
-    // waivers: only free agents released in season, cleared or claimed before the season ends
-    if (p.waivers && p.tid !== -1) bad('rostered player on waivers', nm(p.pid));
-    if (p.waivers && !H.inSeason(L)) bad('waivers outside the season', nm(p.pid));
     // generated players get tendencies like the seed's calibrated ones (without them a star plays like a role player)
     if (p.tid >= -2 && !p.tend) bad('player without tendencies', nm(p.pid));
     if (p.tid === -3 && p.contract.salaries.some((x) => x > 0)) bad('retired with salary', nm(p.pid));
@@ -154,8 +137,6 @@ function check() {
   }
   if (ph !== 'freeAgency' && L.faBids?.length) bad('offers to free agents outside free agency', L.faBids.map((b) => nm(b.pid)).join(', '));
   for (const b of L.faBids ?? []) if (L.players[b.pid]?.tid !== -1) bad('offer to a player off the market', nm(b.pid));
-  for (const b of L.faBids ?? []) if (L.players[b.pid]?.rfa) bad('top-free-agent offer to a restricted free agent', nm(b.pid));
-  checkRfa();
   const first = ['resign', 'freeAgency'].includes(ph) ? season + 1 : season;
   const cnt = new Map<string, number>();
   for (const d of L.draftPicks) {
@@ -473,48 +454,23 @@ function checkTerms() {
 }
 
 /**
- * Contract talks, 10-day contracts and the exceptions: talks only with a real team and in range,
- * and over once he signs (no free-agent or re-sign talks left on a player who signed elsewhere); a
- * 10-day contract only in the regular season on a roster, up to twenty days out (a second one runs
- * on from the first), under his minimum, and two at most with one team; a team never on the
- * mid-level and the room exception, nor the room exception and the bi-annual, in one contract
- * season, and on the room exception only after using its cap space.
+ * Contract talks: only with a real team and in range, and over once he signs (no free-agent or
+ * re-sign talks left on a player who signed elsewhere).
  */
 function checkContracts() {
-  const cs = H.contractSeason(L);
-  const cap = H.CAP_FOR(L);
   for (const p of Object.values(L.players)) {
     const t = p.talks;
     if (t && (!L.teams[t.tid] || !(t.patience >= 0 && t.patience <= 5) || (t.sour ?? 0) > 0.06 + 1e-9 || (t.counter && !(t.counter.amount > 0))))
       bad('talks out of range', `${nm(p.pid)} ${JSON.stringify(t)}`);
     if (t && p.tid >= 0 && p.tid !== t.tid && t.kind !== 'extend') bad('talks left on a player who signed elsewhere', `${nm(p.pid)} ${JSON.stringify(t)}`);
-    const td = p.contract.tenDay;
-    if (!td) continue;
-    const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
-    if (L.phase !== 'regular' || p.tid < 0) bad('10-day contract outside the regular season', `${nm(p.pid)} ${L.phase} tid ${p.tid}`);
-    else if (!(td.until > L.day && td.until <= L.day + 2 * TD.TEN_DAYS && td.until <= L.regularSeasonDays + 1) || !(p.contract.salaries[0] > 0 && p.contract.salaries[0] < min))
-      bad('10-day contract off its terms', `${nm(p.pid)} ${JSON.stringify(p.contract)} day ${L.day}`);
-    if (!p.tenDays || p.tenDays.season !== L.season || !p.tenDays.by[p.tid] || Object.values(p.tenDays.by).some((n) => n > TD.TEN_DAY_MAX))
-      bad('10-day count off', `${nm(p.pid)} ${JSON.stringify(p.tenDays)}`);
-  }
-  for (const t of L.teams) {
-    if (t.mleSeason === cs && t.roomSeason === cs) bad('mid-level and room exception in one season', t.abbrev);
-    if (t.roomSeason === cs && (t.spaceSeason !== cs || t.baeSeason === cs))
-      bad('room exception without cap space, or with the bi-annual', `${t.abbrev} ${JSON.stringify([t.spaceSeason, t.baeSeason])}`);
   }
 }
 
-/** How many teams used cap space and each exception in a contract season (the last use each made). */
-function routeUse(season: number) {
-  const n = (k: 'spaceSeason' | 'mleSeason' | 'roomSeason' | 'baeSeason') => L.teams.filter((t) => t[k] === season).length;
-  return { space: n('spaceSeason'), mle: n('mleSeason'), room: n('roomSeason'), bae: n('baeSeason') };
-}
+/** How many teams used the mid-level in a contract season. */
+const mleUse = (season: number) => L.teams.filter((t) => t.mleSeason === season).length;
 
-/** What the user's contract moves came to this season: talks (offers, counters, signings under the ask, breakdowns), stretched releases and 10-days. */
-const contractTally = { offers: 0, counters: 0, under: 0, broke: 0, lowballs: 0, stretched: 0, tenDays: 0 };
-
-/** 10-day contracts signed this season (players seen on one), by AI teams and on hardship spots. */
-const tenDayTally = { ai: new Set<number>(), hardship: new Set<number>() };
+/** What the user's contract moves came to this season: talks (offers, counters, signings under the ask, breakdowns). */
+const contractTally = { offers: 0, counters: 0, under: 0, broke: 0, lowballs: 0 };
 
 /** What the user's deals with deal terms came to this season. */
 const termsTally = { trades: 0, swaps: 0, cash: 0 };
@@ -577,113 +533,6 @@ function checkTransactions() {
   if (last && !((L.nextTxnId ?? 0) > last)) bad('transaction id reused', `next ${L.nextTxnId}, last ${last}`);
 }
 
-/**
- * Restricted free agency: a qualifying offer only on an expiring player of the team that made it
- * (re-sign period) or on a free agent (free agency), never on a roster otherwise and never outside
- * the summer; offer sheets 2-5 years within the min and max, from another team, decided by their
- * last match day; an AI team with one sheet pending at most; and every team's cap holds in free
- * agency exactly its restricted free agents' holds plus the offer sheets it signed, in capPayroll too.
- */
-function checkRfa() {
-  const ph = L.phase;
-  const next = L.season + 1;
-  const cap = H.CAP_FOR(L, next);
-  const held = new Map<number, number>();
-  const sheets = new Map<number, number>();
-  for (const p of Object.values(L.players)) {
-    const r = p.rfa;
-    if (!r) continue;
-    if (ph !== 'resign' && ph !== 'freeAgency') bad('restricted free agent outside the summer', `${nm(p.pid)} ${ph}`);
-    else if (ph === 'resign' ? p.tid !== r.tid || contractExp(p.contract) > L.season || !!r.sheet : p.tid !== -1)
-      bad('restricted free agent on a roster', `${nm(p.pid)} tid ${p.tid} rfa ${JSON.stringify(r)}`);
-    if (!L.teams[r.tid] || !(r.qo > 0) || (ph === 'freeAgency' && !((r.hold ?? 0) >= r.qo)))
-      bad('qualifying offer without a team, amount or hold', `${nm(p.pid)} ${JSON.stringify(r)}`);
-    if (ph === 'freeAgency') held.set(r.tid, (held.get(r.tid) ?? 0) + (r.hold ?? r.qo));
-    const s = r.sheet;
-    if (!s) continue;
-    sheets.set(s.tid, (sheets.get(s.tid) ?? 0) + 1);
-    held.set(s.tid, (held.get(s.tid) ?? 0) + s.amount);
-    if (s.tid === r.tid || !L.teams[s.tid]) bad('offer sheet from his own team', nm(p.pid));
-    if (s.years < 2 || s.years > 5 || s.amount < cap.minContract - 1 || s.amount > cap.maxContract(p.experience) + 10)
-      bad('offer sheet outside 2-5 yrs or min/max', `${nm(p.pid)} ${JSON.stringify(s)}`);
-    if (s.until < s.day || s.until > FA.FA_DAYS - 1 || s.until < L.faDay) bad('offer sheet past its match day', `${nm(p.pid)} ${JSON.stringify(s)} faDay ${L.faDay}`);
-  }
-  for (const [tid, n] of sheets) if (n > 1 && tid !== L.userTid) bad('AI team with two offer sheets pending', `${L.teams[tid].abbrev} ${n}`);
-  if (ph !== 'freeAgency') return;
-  for (const t of L.teams) {
-    const want = held.get(t.tid) ?? 0;
-    const holds = FA.capHolds(L, t.tid).reduce((a, h) => a + h.amount, 0);
-    if (holds !== want || FA.capPayroll(L, t.tid, next) !== H.payroll(L, t.tid, next) + want) bad('cap holds off in free agency', `${t.abbrev} holds ${holds} want ${want}`);
-  }
-}
-
-/** Offer sheets pending now, to check how each is settled (see settledSheets). */
-const sheetSnapshot = () =>
-  new Map(
-    Object.values(L.players)
-      .filter((p) => p.rfa?.sheet)
-      .map((p) => [p.pid, { own: p.rfa!.tid, ...p.rfa!.sheet! }]),
-  );
-
-/**
- * The sheets in `before` that were decided since (contracts starting `next`): each player is with
- * his team or the offering one, on exactly the sheet's terms. Returns how many were matched and declined.
- */
-function settledSheets(before: ReturnType<typeof sheetSnapshot>, next: number): { matched: number; declined: number } {
-  const out = { matched: 0, declined: 0 };
-  for (const [pid, s] of before) {
-    const p = L.players[pid];
-    if (p.rfa?.sheet) continue;
-    const c = C.makeContract(L, s.amount, s.years, next, p.experience);
-    // (to the rounding step: a sheet at the maximum is clamped to the max of the player's years of service, which
-    // the summer's rollover can move a tier between the signing and this check: $49.129M against $49.13M)
-    const same = p.contract.salaries.length === c.salaries.length && p.contract.salaries.every((x, i) => Math.abs(x - c.salaries[i]) <= 10 * (i + 1));
-    if ((p.tid !== s.own && p.tid !== s.tid) || p.contract.start !== next || !same)
-      bad('offer sheet settled off its terms', `${nm(pid)} tid ${p.tid} ${JSON.stringify(p.contract)} vs ${JSON.stringify(s)}`);
-    out[p.tid === s.own ? 'matched' : 'declined']++;
-  }
-  return out;
-}
-
-/** Restricted free agents now, with the team holding their rights. */
-const rfaSnapshot = () => new Map(R.restrictedFreeAgents(L).map((p) => [p.pid, p.rfa!.tid]));
-
-/** Restricted free agents in `before` who left the market since went only to their own team, or to one whose offer sheet wasn't matched (or are free agents after a withdrawal). */
-function checkRfaMoves(before: Map<number, number>, sheets: ReturnType<typeof sheetSnapshot>) {
-  for (const [pid, own] of before) {
-    const p = L.players[pid];
-    if (p.rfa || p.tid === own || (p.tid === -1 && !p.rfa) || p.tid === sheets.get(pid)?.tid) continue;
-    bad('restricted free agent signed without an offer sheet', `${nm(pid)} -> ${p.tid} (rights ${own})`);
-  }
-}
-
-/** The user's restricted free agents with an offer sheet: he matches when his team's AI would (roster and budget allowing), else lets them go. */
-function decideUserSheets() {
-  for (const p of R.restrictedFreeAgents(L, L.userTid).filter((x) => x.rfa!.sheet)) {
-    const match = R.aiMatchVerdict(L, p).match && !R.sheetDecisionBlocked(L, p.pid, true);
-    const res = R.userDecideSheet(L, p.pid, match);
-    if (!res.ok) bad('offer sheet decision refused', `${nm(p.pid)} ${res.reason}`);
-  }
-}
-
-/** The user signs the best AI restricted free agent he can pay to an offer sheet at his asking price (at least two years). */
-function sheetOnRfa(): number | null {
-  const u = L.userTid;
-  const rfas = R.restrictedFreeAgents(L)
-    .filter((p) => p.rfa!.tid !== u && !p.rfa!.sheet)
-    .sort((a, b) => C.valueScore(L, b) - C.valueScore(L, a));
-  for (const p of rfas) {
-    const a = C.askingContract(L, p, u);
-    const years = Math.max(R.SHEET_MIN_YEARS, Math.min(4, a.years));
-    const amount = Math.ceil((a.amount * (1 + Math.abs(years - a.years) * 0.03)) / 50) * 50;
-    if (FA.userOffer(L, p.pid, amount, years).ok) {
-      if (!L.players[p.pid].rfa?.sheet || L.players[p.pid].rfa!.sheet!.tid !== u) bad('user offer sheet not pending', nm(p.pid));
-      return p.pid;
-    }
-  }
-  return null;
-}
-
 function checkOptions(user: boolean) {
   for (const p of Object.values(L.players)) if (C.pendingOption(L, p) && (user || p.tid !== L.userTid)) bad('undecided contract option', `${nm(p.pid)} ${p.contract.option}`);
 }
@@ -725,8 +574,7 @@ function extendBest() {
   const p = H.teamPlayers(L, L.userTid)
     .filter((x) => !C.extensionBlockedReason(L, x) && !C.extensionRefusal(L, x))
     .sort((a, b) => C.valueScore(L, b) - C.valueScore(L, a))[0];
-  // (a frozen budget allows no raises: the owner's rule, not a refusal to check)
-  if (!p || frozen(L)) return;
+  if (!p) return;
   const ask = C.extensionAsk(L, p);
   const res = N.userExtend(L, p.pid, ask.amount, ask.years);
   if (!res.ok || !p.contract.next) bad('extension at his ask refused', `${nm(p.pid)} ${res.reason}`);
@@ -734,7 +582,7 @@ function extendBest() {
 
 function fixUserRoster() {
   const u = L.userTid;
-  while (std(u).length > CAP.rosterMax) releaseStretched(std(u).sort((a, b) => C.valueScore(L, a) - C.valueScore(L, b))[0]);
+  while (std(u).length > CAP.rosterMax) C.releasePlayer(L, std(u).sort((a, b) => C.valueScore(L, a) - C.valueScore(L, b))[0]);
   for (let g = 0; std(u).length < CAP.rosterMin && g < 40; g++)
     for (const p of H.freeAgents(L).sort((a, b) => b.ovr - a.ovr)) {
       const ask = C.askingContract(L, p, u);
@@ -744,27 +592,8 @@ function fixUserRoster() {
 }
 
 /**
- * The user releases a player, stretching his dead money when there's something to stretch: the
- * same total, spread evenly over twice the seasons left plus one (this season's as usual once it's
- * under way), each stretched season marked.
- */
-function releaseStretched(p: Player) {
-  const plain = C.releaseSchedule(L, p);
-  const stretch = C.stretchDeadMoney(L, plain);
-  const tid = p.tid;
-  C.releasePlayer(L, p, { stretch: !!stretch });
-  if (!stretch) return;
-  contractTally.stretched++;
-  const dead = L.teams[tid].deadMoney.filter((d) => d.pid === p.pid);
-  const spread = dead.filter((d) => d.stretched);
-  const sum = (xs: { amount: number }[]) => xs.reduce((a, d) => a + d.amount, 0);
-  if (sum(dead) !== sum(plain) || spread.length % 2 !== 1 || spread.some((d, i) => i > 0 && d.season !== spread[i - 1].season + 1))
-    bad('stretched dead money off', `${nm(p.pid)} ${JSON.stringify(plain)} -> ${JSON.stringify(dead)}`);
-}
-
-/**
  * The summer market: the user negotiates with the two best free agents he can pay who aren't top
- * or restricted ones. A lowball to the first (refused, and AI teams' prices unchanged), then 87% of
+ * ones. A lowball to the first (refused, and AI teams' prices unchanged), then 87% of
  * the ask for his length to each: signed if that's within his walk-away price, else a counter
  * between the offer and his ask, which he then takes as offered.
  */
@@ -776,10 +605,7 @@ function negotiate() {
     // (a minimum-level player just takes his minimum: talks are about more than that)
     .filter(
       (p) =>
-        !p.rfa &&
-        !FA.marqueeFA(L, p) &&
-        N.talkAsk(L, p, 'fa').amount > H.CAP_FOR(L, s).vetMin * 1.5 &&
-        FA.offerRoute(L, p, N.talkAsk(L, p, 'fa').amount, s, N.talkAsk(L, p, 'fa').years),
+        !FA.marqueeFA(L, p) && N.talkAsk(L, p, 'fa').amount > H.CAP_FOR(L, s).vetMin * 1.5 && FA.offerRoute(L, p, N.talkAsk(L, p, 'fa').amount, s, N.talkAsk(L, p, 'fa').years),
     )
     .sort((a, b) => C.valueScore(L, b) - C.valueScore(L, a))
     .slice(0, 2);
@@ -854,44 +680,6 @@ function resignTalks(p: Player): boolean {
   return true;
 }
 
-/** The day of the 10-day exercise: the user's 10-day player, signed on January 5. */
-let tenDayPid: number | null = null;
-
-/**
- * January 5: the user signs the best free agent who'd take the minimum to a 10-day contract (making
- * room on a full roster), five days later to a second one, and on its last day for the rest of the
- * season; each step checked.
- */
-function tenDayStep() {
-  const u = L.userTid;
-  if (L.day === TD.tenDayOpenDay(L)) {
-    if (std(u).length >= CAP.rosterMax) releaseStretched(std(u).sort((a, b) => C.valueScore(L, a) - C.valueScore(L, b))[0]);
-    const p = H.freeAgents(L)
-      // (not one he released this season: the rule refuses him, and the check is whether the signing works)
-      .filter((x) => TD.wantsTenDay(L, x, u) && !x.injury && !C.releasedBy(L, x, u))
-      .sort((a, b) => C.valueScore(L, b) - C.valueScore(L, a))[0];
-    if (!p) return;
-    const r = TD.userTenDay(L, p.pid);
-    if (!r.ok || !p.contract.tenDay || p.tid !== u) return bad('10-day signing refused', `${nm(p.pid)} ${r.reason}`);
-    tenDayPid = p.pid;
-    contractTally.tenDays++;
-    return;
-  }
-  const p = tenDayPid === null ? null : L.players[tenDayPid];
-  if (!p || p.tid !== u || !p.contract.tenDay) return;
-  if (L.day === TD.tenDayOpenDay(L) + 5) {
-    const until = p.contract.tenDay.until;
-    const r = TD.userTenDay(L, p.pid);
-    if (!r.ok || p.contract.tenDay.until !== Math.min(until + TD.TEN_DAYS, L.regularSeasonDays + 1) || TD.tenDaysWith(L, p, u) !== 2)
-      bad('second 10-day off', `${nm(p.pid)} ${r.reason} ${JSON.stringify(p.contract)}`);
-    else if (!TD.tenDayBlockedReason(L, u, p)?.includes('two 10-days')) bad('third 10-day not refused', nm(p.pid));
-  } else if (L.day === p.contract.tenDay.until - 1) {
-    const r = TD.userTenDayRest(L, p.pid);
-    if (!r.ok || p.contract.tenDay || p.contract.salaries.length !== 1) bad('rest-of-season deal off', `${nm(p.pid)} ${r.reason} ${JSON.stringify(p.contract)}`);
-    tenDayPid = null;
-  }
-}
-
 /** The user's offer each summer to the best top free agent the team can pay: what leads the field now if it can, else his asking price. */
 function bidOnStar(): number | null {
   const u = L.userTid;
@@ -925,11 +713,11 @@ function bidToLose(): number | null {
   return null;
 }
 
-/** Every unrestricted free agent's summer floor before a day of free agency (pid → $K; see summerFloor), for checkFloorsKept. */
+/** Every free agent's summer floor before a day of free agency (pid → $K; see summerFloor), for checkFloorsKept. */
 const floorsNow = () =>
   new Map(
     H.freeAgents(L)
-      .flatMap((p) => (p.rfa ? [] : [[p.pid, C.summerFloor(L, p)] as [number, number]]))
+      .map((p) => [p.pid, C.summerFloor(L, p)] as [number, number])
       .filter(([, f]) => f > 0),
   );
 
@@ -941,7 +729,7 @@ const floorsNow = () =>
 function checkFloorsKept(floors: Map<number, number>) {
   for (const [pid, floor] of floors) {
     const p = L.players[pid];
-    if (p.tid < 0 || p.contract.twoWay) continue;
+    if (p.tid < 0) continue;
     const sal = salaryFor(p, L.season + 1);
     if (sal < floor - 150)
       bad('signed under the floor he had that day', `${nm(pid)} -> ${L.teams[p.tid].abbrev} $${(sal / 1000).toFixed(2)}M, floor $${(floor / 1000).toFixed(2)}M, day ${L.faDay}`);
@@ -1028,14 +816,14 @@ function checkFaPrices(pool: Map<number, { m: number; ovr: number; tid: number |
     faTally.push({ ratio: sal / x.m, name: H.playerName(p), back: p.tid === x.tid, ovr: x.ovr });
     const least = x.ovr >= C.SUMMER_FLOOR.ovr ? 0.55 : 0.35;
     // (a two-way deal is off the cap: a player who'd sign for the minimum takes one, see wantsTwoWay)
-    if (sal < x.m * least && !p.contract.twoWay)
+    if (sal < x.m * least)
       bad('free agent signed under his summer floor', `${H.playerName(p)} (${x.ovr}) $${(sal / 1000).toFixed(1)}M on a $${(x.m / 1000).toFixed(1)}M value, day ${L.faDay + 1}`);
   }
 }
 
 /**
- * Opening night: no AI team at 1.5× the cap (the second apron is 1.344×; AI payrolls stop under it,
- * see aiTopLine, and a team past it sheds salary, see aiTaxDumps, though with no room in the league a
+ * Opening night: no AI team at 1.5× the cap (AI payrolls stop under their top line, 1.344×, see
+ * aiTopLine and aiMleRoom, and a team past it sheds salary, see aiTaxDumps, though with no room in the league a
  * contract can take a season to move; the first season's opening is the real league's own books).
  * Before the round-2 market work AI payrolls reached 1.5-1.9× the cap.
  */
@@ -1043,15 +831,14 @@ function checkAprons(first: boolean) {
   const cap = H.CAP_FOR(L);
   const over = L.teams.filter((t) => t.tid !== L.userTid && H.payroll(L, t.tid) >= cap.salaryCap * 1.5);
   if (!first && over.length)
-    bad('AI payroll well past the second apron on opening night', over.map((t) => `${t.abbrev} ${(H.payroll(L, t.tid) / cap.salaryCap).toFixed(2)}x`).join(', '));
+    bad('AI payroll well past its top line on opening night', over.map((t) => `${t.abbrev} ${(H.payroll(L, t.tid) / cap.salaryCap).toFixed(2)}x`).join(', '));
 }
 
 /**
- * The season's end: losing on purpose costs money and the owner's money stories agree. A home game
+ * The season's end: losing on purpose costs money. A home game
  * of the user's team as a tank (hype 0.1, a 15-67 record) must bring in less than the same team at
  * .500 (hype 0.5), each at its own best ticket price, by at least a sixth (the payroll the same,
- * the tank must not out-earn the .500 team); and the books' close the owner judges is the cash plus
- * exactly the tax his goals signed off on.
+ * the tank must not out-earn the .500 team).
  */
 function checkEconomyClose() {
   const u = L.userTid;
@@ -1073,8 +860,6 @@ function checkEconomyClose() {
   ts.won = keep.won;
   ts.lost = keep.lost;
   if (tank > even * (5 / 6)) bad('a tank earns about what a .500 team does', `${tank.toFixed(0)} vs ${even.toFixed(0)} a home game`);
-  const o = booksOutlook(L);
-  if (Math.abs(o.judged - o.end - sanctionedTax(L)) > 1) bad('books outlook off the tax the owner signed off on', JSON.stringify(o));
 }
 
 /** `realCalendar`: the first season plays the NBA's own schedule; `fire`: the coach loses his job after it. */
@@ -1086,9 +871,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     const best = std(L.userTid).sort((a, b) => C.valueScore(L, b) - C.valueScore(L, a))[0];
     if (best) P.setUntouchable(L, best.pid, true);
     Object.assign(termsTally, { trades: 0, swaps: 0, cash: 0 });
-    Object.assign(contractTally, { offers: 0, counters: 0, under: 0, broke: 0, lowballs: 0, stretched: 0, tenDays: 0 });
-    tenDayTally.ai.clear();
-    tenDayTally.hardship.clear();
+    Object.assign(contractTally, { offers: 0, counters: 0, under: 0, broke: 0, lowballs: 0 });
     tradeWithTerms();
     check();
     const offers0 = L.nextProposalId ?? 1;
@@ -1106,37 +889,13 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     // news is capped, so count trades by id as they appear (the deadline recap is a trade story too)
     let trades = 0;
     let buyouts = 0;
-    let claims = 0;
     let lastId = L.nextMsgId;
     const firstTxn = L.nextTxnId ?? 1;
     for (let g = 0; L.phase === 'regular' && g < 400; g++) {
-      const waived = C.onWaivers(L).map((p) => ({ pid: p.pid, from: p.waivers!.from, contract: p.waivers!.contract, dead: p.waivers!.dead }));
       S.simDay(L);
-      // 10-day contracts: the user's own, and the AI teams' (hardship ones among them)
-      if (L.phase === 'regular') tenDayStep();
-      for (const p of Object.values(L.players))
-        if (p.contract.tenDay && p.tid >= 0 && p.tid !== L.userTid) {
-          tenDayTally.ai.add(p.pid);
-          if (p.contract.tenDay.hardship) tenDayTally.hardship.add(p.pid);
-        }
       trades += L.news.filter((x) => TR.isTradeNews(x) && x.id >= lastId).length;
       buyouts += L.news.filter((x) => x.kind === 'release' && x.id >= lastId && x.text.includes('bought out')).length;
       lastId = L.nextMsgId;
-      // a player can't be signed on waivers: one on a roster now with his old contract was claimed, and
-      // took his dead money with him; one on a new deal cleared and signed the same day (a 10-day, say),
-      // and his old team keeps its dead money
-      for (const w of waived) {
-        const q = L.players[w.pid];
-        if (!(q?.tid >= 0)) continue;
-        if (q.contract !== w.contract) {
-          if (!L.teams[w.from].deadMoney.some((d) => d.pid === w.pid)) bad('dead money gone for a player who cleared waivers', `${nm(w.pid)} ${L.teams[w.from].abbrev}`);
-          continue;
-        }
-        claims++;
-        // (his waiver's dead money: a release of his from an earlier deal can still be on the books)
-        const left = L.teams[w.from].deadMoney.filter((d) => d.pid === w.pid && w.dead.some((x) => x.season === d.season && x.amount === d.amount));
-        if (left.length) bad('dead money left for a claimed player', `${nm(w.pid)} ${L.teams[w.from].abbrev} ${JSON.stringify(left)} of ${JSON.stringify(w.dead)}`);
-      }
       // take the first offer that comes before the deadline: every open one must go through
       const open = P.openProposals(L)[0];
       if (!accepted && open && L.phase === 'regular' && L.day <= L.tradeDeadlineDay) {
@@ -1164,8 +923,8 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     const carousel = L.news.filter((x) => x.kind === 'coach' && x.season === L.season);
     const coachLine = `coaching changes ${carousel.filter((x) => / (fired|parted ways with) /.test(x.text)).length} (${carousel.filter((x) => x.text.includes('first-time')).length} first-time head coaches)`;
     const taxpayers = L.teams.filter((t) => H.curTeamSeason(L, t.tid).payroll > H.CAP_FOR(L).luxuryTax).length;
-    // exceptions used in the season itself (the summer's are counted at the close of free agency)
-    const inSeasonRoutes = routeUse(L.season);
+    // mid-levels used in the season itself (the summer's are counted at the close of free agency)
+    const inSeasonMle = mleUse(L.season);
     checkLottery();
     if (opts.fire && s === 0) fireAndMove();
     S.startDraft(L);
@@ -1174,16 +933,9 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     S.finishDraftPhase(L);
     check();
     checkOptions(false);
-    const firstRfa = L.nextTxnId ?? 1;
-    // young players who can be made restricted and are worth a spot get qualifying offers (so
-    // offer sheets come in for the user to decide); the other 70+ players are re-signed
+    // the 70+ players are re-signed
     for (const p of FA.expiringPlayers(L, L.userTid))
-      if (R.rfaEligible(L, p) && C.valueScore(L, p) >= 64) {
-        // (under a frozen budget a qualifying offer is a raise the owner forbids: he walks)
-        if (frozen(L)) continue;
-        const res = R.userQualify(L, p.pid);
-        if (!res.ok || !p.rfa) bad('qualifying offer refused', `${nm(p.pid)} ${res.reason}`);
-      } else if (p.ovr >= 70) {
+      if (p.ovr >= 70) {
         if (resignTalks(p)) continue;
         const a = C.askingContract(L, p, L.userTid);
         FA.userResign(L, p.pid, a.amount, a.years);
@@ -1207,7 +959,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     // the top ten free agents as the market opens (its value then), and the day each signs
     const top = new Map(
       [...faPool]
-        .filter(([pid]) => L.players[pid].tid === -1 && !L.players[pid].rfa)
+        .filter(([pid]) => L.players[pid].tid === -1)
         .sort((a, b) => b[1].m - a[1].m)
         .slice(0, 10)
         .map(([pid]) => [pid, -1] as [number, number]),
@@ -1215,34 +967,15 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     checkFaPrices(faPool, top);
     check();
     checkOptions(true);
-    // one withdrawn when there are two or more: an unrestricted free agent, his hold gone (not one
-    // who signed an offer sheet in the market's opening wave: that one waits for the match)
-    const mine = R.restrictedFreeAgents(L, L.userTid);
-    const w = [...mine].reverse().find((p) => !p.rfa?.sheet);
-    if (mine.length >= 2 && w) {
-      if (!R.userWithdrawQualifying(L, w.pid).ok || w.rfa || FA.capHolds(L, L.userTid).some((h) => h.p.pid === w.pid)) bad('qualifying offer not withdrawn', nm(w.pid));
-    }
     // (every other summer the losing bid goes first: the winning one's room leaves none for it)
     const lose = L.season % 2 ? bidToLose() : null;
     const star = bidOnStar();
-    const sheet = sheetOnRfa();
     negotiate();
-    const next = L.season + 1;
-    const settled = { matched: 0, declined: 0 };
-    // day by day, deciding offer sheets on the user's restricted free agents as they come (free agency stops for them)
     const day = () => {
-      const sheets = sheetSnapshot();
-      const rfas = rfaSnapshot();
       const floors = floorsNow();
       S.faAdvance(L, 1);
       checkFloorsKept(floors);
       checkFaPrices(faPool, top);
-      for (const [pid, s] of sheetSnapshot()) sheets.set(pid, s);
-      decideUserSheets();
-      const x = settledSheets(sheets, next);
-      settled.matched += x.matched;
-      settled.declined += x.declined;
-      checkRfaMoves(rfas, sheets);
     };
     for (let d = 0; d < 10 && !S.faOver(L); d++) day();
     check();
@@ -1254,15 +987,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     const bid = `${went(star)}, floor bid ${went(lose)}`;
     for (let d = 0; d < 40 && !S.faOver(L); d++) day();
     if (S.faDayNumber(L) !== S.FA_DAYS || !S.faOver(L)) bad('free agency past its last day', String(L.faDay));
-    decideUserSheets();
-    if (S.newSeasonBlockedReason(L)) bad('new season blocked at the close', S.newSeasonBlockedReason(L)!);
-    // the close: the sheets left are decided, and restricted free agents still unsigned take their qualifying offers
-    const closing = sheetSnapshot();
-    const qos = R.restrictedFreeAgents(L)
-      .filter((p) => !p.rfa!.sheet)
-      .map((p) => ({ p, ...p.rfa! }));
-    const rfas = rfaSnapshot();
-    const summerRoutes = routeUse(L.season + 1);
+    const summerMle = mleUse(L.season + 1);
     // the top of the market moves: its ten best free agents sign in the market's first days as a
     // rule, and few are left for their old teams to take back as it closes. One still unsigned whose
     // summer floor no AI team's cap space or exception can pay at the close is priced out, not
@@ -1274,7 +999,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
         (t) =>
           t.tid !== L.userTid &&
           !(t.strategy === 'rebuild' && playerAge(L.players[pid], L.season + 1) >= 27) &&
-          Math.max(C.capSpace(L, t.tid, L.season + 1), C.bestExceptionRoom(L, t.tid, L.season + 1)) >= C.summerFloor(L, L.players[pid]),
+          Math.max(C.capSpace(L, t.tid, L.season + 1), C.mleRoom(L, t.tid, L.season + 1)) >= C.summerFloor(L, L.players[pid]),
       );
     const pricedOut = [...top].filter(([pid, d]) => d < 0 && !pays(pid)).length;
     const days = [...top]
@@ -1288,27 +1013,13 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     if (!S.newSeason(L)) bad('new season refused', '');
     // rotation-level free agents nobody signed this summer
     const unsigned = H.freeAgents(L).filter((p) => C.valueScore(L, p) >= 66).length;
-    const x = settledSheets(closing, next);
-    settled.matched += x.matched;
-    settled.declined += x.declined;
-    checkRfaMoves(rfas, closing);
-    for (const { p, tid, qo } of qos)
-      if (!(p.tid === tid && p.contract.qualifying && p.contract.start === next && p.contract.salaries.join() === String(qo)) && !(p.tid === -1 && !p.rfa))
-        bad('qualifying offer not taken as offered', `${nm(p.pid)} ${p.tid} ${JSON.stringify(p.contract)} qo ${qo}`);
     check();
-    const rfaLog = (L.transactions ?? []).filter((t) => t.id >= firstRfa);
-    const count = (kind: string, note?: string, user?: boolean) => rfaLog.filter((t) => t.kind === kind && (!note || t.note === note) && (!user || t.tids[0] === L.userTid)).length;
-    const outcomes = { matched: count('match', 'matched'), declined: count('match', 'declined') };
-    if (outcomes.matched !== settled.matched || outcomes.declined !== settled.declined)
-      bad('offer sheet outcomes off the log', `${JSON.stringify(settled)} vs ${JSON.stringify(outcomes)}`);
-    const rfaLine = `QOs ${count('qualify', 'extended')} (yours ${count('qualify', 'extended', true)}), offer sheets ${count('offerSheet')} (yours ${count('offerSheet', undefined, true)}${sheet !== null ? `: ${H.playerName(L.players[sheet])} -> ${L.teams[L.players[sheet].tid]?.abbrev ?? 'FA'}` : ''}), on yours ${rfaLog.filter((t) => t.kind === 'offerSheet' && t.tids[1] === L.userTid).length}, matched ${settled.matched}, not matched ${settled.declined}, came to terms ${rfaLog.filter((t) => t.kind === 'resign' && t.phase === 'freeAgency').length}, QOs taken ${count('qualify', 'accepted')}`;
     const sz = L.teams.map((t) => std(t.tid).length);
     console.log(
-      `-> ${label}${L.season}: preseason rosters ${Math.min(...sz)}-${Math.max(...sz)}, players ${Object.keys(L.players).length}, strategies ${['contend', 'retool', 'rebuild'].map((x) => L.teams.filter((t) => t.strategy === x).length).join('/')}, trades ${trades}, offers ${offers}${accepted ? ` (took a ${accepted})` : ''}, extensions ${extended}, buyouts ${buyouts}, waiver claims ${claims}, bid ${bid}, taxpayers ${taxpayers}, save ${(JSON.stringify(L).length / 1e6).toFixed(2)}MB`,
+      `-> ${label}${L.season}: preseason rosters ${Math.min(...sz)}-${Math.max(...sz)}, players ${Object.keys(L.players).length}, strategies ${['contend', 'retool', 'rebuild'].map((x) => L.teams.filter((t) => t.strategy === x).length).join('/')}, trades ${trades}, offers ${offers}${accepted ? ` (took a ${accepted})` : ''}, extensions ${extended}, buyouts ${buyouts}, bid ${bid}, taxpayers ${taxpayers}, save ${(JSON.stringify(L).length / 1e6).toFixed(2)}MB`,
     );
-    console.log(`   restricted free agency: ${rfaLine}`);
     console.log(
-      `   market: top-10 free agents signed by day ${midDay} (median), ${left} unsigned at the close, ${pricedOut} priced out (no AI team could pay his floor); AI payrolls at opening night up to ${Math.max(...openPays).toFixed(2)}x the cap, ${openPays.filter((x) => x * capNow.salaryCap > capNow.secondApron).length} past the second apron`,
+      `   market: top-10 free agents signed by day ${midDay} (median), ${left} unsigned at the close, ${pricedOut} priced out (no AI team could pay his floor); AI payrolls at opening night up to ${Math.max(...openPays).toFixed(2)}x the cap, ${openPays.filter((x) => x * capNow.salaryCap > capNow.spendTop).length} past the AI's top line`,
     );
     for (const [lo, hi, late] of [
       [C.SUMMER_FLOOR.ovr, 99, C.SUMMER_FLOOR.late],
@@ -1328,12 +1039,11 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     const raised = L.teams.flatMap((t) => (t.retired ?? []).filter((r) => r.season === L.season - 1).map((r) => `${t.abbrev} #${r.jersey} ${r.name}`));
     console.log(`   retired numbers: ${raised.length}${raised.length ? ` (${raised.join(', ')})` : ''}, ${L.teams.reduce((a, t) => a + (t.retired?.length ?? 0), 0)} in all`);
     console.log(`   coaches: ${coachLine}, registry ${L.coaches?.length ?? 0} coaches, ${(JSON.stringify(L.coaches ?? []).length / 1e3).toFixed(1)}KB`);
-    const routes = (r: ReturnType<typeof routeUse>) => `space ${r.space}, mid-level ${r.mle}, room ${r.room}, bi-annual ${r.bae}`;
     console.log(
-      `   exceptions (teams): for ${seasonLabel(L.season)} this summer ${routes(summerRoutes)}; for ${seasonLabel(L.season - 1)} by its end ${routes(inSeasonRoutes)}; unsigned 66+ free agents ${unsigned}; 10-days: AI ${tenDayTally.ai.size} (hardship ${tenDayTally.hardship.size}), yours ${contractTally.tenDays}`,
+      `   mid-levels used (teams): for ${seasonLabel(L.season)} this summer ${summerMle}; for ${seasonLabel(L.season - 1)} by its end ${inSeasonMle}; unsigned 66+ free agents ${unsigned}`,
     );
     console.log(
-      `   talks: ${contractTally.offers} offers (${contractTally.lowballs} lowballs), ${contractTally.counters} counters, ${contractTally.under} signed under the ask, ${contractTally.broke} broke down; stretched releases ${contractTally.stretched}`,
+      `   talks: ${contractTally.offers} offers (${contractTally.lowballs} lowballs), ${contractTally.counters} counters, ${contractTally.under} signed under the ask, ${contractTally.broke} broke down`,
     );
     // the user's swaps settled at last season's lottery (he hears about each), and how many were used
     const swapsSettled = L.inbox.filter((m) => m.season === L.season - 1 && m.subject.startsWith('Pick swap')).length;

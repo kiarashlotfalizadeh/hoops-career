@@ -8,8 +8,8 @@
 // strategy (or a development goal for a rebuilder or a team projected out of the play-in: minutes
 // for players 23 or under, for REBUILD_SEASONS seasons in a row without the postseason; after that, the play-in at least and a higher floor, and only reaching the
 // postseason resets the clock), and a money goal (a profit from the season's budget at the league's
-// standard levers, or the luxury tax line for a team near or over it: a win-now owner's the first
-// apron). A season under the floor
+// standard levers, or the luxury tax line for a team near or over it: a win-now owner's a little
+// past it). A season under the floor
 // grades Poor or worse whatever else went right (see floorCap), and so does one past the rebuild
 // allowance that misses the postseason, lower each season it goes on (see patienceCap). Each
 // franchise's owner has a personality of his own (a builder, win-now or frugal), the
@@ -47,7 +47,7 @@ import { money } from '../format';
 import { CAP } from '../constants';
 
 export type OwnerPersonality = 'builder' | 'win-now' | 'frugal';
-export type OwnerGoalKind = 'wins' | 'postseason' | 'profit' | 'payroll' | 'youth';
+export type OwnerGoalKind = 'wins' | 'postseason' | 'payroll' | 'youth';
 
 /** One of the owner's goals for a season (OwnerGoals.goals). */
 export interface OwnerGoal {
@@ -77,7 +77,7 @@ export interface OwnerGoal {
   /** Wins, held: the rotation players the coach traded away or released since last season's goals, best first (two at most; see movedOut). */
   gone?: string[];
   /**
-   * Payroll: the owner's own line (the tax line; a win-now owner's first apron) when the target is the
+   * Payroll: the owner's own line (the tax line; a win-now owner's CAP.spendLine) when the target is the
    * payroll the coach inherited past it (see forcedPayroll): the books don't count that payroll's tax,
    * nor its salary past this line, against him (see books.ts sanctionedTax).
    */
@@ -173,18 +173,6 @@ export const REVIEWS_KEPT = 10;
 export const SEASON_GAMES = 82;
 /** Wins above or below the target that max out the wins grade (a full season; a shorter stretch scales it down to half). */
 export const WIN_SCALE = 20;
-/** Profit above or below the target that maxes out the profit grade, in first-season dollars ($K). */
-export const PROFIT_SCALE = 40_000;
-/** Each win the roster should win above .500 brings about this much more profit (gate, merchandise, hype, playoff gates), first-season $K. */
-export const PROFIT_PER_WIN = 2_000;
-/** Each win it should fall short of .500 costs about this much (crowds and merchandise thin as the losses mount), first-season $K. */
-export const PROFIT_PER_LOSS = 1_500;
-/**
- * The playoff gates and the league's luxury-tax payouts a typical season brings beyond the budget, first-season $K:
- * fitted so that over sixteen simulated league-seasons the profit goals' results center on their targets (they had
- * come in $4.0M over at 8,000).
- */
-export const PROFIT_EXTRA = 12_000;
 /** Payroll over or under its line, as a share of the tax line, that maxes out a payroll goal's grade. */
 export const PAYROLL_SCALE = 0.05;
 /** Games of the record so far that weigh as much as the roster's expectation in a projection. */
@@ -357,11 +345,10 @@ export function ownerProfit(league: League, tid: number, season = league.season)
 /**
  * The season's budget from today, the finance model's own way: national revenue for every game left,
  * gate, merchandise and local TV for every home game left, revenue sharing against the league's average
- * local revenue (still to come during the regular season), and every game's share of the salaries (two-way
- * deals and dead money included, 10-day deals paid already), the staff and facilities budgets and the
- * arena; and at the end of the regular season, a payroll under the salary floor makes up the shortfall
- * (`floor`, as assessLuxuryTax charges it). Playoff gates and the league's luxury-tax payouts aren't in it
- * (see PROFIT_EXTRA). `standard`: at the league's standard levers instead of the team's own (every
+ * local revenue (still to come during the regular season), and every game's share of the salaries (dead
+ * money included), the staff and facilities budgets and the arena; and at the end of the regular season,
+ * a payroll under the salary floor makes up the shortfall (`floor`, as assessLuxuryTax charges it).
+ * Playoff gates and the league's luxury-tax payouts aren't in it. `standard`: at the league's standard levers instead of the team's own (every
  * staff and facilities budget at STANDARD_BUDGET, tickets at the price the staff would set), as the
  * owner sets his profit target: from the team's own levers, tickets at $30 and every budget maxed the
  * night he set it lowered the target by $40-70M, and putting them back banked the difference (the
@@ -383,9 +370,7 @@ export function seasonBudget(league: League, tid: number, standard = false): { o
   });
   const mean = local.reduce((a, v) => a + v, 0) / Math.max(1, local.length);
   const pay =
-    standardRoster(league, tid).reduce((a, p) => a + (p.contract.tenDay ? 0 : salaryFor(p, league.season)), 0) +
-    Object.values(league.players).reduce((a, p) => a + (p.tid === tid && p.contract.twoWay ? salaryFor(p, league.season) : 0), 0) +
-    t.deadMoney.filter((d) => d.season === league.season).reduce((a, d) => a + d.amount, 0);
+    standardRoster(league, tid).reduce((a, p) => a + salaryFor(p, league.season), 0) + t.deadMoney.filter((d) => d.season === league.season).reduce((a, d) => a + d.amount, 0);
   const budget = (level: number) => budgetCostPerSeason(league, Math.max(level, STANDARD_BUDGET));
   const costs = pay + budget(t.budget.coaching) + budget(t.budget.health) + budget(t.budget.facilities) + OPERATIONS_PER_SEASON * s;
   const op = national * left[tid] + home[tid] * localPerHomeGame(league, t) - (costs / SEASON_GAMES) * left[tid];
@@ -540,7 +525,7 @@ export function forcedPayroll(league: League, tid: number, season = league.seaso
   let n = 0;
   const others: number[] = [];
   for (const p of Object.values(league.players)) {
-    if (p.tid !== tid || p.contract.twoWay || p.contract.tenDay) continue;
+    if (p.tid !== tid) continue;
     const c = p.contract;
     const inherited = c.start <= from && !arrived.has(p.pid);
     const draftee = !!c.rookie && p.draft.round === 1 && p.draft.tid === tid;
@@ -565,7 +550,6 @@ export function forcedPayroll(league: League, tid: number, season = league.seaso
 // ---------------------------------------------------------------- setting the goals
 
 const round100 = (x: number) => Math.round(x / 100) * 100;
-const round500 = (x: number) => Math.round(x / 500) * 500;
 
 /**
  * The least chance the season forecast must give a postseason goal: he asks for no more than the
@@ -574,11 +558,11 @@ const round500 = (x: number) => Math.round(x / 500) * 500;
 export const POSTSEASON_ODDS = 0.35;
 
 /** Base weights by goal, and how each personality and market size moves them. */
-const WEIGHT: Record<OwnerGoalKind, number> = { wins: 0.4, postseason: 0.3, profit: 0.2, payroll: 0.15, youth: 0.3 };
+const WEIGHT: Record<OwnerGoalKind, number> = { wins: 0.4, postseason: 0.3, payroll: 0.15, youth: 0.3 };
 const LEAN: Record<OwnerPersonality, Partial<Record<OwnerGoalKind, number>>> = {
-  'win-now': { wins: 1.15, postseason: 1.3, profit: 0.75, payroll: 0.75, youth: 0.6 },
+  'win-now': { wins: 1.15, postseason: 1.3, payroll: 0.75, youth: 0.6 },
   builder: { wins: 0.9, postseason: 0.85, youth: 1.5 },
-  frugal: { wins: 0.9, profit: 1.7, payroll: 1.7 },
+  frugal: { wins: 0.9, payroll: 1.7 },
 };
 /**
  * ...and his quirk's lean on top (league/voices.ts): small, and only in what he weighs, never in what
@@ -590,14 +574,12 @@ const QUIRK_LEAN: Record<OwnerQuirk, Partial<Record<OwnerGoalKind, number>>> = {
   hothead: { wins: 1.15 },
   sentimental: { youth: 1.2 },
   gambler: { postseason: 1.15, payroll: 0.85 },
-  accountant: { profit: 1.15, payroll: 1.1 },
+  accountant: { payroll: 1.1 },
   ghost: {},
   traditionalist: {},
 };
 /** Wins the owner adds to (or takes off) what the roster should win, over a full season. */
 const WIN_NUDGE: Record<OwnerPersonality, number> = { 'win-now': 2, builder: -1, frugal: -1 };
-/** Profit the owner adds to the budget, over a full season, first-season $K. */
-const PROFIT_NUDGE: Record<OwnerPersonality, number> = { 'win-now': -2_000, builder: 0, frugal: 4_000 };
 
 /** Weights that add up to exactly 1, in whole percents (the largest takes the rounding). */
 function normalize(goals: OwnerGoal[]) {
@@ -738,12 +720,11 @@ export function planOwnerGoals(league: League, tid: number, outlook: TeamOutlook
     });
   }
   // money: a payroll near or over the tax line is the owner's concern, and the line is his limit
-  // (a win-now owner's the first apron: he pays some tax for a contender, not the second apron's);
-  // anyone else's the season's profit
+  // (a win-now owner pays some tax for a contender: his line is a step past it, CAP.spendLine)
   const line = cap.luxuryTax;
   const market = team.pop < 3 ? 1.3 : team.pop > 7 ? 0.75 : 1;
   // a payroll the coach inherited past the owner's line is the owner's own: the line becomes "add
-  // nothing to it" (the books don't count its tax, nor its salary past his line: see sanctionedTax):
+  // nothing to it":
   // his figure rounded up, with PAYROLL_SLACK of room, so a coach who adds nothing is never over it by
   // a rounding or the staff's own opening-night cuts (see forcedPayroll)
   const payrollGoal = (own: number, under: string, getUnder: string) => {
@@ -759,23 +740,9 @@ export function planOwnerGoals(league: League, tid: number, outlook: TeamOutlook
       ...(kept ? { line: own, inherited: forcedPay } : {}),
     });
   };
-  if (who === 'win-now' && pay > line) payrollGoal(cap.firstApron, 'Stay under the first apron', 'Get under the first apron');
+  if (who === 'win-now' && pay > line) payrollGoal(cap.spendLine, `Keep the payroll under ${money(cap.spendLine)}`, `Get the payroll under ${money(cap.spendLine)}`);
   else if (pay > line * 0.94) payrollGoal(line, 'Stay under the luxury tax', 'Get under the luxury tax');
-  else {
-    const s = revenueScale(league);
-    // a roster that should lose draws smaller crowds game by game; one that should win earns playoff gates at the
-    // end. The season's end money (revenue sharing, the floor, playoff gates, tax payouts) all lands after a
-    // mid-season start, so none of it is prorated. The target is the budget at the league's standard levers
-    // (see seasonBudget), so the price and the budgets the night he sets it don't move it; the projection
-    // reads the team's own, so what the coach does with them shows in it.
-    const wins = (expected >= o.left / 2 ? PROFIT_PER_WIN : PROFIT_PER_LOSS) * (expected - o.left / 2) * s;
-    const split = (b: { op: number; share: number; floor: number }) => ({ op: b.op + Math.min(0, wins), end: b.share - b.floor + PROFIT_EXTRA * s + Math.max(0, wins) });
-    const std = split(seasonBudget(league, tid, true));
-    const { op, end } = split(seasonBudget(league, tid));
-    const target = round500((opening ? ownerProfit(league, tid) : 0) + std.op + std.end + PROFIT_NUDGE[who] * share * s);
-    const words = target >= 500 ? `Turn a ${money(target)} profit` : target > -500 ? 'Break even' : `Keep the loss under ${money(-target)}`;
-    goals.push({ kind: 'profit', title: opening ? words : `${words} the rest of the way`, target, weight: lean('profit') * market, perGame: op / o.left, end });
-  }
+  // (nothing is asked of the gate or the budgets: the franchise runs its own money)
   normalize(goals);
   return base;
 }
@@ -789,8 +756,6 @@ export function previewTitle(g: Pick<OwnerGoal, 'kind' | 'title' | 'target'>): s
   switch (g.kind) {
     case 'wins':
       return `Win about ${g.target} games`;
-    case 'profit':
-      return g.title.replace(/^Turn a (\S+) profit$/, 'Turn a profit of about $1').replace(/^Keep the loss under /, 'Keep the loss under about ');
     case 'youth':
       return g.title.replace(/^Give ([\d,]+) minutes/, 'Give about $1 minutes');
     default:
@@ -878,19 +843,17 @@ export function goalsWhy(og: OwnerGoals, voice: 'mail' | 'screen' = 'mail'): str
       }`,
     );
   }
-  // a payroll line past the tax: the tax up to it is his to pay (see books.ts sanctionedTax)
+  // a payroll line past the tax: the tax up to it is his to pay
   const pg = og.goals.find((g) => g.kind === 'payroll');
   if (pg?.line !== undefined)
     out.push(
       me
-        ? "You inherited this payroll, past my line. I won't hold its tax against you on the books. Add to it and that's on you."
-        : "You inherited this payroll, past his line. Its tax won't count against you. Adding to it will.",
+        ? "You inherited this payroll, past my line. I won't hold it against you. Add to it and that's on you."
+        : "You inherited this payroll, past his line. It won't count against you. Adding to it will.",
     );
-  else if (pg && /first apron/.test(pg.title))
+  else if (pg && /^(Keep|Get) the payroll under /.test(pg.title))
     out.push(
-      me
-        ? "I'll pay the luxury tax for a contender, up to the first apron. It won't count against you on the books. Past the apron, it's on you."
-        : "He pays a contender's luxury tax up to the first apron. Past it, the tax counts against you.",
+      me ? "I'll pay some luxury tax for a contender, up to that line. Past it, it's on you." : "He pays a contender's luxury tax up to that line. Past it, it counts against you.",
     );
   if (og.rebuild?.over) {
     const took = og.rebuild.year - 1 === 1 ? 'One season' : `${og.rebuild.year - 1} seasons`;
@@ -1111,8 +1074,6 @@ export function goalResult(league: League, og: OwnerGoals, g: OwnerGoal): number
       return (ts?.won ?? 0) - (og.from?.won ?? 0);
     case 'postseason':
       return postseasonLevel(ts);
-    case 'profit':
-      return ownerProfit(league, og.tid, og.season) - (og.from?.profit ?? 0);
     case 'payroll':
       // what the tax was assessed on at the end of the regular season (the payroll today before then)
       return ts?.payroll || payroll(league, og.tid, og.season);
@@ -1140,8 +1101,6 @@ export function gradeGoal(league: League, og: OwnerGoals, g: OwnerGoal, result: 
       const d = result - g.target;
       return r2(d >= 0 ? 0.3 + 0.3 * d : 0.35 * d);
     }
-    case 'profit':
-      return r2((result - g.target) / (PROFIT_SCALE * revenueScale(league, og.season) * span));
     case 'payroll': {
       // a line kept is what the owner expects: +15, up to +30 with room to spare; over it costs 25, down to
       // −100 at PAYROLL_SCALE of the tax line over (the luxury tax he pays for it)
@@ -1179,8 +1138,6 @@ export function resultText(g: Pick<OwnerGoal, 'kind' | 'target'>, result: number
       return `${result} win${result === 1 ? '' : 's'}`;
     case 'postseason':
       return POSTSEASON[clamp(result, 0, 6)].result;
-    case 'profit':
-      return result >= 0 ? `${money(result)} profit` : `${money(-result)} loss`;
     case 'payroll':
       return result <= g.target ? `${money(result)}, ${money(g.target - result)} under` : `${money(result)}, ${money(result - g.target)} over`;
     case 'youth':
@@ -1278,17 +1235,6 @@ export function ownerProgress(league: League, og: OwnerGoals | undefined = curre
                 ? 'Qualified for the playoffs'
                 : `Playing in the ${['', '', 'first round', 'second round', 'conference finals', 'Finals'][level]}`;
         return { goal: g, now: level, projected: level, status, text: text.charAt(0).toUpperCase() + text.slice(1), fill: clamp(level / g.target, 0, 1) };
-      }
-      case 'profit': {
-        const projected = regular ? now + (g.perGame ?? 0) * left + (g.end ?? 0) : now;
-        const scale = PROFIT_SCALE * revenueScale(league, og.season) * Math.max(0.5, og.games / SEASON_GAMES);
-        const status: GoalStatus =
-          !regular && now >= g.target ? 'met' : projected >= g.target + 0.15 * scale ? 'ahead' : projected >= g.target - 0.1 * scale ? 'on track' : 'behind';
-        // (what budgets under the standard saved, left out of it: said, as Finances counts it in)
-        const trimmed = ts?.trimmed ?? 0;
-        const cut = trimmed >= 100 ? `, not counting ${money(trimmed)} of budget cuts` : '';
-        const text = (!regular ? `${money(now)} so far` : gp ? `${money(now)} so far, projected ${money(projected)}` : `His budget projects ${money(projected)}`) + cut;
-        return { goal: g, now, projected, status, text, fill: g.target > 0 ? clamp(projected / g.target, 0, 1) : projected >= g.target ? 1 : 0 };
       }
       case 'payroll': {
         const settled = !regular;

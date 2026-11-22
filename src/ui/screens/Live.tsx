@@ -66,7 +66,7 @@ import { foulLimit } from '../live/alerts';
 import { changesLine, screenChanges } from '../tactics/changes';
 import { nightWatch } from '../games/data';
 import { teamPlayers } from '../../core/league/helpers';
-import { breakStory, crowdLevel, currentRun, isClutch, RUN_MIN } from '../live/atmosphere';
+import { crowdLevel, currentRun, isClutch, RUN_MIN } from '../live/atmosphere';
 import { Crowd, clutchSlowAlways, setClutchSlowAlways } from '../live/Atmos';
 import { COACH_MARKS, CoachMark, coachMarksSeen, markCoachMarksSeen } from '../live/CoachMarks';
 import { lookFor } from '../live/looks';
@@ -257,7 +257,7 @@ export default function Live() {
     // with the pre-game screen on, game night starts with the matchup preview
     const l = useStore.getState().league!;
     const today = userGameOnDay(l, l.day);
-    if (l.settings.pregame !== false && today) nav(`/games/${today.home === l.userTid ? today.away : today.home}?tab=preview`, { replace: true });
+    if (l.settings.pregame !== false && today) nav(`/games/${today.home === l.userTid ? today.away : today.home}`, { replace: true });
     else s.start();
   };
 
@@ -292,7 +292,7 @@ export default function Live() {
         result={s.resultGid !== null ? league.games.find((g) => g.gid === s.resultGid) : undefined}
         announce={s.announce}
         // the report opens on the Why: the recap is already here
-        onReport={(gid) => nav(`/game/${gid}${final ? '?tab=report' : ''}`, { replace: true })}
+        onReport={(gid) => nav(`/game/${gid}${final ? '?tab=box' : ''}`, { replace: true })}
         next={nextAction}
         busy={simBusy}
         onNext={() => void nextGame()}
@@ -330,12 +330,9 @@ export default function Live() {
   const abbrevs = { us: me.team.abbrev, them: sim.T[1 - userSide].team.abbrev };
   const teams: [typeof home, typeof away] = [home, away];
   const read = staffRead({ view, side: userSide, teams });
-  // the night: the run on now, the crowd, the story so far at a break
+  // the night: the run on now and the crowd
   const night = s.night;
   const nightRun = night ? ([0, 1] as const).map((sd) => currentRun(night.plays, sd)).find((r) => r && r.a - r.b >= RUN_MIN) : undefined;
-  const actx = s.atmoCtx.current;
-  const top = (sd: 0 | 1) => [...view.sides[sd].players].sort((a, b) => b.pts - a.pts).slice(0, 1);
-  const story = atBreak && night && actx ? breakStory(night, actx, view.q, [top(0), top(1)]) : undefined;
   const crowd = night ? crowdLevel(night.crowd) : 2;
   const notes = s.notes;
   const calls = notes.filter((n) => n.kind === 'decision').length;
@@ -431,7 +428,6 @@ export default function Live() {
     onDismiss: dismiss,
     subFor: s.subFor,
     substitute: subAtStop,
-    keys: s.keys,
     moves,
     busy: simBusy,
     quiet: s.quiet,
@@ -440,8 +436,7 @@ export default function Live() {
 
   const consoleBody = () => {
     if (cview === 'staff') {
-      if (atBreak)
-        return <PeriodReport {...common} oppPlan={oppPlanIn(sim, (1 - userSide) as 0 | 1)?.items} adjustments={sim.adjustments} onSkip={() => setPanel('skip')} story={story} />;
+      if (atBreak) return <PeriodReport {...common} oppPlan={oppPlanIn(sim, (1 - userSide) as 0 | 1)?.items} adjustments={sim.adjustments} onSkip={() => setPanel('skip')} />;
       if (huddling)
         return (
           <Huddle
@@ -471,7 +466,6 @@ export default function Live() {
           busy={simBusy}
           view={view}
           side={userSide}
-          keys={s.keys}
           watch={watch}
           onPlayer={pickPlayer}
           tactics={tactics}

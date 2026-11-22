@@ -1,16 +1,13 @@
 import { useMemo, type DependencyList } from 'react';
 import { create } from 'zustand';
-import type { InboxMessage, League } from '../core/types';
+import type { League } from '../core/types';
 import { adoptSync, isQuotaError, onDevice, SaveConflictError, saveLeague, setLastLeagueId } from './persistence';
 import { checkpointLive, dropLive, liveInProgress, resumeLive } from './live';
 import { estimateTotal, loopSetting, targetDone, type SimProgress, type SimStop, type SimTarget, type TaskOp, type TaskResult } from './simCore';
 import { checkpointSimRun, simLeague, stopSimRun, taskLeague } from './simClient';
 import { buildDigest, digestMark, type Digest, type DigestMark } from '../ui/today/digest';
-import { newCall, openCallIds } from '../core/league/calls';
+import { agenda, simStopIds, stopsSim } from '../core/league/agenda';
 import { staffPicksSince } from '../core/league/weekCall';
-import { userGameOnDay } from '../core/league/games';
-import { billingFor } from '../core/analysis/gameStory';
-import { teamCity } from '../core/league/helpers';
 
 export type { SimProgress, SimTarget, TaskOp, TaskResult } from './simCore';
 export { allStarStop, loopSetting, MONTH_DAYS, type LoopSettings } from './simCore';
@@ -91,43 +88,17 @@ let saving: Promise<boolean> | null = null;
 let queued: Promise<boolean> | null = null;
 let toastId = 1;
 
-/** A sim that stopped for big news says which, and opens it: the newest important unread mail. */
-function newsStop(l: League): [string, Toast['tone'], string] {
-  const news = l.inbox.filter((m) => !m.read && m.important).reduce<InboxMessage | null>((a, m) => (!a || m.id > a.id ? m : a), null);
-  return [
-    news ? `Stopped for news: ${news.subject}` : 'Stopped for news in your inbox.',
-    news?.tone === 'bad' || news?.tone === 'alert' ? 'bad' : 'neutral',
-    news?.link ?? '/inbox',
-  ];
-}
-
 /**
- * What a sim that ended says, and opens: why it stopped short (mail that needs an answer, a big night
- * ahead), or a staff call that opened on the way or came due (see openCallIds), against those open
- * when it started (`callsFrom`). A call is said whether it stopped the sim or the sim reached its
- * target that day anyway (the next game, a set number of days): passed in silence, one sat unseen.
- * `call`: the line is a call's (the digest shows the calls themselves in its place).
+ * What a sim that ended says, and opens: the job itself (the owner's ultimatum, the sack), or what
+ * opened on the way and needs an answer (agenda.ts's stopsSim), against what was open when it started
+ * (`from`). It is said whether it stopped the sim or the sim reached its target that day anyway (the
+ * next game, a set number of days): passed in silence, it sat unseen. `call`: the line is a queue
+ * item's (the digest shows the item itself in its place).
  */
-function stopToast(l: League, stop: SimStop, callsFrom: ReadonlySet<string>): { toast: [string, Toast['tone'], string]; call?: true } | undefined {
-  if (stop === 'news') return { toast: newsStop(l) };
-  if (stop === 'bigGame') {
-    const g = userGameOnDay(l, l.day);
-    const b = g && billingFor(l, g);
-    const opp = g && l.teams[g.home === l.userTid ? g.away : g.home];
-    return {
-      toast: [
-        b && opp ? `Stopped for tonight: ${b.tag} ${g.home === l.userTid ? 'vs' : 'at'} ${teamCity(l, opp)}` : 'Stopped for a big night.',
-        'neutral',
-        opp ? `/games/${opp.tid}` : '/',
-      ],
-    };
-  }
-  const c = newCall(l, openCallIds(l), callsFrom);
-  if (c)
-    return {
-      toast: [`${c.due ? 'Still open' : 'Needs you'}: ${c.card.title}${c.due && c.card.due ? ` · ${c.card.due}` : ''}`, c.card.tone === 'bad' ? 'bad' : 'neutral', '/'],
-      call: true,
-    };
+function stopToast(l: League, stop: SimStop, from: ReadonlySet<string>): { toast: [string, Toast['tone'], string]; call?: true } | undefined {
+  if (stop === 'news') return { toast: [l.fired ? 'Stopped: the owner has let you go.' : "Stopped: the owner's ultimatum.", 'bad', l.fired ? '/office/career' : '/office/owner'] };
+  const item = agenda(l).find((i) => stopsSim(i) && !from.has(i.id));
+  if (item) return { toast: [`Needs you: ${item.title}`, item.tone === 'bad' ? 'bad' : 'neutral', '/'], call: true };
   if (stop === 'call') return { toast: ['Stopped: something needs you.', 'neutral', '/'], call: true };
   return undefined;
 }
@@ -312,9 +283,9 @@ export const useStore = create<AppState>((set, get) => ({
     const l = get().league;
     if (!l || get().sim || stale()) return;
     const token = ++runToken;
-    // where the league stands, for the digest once it's done (a new sim retires the last one), and the calls open now
+    // where the league stands, for the digest once it's done (a new sim retires the last one), and what already needs him
     const mark = digestMark(l);
-    const callsFrom = new Set(openCallIds(l));
+    const stopsFrom = new Set(simStopIds(l));
     set({ sim: { label: 'Simulating', done: 0, total: estimateTotal(l, target) }, stopRequested: false, digest: null, digestOpen: false });
     // what the sim starts from is on the device first
     await get().flush();
@@ -367,7 +338,7 @@ export const useStore = create<AppState>((set, get) => ({
       });
       if (runToken !== token) return;
       replaceLeague(shown, out.league);
-      const said = stopToast(out.league, out.stop, callsFrom);
+      const said = stopToast(out.league, out.stop, stopsFrom);
       done(said?.toast, out.stop, said?.call);
     } catch (e) {
       console.error('sim failed', e);

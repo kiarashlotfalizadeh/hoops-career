@@ -1,30 +1,29 @@
-// A game's report: the final score is the hero (the board; the first showing counts it up), then for
-// your games the night's story (the headline, the player of the game, what it means), then the tabs:
-// Debrief (your games: the staff's verdict, your moves and what to do next time, the keys, then the
-// stars, the night, what was said and the other scores a tap each), Why (what decided it), Box (the
-// linescore and both box scores), Shots and Flow (win probability, the margin and the play-by-play).
-// Each tab is its own module under report/.
+// A game's report: the final score is the hero (the board; the first showing counts it up), then
+// the tabs: Summary (your games, numbers first: what the schemes, the shooting luck and your moves
+// were worth, what decided it in points, the four factors, your coaching and every player's grade),
+// Box (the linescore and both box scores), Shots and Flow (win probability, the margin and the
+// play-by-play). Each tab is its own module under report/.
 import { useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
-import { useLeague, useLeagueMemo } from '../../state/store';
-import { gameStoryFor } from '../../core/analysis/gameStory';
+import { useLeague } from '../../state/store';
 import { GameTop, useFirstShowing } from './occasion';
 import { buildGameReport } from '../../core/analysis/gameReport';
 import { Empty, PageHeader } from '../components/ui';
-import { GameRecap } from '../components/GameRecap';
 import { boardColors, FinalSlab } from '../components/FinalSlab';
 import { ShareButton } from '../share/ShareButton';
 import { gamePosterOf, posterFile } from '../share/specs';
 import { HighlightsCard } from '../components/HighlightsCard';
 import { TabBar, useQueryParam } from '../league/shared';
-import { WhyTab } from './report/WhyTab';
+import { SummaryTab } from './report/SummaryTab';
 import { BoxTab } from './report/BoxTab';
 import { ShotsTab } from './report/ShotsTab';
 import { FlowTab } from './report/FlowTab';
 import '../components/gameday.css';
 
-type Tab = 'recap' | 'report' | 'box' | 'shots' | 'flow' | 'pbp';
+type Tab = 'summary' | 'box' | 'shots' | 'flow';
+/** Tabs a link from before the report had a Summary may name: the Debrief and the Why are it, the play-by-play is under Flow. */
+const OLD_TAB: Record<string, Tab> = { recap: 'summary', report: 'summary', pbp: 'flow' };
 
 export default function GameReport() {
   const league = useLeague();
@@ -32,10 +31,10 @@ export default function GameReport() {
   const g = league.games.find((x) => x.gid === Number(gid));
   const userGame = !!g && (g.home.tid === league.userTid || g.away.tid === league.userTid);
   const report = useMemo(() => (g && userGame && g.impacts ? buildGameReport(league, g) : null), [g, userGame, league]);
-  // your games open on their recap (the result, the stars, the keys); the Why is a tab away
-  const [picked, setTab] = useQueryParam<Tab>('tab', userGame ? 'recap' : 'box', ['recap', 'report', 'box', 'shots', 'flow', 'pbp']);
-  const story = useLeagueMemo(() => (g && userGame ? gameStoryFor(league, g.gid) : null), [league, g, userGame]);
-  const moment = useFirstShowing(story ? `${league.id}:${story.gid}` : undefined);
+  // your games open on their summary; anyone else's on the box score
+  const [raw, setTab] = useQueryParam<Tab | keyof typeof OLD_TAB>('tab', userGame ? 'summary' : 'box', ['summary', 'box', 'shots', 'flow', ...Object.keys(OLD_TAB)]);
+  const picked: Tab = OLD_TAB[raw] ?? (raw as Tab);
+  const moment = useFirstShowing(g && userGame ? `${league.id}:${g.gid}` : undefined);
   if (!g) {
     return (
       <main className="page">
@@ -48,15 +47,13 @@ export default function GameReport() {
     );
   }
   const tabs: { id: Tab; label: string }[] = [
-    ...(userGame ? [{ id: 'recap' as Tab, label: 'Debrief' }] : []),
-    ...(report ? [{ id: 'report' as Tab, label: 'Why' }] : []),
+    ...(userGame ? [{ id: 'summary' as Tab, label: 'Summary' }] : []),
     { id: 'box', label: 'Box' },
     ...(g.shots?.length ? [{ id: 'shots' as Tab, label: 'Shots' }] : []),
     ...(g.flow?.length || g.pbp?.length ? [{ id: 'flow' as Tab, label: 'Flow' }] : []),
   ];
-  // the play-by-play is under Flow; a tab this game doesn't have (a link from another game's report) opens the first it has
-  const want = picked === 'pbp' ? 'flow' : picked;
-  const tab = tabs.some((t) => t.id === want) ? want : tabs[0].id;
+  // a tab this game doesn't have (a link from another game's report) opens the first it has
+  const tab = tabs.some((t) => t.id === picked) ? picked : tabs[0].id;
   // the user's team carries the accent in two-team comparisons, wherever it played (side 0 = home);
   // between two other teams neither side does, and the charts take the home team's view
   const accentSide: 0 | 1 = userGame && g.home.tid === league.userTid ? 0 : 1;
@@ -73,7 +70,7 @@ export default function GameReport() {
         backTo="/games"
         right={
           <span className="row" style={{ gap: 10 }}>
-            {/* the final as a picture, one tap: the result, its headline and the player of the game */}
+            {/* the final as a picture, one tap */}
             <ShareButton
               className="btn xs ghost"
               spec={() => gamePosterOf(league, g)}
@@ -88,13 +85,12 @@ export default function GameReport() {
           </span>
         }
       />
-      {/* the night's story leads the first tab; on the others the board is one line, so the tab's own content starts on the first screen */}
-      <FinalSlab res={g} league={league} story={story} moment={moment} compact={tab !== tabs[0].id} />
+      {/* the full board on the first tab; on the others it is one line, so the tab's own content starts on the first screen */}
+      <FinalSlab res={g} league={league} moment={moment} compact={tab !== tabs[0].id} />
       {tabs.length > 1 && <TabBar value={tab} onChange={setTab} options={tabs} label="Game report sections" />}
-      {tab === 'recap' && userGame && (
-        <GameRecap res={g} league={league} report={report} highlights={league.reel?.gid === g.gid ? <HighlightsCard league={league} res={g} /> : undefined} />
+      {tab === 'summary' && userGame && (
+        <SummaryTab res={g} league={league} report={report} highlights={league.reel?.gid === g.gid ? <HighlightsCard league={league} res={g} /> : undefined} />
       )}
-      {tab === 'report' && report && <WhyTab g={g} league={league} report={report} />}
       {tab === 'box' && <BoxTab g={g} league={league} userGame={userGame} colors={colors} />}
       {tab === 'shots' && g.shots && <ShotsTab g={g} league={league} />}
       {tab === 'flow' && <FlowTab g={g} league={league} side={userGame ? accentSide : 0} kits={boardColors(league, g)} />}

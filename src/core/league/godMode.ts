@@ -13,7 +13,7 @@ import { CAP } from '../constants';
 import { RATING_KEYS, shiftToOvr } from '../ratings';
 import { Rng, clamp, hashString } from '../random';
 import { contractExp, followTendencies, genTendencies, generatePlayer, salaryFor } from '../playerGen';
-import { contractSeason, inSeason, playerName, rosterMaxNow, standardRoster, teamPlayers, TWO_WAY_MAX, twoWayRoster } from './helpers';
+import { contractSeason, inSeason, playerName, rosterMaxNow, standardRoster, teamPlayers } from './helpers';
 import { FA_PRICE_CUT_DAYS, askingContract, leaveTeam, makeContract, marketSalary, valueScore } from './contracts';
 import { refreshDerived } from './progression';
 import { INJURY_TYPES } from './injuries';
@@ -44,12 +44,11 @@ export const GOD_LIMITS = {
 const between = (v: number, [lo, hi]: readonly [number, number]) => Number.isFinite(v) && v >= lo && v <= hi;
 const wholeIn = (v: number, range: readonly [number, number]) => Number.isInteger(v) && between(v, range);
 
-/** A god-mode change to a contract: this contract season's salary and length (later seasons get the usual 5% raises), its option, two-way or not. */
+/** A god-mode change to a contract: this contract season's salary and length (later seasons get the usual 5% raises) and its option. */
 export interface ContractEdit {
   amount?: number;
   years?: number;
   option?: 'player' | 'team' | null;
-  twoWay?: boolean;
 }
 
 /** A god-mode edit to one player: only the fields given change. */
@@ -78,7 +77,7 @@ export interface PlayerEdit {
 export interface EditCheck {
   /** Why the edit can't be made: nothing changes while there are any. */
   errors: string[];
-  /** Rules it bends (a roster over the limit, a two-way slot too many): allowed in god mode. */
+  /** Rules it bends (a roster over the limit): allowed in god mode. */
   warnings: string[];
 }
 
@@ -90,11 +89,10 @@ const teamLabel = (league: League, tid: number) => league.teams[tid]?.abbrev ?? 
 /** Whether a name field holds a usable name. */
 const nameOk = (s: string) => s.trim().length > 0 && s.trim().length <= GOD_LIMITS.name;
 
-/** One player joining (+1) or leaving (-1) a team's roster, on a standard or a two-way deal. */
+/** One player joining (+1) or leaving (-1) a team's roster. */
 interface RosterMove {
   tid: number;
   n: 1 | -1;
-  twoWay: boolean;
 }
 
 /**
@@ -103,18 +101,12 @@ interface RosterMove {
  */
 function rosterChecks(league: League, moves: RosterMove[], out: EditCheck) {
   for (const tid of new Set(moves.map((m) => m.tid).filter((t) => t >= 0))) {
-    const net = (tw: boolean) => moves.reduce((a, m) => a + (m.tid === tid && m.twoWay === tw ? m.n : 0), 0);
-    const std = net(false);
-    const tw = net(true);
-    const n = standardRoster(league, tid).length + std;
-    const all = teamPlayers(league, tid).length + std + tw;
-    const nTw = twoWayRoster(league, tid).length + tw;
+    const net = moves.reduce((a, m) => a + (m.tid === tid ? m.n : 0), 0);
+    const n = standardRoster(league, tid).length + net;
     const ab = teamLabel(league, tid);
-    if (inSeason(league) && std + tw < 0 && all < DRESS_MIN)
-      out.errors.push(`${ab} would have ${all} player${all === 1 ? '' : 's'}: a team needs ${DRESS_MIN} to dress for its games.`);
-    else if (inSeason(league) && std < 0 && n < CAP.rosterMin) out.warnings.push(`${ab} drops to ${n} players. The minimum in season is ${CAP.rosterMin}.`);
-    if (std > 0 && n > rosterMaxNow(league)) out.warnings.push(`${ab} will carry ${n} players. The limit now is ${rosterMaxNow(league)}.`);
-    if (tw > 0 && nTw > TWO_WAY_MAX) out.warnings.push(`${ab} will have ${nTw} two-way players. The limit is ${TWO_WAY_MAX}.`);
+    if (inSeason(league) && net < 0 && n < DRESS_MIN) out.errors.push(`${ab} would have ${n} player${n === 1 ? '' : 's'}: a team needs ${DRESS_MIN} to dress for its games.`);
+    else if (inSeason(league) && net < 0 && n < CAP.rosterMin) out.warnings.push(`${ab} drops to ${n} players. The minimum in season is ${CAP.rosterMin}.`);
+    if (net > 0 && n > rosterMaxNow(league)) out.warnings.push(`${ab} will carry ${n} players. The limit now is ${rosterMaxNow(league)}.`);
   }
 }
 
@@ -144,21 +136,18 @@ export function checkPlayerEdit(league: League, p: Player, e: PlayerEdit): EditC
   const to = e.tid ?? p.tid;
   const moving = e.tid !== undefined && e.tid !== p.tid;
   const cs = contractSeason(league);
-  // a free agent, or a player whose deal is up, joins a team on his asking deal: a standard one,
-  // unless the edit makes it a two-way one
+  // a free agent, or a player whose deal is up, joins a team on his asking deal
   const signs = moving && to >= 0 && salaryFor(p, cs) <= 0;
-  const wasTw = p.tid >= 0 && !!p.contract.twoWay;
-  const isTw = to >= 0 && (e.contract?.twoWay ?? (signs ? false : wasTw));
   if (moving) {
     if (!movable(p)) err(p.tid === DRAFT_PROSPECT ? 'A draft prospect joins a team through the draft.' : 'A retired player stays retired.');
     else if (to !== FREE_AGENT && !league.teams[to]) err("That team doesn't exist.");
   }
-  if (!out.errors.length && (moving || isTw !== wasTw) && to >= FREE_AGENT)
+  if (!out.errors.length && moving && to >= FREE_AGENT)
     rosterChecks(
       league,
       [
-        { tid: p.tid, n: -1, twoWay: wasTw },
-        { tid: to, n: 1, twoWay: isTw },
+        { tid: p.tid, n: -1 },
+        { tid: to, n: 1 },
       ],
       out,
     );
@@ -197,7 +186,7 @@ export function yearsLeft(league: League, p: Player): number {
 /**
  * Rewrite his contract from the contract season on (the seasons before it, already under way or
  * paid, stay as they were): a new salary or length is a new deal with the usual raises, which drops
- * a signed extension and the rookie, 10-day and qualifying-offer marks of the old one.
+ * a signed extension and the rookie mark of the old one.
  */
 function applyContract(league: League, p: Player, c: ContractEdit) {
   const cs = contractSeason(league);
@@ -212,21 +201,16 @@ function applyContract(league: League, p: Player, c: ContractEdit) {
     p.contract = { start: past.length ? old.start : cs, salaries: [...past, ...makeContract(league, amount, years, cs).salaries] };
     // (an option goes on the last season of a deal of two or more)
     if (old.option && years >= 2) p.contract.option = old.option;
-    if (old.twoWay) p.contract.twoWay = true;
   }
   if (c.option !== undefined) {
     if (c.option) p.contract.option = c.option;
     else delete p.contract.option;
   }
-  if (c.twoWay !== undefined) {
-    if (c.twoWay) p.contract.twoWay = true;
-    else delete p.contract.twoWay;
-  }
 }
 
 /**
  * Move a player to a team or to free agency, cleanly: off his old team's rotation and roles, his
- * talks, waiver and restricted free agency over, the user's pending offer to him dropped.
+ * talks over, the user's pending offer to him dropped.
  * A free agent (or a player whose deal is up) joins a team on his asking contract; a player under
  * contract takes his deal with him, as in a trade. Nothing is left on the old team's books.
  */
@@ -237,8 +221,6 @@ function movePlayer(league: League, p: Player, to: number) {
   delete p.tradedFrom;
   delete p.tradeLock;
   delete p.talks;
-  delete p.rfa;
-  delete p.waivers;
   if (league.faBids?.some((b) => b.pid === p.pid)) league.faBids = league.faBids.filter((b) => b.pid !== p.pid);
   // a free agent joining a team signs at his price as it stands (marked down as the market dried
   // up, as the editor shows it), so it's read before his asking deal goes
@@ -443,7 +425,7 @@ export function checkNewPlayer(league: League, o: NewPlayer): EditCheck {
   if (!wholeIn(o.ovr, [40, 99])) out.errors.push('OVR is 40 to 99.');
   if (!between(o.growth, [-1, 1])) out.errors.push('Development is -1 to 1.');
   if (o.tid !== FREE_AGENT && !league.teams[o.tid]) out.errors.push("That team doesn't exist.");
-  else if (o.tid >= 0) rosterChecks(league, [{ tid: o.tid, n: 1, twoWay: false }], out);
+  else if (o.tid >= 0) rosterChecks(league, [{ tid: o.tid, n: 1 }], out);
   return out;
 }
 
@@ -530,13 +512,12 @@ export function checkForceDeal(league: League, legs: TradeLeg[]): EditCheck {
   const something = (s: TradeLeg) => s.pids.length || s.dpids.length || s.swaps?.length || (s.cash ?? 0) > 0;
   if (!legs.some(something)) out.errors.push('The trade is empty.');
   if (!out.errors.length) {
-    const tw = (pid: number) => !!league.players[pid].contract.twoWay;
     rosterChecks(
       league,
       legs.flatMap((l) =>
-        l.pids.flatMap((pid): RosterMove[] => [
-          { tid: l.tid, n: -1, twoWay: tw(pid) },
-          { tid: l.to, n: 1, twoWay: tw(pid) },
+        l.pids.flatMap((): RosterMove[] => [
+          { tid: l.tid, n: -1 },
+          { tid: l.to, n: 1 },
         ]),
       ),
       out,

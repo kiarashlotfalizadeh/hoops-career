@@ -1,7 +1,7 @@
-// What the staff believes, in words. The sim still measures every call, counter and fit, and the staff
-// still acts on those readings, but the player gets an opinion and never the figure behind it: what a
-// choice will do stays a little unknown (src/ui/DESIGN.md, "Words before the fact, numbers for facts").
-// Every screen says a forecast or an estimate with these words, so a lean reads the same everywhere.
+// How the staff's readings are said (src/ui/DESIGN.md, "Words before the fact, numbers for facts").
+// A choice not yet played (a counter, a tactic, a fit) gets an opinion in words and never the figure
+// behind it: what it will do stays a little unknown. What already happened, and what the two teams
+// are, gets the exact figure: the points an edge was worth in a game (ptsFig), a chance to win (winPct).
 import { WORTH_MIN } from '../ai/counterWorth';
 
 /** Which way a reading leans: a gain, a cost, or too small to call. */
@@ -35,19 +35,14 @@ export function fitWord(pts: number): string {
   return pts >= SHADE_MIN ? 'Slightly better' : pts <= -SHADE_MIN ? 'Slightly worse' : 'Similar fit';
 }
 
-/** How big an edge in a game was, for "what decided it": sized, not counted. */
-export function edgeWord(pts: number): string {
+/** Points an edge was worth, as a fact: "+4.2 pts", "−1.3 pts" (a true minus), "0.0 pts". */
+export function ptsFig(pts: number, unit = true): string {
   const a = Math.abs(pts);
-  return a >= 4 ? 'Big edge' : a >= 1.5 ? 'Edge' : 'Small edge';
+  const sign = a < 0.05 ? '' : pts > 0 ? '+' : '−';
+  return `${sign}${a.toFixed(1)}${unit ? ' pts' : ''}`;
 }
 
-/** One team's chance to win as the pre-game screens say it. */
-export function oddsWord(p: number): string {
-  if (p >= 0.8) return 'Heavy favorite';
-  if (p >= 0.62) return 'Favorite';
-  if (p >= 0.54) return 'Slight favorite';
-  if (p > 0.46) return 'Toss-up';
-  if (p > 0.38) return 'Slight underdog';
-  if (p > 0.2) return 'Underdog';
-  return 'Long shot';
+/** A chance to win as a whole percentage, never 0 or 100 while the game is open: "62%". */
+export function winPct(p: number): string {
+  return `${Math.min(99, Math.max(1, Math.round(p * 100)))}%`;
 }

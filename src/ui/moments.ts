@@ -1,7 +1,6 @@
 // Big moments: the events of the user's career that take the screen for a moment (a clinch, a
 // series, a title, the Cup's knockouts, a big signing, an award, his All-Stars, a record or a career
-// mark by one of his players, a number going up at his home opener, a legend's farewell, and the
-// front-page stories about his team: a milestone, an honor, a career night, a streak, a breakout),
+// mark by one of his players, a number going up at his home opener, a legend's farewell),
 // and the job's own: the owner's ultimatum, his verdict on the season, the sack, a new job, for every
 // team, winners or not. Each is read from the league as it stands and has a stable key, so the shell
 // can show only the ones that happen while it's open: whatever is already true when a league opens
@@ -14,7 +13,6 @@ import { seasonLabel } from '../core/constants';
 import { money, plural } from '../core/format';
 import { curTeamSeason, fmtDate, teamCity, teamName } from '../core/league/helpers';
 import { storyLink } from './today/front';
-import { isFrontPage } from '../state/simCore';
 import { currentGoals, ownerPersonality, personalityLine, resultText } from '../core/league/ownerGoals';
 import { GRACE } from '../core/league/jobSecurity';
 import { coachCareer, openStint, userCoach } from '../core/league/coaches';
@@ -27,23 +25,7 @@ import { ultimatumSaid } from '../core/league/ownerVoice';
 import { BIG_NIGHT, REC_LABEL, REC_STATS, TEAM_REC_STATS, bookFrom, gameMark, recordReach, recordSpan, recordWhat, teamMark, youngBook } from '../core/league/records';
 
 export type MomentKind =
-  | 'clinch'
-  | 'series'
-  | 'title'
-  | 'cup'
-  | 'draft'
-  | 'signing'
-  | 'award'
-  | 'allStar'
-  | 'record'
-  | 'milestone'
-  | 'jersey'
-  | 'farewell'
-  | 'story'
-  | 'verdict'
-  | 'ultimatum'
-  | 'fired'
-  | 'hired';
+  'clinch' | 'series' | 'title' | 'cup' | 'draft' | 'signing' | 'award' | 'allStar' | 'record' | 'milestone' | 'jersey' | 'farewell' | 'verdict' | 'ultimatum' | 'fired' | 'hired';
 
 /**
  * The job's moments: each shows whatever else came out with it (they're never the one left in the
@@ -126,67 +108,9 @@ const AWARD_SHORT: Record<string, string> = { mvp: 'MVP', finalsMvp: 'Finals MVP
 
 const name = (p: Player | undefined, fallback = '') => (p ? `${p.firstName} ${p.lastName}` : fallback);
 
-/** What a front-page story is, over its headline, and how it ranks against another at the same time. */
-const STORY_KIND: Partial<Record<NewsItem['kind'], [string, number]>> = {
-  milestone: ['Milestone', 6],
-  record: ['Record', 6],
-  award: ['Award', 5],
-  honor: ['Honor', 5],
-  game: ['Final', 4],
-  draft: ['Draft', 3],
-  trade: ['Trade', 2],
-  signing: ['Signing', 2],
-};
-
 /** Mail from this sender with this subject this season (the letter a moment says in full). */
 function mailOf(league: League, from: string, subject: (s: string) => boolean, day?: number): number[] {
   return league.inbox.filter((m) => m.season === league.season && m.from === from && subject(m.subject) && (day === undefined || Math.abs(m.day - day) <= 1)).map((m) => m.id);
-}
-
-/**
- * The front-page stories about the user's team this season (events, not the press's opinions),
- * newest first, but for those another moment tells (`told`: a career mark, a record's night, a
- * farewell, a number going up).
- */
-function storyMoments(league: League, told: ReadonlySet<number>): Moment[] {
-  const out: Moment[] = [];
-  const me = league.userTid;
-  for (let i = league.news.length - 1; i >= 0; i--) {
-    const x = league.news[i];
-    if (x.season !== league.season) break;
-    if (told.has(x.id) || !isFrontPage(league, x)) continue;
-    const [label, rank] = STORY_KIND[x.kind] ?? ['Front page', 1];
-    // his own player's jersey, when the story is about one
-    const pid = x.pids.find((p) => league.players[p]?.tid === me);
-    out.push({
-      key: `news-${x.id}`,
-      kind: 'story',
-      over: `${fmtDate(x.season, x.day)} · ${label}`,
-      title: x.head ?? x.text,
-      sub: x.head ? subOf(x.head, x.text) : '',
-      pid,
-      link: storyLink(x.id),
-      rank: rank * 1e6 + x.id,
-      news: x.kind,
-      season: x.season,
-      day: x.day,
-      story: x.id,
-      // (a milestone's note from the staff says the same)
-      mail:
-        x.kind === 'milestone' && x.head ? mailOf(league, 'Media Relations', (s) => s === x.head, x.day).concat(mailOf(league, 'Owner', (s) => s === x.head, x.day)) : undefined,
-    });
-  }
-  return out;
-}
-
-/**
- * The line under a story's headline on its moment: its dek, unless the dek only says the score the
- * headline already gives ("133-128 over the Timberwolves" twice); then what comes after it.
- */
-function subOf(head: string, dek: string): string {
-  const score = /^(\d+-\d+)[^.]*\.\s*/.exec(dek);
-  if (score && head.includes(score[1])) return dek.slice(score[0].length);
-  return dek;
 }
 
 /** Career moments by size, the biggest first: one that comes out with a bigger one waits for the next sim. */
@@ -202,7 +126,7 @@ const foldLine = (m: Moment) => `${m.title} · ${m.sub.split(/(?<=\.)\s/)[0]}`;
 
 /**
  * The moments to show from those new at once: one card a sim, not a stack to dismiss. The biggest
- * career moment, or else the biggest front-page story, takes the screen, and tells as lines what came
+ * career moment takes the screen, and tells as lines what came
  * out with it (the other career moments, the biggest few; the rest wait: see scheduleMoments) and
  * the owner's verdict on the season, his link if the card has none. After it only the job's moments
  * that can't be a line (the ultimatum, the sack, a new job) show on their own.
@@ -212,7 +136,7 @@ export function pickMoments(fresh: Moment[]): Moment[] {
   const jobs = job.filter((m) => !(m.kind === 'verdict' && job.some((x) => x.kind === 'fired')));
   // (beside the job's own, only a moment of the season's own size: a farewell or a record waits for the next sim)
   const career = fresh
-    .filter((m) => m.kind !== 'story' && !JOB_MOMENTS.has(m.kind) && !(jobs.length && MINOR.has(m.kind)))
+    .filter((m) => !JOB_MOMENTS.has(m.kind) && !(jobs.length && MINOR.has(m.kind)))
     .sort((a, b) => CAREER_ORDER.indexOf(a.kind) - CAREER_ORDER.indexOf(b.kind) || (b.rank ?? 0) - (a.rank ?? 0));
   if (career.length) {
     const [top, ...rest] = career;
@@ -228,9 +152,7 @@ export function pickMoments(fresh: Moment[]): Moment[] {
     };
     return [card, ...jobs.filter((m) => m !== verdict)];
   }
-  if (jobs.length) return jobs;
-  const stories = fresh.filter((m) => m.kind === 'story').sort((a, b) => (b.rank ?? 0) - (a.rank ?? 0));
-  return stories.slice(0, 1);
+  return jobs;
 }
 
 /**
@@ -269,7 +191,7 @@ export function momentFits(m: Moment, path: string, landed: string | undefined):
   const work = WORK.find((w) => path.startsWith(w.at));
   if (!work || JOB_MOMENTS.has(m.kind) || work.own.includes(m.kind)) return true;
   // (on the screen it landed on: only a moment of the season's own size, a title or a series)
-  return landed === path && m.kind !== 'story' && !MINOR.has(m.kind);
+  return landed === path && !MINOR.has(m.kind);
 }
 
 /** Moments of a night or a player rather than of the season: they don't take the screen beside the job's own, and wait. */
@@ -437,9 +359,6 @@ function recordMoments(league: League): Moment[] {
   }
   return out;
 }
-
-/** A news item another kind of moment tells, never a story moment: a career mark, a farewell, a number going up. */
-const toldElsewhere = (n: NewsItem) => isCareerMarkStory(n) || (n.kind === 'retire' && !!n.head);
 
 /** "25,000 points" out of a career mark's headline ("Stephen Curry reaches 25,000 points"). */
 const MARK_FIG = /([\d,]+ (?:points|rebounds|assists))/;
@@ -862,18 +781,11 @@ export function currentMoments(league: League): Moment[] {
       });
     }
   }
-  // the season's occasions and the nights his players are remembered for: each tells its news item,
-  // which isn't a story moment as well
+  // the season's occasions and the nights his players are remembered for
   const occasions = [allStarMoment(league), ...cupMoments(league), ...recordMoments(league), ...markMoments(league), ...jerseyMoments(league), ...farewellMoments(league)].filter(
     (m): m is Moment => !!m,
   );
-  // (whether or not it's a moment now: a career mark by a player who has left since is no front-page story either)
-  const told = new Set(occasions.flatMap((m) => (m.story !== undefined ? [m.story] : [])));
-  for (const n of league.news) if (n.season === season && toldElsewhere(n)) told.add(n.id);
-  // (a record's night: its game's story is the record's)
-  const recordDays = new Set(occasions.filter((m) => m.kind === 'record').map((m) => m.day));
-  for (const n of league.news) if (n.season === season && n.kind === 'game' && recordDays.has(n.day) && n.tids[0] === me) told.add(n.id);
-  return out.concat(occasions, jobMoments(league), storyMoments(league, told));
+  return out.concat(occasions, jobMoments(league));
 }
 
 /** The moments in `now` that weren't in `seen`, oldest first. */

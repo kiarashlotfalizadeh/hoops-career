@@ -4,7 +4,7 @@ import { GAME } from '../../core/constants';
 import { gameTime, keepFigures, madeAtt } from '../../core/format';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { marginWords, wpSeries } from '../../core/analysis/winProb';
-import { oddsWord } from '../../core/analysis/staffWords';
+import { winPct } from '../../core/analysis/staffWords';
 import { Card, Chips, Section, Segmented } from '../components/ui';
 import { FlowChart, ShotChart, WinProbChart } from '../components/charts';
 import { QuarterTable, TeamComparison } from '../components/gameBlocks';
@@ -288,12 +288,12 @@ function WinProbCard({
               const p = series[i];
               return p.i < 0 ? 'Tip-off' : `${gameTime(p.q, p.clock)} · ${marginWords(me, side === 0 ? p.margin : -p.margin)}`;
             }}
-            label={`${me} chance to win over the game so far: ${oddsWord(mine(series[series.length - 1].wp))} now`}
+            label={`${me} chance to win over the game so far: ${winPct(mine(series[series.length - 1].wp))} now`}
             height={130}
             bare
           />
           <div className="small dim lv-bx-foot">
-            {me} now: {oddsWord(mine(series[series.length - 1].wp))}.
+            {me} now: <b className="num">{winPct(mine(series[series.length - 1].wp))}</b> to win.
           </div>
         </>
       )}

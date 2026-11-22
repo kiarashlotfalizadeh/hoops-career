@@ -1,16 +1,11 @@
-// A game's result as a newspaper's game story, at the top of its report and of the live game's final
-// card: the scoreboard in both teams' colours (the score, whether the user won: `GameBoard`, which
-// the next game's screens share), then for his games the result as an event on the page: the
-// headline and its dek, the player of the game's jersey and line, and what it means (the story from
-// gameStory.ts), over the linescore. The first time a result
-// shows, its score counts up and the headline rises in (under a second; reduced motion shows it still).
+// A game's result at the top of its report and of the live game's final card: the scoreboard in
+// both teams' colours (the score, whether the user won: `GameBoard`, which the next game's screens
+// share), with the linescore under it when asked. The first time a result shows, its score counts up
+// (under a second; reduced motion shows it still).
 import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
 import type { GameResult, League } from '../../core/types';
-import type { GameStory } from '../../core/analysis/gameStory';
-import { Avatar, CountUp, Fit, Statline, keep } from './ui';
-import { madeAtt } from '../../core/format';
+import { CountUp, keep } from './ui';
 import { cupLabel } from '../../core/league/cup';
 import { fmtDate, teamCity } from '../../core/league/helpers';
 import { matchupColors, matchupLooks } from '../teamColors';
@@ -151,14 +146,12 @@ export function GameBoard({
 }
 
 /**
- * The result: the scoreboard in both teams' colours with whether the user won, the story and (with
- * `linescore`; the report keeps it on its Box) the linescore. `children` go under it (the final
- * card's buttons).
+ * The result: the scoreboard in both teams' colours with whether the user won and (with `linescore`;
+ * the report keeps it on its Box) the linescore. `children` go under it (the final card's buttons).
  */
 export function FinalSlab({
   res,
   league,
-  story,
   moment,
   linescore = false,
   compact = false,
@@ -166,11 +159,9 @@ export function FinalSlab({
 }: {
   res: GameResult;
   league: League;
-  /** The user's game told as a story: its headline, hero and what it means. */
-  story?: GameStory | null;
   /** The result showing for the first time: the score counts up. */
   moment?: boolean;
-  /** The points by period under the story (off by default: the report has them on its Box). */
+  /** The points by period under the board (off by default: the report has them on its Box). */
   linescore?: boolean;
   /** Just the board, on one line: a report's tab other than its first leads with its own content. */
   compact?: boolean;
@@ -182,15 +173,11 @@ export function FinalSlab({
   const won = !!us && us.pts > (us === res.home ? res.away : res.home).pts;
   const by = Math.abs(res.home.pts - res.away.pts);
   const fig = (pts: number) => (moment ? <CountUp value={String(pts)} ms={800} /> : pts);
-  // the occasion over the board: a regular-season night's own (opening night, a rivalry); a series, the
-  // play-in and the Cup say theirs (the crowd is the box score's, once)
+  // what kind of game it was, over the board: a series, the play-in and the Cup say theirs
   const kind = gameTypeLabel(league, res);
-  const occasion = story?.kicker && res.type === 'regular' && !res.cup ? story.kicker : kind !== 'Regular season' ? kind : '';
+  const occasion = kind !== 'Regular season' ? kind : '';
   return (
-    <section
-      className={`gd-final${story ? ` gd-story w${story.weight}` : ''}${moment ? ' gd-moment' : ''}`}
-      aria-label={`Final: ${teamCity(league, away)} ${res.away.pts}, ${teamCity(league, home)} ${res.home.pts}`}
-    >
+    <section className={`gd-final${moment ? ' gd-moment' : ''}`} aria-label={`Final: ${teamCity(league, away)} ${res.away.pts}, ${teamCity(league, home)} ${res.home.pts}`}>
       <GameBoard
         league={league}
         compact={compact}
@@ -208,64 +195,8 @@ export function FinalSlab({
           )
         }
       />
-      {story && !compact && <StoryBlock league={league} res={res} story={story} moment={moment} />}
       {linescore && <QuarterTable g={res} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />}
       {children && <div className="gd-fs-actions">{children}</div>}
     </section>
-  );
-}
-
-/**
- * The result as the night's story, printed under the board: the headline and its dek, the player of
- * the game with his line as a box score's figures, and what it means (the full story a tap away in
- * the news).
- */
-function StoryBlock({ league, res, story, moment }: { league: League; res: GameResult; story: GameStory; moment?: boolean }) {
-  const hero = story.hero !== undefined ? league.players[story.hero] : undefined;
-  const line = hero ? [...res.home.players, ...res.away.players].find((b) => b.pid === hero.pid) : undefined;
-  const figs = line
-    ? [
-        { k: 'PTS', v: String(line.pts) },
-        { k: 'REB', v: String(line.orb + line.drb) },
-        { k: 'AST', v: String(line.ast) },
-        ...(line.stl >= 4 ? [{ k: 'STL', v: String(line.stl) }] : []),
-        ...(line.blk >= 4 ? [{ k: 'BLK', v: String(line.blk) }] : []),
-        { k: 'FG', v: madeAtt(line.fgm, line.fga) },
-      ]
-    : [];
-  return (
-    <div className="gd-sb">
-      <Fit as="h2" className={`gd-sb-head${moment ? ' rise' : ''}`} min={16}>
-        {story.head}
-      </Fit>
-      {story.dek && <p className="gd-sb-dek">{keep(story.dek)}</p>}
-      {hero && (line || story.heroLine) && (
-        <div className="gd-sb-pog">
-          <Link to={`/player/${hero.pid}`} className="gd-sb-hero">
-            <Avatar p={hero} />
-            <span className="gd-sb-who">
-              <span className="over">{story.won ? 'Player of the game' : 'Best of the night'}</span>
-              <span className="gd-sb-name ellipsis">
-                {hero.firstName} {hero.lastName}
-              </span>
-            </span>
-            <ChevronRight size={16} className="gd-sb-chev" aria-hidden="true" />
-          </Link>
-          {line ? <Statline items={figs} /> : <span className="gd-sb-line num">{story.heroLine}</span>}
-        </div>
-      )}
-      {story.means.length > 0 && (
-        <ul className="gd-sb-means" aria-label="What it means">
-          {story.means.map((m) => (
-            <li key={m}>{keep(m)}</li>
-          ))}
-        </ul>
-      )}
-      {story.newsId !== undefined && (
-        <Link to={`/league/news?story=${story.newsId}`} className="gd-sb-read">
-          The story <ChevronRight size={14} aria-hidden="true" />
-        </Link>
-      )}
-    </div>
   );
 }

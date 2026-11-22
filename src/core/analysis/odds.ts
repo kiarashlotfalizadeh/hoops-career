@@ -530,27 +530,14 @@ export function pct(p: number, sure = false): string {
   return `${Math.round(p * 100)}%`;
 }
 
-/** Simulated seasons each side of a game's stakes: a sharper read isn't worth the wait when the preview opens. */
-export const STAKES_SIMS = 600;
-
-/**
- * What one regular-season game is worth to a team (the preview's stakes): its playoff odds with the
- * game won and with it lost, each from the same simulated seasons. Null for any other game.
- */
-export function gameStakes(league: League, gid: number, tid: number): { win: number; loss: number } | null {
-  const g = league.schedule.find((x) => x.gid === gid);
-  if (!g || g.played || g.type !== 'regular' || (g.home !== tid && g.away !== tid) || !forecastable(league)) return null;
-  const at = (won: boolean) => forecast(league, { sims: STAKES_SIMS, fixed: { gid, homeWon: won === (g.home === tid) } })!.teams[tid].reach[0];
-  return { win: at(true), loss: at(false) };
-}
-
 // ---------------------------------------------------------------- draft pick projection
 
 /** Simulated standings a pick projection is read from (see pickProjection): about a tenth of a slot of noise in a pick's expected slot. */
 export const PICK_SIMS = 400;
 
 /** Lottery places a first-round pick can draw (the 2019 odds' table): the rest of the non-playoff teams, and the playoff teams, pick in order. */
-const LOTTERY_PLACES = LOTTERY_ODDS.length;
+// (read when asked, not when this module loads: draft.ts and this one import each other)
+const lotteryPlaces = () => LOTTERY_ODDS.length;
 
 const lotteryMatrices = new Map<number, number[][]>();
 
@@ -656,7 +643,7 @@ function projectPicks(league: League): PickProjection {
   const second = Array.from({ length: n }, () => new Array<number>(n).fill(0));
   const rank = new Array<number>(n).fill(0);
   // once the playoffs are set, the lottery is the teams out of them; before, the worst records
-  const out = rows.some((r) => r.playoff) ? rows.filter((r) => !r.playoff).length : Math.min(LOTTERY_PLACES, n);
+  const out = rows.some((r) => r.playoff) ? rows.filter((r) => !r.playoff).length : Math.min(lotteryPlaces(), n);
   const lottery = lotteryMatrix(out);
   const known = rows.some((r) => r.playoff);
   const draw = new Float64Array(n);

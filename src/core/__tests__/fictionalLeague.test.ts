@@ -889,6 +889,8 @@ describe('two seasons of a fictional league', () => {
       };
       for (const quirk of Object.keys(OWNER_QUIRK)) {
         const x = withOwner(quirk);
+        // (an accountant divides the payroll by the wins: he waits for five)
+        if (quirk === 'accountant') Object.assign(curTeamSeason(x, u), { won: Math.max(5, curTeamSeason(x, u).won) });
         const c = send(x)!;
         expect(c, quirk).toMatchObject({ season: x.season, tid: u, quirk, day: x.day });
         expect(cameoOf(x)).toBe(c);

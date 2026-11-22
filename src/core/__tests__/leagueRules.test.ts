@@ -6,9 +6,9 @@ import seedJson from '../../data/seed.json';
 import { testLeague } from '../../state/__tests__/fixtures';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { advanceDay, simDay, startRegularSeason } from '../league/season';
-import { CAP_FOR, curTeamSeason, freeAgents, payroll, standardRoster, statsLine, teamPlayers } from '../league/helpers';
-import { askingContract, convertTwoWay, releasePlayer, signPlayer, twoWaySalary, valueScore } from '../league/contracts';
-import { signingClosedReason, userOffer, userTwoWayOffer } from '../league/freeAgency';
+import { CAP_FOR, curTeamSeason, freeAgents, standardRoster, statsLine, teamPlayers } from '../league/helpers';
+import { askingContract, releasePlayer, signPlayer, valueScore } from '../league/contracts';
+import { signingClosedReason, userOffer } from '../league/freeAgency';
 import { tradingClosedReason, validateTrade } from '../league/trades';
 import { ensureRotation, wearInjuryRisk } from '../league/games';
 import { fitRoster, styleChanged } from '../ai/coachAI';
@@ -23,7 +23,6 @@ import { playerAge, salaryFor } from '../playerGen';
 import { CAP } from '../constants';
 import { Rng } from '../random';
 import type { League, Player, PlayoffSeries } from '../types';
-import { FREE_AGENT } from '../types';
 
 const seed = seedJson as unknown as SeedData;
 const real = seed.players.length > 0;
@@ -155,34 +154,6 @@ describe('trades, rosters and signings', () => {
       const ask = askingContract(l, fa, U);
       expect(ask.amount).toBeLessThanOrEqual(CAP_FOR(l).vetMin);
       expect(userOffer(l, fa.pid, ask.amount, ask.years).ok).toBe(true);
-    }
-
-    // two-way players sit outside the 15, the cap and the trade roster count
-    {
-      const l = league();
-      const young = freeAgents(l)
-        .filter((p) => p.experience <= 3)
-        .sort((a, b) => a.ovr - b.ovr)[0];
-      const pay = payroll(l, U);
-      const n = standardRoster(l, U).length;
-      expect(userTwoWayOffer(l, young.pid).ok).toBe(true);
-      expect(young.contract.twoWay).toBe(true);
-      expect(salaryFor(young, l.season)).toBe(twoWaySalary(l));
-      expect(standardRoster(l, U).length).toBe(n);
-      expect(teamPlayers(l, U).length).toBe(n + 1);
-      expect(payroll(l, U)).toBe(pay);
-      // in season (the offseason allows 21) at 15 standard players he can't be converted; with a spot open he takes the minimum
-      l.phase = 'regular';
-      expect(standardRoster(l, U).length).toBe(CAP.rosterMax);
-      expect(convertTwoWay(l, young.pid).ok).toBe(false);
-      releasePlayer(l, standardRoster(l, U).sort((a, b) => a.ovr - b.ovr)[0], { news: false });
-      expect(convertTwoWay(l, young.pid).ok).toBe(true);
-      expect(young.contract.twoWay).toBeUndefined();
-      expect(salaryFor(young, l.season)).toBeGreaterThanOrEqual(CAP_FOR(l).minContract);
-      // only young players qualify
-      const vet = freeAgents(l).find((p) => p.experience > 3)!;
-      expect(userTwoWayOffer(l, vet.pid).ok).toBe(false);
-      expect(vet.tid).toBe(FREE_AGENT);
     }
   }, 180_000);
 });

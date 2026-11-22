@@ -1,19 +1,16 @@
 // The live game's Now view, the one the console opens on: what the staff sees and what needs you, most
 // urgent first. The lead assistant's read in a sentence, the calls he wants from you, who's tired or in
 // foul trouble with the sub a tap away, what's working and what isn't, the scorer of theirs he's
-// watching, the keys to the game, your moves tonight with the score since, and whether he makes his
+// watching, your moves tonight with the score since, and whether he makes his
 // tactics calls himself. Opinions in words: what a call will do stays the staff's hunch.
 import { useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
-import type { CoachMove, GameResult, Tactics } from '../../core/types';
-import type { GameKey } from '../../core/analysis/keys';
+import type { CoachMove, Tactics } from '../../core/types';
 import { keepFigures, madeAtt } from '../../core/format';
 import { Section, Toggle } from '../components/ui';
-import { KeysLive } from '../components/GameKeys';
 import type { Drawn } from './drawn';
 import { AssistantHead, MovesList, NoteCard } from '../components/StaffCards';
 import type { StaffAction, StaffNote } from './staff';
-import { keysShare } from './session';
 import { Trouble } from './Trouble';
 
 /** Moves listed before "All". */
@@ -34,7 +31,6 @@ export function StaffView({
   busy,
   view,
   side,
-  keys,
   watch,
   onPlayer,
   tactics,
@@ -56,7 +52,6 @@ export function StaffView({
   busy?: boolean;
   view: Drawn;
   side: 0 | 1;
-  keys?: GameKey[];
   /** Their scorer the staff is watching (their best tonight, or the threat the scouting named), and who's on him. */
   watch?: { pid: number; defender?: number };
   onPlayer: (pid: number) => void;
@@ -93,7 +88,6 @@ export function StaffView({
         </div>
       )}
       {watch && <Watch view={view} side={side} watch={watch} nameOf={nameOf} onPlayer={onPlayer} />}
-      {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box as Pick<GameResult, 'home' | 'away'>} side={side} share={keysShare(view.elapsed, view.q)} />}
       {/* (before the first move there's nothing to show: the section comes with it) */}
       {moves.length > 0 && (
         <Section

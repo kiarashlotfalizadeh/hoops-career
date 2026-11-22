@@ -374,6 +374,7 @@ describe('engine tactics', () => {
       // And again the same day, its second round: a shot's worth by the shot clock, shots at the horn, the score effect from the tip, rebounds before loose-ball fouls.
       // And again that day, its third round (see engineDefense.test.ts).
       // All of them again 2026-11-10, the tactics rewrite (tactics v2: the table above, see engineDefense.test.ts).
+      // All of them again 2026-11-22, when two-way deals were cut (see engineDefense.test.ts).
       const zone = (tid: number): SimTeamInput => ({ team: { ...league.teams[tid], tactics: defaultTactics('balanced', 'zone') }, players: teamPlayers(league, tid) });
       const out: number[][] = [];
       for (let g = 0; g < 4; g++) {
@@ -381,10 +382,10 @@ describe('engine tactics', () => {
         out.push([res.home.pts, res.away.pts, res.home.t.fga, res.away.t.fga, res.home.t.tpa, res.away.t.tpa, res.home.t.orb, res.away.t.orb]);
       }
       expect(out).toEqual([
-        [97, 116, 103, 89, 53, 47, 20, 9],
-        [124, 114, 108, 105, 61, 57, 25, 25],
-        [123, 112, 100, 100, 47, 50, 25, 19],
-        [107, 105, 91, 92, 50, 35, 11, 15],
+        [63, 96, 81, 91, 45, 47, 11, 18],
+        [122, 118, 100, 92, 59, 46, 19, 19],
+        [128, 117, 101, 99, 55, 54, 26, 16],
+        [107, 112, 96, 89, 55, 32, 12, 16],
       ]);
     }
 

@@ -1,9 +1,8 @@
 // The staff's week: each week of the regular season, the staff looks at what's at stake in it, measures
 // what it would change in paired games (see counterWorth.ts) and makes its pick. A pick that's best on
 // every measured count is the staff's to make: it goes in without a word and the digest says it
-// (staffPicksSince). Only a week whose options win on different counts that the user has to weigh
-// opens a card, and a sim stops for it. A call is a choice: one whose honest answer is always the same
-// isn't one.
+// (staffPicksSince). A week whose options win on different counts is the staff's to weigh too, by the
+// owner's own grading (youthLeans): there is no card for it and no sim stops for it.
 //
 // What the staff looks at, planned on the week's first morning (planWeek): the young players, as an
 // AI team's youth movement leans to them (see youthLean.ts). The minutes a game the staff's rotation
@@ -13,13 +12,12 @@
 // - the draft (after the deadline, the postseason out of reach: odds under LOTTERY_OUT): what the
 //   wins it costs do to his own first-round pick, as the forecast reads the standings
 //   (lotteryOutlook).
-// Free (inside WORTH_MIN), it goes in; costing points, it's a card: the owner's goal or the pick
-// against the wins. (Minutes also count in development, but only through a season's average crossing
+// Free (inside WORTH_MIN), it goes in; costing points, the staff weighs the owner's goal or the pick
+// against the wins and goes with its lean. (Minutes also count in development, but only through a season's average crossing
 // 15 or 25 a game for a player 25 or under: see progression.ts. A few weeks rarely moves that, so it
-// isn't counted.) A lean a card put in is measured again on the last of its games once they're
-// played, and the digest says what it came to (youthPayoff): a measurement, never the record.
-// Unanswered by the morning after it opened, the staff goes with its lean (the card says which and
-// why: the staff's read, not a measurement). The lean comes out at its last game.
+// isn't counted.) A lean that cost points going in is measured again on the last of its games once
+// they're played, and the digest says what it came to (youthPayoff): a measurement, never the record.
+// The lean comes out at its last game.
 //
 // The measuring runs before any sim decides to stop (simCore.ts's runSim: in the worker, on a budget,
 // see callMeasure.ts), so long sims and short ones make the same picks and no card appears to vanish.
@@ -34,10 +32,10 @@ import type { League, Rotation, ScheduledGame } from '../types';
 import type { YouthLean } from './youthLean';
 import { fmtDate, shortName, teamPlayers } from './helpers';
 import { guideOpen } from './agenda';
-import { worthSig, type CallCard, type CallMeasure, type CallWorth } from './calls';
+import { worthSig, type CallMeasure, type CallWorth } from './calls';
 import { WORTH_MIN } from '../ai/counterWorth';
 import { autoRotation } from '../ai/coachAI';
-import { benchTwoWays, ensureRotation, youthLean } from './games';
+import { ensureRotation, youthLean } from './games';
 import { currentGoals, goalResult, gradeGoal, YOUNG_AGE, youthProjected } from './ownerGoals';
 import { playerAge } from '../playerGen';
 import { winChance } from '../analysis/winProb';
@@ -119,8 +117,6 @@ export function weekOf(league: League, day = league.day): number | null {
 
 /** The week's call's id. */
 export const weekId = (season: number, week: number) => `week:${season}:${week}`;
-/** Whether a call id is a weekly call's. */
-export const isWeekId = (id: string) => id.startsWith('week:');
 /** The user's regular-season games still to play from `from` through `to`, in order. */
 function gamesIn(league: League, from: number, to: number): ScheduledGame[] {
   const me = league.userTid;
@@ -139,9 +135,7 @@ const healthy = (league: League) => teamPlayers(league, league.userTid);
 /** The staff's rotation for the user's team with the young players' lean at `level` (as games.ts's ensureRotation plans it). */
 export function leanedRotation(league: League, level: number): Rotation {
   const players = healthy(league);
-  const rot = autoRotation(players, league.teams[league.userTid].rotation, { lean: (p) => level * youthLean(playerAge(p, league.season)), maxMinutes: 38 - 8 * level });
-  if (level < 1) benchTwoWays(rot, players);
-  return rot;
+  return autoRotation(players, league.teams[league.userTid].rotation, { lean: (p) => level * youthLean(playerAge(p, league.season)), maxMinutes: 38 - 8 * level });
 }
 
 /** A player the young players' lean moves: his minutes a game now and with it, and whether he starts each way. */
@@ -409,7 +403,7 @@ function youthLeans(league: League, y: NonNullable<WeekCall['youth']>, pts: numb
 
 /**
  * The staff's pick for the week, once what it waits on is measured (weekNeeds empty): the young
- * players' lean if it costs nothing measurable. A lean that costs points is a choice: the card opens.
+ * players' lean if it costs nothing measurable; one that costs points, by the owner's own grading.
  */
 export function weekDecide(league: League) {
   const wc = storedWeek(league);
@@ -426,7 +420,16 @@ export function weekDecide(league: League) {
       putYouth(league, 'kept', wc);
       notePick(league, "The rotation stays as it is. More minutes for the young players wouldn't move your pick.");
     } else if (yw.pts <= -WORTH_MIN) {
-      wc.ask = 'youth';
+      // (it costs points: the staff weighs it as the owner grades the season, and goes with its lean)
+      const leans = youthLeans(league, y, yw.pts);
+      putYouth(league, leans ? 'auto' : 'kept', wc, true);
+      wc.taken = 'auto';
+      notePick(
+        league,
+        leans
+          ? `About ${y.add} more minutes a game for the young players until ${fmtDate(league.season, league.youthLean!.until)}. It could cost a little now: the staff weighed it against the owner's goals.`
+          : 'The rotation stays as it is. More minutes for the young players would cost more than they bring.',
+      );
     } else {
       // (who it moves, read before the lean goes in)
       const roles = youthMovesText(youthMoves(league));
@@ -438,7 +441,6 @@ export function weekDecide(league: League) {
       );
     }
   }
-  if (wc.ask) wc.asked = league.day;
 }
 
 // ---------------------------------------------------------------- the young players' turn, measured again
@@ -509,110 +511,8 @@ export function youthPayoff(league: League) {
   league.youthLean = { ...y, paid: true };
 }
 
-// ---------------------------------------------------------------- the card
-
 /** "vs BOS", "@ BOS". */
 export const vsAt = (league: League, g: Pick<ScheduledGame, 'home' | 'away'>) => `${g.home === league.userTid ? 'vs' : '@'} ${league.teams[oppOf(league, g)].abbrev}`;
-
-/** The week's card's id when it's open now (what a sim checks each day: cheap). */
-export function openWeekId(league: League): string | null {
-  const wc = storedWeek(league);
-  return wc && wc.decided && wc.ask && !wc.taken && !done(league, wc) ? weekId(wc.season, wc.week) : null;
-}
-
-/** What the week's card is about, if it's open (staffCalls draws it). */
-export function weekKind(league: League, wc: WeekCall | null = storedWeek(league)): WeekAsk | null {
-  return wc && wc.decided && wc.ask && !wc.taken && !done(league, wc) ? wc.ask : null;
-}
-
-/** The week's card (calls.ts's staffCalls draws it with the rest), when it's open. */
-export function weekCard(league: League): CallCard | null {
-  const wc = storedWeek(league);
-  const ask = wc && weekKind(league, wc);
-  if (!wc || !ask) return null;
-  const id = weekId(wc.season, wc.week);
-  const tomorrow = 'Unanswered, the staff goes with its lean tomorrow.';
-  const y = wc.youth!;
-  const yw = kept(league, weekWorthId(wc, 'youth'), y.gid);
-  if (!yw || yw.pts === undefined) return null;
-  const lost = leanLost(league, yw.pts);
-  const leans = youthLeans(league, y, yw.pts);
-  const play: CallCard['suggestion'] = { label: 'Play the young players', action: { kind: 'youthLean', id } };
-  const keep: CallCard['suggestion'] = { label: 'Keep the rotation', action: { kind: 'settle', id } };
-  const n = (x: number) => x.toLocaleString('en-US');
-  // the lean and what it turns on on the row, why and what it brings a tap down: all in words
-  const cost = lost < 1 ? 'It should only cost a little.' : 'It could cost you wins.';
-  let gain: string;
-  let lead: string;
-  let why: string;
-  if (y.why === 'draft') {
-    const lo = lotteryOutlook(league, lost);
-    if (!lo) return null;
-    lead = 'It should help your draft pick.';
-    gain = 'Your own first should land higher with it.';
-    why = leans ? "The owner's wins goal is out of reach either way." : 'The owner still counts these wins.';
-  } else {
-    const o = youthOutlook(league, y.add);
-    if (!o) return null;
-    lead = cost;
-    gain =
-      o.lean < o.g.target
-        ? `You'd still fall short of his ${n(o.g.target)} minutes.`
-        : o.base < o.g.target
-          ? `It should get you to his ${n(o.g.target)} minutes.`
-          : 'His minutes goal looks safe either way.';
-    why = leans ? 'The owner counts the minutes for more.' : 'The owner counts the wins for more.';
-  }
-  // who it moves and for how long, before it's taken: the starters it changes on the row, every minute a tap down
-  const moves = youthMoves(league);
-  const roles = youthMovesText(moves);
-  const games = Math.min(YOUTH_GAMES, gamesLeft(league));
-  const span = `For ${games} game${games === 1 ? '' : 's'}, through ${fmtDate(league.season, youthUntil(league))}`;
-  const minutes = moves.length ? `Minutes a game: ${moves.map((m) => `${m.name} ${m.from} → ${m.to}`).join(', ')}.` : '';
-  return {
-    id,
-    kind: 'week',
-    title: `${y.add} more minutes a game for the young players?`,
-    line: `${span}${roles ? `: ${roles}` : ''}. The staff leans ${leans ? 'to playing them' : 'to the rotation as it is'}. ${lead}`,
-    detail: [minutes, why, ...(y.why === 'draft' ? [cost] : []), gain, tomorrow].filter(Boolean).join('\n'),
-    pids: moves.map((m) => m.pid),
-    tone: 'info',
-    to: y.why === 'draft' ? '/office/draft' : '/office/owner',
-    suggestion: leans ? play : keep,
-    choices: [leans ? keep : play],
-  };
-}
-
-/** The week's card answered (calls.ts's resolveCall): `youth` for the young players' lean, nothing for things as they were. */
-export function answerWeek(league: League, a: { youth?: boolean }): { ok: boolean; text: string } {
-  const wc = storedWeek(league);
-  const ask = wc && weekKind(league, wc);
-  if (!wc || !ask) return { ok: false, text: 'That week is over.' };
-  if (a.youth) {
-    putYouth(league, 'staff', wc, true);
-    wc.taken = 'staff';
-    return { ok: true, text: `The young players get their minutes until ${fmtDate(league.season, league.youthLean!.until)}.` };
-  }
-  putYouth(league, 'kept', wc, true);
-  wc.taken = 'kept';
-  return { ok: true, text: '' };
-}
-
-/** The staff's lean on an open card, put in unanswered (weekDaily). */
-function takeLean(league: League, wc: WeekCall) {
-  if (wc.ask === 'youth' && wc.youth) {
-    const yw = kept(league, weekWorthId(wc, 'youth'), wc.youth.gid);
-    const leans = !!yw && yw.pts !== undefined && youthLeans(league, wc.youth, yw.pts);
-    putYouth(league, leans ? 'auto' : 'kept', wc, true);
-    notePick(
-      league,
-      leans
-        ? `About ${wc.youth.add} more minutes a game for the young players until ${fmtDate(league.season, league.youthLean!.until)}. The staff's lean on a card you left.`
-        : "The rotation stays as it is, the staff's lean on a card you left.",
-    );
-  }
-  wc.taken = 'auto';
-}
 
 // ---------------------------------------------------------------- each morning
 
@@ -630,9 +530,8 @@ export function notePick(league: League, text: string) {
 }
 
 /**
- * Each morning of the season (callsDaily): a week that's over makes way for the next one, planned;
- * a card left unanswered past the morning after it opened is the staff's lean. The pick itself waits
- * on the measuring (weekNeeds, weekDecide: a sim runs them each morning).
+ * Each morning of the season (callsDaily): a week that's over makes way for the next one, planned.
+ * The pick itself waits on the measuring (weekNeeds, weekDecide: a sim runs them each morning).
  */
 export function weekDaily(league: League) {
   if (league.fired) return;
@@ -640,9 +539,7 @@ export function weekDaily(league: League) {
   const old = league.weekCall;
   if (old && (w === null || old.season !== league.season || old.week !== w || old.tid !== league.userTid)) league.weekCall = undefined;
   if (w === null) return;
-  const wc = (league.weekCall ??= planWeek(league, w));
-  if (wc.taken || done(league, wc) || !wc.decided) return;
-  if (wc.ask && league.day > (wc.asked ?? wc.day)) takeLean(league, wc);
+  league.weekCall ??= planWeek(league, w);
 }
 
 /**

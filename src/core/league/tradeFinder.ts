@@ -2,9 +2,8 @@
 // targets with their filters, and how much salary a team can take back.
 import type { League, Player, Pos } from '../types';
 import { playerAge } from '../playerGen';
-import { CAP_FOR, contractSeason, standardRoster } from './helpers';
-import { hardCapLine, tradeValue } from './contracts';
-import { capPayroll } from './freeAgency';
+import { CAP_FOR, contractSeason, standardRoster, payroll } from './helpers';
+import { tradeValue } from './contracts';
 import { capSalary, tradeMatchLimit, untradeable } from './trades';
 import { sellable } from './aiTrades';
 import { wantsOut } from './pulse';
@@ -33,7 +32,7 @@ function tierCuts(league: League): number[] {
   const hit = tierCache.get(league);
   if (hit?.key === key) return hit.cuts;
   const values = Object.values(league.players)
-    .filter((p) => p.tid >= 0 && !p.contract.twoWay)
+    .filter((p) => p.tid >= 0)
     .map((p) => tradeValue(league, p))
     .sort((a, b) => b - a);
   const cuts = TIER_SHARE.map(([, share]) => (values.length ? values[Math.min(values.length - 1, Math.max(0, Math.ceil(values.length * share) - 1))] : Infinity));
@@ -105,7 +104,7 @@ export interface TradeTarget {
   value: number;
   tier: ValueTier;
   avail: Availability;
-  /** Salary that counts in trades this contract season ($K; two-way pay doesn't). */
+  /** Salary that counts in trades this contract season ($K). */
   salary: number;
 }
 
@@ -148,21 +147,17 @@ export function filterTargets(rows: TradeTarget[], f: TargetFilter): TradeTarget
 /**
  * The most salary a team can take back in one deal right now, sending at most two of its
  * tradeable contracts (as "what would make this work?" does to match salaries): what fits under
- * the cap after they leave, or what matching allows for them (see tradeMatchLimit; 100% over the
- * first apron), and no more than keeps a hard-capped team under its apron (or as much as they make,
- * past it).
+ * the cap after they leave, or what matching allows for them (see tradeMatchLimit).
  */
 export function maxTakeBack(league: League, tid: number): number {
   const s = contractSeason(league);
   const cap = CAP_FOR(league, s);
-  const pay = capPayroll(league, tid, s);
+  const pay = payroll(league, tid, s);
   const sals = standardRoster(league, tid)
     .filter((p) => !untradeable(league, p))
     .map((p) => capSalary(league, p.pid))
     .sort((a, b) => b - a);
   const out = (sals[0] ?? 0) + (sals[1] ?? 0);
   const match = tradeMatchLimit(league, out, s);
-  const most = Math.max(cap.salaryCap - pay + out, pay - out + match > cap.firstApron ? Math.max(out, cap.firstApron - pay + out) : match);
-  const line = hardCapLine(league, tid, s);
-  return line ? Math.min(most, Math.max(out, line.amount - pay + out)) : most;
+  return Math.max(cap.salaryCap - pay + out, match);
 }

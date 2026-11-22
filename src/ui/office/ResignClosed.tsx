@@ -2,17 +2,14 @@
 // he'd ask, the players you can extend now, and the ones already extended.
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ShieldCheck } from 'lucide-react';
 import type { League } from '../../core/types';
-import { CAP_FOR, payroll, playerName, shortName, teamPlayers } from '../../core/league/helpers';
+import { CAP_FOR, payroll, playerName, teamPlayers } from '../../core/league/helpers';
 import { askingContract, extensionBlockedReason } from '../../core/league/contracts';
-import { capHolds } from '../../core/league/freeAgency';
 import { extensionStart, playerAge, salaryFor } from '../../core/playerGen';
 import { useLeagueMemo } from '../../state/store';
 import { PageHeader, Section, Statline } from '../components/ui';
-import { Callout, HelpSheet, OvrPot, capRoomFig, contractEnd, contractsUp, forYears, salaryText, shortSeason } from './common';
+import { HelpSheet, OvrPot, capRoomFig, contractEnd, contractsUp, forYears, salaryText, shortSeason } from './common';
 import { ContractSheet } from './ContractSheet';
-import { restrictedFreeAgents } from '../../core/league/rfa';
 import { money } from '../../core/format';
 import { ExtendRow, extendablePlayers } from './resignRows';
 
@@ -31,15 +28,10 @@ export function ResignClosed({ league }: { league: League }) {
         .sort((a, b) => b.ovr - a.ovr),
     [league, tid, s],
   );
-  // two-way pay was never on the cap books (the committed figure beside it leaves it out too)
-  const freed = list.reduce((a, p) => a + (p.contract.twoWay ? 0 : salaryFor(p, s)), 0);
-  // in free agency, last summer's qualified players are re-signed from the Free Agents screen
-  const rfas = useLeagueMemo(() => (league.phase === 'freeAgency' ? restrictedFreeAgents(league, tid) : []), [league, tid]);
+  const freed = list.reduce((a, p) => a + salaryFor(p, s), 0);
   const cap = CAP_FOR(league, s + 1);
   const after = payroll(league, tid, s + 1);
-  // from the lottery on, the expiring players hold room against it (their cap holds), as on the Office's cap sheet
-  const holds = s + 1 === league.season + 1 ? capHolds(league, tid).reduce((a, h) => a + h.amount, 0) : 0;
-  const room = capRoomFig(cap.salaryCap - after - holds);
+  const room = capRoomFig(cap.salaryCap - after);
   const [title, when] =
     league.phase === 'freeAgency'
       ? ['Closed for this summer', 'These deals end after next season. Extend them now, or re-sign them next summer.']
@@ -67,13 +59,13 @@ export function ResignClosed({ league }: { league: League }) {
           </HelpSheet>
         }
       />
-      {/* the desk's poster: next season's room as big as it fits (the same cap figure as the Office's cap sheet, holds said) */}
+      {/* the desk's poster: next season's room as big as it fits (the same cap figure as the Office's cap sheet) */}
       <section className="fo-room" aria-label="Re-sign period">
         <div className="over">
           {room.k} · {shortSeason(s + 1)}
         </div>
         <div className="fo-room-v num">{room.v}</div>
-        <div className="fo-room-s">{holds > 0 ? `after ${money(holds)} in holds` : when}</div>
+        <div className="fo-room-s">{when}</div>
         <Statline
           items={[
             { k: 'Committed', v: money(after), s: shortSeason(s + 1) },
@@ -81,16 +73,6 @@ export function ResignClosed({ league }: { league: League }) {
           ]}
         />
       </section>
-
-      {rfas.length > 0 && (
-        <Callout icon={<ShieldCheck size={16} className="dim" />}>
-          {rfas.map((p) => shortName(league, p)).join(', ')} can still re-sign with Bird rights until {rfas.length > 1 ? 'they sign' : 'he signs'} an offer sheet. You match any
-          sheet.{' '}
-          <Link to="/office/free-agents" className="bold accent-text">
-            Free agents
-          </Link>
-        </Callout>
-      )}
 
       <Section title={`Up after ${shortSeason(s)}`}>
         {list.length === 0 ? (
@@ -100,7 +82,7 @@ export function ResignClosed({ league }: { league: League }) {
             {list.map((p) => {
               if (canExtend.has(p.pid)) return <ExtendRow key={p.pid} league={league} p={p} onExtend={setExt} />;
               const ask = askingContract(league, p, tid);
-              // why he can't be extended now (a two-way, a deal signed this season), unless it's the calendar's reason for everyone
+              // why he can't be extended now (a deal signed this season), unless it's the calendar's reason for everyone
               const why = extensionBlockedReason(league, p);
               const own = why && !/^(Extensions reopen|No extensions during)/.test(why) ? why : null;
               return (
@@ -108,12 +90,10 @@ export function ResignClosed({ league }: { league: League }) {
                   <OvrPot p={p} />
                   <div className="grow">
                     <div className="fo-name">{playerName(p)}</div>
-                    {/* a two-way says so in the meta line (his page converts him to a standard deal); a rarer reason gets its own */}
                     <div className="fo-meta">
                       {p.pos} · {playerAge(p, league.season)}
-                      {p.contract.twoWay ? ' · two-way' : ''}
                     </div>
-                    {own && !p.contract.twoWay && <div className="tiny dim fo-why">{own}</div>}
+                    {own && <div className="tiny dim fo-why">{own}</div>}
                   </div>
                   <div className="fo-money">
                     <div className="a">{salaryText(league, salaryFor(p, s))}</div>

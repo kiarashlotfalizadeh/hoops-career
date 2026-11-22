@@ -1,5 +1,5 @@
 // Team: who plays and how. The hub's sections are /team (the roster), /team/rotation,
-// /team/tactics (its own sections under it: /team/tactics/instructions, /match, /analysis) and
+// /team/tactics (with its Season Analysis under it: /team/tactics/analysis) and
 // /team/lineups; a player's page and the comparison sit under it.
 import { Navigate, Route, useLocation, useParams } from 'react-router-dom';
 import { lazyRetry } from '../lazyRetry';
@@ -14,8 +14,8 @@ const Compare = lazyRetry(() => import('../screens/Compare'));
  */
 export const screenKey = (path: string) => path.replace(/^\/team\/tactics\/[^/]*$/, '/team/tactics');
 
-/** Tactics' own sections: the paths under /team/tactics (Tactic is /team/tactics itself). */
-const TACTICS_SUBS = ['instructions', 'match', 'analysis'];
+/** Tactics' own sections: the paths under /team/tactics (System is /team/tactics itself; the old Instructions and Match paths open it). */
+const TACTICS_SUBS = ['analysis'];
 
 /**
  * /team/12 was another team's page before the redesign: those live at /teams/:tid now. Only Tactics

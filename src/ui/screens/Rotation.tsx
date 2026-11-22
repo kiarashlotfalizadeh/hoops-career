@@ -62,7 +62,7 @@ export default function Rotation() {
   const setAssistant = (on: boolean) => {
     if (on) {
       const before = structuredClone(rot);
-      // the assistant's rotation as the next game would have it: two-way players at the end of the bench too
+      // the assistant's rotation as the next game would have it
       if (
         edit((l) => {
           l.teams[l.userTid].rotation.manual = false;
@@ -222,11 +222,6 @@ export default function Rotation() {
                             </>
                           )}
                         </span>
-                        {p.contract.twoWay && (
-                          <Tag>
-                            2W<span className="sr-only"> (two-way)</span>
-                          </Tag>
-                        )}
                         {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" role="img" aria-label="Rests on back-to-backs" />}
                       </div>
                       {!p.injury && (

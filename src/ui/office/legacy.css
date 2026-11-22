@@ -412,15 +412,6 @@ a.fo-rv-row:active {
   color: var(--tier-good);
 }
 
-.fo-ms-i {
-  flex: none;
-  color: var(--text-dim);
-}
-
-.fo-ms.big .fo-ms-i {
-  color: var(--accent-text);
-}
-
 .fo-rv-pulse {
   display: flex;
   flex-direction: column;

@@ -1,6 +1,6 @@
 // Jersey numbers: every player on a team wears his own number, and a franchise retires the number
 // its legends wore there when they retire. A team's numbers are settled whenever a player joins it
-// (a signing, a waiver claim, a trade or the draft) and before each of its games (see
+// (a signing, a trade or the draft) and before each of its games (see
 // ensureRotation): the players it has already numbered keep theirs, and an arrival whose number is
 // taken, or retired there, picks a free one. Nothing here draws on the league's random stream.
 

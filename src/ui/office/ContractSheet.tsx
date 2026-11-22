@@ -5,23 +5,20 @@
 import { fills, hurts, movedNeedText, needCache, needLead, needMinutes, needMove, teamNeed } from '../../core/league/rosterNeed';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Ban, Scale, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { Ban, Scale, TriangleAlert } from 'lucide-react';
 import type { Player, SigningRoute, TalkTerms } from '../../core/types';
 import { FREE_AGENT } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
-import { CAP_FOR, payroll, playerName, rosterMaxNow, shortName, standardRoster, teamCity } from '../../core/league/helpers';
+import { CAP_FOR, payroll, playerName, rosterMaxNow, shortName, standardRoster } from '../../core/league/helpers';
 import { CAP } from '../../core/constants';
 import {
   EXCEPTIONS,
-  EXCEPTION_ORDER,
-  type Exception,
   askingContract,
   exceptionAmount,
   exceptionRoom,
   birdTier,
   isException,
-  marketHolds,
   marketSalary,
   maxYearsWith,
   playerMax,
@@ -30,12 +27,10 @@ import {
   signingRoute,
   teamAppeal,
 } from '../../core/league/contracts';
-import { SHEET_MAX_YEARS, SHEET_MIN_YEARS, deadlineLabel, matchDeadline, pendingSheets, sheetBlockedReason } from '../../core/league/rfa';
 import {
   FA_YEARS,
   bidFloor,
   bidHolds,
-  capHolds,
   marqueeFA,
   offerBlockedReason,
   offerRoute,
@@ -57,25 +52,17 @@ import { ExtendBody } from './ExtendBody';
 import { BidPanel } from './BidPanel';
 import { type Reply, TalkPanel } from './TalkPanel';
 import { compareHref, counterpart } from '../compare';
-import { keepFigures, money, moneyExact } from '../../core/format';
-import { freezeResignReason, freezeSigningReason } from '../../core/league/books';
-import { salaryFor } from '../../core/playerGen';
+import { money, moneyExact } from '../../core/format';
 
 export type OfferMode = 'fa' | 'resign' | 'extend';
 
 export function ContractSheet({ pid, mode, onClose }: { pid: number | null; mode: OfferMode; onClose: () => void }) {
   const league = useLeague();
   const p = pid !== null ? league.players[pid] : undefined;
-  // the user's restricted free agent is re-signed with Bird rights, from the free-agent list too
-  const ownRfa = !!p && p.tid === FREE_AGENT && p.rfa?.tid === league.userTid;
-  const m: OfferMode = mode === 'fa' && ownRfa ? 'resign' : mode;
-  const valid = !!p && (m === 'fa' ? p.tid === FREE_AGENT : p.tid === league.userTid || (m === 'resign' && ownRfa));
+  const valid = !!p && (mode === 'fa' ? p.tid === FREE_AGENT : p.tid === league.userTid);
+  const m = mode;
   return (
-    <Sheet
-      open={valid}
-      onClose={onClose}
-      label={p ? `${m === 'fa' ? (p.rfa ? 'Offer sheet for' : 'Offer to') : m === 'extend' ? 'Extend' : 'Re-sign'} ${playerName(p)}` : undefined}
-    >
+    <Sheet open={valid} onClose={onClose} label={p ? `${m === 'fa' ? 'Offer to' : m === 'extend' ? 'Extend' : 'Re-sign'} ${playerName(p)}` : undefined}>
       {valid && p && (m === 'extend' ? <ExtendBody key={p.pid} p={p} onClose={onClose} /> : <OfferBody key={p.pid} p={p} mode={m} onClose={onClose} />)}
     </Sheet>
   );
@@ -89,9 +76,6 @@ const ROUTE_TAG: Record<SigningRoute, { label: string; tone: string }> = {
   min: { label: 'Minimum deal', tone: 'good' },
   space: { label: 'Cap space', tone: '' },
   mle: { label: 'Mid-level', tone: 'info' },
-  tmle: { label: 'Taxpayer mid-level', tone: 'info' },
-  room: { label: 'Room exception', tone: 'info' },
-  bae: { label: 'Bi-annual', tone: 'info' },
 };
 
 function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, 'extend'>; onClose: () => void }) {
@@ -102,9 +86,6 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   // a top free agent in the summer weighs offers: the sheet opens on your pending one, and raising it replaces it
   const bidding = mode === 'fa' && marqueeFA(league, p);
   const bid = bidding ? pendingBid(league, p.pid) : undefined;
-  // another team's restricted free agent signs an offer sheet it can match (2-4 years); the user's own is re-signed
-  const sheet = mode === 'fa' && !!p.rfa;
-  const ownRfa = mode === 'resign' && p.tid === FREE_AGENT;
   const kind: TalkKind = mode === 'resign' ? 'resign' : 'fa';
   const mine = mode === 'fa' ? counterpart(league, p) : null;
   // the roster's need, and what he'd do to it (a free agent only: your own are already counted)
@@ -124,7 +105,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   // so the sheet says so and shows his real ask, never one cut down to the limit
   const wants = mode === 'resign' ? askingContract(league, p, tid).amount : 0;
   const overRights = limit !== null && wants > limit;
-  const yearsMax = mode === 'resign' ? maxYearsWith(league, p, tid) : sheet ? SHEET_MAX_YEARS : FA_YEARS;
+  const yearsMax = mode === 'resign' ? maxYearsWith(league, p, tid) : FA_YEARS;
   // his raises as the deal is written (8% re-signing on Bird rights, 5% otherwise: see talkSalaries)
   const raise = mode === 'resign' ? raiseWith(league, p, tid) : 0.05;
   // (his minimum exactly when he asks it: a little more would no longer be a minimum deal)
@@ -132,14 +113,12 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   // an exception's deal is shorter: open on the longest the route allows
   const [years, setYears] = useState(() => {
     const route = mode === 'fa' ? offerRoute(league, p, amount, season) : null;
-    return Math.max(sheet ? SHEET_MIN_YEARS : 1, bid?.years ?? (isException(route) ? Math.min(ask.years, EXCEPTIONS[route].years) : ask.years));
+    return Math.max(1, bid?.years ?? (isException(route) ? Math.min(ask.years, EXCEPTIONS[route].years) : ask.years));
   });
-  // an option on the final season: on a deal of two years or more, not on an offer sheet or a top free agent's bid
-  const optionsOk = !bidding && !sheet;
+  // an option on the final season: on a deal of two years or more, not on a top free agent's bid
+  const optionsOk = !bidding;
   const [optChoice, setOptChoice] = useState<OptionChoice>('none');
   const option = optionsOk && years >= 2 && optChoice !== 'none' ? optChoice : undefined;
-  // the exception to pay with when more than one covers the offer
-  const [via, setVia] = useState<Exception | undefined>(undefined);
   const [reply, setReply] = useState<Reply | null>(null);
   const set = (v: number) => setAmount(clamp(v, minAmt, maxAmt));
   const busy = useBusy();
@@ -153,52 +132,27 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   // his ask from you against a neutral team's: his interest in the team moves it
   const vsNeutral = Math.round((askingContract(league, p, tid).amount / askingContract(league, p).amount - 1) * 100);
   const market = marketSalary(league, p);
-  // your other pending offers on cap space hold their room, and so do the summer market's holds:
-  // your offer sheets and your restricted free agents' cap holds
-  const holds = mode === 'fa' ? marketHolds(league, tid, season) : [];
-  const heldRfa = holds.reduce((a, h) => a + (h.kind === 'rfa' ? h.amount : 0), 0);
-  const heldOffers = (mode === 'fa' ? bidHolds(league, p.pid) : 0) + holds.reduce((a, h) => a + (h.kind === 'sheet' ? h.amount : 0), 0);
-  const held = heldOffers + heldRfa;
+  // your other pending offers on cap space hold their room
+  const held = mode === 'fa' ? bidHolds(league, p.pid) : 0;
   const pay = payroll(league, tid, season) + held;
   const space = cap.salaryCap - pay;
   const after = pay + amount;
-  // re-signing him clears his own cap hold; the other expiring players still hold their room
-  const otherHolds = mode === 'resign' ? capHolds(league, tid).reduce((a, h) => a + (h.p.pid === p.pid ? 0 : h.amount), 0) : 0;
   // re-signing counts next season's contracts: the other expiring deals are leaving or re-signing too
-  const pendingN = mode === 'fa' ? (league.faBids ?? []).filter((b) => b.pid !== p.pid).length + pendingSheets(league, tid).filter((x) => x.pid !== p.pid).length : 0;
+  const pendingN = mode === 'fa' ? (league.faBids ?? []).filter((b) => b.pid !== p.pid).length : 0;
   const rosterN = mode === 'resign' ? resignRoster(league) : standardRoster(league, tid).length + pendingN;
   const rosterMax = rosterMaxNow(league);
-  // signing windows: free agents in the preseason, regular season and free agency; own players in the
-  // re-sign period, and a restricted free agent of yours in free agency until he signs an offer sheet
-  const closed =
-    mode === 'fa'
-      ? (signingClosedReason(league) ?? (sheet ? sheetBlockedReason(league, p, Math.max(years, SHEET_MIN_YEARS)) : null))
-      : ownRfa
-        ? p.rfa?.sheet
-          ? `${shortName(league, p)} has signed an offer sheet with ${teamCity(league, p.rfa.sheet.tid)}. Match it or let him go.`
-          : null
-        : league.phase !== 'resign'
-          ? 'Re-signing happens between the draft and free agency.'
-          : null;
+  // signing windows: free agents in the preseason, regular season and free agency; own players in the re-sign period
+  const closed = mode === 'fa' ? signingClosedReason(league) : league.phase !== 'resign' ? 'Re-signing happens between the draft and free agency.' : null;
   const rosterBlocked = rosterN >= rosterMax;
-  // the owner's freeze: minimum deals only, and no raise on what one of your own is paid now
-  const paidNow = mode === 'resign' ? salaryFor(p, league.season) : 0;
-  const frozenAt = (x: number) => (mode === 'fa' ? freezeSigningReason(league, x, minAmt) : freezeResignReason(league, x, paidNow, minAmt, 're-signing him'));
-  const frozenTop = mode === 'fa' ? minAmt : Math.max(paidNow, minAmt);
-  const frozenWhy = closed ? null : frozenAt(amount);
-  const route = mode === 'fa' ? offerRoute(league, p, amount, season, years, via) : signingRoute(league, tid, amount, season, p);
-  // covered by an exception, but not for this long
-  const tooLong = mode === 'fa' && !route && isException(offerRoute(league, p, amount, season)) ? offerBlockedReason(league, p, amount, years, via) : null;
+  const route = mode === 'fa' ? offerRoute(league, p, amount, season, years) : signingRoute(league, tid, amount, season, p);
+  // covered by the mid-level, but not for this long
+  const tooLong = mode === 'fa' && !route && isException(offerRoute(league, p, amount, season)) ? offerBlockedReason(league, p, amount, years) : null;
   const capBlocked = mode === 'fa' && !route && !tooLong;
-  // the exceptions that would pay for this offer (more than one: choose)
-  const covering = mode === 'fa' && isException(route) ? EXCEPTION_ORDER.filter((k) => years <= EXCEPTIONS[k].years && amount <= userExceptionRoom(league, k, season, p.pid)) : [];
-  const exceptionsOpen = EXCEPTION_ORDER.map((k) => ({ k, room: mode === 'fa' ? userExceptionRoom(league, k, season, p.pid) : exceptionRoom(league, tid, k, season) }))
-    .filter((x) => x.room > cap.vetMin)
-    // (the taxpayer mid-level only once the full one can't pay as much)
-    .filter((x, _, all) => x.k !== 'tmle' || (all.find((y) => y.k === 'mle')?.room ?? 0) < x.room);
+  // what the mid-level can still pay him
+  const mleOpen = mode === 'fa' ? userExceptionRoom(league, 'mle', season, p.pid) : exceptionRoom(league, tid, 'mle', season);
   const floor = bidding ? bidFloor(league, p, years) : 0;
   const talksOff = !!talks?.closed;
-  const blocked = !!closed || rosterBlocked || capBlocked || !!tooLong || !!frozenWhy || amount < floor || (sheet && years < SHEET_MIN_YEARS) || talksOff || overRights;
+  const blocked = !!closed || rosterBlocked || capBlocked || !!tooLong || amount < floor || talksOff || overRights;
   // as signed: each season at least his minimum
   const total = talkSalaries(league, p, kind, amount, years).reduce((a, b) => a + b, 0);
   // what this deal does to the luxury tax: the bill with him against the bill without
@@ -207,8 +161,8 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   /** Why his counter can't be signed as it stands (the window, the roster, the cap), or null. */
   const counterBlocked = (c: TalkTerms): string | null =>
     mode === 'fa'
-      ? (signingClosedReason(league) ?? (sheet ? sheetBlockedReason(league, p, c.years) : null) ?? offerBlockedReason(league, p, c.amount, c.years, via))
-      : (closed ?? (rosterBlocked ? `Your offseason roster is full, at ${rosterMax}.` : frozenAt(c.amount)));
+      ? (signingClosedReason(league) ?? offerBlockedReason(league, p, c.amount, c.years))
+      : (closed ?? (rosterBlocked ? `Your offseason roster is full, at ${rosterMax}.` : null));
 
   /** His counter's payroll line on its own terms (the cap section below follows the slider's offer). */
   const counterImpact = (c: TalkTerms) =>
@@ -220,12 +174,12 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   const submit = (terms: TalkTerms = { amount, years, option }) => {
     // a refused offer still counts in the talks (his patience): only the answer differs
     const res = settle<OfferResult>(
-      mode === 'fa' ? (bidding ? 'Your offer' : sheet ? 'The offer sheet' : 'The signing') : 'The re-signing',
+      mode === 'fa' ? (bidding ? 'Your offer' : 'The signing') : 'The re-signing',
       (l) =>
         mode === 'fa'
           ? bidding
             ? userBid(l, p.pid, terms.amount, terms.years)
-            : userOffer(l, p.pid, terms.amount, terms.years, { option: terms.option, via })
+            : userOffer(l, p.pid, terms.amount, terms.years, { option: terms.option })
           : userResign(l, p.pid, terms.amount, terms.years, { option: terms.option }),
       'good',
       true,
@@ -291,13 +245,11 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           setYears={setYears}
           wants={ask.years}
           firstSeason={season}
-          yearDisabled={(y) => sheet && y < SHEET_MIN_YEARS}
           overAsk={!bidding}
           yearsMax={yearsMax}
           yearsNote={
             <>
               Through {shortSeason(season + years - 1)}, {Math.round(raise * 100)}% raises. Each year off what he wants adds {Math.round(YEAR_PREMIUM * 100)}% to his price.
-              {sheet ? keepFigures(` Offer sheets run ${SHEET_MIN_YEARS}-${SHEET_MAX_YEARS} years, no options.`) : ''}
               {mode === 'resign' && birdTier(league, p) !== 'full'
                 ? ` ${birdTier(league, p) === 'early' ? 'Early Bird rights' : 'Without full Bird rights'}: up to ${money(maxAmt)}, ${yearsMax} years.`
                 : ''}
@@ -311,9 +263,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           <b>
             He wants {moneyExact(wants)}. Your {birdTier(league, p) === 'early' ? 'Early Bird' : 'non-Bird'} rights allow {moneyExact(maxAmt)}.
           </b>{' '}
-          {ownRfa
-            ? 'No new deal can pay that. Match an offer sheet he signs elsewhere instead.'
-            : 'He walks in free agency, unless you renounce him and bid with space or an exception.'}
+          He goes to free agency, where cap space or your mid-level can still sign him.
           <div className="tiny dim">
             {birdTier(league, p) === 'early'
               ? 'Early Bird rights, after two seasons with you, pay up to 175% of his salary. Or 105% of the league average, if more.'
@@ -382,43 +332,18 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
                 Over the cap, players still sign <b>minimum contracts</b> with a roster spot. His is {moneyExact(minAmt)} a season.
               </p>
               <p>
-                Over the cap, each <b>exception</b> pays for one signing. Each hard-caps you at its apron for the season, and no trade can take you past it.
+                Over the cap, your <b>mid-level exception</b> pays for one signing a season: up to {money(exceptionAmount(league, 'mle', season))} for {EXCEPTIONS.mle.years} years.
               </p>
-              <ul>
-                <li>
-                  <b>Mid-level</b>: up to {money(exceptionAmount(league, 'mle', season))} for {EXCEPTIONS.mle.years} years, once a season, under the first apron,{' '}
-                  {money(cap.firstApron)}.
-                </li>
-                <li>
-                  <b>Taxpayer mid-level</b>, past that apron: up to {money(exceptionAmount(league, 'tmle', season))} for {EXCEPTIONS.tmle.years} years, under the second apron,{' '}
-                  {money(cap.secondApron)}.
-                </li>
-                <li>
-                  <b>Bi-annual</b>: up to {money(exceptionAmount(league, 'bae', season))} for {EXCEPTIONS.bae.years} years, under the first apron, not two seasons running.
-                </li>
-                <li>
-                  <b>Room exception</b>, for a team that used its cap space: up to {money(exceptionAmount(league, 'room', season))} for {EXCEPTIONS.room.years} years, in place of
-                  the mid-level.
-                </li>
-              </ul>
               <p>To make space, trade salary away, let contracts expire, or release players. What they&apos;re owed still counts as dead money.</p>
             </HelpSheet>
           </div>
-          <div className="small">{offerBlockedReason(league, p, amount, years, via) ?? `This offer puts you ${money(after - cap.salaryCap)} over the cap.`}</div>
+          <div className="small">{offerBlockedReason(league, p, amount, years) ?? `This offer puts you ${money(after - cap.salaryCap)} over the cap.`}</div>
           <div className="chips fo-callout-btns">
-            {exceptionsOpen.map(({ k, room }) => (
-              <button
-                key={k}
-                className="btn xs"
-                onClick={() => (
-                  set(Math.floor(Math.min(room, maxAmt) / STEP) * STEP),
-                  setYears(Math.max(sheet ? SHEET_MIN_YEARS : 1, Math.min(years, EXCEPTIONS[k].years))),
-                  setVia(k)
-                )}
-              >
-                Use the {EXCEPTIONS[k].name} · {moneyExact(room)}
+            {mleOpen > cap.vetMin && (
+              <button className="btn xs" onClick={() => (set(Math.floor(Math.min(mleOpen, maxAmt) / STEP) * STEP), setYears(Math.max(1, Math.min(years, EXCEPTIONS.mle.years))))}>
+                Use the mid-level · {moneyExact(mleOpen)}
               </button>
-            ))}
+            )}
             <button className="btn xs" onClick={() => set(minAmt)}>
               Offer the minimum instead
             </button>
@@ -427,25 +352,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
         </Callout>
       )}
 
-      {frozenWhy && !rosterBlocked && !capBlocked && !tooLong && (
-        <Callout tone="bad" icon={<Ban size={18} className="bad" />}>
-          <b>{frozenWhy}</b>
-          <div className="chips fo-callout-btns">
-            <button className="btn xs" onClick={() => set(frozenTop)}>
-              Offer {moneyExact(frozenTop)} instead
-            </button>
-          </div>
-        </Callout>
-      )}
-
       {bidding && !closed && !rosterBlocked && !capBlocked && !tooLong && <BidPanel p={p} amount={amount} years={years} floor={floor} onAmount={set} />}
-
-      {sheet && !closed && p.rfa && (
-        <Callout icon={<ShieldCheck size={18} className="dim" />}>
-          <b>Restricted: this is an offer sheet.</b> Signed, {teamCity(league, p.rfa.tid)} has until the end of {deadlineLabel(matchDeadline(league.faDay))} to match it. Until then
-          it holds your {isException(route) ? EXCEPTIONS[route].name : 'cap room'} and a roster spot. Unmatched, he&apos;s yours.
-        </Callout>
-      )}
 
       {need && (
         <div className={`tiny ${fills(need) ? 'good' : hurts(need) ? 'warn' : 'dim'}`}>
@@ -480,12 +387,6 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
             <span className="over">Cap impact · {shortSeason(season)}</span>
             {route ? <span className={`tag ${ROUTE_TAG[route].tone}`}>{ROUTE_TAG[route].label}</span> : <span className="tag bad">Over the cap</span>}
           </div>
-          {covering.length > 1 && (
-            <div className="col">
-              <div className="over">Pay with</div>
-              <Segmented label="Exception to use" value={route as Exception} onChange={(k) => setVia(k)} options={covering.map((k) => ({ id: k, label: EXCEPTIONS[k].short }))} />
-            </div>
-          )}
           <Statline
             items={[
               { ...capRoomFig(space), k: space >= 0 ? 'Cap space now' : 'Over the cap now' },
@@ -497,24 +398,14 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
               },
             ]}
           />
-          <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} aprons={{ first: cap.firstApron, second: cap.secondApron }} add={amount} addLabel="This offer" />
+          <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} addLabel="This offer" />
           <div className="tiny dim">
             {route === 'min' && after > cap.salaryCap
               ? `Minimum deals sign over the cap: up to ${moneyExact(minAmt)} for him.`
-              : route === 'space' && exceptionRoom(league, tid, 'mle', season) > 0
-                ? `Signing with cap space trades your mid-level for the smaller room exception for ${shortSeason(season)}.`
-                : route === 'mle'
-                  ? `Your mid-level: once a season, up to ${EXCEPTIONS.mle.years} years. It hard-caps you at the first apron, ${money(cap.firstApron)}, for ${shortSeason(season)}.`
-                  : route === 'tmle'
-                    ? `Your taxpayer mid-level: once a season, up to ${EXCEPTIONS.tmle.years} years. It hard-caps you at the second apron, ${money(cap.secondApron)}.`
-                    : route === 'room'
-                      ? `Your room exception: once, after using cap space this season, up to ${EXCEPTIONS.room.years} years.`
-                      : route === 'bae'
-                        ? `Your bi-annual: up to ${EXCEPTIONS.bae.years} years, not again next season. It hard-caps you at the first apron, ${money(cap.firstApron)}.`
-                        : ''}
-            {held > 0
-              ? ` Counts ${money(held)} held for ${[heldOffers > 0 ? 'your other pending offers and sheets' : '', heldRfa > 0 ? "your restricted free agents' holds" : ''].filter(Boolean).join(' and ')}.`
-              : ''}
+              : route === 'mle'
+                ? `Your mid-level: one signing a season, up to ${EXCEPTIONS.mle.years} years.`
+                : ''}
+            {held > 0 ? ` Counts ${money(held)} held for your other pending offers.` : ''}
           </div>
           {tax && <div className={`tiny num ${tax.tone}`}>{tax.text}</div>}
         </section>
@@ -524,15 +415,15 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
             <span className="over">{shortSeason(season)} payroll</span>
             <span className="tag info">Bird rights</span>
           </div>
-          <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} aprons={{ first: cap.firstApron, second: cap.secondApron }} add={amount} addLabel="This deal" />
+          <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} addLabel="This deal" />
           <div className="tiny dim">
-            Over the cap is fine for your own players.{ownRfa && p.rfa ? ` His ${money(p.rfa.hold ?? p.rfa.qo)} cap hold gives way to this deal.` : ''}
+            Over the cap is fine for your own players.
             {tax ? (
               <span className={tax.tone}> {tax.text}.</span>
-            ) : after + otherHolds > cap.salaryCap ? (
-              ` Over the cap${otherHolds > 0 ? ' with your other holds' : ''}: in free agency, minimum deals or an exception only.`
+            ) : after > cap.salaryCap ? (
+              ' Over the cap: in free agency, minimum deals or your mid-level only.'
             ) : (
-              ` Leaves ${money(cap.salaryCap - after - otherHolds)} of cap space${otherHolds > 0 ? ` after ${money(otherHolds)} in other holds` : ''}.`
+              ` Leaves ${money(cap.salaryCap - after)} of cap space.`
             )}
           </div>
         </section>
@@ -543,9 +434,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           Profile
         </Link>
         <button className={`btn grow ${!blocked ? 'primary' : ''}`} disabled={blocked || busy} onClick={() => submit()}>
-          {overRights
-            ? 'No offer can re-sign him'
-            : `${bidding ? (bid ? 'Update offer' : 'Submit offer') : sheet ? 'Offer sheet' : 'Make offer'} · ${yrs(years)} · ${money(total)}`}
+          {overRights ? 'No offer can re-sign him' : `${bidding ? (bid ? 'Update offer' : 'Submit offer') : 'Make offer'} · ${yrs(years)} · ${money(total)}`}
         </button>
       </div>
     </div>

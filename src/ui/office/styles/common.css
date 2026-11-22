@@ -43,12 +43,7 @@
   animation: pulse 1.4s ease-in-out infinite;
 }
 
-/* a card other screens still use for a headline block */
-.fo-hero {
-  position: relative;
-}
-
-/* a tiny flag after a name: rookie scale, two-way, 10-day, injured. A soft filled label in
+/* a tiny flag after a name: rookie scale, injured, a bid. A soft filled label in
    sentence case, a tone colouring its word and its wash */
 .fo-flag {
   flex: none;
@@ -143,7 +138,7 @@
   opacity: 0.5;
 }
 
-/* the release's dead money: release and stretched side by side */
+/* the release's dead money, season by season */
 .fo-dead {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -245,7 +240,7 @@
   background: var(--surface);
 }
 
-/* a long status tag ("Offer sheet · SAS · POR decides day 4") wraps instead of running under the money column */
+/* a long status tag ("Bidding · decides day 4") wraps instead of running under the money column */
 .fo-prow .tag {
   max-width: 100%;
   height: auto;
@@ -307,8 +302,7 @@
 }
 
 /* money in a row: the ledger's figure in mono, its terms in small mono under it */
-.fo-money .a,
-.fo-money-a {
+.fo-money .a {
   font-family: var(--mono);
   font-weight: 600;
   font-size: 15.5px;
@@ -409,22 +403,15 @@
 }
 
 /* ------------------------------------------------------------ press and hover on the desks' rows */
-.fo-prow,
-.fo-team {
+.fo-prow {
   transition:
     background var(--dur-fast) var(--ease-out),
     transform var(--dur-fast) var(--ease-out);
 }
 
-/* a team tile presses in, as buttons do */
-.fo-team:active {
-  transform: scale(0.97);
-}
-
 @media (hover: hover) {
   .fo-prow:hover,
-  .fo-asset:not(.on):hover,
-  .fo-team:not(.on):hover {
+  .fo-asset:not(.on):hover {
     background: color-mix(in srgb, var(--surface) 60%, transparent);
   }
 }

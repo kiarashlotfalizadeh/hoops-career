@@ -19,7 +19,7 @@ import { useQueryParam } from '../league/shared';
 import { TeamScheduleList, type ScheduleFilter } from './ScheduleList';
 import { gameTag, liveSeries, planStatus } from './data';
 import { seasonSeries, seriesParts, seriesText } from './series';
-import { FormPills, nightTitle, useBillings } from './occasion';
+import { FormPills, nightTitle } from './occasion';
 import { favoriteOf } from './favorite';
 import './games.css';
 
@@ -129,7 +129,6 @@ function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
   const series = g.type === 'playoffs' ? liveSeries(league, opp) : undefined;
   const ss = g.type === 'regular' ? seasonSeries(league, opp) : null;
   const plan = planStatus(league, opp, g);
-  const [bill] = useBillings(league, g);
   // the preview's chance to win, from the home side, said in words
   const proj = useLeagueMemo(() => gameProjection(league, g), [league, g]);
   const seriesLine = series
@@ -151,14 +150,13 @@ function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
     <section className="gs-next" aria-label={`Next game: ${when}, ${g.home === me || neutral ? 'vs' : 'at'} the ${t.region} ${t.name}`}>
       <GameBoard league={league} links={false} away={side(g.away)} home={side(g.home)} over={[`${when} · ${where}`, tag]} mid={<span className="gd-bd-k">Record</span>}>
         <div className="gd-bd-foot">
-          <b>{favoriteOf(league, g, proj.win).line}</b>
+          <b>{favoriteOf(league, g, proj.win).line} to win</b>
         </div>
       </GameBoard>
       <div className="gs-next-body">
-        {/* the poster's headline: what the night is billed as, or on an ordinary night who's next */}
+        {/* the poster's headline: who's next, and where */}
         <div className="gs-next-bill">
-          <h2 className={`gs-next-h w${bill ? bill.weight : 1}`}>{bill ? bill.tag : nightTitle(league, g, neutral)}</h2>
-          {bill && <div className="gs-next-l">{keepFigures(bill.line)}</div>}
+          <h2 className="gs-next-h w1">{nightTitle(league, g, neutral)}</h2>
         </div>
         {series && <SeriesStrip league={league} seriesId={series.id} />}
         <div className="gs-next-foot">

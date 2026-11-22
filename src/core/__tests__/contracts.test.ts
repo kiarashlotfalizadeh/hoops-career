@@ -2,21 +2,18 @@
 // signs him on the spot, a hidden walk-away price a little under it too, below it he counters and
 // his patience drops, and out of patience talks break down by the period; AI teams never negotiate.
 // Extensions: who and when, what he asks, how one shows on the books and the season it takes over.
-// Releases: waivers and buyouts (W10), the stretch provision, 10-day contracts and the hardship
-// exception. Fictional leagues with hand-shaped players keep these fast: each scenario builds its own.
+// Releases and buyouts: a free agent at once, the dead money on the books, what a veteran gives
+// back. Fictional leagues with hand-shaped players keep these fast: each scenario builds its own.
 import { expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { newSeason, startRegularSeason } from '../league/season';
-import { CAP_FOR, age, contractSeason, curTeamSeason, freeAgents, payroll, revenueScale, standardRoster, teamPlayers, teamSeason, twoWayRoster } from '../league/helpers';
+import { CAP_FOR, age, contractSeason, curTeamSeason, freeAgents, payroll, revenueScale, standardRoster, teamPlayers, teamSeason } from '../league/helpers';
 import {
   DEC_15,
   FIRED_REASON,
-  WAIVER_DAYS,
   aiBuyouts,
   askingContract,
   buyoutTerms,
-  claimBlockedReason,
-  convertTwoWay,
   decideTeamOption,
   extensionAsk,
   extensionBlockedReason,
@@ -24,22 +21,15 @@ import {
   injuryShare,
   marketSalary,
   roleMpg,
-  onWaivers,
   releaseDeadMoney,
   releasePlayer,
-  releaseSchedule,
-  resolveWaivers,
   rookieContract,
   signPlayer,
-  stretchDeadMoney,
-  stretchPhrase,
   teamAppeal,
   contractBurden,
   tradeValue,
   userBuyout,
-  userClaim,
   valueScore,
-  waiverOrder,
   willExtend,
   type Strategy,
 } from '../league/contracts';
@@ -62,29 +52,9 @@ import {
   walkAwayFor,
   talkSalaries,
 } from '../league/negotiation';
-import { aiExtensions, capHolds, expiringPlayers, releaseExpiring, renouncePlayer, signedThisSummer, userOffer, userResign } from '../league/freeAgency';
-import { executeTrade, untradeableReason, validateTrade } from '../league/trades';
-import {
-  HARDSHIP_OUT,
-  TEN_DAYS,
-  hardship,
-  tenDayBlockedReason,
-  tenDayClosedReason,
-  tenDayDaily,
-  tenDayEndBlockedReason,
-  tenDayLeft,
-  tenDayOpenDay,
-  tenDayPay,
-  tenDaySpot,
-  tenDaysWith,
-  userEndTenDay,
-  userTenDay,
-  userTenDayRest,
-} from '../league/tenDay';
-import { gameFinances } from '../league/finances';
+import { aiExtensions, expiringPlayers, releaseExpiring, userOffer, userResign } from '../league/freeAgency';
+import { executeTrade, validateTrade } from '../league/trades';
 import { takeOverTeam } from '../league/owner';
-import { txnLine, txnText } from '../league/transactions';
-import { CAP } from '../constants';
 import { blankStats, contractExp, extensionStart, salaryFor } from '../playerGen';
 import type { League, Player } from '../types';
 import { FREE_AGENT } from '../types';
@@ -108,7 +78,7 @@ function talksLeague(phase: League['phase'] = 'regular', rngSeed = 7): League {
 
 /** A free agent of known value: OVR = POT, 27, healthy, asking his market price. */
 function freeAgent(l: League, ovr = 74, age = 27, i = 0): Player {
-  const p = freeAgents(l).filter((x) => !x.rfa)[i];
+  const p = freeAgents(l)[i];
   p.ovr = ovr;
   p.pot = ovr;
   p.bornYear = l.season - age;
@@ -177,12 +147,9 @@ function waiversLeague(rngSeed = 11): League {
   l.id = `waivers_${rngSeed}`;
   l.phase = 'regular';
   l.day = 20;
-  // everyone 10-10, so a test can make the team it wants first in the waiver order
   for (const t of l.teams) Object.assign(curTeamSeason(l, t.tid), { won: 10, lost: 10 });
   return l;
 }
-
-const record = (l: League, tid: number, won: number) => Object.assign(curTeamSeason(l, tid), { won, lost: 20 - won });
 
 /** A player of known value and contract (`salary` a season, `years` from this season). */
 function shape(l: League, p: Player, ovr: number, age: number, salary: number, years: number): Player {
@@ -195,7 +162,7 @@ function shape(l: League, p: Player, ovr: number, age: number, salary: number, y
   return p;
 }
 
-/** Bring a team to `n` standard players: preseason cuts (no waivers), or free agents on minimum deals. */
+/** Bring a team to `n` standard players: preseason cuts, or free agents on minimum deals. */
 function cutTo(l: League, tid: number, n: number) {
   const phase = l.phase;
   l.phase = 'preseason';
@@ -205,75 +172,6 @@ function cutTo(l: League, tid: number, n: number) {
 }
 
 const deadFor = (l: League, tid: number, pid: number) => l.teams[tid].deadMoney.filter((d) => d.pid === pid).reduce((a, d) => a + d.amount, 0);
-const passDays = (l: League, n: number) => {
-  for (let i = 0; i < n; i++) {
-    l.day++;
-    resolveWaivers(l);
-  }
-};
-
-function stretchLeague(phase: League['phase'] = 'regular'): League {
-  const l = createLeague({ name: 'stretch', userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 3 });
-  l.id = 'stretch_3';
-  l.phase = phase;
-  l.day = phase === 'regular' ? 30 : l.day;
-  for (const t of l.teams) Object.assign(curTeamSeason(l, t.tid), { won: 10, lost: 10 });
-  return l;
-}
-
-/** One of the user's players on `salary` a season from `start` for `years`. */
-function signed(l: League, salary: number, years: number, start = l.season, age = 27): Player {
-  const p = standardRoster(l, U)[0];
-  p.ovr = p.pot = 70;
-  p.bornYear = l.season - age;
-  p.experience = 6;
-  p.injury = null;
-  p.contract = { start, salaries: Array.from({ length: years }, () => salary) };
-  return p;
-}
-
-const sum = (xs: { amount: number }[]) => xs.reduce((a, d) => a + d.amount, 0);
-const deadOf = (l: League, pid: number) => l.teams[U].deadMoney.filter((d) => d.pid === pid).sort((a, b) => a.season - b.season);
-
-function tenLeague(): League {
-  const l = createLeague({ name: 'ten', userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 4 });
-  l.id = 'ten_4';
-  l.phase = 'regular';
-  l.day = tenDayOpenDay(l);
-  return l;
-}
-
-/** Bring a team to `n` healthy standard players (the rest become free agents, or free agents join on minimum deals). */
-function rosterOf(l: League, tid: number, n: number) {
-  for (const p of standardRoster(l, tid).slice(n)) p.tid = FREE_AGENT;
-  while (standardRoster(l, tid).length < n)
-    signPlayer(
-      l,
-      freeAgents(l)
-        .filter((x) => !x.rfa)
-        .at(-1)!,
-      tid,
-      CAP_FOR(l).vetMin,
-      1,
-      { news: false },
-    );
-  for (const p of standardRoster(l, tid)) p.injury = null;
-  l.teams[tid].rotation.order = standardRoster(l, tid).map((p) => p.pid);
-}
-
-/** A free agent who'd sign for the minimum. */
-function minGuy(l: League, i = 0): Player {
-  const p = freeAgents(l).filter((x) => !x.rfa)[i];
-  p.ovr = p.pot = 62;
-  p.experience = 4;
-  p.injury = null;
-  p.asking = { amount: CAP_FOR(l).vetMin, years: 1 };
-  expect(askingContract(l, p, U).amount).toBe(CAP_FOR(l).vetMin);
-  return p;
-}
-
-const out = (p: Player, games = 10) => (p.injury = { type: 'Sprained Ankle', gamesRemaining: games, gamesTotal: games, severity: 'minor' });
-
 it('negotiation and extensions: the ask, the walk-away price, counters and patience; the extension window, its ask and the books; free agents leave their trade history behind', () => {
   // his ask on his terms signs him on the spot; a little under it (at his walk-away price) too
   {
@@ -534,14 +432,11 @@ it('negotiation and extensions: the ask, the walk-away price, counters and patie
     p.contract.salaries.push(10_000);
     expect(extensionBlockedReason(l, p)).toMatch(/final season of his deal/);
     p.contract.salaries.pop();
-    // not someone else's player, not a two-way, not for a fired coach
+    // not someone else's player, not for a fired coach
     expect(extensionBlockedReason(l, finalYear(l, standardRoster(l, AI)[0], 78, 27))).toMatch(/your own players/);
     l.fired = true;
     expect(extensionBlockedReason(l, p)).toBe(FIRED_REASON);
     l.fired = false;
-    const tw = twoWayRoster(l, U)[0];
-    tw.contract = { start: l.season - 1, salaries: [600, 600], twoWay: true };
-    expect(extensionBlockedReason(l, tw)).toMatch(/Two-way/);
     // postseason, lottery and draft: closed; the summer: next season's deal is the final one
     for (const phase of ['playoffs', 'draftLottery', 'draft'] as const) {
       l.phase = phase;
@@ -664,7 +559,6 @@ it('negotiation and extensions: the ask, the walk-away price, counters and patie
     // after the season he isn't up for re-signing
     l.phase = 'resign';
     expect(expiringPlayers(l, U).map((x) => x.pid)).not.toContain(p.pid);
-    expect(capHolds(l, U).map((h) => h.p.pid)).not.toContain(p.pid);
     releaseExpiring(l);
     expect(p.tid).toBe(U);
   }
@@ -779,27 +673,7 @@ it('negotiation and extensions: the ask, the walk-away price, counters and patie
     expect(Object.values(l.players).some((p) => p.contract.next)).toBe(true);
   }
 
-  // a renounced player, signed elsewhere, can be traded back to the team that traded him away
-  {
-    const l = extLeague();
-    l.phase = 'regular';
-    const p = finalYear(l, standardRoster(l, AI)[0], 76, 27);
-    tradedThisSeason(l, p, U);
-    l.phase = 'resign';
-    p.contract = { start: l.season - 1, salaries: [10_000, 10_000] };
-    expect(renouncePlayer(l, p.pid).ok).toBe(true);
-    expect(p.tid).toBe(FREE_AGENT);
-    expect(p.tradedFrom).toBeUndefined();
-    expect(p.tradeLock).toBeUndefined();
-    // a free agent like any other: an asking price and the price-cut clock
-    expect(p.asking?.amount).toBeGreaterThan(0);
-    expect(p.faDays).toBeGreaterThan(0);
-    l.phase = 'freeAgency';
-    signPlayer(l, p, 2, p.asking!.amount, 2, { news: false, start: l.season + 1 });
-    expect(tradeBack(l, p, 2, AI)).toEqual([]);
-  }
-
-  // so can a player whose deal ran out
+  // a player whose deal ran out, signed elsewhere, can be traded back to the team that traded him away
   {
     const l = extLeague();
     l.phase = 'regular';
@@ -830,19 +704,6 @@ it('negotiation and extensions: the ask, the walk-away price, counters and patie
     expect(go.tradedFrom).toBeUndefined();
   }
 
-  // a two-way converted in the re-signing period isn't listed as signed this summer
-  {
-    const l = extLeague();
-    l.phase = 'resign';
-    const tw = twoWayRoster(l, U)[0];
-    tw.contract = { start: l.season, salaries: [600, 600], twoWay: true };
-    const fa = freeAgents(l)[0];
-    signPlayer(l, fa, U, CAP_FOR(l, l.season + 1).vetMin, 1, { news: false, start: l.season + 1 });
-    expect(convertTwoWay(l, tw.pid).ok).toBe(true);
-    expect(tw.contract.start).toBe(l.season + 1);
-    expect(signedThisSummer(l).map((p) => p.pid)).toEqual([fa.pid]);
-  }
-
   // the market pays for the role he has shown (ROLE_PAY): an 80 the staff played 3.7 minutes a game in
   // 21 games asks a bench player's money, not star money; at 32 minutes a game he asks his full price
   {
@@ -857,120 +718,25 @@ it('negotiation and extensions: the ask, the walk-away price, counters and patie
   }
 }, 120_000);
 
-it('releases: waivers and buyouts (W10), the stretch provision, 10-day contracts and the hardship exception', () => {
-  // a claim takes over the contract, and the dead money comes off the old team's books
+it('releases and buyouts: a free agent at once, the dead money on the books, what a veteran gives back', () => {
+  // a release in season: a free agent at once, what he's owed left on the books season by season, and any other team can sign him that day
   {
     const l = waiversLeague();
-    const vetMin = CAP_FOR(l).vetMin;
-    const p = shape(l, standardRoster(l, U)[0], 70, 26, vetMin, 2);
-    const claimer = 5;
-    cutTo(l, claimer, 14);
-    record(l, claimer, 2);
+    const p = shape(l, standardRoster(l, U)[0], 70, 26, 10_000, 2);
     releasePlayer(l, p);
     expect(p.tid).toBe(FREE_AGENT);
-    expect(p.waivers).toMatchObject({ from: U, until: l.day + WAIVER_DAYS });
-    expect(deadFor(l, U, p.pid)).toBe(2 * vetMin);
-    // on waivers he can be claimed, not signed
-    expect(freeAgents(l).some((x) => x.pid === p.pid)).toBe(false);
-    expect(onWaivers(l).map((x) => x.pid)).toEqual([p.pid]);
-    expect(userOffer(l, p.pid, vetMin, 1).reason).toMatch(/waivers/);
-    passDays(l, WAIVER_DAYS - 1);
-    expect(p.tid).toBe(FREE_AGENT);
-    passDays(l, 1);
-    expect(p.tid).toBe(claimer);
-    expect(p.waivers).toBeUndefined();
-    expect(p.contract.salaries).toEqual([vetMin, vetMin]);
-    expect(l.teams[claimer].rotation.order).toContain(p.pid);
-    expect(deadFor(l, U, p.pid)).toBe(0);
-    expect(l.inbox[0].subject).toMatch(/claimed off waivers/);
+    expect(p.asking?.amount).toBeGreaterThan(0);
+    expect(l.teams[U].deadMoney.filter((d) => d.pid === p.pid).map((d) => d.season)).toEqual([l.season, l.season + 1]);
+    const dead = deadFor(l, U, p.pid);
+    expect(dead).toBeGreaterThan(10_000);
+    expect(l.transactions?.some((t) => t.kind === 'release' && t.pid === p.pid)).toBe(true);
+    cutTo(l, AI, 14);
+    signPlayer(l, p, AI, CAP_FOR(l).vetMin, 1, { news: false });
+    expect(p.tid).toBe(AI);
+    expect(deadFor(l, U, p.pid)).toBe(dead);
   }
 
-  // a claim takes over the contract's trade lock
-  {
-    const l = waiversLeague();
-    const vetMin = CAP_FOR(l).vetMin;
-    const p = shape(l, standardRoster(l, 5)[0], 74, 27, vetMin * 3, 1);
-    // signed this season: he can't be traded until the lock is up, nor extended this season
-    p.tradeLock = { season: l.season, day: l.day + 60 };
-    cutTo(l, U, 14);
-    record(l, U, 1);
-    releasePlayer(l, p);
-    expect(userClaim(l, p.pid).ok).toBe(true);
-    passDays(l, WAIVER_DAYS);
-    expect(p.tid).toBe(U);
-    expect(p.tradeLock).toEqual({ season: l.season, day: l.day + 60 - WAIVER_DAYS });
-    expect(extensionBlockedReason(l, p)).toMatch(/signed this deal this season/);
-  }
-
-  // taking over another team leaves the old team's waiver claims (and free-agent offers) behind
-  {
-    const l = waiversLeague();
-    const p = shape(l, standardRoster(l, 5)[0], 70, 26, CAP_FOR(l).vetMin, 2);
-    cutTo(l, U, 14);
-    releasePlayer(l, p);
-    expect(userClaim(l, p.pid).ok).toBe(true);
-    l.faBids = [{ pid: p.pid, amount: 1, years: 1, day: 0, decideDay: 1, route: 'space' }];
-    takeOverTeam(l, 7);
-    expect(p.waivers?.claim).toBeUndefined();
-    expect(l.faBids).toBeUndefined();
-  }
-
-  // a contract nobody wants clears to free agency, and its dead money stays
-  {
-    const l = waiversLeague();
-    const p = shape(l, standardRoster(l, U)[0], 62, 31, 30_000, 3);
-    releasePlayer(l, p);
-    expect(p.waivers).toBeDefined();
-    passDays(l, WAIVER_DAYS);
-    expect(p.waivers).toBeUndefined();
-    expect(p.tid).toBe(FREE_AGENT);
-    expect(freeAgents(l).some((x) => x.pid === p.pid)).toBe(true);
-    expect(deadFor(l, U, p.pid)).toBe(90_000);
-    expect(l.inbox[0].subject).toMatch(/cleared waivers/);
-  }
-
-  // the user claims in waiver order: a worse record goes first
-  {
-    for (const worseAi of [false, true]) {
-      const l = waiversLeague();
-      const vetMin = CAP_FOR(l).vetMin;
-      const from = 7;
-      const p = shape(l, standardRoster(l, from)[0], 69, 25, vetMin, 2);
-      cutTo(l, U, 14);
-      record(l, U, 3);
-      const rival = 9;
-      cutTo(l, rival, 14);
-      if (worseAi) record(l, rival, 1);
-      releasePlayer(l, p);
-      expect(claimBlockedReason(l, from, p)).toMatch(/released/);
-      expect(userClaim(l, p.pid).ok).toBe(true);
-      expect(waiverOrder(l)[0].tid).toBe(worseAi ? rival : U);
-      passDays(l, WAIVER_DAYS);
-      expect(p.tid).toBe(worseAi ? rival : U);
-      expect(deadFor(l, from, p.pid)).toBe(0);
-      if (worseAi) expect(l.inbox[0].body).toMatch(/ahead of us/);
-    }
-  }
-
-  // a claim needs a roster spot and room for this season's salary unless it's a minimum
-  {
-    const l = waiversLeague();
-    const from = 7;
-    const p = shape(l, standardRoster(l, from)[0], 75, 27, 25_000, 2);
-    releasePlayer(l, p);
-    cutTo(l, U, 14);
-    l.teams[U].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: CAP_FOR(l).salaryCap });
-    expect(userClaim(l, p.pid).reason).toMatch(/cap space/);
-    l.teams[U].deadMoney = [];
-    while (standardRoster(l, U).length < 15) {
-      const fa = freeAgents(l)[0];
-      fa.tid = U;
-      fa.contract = { start: l.season, salaries: [CAP_FOR(l).vetMin] };
-    }
-    expect(claimBlockedReason(l, U, p)).toMatch(/roster spot/);
-  }
-
-  // preseason cuts and minimum camp deals don't go through waivers
+  // a preseason cut of a minimum camp deal leaves no dead money; a guaranteed deal does
   {
     const l = waiversLeague();
     l.phase = 'preseason';
@@ -978,47 +744,21 @@ it('releases: waivers and buyouts (W10), the stretch provision, 10-day contracts
     const camp = shape(l, standardRoster(l, U)[1], 66, 26, CAP_FOR(l).vetMin, 1);
     releasePlayer(l, p);
     releasePlayer(l, camp);
-    expect(p.waivers).toBeUndefined();
-    expect(camp.waivers).toBeUndefined();
+    expect(deadFor(l, U, p.pid)).toBe(20_000);
+    expect(deadFor(l, U, camp.pid)).toBe(0);
     expect(freeAgents(l).some((x) => x.pid === p.pid)).toBe(true);
   }
 
-  // claims close with the regular season: a player still on waivers in the play-in clears, and a claim on him falls through
+  // taking over another team leaves the old team's free-agent offers behind
   {
     const l = waiversLeague();
-    const vetMin = CAP_FOR(l).vetMin;
-    const from = 7;
-    const p = shape(l, standardRoster(l, from)[0], 70, 26, vetMin, 2);
-    // a team that would claim him first, and the user's claim
-    const claimer = 5;
-    cutTo(l, claimer, 14);
-    record(l, claimer, 2);
-    cutTo(l, U, 14);
-    releasePlayer(l, p);
-    expect(userClaim(l, p.pid).ok).toBe(true);
-    // the regular season ends while he's on waivers
-    l.phase = 'playin';
-    expect(claimBlockedReason(l, U, p)).toMatch(/close with the regular season/);
-    expect(claimBlockedReason(l, claimer, p)).toMatch(/close with the regular season/);
-    passDays(l, 1);
-    expect(p.tid).toBe(FREE_AGENT);
-    expect(p.waivers).toBeUndefined();
-    expect(deadFor(l, from, p.pid)).toBe(2 * vetMin);
-    expect(l.inbox[0].body).toMatch(/fell through\. Waiver claims close with the regular season, as signings do\. He is a free agent now\.$/);
+    const p = freeAgents(l)[0];
+    l.faBids = [{ pid: p.pid, amount: 1, years: 1, day: 0, decideDay: 1, route: 'space' }];
+    takeOverTeam(l, 7);
+    expect(l.faBids).toBeUndefined();
   }
 
-  // everyone left on waivers clears when the season is over
-  {
-    const l = waiversLeague();
-    const p = shape(l, standardRoster(l, U)[0], 70, 26, CAP_FOR(l).vetMin, 2);
-    releasePlayer(l, p);
-    l.phase = 'draftLottery';
-    resolveWaivers(l);
-    expect(p.waivers).toBeUndefined();
-    expect(p.tid).toBe(FREE_AGENT);
-  }
-
-  // cuts the dead money by what he gives back, with no waivers
+  // a buyout cuts the dead money by what he gives back
   {
     const l = waiversLeague();
     const p = shape(l, standardRoster(l, U)[0], 74, 31, 20_000, 2);
@@ -1038,7 +778,6 @@ it('releases: waivers and buyouts (W10), the stretch provision, 10-day contracts
     const res = userBuyout(l, p.pid);
     expect(res.ok).toBe(true);
     expect(p.tid).toBe(FREE_AGENT);
-    expect(p.waivers).toBeUndefined();
     expect(deadFor(l, U, p.pid)).toBe(most.dead);
     expect(Math.abs(most.dead - most.owed * (1 - most.giveback))).toBeLessThanOrEqual(20);
     expect(most.saved).toBeGreaterThan(0);
@@ -1078,330 +817,5 @@ it('releases: waivers and buyouts (W10), the stretch provision, 10-day contracts
     }
     expect(bought).toBeGreaterThan(0);
     for (const [tid, n] of before) if (n < 15) expect(standardRoster(l, tid).length).toBe(n);
-    expect(onWaivers(l)).toEqual([]);
-  }
-
-  // in season: this season is paid as usual, the seasons after it spread over twice their number plus one
-  {
-    const l = stretchLeague();
-    const p = signed(l, 12_000, 3);
-    const sched = stretchDeadMoney(l, releaseSchedule(l, p))!;
-    expect(sched[0]).toEqual({ season: l.season, amount: 12_000 });
-    const rest = sched.slice(1);
-    expect(rest.map((d) => d.season)).toEqual([1, 2, 3, 4, 5].map((i) => l.season + i));
-    expect(rest.every((d) => d.stretched)).toBe(true);
-    expect(sum(rest)).toBe(24_000);
-    expect(rest.slice(0, -1).every((d) => d.amount === 4_800)).toBe(true);
-    const before = payroll(l, U, l.season + 1);
-    releasePlayer(l, p, { stretch: true });
-    // waived in season with guaranteed money: the stretched schedule is what a claim would wipe
-    expect(p.waivers?.dead).toEqual(sched);
-    expect(deadOf(l, p.pid).map(({ season, amount }) => ({ season, amount }))).toEqual(sched.map(({ season, amount }) => ({ season, amount })));
-    expect(payroll(l, U, l.season + 1) - before).toBe(4_800 - 12_000);
-    expect(stretchPhrase(l, 5)).toBe("this season's as usual and the rest stretched over 5 seasons");
-  }
-
-  // in the summer every season left is stretched, from next season; amounts in $10K steps, the total unchanged
-  {
-    const l = stretchLeague('freeAgency');
-    const p = signed(l, 10_010, 2, l.season + 1);
-    const sched = stretchDeadMoney(l, releaseSchedule(l, p))!;
-    expect(sched.map((d) => d.season)).toEqual([1, 2, 3, 4, 5].map((i) => l.season + i));
-    expect(sum(sched)).toBe(20_020);
-    expect(sched.slice(0, -1).every((d) => d.amount % 10 === 0 && d.amount === 4_000)).toBe(true);
-    expect(sched[4].amount).toBe(4_020);
-    expect(stretchPhrase(l, 5)).toBe('stretched over 5 seasons');
-    // one season left in the summer: over three
-    const q = signed(l, 9_000, 1, l.season + 1);
-    expect(stretchDeadMoney(l, releaseSchedule(l, q))!.map((d) => d.amount)).toEqual([3_000, 3_000, 3_000]);
-  }
-
-  // nothing to stretch in season on a deal that ends this season, so the release is the usual one
-  {
-    const l = stretchLeague();
-    const p = signed(l, 8_000, 1);
-    expect(stretchDeadMoney(l, releaseSchedule(l, p))).toBeNull();
-    expect(releaseSchedule(l, p, { stretch: true })).toEqual([{ season: l.season, amount: 8_000 }]);
-  }
-
-  // a buyout stretches what is left after he gives some back, and the log says so
-  {
-    const l = stretchLeague();
-    const p = signed(l, 10_000, 3, l.season, 33);
-    const terms = buyoutTerms(l, p)!;
-    expect(terms.giveback).toBeGreaterThan(0);
-    const plain = releaseSchedule(l, p, { giveback: terms.giveback });
-    const res = userBuyout(l, p.pid, true);
-    expect(res.reason).toMatch(/this season's as usual and the rest stretched over 5 seasons/);
-    const dead = deadOf(l, p.pid);
-    expect(sum(dead)).toBe(sum(plain));
-    expect(dead).toHaveLength(6);
-    expect(p.tid).toBe(FREE_AGENT);
-    expect(p.waivers).toBeUndefined();
-    const t = l.transactions!.at(-1)!;
-    expect(t).toMatchObject({ kind: 'buyout', note: 'stretched', years: 5 });
-    expect(txnText(l, txnLine(t, { tid: U }))).toMatch(/, the rest stretched over 5 seasons$/);
-  }
-
-  // a waiver claim takes over the contract and wipes the stretched dead money
-  {
-    const l = stretchLeague();
-    const p = signed(l, 3_000, 3);
-    p.ovr = p.pot = 78;
-    // an AI team with room and a spot, first in the waiver order
-    Object.assign(curTeamSeason(l, AI), { won: 2, lost: 18 });
-    l.teams[AI].deadMoney = [];
-    while (standardRoster(l, AI).length > 13) {
-      const x = standardRoster(l, AI)[0];
-      x.tid = FREE_AGENT;
-    }
-    for (const x of standardRoster(l, AI)) x.contract = { start: l.season, salaries: [CAP_FOR(l).vetMin] };
-    releasePlayer(l, p, { stretch: true });
-    expect(deadOf(l, p.pid).length).toBe(6);
-    const t = l.transactions!.at(-1)!;
-    expect(t).toMatchObject({ kind: 'waive', note: 'stretched', years: 5, amount: 9_000 });
-    expect(txnText(l, txnLine(t, { tid: U }))).toMatch(/ · \$9\.0M in dead money, stretched over 5 seasons$/);
-    l.day += 2;
-    resolveWaivers(l);
-    expect(p.tid).toBe(AI);
-    expect(deadOf(l, p.pid)).toEqual([]);
-  }
-
-  // the user's own claim works the same way on another team's stretched release
-  {
-    const l = stretchLeague();
-    const p = standardRoster(l, AI)[0];
-    p.ovr = p.pot = 60;
-    p.injury = null;
-    p.experience = 6;
-    p.contract = { start: l.season, salaries: [CAP_FOR(l).vetMin * 2, CAP_FOR(l).vetMin * 2] };
-    releasePlayer(l, p, { stretch: true });
-    expect(l.teams[AI].deadMoney.filter((d) => d.pid === p.pid && d.stretched)).toHaveLength(3);
-    while (standardRoster(l, U).length > 14) standardRoster(l, U)[0].tid = FREE_AGENT;
-    l.teams[U].deadMoney = [];
-    for (const x of standardRoster(l, U)) x.contract = { start: l.season, salaries: [CAP_FOR(l).vetMin] };
-    Object.assign(curTeamSeason(l, U), { won: 1, lost: 19 });
-    expect(userClaim(l, p.pid).ok).toBe(true);
-    l.day += 2;
-    resolveWaivers(l);
-    expect(p.tid).toBe(U);
-    expect(l.teams[AI].deadMoney.filter((d) => d.pid === p.pid)).toEqual([]);
-    // (a fresh signing for comparison: no stretch, nothing left behind)
-    const fa = freeAgents(l)[0];
-    signPlayer(l, fa, U, CAP_FOR(l).vetMin, 1, { news: false });
-    expect(fa.contract.salaries).toEqual([CAP_FOR(l).vetMin]);
-  }
-
-  // open on January 5 and close with the regular season
-  {
-    const l = tenLeague();
-    expect(tenDayClosedReason(l)).toBeNull();
-    l.day = tenDayOpenDay(l) - 1;
-    expect(tenDayClosedReason(l)).toMatch(/open on January 5/);
-    l.day = l.regularSeasonDays + 1;
-    expect(tenDayClosedReason(l)).toMatch(/end of the regular season/);
-    l.phase = 'playoffs';
-    expect(tenDayClosedReason(l)).toMatch(/from January 5/);
-  }
-
-  // pay his minimum prorated for ten days, booked when he signs, take a roster spot and end by themselves with no dead money
-  {
-    const l = tenLeague();
-    rosterOf(l, U, 14);
-    const p = minGuy(l);
-    const pay = tenDayPay(l, p, TEN_DAYS);
-    expect(pay).toBe(Math.round((CAP_FOR(l).vetMin * 10) / (l.regularSeasonDays + 1) / 10) * 10);
-    const ts = curTeamSeason(l, U);
-    const [exp0, cash0, pay0] = [ts.expenses, l.teams[U].cash, payroll(l, U)];
-    expect(userTenDay(l, p.pid).reason).toMatch(/signs a 10-day contract: through/);
-    expect(p.tid).toBe(U);
-    expect(p.contract).toEqual({ start: l.season, salaries: [pay], tenDay: { until: l.day + TEN_DAYS } });
-    expect(ts.expenses - exp0).toBe(pay);
-    expect(cash0 - l.teams[U].cash).toBe(pay);
-    expect(payroll(l, U) - pay0).toBe(pay);
-    expect(tenDayLeft(l, p)).toBe(TEN_DAYS);
-    expect(releaseDeadMoney(l, p)).toEqual([]);
-    expect(untradeableReason(l, p)).toMatch(/signed recently/);
-    // the per-game payroll leaves him out: he's paid already
-    const before = ts.expenses;
-    gameFinances(l, l.teams[U], false, false);
-    const perGame = ts.expenses - before;
-    p.contract.tenDay = undefined;
-    const ts2 = curTeamSeason(l, U);
-    const b2 = ts2.expenses;
-    gameFinances(l, l.teams[U], false, false);
-    expect(ts2.expenses - b2 - perGame).toBeCloseTo(pay / 82, 5);
-    p.contract.tenDay = { until: l.day + TEN_DAYS };
-    // the log
-    const t = l.transactions!.at(-1)!;
-    expect(t).toMatchObject({ kind: 'tenDay', amount: pay });
-    expect(txnText(l, txnLine(t, { tid: U }))).toBe(`Signed ${p.firstName} ${p.lastName} to a 10-day contract · $${(pay / 1000).toFixed(1)}M`);
-    // nine days on: his last day, and the inbox says so with the choices
-    for (let i = 0; i < TEN_DAYS - 1; i++) {
-      l.day++;
-      tenDayDaily(l);
-    }
-    expect(tenDayLeft(l, p)).toBe(1);
-    expect(l.inbox[0]).toMatchObject({ subject: `${p.firstName} ${p.lastName}'s 10-day contract ends tonight`, tenDay: p.pid });
-    expect(l.inbox[0].body).toMatch(/Sign him to a second 10-day.* or for the rest of the season at .*Doing nothing lets him go/);
-    l.day++;
-    tenDayDaily(l);
-    expect(p.tid).toBe(FREE_AGENT);
-    expect(l.teams[U].deadMoney.filter((d) => d.pid === p.pid)).toEqual([]);
-    expect(p.waivers).toBeUndefined();
-    expect(l.transactions!.at(-1)).toMatchObject({ kind: 'tenDay', note: 'ended' });
-  }
-
-  // two with one team a season: a second extends the first, a third is refused
-  {
-    const l = tenLeague();
-    rosterOf(l, U, 14);
-    const p = minGuy(l);
-    userTenDay(l, p.pid);
-    const until = p.contract.tenDay!.until;
-    const first = p.contract.salaries[0];
-    l.day += 4;
-    expect(userTenDay(l, p.pid).reason).toMatch(/signs a second 10-day contract/);
-    expect(p.contract.tenDay!.until).toBe(until + TEN_DAYS);
-    expect(p.contract.salaries[0]).toBe(first + tenDayPay(l, p, TEN_DAYS));
-    expect(p.tenDays).toEqual({ season: l.season, by: { [U]: 2 } });
-    expect(l.transactions!.at(-1)).toMatchObject({ kind: 'tenDay', note: 'second' });
-    expect(tenDayBlockedReason(l, U, p)).toMatch(/had his two 10-days with you/);
-    l.day = until + TEN_DAYS;
-    tenDayDaily(l);
-    expect(p.tid).toBe(FREE_AGENT);
-    expect(tenDayBlockedReason(l, U, p)).toMatch(/had his two/);
-    // another team can still give him one
-    expect(tenDayBlockedReason(l, AI, p) ?? '').not.toMatch(/had his two/);
-  }
-
-  // counts each team's on their own: a 10-day with another team in between doesn't give a team a third
-  {
-    const l = tenLeague();
-    rosterOf(l, U, 14);
-    rosterOf(l, AI, 13);
-    const p = minGuy(l);
-    // the best free agent who'd take the minimum, so the AI team short of healthy players takes him
-    // (a 79: an 80+ the summer left unsigned holds 55% of his value in season, see SUMMER_FLOOR)
-    const atMin = () => {
-      p.ovr = p.pot = 79;
-      p.asking = { amount: CAP_FOR(l).vetMin, years: 1 };
-    };
-    expect(userTenDay(l, p.pid).ok).toBe(true);
-    l.day = p.contract.tenDay!.until;
-    tenDayDaily(l);
-    expect(p.tid).toBe(FREE_AGENT);
-    atMin();
-    out(standardRoster(l, AI)[0]);
-    tenDayDaily(l);
-    expect(p.tid).toBe(AI);
-    expect([tenDaysWith(l, p, U), tenDaysWith(l, p, AI)]).toEqual([1, 1]);
-    for (const x of standardRoster(l, AI)) x.injury = null;
-    l.day = p.contract.tenDay!.until;
-    tenDayDaily(l);
-    expect(p.tid).toBe(FREE_AGENT);
-    // back with the user: his second there, and no third
-    atMin();
-    expect(userTenDay(l, p.pid).reason).toMatch(/signs a second 10-day contract/);
-    expect(p.tenDays).toEqual({ season: l.season, by: { [U]: 2, [AI]: 1 } });
-    l.day = p.contract.tenDay!.until;
-    tenDayDaily(l);
-    atMin();
-    expect(tenDayBlockedReason(l, U, p)).toMatch(/had his two 10-days with you/);
-    expect(tenDayBlockedReason(l, AI, p) ?? '').not.toMatch(/had his two/);
-  }
-
-  // end with the regular season, prorated for the days left
-  {
-    const l = tenLeague();
-    rosterOf(l, U, 14);
-    l.day = l.regularSeasonDays - 3;
-    const p = minGuy(l);
-    userTenDay(l, p.pid);
-    expect(p.contract.tenDay!.until).toBe(l.regularSeasonDays + 1);
-    expect(p.contract.salaries[0]).toBe(tenDayPay(l, p, 4));
-    expect(tenDayBlockedReason(l, U, p)).toMatch(/already runs to the end of the regular season/);
-  }
-
-  // sign him for the rest of the season at his minimum, or let him go while the roster stays at 13
-  {
-    const l = tenLeague();
-    rosterOf(l, U, 13);
-    const p = minGuy(l);
-    const q = minGuy(l, 1);
-    userTenDay(l, p.pid);
-    userTenDay(l, q.pid);
-    expect(userTenDayRest(l, p.pid).ok).toBe(true);
-    expect(p.contract).toEqual({ start: l.season, salaries: [CAP_FOR(l).vetMin] });
-    expect(l.transactions!.at(-1)).toMatchObject({ kind: 'sign', amount: CAP_FOR(l).vetMin, years: 1 });
-    expect(userEndTenDay(l, q.pid).ok).toBe(true);
-    expect(q.tid).toBe(FREE_AGENT);
-    // at 13 he can't go
-    const r = minGuy(l, 2);
-    for (const x of standardRoster(l, U).slice(0, 2)) x.tid = FREE_AGENT;
-    userTenDay(l, r.pid);
-    expect(standardRoster(l, U).length).toBe(CAP.rosterMin);
-    expect(tenDayEndBlockedReason(l, r)).toMatch(/at least 13/);
-  }
-
-  // a 10-day ending that leaves a team under 13 has it sign the best free agent left for the rest of the season
-  {
-    const l = tenLeague();
-    rosterOf(l, U, 12);
-    const p = minGuy(l);
-    userTenDay(l, p.pid);
-    l.day = p.contract.tenDay!.until;
-    tenDayDaily(l);
-    expect(p.tid).toBe(FREE_AGENT);
-    expect(standardRoster(l, U).length).toBe(CAP.rosterMin);
-    expect(l.inbox[0].subject).toMatch(/signed to fill the roster/);
-    expect(standardRoster(l, U).every((x) => !x.contract.tenDay)).toBe(true);
-  }
-
-  // with four or more players out (3+ games each) a team can sign 10-days beyond 15, one per player out past three
-  {
-    const l = tenLeague();
-    rosterOf(l, U, 15);
-    const a = minGuy(l, 0);
-    const b = minGuy(l, 1);
-    expect(tenDaySpot(l, U)).toBeNull();
-    expect(tenDayBlockedReason(l, U, a)).toMatch(/Hardship spots past 15 open with 4 players out 3\+ games/);
-    const roster = standardRoster(l, U);
-    for (const p of roster.slice(0, HARDSHIP_OUT)) out(p);
-    // two games to go doesn't count
-    out(roster[HARDSHIP_OUT], 2);
-    expect(hardship(l, U)).toEqual({ out: 4, spots: 1, used: 0 });
-    expect(userTenDay(l, a.pid).reason).toMatch(/\(hardship\)/);
-    expect(a.contract.tenDay!.hardship).toBe(true);
-    expect(standardRoster(l, U).length).toBe(16);
-    expect(tenDayBlockedReason(l, U, b)).toMatch(/allows 1 beyond 15 with 4 players out/);
-    expect(l.transactions!.at(-1)).toMatchObject({ kind: 'tenDay', note: 'hardship' });
-    // healthy again: no second hardship 10-day, nor a regular deal without a regular spot
-    for (const p of roster) p.injury = null;
-    expect(tenDayBlockedReason(l, U, a)).toMatch(/No roster spot/);
-    l.day = a.contract.tenDay!.until;
-    tenDayDaily(l);
-    expect(a.tid).toBe(FREE_AGENT);
-    expect(standardRoster(l, U).length).toBe(15);
-  }
-
-  // AI teams short of 13 healthy players sign 10-days, beyond 15 only as hardship allows
-  {
-    const l = tenLeague();
-    rosterOf(l, AI, 15);
-    const roster = standardRoster(l, AI);
-    for (const p of roster.slice(0, 5)) out(p, 20);
-    tenDayDaily(l);
-    // 10 healthy, five out: two hardship spots, so 12 healthy
-    const tens = standardRoster(l, AI).filter((p) => p.contract.tenDay);
-    expect(tens).toHaveLength(2);
-    expect(tens.every((p) => p.contract.tenDay!.hardship)).toBe(true);
-    // AI 10-days are roster filler: not in the log
-    expect((l.transactions ?? []).some((t) => t.kind === 'tenDay' && t.tids.includes(AI))).toBe(false);
-    // healthy again, the 10-days run out and the roster is back to 15
-    for (const p of roster) p.injury = null;
-    l.day = tens[0].contract.tenDay!.until;
-    tenDayDaily(l);
-    expect(standardRoster(l, AI)).toHaveLength(15);
   }
 }, 120_000);

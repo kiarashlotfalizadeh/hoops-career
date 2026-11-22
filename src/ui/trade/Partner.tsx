@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import type { League } from '../../core/types';
 import { CAP_FOR, curTeamSeason, payroll } from '../../core/league/helpers';
-import { capPayroll } from '../../core/league/freeAgency';
 import { TeamLogo } from '../components/TeamLogo';
 import { Sheet } from '../components/ui';
 import { slabVars } from '../teamColors';
@@ -15,19 +14,10 @@ import { gmLine } from '../../core/league/voices';
 
 /** A team's cap room as the trade slab says it: the figure, and which line it's measured from. */
 function capRoom(league: League, tid: number, season: number) {
-  const pay = capPayroll(league, tid, season);
+  const pay = payroll(league, tid, season);
   const cap = CAP_FOR(league, season);
   const v = pay > cap.salaryCap ? money(pay - cap.salaryCap) : money(cap.salaryCap - pay);
-  const k =
-    pay > cap.secondApron
-      ? 'over · 2nd apron'
-      : pay > cap.firstApron
-        ? 'over · 1st apron'
-        : pay > cap.luxuryTax
-          ? 'over · taxpayer'
-          : pay > cap.salaryCap
-            ? 'over the cap'
-            : 'cap space';
+  const k = pay > cap.luxuryTax ? 'over · taxpayer' : pay > cap.salaryCap ? 'over the cap' : 'cap space';
   return { pay, v, k };
 }
 
@@ -117,7 +107,6 @@ export function PartnerSlab({ league, tid, season, onPick }: { league: League; t
         <div className="fo-partner-meta">
           <span className="tag">{st.label}</span>
           <span className="num">{record(league, tid)}</span>
-          {/* (cap holds count: in free agency a team's restricted free agents' and offer sheets', see capHolds) */}
           <span className="num">
             payroll {money(pay)}
             {holds > 0 ? ' with holds' : ''}

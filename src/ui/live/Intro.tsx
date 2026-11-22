@@ -9,9 +9,6 @@ import type { League, Team } from '../../core/types';
 import { FRANCHISES } from '../../core/teams';
 import { seasonTotals } from '../../core/league/helpers';
 import type { MatchKit } from '../teamColors';
-import { useLeagueMemo } from '../../state/store';
-import { arenaOf, billingFor } from '../../core/analysis/gameStory';
-import { billingTitle } from '../games/occasion';
 
 /** How long the lineups stay up before the tip at 1× (faster speeds shorten it). */
 export const INTRO_MS = 9000;
@@ -79,22 +76,15 @@ export function Intro({
     if (left <= 0) onTip();
   }, [left, onTip]);
   const arena = neutral ? undefined : FRANCHISES[home.tid]?.arena;
-  // the night's billing, as the broadcast opens: "Rivalry night at Madison Square Garden"
-  const bill = useLeagueMemo(() => {
-    const g = league.schedule.find((x) => !x.played && x.day === league.day && x.home === home.tid && x.away === away.tid);
-    return g ? billingFor(league, g) : null;
-  }, [league, home.tid, away.tid]);
-  const billAt = neutral ? 'in Las Vegas' : arenaOf(home) ? `at ${arenaOf(home)}` : `in ${home.region}`;
   const lines = new Map([...fives[0], ...fives[1]].map((pid) => [pid, introLine(league, pid)]));
   // opening nights read last season's lines (said once, at the top); a starter yet to play this season says so on his line
   const withLines = [...lines.values()].filter((l) => l.text && l.text !== 'Rookie');
   const lastSeason = withLines.length > 0 && withLines.every((l) => l.last);
   const perGame = withLines.length > 0 ? `per game, ${lastSeason ? 'last' : 'this'} season` : '';
-  // the headline: the billing, or the plain thing this is; under it one line (the billing's reason unless
-  // it only names the arena again, or where the game is, or what's at stake)
-  const title = bill ? billingTitle(bill, billAt) : 'Starting lineups';
+  // the headline says what this is; under it one line: what's at stake, or where the game is
+  const title = 'Starting lineups';
   const where = neutral ? 'Neutral floor' : `${arena ? `${arena} · ` : ''}${home.region}`;
-  const sub = bill ? (arena && bill.line.includes(arena) ? context : bill.line) : (context ?? where);
+  const sub = context ?? where;
   const col = (side: 0 | 1) => {
     const t = teams[side];
     const kit = kits[side];
@@ -138,12 +128,7 @@ export function Intro({
           <div className="lv-in-bill">{title}</div>
           {sub && <div className="lv-in-sub">{sub}</div>}
           {/* (one quiet line where the figures show: what they are) */}
-          {perGame && (
-            <div className="lv-in-note">
-              {bill ? 'Starting lineups · ' : ''}
-              {bill ? perGame : perGame.charAt(0).toUpperCase() + perGame.slice(1)}
-            </div>
-          )}
+          {perGame && <div className="lv-in-note">{perGame.charAt(0).toUpperCase() + perGame.slice(1)}</div>}
         </div>
         <div className="lv-in-fives">
           {col(1)}

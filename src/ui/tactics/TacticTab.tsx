@@ -1,8 +1,8 @@
-// Tactics → Tactic, where the screen opens: the tactics board first (your five where the shape and
-// the scheme put them, each with his role at that end and how he suits it), then the staff's word and
-// the system's strengths and weaknesses (the screen's), and the bench as a short list at the board's
-// end. A tap on any player opens his sheet (both roles, shot freedom, glass duty, screens). The style
-// and who runs it are the card over the sections.
+// Tactics → System's top: the tactics board first (your five where the shape and the scheme put them,
+// each with his role at that end and how he suits it); beside it (under it on a phone) the core
+// settings, the staff's word and the system's strengths and weaknesses (the screen's), and the bench
+// as a short list at the board's end. A tap on any player opens his sheet (both roles, shot freedom,
+// glass duty, screens). The style and who runs it are the card over it.
 import { useMemo, useState, type ReactNode } from 'react';
 import type { Player } from '../../core/types';
 import { useLeague, useLeagueMemo } from '../../state/store';

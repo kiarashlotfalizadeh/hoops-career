@@ -8,7 +8,6 @@ import type { MediaState } from './league/media';
 import type { JobOffer } from './league/jobs';
 import type { GuideStep } from './league/agenda';
 import type { OwnerGoals, OwnerReview } from './league/ownerGoals';
-import type { Books } from './league/books';
 import type { OwnerCameo } from './league/ownerCameos';
 import type { CallWorth, DeadlineCall, SkidCall } from './league/calls';
 import type { StaffPick, WeekCall } from './league/weekCall';
@@ -90,18 +89,6 @@ export interface Contract {
   rookie?: boolean;
   /** Option on the final season. */
   option?: 'player' | 'team';
-  /** Two-way deal: doesn't use a 15-man roster spot and is paid outside the cap and tax. */
-  twoWay?: boolean;
-  /** A two-way deal converted to a standard one: the same contract, not a new signing. */
-  converted?: boolean;
-  /** A qualifying offer he took at the close of free agency: when it runs out he is unrestricted (see rfa.ts). */
-  qualifying?: boolean;
-  /**
-   * A 10-day contract (see tenDay.ts): its one salary is the minimum prorated for its days, paid when
-   * he signs; it ends by itself when season day `until` begins. `hardship`: signed beyond 15 players
-   * under the hardship exception.
-   */
-  tenDay?: { until: number; hardship?: boolean };
   /**
    * A signed extension: salaries from the season after this deal's last one. `salaryFor` and
    * `contractExp` count it; at that season's start it becomes the contract (see newSeason).
@@ -303,14 +290,8 @@ export interface Player {
   asking?: { amount: number; years: number };
   /** Free-agency days left until his next price cut (see faDay). */
   faDays?: number;
-  /** Released in season with guaranteed money left: other teams can claim his contract until `until` (a season day). See resolveWaivers. */
-  waivers?: Waivers;
-  /** Restricted free agency: his team extended a qualifying offer as his deal ran out, so it can match any offer sheet he signs (see rfa.ts). */
-  rfa?: Rfa;
   /** His contract talks with the user's team (see negotiation.ts): cleared when he signs anywhere. */
   talks?: Talks;
-  /** The 10-day contracts he has signed this season, by team (tid -> count): two at most with each (see tenDay.ts). */
-  tenDays?: { season: number; by: Record<number, number> };
   /** His regular-season career highs in this league (see records.ts): the whole career's when it's all on record. */
   highs?: Partial<Record<RecStat, HighRow>>;
   /** The number he last wore for each team that numbered him (tid -> number), so a franchise retiring it after he moved on knows which (see jerseys.ts); dropped when he retires. */
@@ -340,7 +321,7 @@ export interface Talks {
   tid: number;
   /** The contract season they're about (next season's from the draft through free agency). */
   season: number;
-  /** A contract as a free agent or an offer sheet ('fa'), re-signing his own player ('resign'), or an extension ('extend'). */
+  /** A contract as a free agent ('fa'), re-signing his own player ('resign'), or an extension ('extend'). */
   kind: 'fa' | 'resign' | 'extend';
   /** The stretch of the calendar they're in: patience and his counter start over in the next one. */
   period: 'resign' | 'fa' | 'season';
@@ -358,58 +339,8 @@ export interface Talks {
   firm?: number;
 }
 
-/**
- * A restricted free agent's rights (see src/core/league/rfa.ts). Set when his team extends the
- * qualifying offer in the re-sign period (he is still on its roster then); from the day free
- * agency opens he is a free agent until he re-signs, signs an offer sheet that isn't matched, or
- * takes the qualifying offer as the market closes.
- */
-export interface Rfa {
-  /** The team holding his rights: it can re-sign him with Bird rights or match an offer sheet. */
-  tid: number;
-  /** The qualifying offer: one season at this salary ($K, next season's money). */
-  qo: number;
-  /** His cap hold on that team from the day the market opens (the larger of the QO and his asking price then) until he signs or the QO is withdrawn. */
-  hold?: number;
-  /** An offer sheet he signed with another team, waiting for his team's decision. */
-  sheet?: OfferSheet;
-}
-
-/** Another team's offer sheet for a restricted free agent: his team matches it and keeps him on exactly these terms, or he joins that team on them. */
-export interface OfferSheet {
-  /** The team that signed him to it. */
-  tid: number;
-  /** First-season salary ($K, next season's money; the usual 5% raises follow) and length: 2-5 seasons, no options. */
-  amount: number;
-  years: number;
-  /** How the offering team pays for it: its cap space or exception stays held for it until his team decides. */
-  route: SigningRoute;
-  /** The free-agency day (faDay) it was signed on, and the last one his team can match on: unmatched at the end of that day, he joins the other team. */
-  day: number;
-  until: number;
-}
-
-export interface Waivers {
-  /** The team that released him. */
-  from: number;
-  /** Season day he clears waivers (and becomes a free agent) unless claimed. */
-  until: number;
-  /** The contract a claiming team takes over. */
-  contract: Contract;
-  /** The dead money the release left his old team (stretched or not), which a claim takes off its books. */
-  dead: { season: number; amount: number; stretched?: true }[];
-  /** The user has put in a claim. */
-  claim?: boolean;
-  /** His trade lock when he was waived: a claiming team takes it over with the contract. */
-  lock?: { season: number; day: number };
-}
-
-/**
- * How a team pays a free agent: his minimum, cap space, or an exception over the cap: the mid-level
- * (the taxpayer mid-level for a team it takes past the first apron), the room exception (instead of
- * the mid-level, once a team has used cap space that season) or the bi-annual (see contracts.ts).
- */
-export type SigningRoute = 'min' | 'space' | 'mle' | 'tmle' | 'room' | 'bae';
+/** How a team pays a free agent: his minimum, cap space, or over the cap the mid-level exception, once a season (see contracts.ts). */
+export type SigningRoute = 'min' | 'space' | 'mle';
 
 /** The user's offer to a top free agent in the summer: he weighs it against other teams' on `decideDay` (a faDay). See userBid. */
 export interface FaBid {
@@ -419,7 +350,7 @@ export interface FaBid {
   /** faDay it was made (a raised offer keeps the first one's day and decision day). */
   day: number;
   decideDay: number;
-  /** How it is paid for: cap space is held for it, an exception (mid-level, room or bi-annual) is reserved for it. */
+  /** How it is paid for: cap space is held for it, the mid-level exception is reserved for it. */
   route?: SigningRoute;
   /** Salary the user signed over the cap (minimum and mid-level deals) while it was pending: those could have come after it, so they don't count against it. */
   slack?: number;
@@ -746,8 +677,6 @@ export interface Budget {
   health: number; // 1..100 -> injury recovery
   facilities: number; // 1..100 -> attendance/hype, slow-moving
   ticketPrice: number; // dollars
-  /** The user set the ticket price himself (Finances, or a staff call's price): the staff no longer prices it at opening night. */
-  priceSet?: boolean;
 }
 
 export interface Team {
@@ -775,23 +704,10 @@ export interface Team {
    */
   assistant?: true;
   seasons: TeamSeason[];
-  /** Dead money from released players: season -> amount (`stretched`: spread by the stretch provision, see stretchDeadMoney). */
-  deadMoney: { pid: number; name: string; season: number; amount: number; stretched?: true }[];
+  /** Dead money from released players: season -> amount. */
+  deadMoney: { pid: number; name: string; season: number; amount: number }[];
   /** Contract season the team last used its mid-level exception. */
   mleSeason?: number;
-  /** Contract season the team last signed a free agent with cap space: no mid-level that season, the room exception instead. */
-  spaceSeason?: number;
-  /** Contract season the team last used its room exception. */
-  roomSeason?: number;
-  /** Contract season the team last used its bi-annual exception (not two seasons running). */
-  baeSeason?: number;
-  /** Contract season the team used the taxpayer mid-level exception (instead of the mid-level: one or the other). */
-  taxMleSeason?: number;
-  /**
-   * Traded player exceptions (see executeTrade): salary it sent out over the cap beyond what it took
-   * back, which it can absorb salary into for a year from the trade (`season` and `day`: when).
-   */
-  tpes?: { amount: number; season: number; day: number }[];
   /** Players whose jersey numbers were settled at the team's last game or arrival (see numberTeam): they keep them over arrivals. */
   numbered?: number[];
   /**
@@ -1022,8 +938,6 @@ export interface GameResult {
   att?: number;
   /** The user's regular-season games: where his team stood in its conference going in and coming out. */
   stakes?: { tid: number; before: StandingLine; after: StandingLine };
-  /** The user's games: the keys to the game set before it (see analysis/keys.ts) and how each went. */
-  keys?: KeyGrade[];
   /**
    * The user's games, for the recap's quotes (see recapFacts): his players hurt in it (empty: none),
    * and the winner's lowest chance once it was under way, when that fell below his chance at tip-off.
@@ -1117,26 +1031,6 @@ export interface CoachMove {
    * came, or the final buzzer): it's judged on what it had.
    */
   closed?: true;
-}
-
-/** A number a key to the game is about (see analysis/keys.ts): a team's, or one player's points. */
-export type KeyStat = 'orb' | 'tov' | 'tpm' | 'fta' | 'fastBreak' | 'paint' | 'ast' | 'pts';
-
-/** One key to the game as it went (GameResult.keys). */
-export interface KeyGrade {
-  id: string;
-  /** "Keep them off the glass". */
-  title: string;
-  /** "Hold BOS to 10 offensive rebounds or fewer". */
-  goal: string;
-  dir: 'max' | 'min';
-  target: number;
-  /** The number on the night (null: the player it was about didn't play). */
-  value: number | null;
-  /** Null when it didn't apply. */
-  met: boolean | null;
-  /** The number is a percentage (a share of the misses on the offensive glass). */
-  pct?: true;
 }
 
 /** One set's night (GameResult.sets): how often a side ran it, the points those possessions scored, and the run the defense was on it by. */
@@ -1277,9 +1171,9 @@ export interface ChronicleSeason {
 
 /**
  * A kind of roster move in the transaction log. 'swap': a pick swap exercised when the lottery set
- * the order. Restricted free agency: 'qualify' (a qualifying offer extended, withdrawn or taken),
- * 'offerSheet' (signed with another team) and 'match' (his team matched it, or declined and he
- * joined the other team). 'tenDay': a 10-day contract signed (or, for the user's team, ended).
+ * the order. A league from before the rules were simplified keeps its old moves in the log, and they
+ * still read: waivers and claims, two-way deals and conversions, 10-day contracts, and restricted
+ * free agency's 'qualify', 'offerSheet' and 'match'. None of those is made any more.
  */
 export type TxnKind =
   | 'trade'
@@ -1371,10 +1265,6 @@ export interface InboxMessage {
   proposal?: number;
   /** What an AI trade pitch is about ("sell:812", "dump:14"), so the same pitch rests a while and replaces its earlier mail. */
   pitch?: string;
-  /** The user's restricted free agent (pid) whose offer sheet this message is about: the inbox offers Match and Let him go while it stands. */
-  sheet?: number;
-  /** The user's player (pid) whose 10-day contract is ending: the inbox offers a second 10-day, the rest of the season or letting him go while it runs. */
-  tenDay?: number;
 }
 
 /**
@@ -1480,8 +1370,6 @@ export interface Settings {
   liveKeyPlays?: boolean;
   /** Pause long sims for what needs an answer (default on: see runSim). */
   stopOnNews?: boolean;
-  /** A long sim also stops on the morning of one of the user's biggest games, a billing of weight 3 (default on; under stopOnNews). */
-  stopForBigGames?: boolean;
   /** After a sim of more than a day, the "While you were away" digest opens first (default on; off: it waits on Today). */
   digest?: boolean;
   /** Watch & coach (the Continue bar on game day) opens the pre-game screen first (default on). */
@@ -1581,8 +1469,6 @@ export interface League {
   ownerReviews?: OwnerReview[];
   /** The owner's cameo this season, if he has had one (see ownerCameos.ts): a napkin lineup, a dare, a postcard. */
   ownerCameo?: OwnerCameo;
-  /** The owner's word on the user's books once they're in the red (see books.ts): a warning, an ultimatum, a freeze, a final warning. */
-  books?: Books;
   /** The staff's calls the user has settled (see calls.ts), newest last. */
   callsDone?: string[];
   /** The staff's call at this season's trade deadline, worked out the day its card opened (see calls.ts). */
@@ -1636,7 +1522,7 @@ export interface League {
   gamePlans?: Record<number, GamePlan>;
   /**
    * The user's recent changes to his tactics and rotation as the staff measured them (see
-   * core/ai/tacticEdits.ts), oldest first, the last few kept: Tactics → Analysis's "Since you changed it".
+   * core/ai/tacticEdits.ts), oldest first, the last few kept: Tactics → Season Analysis's "Since you changed it".
    */
   tacticEdits?: TacticEdit[];
   /**
@@ -1857,7 +1743,8 @@ export interface GamePlanItem {
 }
 
 /** How long a game plan lasts: the next game against that opponent, the current playoff series, or the rest of the season. */
-export type PlanScope = 'next' | 'series' | 'season';
+/** How long a plan lasts: the next game against them, or the playoff series under way. */
+export type PlanScope = 'next' | 'series';
 
 /** The user's plan for one opponent (see src/core/league/gamePlans.ts). */
 export interface GamePlan {
@@ -1869,7 +1756,6 @@ export interface GamePlan {
   seriesId?: string;
   /** Planned matchups against this opponent: their pid -> my defender pid. */
   matchups?: Record<number, number>;
-  note?: string;
 }
 
 export const FREE_AGENT = -1;

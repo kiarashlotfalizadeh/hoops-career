@@ -8,22 +8,7 @@ import { GameSim } from '../sim/engine';
 import { autoRotation, autoTactics } from '../ai/coachAI';
 import { makeTeam } from '../teamFactory';
 import { contractExp, playerAge } from '../playerGen';
-import {
-  OFFSEASON_ROSTER_MAX,
-  TWO_WAY_MAX,
-  addInbox,
-  addNews,
-  andList,
-  dateToDay,
-  playerName,
-  prospects,
-  standardRoster,
-  teamCity,
-  teamPlayers,
-  teamSeason,
-  twoWayRoster,
-  withRng,
-} from './helpers';
+import { OFFSEASON_ROSTER_MAX, addInbox, addNews, dateToDay, playerName, prospects, standardRoster, teamCity, teamPlayers, teamSeason, withRng } from './helpers';
 import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
 import { applyStaffTactics, ensureRotation, gamesOnDay, playGame, youthNews } from './games';
@@ -51,27 +36,12 @@ import {
   trimRosters,
   trimSigned,
 } from './freeAgency';
-import { MATCH_DAYS, acceptQualifyingOffers, resolveOfferSheets, restrictedFreeAgents } from './rfa';
-import {
-  FIRED_REASON,
-  aiBuyouts,
-  askingContract,
-  capSpace,
-  extensionAsk,
-  extensionBlockedReason,
-  extensionRefusal,
-  leaveTeam,
-  releasePlayer,
-  resolveOptions,
-  resolveWaivers,
-} from './contracts';
+import { FIRED_REASON, aiBuyouts, askingContract, capSpace, extensionAsk, extensionBlockedReason, extensionRefusal, leaveTeam, releasePlayer, resolveOptions } from './contracts';
 import { healOneGame } from './injuries';
 import { bookTradedCash } from './trades';
 import { aiDraftTrade, aiOffseasonTrades, aiTaxDumps, aiToAiTrade, teamStrategyUpdate } from './aiTrades';
 import { aiProposals, cleanProposals, draftProposals, freeAgencyProposals, openingProposal } from './proposals';
-import { tenDayDaily } from './tenDay';
 import { deadlineDay } from './deadline';
-import { booksDaily, closeBooks } from './books';
 import { callsDaily } from './calls';
 import { ownerEvaluation } from './owner';
 import { ownerWords } from './ownerVoice';
@@ -106,12 +76,9 @@ export function canStartRegularSeason(league: League): string[] {
   if (league.phase !== 'preseason') return ['The regular season starts from the preseason.'];
   if (league.fired) return [FIRED_REASON];
   const errs: string[] = [];
-  // two-way players don't take one of the 15 spots or count toward the 13-man minimum
   const n = standardRoster(league, league.userTid).length;
   if (n > CAP.rosterMax) errs.push(`Your roster has ${n} players. Release or trade down to ${CAP.rosterMax}.`);
   if (n < CAP.rosterMin) errs.push(`Your roster has ${n} players. Sign ${CAP.rosterMin - n} more to reach the minimum of ${CAP.rosterMin}.`);
-  const tw = twoWayRoster(league, league.userTid).length;
-  if (tw > TWO_WAY_MAX) errs.push(`You have ${tw} two-way players, ${TWO_WAY_MAX} at most. Release or convert ${tw - TWO_WAY_MAX}.`);
   return errs;
 }
 
@@ -126,10 +93,10 @@ export function startRegularSeason(league: League): string[] {
     fillRosters(league, rng);
   });
   for (const t of league.teams) ensureRotation(league, t.tid);
-  // tickets priced where the gate peaks, the user's too until he sets a price himself: left at the
-  // default, a contender's crowd paid $95-113 where the gate peaked at $123-152, $20-35M a season
+  // tickets priced where the gate peaks, the user's too (the franchise runs its own money): left at
+  // the default, a contender's crowd paid $95-113 where the gate peaked at $123-152, $20-35M a season
   // short (OKC, four seasons, round 2026-10-25)
-  for (const t of league.teams) if (t.tid !== league.userTid || !t.budget.priceSet) t.budget.ticketPrice = aiTicketPrice(league, t);
+  for (const t of league.teams) t.budget.ticketPrice = aiTicketPrice(league, t);
   aiExtensions(league);
   // job security turned off in Settings since last season's opener takes effect now
   applyPendingSettings(league);
@@ -288,10 +255,6 @@ export function advanceDay(league: League) {
   // game-time decisions for a game whose day has passed (or that is gone) are over
   const gt = league.gameTime;
   if (gt && !league.schedule.some((g) => g.gid === gt.gid && !g.played && g.day >= league.day)) delete league.gameTime;
-  // released players whose days on waivers are up are claimed or clear to free agency
-  resolveWaivers(league);
-  // 10-day contracts that are up end, and AI teams short of healthy players sign them
-  tenDayDaily(league);
   if (league.phase === 'regular' && regularGamesLeft(league) === 0) endRegularSeason(league);
   else if (league.phase === 'playin' && playInDone(league)) startPlayoffs(league);
   else if (league.phase === 'playoffs' && champion(league) !== undefined) endPlayoffs(league);
@@ -300,8 +263,6 @@ export function advanceDay(league: League) {
   deadlineDay(league);
   // the staff's deadline call, worked out the day its card opens
   callsDaily(league);
-  // the owner's word on the books, the day their close projects into the red (in the weeks before the deadline)
-  booksDaily(league);
   worldDay(league);
   // the draft class's day: the user's scouts, its monthly moves and the combine (prospects.ts; its own streams)
   prospectsDay(league);
@@ -312,8 +273,6 @@ function endRegularSeason(league: League) {
   // revenue sharing first: the tax pot is shared on top of it
   const shared = shareRevenue(league).get(league.userTid) ?? 0;
   const bills = assessLuxuryTax(league);
-  // the books close: what the owner's review judges (the playoff gates come after)
-  closeBooks(league);
   seasonBooksMail(league, shared, bills);
   startPlayIn(league);
 }
@@ -607,21 +566,13 @@ export function startFreeAgency(league: League): boolean {
     league.day = Math.max(league.day + 1, dateToDay(league.season, 5, 30));
     faDay(league, rng, 2, 0);
   });
-  // (net of the cap holds the user's restricted free agents keep through free agency)
   const space = capSpace(league, league.userTid, league.season + 1);
-  const rfas = restrictedFreeAgents(league, league.userTid);
   addInbox(league, {
     from: 'Assistant GM',
     subject: 'Free agency is open',
     body: [
-      `You have ${space > 0 ? `${money(space)} in cap space` : 'no cap space'} for next season${rfas.length > 1 ? " after your restricted free agents' cap holds" : rfas.length ? " after your restricted free agent's cap hold" : ''}.${space > 0 ? '' : ' Minimum contracts only.'}`,
+      `You have ${space > 0 ? `${money(space)} in cap space` : 'no cap space'} for next season.${space > 0 ? '' : ' Over the cap you can offer minimum contracts, and one mid-level exception.'}`,
       'AI teams are already signing their first wave. Top free agents weigh offers over their first days on the market. Anyone else signs at his asking price on the spot.',
-      `Restricted free agents sign offer sheets their team can match within ${MATCH_DAYS} days.`,
-      ...(rfas.length
-        ? [
-            `Your restricted free agent${rfas.length > 1 ? 's' : ''}: ${andList(rfas.map(playerName))}. Re-sign ${rfas.length > 1 ? 'them' : 'him'} with Bird rights before an offer sheet comes in, or match one. Unsigned when the market closes, ${rfas.length > 1 ? 'each takes his' : 'he takes his'} qualifying offer.`,
-          ]
-        : []),
     ].join('\n'),
     tone: 'neutral',
     link: '/office/free-agents',
@@ -639,18 +590,13 @@ export const faDayNumber = (league: League) => Math.min(FA_DAYS, league.faDay + 
 export const faOver = (league: League) => league.faDay >= FA_DAYS - 1;
 
 /**
- * Advance free agency `days` days ("advance a week" near the end stops on the last day). While an
- * offer sheet on one of the user's restricted free agents waits for his call (signed on the day just
- * played, or still pending from before), it goes one day at a time: only he can match it, and a run
- * of days would go through his last day to match it without a stop. Leaving it unanswered, day by
- * day, still lets him go when its time runs out.
+ * Advance free agency `days` days ("advance a week" near the end stops on the last day).
  */
 export function faAdvance(league: League, days = 1) {
   if (league.phase !== 'freeAgency') return;
   const n = Math.max(0, Math.min(days, FA_DAYS - 1 - league.faDay));
   withRng(league, (rng) => {
     for (let i = 0; i < n; i++) {
-      if (i > 0 && newSeasonBlockedReason(league)) break;
       league.day++;
       faDay(league, rng);
       league.faDay++;
@@ -664,25 +610,15 @@ export function faAdvance(league: League, days = 1) {
   cleanProposals(league);
 }
 
-/** Why the new season can't start yet, or null: an offer sheet on one of the user's restricted free agents waits for his call. */
-export function newSeasonBlockedReason(league: League): string | null {
-  if (league.phase !== 'freeAgency' || league.fired) return null;
-  const p = restrictedFreeAgents(league, league.userTid).find((x) => x.rfa!.sheet);
-  return p ? `${league.teams[p.rfa!.sheet!.tid].abbrev} signed ${playerName(p)} to an offer sheet: match it or let him go first.` : null;
-}
-
 export function newSeason(league: League): boolean {
-  if (league.phase !== 'freeAgency' || league.fired || newSeasonBlockedReason(league)) return false;
-  // finish free agency quickly (it stops for an offer sheet on one of the user's restricted free agents)
+  if (league.phase !== 'freeAgency' || league.fired) return false;
+  // finish free agency quickly
   if (!faOver(league)) faAdvance(league, FA_DAYS);
-  if (!faOver(league) || newSeasonBlockedReason(league)) return false;
-  // offers made on the last day are decided as the market closes, then the offer sheets still
-  // pending, the restricted free agents left take their qualifying offers, and the good players
-  // nobody could pay go back to their teams
+  if (!faOver(league)) return false;
+  // offers made on the last day are decided as the market closes, and the good players nobody could
+  // pay go back to their teams
   resolveBids(league);
   delete league.faBids;
-  resolveOfferSheets(league);
-  acceptQualifyingOffers(league);
   aiLateReturns(league);
   const prevSeason = league.season;
   league.season++;
@@ -723,9 +659,8 @@ export function newSeason(league: League): boolean {
         p.injury.gamesRemaining -= 35;
         if (p.injury.gamesRemaining <= 0) p.injury = null;
       }
-      // last season's contract talks with the user and 10-day count are over (the summer's talks are about this season)
+      // last season's contract talks with the user are over (the summer's talks are about this season)
       if (p.talks && p.talks.season < league.season) delete p.talks;
-      if (p.tenDays && p.tenDays.season < league.season) delete p.tenDays;
     }
     annualProgression(league, rng);
     // the summer's development, told by the staff (and the league's summer breakouts in the news)

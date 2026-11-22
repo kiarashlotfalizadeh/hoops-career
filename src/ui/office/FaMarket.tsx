@@ -1,24 +1,21 @@
-// Free agency's market, on the Free Agents screen while it runs: your offer sheets and
-// pending offers, the latest signings, and the dock that moves the market on a day or a week (and,
+// Free agency's market, on the Free Agents screen while it runs: your pending offers, the latest signings, and the dock that moves the market on a day or a week (and,
 // on its last day, starts the new season).
 import { Play } from 'lucide-react';
 import { seasonLabel } from '../../core/constants';
 import { freeAgents, playerName, shortName } from '../../core/league/helpers';
 import { withdrawBid } from '../../core/league/freeAgency';
-import { faDayNumber, faOver, newSeasonBlockedReason } from '../../core/league/season';
-import { pendingSheets, restrictedFreeAgents } from '../../core/league/rfa';
+import { faDayNumber, faOver } from '../../core/league/season';
 import { agendaBlocker } from '../../core/league/agenda';
 import { useLeague, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { useFlowRunner } from '../useFlow';
 import { More, Section } from '../components/ui';
-import { MySheets } from './RfaPanel';
 import { forYears, useDockHeight } from './common';
 import { money } from '../../core/format';
 
 /**
- * What's moving on the market (the day is in the screen's header): an offer sheet waiting on your
- * call, your offer sheets and pending offers (each opens its sheet), and the latest signings.
+ * What's moving on the market (the day is in the screen's header): your pending offers (each opens
+ * its sheet) and the latest signings.
  * Nothing when there's none of it.
  */
 export function FaMarket({ onOpen }: { onOpen: (pid: number) => void }) {
@@ -31,18 +28,11 @@ export function FaMarket({ onOpen }: { onOpen: (pid: number) => void }) {
     .filter((x) => x.kind === 'signing' && x.season === league.season)
     .slice(-4)
     .reverse();
-  const sheetWaiting = restrictedFreeAgents(league, league.userTid).some((p) => p.rfa!.sheet);
-  const sheets = pendingSheets(league, league.userTid).length;
-  if (!sheetWaiting && !sheets && !bids.length && !recent.length && !over) return null;
+  if (!bids.length && !recent.length && !over) return null;
   return (
     <Section title="The market">
       <div className="card fo-market">
-        {(over || sheetWaiting) && (
-          <div className="small">
-            {sheetWaiting ? <span className="warn">An offer sheet waits for your call.</span> : <span className="dim2">The market is winding down.</span>}
-          </div>
-        )}
-        <MySheets onOpen={onOpen} />
+        {over && <div className="small dim2">The market is winding down.</div>}
         {bids.length > 0 && (
           <div className="fo-pending">
             <div className="over">Your pending offers</div>
@@ -88,21 +78,18 @@ export function FaMarket({ onOpen }: { onOpen: (pid: number) => void }) {
 export function FaDock() {
   const league = useLeague();
   const bids = league.faBids ?? [];
-  const sheetsOut = pendingSheets(league, league.userTid);
   const busy = useBusy();
   const over = faOver(league);
   // the market's last day: the new season is next (the Continue bar's words)
   const runFlow = useFlowRunner();
   const newSeasonLabel = `Start ${seasonLabel(league.season + 1)} season`;
-  const seasonBlocked = over ? newSeasonBlockedReason(league) : null;
-  // a decision the league waits on (an offer sheet on your restricted free agent) holds the calendar, as it holds the Continue bar
+  // a decision the league waits on holds the calendar, as it holds the Continue bar
   const held = agendaBlocker(league);
   // (toasts rise above the dock: see useDockHeight)
   const ref = useDockHeight<HTMLDivElement>(over);
   const advance = async (days: number) => {
     const before = freeAgents(league).map((p) => p.pid);
     const offered = bids.map((b) => b.pid);
-    const sheeted = sheetsOut.map((p) => p.pid);
     const from = faDayNumber(league) + 1;
     // behind the progress bar, like the Play menu's: a second tap while it runs is a no-op
     if (!(await useStore.getState().task('Free agency', { kind: 'faAdvance', days }))) return;
@@ -115,21 +102,13 @@ export function FaDock() {
     const when = day > from ? `Days ${from}-${day}` : `Day ${day}`;
     // the players who decided on your offers lead (the details are in the inbox)
     const decided = offered.filter((pid) => !l.faBids?.some((b) => b.pid === pid)).map((pid) => l.players[pid]);
-    // your offer sheets that were decided, and sheets on your restricted free agents that came in (the market stops for those)
-    const settled = sheeted.map((pid) => l.players[pid]).filter((p) => p && !p.rfa?.sheet);
-    const incoming = restrictedFreeAgents(l, l.userTid).filter((p) => p.rfa!.sheet?.day === l.faDay);
-    const won = decided.some((p) => p?.tid === l.userTid) || settled.some((p) => p.tid === l.userTid);
-    const verdicts = [
-      ...decided
-        .filter(Boolean)
-        .map((p) =>
-          p.tid === l.userTid ? `${shortName(l, p)} chose you!` : p.tid >= 0 ? `${shortName(l, p)} chose ${l.teams[p.tid].abbrev}.` : `${shortName(l, p)} passed on your offer.`,
-        ),
-      ...settled.map((p) =>
-        p.tid === l.userTid ? `${shortName(l, p)}'s offer sheet wasn't matched: he's yours!` : `${l.teams[p.tid].abbrev} matched ${shortName(l, p)}'s offer sheet.`,
-      ),
-      ...incoming.map((p) => `${l.teams[p.rfa!.sheet!.tid].abbrev} signed ${shortName(l, p)} to an offer sheet. Match it or let him go.`),
-    ].join(' ');
+    const won = decided.some((p) => p?.tid === l.userTid);
+    const verdicts = decided
+      .filter(Boolean)
+      .map((p) =>
+        p.tid === l.userTid ? `${shortName(l, p)} chose you!` : p.tid >= 0 ? `${shortName(l, p)} chose ${l.teams[p.tid].abbrev}.` : `${shortName(l, p)} passed on your offer.`,
+      )
+      .join(' ');
     useStore.getState().toast(
       `${verdicts ? `${verdicts} ` : ''}${
         signed.length
@@ -139,13 +118,13 @@ export function FaDock() {
               .join(', ')}${signed.length > 2 ? '…' : ''}`
           : `${when}: ${day > from ? (day - from >= 6 ? 'a quiet week' : 'a few quiet days') : 'a quiet day'} on the market.`
       }`,
-      won ? 'good' : incoming.length ? 'bad' : 'neutral',
+      won ? 'good' : 'neutral',
     );
   };
   return (
     <div ref={ref} className={`fo-dock ${over ? 'fo-dock-go' : 'fo-dock-days'}`}>
       {over ? (
-        <button className="btn primary block big" disabled={busy || !!seasonBlocked} onClick={() => void runFlow({ id: 'new', label: newSeasonLabel, cmd: 'newSeason' })}>
+        <button className="btn primary block big" disabled={busy} onClick={() => void runFlow({ id: 'new', label: newSeasonLabel, cmd: 'newSeason' })}>
           <Play size={18} fill="currentColor" /> {newSeasonLabel}
         </button>
       ) : (
@@ -159,7 +138,7 @@ export function FaDock() {
           </button>
         </div>
       )}
-      {(held || (over && seasonBlocked)) && <div className="tiny warn fo-dock-why">{held ? `${held.title.replace(/\?$/, '')} first.` : seasonBlocked}</div>}
+      {held && <div className="tiny warn fo-dock-why">{`${held.title.replace(/\?$/, '')} first.`}</div>}
     </div>
   );
 }

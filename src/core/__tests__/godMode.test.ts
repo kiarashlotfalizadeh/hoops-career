@@ -199,9 +199,8 @@ describe('god mode', () => {
       expect(contractExp(p.contract)).toBe(cs + 3);
       expect(yearsLeft(l, p)).toBe(4);
       expect(p.contract.option).toBe('player');
-      editPlayer(l, p.pid, { contract: { option: null, twoWay: true } });
+      editPlayer(l, p.pid, { contract: { option: null } });
       expect(p.contract.option).toBeUndefined();
-      expect(p.contract.twoWay).toBe(true);
       expect(checkPlayerEdit(l, p, { contract: { years: 1, option: 'team' } }).errors[0]).toMatch(/two seasons or more/);
       // a deal cut to one season loses the option it had
       editPlayer(l, p.pid, { contract: { option: 'team' } });

@@ -8,13 +8,7 @@ export function money(k: number, d = 1): string {
   return `${k < 0 && Number(m) !== 0 ? '-' : ''}$${m}M`;
 }
 
-/** Money with its sign: "+$1.2M", "-$3.4M" (a value that rounds to zero reads "+$0.0M"). */
-export function moneySigned(k: number, d = 1): string {
-  const m = (Math.abs(k) / 1000).toFixed(d);
-  return `${k < 0 && Number(m) !== 0 ? '-' : '+'}$${m}M`;
-}
-
-/** Small amounts to the $10K when they aren't a round $0.1M (minimums, two-ways, cash): "$1.27M", "$2.5M". */
+/** Small amounts to the $10K when they aren't a round $0.1M (minimums, cash): "$1.27M", "$2.5M". */
 export const moneyExact = (k: number) => money(k, Math.round(k) % 100 ? 2 : 1);
 
 /** A count with its noun: "1 game", "5 games", "2 second-rounders" (`many` for irregular plurals). */

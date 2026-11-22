@@ -3,13 +3,13 @@
 // Trade, Free agents, Re-sign, Draft, Finances, Owner, and the player page's contract).
 import { Fragment, useEffect, useRef, type ReactNode } from 'react';
 import { TriangleAlert } from 'lucide-react';
-import type { League, Player, Team } from '../../core/types';
+import type { League, Player } from '../../core/types';
 import { CAP } from '../../core/constants';
 import { clamp } from '../../core/random';
 import { fmtHeight } from '../../core/ratings';
 import { contractExp, playerAge } from '../../core/playerGen';
-import { contractSeason, playerName, standardRoster } from '../../core/league/helpers';
-import { WAIVER_DAYS, buyoutTerms, nonGuaranteed, releaseDeadMoney, releaseSchedule, stretchDeadMoney, stretchPhrase, stretchedSeasons } from '../../core/league/contracts';
+import { playerName, standardRoster } from '../../core/league/helpers';
+import { buyoutTerms, nonGuaranteed, releaseDeadMoney } from '../../core/league/contracts';
 import { tradingClosedReason } from '../../core/league/trades';
 import { taxChange } from '../../core/league/finances';
 import { release as releaseAction, useBusy } from '../../state/actions/office';
@@ -27,13 +27,6 @@ export { ordinal } from '../stats';
 
 // tones match the league screens' strategy tags
 export { STRATEGY_META } from '../league/shared';
-
-/** Practice intensity levels as the Finances budget tab names and explains them: verdicts, never the engine's effect sizes. */
-export const PRACTICE: { id: Team['practice']; label: string; dev: string; risk: string }[] = [
-  { id: 'light', label: 'Light', dev: 'Slower skill growth', risk: 'Fresher legs, fewer injuries' },
-  { id: 'normal', label: 'Normal', dev: 'Standard skill growth', risk: 'Standard wear and injury risk' },
-  { id: 'intense', label: 'Intense', dev: 'Faster skill growth', risk: 'Heavier legs, more injuries' },
-];
 
 export function playerMeta(league: League, p: Player, extra?: string): string {
   const bits = [p.pos, String(playerAge(p, league.season)), fmtHeight(p.heightIn)];
@@ -101,13 +94,13 @@ export function taxFig(pay: number, line: number, bill: number): { k: ReactNode;
 /**
  * What a move does to the user's luxury tax, in a line, wherever money moves (the trade dock, an
  * offer's card, a signing or re-signing sheet): "26-27 tax +$45.1M · $18.9M → $64.0M · crosses the
- * 2nd apron", "saves $10.7M in tax", or null when there's no tax either way and no line crossed.
+ * tax line", "saves $10.7M in tax", or null when there's no tax either way and no line crossed.
  */
 export function taxLine(league: League, before: number, after: number, season: number): { text: string; tone: 'bad' | 'good' | 'dim' } | null {
   const t = taxChange(league, league.userTid, before, after, season);
   if (!t.before && !t.after && !t.crosses) return null;
   const bill = `${money(t.before)} → ${money(t.after)}`;
-  const cross = t.crosses ? ` · crosses the ${t.crosses === 'tax' ? 'tax line' : t.crosses === 'first' ? '1st apron' : '2nd apron'}` : '';
+  const cross = t.crosses ? ' · crosses the tax line' : '';
   const text =
     t.delta > 0
       ? `${shortSeason(season)} tax +${money(t.delta)} · ${bill}${cross}`
@@ -117,10 +110,8 @@ export function taxLine(league: League, before: number, after: number, season: n
   return { text, tone: t.delta > 0 || t.crosses ? 'bad' : t.delta < 0 ? 'good' : 'dim' };
 }
 
-/** Where a payroll stands against the cap's lines, for a status tag: the second apron, the first, the tax line, the cap. */
-export function payStatus(pay: number, cap: { salaryCap: number; luxuryTax: number; firstApron: number; secondApron: number }): { label: string; tone: 'bad' | 'warn' | 'good' } {
-  if (pay > cap.secondApron) return { label: 'Over the 2nd apron', tone: 'bad' };
-  if (pay > cap.firstApron) return { label: 'Over the 1st apron', tone: 'bad' };
+/** Where a payroll stands against the cap's lines, for a status tag: the tax line, the cap. */
+export function payStatus(pay: number, cap: { salaryCap: number; luxuryTax: number }): { label: string; tone: 'bad' | 'warn' | 'good' } {
   if (pay > cap.luxuryTax) return { label: 'Taxpayer', tone: 'bad' };
   if (pay > cap.salaryCap) return { label: 'Over the cap', tone: 'warn' };
   return { label: 'Under the cap', tone: 'good' };
@@ -178,15 +169,14 @@ export function useDockHeight<T extends HTMLElement>(dep?: unknown) {
 }
 
 /**
- * Payroll against the cap and the tax line, with an amount on top of it striped (cap holds, an
- * offer). The legend names each part: the payroll and the stripe with their swatches (`full`), or
+ * Payroll against the cap and the tax line, with an amount on top of it striped (an offer, a
+ * trade). The legend names each part: the payroll and the stripe with their swatches (`full`), or
  * only the two lines when the payroll is the figure above it (`lines`).
  */
 export function CapBar({
   pay,
   cap,
   tax,
-  aprons,
   add = 0,
   addLabel,
   legend = 'full',
@@ -194,15 +184,13 @@ export function CapBar({
   pay: number;
   cap: number;
   tax: number;
-  /** The first and second aprons, marked past the tax line (too close to it for a label over the bar: the legend names them). */
-  aprons?: { first: number; second: number };
   add?: number;
-  /** What the stripe is ("Cap holds", "This offer"). */
+  /** What the stripe is ("This offer"). */
   addLabel?: ReactNode;
   legend?: 'full' | 'lines' | false;
 }) {
   const total = pay + Math.max(0, add);
-  const max = Math.max(aprons ? aprons.second * 1.05 : tax * 1.14, total * 1.03);
+  const max = Math.max(tax * 1.14, total * 1.03);
   const pct = (x: number) => clamp((x / max) * 100, 0, 100);
   // the payroll in its zones: up to the cap, the cap to the tax line, past the tax (a team deep in
   // the tax reads as mostly paid-for room with a red tail, not one red bar)
@@ -222,12 +210,6 @@ export function CapBar({
             ))}
             {add > 0 && <div className="fo-cap-add" style={{ left: `${pct(pay)}%`, width: `${pct(total) - pct(pay)}%` }} />}
           </div>
-          {aprons && (
-            <>
-              <div className="fo-cap-notch" style={{ left: `${pct(aprons.first)}%` }} />
-              <div className="fo-cap-notch" style={{ left: `${pct(aprons.second)}%` }} />
-            </>
-          )}
         </div>
         <div className="fo-cap-mark" style={{ left: `${pct(cap)}%` }}>
           <span>Cap</span>
@@ -259,15 +241,6 @@ export function CapBar({
             <i className="fo-legend-line tax" />
             Tax line <b>{money(tax)}</b>
           </span>
-          {aprons && (
-            <span>
-              <i className="fo-legend-apron" />
-              <Term id="apron">Aprons</Term>{' '}
-              <b>
-                {money(aprons.first)} · {money(aprons.second)}
-              </b>
-            </span>
-          )}
         </div>
       )}
     </div>
@@ -364,73 +337,45 @@ export function Line({ k, children, className = '' }: { k: ReactNode; children: 
 }
 
 /**
- * Releasing one of your players: what it leaves on the books, as it is and stretched side by side
- * when the stretch provision applies, a buyout for a veteran, and the buttons (the Office contract
- * sheet and the player page).
+ * Releasing one of your players: what it leaves on the books, a buyout for a veteran, and the
+ * buttons (the Office contract sheet and the player page).
  */
 export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; p: Player; onKeep: () => void; onDone: () => void }) {
   const remaining = releaseDeadMoney(league, p);
   const owed = remaining.reduce((a, r) => a + r.amount, 0);
   const n = standardRoster(league, league.userTid).length;
-  // in the regular season, a release that leaves dead money goes through waivers first (see releasePlayer)
-  const waive = league.phase === 'regular' && owed > 0;
   const buyout = buyoutTerms(league, p);
   const busy = useBusy();
-  // the stretch provision: the same money over twice the seasons left plus one (null: nothing to stretch)
-  const stretch = stretchDeadMoney(league, remaining);
-  const spread = stretch ? stretchedSeasons(stretch) : 0;
-  const buyoutStretch = buyout ? stretchedSeasons(releaseSchedule(league, p, { giveback: buyout.giveback, stretch: true })) : 0;
-  const release = (stretchIt: boolean) => {
-    const name = playerName(p);
-    const how = stretchIt && spread ? `, ${stretchPhrase(league, spread)}` : '';
-    const after = waive
-      ? `${name} waived. ${money(owed)} stays on your books${how} unless a team claims him.`
-      : `${name} released.${owed > 0 ? ` ${money(owed)} stays on your books${how}.` : ''}`;
-    if (releaseAction(league, p.pid, { stretch: stretchIt }, after)) onDone();
+  const release = () => {
+    if (releaseAction(league, p.pid, {}, `${playerName(p)} released.${owed > 0 ? ` ${money(owed)} stays on your books.` : ''}`)) onDone();
   };
-  const buyOut = (stretchIt: boolean) => {
-    if (releaseAction(league, p.pid, { stretch: stretchIt, buyout: true }, '')) onDone();
+  const buyOut = () => {
+    if (releaseAction(league, p.pid, { buyout: true }, '')) onDone();
   };
-  // every season either schedule touches, in order
-  const seasons = [...new Set([...remaining, ...(stretch ?? [])].map((d) => d.season))].sort((a, b) => a - b);
-  const amountIn = (xs: { season: number; amount: number }[] | null, s: number) => xs?.find((d) => d.season === s)?.amount;
   // why he'd give back more than a little
   const why = buyout ? [playerAge(p, league.season) >= 32 ? 'his age' : '', league.teams[p.tid].strategy !== 'contend' ? "you're not contending" : ''].filter(Boolean) : [];
   return (
     <>
       <p className="fo-lede">
-        {waive ? `On waivers for ${WAIVER_DAYS} days, then a free agent if no one claims him.` : 'He becomes a free agent at once.'}{' '}
-        {p.contract.twoWay
-          ? 'Two-way pay is off the cap: no dead money.'
-          : p.contract.tenDay
-            ? 'His 10-day pay was paid when he signed: no dead money.'
-            : nonGuaranteed(league, p)
-              ? "His minimum deal isn't guaranteed until opening night: no dead money."
-              : owed > 0
-                ? `What he's owed stays on your cap and payroll as dead money${waive ? ' unless he is claimed' : ''}.`
-                : 'Nothing is left to pay: no dead money.'}
+        He becomes a free agent at once.{' '}
+        {nonGuaranteed(league, p)
+          ? "His minimum deal isn't guaranteed until opening night: no dead money."
+          : owed > 0
+            ? "What he's owed stays on your cap and payroll as dead money."
+            : 'Nothing is left to pay: no dead money.'}
       </p>
       {remaining.length > 0 && (
-        <div className={`fo-dead ${stretch ? 'three' : ''}`}>
+        <div className="fo-dead">
           <span className="over">Dead money</span>
           <span className="over r">Release</span>
-          {stretch && <span className="over r">Stretched</span>}
-          {seasons.map((s) => (
-            <Fragment key={s}>
-              <span className="dim2">{shortSeason(s)}</span>
-              <span className="num r">{amountIn(remaining, s) ? money(amountIn(remaining, s)!) : '—'}</span>
-              {stretch && <span className="num r">{amountIn(stretch, s) ? money(amountIn(stretch, s)!) : '—'}</span>}
+          {remaining.map((d) => (
+            <Fragment key={d.season}>
+              <span className="dim2">{shortSeason(d.season)}</span>
+              <span className="num r">{money(d.amount)}</span>
             </Fragment>
           ))}
           <span className="fo-dead-t">Total</span>
           <span className="fo-dead-t num r bad">{money(owed)}</span>
-          {stretch && <span className="fo-dead-t num r bad">{money(owed)}</span>}
-        </div>
-      )}
-      {stretch && (
-        <div className="tiny dim">
-          Stretched: the same money{contractSeason(league) === league.season ? ' past this season' : ''} over {spread} seasons. That is twice the {(spread - 1) / 2} left, plus one.
-          {waive ? ' A waiver claim still wipes it.' : ''}
         </div>
       )}
       {buyout && (
@@ -440,7 +385,7 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
             <span className="tag good">Gives back {Math.round(buyout.giveback * 100)}%</span>
           </div>
           <div className="small dim2">
-            He gives back {money(buyout.saved)} of {money(buyout.owed)} and skips waivers.{why.length ? ` Why so much: ${why.join(' and ')}.` : ''}
+            He gives back {money(buyout.saved)} of {money(buyout.owed)}.{why.length ? ` Why so much: ${why.join(' and ')}.` : ''}
           </div>
           <div className="statline">
             <div>
@@ -452,17 +397,12 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
               <div className="v warn">{money(buyout.dead)}</div>
             </div>
           </div>
-          <button className="btn block" disabled={busy} onClick={() => buyOut(false)}>
+          <button className="btn block" disabled={busy} onClick={buyOut}>
             Buy out · save {money(buyout.saved)}
           </button>
-          {buyoutStretch > 0 && (
-            <button className="btn block" disabled={busy} onClick={() => buyOut(true)}>
-              Buy out and stretch it over {buyoutStretch} seasons
-            </button>
-          )}
         </div>
       )}
-      {!p.contract.twoWay && n - 1 < CAP.rosterMin && (
+      {n - 1 < CAP.rosterMin && (
         <Callout tone="warn" icon={<TriangleAlert size={18} className="warn" />}>
           You'll have {n - 1} players: rosters need {CAP.rosterMin} to start the season.
         </Callout>
@@ -471,15 +411,10 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
         <button className="btn grow" onClick={onKeep}>
           Keep him
         </button>
-        <button className="btn danger grow" disabled={busy} onClick={() => release(false)}>
+        <button className="btn danger grow" disabled={busy} onClick={release}>
           Release
         </button>
       </div>
-      {stretch && (
-        <button className="btn danger block" disabled={busy} onClick={() => release(true)}>
-          Release and stretch over {spread} seasons
-        </button>
-      )}
     </>
   );
 }

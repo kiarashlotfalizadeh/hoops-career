@@ -81,23 +81,6 @@
     left var(--dur) var(--ease-out);
 }
 
-/* the aprons: notches cut into the bar past the tax line (the legend names them) */
-.fo-cap-notch {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  margin-left: -1px;
-  background: repeating-linear-gradient(180deg, var(--raised) 0 2px, transparent 2px 4px);
-}
-
-.fo-cap-notch::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(180deg, transparent 0 2px, color-mix(in srgb, var(--bad) 70%, var(--text)) 2px 4px);
-}
-
 /* the cap and the tax line: ticks through the bar, labelled over it */
 .fo-cap-mark {
   position: absolute;
@@ -159,15 +142,6 @@
 }
 
 /* the stripe's swatch: the cap bar's striped part (holds, an offer) */
-/* the aprons' swatch: a short dashed line, as they're marked on the bar */
-.fo-legend i.fo-legend-apron {
-  width: 2px;
-  height: 10px;
-  margin: 0 6px 0 2px;
-  vertical-align: -1px;
-  border-radius: 0;
-  background: repeating-linear-gradient(180deg, color-mix(in srgb, var(--bad) 70%, var(--text)) 0 2px, transparent 2px 4px);
-}
 
 /* the payroll's swatch: its three zones, as the bar shows them */
 .fo-legend i.fo-legend-pay {
@@ -190,20 +164,6 @@
 
 .fo-legend i.fo-legend-add {
   background: repeating-linear-gradient(135deg, var(--accent) 0 2px, color-mix(in srgb, var(--accent) 50%, transparent) 2px 4px);
-}
-
-/* the four figures, two by two with hairlines */
-.fo-figs {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-}
-
-.fo-figs .statline + .statline {
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
 }
 
 /* three figures across a phone: a size that fits "$251.2M" */

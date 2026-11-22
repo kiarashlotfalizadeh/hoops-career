@@ -44,6 +44,23 @@
   letter-spacing: -0.02em;
 }
 
+/* two teams' ranks side by side: a row a number, the figure in mono with its rank beside it */
+.scout-cmp th[scope='row'] {
+  font-weight: 600;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.scout-cmp-v {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.04em;
+}
+.scout-cmp-r {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
 /* game plan: one of their players (his jersey, name, size) and who guards him */
 .gp-match {
   display: grid;

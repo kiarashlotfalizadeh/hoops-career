@@ -137,11 +137,7 @@
   font-size: 24px;
   text-align: left;
 }
-.tx-why-rank {
-  display: block;
-  font-weight: 640;
-  color: var(--text);
-}
+
 .tx-terms {
   display: flex;
   flex-direction: column;

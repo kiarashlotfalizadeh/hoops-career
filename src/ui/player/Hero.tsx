@@ -45,9 +45,7 @@ const RACES = [
 function statusLine(league: League, p: Player): string {
   const team = p.tid >= 0 ? league.teams[p.tid] : null;
   return p.tid === FREE_AGENT
-    ? p.rfa
-      ? 'Restricted free agent'
-      : 'Free agent'
+    ? 'Free agent'
     : p.tid === DRAFT_PROSPECT
       ? `${p.draft.year} draft prospect · staff read`
       : p.tid === RETIRED
@@ -57,7 +55,7 @@ function statusLine(league: League, p: Player): string {
           : '';
 }
 
-/** His marks in the order they matter (hurt, a hot or cold stretch, an award race, development, the Hall, a two-way deal, his voice, his archetype, his tier): the hero shows two, his Overview the rest. */
+/** His marks in the order they matter (hurt, a hot or cold stretch, an award race, development, the Hall, his voice, his archetype, his tier): the hero shows two, his Overview the rest. */
 export function usePlayerTags(league: League, p: Player): { key: string; node: ReactNode }[] {
   // this season's award ladders, as the Awards tab draws them (once games are played)
   const races = useLeagueMemo(() => {
@@ -100,7 +98,6 @@ export function usePlayerTags(league: League, p: Player): { key: string; node: R
     })),
     ...(dev ? [{ key: 'dev', node: <DevTagChip tag={dev} /> }] : []),
     ...(p.hof ? [{ key: 'hof', node: <Tag tone="warn">Hall of Fame</Tag> }] : []),
-    ...(p.contract.twoWay && p.tid >= 0 ? [{ key: 'twoway', node: <Tag>Two-way</Tag> }] : []),
     // (how he talks to the press and across the table: league/voices.ts)
     ...(p.tid >= FREE_AGENT
       ? [

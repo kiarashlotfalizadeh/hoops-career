@@ -14,7 +14,7 @@ import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { autoDraftUserPick, finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency, startRegularSeason } from '../league/season';
 import { nextPick } from '../league/draft';
-import { CAP_FOR, curTeamSeason, freeAgents, payroll, revenueScale, standardRoster, statsLine, teamSeason } from '../league/helpers';
+import { CAP_FOR, curTeamSeason, freeAgents, payroll, standardRoster, statsLine, teamSeason } from '../league/helpers';
 import { askingContract, releasePlayer, valueScore } from '../league/contracts';
 import { userOffer } from '../league/freeAgency';
 import { FIRING_LINE, ownerEvaluation, takeOverTeam } from '../league/owner';
@@ -103,7 +103,6 @@ function results(l: League, og: OwnerGoals, r: Partial<Record<OwnerGoalKind, num
     const v = r[g.kind] ?? g.target;
     if (g.kind === 'wins') [ts.won, ts.lost] = [v + (og.from?.won ?? 0), 82 - v - (og.from?.won ?? 0)];
     if (g.kind === 'postseason') [ts.playoffRound, ts.playIn] = [v >= 2 ? v - 1 : -1, v === 1];
-    if (g.kind === 'profit') ts.revenue = ts.expenses + v + (og.from?.profit ?? 0);
     if (g.kind === 'payroll') ts.payroll = v;
     if (g.kind === 'youth') {
       const kid = Object.values(l.players).find((p) => p.tid >= 0 && playerAge(p, l.season) <= 23)!;
@@ -246,7 +245,6 @@ describe('two seasons of the real league', () => {
           if (m.won < p.goal.target && m.won + left >= p.goal.target) expect(p.status).toBe(want);
         }
         if (p.goal.kind === 'postseason') expect(p.text).toMatch(/^\d+(st|nd|rd|th) in the (East|West)$/);
-        if (p.goal.kind === 'profit') expect(p.text).toMatch(/^−?\$\d+\.\dM so far, projected −?\$\d+\.\dM$/);
         if (p.goal.kind === 'payroll') expect(p.text).toMatch(/^\$\d+\.\dM, \$\d+\.\dM (under|over)$/);
         if (p.goal.kind === 'youth') expect(p.text).toMatch(/^[\d,]+ so far$/);
       }
@@ -362,11 +360,12 @@ describe('two seasons of the real league', () => {
         } else expect(post!.target, t.abbrev).toBe(Math.min(want, most));
         if (post) expect(levelOdds(odds, post.target), t.abbrev).toBeGreaterThanOrEqual(POSTSEASON_ODDS);
         const pay = payroll(l, og.tid);
-        if (pay <= line * 0.94) expect(goal(og, 'profit'), t.abbrev).toBeDefined();
-        // the tax line is his limit (a win-now owner's the first apron), or the payroll a coach would
+        // (well under the tax he asks nothing of the money: the franchise runs its own)
+        if (pay <= line * 0.94) expect(goal(og, 'payroll'), t.abbrev).toBeUndefined();
+        // the tax line is his limit (a win-now owner's a little past it), or the payroll a coach would
         // inherit past it: add nothing to that
         else {
-          const own = ownerPersonality(l, og.tid) === 'win-now' && pay > line ? CAP_FOR(l).firstApron : line;
+          const own = ownerPersonality(l, og.tid) === 'win-now' && pay > line ? CAP_FOR(l).spendLine : line;
           const forced = forcedPayroll(l, og.tid);
           // (rounded up, with PAYROLL_SLACK of room: a coach who adds nothing is never over it)
           if (forced > own)
@@ -426,7 +425,7 @@ describe('two seasons of the real league', () => {
       const a = seasonBudget(l, tid);
       expect(a.floor).toBe(floor - payroll(l, tid));
       // a little more off the payroll before the season: every dollar saved goes to the shortfall at its end
-      const p = paid().find((x) => salaryFor(x, l.season) >= 1_000 && !x.contract.tenDay)!;
+      const p = paid().find((x) => salaryFor(x, l.season) >= 1_000)!;
       p.tid = FREE_AGENT;
       const b = seasonBudget(l, tid);
       expect(b.floor - a.floor).toBe(salaryFor(p, l.season));
@@ -465,7 +464,7 @@ describe('two seasons of the real league', () => {
       results(l, strong, { wins: hi - 2 });
       expect(gradeOwnerGoals(l, strong).grade).toBeGreaterThan(-0.15);
       // a title is what the season is remembered for: Excellent at least, whatever the wins and the money did
-      results(l, strong, { wins: hi - 8, postseason: 6, payroll: CAP_FOR(l).luxuryTax * 2, profit: -500_000 });
+      results(l, strong, { wins: hi - 8, postseason: 6, payroll: CAP_FOR(l).luxuryTax * 2 });
       expect(gradeOwnerGoals(l, strong)).toMatchObject({ grade: CROWN_GRADE.title, crowned: 'title' });
       // and so is a run two rounds past the goal
       if (post + 2 <= 5) {
@@ -682,7 +681,7 @@ describe('two seasons of the real league', () => {
       expect(l.ownerReviews!.at(-1)).toMatchObject({ season: l.season, goals: [] });
       // (his verdict in his own manner: ownerVoice.ts)
       expect(l.inbox[0].body.startsWith(`${ownerWords(l).verdict[verdictOf(l.ownerMood.total)]} Wins: `)).toBe(true);
-      expect(l.inbox[0].body).toMatch(/ Wins: [+-]\d+ · Playoffs: [+-]\d+ · Finances: [+-]\d+\./);
+      expect(l.inbox[0].body).toMatch(/ Wins: [+-]\d+ · Playoffs: [+-]\d+\./);
     }
 
     // firing
@@ -692,20 +691,20 @@ describe('two seasons of the real league', () => {
         for (let i = 0; i < n && !l.fired; i++) {
           l.season++;
           l.ownerGoals = { ...structuredClone(og), season: l.season };
-          results(l, l.ownerGoals, bad ? { wins: goal(og, 'wins')!.target - 20, postseason: 0, profit: (goal(og, 'profit')?.target ?? 0) - 40_000 * revenueScale(l) } : {});
+          results(l, l.ownerGoals, bad ? { wins: goal(og, 'wins')!.target - 20, postseason: 0 } : {});
           ownerEvaluation(l);
         }
       };
       /**
-       * A league whose user team's owner sets a `money` goal, a playoff goal and no development goal, past
-       * the grace period at a neutral standing (a profit goal and a playoff goal: a fictional league's team,
-       * the real league's are over the tax or not playoff teams).
+       * A league whose user team's owner sets a playoff goal and no development goal, with a payroll
+       * goal (`money`: a real league's team over the tax) or without one (a fictional league's team),
+       * past the grace period at a neutral standing.
        */
-      const setup = (money: 'profit' | 'payroll') => {
+      const setup = (money: 'payroll' | null) => {
         const real = money === 'payroll';
         const probe = preseason(7, U, real);
         const outlook = leagueOutlook(probe);
-        const fits = (og: OwnerGoals) => !!goal(og, money) && (goal(og, 'postseason')?.target ?? 0) >= 2 && !goal(og, 'youth');
+        const fits = (og: OwnerGoals) => !!goal(og, 'payroll') === real && (goal(og, 'postseason')?.target ?? 0) >= 2 && !goal(og, 'youth');
         // (a team whose goals fit when you run it too: your staff's tactics aren't its old coach's, and since tactics
         // count for more, sim/engine/feel.ts, its forecast can move a postseason round)
         let l = probe;
@@ -724,12 +723,12 @@ describe('two seasons of the real league', () => {
       };
 
       // he never fires a coach whose seasons meet the goals; twenty wins under the roster two seasons running puts him in trouble
-      const a = setup('profit');
+      const a = setup(null);
       seasons(a.l, a.og, 10, false);
       expect(a.l.fired).toBeFalsy();
       expect(a.l.ownerMood.total).toBeGreaterThanOrEqual(0);
-      // out of the postseason and short of the budget too: fired after the second
-      const b = setup('profit');
+      // out of the postseason too: fired after the second
+      const b = setup(null);
       seasons(b.l, b.og, 1, true);
       expect(b.l.fired).toBeFalsy();
       expect(b.l.ownerReviews!.at(-1)!.grade).toBeLessThan(-0.85);
@@ -754,7 +753,7 @@ describe('two seasons of the real league', () => {
         [3, true, true],
         [3, false, false],
       ] as const) {
-        const { l, og } = setup('profit');
+        const { l, og } = setup(null);
         l.settings.jobSecurity = security;
         // a standing already on the hot seat, then a terrible season in his `tenure`th season in charge
         l.ownerMood.total = -0.5;

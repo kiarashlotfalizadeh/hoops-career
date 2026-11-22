@@ -5,7 +5,6 @@ import { seasonLabel } from '../constants';
 import { contractExp, salaryFor } from '../playerGen';
 import { contractSeason, playerName, rosterMaxNow, standardRoster } from './helpers';
 import { summerRoster, tradeValue } from './contracts';
-import { withHoldsMemo } from './freeAgency';
 import { neutralBalance } from './tradePackages';
 import { money, moneyExact } from '../format';
 import {
@@ -44,9 +43,9 @@ const withA = (offer: TradeOffer, pids: number[], dpids: number[] = []): TradeOf
 
 /** Side A would end up over the roster limit: sending one more of its players fixes that. */
 function aRosterOver(league: League, o: TradeOffer): boolean {
-  const std = (pids: number[]) => pids.filter((pid) => !league.players[pid]?.contract.twoWay).length;
+  const std = (pids: number[]) => pids.length;
   const roster = tradeRoster(league, o.a.tid).length;
-  // (in free agency the spots an offer sheet or a pending offer holds count, as validateTrade counts them)
+  // (in free agency the spots pending offers hold count, as validateTrade counts them)
   const held = league.phase === 'freeAgency' ? summerRoster(league, o.a.tid) - roster : 0;
   return std(o.b.pids) > std(o.a.pids) && roster + held - std(o.a.pids) + std(o.b.pids) > rosterMaxNow(league);
 }
@@ -76,7 +75,7 @@ const withB = (offer: TradeOffer, pids: number[]): TradeOffer => ({ a: offer.a, 
  */
 function theirFiller(league: League, o: TradeOffer, gap: number): number[] | null {
   const pool = tradeRoster(league, o.b.tid)
-    .filter((p) => !o.b.pids.includes(p.pid) && !p.contract.twoWay && !untradeable(league, p) && !tradedAwayBy(league, p, o.a.tid))
+    .filter((p) => !o.b.pids.includes(p.pid) && !untradeable(league, p) && !tradedAwayBy(league, p, o.a.tid))
     .map((p) => ({ pid: p.pid, sal: capSalary(league, p.pid), v: playerValueFor(league, p, o.b.tid, false) }))
     .filter((x) => x.sal > 0);
   const options: { pids: number[]; v: number }[] = [];
@@ -103,7 +102,7 @@ function theirFiller(league: League, o: TradeOffer, gap: number): number[] | nul
  * AI then wanted two firsts to take.
  */
 export function makeItWork(league: League, offer: TradeOffer, keep: readonly number[] = [], opts: { cash?: boolean; best?: boolean } = {}): WorkResult {
-  return withHoldsMemo(() => findWork(league, offer, keep, opts));
+  return findWork(league, offer, keep, opts);
 }
 
 /**
@@ -230,7 +229,7 @@ const idleIn = (legs: TradeLeg[]) => dealTeams(legs).filter((tid) => !legs.some(
 
 /** Would the asking team end up over the roster limit: sending one more of its players fixes that. */
 function rosterOver(league: League, legs: TradeLeg[], from: number): boolean {
-  const std = (pids: number[]) => pids.filter((pid) => !league.players[pid]?.contract.twoWay).length;
+  const std = (pids: number[]) => pids.length;
   const out = std(legs.filter((l) => l.tid === from).flatMap((l) => l.pids));
   const inc = std(legs.filter((l) => l.to === from).flatMap((l) => l.pids));
   return inc > out && tradeRoster(league, from).length - out + inc > rosterMaxNow(league);
@@ -259,7 +258,7 @@ function fixable(league: League, legs: TradeLeg[], from: number): number {
  * already in the deal moves. A team left with no part in it is said so: that deal is for two teams.
  */
 export function makeDealWork(league: League, legs: TradeLeg[], from = league.userTid): DealWork {
-  return withHoldsMemo(() => findDealWork(league, legs, from));
+  return findDealWork(league, legs, from);
 }
 
 function findDealWork(league: League, start: TradeLeg[], from: number): DealWork {
@@ -317,7 +316,7 @@ function findDealWork(league: League, start: TradeLeg[], from: number): DealWork
       if (gap <= 0) continue;
       const used = inDeal(cur);
       const fill = tradeRoster(league, tid)
-        .filter((p) => !used.pids.has(p.pid) && !p.contract.twoWay && !untradeable(league, p) && !tradedAwayBy(league, p, from) && capSalary(league, p.pid) >= gap)
+        .filter((p) => !used.pids.has(p.pid) && !untradeable(league, p) && !tradedAwayBy(league, p, from) && capSalary(league, p.pid) >= gap)
         .map((p) => ({ a: { kind: 'player' as const, id: p.pid, from: tid, to: from }, v: playerValueFor(league, p, tid, false) }))
         .sort((x, y) => x.v - y.v)
         .find((x) => gapOf(add(cur, x.a), tid) === 0 && broken(add(cur, x.a)) <= broken(cur));
@@ -394,7 +393,7 @@ export interface CounterOffer {
  * each side owns. Nothing for a deal B already takes.
  */
 export function counterOffers(league: League, offer: TradeOffer, max = 3): CounterOffer[] {
-  return withHoldsMemo(() => findCounters(league, offer, max));
+  return findCounters(league, offer, max);
 }
 
 function findCounters(league: League, offer: TradeOffer, max: number): CounterOffer[] {

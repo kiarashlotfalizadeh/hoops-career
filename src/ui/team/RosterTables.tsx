@@ -2,12 +2,10 @@
 // rating, every per-game figure, and the contracts season by season (with dead money, options and
 // extensions marked, and each season's payroll under the table). Rows open the player's page.
 import { useMemo, type ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import type { League, Player } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
 import { CAP_FOR, contractSeason, payroll } from '../../core/league/helpers';
-import { capPayroll } from '../../core/league/freeAgency';
 import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
 import { seasonLabel } from '../../core/constants';
 import { injuryName, money, outFor, plural } from '../../core/format';
@@ -152,7 +150,7 @@ export function PayrollBar({ league, tid }: { league: League; tid: number }) {
   const cs = contractSeason(league);
   const pay = payroll(league, tid, cs);
   // during the draft and re-signing window, the players a team will keep hold cap room
-  const room = capPayroll(league, tid, cs);
+  const room = payroll(league, tid, cs);
   const holds = room > pay ? ' after holds' : '';
   const cap = CAP_FOR(league, cs);
   const color = pay > cap.luxuryTax ? 'var(--bad)' : pay > cap.salaryCap ? 'var(--warn)' : 'var(--good)';
@@ -210,14 +208,7 @@ export function RosterContracts({ league, tid, roster }: { league: League; tid: 
         (r) => r.p,
         (r) => r.name,
         // (between seasons, a deal that ran out with the last one: his rights, up for re-signing, as the header counts them)
-        (r) =>
-          r.p?.contract.twoWay ? (
-            <span className="tag">2W</span>
-          ) : !r.p ? (
-            <span className="tiny dim">dead money</span>
-          ) : contractExp(r.p.contract) < cs ? (
-            <span className="tiny dim">expiring</span>
-          ) : null,
+        (r) => (!r.p ? <span className="tiny dim">dead money</span> : contractExp(r.p.contract) < cs ? <span className="tiny dim">expiring</span> : null),
       ),
       { key: 'ovr', label: 'OVR', get: (r) => r.p?.ovr ?? -1, fmt: (x, r) => (r.p ? <Ovr v={x as number} size="sm" /> : '') },
       { key: 'age', label: 'Age', get: (r) => (r.p ? playerAge(r.p, league.season) : -1), fmt: (x, r) => (r.p ? x : '') },
@@ -234,7 +225,7 @@ export function RosterContracts({ league, tid, roster }: { league: League; tid: 
           // the first season of a signed extension
           const ext = r.p && extensionStart(r.p.contract) === cs + i;
           return (
-            <span className={!r.p || r.p.contract.twoWay ? 'dim' : i === 0 ? 'bold' : 'dim2'}>
+            <span className={!r.p ? 'dim' : i === 0 ? 'bold' : 'dim2'}>
               {money(amt)}
               {opt && <span className="tiny warn">{opt}</span>}
               {ext && <span className="tiny good"> EXT</span>}
@@ -246,7 +237,6 @@ export function RosterContracts({ league, tid, roster }: { league: League; tid: 
     ],
     [league, cs],
   );
-  const twoWay = rows.some((r) => r.p?.contract.twoWay);
   return (
     <>
       {/* your own payroll is on Team's header, in full in the Office: another team's gets its bar here */}
@@ -269,21 +259,6 @@ export function RosterContracts({ league, tid, roster }: { league: League; tid: 
         <span>
           <Term id="extension">EXT</Term> extension starts
         </span>
-        {twoWay && (
-          <span>
-            <Term id="twoway">2W</Term> two-way, off the cap
-          </span>
-        )}
-        {rows.some((r) => !r.p) && (
-          <span>
-            <Term id="dead">Dead money</Term> counts on the cap
-          </span>
-        )}
-        {mine && (
-          <Link to="/office" className="card-link">
-            Cap sheet <ChevronRight size={14} />
-          </Link>
-        )}
       </div>
     </>
   );

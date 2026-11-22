@@ -38,7 +38,7 @@ const fresh = (seed = 5) => {
 /** A league on opening night with the watch's snapshot taken (the first day played). */
 function opened(seed = 5): League {
   const l = fresh(seed);
-  while (teamPlayers(l, 0).filter((p) => !p.contract.twoWay).length > 15) teamPlayers(l, 0).pop()!.tid = -1;
+  while (teamPlayers(l, 0).length > 15) teamPlayers(l, 0).pop()!.tid = -1;
   expect(startRegularSeason(l)).toEqual([]);
   simDay(l);
   return l;
@@ -245,7 +245,7 @@ describe('the development watch', () => {
       const l = create({ name: 'o', userTid: 0, coachName: 'c', settings: settings(), seed: null, rngSeed: 11 });
       l.id = 'devwatch-outcomes';
       for (const p of Object.values(l.players)
-        .filter((x) => x.tid === 0 && !x.contract.twoWay)
+        .filter((x) => x.tid === 0)
         .slice(15))
         p.tid = -1;
       expect(S.startRegularSeason(l)).toEqual([]);

@@ -1,7 +1,7 @@
 // The Office hub: the GM's desk. Its poster is the cap position in your colours (the payroll as one
 // giant figure over its bar against the cap and the tax line, the room and the tax under it) that
-// opens the full cap sheet (the aprons, the roster, the exceptions open and why the others aren't, a
-// hard cap, the traded player exceptions, the seasons ahead, the rules); then what the desk is doing
+// opens the full cap sheet (the roster, the mid-level exception, the seasons ahead, the rules); then
+// what the desk is doing
 // now (the phase's headline and its action), the decisions waiting on it, and the desks as one list,
 // each with a line of live status. The contracts table lives on Team → Roster → Contracts; the owner
 // on his own desk.
@@ -11,13 +11,11 @@ import { ChevronRight } from 'lucide-react';
 import type { League } from '../../core/types';
 import { CAP, TAX_BRACKET_PCT, TAX_RATES } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, fmtDate, freeAgents, payroll, playerName, prospects, shortName, teamPlayers, teamCity } from '../../core/league/helpers';
-import { EXCEPTIONS, EXCEPTION_ORDER, exceptionAmount, exceptionUsedShort, extensionBlockedReason, hardCapLine, onWaivers } from '../../core/league/contracts';
-import { bidOnException, capHolds, expiringPlayers, signedThisSummer, signingClosedReason, userExceptionRoom } from '../../core/league/freeAgency';
-import { HARDSHIP_OUT } from '../../core/league/tenDay';
+import { EXCEPTIONS, exceptionAmount, exceptionUsedReason, extensionBlockedReason } from '../../core/league/contracts';
+import { bidOnException, expiringPlayers, signedThisSummer, signingClosedReason, userExceptionRoom } from '../../core/league/freeAgency';
 import { draftOrder, nextPick } from '../../core/league/draft';
 import { FA_DAYS, faDayNumber, faOver } from '../../core/league/season';
-import { TAX_SHARE_TO_NON_TAXPAYERS, profit, teamTaxBill } from '../../core/league/finances';
-import { openTpes } from '../../core/league/trades';
+import { TAX_SHARE_TO_NON_TAXPAYERS, teamTaxBill } from '../../core/league/finances';
 import { openProposals } from '../../core/league/proposals';
 import { agenda, type AgendaKind } from '../../core/league/agenda';
 import { seasonsInCharge } from '../../core/league/owner';
@@ -27,7 +25,7 @@ import { Bar, CountUp, Section, Sheet, Statline } from '../components/ui';
 import { AgendaRow, runAgenda } from '../components/Agenda';
 import { AssistantCards } from '../components/Assistant';
 import { Term } from '../components/Glossary';
-import { CapBar, HelpSheet, capRoomFig, capSeason, contractsUp, floorText, isOffseason, payStatus, rosterFig, rosterSpots, shortSeason, taxFig } from '../office/common';
+import { CapBar, HelpSheet, capRoomFig, capSeason, contractsUp, floorText, payStatus, rosterFig, rosterSpots, shortSeason, taxFig } from '../office/common';
 import { overallPick, pickProjection } from '../league/shared';
 import { lotterySeen, picksText } from '../draft/common';
 import { useFlowRunner } from '../useFlow';
@@ -35,7 +33,7 @@ import { seatOf } from '../office/seat';
 import { money, moneyExact, plural } from '../../core/format';
 
 /** The decisions the desk settles (the owner's and the job market's show on their desks' lines; the pick on the phase card). */
-const OFFICE_AGENDA: AgendaKind[] = ['cuts', 'signings', 'twoWays', 'offerSheet', 'tenDay', 'tradeOffer'];
+const OFFICE_AGENDA: AgendaKind[] = ['cuts', 'signings', 'tradeOffer'];
 
 export default function Office() {
   const league = useLeague();
@@ -278,28 +276,22 @@ function PhaseCard({ league }: { league: League }) {
 
 // ------------------------------------------------------------------ the cap sheet
 
-/** Where the payroll stands for the season new deals count against: the cap, the tax line, the holds. */
+/** Where the payroll stands for the season new deals count against: the cap and the tax line. */
 function capPosition(league: League) {
-  const tid = league.userTid;
   const s0 = capSeason(league);
   const cap = CAP_FOR(league, s0);
-  const pay = payroll(league, tid, s0);
-  // between the season and free agency, own expiring players hold cap room until renounced
-  const holds = capHolds(league, tid).reduce((a, h) => a + h.amount, 0);
-  const space = cap.salaryCap - pay - holds;
-  // (cap holds count against the cap, not toward the tax or the aprons)
-  const status = pay + holds > cap.salaryCap && pay <= cap.salaryCap ? { label: 'Over the cap', tone: 'warn' as const } : payStatus(pay, cap);
-  return { s0, cap, pay, holds, space, status };
+  const pay = payroll(league, league.userTid, s0);
+  return { s0, cap, pay, space: cap.salaryCap - pay, status: payStatus(pay, cap) };
 }
 
 /**
  * The cap position at a glance: the payroll as the desk's one big figure, the bar against the cap
- * and the tax line, and the room in a line. The whole sheet (figures, exceptions, the seasons
+ * and the tax line, and the room in a line. The whole sheet (figures, the mid-level, the seasons
  * ahead, the rules) is one tap down.
  */
 function CapCard({ league }: { league: League }) {
   const [open, setOpen] = useState(false);
-  const { s0, cap, pay, holds, space, status } = capPosition(league);
+  const { s0, cap, pay, space, status } = capPosition(league);
   const bill = teamTaxBill(league, league.userTid, pay, s0);
   return (
     <>
@@ -315,7 +307,7 @@ function CapCard({ league }: { league: League }) {
           <CountUp value={money(pay)} ms={700} />
         </span>
         <span className="fo-capslab-status">{status.label}</span>
-        <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={holds} legend={false} />
+        <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} legend={false} />
         <span className="statline fo-capslab-figs">
           <span>
             <span className="k">{space >= 0 ? 'Cap space' : 'Over the cap'}</span>
@@ -349,14 +341,12 @@ function CapCard({ league }: { league: League }) {
   );
 }
 
-/** The cap sheet in full: the bar with its lines named, the room, the tax and the roster, the exceptions, a hard cap and traded player exceptions, the seasons ahead. */
+/** The cap sheet in full: the bar with its lines named, the room, the tax and the roster, the mid-level, the seasons ahead. */
 function CapSheet({ league }: { league: League }) {
   const tid = league.userTid;
   const team = league.teams[tid];
-  const { s0, cap, pay, holds, space, status } = capPosition(league);
+  const { s0, cap, pay, space, status } = capPosition(league);
   const dead = team.deadMoney.filter((d) => d.season === s0).reduce((a, d) => a + d.amount, 0);
-  const hard = hardCapLine(league, tid, s0);
-  const tpes = openTpes(league, tid);
   return (
     <div className="fo-capsheet fo-statement">
       <div className="fo-pay">
@@ -366,36 +356,18 @@ function CapSheet({ league }: { league: League }) {
             <CountUp value={money(pay)} />
           </div>
         </div>
-        {/* cap holds count against the cap (trades treat the team as over it), not toward the tax */}
         <span className={`tag ${status.tone}`}>{status.label}</span>
       </div>
-      <CapBar
-        pay={pay}
-        cap={cap.salaryCap}
-        tax={cap.luxuryTax}
-        aprons={{ first: cap.firstApron, second: cap.secondApron }}
-        add={holds}
-        addLabel={<Term id="hold">Cap holds</Term>}
-        legend="lines"
-      />
+      <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} legend="lines" />
       <Statline
         items={[
-          { ...capRoomFig(space), s: holds > 0 ? `${money(holds)} in holds` : undefined },
+          capRoomFig(space),
           taxFig(pay, cap.luxuryTax, teamTaxBill(league, tid, pay, s0)),
           // on the season the money is about: signed for it, the expiring deals beside them
           rosterFig(league),
         ]}
       />
-      <Exceptions league={league} season={s0} />
-      {(hard || tpes.length > 0) && (
-        <div className="tiny dim">
-          {hard ? `Hard-capped at the ${hard.name}, ${money(hard.amount)}, for ${shortSeason(s0)}. You used the ${hard.what}.` : ''}
-          {hard && tpes.length ? ' ' : ''}
-          {tpes.length
-            ? `${tpes.length > 1 ? 'Traded player exceptions' : 'Traded player exception'}: ${tpes.map((x) => `${money(x.amount)} until ${fmtDate(x.season + 1, x.day)}`).join(', ')}.`
-            : ''}
-        </div>
-      )}
+      <MidLevel league={league} season={s0} />
       <SeasonsAhead league={league} from={s0 + 1} />
       <div className="fo-capsheet-foot">
         <Link to="/team?view=contracts" className="card-link">
@@ -447,59 +419,19 @@ function SeasonsAhead({ league, from }: { league: League; from: number }) {
   );
 }
 
-/** The room exception's short reason before any signing with cap space: its usual state. */
-const ROOM_IDLE = 'only after a cap-space signing';
-
-/** The exceptions open to a signing now (net of a pending offer that leans on one), and in a few words why the others aren't. */
-function Exceptions({ league, season }: { league: League; season: number }) {
-  const rows = EXCEPTION_ORDER.map((k) => {
-    const room = userExceptionRoom(league, k, season);
-    const bid = bidOnException(league, k);
-    const why =
-      exceptionUsedShort(league, league.userTid, k, season) ??
-      (bid
-        ? bid.route === k
-          ? `held for your offer to ${playerName(league.players[bid.pid])}`
-          : 'gone while your offer holds your cap space'
-        : room <= 0
-          ? k === 'tmle'
-            ? 'over the second apron'
-            : 'over the first apron'
-          : null);
-    return { k, room, why };
-  });
-  // the taxpayer mid-level only matters once the full one can't pay it (past the first apron)
-  const mle = rows.find((r) => r.k === 'mle')!;
-  const tmle = rows.find((r) => r.k === 'tmle')!;
-  if (!mle.why && mle.room >= tmle.room) tmle.why = null;
-  const shown = rows.filter((r) => r.k !== 'tmle' || mle.why || mle.room < tmle.room);
-  const open = shown.filter((r) => !r.why).sort((a, b) => b.room - a.room);
-  // the room exception's usual state (no cap-space signing yet) says nothing: it's left out
-  const closed = shown.filter((r) => r.why && !(r.k === 'room' && r.why === ROOM_IDLE) && !(r.k === 'tmle' && !mle.why));
-  // the same reason once, for the exceptions it closes, biggest first: "Mid-level, bi-annual: over the first apron"
-  const byWhy = new Map<string, string[]>();
-  for (const r of [...closed].reverse()) byWhy.set(r.why!, [...(byWhy.get(r.why!) ?? []), EXCEPTIONS[r.k].short]);
-  const whys = [...byWhy].map(([why, names]) => `${names.map((n, i) => (i ? n.toLowerCase() : n)).join(', ')}: ${why}`);
+/** The mid-level exception: what it pays now, or in a few words why it's gone (used, or held for a pending offer). */
+function MidLevel({ league, season }: { league: League; season: number }) {
+  const room = userExceptionRoom(league, 'mle', season);
+  const bid = bidOnException(league, 'mle');
+  const why = exceptionUsedReason(league, league.userTid, season) ? 'used this season' : bid ? `held for your offer to ${playerName(league.players[bid.pid])}` : null;
   return (
     <div className="fo-exc">
       <div className="fo-exc-row">
         <span className="over">
-          <Term id="exception">Exceptions</Term>
+          <Term id="mle">Mid-level</Term>
         </span>
-        {open.length ? (
-          <span className="num bold good">
-            {open.map((r, i) => (
-              <span key={r.k}>
-                {i > 0 && ' · '}
-                <Term id={r.k}>{EXCEPTIONS[r.k].short}</Term> {money(r.room)}
-              </span>
-            ))}
-          </span>
-        ) : (
-          <span className="dim2">None open</span>
-        )}
+        {why ? <span className="dim2">{why}</span> : <span className="num bold good">{money(room)}</span>}
       </div>
-      {whys.length > 0 && <div className="tiny dim">{whys.join(' · ')}</div>}
     </div>
   );
 }
@@ -507,7 +439,6 @@ function Exceptions({ league, season }: { league: League; season: number }) {
 /** The cap rules in full, behind the cap sheet's "?". */
 function CapHelp({ league, season }: { league: League; season: number }) {
   const cap = CAP_FOR(league, season);
-  const pct = (k: keyof typeof EXCEPTIONS) => Math.round(EXCEPTIONS[k].pct * 1000) / 10;
   return (
     <HelpSheet title="How the cap works">
       <p>
@@ -515,28 +446,7 @@ function CapHelp({ league, season }: { league: League; season: number }) {
         shows the season new deals count against. From the draft lottery on, that is next season.
       </p>
       <p>
-        <b>Mid-level.</b> Once a season, sign one free agent even over the cap. He gets up to {money(exceptionAmount(league, 'mle', season))} for {EXCEPTIONS.mle.years} years,{' '}
-        {pct('mle')}% of the cap. The team must stay under the first apron, {money(cap.firstApron)}, and is hard-capped there for the season.
-      </p>
-      <p>
-        <b>Taxpayer mid-level.</b> A team the mid-level would take past the first apron gets this one instead. It pays up to {money(exceptionAmount(league, 'tmle', season))} for{' '}
-        {EXCEPTIONS.tmle.years} years, {pct('tmle')}% of the cap. The team must stay under the second apron, {money(cap.secondApron)}, and is hard-capped there.
-      </p>
-      <p>
-        <b>Room exception.</b> A signing with cap space ends the mid-level for the season. The room exception replaces it. One signing up to{' '}
-        {money(exceptionAmount(league, 'room', season))} for {EXCEPTIONS.room.years} years, {pct('room')}% of the cap.
-      </p>
-      <p>
-        <b>Bi-annual.</b> One signing up to {money(exceptionAmount(league, 'bae', season))} for {EXCEPTIONS.bae.years} years, {pct('bae')}% of the cap. The team must stay under the
-        first apron after it. Not two seasons running, and not with the room exception. Like the mid-level, it hard-caps the team at the first apron.
-      </p>
-      <p>
-        <b>Stretch.</b> A release can spread its dead money over twice the seasons left, plus one. In season, this season&apos;s salary is paid as usual. It costs less a season,
-        for longer. A waiver claim still wipes it.
-      </p>
-      <p>
-        <b>10-day contracts.</b> From January 5 to the end of the regular season. They pay the minimum for 10 days, with no dead money. Two at most per player and team. With{' '}
-        {HARDSHIP_OUT}+ players out for 3+ games, the hardship exception allows more than {CAP.rosterMax}.
+        <b>Mid-level.</b> Once a season, sign one free agent even over the cap. He gets up to {money(exceptionAmount(league, 'mle', season))} for {EXCEPTIONS.mle.years} years.
       </p>
       <p>
         <b>Bird rights.</b> Re-sign your own players in the re-sign period, even over the cap. After three seasons with you, he can get his max for five years with 8% raises. A
@@ -544,35 +454,20 @@ function CapHelp({ league, season }: { league: League; season: number }) {
         four years at most, with 5% raises.
       </p>
       <p>
-        <b>Cap holds.</b> Until free agency opens, each expiring player holds cap room at about his ask. That is the striped part of the bar. Renounce him to free it.
-      </p>
-      <p>
         <b>The max.</b> 25% of the cap up to six seasons in the league, 30% for seven to nine, 35% from ten. All-League, MVP or Defensive Player of the Year honors raise it with
-        his own team. Off his rookie deal he can get 30%, and with seven to nine seasons 35%: the supermax. A player worth about the max asks it of every team. Where he signs comes
-        down to how much he likes each.
-      </p>
-      <p>
-        <b>Restricted free agents.</b> Qualify a young player and he stays yours to re-sign in free agency. Match any offer sheet he signs, or let him go. His cap hold is the
-        larger of the offer and his ask. It stays until he signs or you withdraw the offer. An offer sheet you sign holds its room until his team decides.
+        his own team.
       </p>
       <p>
         <b>Luxury tax · {money(cap.luxuryTax)}.</b> Paid at the end of the regular season, by brackets of {money(cap.salaryCap * TAX_BRACKET_PCT)} over the line. The rates run{' '}
         {TAX_RATES.join('×, ')}×, then 0.5 more for each bracket after. A repeater pays 1 more on every bracket. A repeater paid the tax in three of the last four seasons.{' '}
-        {Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}% of the pot goes to the teams under the line. Cap holds don&apos;t count toward it.
+        {Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}% of the pot goes to the teams under the line.
       </p>
       <p>
-        <b>
-          Aprons · {money(cap.firstApron)} and {money(cap.secondApron)}.
-        </b>{' '}
-        Over the first apron after a deal, a team takes back no more salary than it sends. It has no bi-annual and only the taxpayer mid-level. Over the second, it can&apos;t
-        combine salaries to take back a bigger one. It can&apos;t send cash or use a traded player exception. It can&apos;t trade its first in the furthest draft on the books. It
-        has no mid-level at all.
+        <b>Trades.</b> A team under the cap after a trade takes back any salary. Over it, up to {Math.round(CAP.tradeMatch * 100)}% of the salary it sends, plus{' '}
+        {money(cap.salaryCap * CAP.tradeMatchBufferPct)}.
       </p>
       <p>
-        <b>Trades.</b> A team over the cap after a trade can take back only so much salary. Sending up to {money(cap.salaryCap * 0.0485)}: 200% of it, plus{' '}
-        {money(cap.salaryCap * CAP.tradeMatchBufferPct)}. Sending up to {money(cap.salaryCap * 0.1875)}: what it sends, plus {money(cap.salaryCap * 0.0485)}. Above that: 125%, plus{' '}
-        {money(cap.salaryCap * CAP.tradeMatchBufferPct)}. Send out more than you take back and the difference becomes a <Term id="tpe">traded player exception</Term>. It lasts a
-        year.
+        <b>Releases.</b> A released player is a free agent at once. What he is still owed stays on your payroll as dead money.
       </p>
       <p>
         <b>Rosters.</b> {CAP.rosterMin}-{CAP.rosterMax} players in season, up to {OFFSEASON_ROSTER_MAX} in the offseason. Minimum deals for the coming season aren&apos;t guaranteed
@@ -600,8 +495,7 @@ interface Desk {
 function Desks({ league }: { league: League }) {
   const tid = league.userTid;
   const team = league.teams[tid];
-  // (counted as the Free agents screen lists them: players on waivers too, to be claimed)
-  const market = useLeagueMemo(() => [...freeAgents(league), ...onWaivers(league)], [league]);
+  const market = useLeagueMemo(() => freeAgents(league), [league]);
   const best = market.reduce((a, p) => Math.max(a, p.ovr), 0);
   const extendable = useLeagueMemo(() => teamPlayers(league, tid).filter((p) => !extensionBlockedReason(league, p)).length, [league, tid]);
   const proj = useLeagueMemo(() => pickProjection(league), [league]);
@@ -618,11 +512,9 @@ function Desks({ league }: { league: League }) {
   // this draft's picks by their slots, or projections until the order is set (before opening night nothing projects: they're counted)
   const thisDraft = myPicks.filter((d) => d.season === league.season);
   const drafted = after ? Object.values(league.players).filter((p) => p.draft.year === league.season && p.draft.tid === tid && p.draft.round > 0) : [];
-  // the contracts the Re-sign desk lists, two-ways included
+  // the contracts the Re-sign desk lists
   const up = contractsUp(league);
   const expiring = up.players.length;
-  const ts = team.seasons.find((s) => s.season === league.season);
-  const pr = ts && ts.won + ts.lost > 0 ? profit(league, tid) : null;
   const jobOffers = league.jobOffers?.season === league.season ? league.jobOffers.offers.length : 0;
   const seasonsIn = seasonsInCharge(league);
 
@@ -681,11 +573,6 @@ function Desks({ league }: { league: League }) {
       title: 'Picks & moves',
       // (the moves themselves are its second tab)
       sub: `${plural(myPicks.length, 'pick')} · ${firsts} in the 1st round`,
-    },
-    {
-      to: '/office/finances',
-      title: 'Finances',
-      sub: `Cash ${money(team.cash)}${pr !== null ? ` · ${pr >= 0 ? 'profit' : 'loss'} ${money(Math.abs(pr))}${isOffseason(league) ? ` in ${shortSeason(league.season)}` : ' so far'}` : ''}`,
     },
     {
       to: '/office/owner',

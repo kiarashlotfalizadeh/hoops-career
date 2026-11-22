@@ -6,7 +6,6 @@ import { Link } from 'react-router-dom';
 import { PencilLine, Ticket } from 'lucide-react';
 import type { League, Proposal } from '../../core/types';
 import { CAP_FOR, payroll, playerName, teamCity, teamName } from '../../core/league/helpers';
-import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
 import { declineProposal, markOffersSeen, openProposals, proposalError, proposalThird } from '../../core/league/proposals';
 import { agenda, type AgendaItem } from '../../core/league/agenda';
 import { capSalary, type TradeOffer } from '../../core/league/trades';
@@ -27,7 +26,7 @@ import { money, plural } from '../../core/format';
 export function OffersTab({ league, closed, focus, onReview }: { league: League; closed: boolean; focus?: number | null; onReview: (p: Proposal) => void }) {
   const offers = openProposals(league);
   // why each can't be taken right now (another deal moved a player since), worked out once per change
-  const errors = useLeagueMemo(() => withHoldsMemo(() => new Map(openProposals(league).map((p) => [p.id, proposalError(league, p)]))), [league]);
+  const errors = useLeagueMemo(() => new Map(openProposals(league).map((p) => [p.id, proposalError(league, p)])), [league]);
   const items = useLeagueMemo(() => new Map(agenda(league).flatMap((i) => (i.kind === 'tradeOffer' ? [[i.id, i] as const] : []))), [league]);
   // shown here, each one's date stands as it reads (see markOffersSeen)
   const unseen = offers.some((p) => !p.seen);
@@ -84,7 +83,7 @@ function OfferCard({
   }, [focus]);
   const out = p.offer.a.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
   const inc = p.offer.b.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
-  const after = capPayroll(league, league.userTid, s) - out + inc;
+  const after = payroll(league, league.userTid, s) - out + inc;
   const pay = payroll(league, league.userTid, s);
   const tax = taxLine(league, pay, pay - out + inc, s);
   // in neutral (league) value: every offer is at worst slightly against the user

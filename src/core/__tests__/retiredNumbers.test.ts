@@ -292,7 +292,6 @@ describe('retired numbers', () => {
       expect(arrival.jerseys?.[A]).toBe(arrival.jersey);
       // the incumbent leaves; a free agent who wore his number signs and takes another at once
       releasePlayer(l, incumbent, { news: false });
-      delete incumbent.waivers;
       const fa = freeAgents(l).find((p) => p.pid !== incumbent.pid)!;
       fa.jersey = n;
       signPlayer(l, fa, A, CAP.minContract, 1, { news: false });

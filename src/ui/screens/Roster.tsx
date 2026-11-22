@@ -1,6 +1,6 @@
 // Team → Roster: the roster decisions the league waits on (cuts on opening night) at the top,
 // settled in place, then your players in four views (src/ui/team/RosterViews): Players (tonight's
-// five, the bench, the two-way deals, with health marked where it matters), Ratings,
+// five, the bench, with health marked where it matters), Ratings,
 // Stats and Contracts, the app's one contracts table (Office links here with ?view=contracts).
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { agenda } from '../../core/league/agenda';
@@ -11,7 +11,7 @@ import './team.css';
 export default function Roster() {
   const league = useLeague();
   // the roster decisions the league waits on (opening night's limits): here, where they're made
-  const decisions = useLeagueMemo(() => agenda(league).filter((i) => i.kind === 'cuts' || i.kind === 'twoWays'), [league]);
+  const decisions = useLeagueMemo(() => agenda(league).filter((i) => i.kind === 'cuts'), [league]);
   return (
     <>
       {decisions.length > 0 && (

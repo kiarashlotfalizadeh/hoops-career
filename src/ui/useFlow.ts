@@ -1,7 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore, type TaskOp } from '../state/store';
 import { simStart, simSummary, type FlowAction } from './flow';
-import { newSeasonBlockedReason } from '../core/league/season';
 import { userGameOnDay } from '../core/league/games';
 import { seasonLabel } from '../core/constants';
 
@@ -79,13 +78,6 @@ export function useFlowRunner() {
         const r = await task('New season', { kind: 'newSeason' });
         if (!r) return;
         const done = !!r.done;
-        // finishing the market stops for an offer sheet on one of the user's restricted free agents
-        const blocked = !done && newSeasonBlockedReason(useStore.getState().league!);
-        if (blocked) {
-          st.toast(`Free agency stopped: ${blocked}`, 'bad');
-          nav('/office/free-agents');
-          return;
-        }
         // (the summer's development report is a tap away)
         if (done) st.toast(`The ${seasonLabel(useStore.getState().league!.season)} season is here · Summer development`, 'good', '/inbox');
         nav('/');

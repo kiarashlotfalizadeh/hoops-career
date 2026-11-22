@@ -4,7 +4,7 @@
 import type { League, Phase, ScheduledGame } from '../core/types';
 import { allStarStop, MONTH_DAYS, type SimTarget } from '../state/store';
 import { liveInProgress, type LiveStatus } from '../state/live';
-import { canStartRegularSeason, FA_DAYS, faDayNumber, faOver, newSeasonBlockedReason, regularGamesLeft } from '../core/league/season';
+import { canStartRegularSeason, FA_DAYS, faDayNumber, faOver, regularGamesLeft } from '../core/league/season';
 import { userGameOnDay } from '../core/league/games';
 import { curTeamSeason, fmtDate, standardRoster } from '../core/league/helpers';
 import { CAP, seasonLabel } from '../core/constants';
@@ -12,7 +12,6 @@ import { plural } from '../core/format';
 import { agendaBlocker } from '../core/league/agenda';
 import { draftOrder } from '../core/league/draft';
 import { periodLabel } from './stats';
-import { billingFor, type Billing } from '../core/analysis/gameStory';
 import { lotterySeen } from './draft/common';
 
 export interface FlowAction {
@@ -120,50 +119,6 @@ export function simSummary(before: SimStart, l: League): { text: string; tone: '
   return { text: `${w}-${lo} since ${since}${now}`, tone: w > lo ? 'good' : w < lo ? 'bad' : 'neutral', link: '/games' };
 }
 
-/** A game's billing, or null for an ordinary night (and if working it out fails: a label isn't worth a crash). */
-function billing(league: League, g: ScheduledGame): Billing | null {
-  try {
-    return billingFor(league, g);
-  } catch (e) {
-    console.error('billing failed', e);
-    return null;
-  }
-}
-
-/** The billing's tag in front of a line: "Rivalry · @ BOS 12-8". */
-const billed = (b: Billing | null, line: string) => (b ? `${b.tag} · ${line}` : line);
-
-/** The smallest billing that makes a game a big night. */
-export const BIG_NIGHT = 2;
-
-const bigNights = new WeakMap<League, { key: string; value: { g: ScheduledGame; b: Billing } | null }>();
-
-/**
- * The user's next big night after today: his first game still to play whose billing weighs
- * `BIG_NIGHT` or more (a rivalry, a revenge game, Christmas, a Game 7). Worked out once per day and
- * result, as the Continue bar asks on every render.
- */
-export function nextBigNight(league: League): { g: ScheduledGame; b: Billing } | null {
-  if (league.phase !== 'regular' && league.phase !== 'playin' && league.phase !== 'playoffs') return null;
-  const key = `${league.season}|${league.phase}|${league.day}|${league.games.length}|${league.userTid}|${league.schedule.length}`;
-  const hit = bigNights.get(league);
-  if (hit?.key === key) return hit.value;
-  const me = league.userTid;
-  const ahead = league.schedule
-    .filter((g) => !g.played && g.day > league.day && g.type !== 'allstar' && (g.home === me || g.away === me))
-    .sort((a, b) => a.day - b.day || a.gid - b.gid);
-  let value: { g: ScheduledGame; b: Billing } | null = null;
-  for (const g of ahead) {
-    const b = billing(league, g);
-    if (b && b.weight >= BIG_NIGHT) {
-      value = { g, b };
-      break;
-    }
-  }
-  bigNights.set(league, { key, value });
-  return value;
-}
-
 /** The user's games still to play from today up to (not including) `end`. */
 function yourGames(league: League, end: number): number {
   return league.schedule.filter((g) => !g.played && g.type !== 'playoffs' && g.day >= league.day && g.day < end && (g.home === league.userTid || g.away === league.userTid)).length;
@@ -227,8 +182,7 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
         a.push({ id: 'quick', label: 'Finish this game', sub: 'Sim the rest from the current score.', cmd: 'quickGame' });
       } else if (g) {
         // what's on the line tonight, when it's more than a date: "Rivalry · @ BOS 12-8"
-        const b = billing(league, g);
-        a.push({ id: 'live', label: 'Watch & coach live', sub: b ? billed(b, opponentText(league, g)) : `${opponentText(league, g)} · today`, primary: true, cmd: 'watchLive' });
+        a.push({ id: 'live', label: 'Watch & coach live', sub: `${opponentText(league, g)} · today`, primary: true, cmd: 'watchLive' });
         a.push({ id: 'quick', label: 'Quick sim this game', cmd: 'quickGame' });
       } else if (out) {
         // "next game" would never come: it would sim the whole postseason anyway
@@ -240,7 +194,7 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
           undefined,
         );
         const sub = next
-          ? billed(billing(league, next), `${when(next.day)} · ${opponentText(league, next)}`)
+          ? `${when(next.day)} · ${opponentText(league, next)}`
           : league.phase === 'regular'
             ? 'Your regular season is over.'
             : league.phase === 'playin'
@@ -249,19 +203,6 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
         a.push({ id: 'next', label: 'Sim to next game', sub, primary: true, sim: { kind: 'untilUserGame' } });
       }
       a.push({ id: 'day', label: 'Sim 1 day', sim: { kind: 'days', n: 1 } });
-      // the next big night, when it isn't the next game anyway: the sim stops on its morning
-      const big = !live && !out ? nextBigNight(league) : null;
-      const nextDay = league.schedule.reduce(
-        (d, x) => (!x.played && x.day > league.day && (x.home === league.userTid || x.away === league.userTid) ? Math.min(d, x.day) : d),
-        Infinity,
-      );
-      if (big && (g || big.g.day > nextDay))
-        a.push({
-          id: 'bignight',
-          label: 'Sim to the next big night',
-          sub: billed(big.b, `${when(big.g.day)} · ${opponentText(league, big.g)}`),
-          sim: { kind: 'bigNight', day: big.g.day },
-        });
       if (league.phase === 'regular') {
         const left = regularGamesLeft(league);
         // how far each sim goes, in your games: a sim of n days plays today and the n - 1 after it
@@ -337,17 +278,14 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
         a.push({ id: 'faday', label: 'Advance 1 day', cmd: 'faDay' });
         a.push({ id: 'faweek', label: 'Advance 1 week', cmd: 'faWeek' });
       }
-      // an offer sheet on one of the user's restricted free agents waits for his call first
-      const blocked = newSeasonBlockedReason(league) ?? undefined;
       // short of opening night's minimum: camp opens, but the season won't start until he signs more
       const short = CAP.rosterMin - standardRoster(league, league.userTid).length;
       a.push({
         id: 'new',
         label: `Start ${seasonLabel(league.season + 1)} season`,
-        sub: blocked ?? (short > 0 ? `Sign ${plural(short, 'more player')} by opening night.` : 'Players develop and age over the summer.'),
+        sub: short > 0 ? `Sign ${plural(short, 'more player')} by opening night.` : 'Players develop and age over the summer.',
         primary: over,
         cmd: 'newSeason',
-        disabled: blocked,
       });
       break;
     }

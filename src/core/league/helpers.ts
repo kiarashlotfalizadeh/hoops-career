@@ -18,17 +18,11 @@ export function teamPlayers(league: League, tid: number): Player[] {
   return out;
 }
 
-/** Players holding one of the 15 standard roster spots (two-way deals sit outside them). */
+/** A team's roster: every player holds one of its spots (15 from opening night). */
 export function standardRoster(league: League, tid: number): Player[] {
-  return teamPlayers(league, tid).filter((p) => !p.contract.twoWay);
+  return teamPlayers(league, tid);
 }
 
-export function twoWayRoster(league: League, tid: number): Player[] {
-  return teamPlayers(league, tid).filter((p) => p.contract.twoWay);
-}
-
-/** Two-way slots per team. */
-export const TWO_WAY_MAX = 3;
 /** Standard roster limit between seasons (camp bodies, draftees); 15 applies from opening night. */
 export const OFFSEASON_ROSTER_MAX = 21;
 
@@ -41,9 +35,9 @@ export function rosterMaxNow(league: League): number {
   return inSeason(league) ? CAP.rosterMax : OFFSEASON_ROSTER_MAX;
 }
 
-/** Free agents who can be signed: a player still on waivers can only be claimed (see resolveWaivers). */
+/** Free agents: anyone unsigned can be signed. */
 export function freeAgents(league: League): Player[] {
-  return Object.values(league.players).filter((p) => p.tid === FREE_AGENT && !p.waivers);
+  return Object.values(league.players).filter((p) => p.tid === FREE_AGENT);
 }
 
 export function prospects(league: League, year?: number): Player[] {
@@ -67,10 +61,10 @@ export function curTeamSeason(league: League, tid: number): TeamSeason {
   return teamSeason(league.teams[tid], league.season);
 }
 
-/** Cap payroll: two-way deals are paid but don't count against the cap or tax. */
+/** A team's payroll for a season: its contracts and its dead money. It counts against the cap and the tax. */
 export function payroll(league: League, tid: number, season = league.season): number {
   let total = 0;
-  for (const p of Object.values(league.players)) if (p.tid === tid && !p.contract.twoWay) total += salaryFor(p, season);
+  for (const p of Object.values(league.players)) if (p.tid === tid) total += salaryFor(p, season);
   for (const d of league.teams[tid].deadMoney) if (d.season === season) total += d.amount;
   return total;
 }
@@ -94,8 +88,8 @@ export function CAP_FOR(league: League, season = league.season) {
   return {
     salaryCap: Math.round(CAP.salaryCap * g),
     luxuryTax: Math.round(CAP.luxuryTax * g),
-    firstApron: Math.round(CAP.firstApron * g),
-    secondApron: Math.round(CAP.secondApron * g),
+    spendLine: Math.round(CAP.spendLine * g),
+    spendTop: Math.round(CAP.spendTop * g),
     minPayroll: Math.round(CAP.minPayroll * g),
     minContract: Math.round(CAP.minContract * g),
     vetMin: Math.round(CAP.vetMinContract * g),

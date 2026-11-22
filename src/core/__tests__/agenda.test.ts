@@ -9,8 +9,8 @@ import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, roleSettings, type SeedData } from '../league/create';
 import { agenda, agendaBlocker, cutOrder, GUIDE_STEPS, guideDone, guideFinished, guideOpen, guideStepOpen, guideStepTitle, resolveAgenda, showGuide } from '../league/agenda';
 import { canStartRegularSeason, simDay, startRegularSeason } from '../league/season';
-import { CAP_FOR, curTeamSeason, fmtDate, playerName, revenueScale, standardRoster } from '../league/helpers';
-import { releasePlayer } from '../league/contracts';
+import { CAP_FOR, curTeamSeason, fmtDate, freeAgents, payroll, playerName, standardRoster } from '../league/helpers';
+import { releasePlayer, signPlayer } from '../league/contracts';
 import { executeTrade } from '../league/trades';
 import { ensureRotation } from '../league/games';
 import { fills, movedNeedText, needCache, needMove, needOptions, teamNeed } from '../league/rosterNeed';
@@ -39,9 +39,7 @@ import {
   currentGoals,
   floorDanger,
   goalsWhy,
-  CROWN_GRADE,
   gradeGoal,
-  gradeOwnerGoals,
   lastWinsTarget,
   ownerProgress,
   personalityLine,
@@ -52,7 +50,6 @@ import {
 import { leagueForecast } from '../analysis/odds';
 import {
   DEADLINE_DAYS,
-  DUE_SOON,
   FLOOR_AGO,
   ODDS_FIRST_GAMES,
   callsDaily,
@@ -62,41 +59,17 @@ import {
   countersWorth,
   deadlineAnswered,
   dealGoals,
-  dueId,
   floorStanding,
-  openCallIds,
   planDeadlineCall,
   quietSeriesStart,
   storeWorth,
 } from '../league/calls';
-import { isWeekId, staffPicksSince } from '../league/weekCall';
+import { staffPicksSince } from '../league/weekCall';
+import { simStopIds } from '../league/agenda';
 import { schedulePlayoffDay, seriesLabel } from '../league/playoffs';
 import { setPlanItem } from '../league/gamePlans';
-import {
-  BLEED_GRADE,
-  DEBT_LIMIT,
-  FREEZE_GRADE,
-  FROZEN_BUDGET,
-  WARN_DAYS,
-  WARN_RED,
-  booksDaily,
-  booksReview,
-  booksVerdict,
-  closeBooks,
-  deeperText,
-  freezeResignReason,
-  freezeSigningReason,
-  freezeTradeReason,
-} from '../league/books';
-import { PROJECT_HOME_GAMES, aiTicketPrice, seasonEndCash } from '../league/finances';
-import { extensionBlockedReason, valueScore } from '../league/contracts';
-import { extensionFrozenReason, userExtend } from '../league/negotiation';
-import { qualifyFrozenReason, sheetDecisionBlocked } from '../league/rfa';
-import { salaryFor } from '../playerGen';
-import { tenDayOpenDay } from '../league/tenDay';
 import { flowActions } from '../../ui/flow';
-import { money } from '../format';
-import { FREE_AGENT, type League } from '../types';
+import { type League } from '../types';
 
 const seed = seedJson as unknown as SeedData;
 
@@ -548,10 +521,12 @@ describe('the agenda', () => {
         p.injuryCount++;
         return p;
       };
+      // (a full roster: nobody to sign for cover)
+      while (standardRoster(l, me).length < CAP.rosterMax) signPlayer(l, freeAgents(l)[0], me, CAP_FOR(l).vetMin, 1, { news: false });
       const star = hurt(20);
       const card = () => agenda(l).find((i) => i.kind === 'injury');
       expect(card()).toMatchObject({ required: false, tone: 'bad', title: `${star.firstName} ${star.lastName} is out 20 games`, pids: [star.pid] });
-      // before 10-day contracts open, with the staff on the rotation: ride it out
+      // a full roster, with the staff on the rotation: ride it out
       expect(card()!.suggestion!.label).toBe('Ride it out');
       // a rotation set by hand: the staff takes it back
       l.teams[me].rotation.manual = true;
@@ -559,22 +534,20 @@ describe('the agenda', () => {
       expect(resolveAgenda(l, card()!.suggestion!.action).ok).toBe(true);
       expect(l.teams[me].rotation.manual).toBe(false);
       expect(card()).toBeUndefined();
-      // in January with a spot open: a 10-day for cover, signed in one tap
+      // with a spot open: a free agent for cover, signed in one tap
       star.injury = null;
-      l.day = tenDayOpenDay(l);
       while (standardRoster(l, me).length >= CAP.rosterMax) releasePlayer(l, standardRoster(l, me).sort((a, b) => a.ovr - b.ovr)[0], { news: false });
       hurt(12);
       const c = card()!;
-      expect(c.suggestion!.label).toMatch(/^Sign .+ to a 10-day$/);
+      expect(c.suggestion!.label).toMatch(/^Sign .+$/);
       const n = standardRoster(l, me).length;
       expect(resolveAgenda(l, c.suggestion!.action).ok).toBe(true);
       expect(standardRoster(l, me).length).toBe(n + 1);
-      expect(standardRoster(l, me).some((p) => p.contract.tenDay)).toBe(true);
       // a short absence, or someone outside the top three, is no call
       best().injury = null;
       hurt(6);
       expect(card()).toBeUndefined();
-      // nor is one whose only answer is to carry on: 12 games out with no 10-day to be had and the staff on the rotation
+      // nor is one whose only answer is to carry on: 12 games out with the roster full again and the staff on the rotation
       best().injury = null;
       l.day = 1;
       l.teams[me].rotation.manual = false;
@@ -592,9 +565,9 @@ describe('the agenda', () => {
         expect(resolveAgenda(m, look.action).ok).toBe(true);
         expect(agenda(m).some((i) => i.kind === 'injury')).toBe(true);
         const id = `injury:${long.pid}:${long.injuryCount}`;
-        expect(openCallIds(m)).toContain(id);
+        expect(simStopIds(m)).toContain(id);
         m.transactions = [...(m.transactions ?? []), { id: m.nextTxnId ?? 1, season: m.season, day: m.day, phase: m.phase, kind: 'trade', tids: [me, 0], user: true }];
-        expect(openCallIds(m)).not.toContain(id);
+        expect(simStopIds(m)).not.toContain(id);
         callsDaily(m);
         expect(m.callsDone).toContain(id);
       }
@@ -702,12 +675,10 @@ describe('the agenda', () => {
       // (a word, not the forecast's figure)
       expect(card.title).toBe('The postseason is slipping away');
       expect(card.due).toBe(`Decide by ${fmtDate(l.season, l.tradeDeadlineDay)}`);
-      // still open as the deadline nears, it stops a long sim once more: a new id within DUE_SOON days of it
-      // (the week's own call is open beside it: see weekCall.ts)
-      const crisis = () => openCallIds(l).filter((id) => !isWeekId(id));
-      expect(crisis()).toEqual([card.id]);
-      l.day = l.tradeDeadlineDay - DUE_SOON;
-      expect(crisis()).toEqual([card.id, dueId(card.id)]);
+      // it waits in the queue: a long sim doesn't stop for it, the day it opens or as the deadline nears
+      expect(simStopIds(l)).not.toContain(card.id);
+      l.day = l.tradeDeadlineDay - 5;
+      expect(simStopIds(l)).not.toContain(card.id);
       l.day = 35;
       // the staff's lean is the answer that leaves his standing higher, as the forecast reads the season, in words
       {
@@ -842,20 +813,15 @@ describe('the agenda', () => {
             expect(f.detail).toMatch(/^The best buy it found: .+ from [A-Z].+ for .+\./);
           }
         }
-        // a buy never costs one of the owner's money or youth goals: with a profit goal and no room in it, a deal that adds salary isn't the call
+        // a buy never costs the owner's payroll or youth goal: with a payroll line and no room under it, a deal that adds salary isn't the call
         if (odds > 500) {
           const m = structuredClone(l);
           const og = currentGoals(m)!;
-          og.goals = [
-            ...og.goals.filter((g) => g.kind !== 'profit' && g.kind !== 'payroll'),
-            { kind: 'profit', title: 'Turn a profit', target: 0, weight: 0.3, perGame: 0, end: 0 },
-          ];
-          const prof = og.goals.at(-1)!;
-          prof.target = ownerProgress(m, og).find((x) => x.goal === prof)!.projected;
+          og.goals = [...og.goals.filter((g) => g.kind !== 'payroll'), { kind: 'payroll', title: 'Stay under the luxury tax', target: payroll(m, m.userTid), weight: 0.3 }];
           const re = planDeadlineCall(m);
-          if (re.offer) expect(dealGoals(m, re.offer).some((d) => d.kind === 'profit' && d.with < d.target && d.with < d.now)).toBe(false);
+          if (re.offer) expect(dealGoals(m, re.offer).some((d) => d.kind === 'payroll' && d.with > d.target && d.with > d.now)).toBe(false);
           // (the staff's first pick, had it added salary, is one it passes over now)
-          if (dealGoals(m, call.offer!).some((d) => d.kind === 'profit' && d.with < d.now)) expect(re.offer).not.toEqual(call.offer);
+          if (dealGoals(m, call.offer!).some((d) => d.kind === 'payroll' && d.with > d.now)) expect(re.offer).not.toEqual(call.offer);
         }
         expect(resolveAgenda(l, card.suggestion!.action).ok).toBe(true);
         for (const pid of theirs) expect(l.players[pid].tid).toBe(tid);
@@ -922,7 +888,7 @@ describe('the agenda', () => {
         if (ms.kind !== 'counters') throw new Error('not counters');
         storeWorth(m, ms.key, countersWorth(m, ms, []));
         expect(agenda(m).some((i) => i.kind === 'series')).toBe(false);
-        expect(openCallIds(m)).not.toContain(`series:${m.season}:${conf}1-0`);
+        expect(simStopIds(m)).not.toContain(`series:${m.season}:${conf}1-0`);
         expect(quietSeriesStart(m)).toBe("None of the staff's counters helps against them. You play them with your playbook as it is.");
         callsDecide(m);
         callsDecide(m);
@@ -934,7 +900,7 @@ describe('the agenda', () => {
       // a plan from before the series still opens it (keep it, or review it); one set for the series answers it
       {
         const m = structuredClone(l);
-        m.gamePlans = { [opp]: { oppTid: opp, items: [{ id: 'x', label: 'Pack the paint', patch: {} }], scope: 'season' } };
+        m.gamePlans = { [opp]: { oppTid: opp, items: [{ id: 'x', label: 'Pack the paint', patch: {} }], scope: 'next' } };
         expect(agenda(m).find((i) => i.kind === 'series')!.suggestion!.label).toBe('Review the plan');
       }
       setPlanItem(l, opp, { id: 'x', label: 'Pack the paint', patch: {} });
@@ -946,243 +912,6 @@ describe('the agenda', () => {
       expect(card()).toBeUndefined();
       l.day = l.schedule.find((g) => g.seriesId === `${conf}1-0` && !g.played)!.day;
       expect(card()).toBeUndefined();
-    }
-
-    // the books: judged on the regular season's close (the playoff gates come after); a warning only in
-    // the weeks before the deadline, the card's choices levers he can pull then; steps at reviews (an
-    // ultimatum, a freeze that blocks new money on every path, a final warning when a frozen season
-    // digs deeper, then the sack, whatever he won), and a review in the black lifts it
-    {
-      const l = inCharge(1);
-      // (an owner who signs off on no tax: the payroll his coach inherited past the line would be his
-      // own, see sanctionedTax, and the ladder's steps are what this tests)
-      for (const g of l.ownerGoals!.goals.filter((x) => x.kind === 'payroll')) {
-        g.target = CAP_FOR(l).luxuryTax;
-        delete g.line;
-      }
-      const team = l.teams[l.userTid];
-      const scale = revenueScale(l);
-      team.budget.coaching = 90;
-      // (the gate already at its peak: the budgets are the lever here)
-      team.budget.ticketPrice = aiTicketPrice(l, team);
-      const ts = curTeamSeason(l, l.userTid);
-      ts.homeWon = PROJECT_HOME_GAMES;
-      const projectTo = (x: number) => (team.cash = x - (seasonEndCash(l, l.userTid).end - team.cash));
-      // week two, deep in the red: no word yet (the projection's error is the warning's size, the summer's signings can't be traded)
-      l.day = 14;
-      projectTo(-50_000 * scale);
-      booksDaily(l);
-      expect(l.books).toBeUndefined();
-      // three weeks before the deadline: a little short of the black is noise; well into the red, the warning
-      l.day = l.tradeDeadlineDay - WARN_DAYS;
-      projectTo(-1_000);
-      expect(seasonEndCash(l, l.userTid).end).toBe(-1_000);
-      booksDaily(l);
-      expect(l.books).toBeUndefined();
-      projectTo(-1_000 - WARN_RED * scale);
-      booksDaily(l);
-      expect(l.books).toMatchObject({ stage: 'warning', tid: l.userTid });
-      expect(l.inbox[0].subject).toBe('The books are heading into the red');
-      expect(l.inbox[0].body).toMatch(/playoff money won't cover it/);
-      const card = agenda(l).find((i) => i.kind === 'books')!;
-      expect(card.suggestion!.label).toBe('Cut the budgets');
-      // how much of the gap the staff's call closes, and plainly when it can't on its own
-      expect(card.detail).toMatch(/The cut saves \$[\d.]+M over the rest of the season, enough to close the \$[\d.]+M gap\.$/);
-      projectTo(-40_000 * scale);
-      expect(agenda(l).find((i) => i.kind === 'books')!.detail).toMatch(/On its own it won't close the \$[\d.]+M gap, so salary has to go too\.$/);
-      projectTo(-1_000 - WARN_RED * scale);
-      expect(card.choices!.map((c) => c.label)).toEqual(['Shed salary', 'Not now']);
-      expect(card.line).toMatch(/^Projected .+ in the red when the regular season's books close\. Still in the red then/);
-      expect(card.detail).toMatch(/Playoff money doesn't count\./);
-      // a ticket priced well under where the gate peaks is a lever too, one tap away
-      {
-        const m = structuredClone(l);
-        m.teams[m.userTid].budget.ticketPrice = 40;
-        const c = agenda(m).find((i) => i.kind === 'books')!;
-        const price = [c.suggestion!, ...c.choices!].find((x) => /^Price tickets at \$\d+$/.test(x.label))!;
-        // (a price can be changed back: no second tap)
-        expect(price.confirm).toBeUndefined();
-        expect(resolveAgenda(m, price.action).ok).toBe(true);
-        expect(m.teams[m.userTid].budget.ticketPrice).toBe(aiTicketPrice(m, m.teams[m.userTid]));
-      }
-      // after the deadline the window has shut: a season that heads into the red late hears it at the review
-      {
-        const m = inCharge(1);
-        m.day = m.tradeDeadlineDay + 1;
-        curTeamSeason(m, m.userTid).homeWon = PROJECT_HOME_GAMES;
-        m.teams[m.userTid].cash = -500_000;
-        booksDaily(m);
-        expect(m.books).toBeUndefined();
-      }
-      // cash crossing zero day to day moves nothing: no second warning, no lift, no step up
-      const mail = l.inbox.length;
-      team.cash = 50_000;
-      booksDaily(l);
-      team.cash = -200_000;
-      booksDaily(l);
-      expect(l.books!.stage).toBe('warning');
-      expect(l.inbox.length).toBe(mail);
-      // the review reads the close: in the red when the regular season's books closed, an ultimatum,
-      // though the playoff gates put the cash back in the black (held there for the season)
-      team.cash = -2_000;
-      closeBooks(l);
-      team.cash = 30_000;
-      // a payroll he inherited: its first close in the red (his first season in charge) only warns, once
-      expect(booksVerdict(l)).toMatchObject({ close: -2_000, stage: 'warning' });
-      {
-        const m = structuredClone(l);
-        booksReview(m);
-        expect(m.books).toMatchObject({ stage: 'warning', close: -2_000 });
-        expect(m.inbox[0]).toMatchObject({ subject: 'The books: a warning', important: true });
-        expect(m.inbox[0].body).toMatch(/You inherited that payroll, so this time it's a warning/);
-        booksReview(m);
-        expect(m.inbox.filter((x) => x.subject === 'The books: a warning').length).toBe(1);
-      }
-      // the size of the hole counts: past the debt limit and deeper than last season's close, no ultimatum
-      // first but the freeze, and no title lifts the season (a passive Thunder coach had closed $1.07B in
-      // the red on a title and heard "I'm thrilled")
-      {
-        const m = structuredClone(l);
-        m.tenureStart = m.season - 1;
-        const mts = curTeamSeason(m, m.userTid);
-        mts.closeCash = -DEBT_LIMIT * scale - 30_000;
-        expect(booksVerdict(m)).toMatchObject({ stage: 'freeze', past: true, debt: true });
-        // a title on a losing record: graded as the goals graded it, the crown's lift gone
-        const og = currentGoals(m)!;
-        const wins = og.goals.find((g) => g.kind === 'wins')!;
-        Object.assign(mts, { won: wins.target - 15, lost: 82 - wins.target + 15, playoffRound: 5, revenue: 100_000, expenses: 1_000_000 });
-        const graded = gradeOwnerGoals(m, og);
-        expect(graded).toMatchObject({ crowned: 'title', grade: CROWN_GRADE.title });
-        expect(graded.uncrowned).toBeLessThan(CROWN_GRADE.title);
-        ownerEvaluation(m);
-        expect(m.ownerReviews!.at(-1)).toMatchObject({ grade: graded.uncrowned, held: 'debt', said: `We won, and it cost me ${money(900_000)}.` });
-        expect(m.books).toMatchObject({ stage: 'freeze', debt: true });
-        const frozenMail = m.inbox.find((x) => x.subject === 'The budget is frozen')!;
-        expect(frozenMail.important).toBe(true);
-        expect(frozenMail.body).toMatch(/^The books closed \$[\d.]+M in the red, past the \$[\d.]+M I'll carry\. A hole that size doesn't get an ultimatum first\./);
-        expect(m.inbox.find((x) => x.subject === 'Season review')!.body).toMatch(/^We won, and it cost me \$900\.0M\. Season grade/);
-        // a hole he took over, no deeper than last season's close, climbs the ladder as before
-        const n = structuredClone(l);
-        n.tenureStart = n.season - 1;
-        curTeamSeason(n, n.userTid).closeCash = -DEBT_LIMIT * scale - 30_000;
-        n.teams[n.userTid].seasons.push({ ...structuredClone(curTeamSeason(n, n.userTid)), season: n.season - 1, closeCash: -DEBT_LIMIT * scale - 60_000 });
-        expect(booksVerdict(n)).toMatchObject({ stage: 'ultimatum', past: true });
-        expect(booksVerdict(n)!.debt).toBeUndefined();
-      }
-      l.tenureStart = l.season - 1;
-      expect(booksVerdict(l)).toMatchObject({ close: -2_000, stage: 'ultimatum' });
-      booksReview(l);
-      expect(l.books).toMatchObject({ stage: 'ultimatum', close: -2_000 });
-      expect(l.inbox[0].body).toMatch(/closed \$2\.0M in the red.+playoff gates are my bonus/);
-      booksReview(l);
-      expect(l.books!.stage).toBe('ultimatum');
-      // still in the red when next season's books close: frozen, the budgets cut to the standard
-      const nextReview = (close: number) => {
-        l.books!.season--;
-        ts.closeCash = close;
-        return booksVerdict(l);
-      };
-      nextReview(-2_500);
-      booksReview(l);
-      expect(l.books).toMatchObject({ stage: 'freeze', close: -2_500 });
-      expect(team.budget.coaching).toBe(FROZEN_BUDGET);
-      expect(l.inbox[0].subject).toBe('The budget is frozen');
-      // the owner says what deeper means, the debt limit included
-      expect(l.inbox[0].body).toMatch(
-        /Deeper in the red when next season's books close, and that's your final warning\. Past \$[\d.]+M in the red, you're done here, whatever you win\.$/,
-      );
-      // minimum deals only (his minimum always), no raises, no trade that takes on salary or sends cash
-      expect(freezeSigningReason(l, 5_000, 2_000)).toMatch(/minimum deals only/);
-      expect(freezeSigningReason(l, 2_000, 2_000)).toBeNull();
-      expect(freezeResignReason(l, 10_000, 9_000)).toMatch(/no raises/);
-      expect(freezeResignReason(l, 1_300, 1_100, 1_300)).toBeNull();
-      expect(freezeTradeReason(l, 10_000, 9_000)).toMatch(/can't take on salary/);
-      expect(freezeTradeReason(l, 9_000, 10_000)).toBeNull();
-      expect(freezeTradeReason(l, 9_000, 10_000, 500)).toMatch(/no cash/);
-      // and every path that adds to the payroll says so where its button is: an extension, a qualifying offer, a matched offer sheet
-      {
-        const m = structuredClone(l);
-        const p = standardRoster(m, m.userTid)
-          .sort((a, b) => salaryFor(a, m.season) - salaryFor(b, m.season))
-          .find((x) => salaryFor(x, m.season) >= 3_000 && valueScore(m, x) < 80)!;
-        const now = salaryFor(p, m.season);
-        p.contract = { start: m.season - 1, salaries: [now, now] };
-        expect(extensionBlockedReason(m, p)).toBeNull();
-        expect(userExtend(m, p.pid, now + 5_000, 3).reason).toMatch(/no raises\. He's paid .+, so extending him at .+ is one/);
-        expect(extensionFrozenReason(m, p, now)).toBeNull();
-        expect(qualifyFrozenReason(m, p)).toMatch(/no raises\..+his qualifying offer/);
-        m.phase = 'freeAgency';
-        p.tid = FREE_AGENT;
-        p.rfa = { tid: m.userTid, qo: now, sheet: { tid: (m.userTid + 1) % m.teams.length, amount: now + 5_000, years: 3, route: 'space', day: 0, until: 1 } };
-        expect(sheetDecisionBlocked(m, p.pid, true)).toMatch(/no raises\..+matching the sheet/);
-        expect(sheetDecisionBlocked(m, p.pid, false)).toBeNull();
-        expect(agenda(m).find((i) => i.kind === 'offerSheet')!.choices![0].blocked).toMatch(/budget is frozen/);
-      }
-      // a frozen season that closes in the red grades no better than FREEZE_GRADE, a title or not;
-      // closed shallower than the last review, the freeze stands
-      expect(nextReview(-1_500)).toEqual({ close: -1_500, stage: 'freeze', cap: FREEZE_GRADE });
-      booksReview(l);
-      expect(l.books).toMatchObject({ stage: 'freeze', close: -1_500 });
-      // the freeze's card says what deeper means, in the Owner page's words: in the grace years only
-      // the season's cap; after them the final warning, and past the owner's debt limit the sack
-      {
-        const m = structuredClone(l);
-        m.books!.season = m.season;
-        m.books!.day = m.day;
-        const line = () => agenda(m).find((i) => i.kind === 'books')!.detail;
-        m.tenureStart = m.season;
-        expect(line()).toMatch(/Deeper in the red than \$1\.5M when the books close brings his final warning\. That season grades −\d+ at best\./);
-        m.tenureStart = m.season - 5;
-        expect(line()).toMatch(/Deeper in the red than \$1\.5M when the books close brings his final warning\. Past \$[\d.]+M in the red, deeper gets you fired\./);
-        m.books!.close = -DEBT_LIMIT * scale;
-        expect(line()).toMatch(/when the books close, and you're fired, whatever you win\./);
-      }
-      // deeper than at the last review: the freeze didn't stop the bleeding, the final warning (and a lower cap)
-      expect(nextReview(-3_000)).toEqual({ close: -3_000, stage: 'final', cap: BLEED_GRADE, deeper: true });
-      booksReview(l);
-      expect(l.books!.stage).toBe('final');
-      expect(l.inbox[0]).toMatchObject({ subject: 'The books: a final warning', important: true });
-      expect(agenda(l).find((i) => i.kind === 'books')!.title).toBe("The owner's final warning: the books");
-      // deeper again: the sack at the review once it can fire him, whatever he won; in grace, the cap
-      expect(nextReview(-4_000)).toMatchObject({ stage: 'final', cap: BLEED_GRADE, fire: true });
-      {
-        const m = structuredClone(l);
-        const mts = curTeamSeason(m, m.userTid);
-        [mts.won, mts.lost, mts.playoffRound] = [70, 12, 5];
-        ownerEvaluation(m);
-        expect(m.fired).toBeFalsy();
-        expect(m.ownerReviews!.at(-1)).toMatchObject({ grade: BLEED_GRADE, held: 'books' });
-        expect(m.inbox.find((x) => x.subject === 'Season review')!.body).toMatch(
-          /We won the title\.\nThe books closed \$4\.0M in the red under the freeze, deeper than last season/,
-        );
-        const f = structuredClone(l);
-        Object.assign(curTeamSeason(f, f.userTid), { won: 70, lost: 12, playoffRound: 5 });
-        f.tenureStart = f.season - 3;
-        ownerEvaluation(f);
-        expect(f.fired).toBe(true);
-        expect(f.inbox[0].body).toMatch(/^The books closed \$4\.0M in the red, deeper again under the freeze/);
-      }
-      // past the debt limit, deeper under the freeze skips the final warning
-      l.books!.stage = 'freeze';
-      l.books!.close = -DEBT_LIMIT * scale;
-      expect(nextReview(-DEBT_LIMIT * scale - 1)).toMatchObject({ stage: 'final', fire: true });
-      // books heading there with the review able to fire him: the meter says so whatever the standing, hot and under the line
-      {
-        const m = structuredClone(l);
-        m.tenureStart = m.season - 3;
-        m.ownerMood.total = 0.9;
-        m.teams[m.userTid].cash = -3 * DEBT_LIMIT * scale;
-        const js = jobSecurity(m);
-        expect(js).toMatchObject({ heat: 'hot', danger: expect.stringMatching(/under the freeze\. Close there and you're fired, whatever you win/) });
-        expect(js.score).toBeLessThan(25);
-        expect(deeperText(m, false)).toBe(`Deeper in the red than ${money(DEBT_LIMIT * scale)} when the books close, and you're fired, whatever you win.`);
-      }
-      // a review in the black lifts it all
-      expect(nextReview(1)).toEqual({ close: 1, stage: null });
-      booksReview(l);
-      expect(l.books).toBeUndefined();
-      expect(l.inbox[0].subject).toBe('Back in the black');
-      expect(freezeSigningReason(l, 5_000, 2_000)).toBeNull();
     }
 
     // the assistant speaks with one voice: every card has an area, and a fix it offers is one the staff can make
@@ -1202,14 +931,14 @@ describe('the agenda', () => {
     }
   }, 120_000);
 
-  it("makes the staff's one-answer picks measured and silent, opens the week's card only for a trade-off, asks after a skid that goes on, and stops a sim only for a real call", async () => {
+  it("makes the staff's own picks measured and silent (the young players' minutes, a skid's counters) with no card for either, and stops a sim only for what needs an answer", async () => {
     const { counterCandidates } = await import('../ai/advisor');
     const { runSim } = await import('../../state/simCore');
     const { staffDecide, staffNeeds } = await import('../league/callMeasure');
     const { YOUTH_ADD, youthOutlook } = await import('../league/weekCall');
     const { userYouth } = await import('../league/youthLean');
     const { ensureRotation } = await import('../league/games');
-    const card = (l: League) => agenda(l).find((i) => i.kind === 'week');
+    const card = (l: League) => agenda(l).find((i) => i.id.startsWith('week:'));
     const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     type Measure = ReturnType<typeof staffNeeds>[number];
     /** The staff's counters measured: the first candidate at `pts`, the rest costs. */
@@ -1232,7 +961,8 @@ describe('the agenda', () => {
       if (m?.kind !== 'change') throw new Error('not a change');
       storeWorth(l, m.key, changeWorth(l, m, { id: 'x', pts, raw: pts, se: 0.4 }));
     };
-    // the owner wants the young players' minutes and they're behind: free, the staff's lean goes in; costing points, a card
+    // the owner wants the young players' minutes and they're behind: free, the staff's lean goes in; costing points, the staff
+    // weighs it by the owner's own grading and goes with its lean: no card either way
     {
       const l = camp(20);
       startRegularSeason(l);
@@ -1265,19 +995,13 @@ describe('the agenda', () => {
       ensureRotation(free, free.userTid);
       expect(young(free)).toBeGreaterThan(young(l));
       answer(l, -0.9);
-      const c = card(l)!;
-      expect(c.title).toBe(`${wc.youth!.add} more minutes a game for the young players?`);
-      // before it's taken: how long, who it moves (and every minute a tap down), then the staff's lean
-      expect(c.line).toMatch(
-        /^For \d+ games?, through [A-Z][a-z]{2} \d+(: [^.]+)?\. The staff leans to (playing them|the rotation as it is)\. (It could cost you wins|It should only cost a little)\.$/,
+      expect(card(l)).toBeUndefined();
+      expect(l.weekCall).toMatchObject({ decided: true, taken: 'auto' });
+      expect(['auto', 'kept']).toContain(l.youthLean!.how);
+      expect(staffPicksSince(l, l.season, l.day - 1).at(-1)).toMatch(
+        /^(About \d+ more minutes a game for the young players until .+\. It could cost a little now: the staff weighed it against the owner's goals\.|The rotation stays as it is\. More minutes for the young players would cost more than they bring\.)$/,
       );
-      expect(c.detail).toMatch(/^Minutes a game: [^\n]+ \d+ → \d+/);
-      expect(c.pids?.length).toBeGreaterThan(0);
-      expect(c.detail).toMatch(/\nYou'd still fall short of his 99,999 minutes\./);
-      expect(c.detail).not.toMatch(/pts|to win|On pace/);
-      // turned down: not asked again for a while
-      expect(resolveAgenda(l, [c.suggestion!, ...c.choices!].find((x) => x.label === 'Keep the rotation')!.action).ok).toBe(true);
-      expect(l.youthLean).toMatchObject({ how: 'kept', level: 0 });
+      // decided: not weighed again for a while
       l.day = 21;
       l.weekCall = undefined;
       callsDaily(l);
@@ -1306,28 +1030,26 @@ describe('the agenda', () => {
       expect(flat.youthLean).toMatchObject({ how: 'kept', level: 0 });
       expect(staffPicksSince(flat, flat.season, flat.day - 1).at(-1)).toMatch(/^The rotation stays as it is\. More minutes for the young players wouldn't move your pick\.$/);
       answer(l, -6);
-      const c = card(l)!;
-      expect(c.line).toMatch(/^For \d+ games?, through [A-Z][a-z]{2} \d+(: [^.]+)?\. The staff leans to (playing them|the rotation as it is)\. It should help your draft pick\.$/);
-      expect(c.detail).toMatch(/It could cost you wins\.\nYour own first should land higher with it\./);
-      // (the planned minutes are the plan's facts; past them, words: no reading behind the lean)
-      expect(c.detail!.replace(/^Minutes a game: [^\n]*\n/, '')).not.toMatch(/\d/);
-      expect(c.to).toBe('/office/draft');
-      expect(resolveAgenda(l, [c.suggestion!, ...c.choices!].find((x) => x.label === 'Play the young players')!.action).ok).toBe(true);
+      expect(card(l)).toBeUndefined();
       const y = l.youthLean!;
-      expect(y).toMatchObject({ how: 'staff', why: 'draft', pts: -6 });
-      expect(staffNeeds(l).some((m) => m.key.endsWith('|again'))).toBe(false);
-      for (const g of l.schedule) if (g.type === 'regular' && g.day >= y.from && g.day <= y.until && (g.home === l.userTid || g.away === l.userTid)) g.played = true;
-      const again = staffNeeds(l).find((m) => m.key.endsWith('|again'))!;
-      expect(again.kind === 'change' && again.base?.teams?.[l.userTid].rotation).toBeTruthy();
-      answer(l, -1.1);
-      expect(staffPicksSince(l, l.season, l.day - 1).at(-1)).toMatch(
-        /^The young players' minutes for the draft, your call on \w+ \d+\. Seems to hurt\. They played 0 minutes in its \d+ games\.$/,
-      );
-      expect(staffNeeds(l).some((m) => m.key.endsWith('|again'))).toBe(false);
+      expect(y).toMatchObject({ why: 'draft', pts: -6 });
+      expect(['auto', 'kept']).toContain(y.how);
+      // a lean that cost points going in is measured again once its games are played, and said
+      if (y.how === 'auto') {
+        expect(staffNeeds(l).some((m) => m.key.endsWith('|again'))).toBe(false);
+        for (const g of l.schedule) if (g.type === 'regular' && g.day >= y.from && g.day <= y.until && (g.home === l.userTid || g.away === l.userTid)) g.played = true;
+        const again = staffNeeds(l).find((m) => m.key.endsWith('|again'))!;
+        expect(again.kind === 'change' && again.base?.teams?.[l.userTid].rotation).toBeTruthy();
+        answer(l, -1.1);
+        expect(staffPicksSince(l, l.season, l.day - 1).at(-1)).toMatch(
+          /^The young players' minutes for the draft, .+ on \w+ \d+\. Seems to hurt\. They played 0 minutes in its \d+ games\.$/,
+        );
+        expect(staffNeeds(l).some((m) => m.key.endsWith('|again'))).toBe(false);
+      }
     }
 
-    // a losing skid, a winning team's too: the first step's counter is the staff's, measured, the slide said; a bad team losing
-    // four straight is having its season; a slide that goes on is a card at eight straight: a trade while deals can be made
+    // a losing skid, a winning team's too: the counters are the staff's, measured, the slide said; a bad team losing
+    // four straight is having its season; a slide that goes on gets a second counter, and never a card
     {
       const l = inCharge(1);
       l.day = 40;
@@ -1340,13 +1062,13 @@ describe('the agenda', () => {
       expect(l.skidCall).toMatchObject({ gp: 20, rung: 1 });
       const need = staffNeeds(l).find((m) => m.key === `skid:${l.season}:20`);
       expect(need).toMatchObject({ kind: 'counters', max: 1 });
-      expect(agenda(l).some((i) => i.kind === 'skid')).toBe(false);
+      expect(agenda(l).some((i) => i.id.startsWith('skid:'))).toBe(false);
       const best = measured(l, need, 1.1);
       staffDecide(l);
       expect(l.gamePlans![l.skidCall!.opp].items.map((x) => x.id)).toContain(best.id);
       expect(staffPicksSince(l, l.season, l.day - 1).at(-1)).toMatch(new RegExp(`^4 straight losses\\. .*The staff put in ${esc(best.label)} for \\w+ (vs|@) [A-Z]{3}\\.$`));
-      expect(agenda(l).some((i) => i.kind === 'skid')).toBe(false);
-      // it goes on: eight straight, two counters measured, and a card
+      expect(agenda(l).some((i) => i.id.startsWith('skid:'))).toBe(false);
+      // it goes on: eight straight, two counters measured, and still no card
       Object.assign(ts, { won: 14, lost: 10, streak: -8 });
       l.day = 50;
       callsDaily(l);
@@ -1355,28 +1077,12 @@ describe('the agenda', () => {
       expect(next).toMatchObject({ max: 2 });
       measured(l, next, 0.2);
       staffDecide(l);
-      const s = agenda(l).find((i) => i.kind === 'skid')!;
-      expect(s).toMatchObject({
-        title: '8 straight losses',
-        suggestion: { label: 'Look for a trade', to: expect.stringMatching(/^\/office\/trade\?tab=find&minOvr=\d+$/) },
-        choices: [{ label: 'Ride it out' }],
-      });
-      // the call follows what's behind it: shots that didn't fall (and nobody out) ride it out, the trade the other way
-      {
-        const m = structuredClone(l);
-        m.skidCall!.luck = true;
-        const r = agenda(m).find((i) => i.kind === 'skid')!;
-        expect([r.suggestion!.label, ...r.choices!.map((c) => c.label)]).toEqual(['Ride it out', 'Look for a trade']);
-        expect(r.line).toBe("The staff's call: ride it out. The box scores say the shots will come back.");
-      }
-      expect(s.line).toBe("The staff's call: look for a trade. Counters alone haven't turned it.");
-      expect(s.detail).toMatch(/Nothing the staff measured for \w+ (vs|@) [A-Z]{3} beats your plan\.\nDeals until /);
-      // nine straight is the same step; past the deadline there's no card
+      expect(agenda(l).some((i) => i.id.startsWith('skid:'))).toBe(false);
+      expect(simStopIds(l).some((id) => id.startsWith('skid:'))).toBe(false);
+      // nine straight is the same step
       Object.assign(ts, { lost: 11, streak: -9 });
       callsDaily(l);
       expect(l.skidCall!.gp).toBe(24);
-      l.day = l.tradeDeadlineDay + 1;
-      expect(agenda(l).some((i) => i.kind === 'skid')).toBe(false);
     }
 
     // a newcomer's first slump (three under .500 in his first 5-20 games): one plain line from the staff, once, that pulls apart
@@ -1446,7 +1152,7 @@ describe('the agenda', () => {
         [a, outA],
         [b, outB],
       ] as const)
-        if (out.stop === 'call') expect(x.stopCall && (!isWeekId(x.stopCall.id) || !!x.weekCall?.ask)).toBe(true);
+        if (out.stop === 'call') expect(x.stopCall && !x.stopCall.id.startsWith('week:')).toBe(true);
     }
   }, 120_000);
 });

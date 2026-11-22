@@ -7,7 +7,6 @@ import { createLeague, defaultSettings } from '../league/create';
 import { advanceDay, continueDraft, draftNextPick, startDraft, startRegularSeason, userDraftPick } from '../league/season';
 import { CAP_FOR, contractSeason, dateToDay, fmtDate, freeAgents, payroll, prospects, standardRoster, teamCity } from '../league/helpers';
 import { DEC_15, marketSalary, releasePlayer, signPlayer, tradeValue } from '../league/contracts';
-import { capPayroll } from '../league/freeAgency';
 import {
   MAX_OPEN,
   acceptProposal,
@@ -398,14 +397,14 @@ it('help and the finder: "what would make this work?", counter-offers, value tie
       .filter((p) => !untradeable(l, p))
       .sort((a, b) => capSalary(l, b.pid) - capSalary(l, a.pid));
     const out = capSalary(l, roster[0].pid) + capSalary(l, roster[1].pid);
-    const room = CAP_FOR(l).salaryCap - capPayroll(l, U, l.season);
+    const room = CAP_FOR(l).salaryCap - payroll(l, U, l.season);
     expect(maxTakeBack(l, U)).toBeCloseTo(Math.max(room + out, out * 1.25 + 100), 6);
     // a recent signing can't go out, so it doesn't count
     roster[0].tradeLock = { season: l.season, day: l.day + 30 };
     expect(maxTakeBack(l, U)).toBeLessThan(Math.max(room + out, out * 1.25 + 100));
   }
 
-  // keeps a team at the first apron: matching by the tiers under it, no more than it sends past it
+  // over the cap: 125% of what it sends, plus the buffer, whatever its payroll
   {
     const l = negLeague();
     l.phase = 'regular';
@@ -414,23 +413,24 @@ it('help and the finder: "what would make this work?", counter-offers, value tie
       .sort((a, b) => capSalary(l, b.pid) - capSalary(l, a.pid));
     const cap = CAP_FOR(l);
     const set = (pay: number) => {
-      const raise = pay - capPayroll(l, U, l.season);
+      const raise = pay - payroll(l, U, l.season);
       top[0].contract = { start: l.season, salaries: [capSalary(l, top[0].pid) + raise, capSalary(l, top[0].pid) + raise] };
     };
-    // well under the first apron: what the tiers allow for its two biggest contracts
+    // just over the cap: what matching allows for its two biggest contracts
     set(cap.salaryCap + 1_000);
     const out = () => capSalary(l, top[0].pid) + capSalary(l, top[1].pid);
     expect(maxTakeBack(l, U)).toBeCloseTo(tradeMatchLimit(l, out()), 6);
-    // $1M under the first apron: no more than takes it there
-    set(cap.firstApron - 1_000);
-    expect(maxTakeBack(l, U)).toBeCloseTo(out() + 1_000, 6);
+    // deep in the tax: the same rule
+    set(cap.luxuryTax + 30_000);
+    expect(maxTakeBack(l, U)).toBeCloseTo(tradeMatchLimit(l, out()), 6);
     // the most it allows passes the rules, a dollar more doesn't
     const them = standardRoster(l, AI).sort((a, b) => capSalary(l, b.pid) - capSalary(l, a.pid))[0];
-    them.contract = { start: l.season, salaries: [out() + 1_000, out() + 1_000] };
+    const most = tradeMatchLimit(l, out());
+    them.contract = { start: l.season, salaries: [most, most] };
     const deal = offer([top[0].pid, top[1].pid], [them.pid]);
     const matchError = (o: TradeOffer) => validateTrade(l, o).some((e) => e.includes("Salary doesn't match"));
     expect(matchError(deal)).toBe(false);
-    them.contract.salaries = [out() + 1_001, out() + 1_001];
+    them.contract.salaries = [most + 1, most + 1];
     expect(matchError(deal)).toBe(true);
   }
 
@@ -804,7 +804,7 @@ it("AI deals: offers to the user, AI-to-AI trades, the deadline's ramp, rumors a
     roster.forEach((p, i) => shapeAt(l, p, i < 3 ? 88 : 70, i < 3 ? 28 : 31, vetMin));
     shapeAt(l, roster[3], 76, 24, 10_000);
     // $5M past the tax: the deal may not add salary, but it needn't get under the line either
-    shapeAt(l, roster[0], 88, 28, vetMin + CAP_FOR(l).luxuryTax + 5_000 - capPayroll(l, B, l.season));
+    shapeAt(l, roster[0], 88, 28, vetMin + CAP_FOR(l).luxuryTax + 5_000 - payroll(l, B, l.season));
     l.teams[B].mleSeason = l.season;
     // (every team's top name on the block, not just the three best: others' expiring stars can outrank him)
     const rumor = onTheBlock(l, 30).find((r) => r.pid === vet.pid);

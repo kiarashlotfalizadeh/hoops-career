@@ -18,19 +18,7 @@
 .tx-group.tight {
   gap: 10px;
 }
-/* one control as a list row: a switch or a slider */
-.tx-ctl {
-  padding: var(--row-py) var(--row-px);
-  min-height: var(--row-min);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-.tx-ctl-chips {
-  gap: 8px;
-  padding-top: 10px;
-  padding-bottom: 10px;
-}
+
 .tx-toggles {
   display: flex;
   flex-direction: column;
@@ -183,22 +171,7 @@
 .tx-bullets.good li::before {
   background: var(--good);
 }
-/* Players: a role's line with his shot freedom (and an injury) as small tags after it */
-.tx-rolemeta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.tx-rolemeta > .ellipsis {
-  min-width: 0;
-}
-.tx-rolemeta > .tag {
-  flex: none;
-  height: 18px;
-  padding: 0 5px;
-  font-size: 12px;
-}
+
 /* the tabs' tappable rows press and hover as a shared list row does */
 .tx-opt,
 .tx-pickrow,

@@ -1,10 +1,12 @@
-// The matchup page's Plan: your plan against this team first (each item with exactly what it
-// changes, and how long it lasts), then the staff's counters, the special plans (a star plan, a junk
-// defense and who it chases, a defender to attack, players to hack: a row each that opens) and a
-// note. Every change is the user's tactics against this team only, on top of his playbook (see
-// core/league/gamePlans.ts).
+// The matchup page's Game Plan, everything that is aimed at this one opponent: your plan first (each
+// item with exactly what it changes), then the staff's counters, who guards whom, and the special
+// plans (a star to double, a defender to target, players to hack, a junk defense and who it chases:
+// a row each that opens). A plan lasts the next game against them, or the playoff series under way.
+// Every change is the user's tactics against this team only, on top of his playbook (see
+// core/league/gamePlans.ts); the base tactics hold nothing that names an opponent.
 import { useEffect, useRef, useState } from 'react';
 import { Check, X } from 'lucide-react';
+import { MatchupPlanner } from '../../components/MatchupPlanner';
 import type { GamePlanItem, League, PlanScope, StarPlan } from '../../../core/types';
 import { useLeagueMemo, useStore } from '../../../state/store';
 import { edit } from '../../../state/actions';
@@ -14,12 +16,11 @@ import { projectedRotation, scoutData } from '../../../core/analysis/scouting';
 import { clearPlan, defaultScope, effectiveTactics, ensurePlan, itemGroup, planFor, removePlanItem, setPlanItem, setPlanScope } from '../../../core/league/gamePlans';
 import { STAR_PLAN_META } from '../../../core/sim/tactics';
 import { playbookLabel } from '../../../core/sim/playbooks';
-import { plural } from '../../../core/format';
 import { Chips, Help, Ovr, Section, Segmented, Tag } from '../../components/ui';
 import { Term } from '../../components/Glossary';
 import { AttackCard, JunkCard } from '../../components/GuardPlanner';
 import { rosterNames } from '../../stats';
-import { teamPlayers, teamCity } from '../../../core/league/helpers';
+import { teamPlayers } from '../../../core/league/helpers';
 import { changesLine, screenChanges } from '../../tactics/changes';
 import { liveSeries, NO_PLAN } from '../data';
 import { CountersCard } from './CountersCard';
@@ -36,7 +37,6 @@ export function PlanTab({ league, opp }: { league: League; opp: number }) {
   const kept = (plan ?? stored)?.scope;
   const scope: PlanScope = kept && (kept !== 'series' || series) ? kept : defaultScope(league, opp);
   const base = league.teams[league.userTid].tactics;
-  const extras = plan ? plannedExtras(plan) : '';
   // the items the plan had when the screen opened stand still; one added since arrives
   const had = useRef<Set<string> | null>(null);
   had.current ??= new Set(plan?.items.map((it) => it.id));
@@ -53,56 +53,57 @@ export function PlanTab({ league, opp }: { league: League; opp: number }) {
             )}
             <Help title="Game plans">
               <p>
-                A <Term id="gameplan">game plan</Term> changes your tactics against this team only, on top of your playbook. It lasts the next game, the series or the season, as
-                you pick.
+                A <Term id="gameplan">game plan</Term> changes your tactics against this team only, on top of your playbook. It lasts the next game against them, or the series in
+                the playoffs.
               </p>
             </Help>
           </span>
         }
       >
-        {plan && (plan.items.length > 0 || extras) ? (
+        {plan && plan.items.length > 0 ? (
           <div className="card flush list">
             {plan.items.map((it) => (
               <PlanItemRow key={it.id} league={league} opp={opp} it={it} fresh={!had.current!.has(it.id)} onGone={() => had.current!.delete(it.id)} />
             ))}
-            {extras && <div className="mu-item mu-note">Plus {extras}, on Matchups.</div>}
           </div>
         ) : (
           <div className="mu-note">
             {NO_PLAN}. You play {playbookLabel(base)} as usual.
           </div>
         )}
-        <div className="mu-scope">
-          <span className="over">Plan lasts</span>
-          <Segmented
-            label="How long the plan lasts"
-            value={scope}
-            disabled={simming}
-            onChange={(sc) =>
-              edit((l) => {
-                ensurePlan(l, opp);
-                setPlanScope(l, opp, sc);
-              })
-            }
-            options={[
-              { id: 'next' as PlanScope, label: 'Next game' },
-              ...(series ? [{ id: 'series' as PlanScope, label: 'This series' }] : []),
-              { id: 'season', label: 'All season' },
-            ]}
-          />
-        </div>
+        {/* (a series under way: the plan can stay for all of it; otherwise it is the next game's, and there is nothing to pick) */}
+        {series && (
+          <div className="mu-scope">
+            <span className="over">Plan lasts</span>
+            <Segmented
+              label="How long the plan lasts"
+              value={scope}
+              disabled={simming}
+              onChange={(sc) =>
+                edit((l) => {
+                  ensurePlan(l, opp);
+                  setPlanScope(l, opp, sc);
+                })
+              }
+              options={[
+                { id: 'next' as PlanScope, label: 'Next game' },
+                { id: 'series' as PlanScope, label: 'This series' },
+              ]}
+            />
+          </div>
+        )}
       </Section>
 
       <CountersCard league={league} opp={opp} />
+      <MatchupPlanner league={league} opp={opp} />
       <Section title="Special plans">
         <div className="card flush list">
           <StarPlanCard league={league} opp={opp} />
-          <JunkCard league={league} opp={opp} fold />
           <AttackCard league={league} opp={opp} fold />
           <HackCard league={league} opp={opp} />
+          <JunkCard league={league} opp={opp} fold />
         </div>
       </Section>
-      <NoteCard key={`${opp}:${stored?.note ?? ''}`} league={league} opp={opp} />
     </>
   );
 }
@@ -140,12 +141,6 @@ function PlanItemRow({ league, opp, it, fresh, onGone }: { league: League; opp: 
   );
 }
 
-/** "2 planned matchups", or '' when there are none. */
-function plannedExtras(plan: { matchups?: Record<number, number> }) {
-  const m = Object.keys(plan.matchups ?? {}).length;
-  return m ? plural(m, 'planned matchup') : '';
-}
-
 /** A star plan for this opponent: none or a double, on one of their top eight. */
 function StarPlanCard({ league, opp }: { league: League; opp: number }) {
   const simming = useStore((s) => !!s.sim);
@@ -176,7 +171,7 @@ function StarPlanCard({ league, opp }: { league: League; opp: number }) {
   const who = target !== null ? names(target) || league.players[target]?.lastName : 'their top creator';
   return (
     <Fold
-      title="Star plan"
+      title="Double a star"
       peek={sp === 'none' ? STAR_PLAN_META.none.label : `${STAR_PLAN_META[sp].label} · ${who}`}
       help={<Help title="Star plan">A double pays against a star who can&apos;t pass out of it. ★ marks the man their offense runs through.</Help>}
     >
@@ -313,52 +308,5 @@ function HackCard({ league, opp }: { league: League; opp: number }) {
         )}
       </div>
     </Fold>
-  );
-}
-
-/** Keeps a note with the plan against `opp`, if it changed and its league is still the one open. */
-function saveNote(leagueId: string, opp: number, text: string) {
-  const { league } = useStore.getState();
-  const note = text.trim();
-  if (league?.id !== leagueId || note === (league.gamePlans?.[opp]?.note ?? '')) return;
-  edit((l) => {
-    const p = ensurePlan(l, opp);
-    if (note) p.note = note;
-    else delete p.note;
-  });
-}
-
-/** A free-text note kept with the plan. */
-function NoteCard({ league, opp }: { league: League; opp: number }) {
-  const saved = league.gamePlans?.[opp]?.note ?? '';
-  const [text, setText] = useState(saved);
-  // typing not saved yet: kept when the screen closes with the note still focused (Android's back
-  // button, a swipe back), where no blur comes; null once saved, so a cleared plan stays cleared
-  const unsaved = useRef<string | null>(null);
-  const id = league.id;
-  useEffect(
-    () => () => {
-      if (unsaved.current !== null) saveNote(id, opp, unsaved.current);
-    },
-    [id, opp],
-  );
-  return (
-    <Section title="Notes">
-      <textarea
-        className="mu-note-input"
-        value={text}
-        maxLength={500}
-        placeholder={`Anything to remember against ${teamCity(league, opp)}`}
-        aria-label="Notes for this game plan"
-        onChange={(e) => {
-          setText(e.target.value);
-          unsaved.current = e.target.value;
-        }}
-        onBlur={() => {
-          unsaved.current = null;
-          saveNote(id, opp, text);
-        }}
-      />
-    </Section>
   );
 }

@@ -567,18 +567,29 @@ export function withoutCoachPlans(t: Tactics): Tactics {
 export const namedJunk = (d: DefenseTactics) => isJunk(d.scheme) && !!d.chase?.length;
 
 /**
- * The parts of the tactics that name one night's opponents: kept in a game or its plan, never in
- * saved tactics. A junk defense named for their players goes with them, back to `base`'s scheme
- * (the tactics it was drawn up over) or man-to-man.
+ * A star plan and hack-a-player belong to one opponent's game plan (and to a live game): saved
+ * tactics never carry them, so the base tactics and a plan never overlap. Cleared in place.
+ */
+export function clearOpponentOnly(t: Tactics): Tactics {
+  t.defense.starPlan = 'none';
+  t.defense.starTarget = null;
+  t.manage.hackThreshold = 0;
+  delete t.manage.hackTargets;
+  delete t.manage.hackFromQ;
+  return t;
+}
+
+/**
+ * The parts of the tactics that name one night's opponents, or are only ever aimed at one (a star
+ * plan, hack-a-player): kept in a game or its plan, never in saved tactics. A junk defense named for
+ * their players goes with them, back to `base`'s scheme (the tactics it was drawn up over) or man-to-man.
  */
 export function withoutGameSpecific(t: Tactics, base?: Tactics): Tactics {
-  const out = cloneTactics(t);
+  const out = clearOpponentOnly(cloneTactics(t));
   if (namedJunk(out.defense)) out.defense.scheme = base && !namedJunk(base.defense) ? base.defense.scheme : 'man';
   out.defense.matchups = {};
-  out.defense.starTarget = null;
   delete out.defense.chase;
   delete out.offense.huntTarget;
-  delete out.manage.hackTargets;
   return out;
 }
 

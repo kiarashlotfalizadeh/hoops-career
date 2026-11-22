@@ -20,7 +20,7 @@ const QUICK = 6;
 /** Where he is: his team, or free agent, prospect (with his board rank) or retired. */
 function where(league: League, p: Player) {
   if (p.tid >= 0) return league.teams[p.tid]?.abbrev ?? '';
-  if (p.tid === FREE_AGENT) return p.waivers ? 'On waivers' : 'Free agent';
+  if (p.tid === FREE_AGENT) return 'Free agent';
   if (p.tid === DRAFT_PROSPECT) return `Prospect #${p.prospect?.rank ?? '—'}`;
   return p.tid === RETIRED ? 'Retired' : '';
 }

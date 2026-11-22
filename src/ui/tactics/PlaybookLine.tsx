@@ -1,60 +1,52 @@
-// The style a phase's settings start from, at the top of each phase's instructions: how many of that
-// phase's settings you've moved from it (with Put back, for that phase's settings only), and the
-// phase's Help, which also keys the dot that marks the style's own setting on each control below.
-import type { ReactNode } from 'react';
+// The style the system's settings start from, over the core settings: how many settings you've moved
+// from it across the whole system (with Put back), which also keys the dot that marks the style's own
+// setting on each control.
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { DEF_PRESETS, OFF_PRESETS, type DefPreset, type OffPreset } from '../../core/sim/tactics';
 import { tacticsChanges } from '../../core/sim/playbooks';
 import type { DefenseTactics, OffenseTactics, Tactics } from '../../core/types';
 import { plural } from '../../core/format';
 import { tweak } from './edit';
-import type { Phase } from './phases';
 
 /** The preset the user's offense or defense comes from. */
 export const offPresetOf = (t: Tactics): OffPreset => OFF_PRESETS.find((p) => p.id === t.offPreset) ?? OFF_PRESETS[0];
 export const defPresetOf = (t: Tactics): DefPreset => DEF_PRESETS.find((p) => p.id === t.defPreset) ?? DEF_PRESETS[0];
 
-/** Each phase's settings that come from the style: the offensive playbook's and the defensive identity's. */
-const PHASE_KEYS: Record<Phase, { off: (keyof OffPreset['values'])[]; def: (keyof DefPreset['values'])[] }> = {
-  inPoss: { off: ['pace', 'actions', 'threePoint', 'rimAttack', 'huntMismatch'], def: [] },
-  inTrans: { off: ['transition', 'crashBoards'], def: ['getBack', 'press'] },
-  outPoss: { off: [], def: ['scheme', 'pnr', 'help', 'pressure', 'switchOffBall', 'physicality'] },
+/** The settings that come from the style: the offensive playbook's and the defensive identity's. */
+const STYLE_KEYS: { off: (keyof OffPreset['values'])[]; def: (keyof DefPreset['values'])[] } = {
+  off: ['pace', 'actions', 'threePoint', 'rimAttack', 'huntMismatch', 'transition', 'crashBoards'],
+  def: ['getBack', 'press', 'scheme', 'pnr', 'help', 'pressure', 'switchOffBall', 'physicality'],
 };
 
-/** Phase `ph`'s settings put back as the style has them (in place). */
-function putBack(tt: Tactics, ph: Phase) {
+/** The style's settings put back as the style has them (in place). */
+function putBack(tt: Tactics) {
   const o = offPresetOf(tt).values as unknown as Record<string, unknown>;
   const d = defPresetOf(tt).values as unknown as Record<string, unknown>;
   const off = tt.offense as unknown as Record<string, unknown>;
   const def = tt.defense as unknown as Record<string, unknown>;
-  for (const k of PHASE_KEYS[ph].off) off[k] = k === 'actions' ? { ...(o.actions as OffenseTactics['actions']) } : o[k];
-  for (const k of PHASE_KEYS[ph].def) def[k] = d[k] as DefenseTactics[keyof DefenseTactics];
+  for (const k of STYLE_KEYS.off) off[k] = k === 'actions' ? { ...(o.actions as OffenseTactics['actions']) } : o[k];
+  for (const k of STYLE_KEYS.def) def[k] = d[k] as DefenseTactics[keyof DefenseTactics];
 }
 
-/** The tactics with phase `ph` as the style has it. */
-const asStyle = (t: Tactics, ph: Phase): Tactics => {
+/** The tactics as the style has them. */
+const asStyle = (t: Tactics): Tactics => {
   const out: Tactics = { ...t, offense: { ...t.offense, actions: { ...t.offense.actions } }, defense: { ...t.defense } };
-  putBack(out, ph);
+  putBack(out);
   return out;
 };
 
-/** The style a phase's settings come from, by name (transition takes from both: the playbook's push and glass, the identity's getting back and press). */
-const phaseStyle = (t: Tactics, phase: Phase) => (phase === 'inPoss' ? offPresetOf(t).name : phase === 'outPoss' ? defPresetOf(t).name : 'your style');
-
-export function PlaybookLine({ phase, help }: { phase: Phase; help?: ReactNode }) {
+export function PlaybookLine() {
   const league = useLeague();
   const t = league.teams[league.userTid].tactics;
-  const name = phaseStyle(t, phase);
-  const moved = useLeagueMemo(() => tacticsChanges(asStyle(t, phase), t).length, [t, phase]);
+  const moved = useLeagueMemo(() => tacticsChanges(asStyle(t), t).length, [t]);
   return (
     <div className="tx-pbline">
-      <span className="grow tx-note">{moved ? `${plural(moved, 'setting')} moved from ${name}` : `As ${name} sets it`}</span>
+      <span className="grow tx-note">{moved ? `${plural(moved, 'setting')} moved from your style` : 'As your style sets it'}</span>
       {moved > 0 && (
-        <button className="btn xs" onClick={() => tweak((tt) => putBack(tt, phase))}>
+        <button className="btn xs" onClick={() => tweak(putBack)}>
           Put back
         </button>
       )}
-      {help}
     </div>
   );
 }

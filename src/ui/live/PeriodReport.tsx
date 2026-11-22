@@ -1,11 +1,11 @@
 // The breaks, in the console under the court: a period's end and your timeout. Each reads as a
 // broadcast's break, in cards, not as a page of text; the board over it (BreakBoard.tsx) has the line
 // score and the team numbers, the scorebug the score and the clock.
-// The period report: the story so far in a card (atmosphere.ts breakStory) with Skip ahead beside it,
-// the staff's one voice and the moves it would make for the next period, what's deciding the game (each
-// edge named for the team that has it), who's tired or in foul trouble going into it, the keys, and
-// both benches (their coach's plan and adjustments, your moves). The box score and the play types are
-// the Stats and Tactics views', a tap away on the bench bar.
+// The period report, numbers first: what's deciding the game (each edge with the points it has been
+// worth and the team that has it, the shooting luck told apart), the staff's one voice and the moves
+// it would make for the next period, who's tired or in foul trouble going into it, and both benches
+// (their coach's plan and adjustments, your moves). The box score and the play types are the Stats
+// and Tactics views', a tap away on the bench bar.
 // The huddle is the short version for a timeout: late in a close game the play call first (built
 // around your closer, with the staff's pick marked: usePlayWorth), then who to sub and the staff's top
 // move; the last possession of a close game stops for the same play call without a timeout. The
@@ -18,11 +18,9 @@ import { buildGameReport, decidingFactors } from '../../core/analysis/gameReport
 import { ACTION_META } from '../../core/sim/tactics';
 import { CLEAR_OUT, SETS, atoLabel, callLabel } from '../../core/sim/sets';
 import { gameTime, plural } from '../../core/format';
-import type { GameKey } from '../../core/analysis/keys';
-import { edgeWord } from '../../core/analysis/staffWords';
+import { ptsFig } from '../../core/analysis/staffWords';
 import { CLUTCH_SEC, pendingLive } from '../../state/live';
 import { Section } from '../components/ui';
-import { KeysLive } from '../components/GameKeys';
 import { AssistantHead, MovesList, NoteCard } from '../components/StaffCards';
 import { fmtClock, periodLabel } from '../stats';
 import type { MatchKit } from '../teamColors';
@@ -31,7 +29,6 @@ import { breakTitle } from './BreakBoard';
 import { Trouble } from './Trouble';
 import type { Drawn } from './drawn';
 import type { StaffAction, StaffNote } from './staff';
-import { keysShare } from './session';
 import { fitPlayers, playBoard, playOptions, readStatus, type PlayOption } from './plays';
 import { PlayBoard } from './PlayBoard';
 import { favoured, usePlayWorth, type PlayReading } from './usePlayWorth';
@@ -55,25 +52,27 @@ interface Common {
   /** The rested bench player the staff would send in for one of yours. */
   subFor: (pid: number) => number | undefined;
   substitute: (out: number, inn: number) => boolean;
-  keys?: GameKey[];
   moves: CoachMove[];
   busy?: boolean;
   /** The staff's line when it measured and found nothing to change, or while it measures (useStaffCall). */
   quiet?: string | null;
 }
 
-/** One of the game's edges so far: what it is, its detail, its size in a word and whose it is. */
+/** One of the game's edges so far: what it is, its detail, the points it has been worth and whose it is. */
 interface Edge {
   id: string;
   title: string;
   text: string;
+  /** Points it has been worth to the side that has it, as a figure ("+4.2 pts"). */
   size: string;
   /** The side that has the better of it (0 home, 1 away). */
   whose: 0 | 1;
+  /** Shots falling above or below their looks: luck, with nothing to change for it. */
+  luck: boolean;
 }
 
 /**
- * What's deciding the game so far: the report's biggest edges, sized in a word, as reads. The counter
+ * What's deciding the game so far: the report's biggest edges, each with the points it has been worth. The counter
  * to one going against you is the staff's to measure from here before it's offered (calls.ts: its call
  * leads the report when one clears), so an edge carries its detail, not a one-tap fix.
  */
@@ -84,8 +83,9 @@ function useDeciding(league: League, view: Drawn, tactics: Tactics, side: 0 | 1)
       id: `f-${f.key ?? f.title}`,
       title: f.title,
       text: f.detail,
-      size: edgeWord(f.pts),
+      size: ptsFig(Math.abs(f.pts)),
       whose: f.pts >= 0 ? side : ((1 - side) as 0 | 1),
+      luck: !!f.luck,
     }));
   }, [league, view, tactics, side]);
 }
@@ -128,7 +128,7 @@ function Staff({
   );
 }
 
-/** What's deciding it: a row an edge, each saying in words whose it is (the team's name in its colour) and how big. */
+/** What's deciding it: a row an edge, each with whose it is (the team's name in its colour) and the points it has been worth. */
 function Deciding({ edges, teams, kits }: { edges: Edge[]; teams: [Team, Team]; kits?: [MatchKit, MatchKit] }) {
   if (!edges.length) return null;
   return (
@@ -138,7 +138,8 @@ function Deciding({ edges, teams, kits }: { edges: Edge[]; teams: [Team, Team]; 
           <li key={e.id} className="lv-br-edge">
             <span className="lv-br-edge-t">{e.title}</span>
             <span className="lv-br-edge-who">
-              <b style={kits ? { color: kits[e.whose].text } : undefined}>{teams[e.whose].abbrev}</b> {e.size.toLowerCase()}
+              <b style={kits ? { color: kits[e.whose].text } : undefined}>{teams[e.whose].abbrev}</b> <span className="num">{e.size}</span>
+              {e.luck && <span className="lv-br-edge-luck"> · luck</span>}
             </span>
             {e.text && <span className="lv-br-edge-d">{e.text}</span>}
           </li>
@@ -157,11 +158,9 @@ export function PeriodReport(
     adjustments: GameAdjustment[];
     /** Skip ahead from here. */
     onSkip?: () => void;
-    /** The story so far, in a line. */
-    story?: string;
   },
 ) {
-  const { view, side, teams, kits, names, keys, moves, oppPlan, adjustments, onSkip, story } = props;
+  const { view, side, teams, kits, names, moves, oppPlan, adjustments, onSkip } = props;
   const me = view.sides[side];
   const them = view.sides[1 - side];
   const lead = me.score - them.score;
@@ -179,17 +178,8 @@ export function PeriodReport(
     <div className="lv-br">
       {/* (the board over it is the visible title; the score, the chance to win and the timeouts are on the scorebug: said once) */}
       <h2 className="sr-only">{breakTitle(q)} report</h2>
-      <Card className="lv-br-lede">
+      {(onSkip || next.length > 0) && (
         <div className="lv-br-top">
-          <span className="lv-br-over">The story so far</span>
-          {onSkip && (
-            <button type="button" className="lv-br-btn" onClick={onSkip} aria-haspopup="dialog">
-              <FastForward size={14} aria-hidden="true" /> Skip ahead
-            </button>
-          )}
-        </div>
-        {story && <p className="lv-br-story">{story}</p>}
-        {next.length > 0 && (
           <div className="lv-br-chips">
             {next.map((x) => (
               <span key={x} className="lv-br-chip">
@@ -197,12 +187,16 @@ export function PeriodReport(
               </span>
             ))}
           </div>
-        )}
-      </Card>
-      <Staff {...props} max={3} />
+          {onSkip && (
+            <button type="button" className="lv-br-btn" onClick={onSkip} aria-haspopup="dialog">
+              <FastForward size={14} aria-hidden="true" /> Skip ahead
+            </button>
+          )}
+        </div>
+      )}
       <Deciding edges={deciding} teams={teams} kits={kits} />
+      <Staff {...props} max={3} />
       <Trouble view={view} side={side} tactics={props.tactics} names={names} subFor={props.subFor} substitute={props.substitute} ahead />
-      {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box} side={side} share={keysShare(view.elapsed, q)} />}
       <Section title="Both benches">
         <div className="lv-br-benches">
           <Card>
@@ -331,7 +325,7 @@ function PlayCall({
 
 /**
  * Your timeout ('timeout'): late in a close game (closeGame) the play call first, built around your
- * closer; then the staff's read and top move, who to sub and the keys (earlier, or in a decided game,
+ * closer; then the staff's read and top move and who to sub (earlier, or in a decided game,
  * the play out of it at the foot). The last possession ('last': the game stopped for it, no timeout
  * taken): the situation, the play call (shouted from the bench), a timeout to take if one is left, and
  * who to sub. The score and the clock are on the scorebug; Resume is on the bench bar.
@@ -349,7 +343,7 @@ export function Huddle(
     onTimeout?: () => void;
   },
 ) {
-  const { kind, view, side, teams, kits, tactics, names, keys, called, closer, onTimeout } = props;
+  const { kind, view, side, teams, kits, tactics, names, called, closer, onTimeout } = props;
   const deciding = useDeciding(props.league, view, tactics, side).slice(0, 1);
   const ato = tactics.manage.ato;
   const atoText = ato ? atoLabel(ato, (a) => ACTION_META[a].label, tactics.manage.atoPid != null ? names(tactics.manage.atoPid) : undefined) : null;
@@ -403,7 +397,6 @@ export function Huddle(
       <Staff {...props} max={2} />
       <Deciding edges={deciding} teams={teams} kits={kits} />
       {trouble}
-      {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box} side={side} share={keysShare(view.elapsed, view.q)} />}
       {/* (the saved after-timeout play, read-only: it's set away from the game, so with none there's nothing to say) */}
       {!call && atoText && (
         <Card>

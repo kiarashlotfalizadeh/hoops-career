@@ -124,7 +124,7 @@ export function DayScoreboard({ league }: { league: League }) {
   );
 }
 
-/** "MIL · Favorite": the matchup preview's own projection (net ratings regressed toward tonight's rotations, home court), in the staff's words. */
+/** "MIL 62%": the matchup preview's own projection (net ratings regressed toward tonight's rotations, home court). */
 const favorite = (league: League, g: ScheduledGame) => favoriteOf(league, g, gameProjection(league, g).win).line;
 
 function ScoreCard({ league, g, res, after }: { league: League; g: ScheduledGame; res?: GameResult; after?: Map<number, [number, number]> }) {
@@ -133,7 +133,7 @@ function ScoreCard({ league, g, res, after }: { league: League; g: ScheduledGame
   const done = !!res || !!g.played;
   // (the projection sets up the game as it will tip off: once per league change)
   const fav = useLeagueMemo(() => (done ? '' : favorite(league, g)), [league, g, done]);
-  // a game to come leads with its favourite ("LAC · Slight favorite"), a final with its result; the right
+  // a game to come leads with its favourite ("LAC 58%"), a final with its result; the right
   // holds what kind of game it is (a Cup night, a playoff game), when it is one
   const status = res ? `Final${res.ot ? (res.ot > 1 ? `/${res.ot}OT` : '/OT') : ''}` : g.played ? 'Final' : fav;
   const right = tag;
@@ -184,7 +184,7 @@ function ScoreCard({ league, g, res, after }: { league: League; g: ScheduledGame
     const next = !g.played && nextUserGame(league)?.gid === g.gid;
     const opp = g.home === league.userTid ? g.away : g.home;
     return (
-      <Link to={next ? `/games/${opp}?tab=preview` : '/games'} className="lg-sb me">
+      <Link to={next ? `/games/${opp}` : '/games'} className="lg-sb me">
         {body}
       </Link>
     );

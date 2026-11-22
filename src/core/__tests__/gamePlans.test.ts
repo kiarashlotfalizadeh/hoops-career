@@ -80,14 +80,6 @@ describe('game plans', () => {
       expect(l.gamePlans?.[3]).toBeUndefined();
     }
     {
-      // a note keeps a plan alive when its last item goes
-      const l = fresh();
-      setPlanItem(l, 3, { id: 'cov-hedge', label: 'Hedge', patch: { defense: { pnr: 'hedge' } } });
-      l.gamePlans![3].note = 'Their guards are slow';
-      removePlanItem(l, 3, 'cov-hedge');
-      expect(l.gamePlans?.[3]?.note).toBe('Their guards are slow');
-    }
-    {
       // the sim takes the plan for that opponent only, and a next-game plan is used up by the game
       const l = fresh();
       toGameDay(l);
@@ -100,16 +92,14 @@ describe('game plans', () => {
       expect(planFor(l, opp)).toBeNull();
     }
     {
-      // a season plan stays after the game
+      // a plan lasts a game unless a series is under way; every plan goes with clearAllPlans
       const l = fresh();
       toGameDay(l);
-      const { g, opp } = opponentOf(l);
+      const { opp } = opponentOf(l);
       setPlanItem(l, opp, { id: 'cov-blitz', label: 'Blitz', patch: { defense: { pnr: 'blitz' } } });
-      expect(setPlanScope(l, opp, 'season')).toBe(true);
+      expect(setPlanScope(l, opp, 'next')).toBe(true);
       // no series under way: a series scope isn't possible
       expect(setPlanScope(l, opp, 'series')).toBe(false);
-      playGame(l, g);
-      expect(planFor(l, opp)?.items.length).toBe(1);
       clearAllPlans(l);
       expect(l.gamePlans).toBeUndefined();
     }
@@ -207,7 +197,8 @@ describe('game plans', () => {
       expect(migrate(structuredClone(l))).toEqual({ ...l, version: out.version });
     }
     {
-      // drops damaged plans from a save: one without items or with an unknown scope, damaged items, matchups and notes
+      // drops damaged plans from a save: one without items or with an unknown scope, damaged items and matchups;
+      // a season plan from before plans lasted a game or a series becomes a next-game one, and notes go
       const l = fresh();
       const raw = structuredClone(l) as unknown as { gamePlans: Record<number, unknown> };
       raw.gamePlans = {
@@ -225,8 +216,8 @@ describe('game plans', () => {
       };
       const out = migrate(raw);
       expect(Object.keys(out.gamePlans!).sort()).toEqual(['6', '7']);
-      expect(out.gamePlans![6]).toEqual({ oppTid: 6, scope: 'season', items: [{ id: 'a', label: 'A', patch: { defense: { scheme: 'box1', chase: [3] } } }], matchups: { 10: 11 } });
-      expect(out.gamePlans![7]).toEqual({ oppTid: 7, items: [], note: 'keep' });
+      expect(out.gamePlans![6]).toEqual({ oppTid: 6, items: [{ id: 'a', label: 'A', patch: { defense: { scheme: 'box1', chase: [3] } } }], matchups: { 10: 11 } });
+      expect(out.gamePlans![7]).toEqual({ oppTid: 7, items: [] });
       // and the games against them go on
       expect(planFor(out, 3)).toBeNull();
       expect(planFor(out, 6)?.items).toHaveLength(1);

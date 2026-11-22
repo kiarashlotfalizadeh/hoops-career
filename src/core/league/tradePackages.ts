@@ -3,7 +3,6 @@
 import type { DraftPick, League, Player } from '../types';
 import { rosterMaxNow, standardRoster } from './helpers';
 import { tradeValue } from './contracts';
-import { withHoldsMemo } from './freeAgency';
 import {
   DEPTH,
   MAX_FIRSTS_OUT,
@@ -15,9 +14,7 @@ import {
   cashValue,
   evaluateTrade,
   findPick,
-  frozenFirst,
   judgedPick,
-  matchInfo,
   pickValue,
   pickValueFor,
   playerValueFor,
@@ -69,7 +66,7 @@ function mineValue(league: League, a: Player | DraftPick): number {
  * rule, two firsts and three picks at most. Null when nothing works.
  */
 export function packageFor(league: League, tid: number, give: { pids: number[]; dpids: number[] }): Package | null {
-  return withHoldsMemo(() => findPackage(league, tid, give));
+  return findPackage(league, tid, give);
 }
 
 function findPackage(league: League, tid: number, give: { pids: number[]; dpids: number[] }): Package | null {
@@ -103,7 +100,7 @@ function findPackage(league: League, tid: number, give: { pids: number[]; dpids:
   const budget = want;
   // after the season, only next season's contracts take a spot
   const max = rosterMaxNow(league);
-  const stdOut = players.filter((p) => !p.contract.twoWay).length;
+  const stdOut = players.length;
   // the AI must stay within the roster limit after taking the user's players, and so must the user
   const minPlayersOut = Math.max(0, tradeRoster(league, tid).length + stdOut - max);
   const maxPlayersIn = Math.min(3, max - tradeRoster(league, user).length + stdOut);
@@ -116,7 +113,7 @@ function findPackage(league: League, tid: number, give: { pids: number[]; dpids:
     sal: capSalary(league, p.pid),
     first: false,
   });
-  // players it can actually move (no expiring deals after the season, two-ways stay put)
+  // players it can actually move (no expiring deals after the season)
   const roster = standardRoster(league, tid).filter((p) => !untradeable(league, p) && !tradedAwayBy(league, p, user));
   const assets: Asset[] = [
     ...roster.map(player),
@@ -208,11 +205,7 @@ export function dumpPackage(league: League, from: number, to: number, bad: Playe
   const dps: DraftPick[] = [];
   const offer = (): TradeOffer => ({ a: { tid: to, pids: back.map((p) => p.pid), dpids: [] }, b: { tid: from, pids: [bad.pid], dpids: dps.map((d) => d.dpid) } });
   if (validateTrade(league, offer()).length) return null;
-  // (past the second apron after the deal, its latest first is frozen: picks don't move salary, so that's known now)
-  const frozen = matchInfo(league, offer(), 'b').apron2 ? frozenFirst(league, from) : undefined;
-  const picks = league.draftPicks
-    .filter((d) => d.tid === from && d !== frozen && !tradedAwayBy(league, d, to))
-    .sort((x, y) => pickValue(league, x) - pickValue(league, y) || x.dpid - y.dpid);
+  const picks = league.draftPicks.filter((d) => d.tid === from && !tradedAwayBy(league, d, to)).sort((x, y) => pickValue(league, x) - pickValue(league, y) || x.dpid - y.dpid);
   for (const x of picks) {
     if (done(offer())) break;
     const out = dps.length >= MAX_PICKS_OUT ? dps[0] : null;

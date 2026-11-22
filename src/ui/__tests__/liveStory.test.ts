@@ -5,21 +5,7 @@
 // the live box score share, from crafted possession logs and from whole simulated games.
 import { describe, expect, it } from 'vitest';
 import type { PossLog, PossStep } from '../../core/sim/log';
-import {
-  advance,
-  breakStory,
-  CALL_GAP,
-  crowdLevel,
-  currentRun,
-  foldAll,
-  isClutch,
-  newTally,
-  pickCall,
-  voiceLog,
-  type AtmoCtx,
-  type AtmoEvent,
-  type Tally,
-} from '../live/atmosphere';
+import { advance, CALL_GAP, crowdLevel, currentRun, foldAll, isClutch, newTally, pickCall, voiceLog, type AtmoCtx, type AtmoEvent, type Tally } from '../live/atmosphere';
 import { feedRows } from '../live/useAtmosphere';
 import { isKey, type KeyContext } from '../live/keyPlays';
 import { hurtStarters, sealedGame, simDecided, skipChoices } from '../live/skip';
@@ -366,18 +352,6 @@ describe('the story of a live game', () => {
       expect(pickCall([ev(2, 120, { q: 4, clock: 200 })], 100)).not.toBeNull();
       // the biggest of a possession's
       expect(pickCall([ev(2, 300, { id: 'a', pri: 30 }), ev(2, 300, { id: 'b', pri: 90 })], null)?.id).toBe('b');
-    }
-
-    // the story so far told at a break
-    {
-      const logs = game([[0, 2], [1, 2], ...Array.from({ length: 16 }, (_, i) => [i % 2 === 0 ? 1 : 0, i % 2 === 0 ? 2 : i === 7 ? 2 : 0] as [0 | 1, number])], 2);
-      const r = fold(logs);
-      const story = breakStory(r.t, ctx(), 2, [[{ pid: 1, pts: 18 }], [{ pid: 15, pts: 12 }]]);
-      expect(story).toMatch(/^(Down|Trailing by) \d+ at the half\. Philadelphia had an? \d+-\d+ second-quarter run\. Brunson (has|leads you with) 18\.$/);
-      // short sentences, one thing each
-      const q1 = breakStory({ ...r.t, runs: { 1: r.t.runs[2] } }, ctx(), 1, [[{ pid: 1, pts: 9 }], []]);
-      expect(q1).toMatch(/after one\. Philadelphia had/);
-      for (const x of q1.split(/(?<=\.) /)) expect(x.split(' ').length).toBeLessThanOrEqual(15);
     }
 
     // key plays: an ordinary possession skipped

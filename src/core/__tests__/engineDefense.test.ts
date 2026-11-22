@@ -324,31 +324,33 @@ describe('engine defense', () => {
       // AI coach's adjustment can turn hunting on), when hunting mismatches came to mean a capable creator against a
       // weaker defender than the rest, the same day; and the AI's after-timeout sets came to fit the late score and its
       // planned zones to be played a fifth of the time, all but a few.
+      // All of them again 2026-11-22, when two-way deals were cut and a fictional league's two young
+      // prospects a team started on the market instead of at the end of its bench.
       const expected: Record<string, number[][]> = {
         default: [
-          [131, 124, 79, 49, 8, 21, 10, 0],
-          [105, 100, 91, 30, 8, 14, 5, 0],
-          [125, 118, 93, 23, 6, 30, 22, 1],
+          [132, 134, 90, 51, 9, 29, 9, 0],
+          [98, 95, 93, 22, 9, 16, 8, 0],
+          [102, 95, 92, 25, 7, 25, 11, 0],
         ],
         zone23: [
-          [141, 135, 93, 55, 11, 19, 11, 1],
-          [98, 93, 92, 18, 8, 15, 7, 0],
-          [108, 102, 83, 24, 9, 25, 16, 0],
+          [124, 118, 88, 47, 11, 15, 4, 0],
+          [102, 100, 98, 23, 13, 15, 6, 0],
+          [102, 98, 84, 30, 8, 31, 15, 0],
         ],
         zone32: [
-          [128, 109, 86, 39, 11, 23, 10, 0],
-          [100, 90, 92, 18, 8, 13, 9, 0],
-          [117, 116, 84, 24, 11, 33, 14, 0],
+          [117, 103, 82, 36, 8, 16, 11, 0],
+          [89, 90, 88, 20, 7, 20, 8, 0],
+          [118, 108, 90, 27, 8, 21, 15, 0],
         ],
         double: [
-          [142, 121, 92, 38, 14, 25, 9, 0],
-          [111, 117, 86, 17, 5, 34, 12, 0],
-          [104, 100, 86, 32, 6, 24, 14, 0],
+          [138, 120, 92, 43, 12, 16, 8, 0],
+          [104, 110, 94, 17, 10, 31, 13, 0],
+          [128, 119, 91, 32, 7, 25, 14, 0],
         ],
         hunt: [
-          [129, 127, 86, 49, 13, 20, 4, 0],
-          [98, 105, 95, 24, 10, 15, 12, 0],
-          [96, 91, 84, 29, 7, 17, 18, 0],
+          [139, 116, 94, 40, 13, 16, 10, 0],
+          [97, 108, 96, 22, 13, 28, 10, 0],
+          [117, 100, 95, 27, 9, 19, 13, 0],
         ],
       };
       const patches: Record<string, TacticsPatch | undefined> = {

@@ -3,7 +3,7 @@
 // by the defensive scheme. Each plate is a player with his role at that end and how well he suits it
 // (one figure: his stars of five, as his sheet shows them); a tap opens his player sheet. The board's
 // heading is its end, the switch between them. Over the court, the formation's picker: the shape, with
-// each shape's fit for this roster, or the scheme (its one home; the coverage is on Instructions).
+// each shape's fit for this roster, or the scheme (its one home; the coverage is in the core settings).
 import { useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import type { DefScheme, OffShape, Player, Tactics } from '../../core/types';

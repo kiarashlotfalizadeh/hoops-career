@@ -16,18 +16,7 @@ import { cupState } from './cup';
 import { ensureFuturePicks, generateDraftClass } from './draft';
 import { ensureRotation } from './games';
 import { JERSEYS } from './jerseys';
-import {
-  FA_PRICE_CUT_DAYS,
-  askingContract,
-  makeContract,
-  marketSalary,
-  preferredYears,
-  releaseDeadMoney,
-  releasePlayer,
-  rookieContract,
-  twoWaySalary,
-  valueScore,
-} from './contracts';
+import { FA_PRICE_CUT_DAYS, askingContract, makeContract, marketSalary, preferredYears, releaseDeadMoney, releasePlayer, rookieContract, valueScore } from './contracts';
 import { CAP_FOR, addInbox, playerName, standardRoster, teamPlayers } from './helpers';
 import type { RecStat } from './records';
 import { applyHistory, type HistoryData } from './media/past';
@@ -187,7 +176,7 @@ export function defaultSettings(): Settings {
  * rookie, and one who debuted within the record counts the seasons since (VanVleet 10: the one he
  * lost to injury counts, as it would for a draftee). One already playing when the record begins
  * (`firstRecord`, in a seed with only three seasons) counts the years since a typical undrafted debut
- * at 22. That sets his max, his minimum and two-way eligibility. Second-round picks are numbered
+ * at 22. That sets his max and his minimum. Second-round picks are numbered
  * within the round, as the game does.
  */
 function seedCareer(sp: SeedPlayer, season: number, firstRecord: number): { experience: number; draft: DraftInfo } {
@@ -256,7 +245,7 @@ function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng, fir
     growth: sp.growth ?? clamp(rng.normal(0, 0.4), -1, 1),
     injuryProne: sp.injuryProne ?? 0.3,
     ratingsHistory: [],
-    contract: { start: season, salaries, option: sp.contract?.option, ...(sp.contract?.twoWay ? { twoWay: true } : {}), ...(onRookieScale(sp, season) ? { rookie: true } : {}) },
+    contract: { start: season, salaries, option: sp.contract?.option, ...(onRookieScale(sp, season) ? { rookie: true } : {}) },
     stats: sp.stats.map((s) => ({ ...s, tid: BBREF_TO_TID[String(s.tid)] ?? s.tid })),
     // the numbers he wore at franchises he has left, for the one that retires his (jerseys.ts)
     ...(sp.jerseys
@@ -383,7 +372,11 @@ export function createLeague(opts: CreateOpts): League {
       // guaranteed), and the player is a free agent, or out of the league if he hasn't played in the
       // seasons the seed rates players by (its careers go further back)
       const c = p.contract;
-      if (p.tid >= 0 && !c.twoWay && c.salaries[0] < CAP.minContract) {
+      // (the league has no two-way deals: a real player on one starts as a free agent, a minimum deal away from anyone's roster)
+      if (sp.contract?.twoWay && p.tid >= 0) {
+        p.tid = FREE_AGENT;
+        p.contract = { start: season, salaries: [0] };
+      } else if (p.tid >= 0 && c.salaries[0] < CAP.minContract) {
         const years = c.option === 'team' ? c.salaries.length - 1 : c.salaries.length;
         for (let i = 0; i < years; i++) if (c.salaries[i] > 0) league.teams[p.tid].deadMoney.push({ pid: p.pid, name: playerName(p), season: season + i, amount: c.salaries[i] });
         if (!p.stats.some((s) => s.real && s.gp > 0 && s.season >= season - RATED_SEASONS)) continue;
@@ -428,13 +421,12 @@ export function createLeague(opts: CreateOpts): League {
         league.players[p.pid] = p;
         roster.push(p);
       }
-      // two-way prospects outside the 15 (most real ones are 22 to 27)
+      // two young prospects a team each on the market (most such players are 22 to 27): camp bodies for anyone
       for (let i = 0; i < 2; i++) {
         const age = rng.int(22, 27);
-        const p = generatePlayer(rng, { pid: league.nextPid++, season, tid, age, talent: rng.normal(-1.3, 0.4), scale: DEFAULT_SCALE, taken });
+        const p = generatePlayer(rng, { pid: league.nextPid++, season, tid: FREE_AGENT, age, talent: rng.normal(-1.3, 0.4), scale: DEFAULT_SCALE, taken });
         p.experience = rng.int(0, Math.min(2, age - 20));
         p.draft = { year: season - 1 - p.experience, round: 2, pick: rng.int(1, 30), tid: null };
-        p.contract = { start: season, salaries: [0], twoWay: true };
         league.players[p.pid] = p;
       }
     }
@@ -446,7 +438,7 @@ export function createLeague(opts: CreateOpts): League {
       p.draft = { year: season - 1 - p.experience, round: 0, pick: 0, tid: null };
       league.players[p.pid] = p;
     }
-    const rostered = Object.values(league.players).filter((p) => p.tid >= 0 && !p.contract.twoWay);
+    const rostered = Object.values(league.players).filter((p) => p.tid >= 0);
     matchRealSpread(rostered, Object.values(league.players));
     league.ovrScale = buildOvrScale(rostered.map((p) => ovrRaw(p.ratings)));
     // (some leagues start with a player already past their scale: legends.ts)
@@ -503,9 +495,7 @@ export function createLeague(opts: CreateOpts): League {
   for (const t of league.teams) ensureRotation(league, t.tid);
   const user = league.teams[opts.userTid];
   const roster = teamPlayers(league, opts.userTid);
-  // two-way contracts don't count toward the 15-man roster
-  const standard = roster.filter((p) => !p.contract.twoWay);
-  const twoWays = roster.length - standard.length;
+  const standard = roster;
   // the owner's goals as the roster stands (he sets them on opening night): the frame for every call that follows
   const goals = planOwnerGoals(league, opts.userTid);
   addInbox(league, {
@@ -517,7 +507,7 @@ export function createLeague(opts: CreateOpts): League {
         opts.role === 'gm'
           ? `${opts.coachName === 'Coach' ? 'Welcome aboard' : opts.coachName}, you're running basketball operations. Your coaching staff runs the bench.`
           : `${opts.coachName === 'Coach' ? 'Coach' : `Coach ${opts.coachName}`}, you're running basketball operations and the bench.`
-      } Your roster has ${standard.length} players${twoWays ? `, plus ${twoWays === 1 ? 'one on a two-way deal' : `${twoWays} on two-way deals`}` : ''}. Your staff has set a rotation and a playbook that fit it.`,
+      } Your roster has ${standard.length} players. Your staff has set a rotation and a playbook that fit it.`,
       ...(goals
         ? [
             'Here is what I expect from this roster.',
@@ -544,7 +534,7 @@ export function createLeague(opts: CreateOpts): League {
       from: 'Assistant GM',
       subject: `Preseason cuts: ${standard.length} players, room for ${CAP.rosterMax}`,
       body: [
-        `We carry ${standard.length} players on standard contracts into camp. The league allows ${CAP.rosterMax} on opening night.${twoWays ? " Two-way deals don't count." : ''}`,
+        `We carry ${standard.length} players into camp. The league allows ${CAP.rosterMax} on opening night.`,
         "Camp and minimum deals aren't guaranteed until then, so those cuts cost nothing. Anyone else's salary stays on our books as dead money.",
         'My picks, least value first:',
         ...cuts.map((p) => `${playerName(p)}: ${p.ovr} OVR, ${cost(p)}`),
@@ -615,8 +605,7 @@ function matchRealSpread(rostered: Player[], all: Player[]) {
  * Team totals are pulled halfway toward the league average (teams budget, so payrolls don't swing
  * as widely as talent does), then everything is scaled so the average payroll lands a little over
  * the cap and clamped to each player's minimum and max. Each team's two or three best young
- * players are on rookie-scale deals, some veterans hold options, and the two-way prospects get
- * two-way deals.
+ * players are on rookie-scale deals, and some veterans hold options.
  */
 function fictionalContracts(league: League, rng: Rng) {
   const season = league.season;
@@ -635,9 +624,6 @@ function fictionalContracts(league: League, rng: Rng) {
   const totals = teams.map((team) => team.reduce((a, x) => a + x.amount, 0));
   const mean = totals.reduce((a, v) => a + v, 0) / totals.length;
   const open = teams.flatMap((team, i) => team.map((x) => ({ ...x, amount: x.amount * Math.sqrt(mean / totals[i]) })));
-  for (const p of Object.values(league.players)) {
-    if (p.contract.twoWay) p.contract = { start: season, salaries: [twoWaySalary(league, season)], twoWay: true };
-  }
   const rookiePay = Object.values(league.players).reduce((a, p) => a + (p.tid >= 0 && p.contract.rookie ? p.contract.salaries[season - p.contract.start] : 0), 0);
   const target = league.teams.length * cap.salaryCap * 1.05 - rookiePay;
   const limits = (p: Player) => [p.experience >= 3 ? cap.vetMin : cap.minContract, cap.maxContract(p.experience)] as const;

@@ -24,11 +24,3 @@
 }
 
 /* a group's rows two to a line on a tablet: hairlines between the lines, none doubled under the last */
-@media (min-width: 760px) {
-  .list.wide2.tm-group > * {
-    border-bottom: none;
-  }
-  .list.wide2.tm-group > :nth-child(n + 3) {
-    border-top: 1px solid var(--line);
-  }
-}

@@ -17,7 +17,6 @@ import { aiGamePlan, oppPlanIn, planTeam, withOppPlan } from '../ai/opponentPlan
 import { staffTactics } from '../ai/advisor';
 import { projectGame } from '../analysis/projection';
 import { careerOnRecord, careerTotals, marksCrossed, markText, newsworthy, type MilestoneStat } from '../analysis/milestones';
-import { gameKeys, gradeKey } from '../analysis/keys';
 import { planAim } from '../analysis/moves';
 import { recapFacts } from '../analysis/quotes';
 import { recordGame, recordNews } from './records';
@@ -42,27 +41,6 @@ export function teamInjuryMult(team: Team) {
 
 function playedYesterday(league: League, tid: number, day: number): boolean {
   return league.schedule.some((g) => g.day === day - 1 && (g.home === tid || g.away === tid));
-}
-
-/**
- * Two-way players are deep bench: last in the order with no planned minutes (their share goes to
- * the standard players), unless the team is down to fewer than nine healthy standard players.
- */
-export function benchTwoWays(rot: Rotation, players: Player[]) {
-  const twoWay = new Set(players.filter((p) => p.contract.twoWay).map((p) => p.pid));
-  if (!twoWay.size || players.filter((p) => !p.contract.twoWay && !p.injury).length < 9) return;
-  rot.order = [...rot.order.filter((pid) => !twoWay.has(pid)), ...rot.order.filter((pid) => twoWay.has(pid))];
-  let freed = [...twoWay].reduce((a, pid) => a + (rot.minutes[pid] ?? 0), 0);
-  for (const pid of twoWay) rot.minutes[pid] = 0;
-  // hand the freed minutes to the lightest-used rotation players first, never past 38
-  const kept = rot.order.filter((pid) => !twoWay.has(pid) && (rot.minutes[pid] ?? 0) > 0);
-  while (freed > 0) {
-    const next = kept.filter((pid) => (rot.minutes[pid] ?? 0) < 38).sort((a, b) => (rot.minutes[a] ?? 0) - (rot.minutes[b] ?? 0))[0];
-    if (next === undefined) break;
-    rot.minutes[next] = (rot.minutes[next] ?? 0) + 1;
-    freed--;
-  }
-  rot.closers = rot.closers.filter((pid) => !twoWay.has(pid));
 }
 
 function bestPresetsChanged(team: Team, players: Player[], user: boolean, sticky: boolean): boolean {
@@ -242,31 +220,31 @@ export function youthLean(age: number): number {
 /**
  * A full youth movement's veterans sit some nights: the 30-and-ups every other night, the
  * 28-and-ups and its two best players 24 or older every third (load management, a sore knee), but
- * never so many that fewer than YOUTH_DRESSED healthy standard players dress: a rebuilder with eight
- * hurt had sat its three best healthy players too and sent out nine, three of them two-ways, who
+ * never so many that fewer than YOUTH_DRESSED healthy players dress: a rebuilder with eight
+ * hurt had sat its three best healthy players too and sent out nine, who
  * lost by 77 (and another such night by 86). Nor more than YOUTH_TOP_REST of its five best healthy
  * players on one night (the league's participation rules): a rebuilder with three 87-90 veterans
  * sat all of them on some nights, scored 53 and lost by 78.
  */
 export function restVeterans(league: League, players: Player[], day: number, rest: number[]) {
   const best = players
-    .filter((p) => playerAge(p, league.season) >= 24 && !p.contract.twoWay)
+    .filter((p) => playerAge(p, league.season) >= 24)
     .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
     .slice(0, 2);
   const top = new Set(
     players
-      .filter((p) => !p.contract.twoWay && !p.injury)
+      .filter((p) => !p.injury)
       .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
       .slice(0, 5)
       .map((p) => p.pid),
   );
   let topOut = rest.filter((pid) => top.has(pid)).length;
-  let dressed = players.filter((p) => !p.contract.twoWay && !p.injury && !rest.includes(p.pid)).length;
+  let dressed = players.filter((p) => !p.injury && !rest.includes(p.pid)).length;
   for (const p of players) {
     const age = playerAge(p, league.season);
     if (rest.includes(p.pid) || (age < 28 && !best.includes(p))) continue;
     if ((p.pid + day) % (age >= 30 ? 2 : 3) !== 0) continue;
-    const counts = !p.contract.twoWay && !p.injury;
+    const counts = !p.injury;
     if (counts && dressed <= YOUTH_DRESSED) continue;
     if (top.has(p.pid) && topOut >= YOUTH_TOP_REST) continue;
     rest.push(p.pid);
@@ -278,7 +256,7 @@ export function restVeterans(league: League, players: Player[], day: number, res
 /** The most of a youth movement's five best healthy players its nights off sit at once (see restVeterans). */
 const YOUTH_TOP_REST = 2;
 
-/** The fewest healthy standard players a youth movement's nights off leave dressed (see restVeterans). */
+/** The fewest healthy players a youth movement's nights off leave dressed (see restVeterans). */
 const YOUTH_DRESSED = 10;
 
 /**
@@ -290,7 +268,7 @@ const YOUTH_DRESSED = 10;
  */
 export function restForPlayoffs(players: Player[], day: number, rest: number[]) {
   const best = players
-    .filter((p) => !p.contract.twoWay && !p.injury)
+    .filter((p) => !p.injury)
     .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
     .slice(0, PLAYOFF_REST);
   for (const p of best) if (!rest.includes(p.pid) && (p.pid + day) % 2 === 0) rest.push(p.pid);
@@ -349,8 +327,6 @@ export function ensureRotation(league: League, tid: number) {
     // (a youth movement also spreads the minutes: nobody past 30, the end of the bench plays)
     team.rotation = autoRotation(players, rot, youth ? { lean: (p) => youth * youthLean(playerAge(p, league.season)), maxMinutes: 38 - 8 * youth } : {});
   } else if (stale) keepManualRotation(rot, players);
-  // (a youth movement plays its two-way prospects too)
-  if ((!isUser || !team.rotation.manual) && youthMovement(league, tid) < 1) benchTwoWays(team.rotation, players);
   const missingRoles = players.some((p) => team.tactics.offense.roles[p.pid] === undefined);
   // an assistant-run playbook follows the healthy roster: a long injury starting or ending can change
   // the best fit (the Tactics screen's fit scores count the same players)
@@ -418,7 +394,7 @@ function teamSimInput(
     }
     // a conference leader well clear rests its best player on the second night (the user's only when his staff runs the rotation)
     if ((tid !== league.userTid || !team.rotation.manual) && clearLeader(league, tid)) {
-      const best = players.filter((p) => !p.contract.twoWay && !p.injury).sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)[0];
+      const best = players.filter((p) => !p.injury).sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)[0];
       if (best && !rest.includes(best.pid)) rest.push(best.pid);
     }
   }
@@ -439,7 +415,6 @@ function teamSimInput(
     if (play.length && !rotation.manual) {
       const ready = players.map((p) => (play.includes(p.pid) ? { ...p, injury: null } : p));
       rotation = autoRotation(ready, team.rotation);
-      benchTwoWays(rotation, ready);
     }
     const extra = play.length ? { play } : {};
     // opponent-specific game plan for the user's team. The assistant adjusts at breaks unless switched off (Tactics: crunch time), whoever runs the tactics, leaving
@@ -571,11 +546,8 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
   // (taken while this game still counts as unplayed: a stored result isn't written again once saved)
   const stakesTid = g.type === 'regular' && (g.home === league.userTid || g.away === league.userTid) ? league.userTid : undefined;
   const before = stakesTid !== undefined ? standingLine(league, stakesTid) : undefined;
-  // and how the keys to the game went (set from the games before tonight, as the preview showed them)
+  // the game plan's counters it was played with (used up just below), for the report's grade of the plan
   if (g.type !== 'allstar' && (g.home === league.userTid || g.away === league.userTid)) {
-    const keys = gameKeys(league, g);
-    if (keys.length) res.keys = keys.map((k) => gradeKey(k, res, g.home === league.userTid ? 0 : 1));
-    // and the game plan's counters it was played with (used up just below), for the report's grade of the plan
     const plan = planFor(league, g.home === league.userTid ? g.away : g.home, g);
     const base = league.teams[league.userTid].tactics;
     res.setup = { playbook: playbookLabel(base), own: !!base.manual, help: base.defense.help };

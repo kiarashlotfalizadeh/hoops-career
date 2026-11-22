@@ -5,12 +5,14 @@
 import type { Room } from '../core/league/pulse';
 import { ACTIONS, DEF_ROLES, FREE_AGENT, OFF_SHAPES, SET_IDS, type League, type Player, type Tactics } from '../core/types';
 import { MIN_SAVE_VERSION, SAVE_VERSION } from '../core/constants';
-import { defaultTactics } from '../core/sim/tactics';
+import { clearOpponentOnly, defaultTactics } from '../core/sim/tactics';
 import { FRANCHISES } from '../core/teams';
 import { REC_STATS, TEAM_REC_STATS, backfillRecords } from '../core/league/records';
 import { DUNK_FIELD, THREE_FIELD } from '../core/league/allStarSaturday';
 import { registryProblems, seedCoaches } from '../core/league/coaches';
 import { REVIEWS_KEPT, type OwnerGoalKind } from '../core/league/ownerGoals';
+import { FA_PRICE_CUT_DAYS, askingContract, leaveTeam } from '../core/league/contracts';
+import { addInbox, andList, playerName } from '../core/league/helpers';
 import { MAX_STEPS } from './live';
 
 /** A save from before the current format (MIN_SAVE_VERSION): its league can't be opened by this build. */
@@ -200,10 +202,10 @@ function cleanGamePlans(x: League) {
     if (x.gamePlans !== undefined) delete x.gamePlans;
     return;
   }
-  const scopes = new Set(['next', 'series', 'season']);
+  const scopes = new Set(['next', 'series']);
   for (const [k, p] of Object.entries(x.gamePlans as Record<string, unknown>)) {
     // a plan without its items or with a scope the app doesn't know would break every game against that team: it goes
-    if (!obj(p) || Array.isArray(p) || !Array.isArray(p.items) || (p.scope !== undefined && !scopes.has(p.scope as string))) {
+    if (!obj(p) || Array.isArray(p) || !Array.isArray(p.items) || (p.scope !== undefined && p.scope !== 'season' && !scopes.has(p.scope as string))) {
       delete (x.gamePlans as Record<string, unknown>)[k];
       continue;
     }
@@ -212,7 +214,9 @@ function cleanGamePlans(x: League) {
       if (!obj(p.matchups) || Array.isArray(p.matchups)) delete p.matchups;
       else for (const [pid, d] of Object.entries(p.matchups)) if (!int(d)) delete p.matchups[pid];
     }
-    if (p.note !== undefined && !str(p.note)) delete p.note;
+    // (plans last a game or a series now, and carry no note: a season plan becomes a next-game one)
+    if (p.scope === 'season') delete p.scope;
+    delete p.note;
     delete p.playerD;
     for (const it of p.items as { patch: Record<string, unknown>; pts?: unknown }[]) {
       cleanTacticsParts(it.patch.offense, it.patch.defense, it.patch.manage, false);
@@ -252,10 +256,6 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   if (x.proposals !== undefined) x.proposals = Array.isArray(x.proposals) ? x.proposals.filter((p) => proposalIntact(x, p)) : [];
   if (x.untouchable !== undefined) x.untouchable = Array.isArray(x.untouchable) ? x.untouchable.filter((pid) => num(pid) && !!x.players[pid]) : [];
   for (const m of x.inbox) if (m.proposal !== undefined && !num(m.proposal)) delete m.proposal;
-  // restricted free agency: damaged rights or offer sheets are dropped (see rfaIntact), and so is an
-  // inbox message's link to an offer sheet that isn't a player id
-  for (const p of Object.values(x.players)) if (p.rfa !== undefined) rfaIntact(x, p);
-  for (const m of x.inbox) if (m.sheet !== undefined && !int(m.sheet)) delete m.sheet;
   // a live game's journal that's damaged, or not for today's game any more, goes (the game starts over)
   if (x.live !== undefined && !liveIntact(x, x.live)) delete x.live;
   // the latest live game's highlights: a damaged reel goes (its report then has none)
@@ -269,8 +269,8 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   // win-probability data of the user's games: a damaged list goes (the charts fall back as for older games)
   for (const g of x.games) {
     if (g.sets !== undefined && !setsIntact(g.sets)) delete g.sets;
-    // keys to the game: a damaged list goes (the recap then has none)
-    if (g.keys !== undefined && !keysIntact(g.keys)) delete g.keys;
+    // (keys to the game are gone from the game: a save from when results kept them drops them)
+    delete (g as { keys?: unknown }).keys;
     // what the recap's quotes read: damaged, they go (the quotes read the play-by-play and the flow, as for older games)
     if (g.hurt !== undefined && !(Array.isArray(g.hurt) && g.hurt.every(int))) delete g.hurt;
     if (g.wpLow !== undefined && !(num(g.wpLow) && g.wpLow >= 0 && g.wpLow <= 1)) delete g.wpLow;
@@ -281,6 +281,7 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
     if (g.flowT !== undefined && !(nums(g.flowT) && g.flowT.length === g.flow?.length)) delete g.flowT;
     if (g.flowPoss !== undefined && !(Array.isArray(g.flowPoss) && g.flowPoss.length === g.flowPeriods?.length && g.flowPoss.every((s) => s === 0 || s === 1))) delete g.flowPoss;
   }
+  migrateSimpleRules(x);
   migrateContracts(x);
   migrateRecords(x);
   // All-Star Saturday's results: a damaged set goes (the Awards tab then shows the All-Stars alone)
@@ -296,6 +297,7 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   migrateReadings(x);
   migrateWording(x);
   migrateNicknames(x);
+  migrateFocus(x);
   // god mode's switch and its count of edits: out of shape, they go (god mode off, an unedited league)
   if (x.settings.godMode !== undefined && typeof x.settings.godMode !== 'boolean') delete x.settings.godMode;
   if (x.godEdits !== undefined && !(int(x.godEdits) && x.godEdits >= 0)) delete x.godEdits;
@@ -338,6 +340,44 @@ function migrateNicknames(x: League) {
   if (!Array.isArray(x.news)) return;
   x.news = x.news.filter((n) => !(obj(n) && typeof n.text === 'string' && / has a nickname now: "/.test(n.text)));
   for (const n of x.news) if (obj(n) && typeof n.text === 'string') n.text = n.text.replace(/, "[^"]+" to the scouts already/, '');
+}
+
+/**
+ * The game narrowed to gameday, tactics and transactions (November 2026). A star plan and
+ * hack-a-player are an opponent's Game Plan's alone: a save whose own tactics carry them loses them
+ * there (the plans against each opponent keep theirs).
+ */
+function migrateFocus(x: League) {
+  const team = x.teams[x.userTid];
+  if (team?.tactics) clearOpponentOnly(team.tactics);
+  // the franchise runs its own money: the budgets at the league's standard, the ticket price the
+  // gate's own from the next opening night, and no word from the owner on the books
+  if (team?.budget) {
+    Object.assign(team.budget, { coaching: 50, health: 50, facilities: 50 });
+    delete (team.budget as { priceSet?: unknown }).priceSet;
+  }
+  delete (x as { books?: unknown }).books;
+  // ...so he asks for no profit either: that goal goes, its weight shared among the others (in this
+  // season's goals; a past review keeps its other lines and its grade as it was given)
+  const dropProfit = <T extends { kind: string; weight?: number }>(goals: T[], rescale: boolean): T[] => {
+    const kept = goals.filter((g) => g.kind !== 'profit');
+    if (!rescale || kept.length === goals.length || !kept.length) return kept;
+    const sum = kept.reduce((a, g) => a + (g.weight ?? 0), 0);
+    if (sum > 0) {
+      for (const g of kept) g.weight = Math.round(((g.weight ?? 0) / sum) * 100) / 100;
+      const top = kept.reduce((a, g) => ((g.weight ?? 0) > (a.weight ?? 0) ? g : a), kept[0]);
+      top.weight = Math.round(((top.weight ?? 0) + 1 - kept.reduce((a, g) => a + (g.weight ?? 0), 0)) * 100) / 100;
+    }
+    return kept;
+  };
+  if (x.ownerGoals) {
+    const kept = dropProfit(x.ownerGoals.goals as { kind: string; weight?: number }[], true);
+    if (kept.length) x.ownerGoals.goals = kept as typeof x.ownerGoals.goals;
+    else delete x.ownerGoals;
+  }
+  for (const r of x.ownerReviews ?? []) r.goals = dropProfit(r.goals as { kind: string; weight?: number }[], false) as typeof r.goals;
+  // (the cards that are gone: the books', a skid's and the week's)
+  if (x.callsDone) x.callsDone = x.callsDone.filter((id) => !/^(books|skid|week):/.test(id));
 }
 
 /**
@@ -457,7 +497,8 @@ function migrateOwner(x: League) {
   if (obj(x.ownerMood) && x.ownerMood.youth !== undefined && !num(x.ownerMood.youth)) delete x.ownerMood.youth;
 }
 
-const GOAL_KINDS: ReadonlySet<unknown> = new Set<OwnerGoalKind>(['wins', 'postseason', 'profit', 'payroll', 'youth']);
+/** (a save from when the owner asked for a profit still names that goal: migrateFocus drops it) */
+const GOAL_KINDS: ReadonlySet<unknown> = new Set<OwnerGoalKind | 'profit'>(['wins', 'postseason', 'profit', 'payroll', 'youth']);
 
 /** A goal as the Owner tab and the review read it: a kind, a title, a target and a weight (and the plan's numbers, when it has them). */
 const goalIntact = (g: unknown): g is Record<string, unknown> =>
@@ -634,40 +675,16 @@ function reelIntact(reel: unknown): boolean {
   });
 }
 
-/** A result's keys to the game, in shape: a title and goal to show, a target, and a value and verdict that agree. */
-function keysIntact(keys: unknown): boolean {
-  return (
-    Array.isArray(keys) &&
-    keys.length <= 5 &&
-    keys.every(
-      (k) =>
-        obj(k) &&
-        typeof k.id === 'string' &&
-        typeof k.title === 'string' &&
-        typeof k.goal === 'string' &&
-        (k.dir === 'max' || k.dir === 'min') &&
-        num(k.target) &&
-        (k.value === null ? k.met === null : num(k.value) && typeof k.met === 'boolean'),
-    )
-  );
-}
-
 const TALK_KINDS = new Set(['fa', 'resign', 'extend']);
 const TALK_PERIODS = new Set(['resign', 'fa', 'season']);
 const OPTIONS = new Set(['player', 'team']);
 
 /**
- * Contract talks, 10-day contracts, the stretch provision, Bird rights and the exceptions (all
- * optional): a damaged piece is dropped. Talks need a real team, season, kind and period, patience
- * 0-5, a counter with a positive salary for 1-5 years, and lost interest and a firm ask in range; a
- * 10-day contract is only kept on a rostered player in the regular season (without it, his one
- * prorated salary runs to the season's end like any deal); the 10-day count holds one or two
- * contracts for each real team (an older save's count, for the one team he last signed with,
- * becomes that team's); a Bird clock is a season (without one, the season he joined stands in); a
- * release names a real team and a season; a dead-money entry's stretch mark is `true` or gone; the
- * seasons a team used cap space or an exception are whole numbers; its traded player exceptions
- * each have a positive amount and the season and day of their trade (a damaged one goes); and an
- * inbox message's 10-day link is a player id.
+ * Contract talks, Bird rights and the mid-level exception (all optional): a damaged piece is
+ * dropped. Talks need a real team, season, kind and period, patience 0-5, a counter with a positive
+ * salary for 1-5 years, and lost interest and a firm ask in range; a Bird clock is a season
+ * (without one, the season he joined stands in); a release names a real team and a season; the
+ * season a team used its mid-level exception is a whole number.
  */
 function migrateContracts(x: League) {
   const teamOk = (v: unknown) => int(v) && !!x.teams[v];
@@ -692,29 +709,61 @@ function migrateContracts(x: League) {
         (t.firm === undefined || (num(t.firm) && (t.firm as number) >= 1 && (t.firm as number) <= 1.2));
       if (!ok) delete p.talks;
     }
-    const n = p.tenDays as unknown;
-    if (n !== undefined) {
-      if (!(obj(n) && int(n.season) && obj(n.by) && !Array.isArray(n.by) && Object.entries(n.by).every(([tid, c]) => teamOk(Number(tid)) && int(c) && c >= 1 && c <= 2)))
-        delete p.tenDays;
-    }
-    const td = p.contract?.tenDay as unknown;
-    if (td !== undefined && !(obj(td) && int(td.until) && (td.hardship === undefined || td.hardship === true) && p.tid >= 0 && x.phase === 'regular')) delete p.contract.tenDay;
-    if (p.waivers && Array.isArray(p.waivers.dead)) for (const d of p.waivers.dead) if (obj(d) && d.stretched !== undefined && d.stretched !== true) delete d.stretched;
     if (p.birdSince !== undefined && !int(p.birdSince)) delete p.birdSince;
     const rel = p.released as unknown;
     if (rel !== undefined && !(obj(rel) && teamOk(rel.tid) && int(rel.season))) delete p.released;
   }
-  for (const t of x.teams) {
-    for (const d of Array.isArray(t.deadMoney) ? t.deadMoney : []) if (obj(d) && d.stretched !== undefined && d.stretched !== true) delete d.stretched;
-    for (const k of ['mleSeason', 'spaceSeason', 'roomSeason', 'baeSeason', 'taxMleSeason'] as const) if (t[k] !== undefined && !int(t[k])) delete t[k];
-    const tpes = t.tpes as unknown;
-    if (tpes !== undefined) {
-      const ok = Array.isArray(tpes) ? tpes.filter((e) => obj(e) && num(e.amount) && (e.amount as number) > 0 && int(e.season) && int(e.day)) : [];
-      if (ok.length) t.tpes = ok as typeof t.tpes;
-      else delete t.tpes;
+  for (const t of x.teams) if (t.mleSeason !== undefined && !int(t.mleSeason)) delete t.mleSeason;
+}
+
+/**
+ * The league's simpler rules (a soft cap, the luxury tax, one mid-level exception, Bird rights): a
+ * save from before them loses what they cut. A two-way player is a free agent (the user hears who);
+ * a player on waivers has cleared (his dead money is on his old team's books already); a 10-day
+ * deal runs to the season's end like any other; a restricted free agent is unrestricted, his offer
+ * sheet gone; a stretched release keeps its seasons; the other exceptions and the traded player
+ * exceptions go, a pending offer on one now rides the mid-level exception.
+ */
+function migrateSimpleRules(x: League) {
+  type Old = Record<string, unknown>;
+  const cut: Player[] = [];
+  for (const p of Object.values(x.players)) {
+    const old = p as unknown as Old;
+    const c = p.contract as unknown as Old | undefined;
+    if (c?.twoWay && x.teams[p.tid]) {
+      const team = x.teams[p.tid];
+      leaveTeam(team, p.pid);
+      if (x.untouchable?.includes(p.pid)) x.untouchable = x.untouchable.filter((pid) => pid !== p.pid);
+      if (p.tid === x.userTid) cut.push(p);
+      p.tid = FREE_AGENT;
+      p.contract = { start: x.season, salaries: [0] };
+      delete p.tradedFrom;
+      delete p.tradeLock;
+      delete p.talks;
+      p.asking = undefined;
+      p.asking = askingContract(x, p);
+      p.faDays = FA_PRICE_CUT_DAYS;
     }
+    if (obj(p.contract)) for (const k of ['twoWay', 'converted', 'qualifying', 'tenDay']) delete (p.contract as unknown as Old)[k];
+    for (const k of ['waivers', 'rfa', 'tenDays']) delete old[k];
   }
-  for (const m of x.inbox) if (m.tenDay !== undefined && !int(m.tenDay)) delete m.tenDay;
+  for (const t of x.teams) {
+    const old = t as unknown as Old;
+    // (an exception of the old rules used this summer was the team's one exception)
+    for (const k of ['taxMleSeason', 'roomSeason', 'baeSeason']) if (int(old[k]) && !(int(t.mleSeason) && t.mleSeason >= (old[k] as number))) t.mleSeason = old[k] as number;
+    for (const k of ['spaceSeason', 'roomSeason', 'baeSeason', 'taxMleSeason', 'tpes']) delete old[k];
+    for (const d of Array.isArray(t.deadMoney) ? t.deadMoney : []) if (obj(d)) delete (d as Old).stretched;
+  }
+  for (const m of x.inbox) for (const k of ['sheet', 'tenDay']) delete (m as unknown as Old)[k];
+  for (const b of x.faBids ?? []) if (b.route !== undefined && !['min', 'space', 'mle'].includes(b.route)) b.route = 'mle';
+  if (cut.length)
+    addInbox(x, {
+      from: 'Assistant GM',
+      subject: 'Two-way deals are gone',
+      body: `The league dropped two-way contracts. ${andList(cut.map(playerName))} ${cut.length === 1 ? 'is a free agent' : 'are free agents'} now: sign ${cut.length === 1 ? 'him' : 'them'} again if you want ${cut.length === 1 ? 'him' : 'them'}.`,
+      tone: 'neutral',
+      link: '/office/free-agents',
+    });
 }
 
 /** A live game's moves in shape (see CoachMove): what each was, when, and the tallies around it. */
@@ -873,50 +922,6 @@ function liveIntact(l: League, j: unknown): boolean {
   }
   const g = l.schedule.find((x) => x.gid === j.gid);
   return j.tid === l.userTid && !!g && !g.played && g.day === l.day && (g.home === j.tid || g.away === j.tid);
-}
-
-const SHEET_ROUTES = new Set(['min', 'space', 'mle', 'tmle', 'room', 'bae']);
-
-/**
- * A restricted free agent's rights in shape (see src/core/league/rfa.ts), or dropped: a qualifying
- * offer from a real team, for a positive amount, on that team's player in the re-sign period or on
- * a free agent in free agency; an offer sheet only in free agency, from another real team, 2-5
- * years at a positive salary, paid for by a known route, its match days in order. A damaged sheet
- * goes alone (his team keeps his rights); damaged rights take the sheet with them, and he is an
- * unrestricted free agent.
- */
-function rfaIntact(l: League, p: Player) {
-  const r = p.rfa as unknown;
-  const ok =
-    obj(r) &&
-    int(r.tid) &&
-    !!l.teams[r.tid] &&
-    num(r.qo) &&
-    (r.qo as number) > 0 &&
-    (r.hold === undefined || (num(r.hold) && (r.hold as number) >= 0)) &&
-    (l.phase === 'resign' ? p.tid === r.tid : l.phase === 'freeAgency' && p.tid === FREE_AGENT);
-  if (!ok) {
-    delete p.rfa;
-    return;
-  }
-  const s = r.sheet;
-  if (s === undefined) return;
-  const sheetOk =
-    obj(s) &&
-    l.phase === 'freeAgency' &&
-    int(s.tid) &&
-    s.tid !== r.tid &&
-    !!l.teams[s.tid] &&
-    num(s.amount) &&
-    (s.amount as number) > 0 &&
-    int(s.years) &&
-    s.years >= 2 &&
-    s.years <= 5 &&
-    SHEET_ROUTES.has(s.route as string) &&
-    int(s.day) &&
-    int(s.until) &&
-    s.until >= s.day;
-  if (!sheetOk) delete p.rfa!.sheet;
 }
 
 /**

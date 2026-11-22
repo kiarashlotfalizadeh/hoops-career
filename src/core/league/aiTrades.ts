@@ -7,15 +7,13 @@
 import type { DraftPick, League, Player } from '../types';
 import { CAP } from '../constants';
 import { Rng, clamp } from '../random';
-import { CAP_FOR, OFFSEASON_ROSTER_MAX, age, contractSeason, curTeamSeason, dateToDay, inSeason, standardRoster, winPct } from './helpers';
-import { DEC_15, extensionRefusal, hardCapLine, tradeValue, valueScore } from './contracts';
-import { capPayroll, withHoldsMemo } from './freeAgency';
+import { CAP_FOR, OFFSEASON_ROSTER_MAX, age, contractSeason, curTeamSeason, dateToDay, inSeason, standardRoster, winPct, payroll } from './helpers';
+import { DEC_15, extensionRefusal, tradeValue, valueScore } from './contracts';
 import { contractExp } from '../playerGen';
 import {
   MAX_FIRSTS_OUT,
   TradeLeg,
   TradeOffer,
-  bestTpe,
   capSalary,
   dealDelta,
   deadlineFever,
@@ -148,7 +146,7 @@ function aiTradeOnce(league: League, rng: Rng): boolean {
   const kinds = rng.chance(late ? 0.5 : 0.7) ? [sale, dump] : [dump, sale];
   for (const find of kinds) {
     // (a deal is its legs: two teams, or three when a sale needed a third to take the salary)
-    const deal = withHoldsMemo(() => find(league, rng));
+    const deal = find(league, rng);
     if (deal && draftNightRoom(league, deal)) {
       executeDeal(league, deal);
       return true;
@@ -165,7 +163,7 @@ function aiTradeOnce(league: League, rng: Rng): boolean {
  */
 function draftNightRoom(league: League, legs: TradeLeg[]): boolean {
   if (league.phase !== 'draft') return true;
-  const bodies = (pids: number[]) => pids.filter((pid) => !league.players[pid]?.contract.twoWay).length;
+  const bodies = (pids: number[]) => pids.length;
   for (const tid of new Set(legs.flatMap((l) => [l.tid, l.to]))) {
     const out = legs.filter((l) => l.tid === tid);
     const inc = legs.filter((l) => l.to === tid);
@@ -306,23 +304,21 @@ export interface BlockRumor {
  */
 export function onTheBlock(league: League, max = 3): BlockRumor[] {
   if (tradingClosedReason(league)) return [];
-  return withHoldsMemo(() => {
-    const cands = league.teams
-      .filter((t) => t.tid !== league.userTid)
-      .flatMap((t) => sellable(league, t.tid).map((p) => ({ tid: t.tid, p })))
-      // (a player who asked out is the story: he leads, and his team's other veterans wait)
-      .sort((x, y) => Number(wantsOut(league, y.p)) - Number(wantsOut(league, x.p)) || y.p.ovr - x.p.ovr || x.p.pid - y.p.pid);
-    const seen = new Set<number>();
-    const out: BlockRumor[] = [];
-    for (const { tid, p } of cands) {
-      if (out.length >= max) break;
-      if (seen.has(tid)) continue;
-      seen.add(tid);
-      const suitors = buyersFor(league, tid, p).filter((b) => aiPackage(league, b, tid, p));
-      out.push({ tid, pid: p.pid, suitors: suitors.slice(0, 3), ...(wantsOut(league, p) ? { asked: true as const } : {}) });
-    }
-    return out;
-  });
+  const cands = league.teams
+    .filter((t) => t.tid !== league.userTid)
+    .flatMap((t) => sellable(league, t.tid).map((p) => ({ tid: t.tid, p })))
+    // (a player who asked out is the story: he leads, and his team's other veterans wait)
+    .sort((x, y) => Number(wantsOut(league, y.p)) - Number(wantsOut(league, x.p)) || y.p.ovr - x.p.ovr || x.p.pid - y.p.pid);
+  const seen = new Set<number>();
+  const out: BlockRumor[] = [];
+  for (const { tid, p } of cands) {
+    if (out.length >= max) break;
+    if (seen.has(tid)) continue;
+    seen.add(tid);
+    const suitors = buyersFor(league, tid, p).filter((b) => aiPackage(league, b, tid, p));
+    out.push({ tid, pid: p.pid, suitors: suitors.slice(0, 3), ...(wantsOut(league, p) ? { asked: true as const } : {}) });
+  }
+  return out;
 }
 
 /** A player this good is worth a buyer's third-best player (see aiPackage). */
@@ -337,7 +333,7 @@ const keptFor = (league: League, buyer: number, vet: Player) => (vet.ovr >= STAR
 
 /**
  * The buyer's offer for one player: salary that matches first (without sending an over-the-cap
- * seller more than it can take back, or taking a hard-capped buyer past its apron), then its two
+ * seller more than it can take back, or taking the buyer past its top line), then its two
  * most valuable young players and picks from the cheapest up (three at most, so better ones
  * replace the cheapest; two firsts at most) until the seller agrees; null unless both teams sign
  * off and the rules allow it. The buyer's three best players are off the table (its two best for
@@ -363,17 +359,9 @@ export function aiPackage(league: League, buyer: number, seller: number, vet: Pl
   });
   // an over-the-cap seller can only take back so much salary
   const sellerFits = (p: Player) => salaryMatchGap(league, offer(p), 'b') === 0;
-  // an over-the-cap buyer must send back salary first, and a hard-capped one (it used an exception)
-  // enough that the deal doesn't take it past its apron (as validateTrade has it: one already past
-  // it only can't add salary): the smallest contract that covers the gap, else the biggest and keep going
-  const s = contractSeason(league);
-  const line = hardCapLine(league, buyer, s);
-  const capGap = () => {
-    if (!line) return 0;
-    const net = sal(vet) - pkg.reduce((a, p) => a + sal(p), 0);
-    return Math.min(net, capPayroll(league, buyer, s) + net - line.amount);
-  };
-  const gapNow = () => Math.max(salaryMatchGap(league, offer(), 'a'), capGap());
+  // an over-the-cap buyer must send back salary first: the smallest contract that covers the gap,
+  // else the biggest and keep going
+  const gapNow = () => salaryMatchGap(league, offer(), 'a');
   while (gapNow() > 0) {
     const gap = gapNow();
     const rest = avail.filter((x) => !pkg.includes(x) && sellerFits(x));
@@ -406,20 +394,20 @@ export function aiPackage(league: League, buyer: number, seller: number, vet: Pl
     } else if (pkg.length < maxPkg && sellerFits(x)) pkg.push(x);
   }
   const deal = offer();
-  return sellerYes() && teamDelta(league, deal, buyer) >= 0 && !pastSecondApron(league, deal, buyer) && !validateTrade(league, deal).length ? deal : null;
+  return sellerYes() && teamDelta(league, deal, buyer) >= 0 && !pastSpendTop(league, deal, buyer) && !validateTrade(league, deal).length ? deal : null;
 }
 
 /**
- * Would this deal take team `tid` past the second apron, or further past it? AI teams don't buy
- * their way past it (the repeater tax, the frozen first and the lost tools aren't worth a player to
- * a front office minding its owner's money); a team past it can still shed salary.
+ * Would this deal take team `tid` past the AI's top line (CAP.spendTop), or further past it? AI teams
+ * don't buy their way past it (the repeater tax isn't worth a player to a front office minding its
+ * owner's money); a team past it can still shed salary. A habit of the AI's, not a rule.
  */
-export function pastSecondApron(league: League, deal: TradeOffer, tid: number): boolean {
+export function pastSpendTop(league: League, deal: TradeOffer, tid: number): boolean {
   const s = contractSeason(league);
   const sal = (pids: number[]) => pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
   const [mine, other] = deal.a.tid === tid ? [deal.a, deal.b] : [deal.b, deal.a];
   const net = sal(other.pids) - sal(mine.pids);
-  return net > 0 && capPayroll(league, tid, s) + net > CAP_FOR(league, s).secondApron;
+  return net > 0 && payroll(league, tid, s) + net > CAP_FOR(league, s).spendTop;
 }
 
 // ---------------------------------------------------------------- three-team deals
@@ -487,13 +475,13 @@ export function facilitatedDeal(
   }
   if (!fill.length) return null;
   const load = fill.reduce((a, p) => a + sal(p), 0);
-  // third teams: with the cap room for all of it, or an exception for a lone contract; the most room first
+  // third teams: with the cap room for all of it; the most room first
   const thirds =
     opts.thirds ??
     league.teams
       .filter((t) => t.tid !== buyer && t.tid !== seller && t.tid !== league.userTid && takesCalls(league, t.tid))
-      .map((t) => ({ tid: t.tid, room: cap.salaryCap - capPayroll(league, t.tid, s) }))
-      .filter((x) => x.room >= load || (fill.length === 1 && bestTpe(league, x.tid) >= load))
+      .map((t) => ({ tid: t.tid, room: cap.salaryCap - payroll(league, t.tid, s) }))
+      .filter((x) => x.room >= load)
       .sort((x, y) => y.room - x.room || x.tid - y.tid)
       .slice(0, THIRD_TEAMS)
       .map((x) => x.tid);
@@ -535,19 +523,19 @@ export function facilitatedDeal(
     pay(third, toThird, THIRD_PICKS, toSeller);
     const deal = legs();
     if (!yes(third, deal) || !yes(buyer, deal) || validateDeal(league, deal).length) continue;
-    // (as in any AI deal: no AI team buys its way past the second apron)
-    if ([buyer, third].some((tid) => tid !== league.userTid && pastApron(league, deal, tid))) continue;
+    // (as in any AI deal: no AI team buys its way past its top line)
+    if ([buyer, third].some((tid) => tid !== league.userTid && pastTop(league, deal, tid))) continue;
     return deal;
   }
   return null;
 }
 
-/** pastSecondApron for a deal read as its legs. */
-function pastApron(league: League, legs: TradeLeg[], tid: number): boolean {
+/** pastSpendTop for a deal read as its legs. */
+function pastTop(league: League, legs: TradeLeg[], tid: number): boolean {
   const s = contractSeason(league);
   const sal = (pids: number[]) => pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
   const net = sal(legs.filter((l) => l.to === tid).flatMap((l) => l.pids)) - sal(legs.filter((l) => l.tid === tid).flatMap((l) => l.pids));
-  return net > 0 && capPayroll(league, tid, s) + net > CAP_FOR(league, s).secondApron;
+  return net > 0 && payroll(league, tid, s) + net > CAP_FOR(league, s).spendTop;
 }
 
 // ---------------------------------------------------------------- salary dumps
@@ -559,7 +547,7 @@ const PARTIAL_DUMP = 0.03;
  * A team over the tax line sheds salary, as the NBA's deadline and summer dumps go: the contract that
  * gets it under the line at the least cost in value (a player outside its eight best; a retooling
  * team's outside its five best; a rebuilder's veteran outside its three best) to a team that can
- * absorb it (cap room, or a traded player exception that covers it) for nothing back, or failing
+ * absorb it (cap room) for nothing back, or failing
  * that for a cheaper player of the taker's that still leaves it under and lets the taker match the
  * salary, with picks attached from the cheapest up until the taker would do it. When no taker can
  * get it under, or no one contract would, a step toward the line: a contract worth shedding that
@@ -573,22 +561,22 @@ function dumpDeal(league: League, rng: Rng, only?: number): TradeOffer | null {
   const s = contractSeason(league);
   const cap = CAP_FOR(league, s);
   const ai = league.teams.filter((t) => t.tid !== league.userTid);
-  const over = ai.map((t) => ({ t, over: capPayroll(league, t.tid, s) - cap.luxuryTax })).filter((x) => x.over > 0 && (only === undefined || x.t.tid === only));
+  const over = ai.map((t) => ({ t, over: payroll(league, t.tid, s) - cap.luxuryTax })).filter((x) => x.over > 0 && (only === undefined || x.t.tid === only));
   const givers: typeof over = [];
   while (givers.length < 3 && over.length) givers.push(over.splice(rng.weighted(over.map((x) => 1 / (1 + x.over / (cap.salaryCap * 0.05)))), 1)[0]);
   for (const { t, over } of givers) {
     const roster = tradeRoster(league, t.tid).filter((p) => capSalary(league, p.pid) > 0 && !untradeable(league, p) && !justTraded(league, p));
     // what it won't give up to get under: its eight best; a retooling team its five best; a
-    // rebuilder only its three best and its young players (25 or under, worth 70+). Past the first
-    // apron a contender keeps its six best; past the second, a contender its five best and anyone
+    // rebuilder only its three best and its young players (25 or under, worth 70+). Past its spending
+    // line a contender keeps its six best; past its top line, a contender its five best and anyone
     // else its three: a team that far over moves a rotation player rather than stay there
     const ranked = [...roster].sort((a, b) => valueScore(league, b) - valueScore(league, a));
-    const pay = capPayroll(league, t.tid, s);
-    const past = pay > cap.secondApron;
+    const pay = payroll(league, t.tid, s);
+    const past = pay > cap.spendTop;
     const keep = new Set(
       (t.strategy === 'rebuild'
         ? ranked.filter((p, i) => i < 3 || (!past && age(league, p) <= 25 && valueScore(league, p) >= 70))
-        : ranked.slice(0, past ? (t.strategy === 'contend' ? 5 : 3) : t.strategy === 'retool' ? 5 : pay > cap.firstApron ? 6 : 8)
+        : ranked.slice(0, past ? (t.strategy === 'contend' ? 5 : 3) : t.strategy === 'retool' ? 5 : pay > cap.spendLine ? 6 : 8)
       ).map((p) => p.pid),
     );
     const under = roster.filter((p) => !keep.has(p.pid) && capSalary(league, p.pid) >= over).sort((a, b) => tradeValue(league, a) - tradeValue(league, b))[0];
@@ -610,7 +598,7 @@ function dumpDeal(league: League, rng: Rng, only?: number): TradeOffer | null {
       for (const x of takers) {
         const taker = (o: TradeOffer) => teamDelta(league, o, x.tid) >= 0;
         const deal = dumpPackage(league, t.tid, x.tid, bad, taker);
-        if (deal && teamDelta(league, deal, t.tid) >= 0 && !pastSecondApron(league, deal, x.tid)) return deal;
+        if (deal && teamDelta(league, deal, t.tid) >= 0 && !pastSpendTop(league, deal, x.tid)) return deal;
         // for a cheaper player back: the taker's least valuable one whose salary still leaves the giver
         // under the line (or a step closer) and lets the taker match the salary it takes in
         const swap = (b: Player): TradeOffer => ({ a: { tid: x.tid, pids: [b.pid], dpids: [] }, b: { tid: t.tid, pids: [bad.pid], dpids: [] } });
@@ -622,7 +610,7 @@ function dumpDeal(league: League, rng: Rng, only?: number): TradeOffer | null {
           .find((p) => salaryMatchGap(league, swap(p), 'a') === 0);
         if (!back) continue;
         const shed = dumpPackage(league, t.tid, x.tid, bad, taker, [back]);
-        if (shed && teamDelta(league, shed, t.tid) >= 0 && !pastSecondApron(league, shed, x.tid)) return shed;
+        if (shed && teamDelta(league, shed, t.tid) >= 0 && !pastSpendTop(league, shed, x.tid)) return shed;
       }
     }
   }
@@ -630,13 +618,13 @@ function dumpDeal(league: League, rng: Rng, only?: number): TradeOffer | null {
 }
 
 /**
- * A team over the tax line that isn't contending, or a contender past the first apron, works at
+ * A team over the tax line that isn't contending, or a contender past its spending line, works at
  * getting under it when the deals are there: on the summer market's third day (while some cap
  * space is still open), in the preseason, on December 15, and a week before the deadline
  * and on deadline day, it tries up to two salary dumps (see dumpDeal), the second while it is
- * still over; a team past the second apron up to three, offered to every other team. With only
- * contenders past the second apron working at it, and six takers asked, 10-16 teams paid the tax a
- * season and two or three opened past the second apron.
+ * still over; a team past its top line up to three, offered to every other team. With only
+ * contenders past the top line working at it, and six takers asked, 10-16 teams paid the tax a
+ * season and two or three opened past the top line.
  */
 export function aiTaxDumps(league: League, rng: Rng) {
   if (tradingClosedReason(league)) return;
@@ -645,9 +633,9 @@ export function aiTaxDumps(league: League, rng: Rng) {
   for (const t of league.teams) {
     if (t.tid === league.userTid) continue;
     for (let i = 0; i < 3; i++) {
-      const pay = capPayroll(league, t.tid, s);
-      if (pay <= cap.luxuryTax || (t.strategy === 'contend' && pay <= cap.firstApron) || (i === 2 && pay <= cap.secondApron)) break;
-      const deal = withHoldsMemo(() => dumpDeal(league, rng, t.tid));
+      const pay = payroll(league, t.tid, s);
+      if (pay <= cap.luxuryTax || (t.strategy === 'contend' && pay <= cap.spendLine) || (i === 2 && pay <= cap.spendTop)) break;
+      const deal = dumpDeal(league, rng, t.tid);
       if (!deal) break;
       executeTrade(league, deal);
     }
@@ -671,7 +659,7 @@ export function aiDraftTrade(league: League, rng: Rng, dp: DraftPick) {
   if (league.phase !== 'draft' || dp.tid === league.userTid || dp.pick === undefined) return;
   // (as often as the team on the clock likes to deal: its front office's `busy`)
   if (!rng.chance((dp.round === 1 ? 0.12 : 0.1) * gmStyle(league, dp.tid).busy)) return;
-  const deal = withHoldsMemo(() => {
+  const deal = (() => {
     const seller = dp.tid;
     const later = (tid: number) =>
       league.draftPicks.filter(
@@ -698,6 +686,6 @@ export function aiDraftTrade(league: League, rng: Rng, dp: DraftPick) {
       if (dps.length && teamDelta(league, o, seller) >= 0 && teamDelta(league, o, b.tid) + COVET * pickValue(league, dp) >= 0 && !validateTrade(league, o).length) return o;
     }
     return null;
-  });
+  })();
   if (deal && findPick(league, dp.dpid)) executeTrade(league, deal);
 }

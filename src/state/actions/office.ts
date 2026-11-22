@@ -103,11 +103,11 @@ export function draftPick(league: League, pid: number, overall: number): boolean
   return !err;
 }
 
-/** Release one of the user's players (stretched, or bought out). */
-export function release(league: League, pid: number, how: { stretch?: boolean; buyout?: boolean }, after: string): boolean {
-  if (how.buyout) return !!settle('The buyout', (l) => userBuyout(l, pid, !!how.stretch), 'neutral')?.ok;
+/** Release one of the user's players (or buy him out). */
+export function release(league: League, pid: number, how: { buyout?: boolean }, after: string): boolean {
+  if (how.buyout) return !!settle('The buyout', (l) => userBuyout(l, pid), 'neutral')?.ok;
   const name = playerName(league.players[pid]);
-  if (!act(`Releasing ${name}`, (l) => releasePlayer(l, l.players[pid], { stretch: how.stretch }))) return false;
+  if (!act(`Releasing ${name}`, (l) => releasePlayer(l, l.players[pid]))) return false;
   say(after, 'neutral');
   return true;
 }

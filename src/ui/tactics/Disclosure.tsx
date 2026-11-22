@@ -1,5 +1,5 @@
 // A row that opens: its name and what's inside, the rest under it once tapped. The Tactics sections'
-// depth one tap down (Instructions' Fine-tune, Match's late-game rules). On its own it's a card;
+// depth one tap down (System's Advanced). On its own it's a card;
 // `bare`, a row in a list card. Its Help sits beside the chevron, outside the row's tap.
 import type { ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';

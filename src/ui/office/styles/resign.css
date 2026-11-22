@@ -39,11 +39,6 @@
   padding: 10px var(--row-px);
 }
 
-/* outside the re-sign period: when it opens, in a line over the figures */
-.fo-closed-t {
-  color: var(--text);
-}
-
 .fo-rs > * {
   max-width: 100%;
 }
@@ -83,14 +78,6 @@
   font-weight: 600;
   font-size: 14px;
   letter-spacing: -0.04em;
-}
-
-.fo-rs-ext {
-  margin-top: 4px;
-}
-
-.fo-rs .fo-qualify {
-  width: 100%;
 }
 
 .fo-done {

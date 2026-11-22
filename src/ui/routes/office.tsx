@@ -1,8 +1,8 @@
 // Office: the GM's desk. The hub, and its desks: trade, free agents, re-signing, the draft,
-// finances, the owner and the coach's career (job offers, taking over another team). The owner,
-// finances and the career stay open to a fired coach: the career is where he finds a new job.
+// the owner and the coach's career (job offers, taking over another team). The owner and the
+// career stay open to a fired coach: the career is where he finds a new job.
 import type { ReactNode } from 'react';
-import { Route, useNavigate } from 'react-router-dom';
+import { Navigate, Route, useNavigate } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
 import { useStore } from '../../state/store';
 import { liveInProgress } from '../../state/live';
@@ -13,7 +13,6 @@ const Trade = lazyRetry(() => import('../screens/Trade'));
 const FreeAgents = lazyRetry(() => import('../screens/FreeAgents'));
 const Resign = lazyRetry(() => import('../screens/Resign'));
 const Draft = lazyRetry(() => import('../screens/Draft'));
-const Finances = lazyRetry(() => import('../screens/Finances'));
 const Assets = lazyRetry(() => import('../office/Assets'));
 const Owner = lazyRetry(() => import('../office/Owner'));
 const Career = lazyRetry(() => import('../office/Career'));
@@ -57,7 +56,7 @@ export const officeRoutes = (
     <Route path="/office/free-agents" element={gated(<FreeAgents />)} />
     <Route path="/office/resign" element={gated(<Resign />)} />
     <Route path="/office/draft" element={gated(<Draft />)} />
-    <Route path="/office/finances" element={<Finances />} />
+    <Route path="/office/finances" element={<Navigate to="/office" replace />} />
     <Route path="/office/owner" element={<Owner />} />
     <Route path="/office/career" element={<Career />} />
     <Route path="/office/assets" element={<Assets />} />

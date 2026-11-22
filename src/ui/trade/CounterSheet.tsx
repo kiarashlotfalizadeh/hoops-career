@@ -2,8 +2,7 @@
 // what it does to your payroll, and buttons to make it or to edit it in the builder.
 import { Handshake, Minus, PackagePlus, Plus } from 'lucide-react';
 import type { League } from '../../core/types';
-import { CAP_FOR, playerName, teamCity } from '../../core/league/helpers';
-import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
+import { CAP_FOR, playerName, teamCity, payroll } from '../../core/league/helpers';
 import { capSalary, evaluateTrade, type TradeOffer } from '../../core/league/trades';
 import { pickName } from '../draft/common';
 import { type CounterOffer } from '../../core/league/tradeHelp';
@@ -78,16 +77,15 @@ function CounterCard({
   const s = capSeason(league);
   const cap = CAP_FOR(league, s);
   const key = JSON.stringify(c.offer);
-  // in the summer each team's cap holds replay its re-signing plan: once per card, not every render
+  // worked out once per card, not every render
   const info = useLeagueMemo(
-    () =>
-      withHoldsMemo(() => {
-        const out = c.offer.a.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
-        const inc = c.offer.b.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
-        // a warning for you (giving up far more than you get) is worth repeating here
-        const warn = evaluateTrade(league, c.offer).notes.filter((n) => n.tone === 'warn');
-        return { out, inc, after: capPayroll(league, user, s) - out + inc, warn };
-      }),
+    () => {
+      const out = c.offer.a.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
+      const inc = c.offer.b.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
+      // a warning for you (giving up far more than you get) is worth repeating here
+      const warn = evaluateTrade(league, c.offer).notes.filter((n) => n.tone === 'warn');
+      return { out, inc, after: payroll(league, user, s) - out + inc, warn };
+    },
     // key stands for the counter's offer
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [league, key, user, s],
@@ -141,15 +139,11 @@ export function PayrollLine({ cap, out, inc, after }: { cap: ReturnType<typeof C
     <div className="tiny dim num">
       {inc >= out ? 'You take on' : 'You shed'} {money(Math.abs(inc - out))} in salary · payroll after{' '}
       <b className={after > cap.luxuryTax ? 'bad' : after > cap.salaryCap ? 'warn' : 'good'}>{money(after)}</b>
-      {after > cap.secondApron
-        ? `, ${money(after - cap.secondApron)} over the second apron`
-        : after > cap.firstApron
-          ? `, ${money(after - cap.firstApron)} over the first apron`
-          : after > cap.luxuryTax
-            ? `, ${money(after - cap.luxuryTax)} over the tax`
-            : after > cap.salaryCap
-              ? `, ${money(after - cap.salaryCap)} over the cap`
-              : `, ${money(cap.salaryCap - after)} in cap space`}
+      {after > cap.luxuryTax
+        ? `, ${money(after - cap.luxuryTax)} over the tax`
+        : after > cap.salaryCap
+          ? `, ${money(after - cap.salaryCap)} over the cap`
+          : `, ${money(cap.salaryCap - after)} in cap space`}
     </div>
   );
 }

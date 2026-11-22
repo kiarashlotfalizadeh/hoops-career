@@ -1,45 +1,33 @@
-// Today: the front page of your season, calm enough to read at a glance. One hero: on game day the
-// next game, over the All-Star break the weekend, otherwise the lead (your last result while it's
-// fresh, or the top story about your team); from the night your season is over until the draft, the
-// season's end as a ceremony; or, outside the season's games, where the season stands. Then a few blocks in order of use: what
-// needs you (the staff's calls first and always on the page, then the decisions waiting, AI teams'
-// offers as one row, the trade deadline, mail that needs you, once a season a backup: see needs.ts)
-// in one list; from your staff (the owner when the seat is warm, the staff's top advice); the next
-// game when it isn't today; your season as a strip of figures; the news in two headlines; and More
-// (the way back to "While you were away", the glossary, the guide). Anything with more to
-// it is one tap away; nothing here repeats something else here or on the top bar.
-import { useEffect, useState } from 'react';
+// Today: three things, in order of use. The next game (who's favoured and by how much, who's out),
+// or outside the season's games the phase the league is in; one action queue (what the league waits
+// on, AI teams' trade offers, players' trade requests, a starter hurt, the owner's warnings, the
+// deadline and a playoff series: see needs.ts), each settled in place; and your season as a compact
+// strip of figures. Nothing else leads the page: no stories, no headlines, no advice feed. The way
+// back to "While you were away", the guide and the glossary sit under More.
+import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import type { League } from '../../core/types';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { edit } from '../../state/actions';
-import { CALL_KINDS, GUIDE_STEPS, guideDone, showGuide } from '../../core/league/agenda';
-import { assistantFeed, type AssistantArea, type AssistantCard } from '../../core/ai/assistant';
+import { GUIDE_STEPS, guideDone, showGuide, stopsSim } from '../../core/league/agenda';
 import { jobSecurity } from '../../core/league/jobSecurity';
-import { AssistantRow } from '../components/Assistant';
+import { planFor } from '../../core/league/gamePlans';
 import { GlossarySheet } from '../components/Glossary';
 import { InstallRow } from '../components/InstallRow';
 import { Section, Sheet } from '../components/ui';
-import { NextGameRow, NextGameSlab, PhaseCard, nextGame } from './NextGame';
-import { AllStarHero, DigestRow, Headlines, LeadStory, SeasonEndHero, TenureKicker, YourSeason, useLead } from './FrontPage';
-import { allStarPhase, seasonOver } from './occasions';
+import { NextGameSlab, PhaseCard, nextGame } from './NextGame';
+import { DigestRow, YourSeason } from './FrontPage';
 import { MessageSheet, markRead } from './messages';
 import { useNeedsYou } from './needs';
 import { NeedRow, needRows } from './NeedsList';
 import './today.css';
 import { useForecast } from '../useForecast';
-import { dayStamp, freshAdvice, noteSeen, readSeen } from './staffAge';
 import { useChanged } from '../motion';
-
-/** Today's advice leaves the owner to the job-security row. */
-const STAFF_AREAS: AssistantArea[] = ['team', 'tactics', 'games', 'office'];
 
 const inSeason = (l: League) => l.phase === 'regular' || l.phase === 'playin' || l.phase === 'playoffs';
 
-/** The most of the staff's cards in Needs you (the rest are behind All advice): fewer when the list is long already. */
-const STAFF_SHOWN = 2;
-/** The most rows Needs you shows on the page (the staff's calls and required decisions always show); the rest, mail included, are in its sheet. */
-const NEEDS_SHOWN = 3;
+/** The most rows the queue shows on the page (what a sim stops for always shows); the rest, mail included, are in its sheet. */
+const QUEUE_SHOWN = 4;
 
 /** The guide was put away, but its weeks aren't over (Today offers it back). */
 function guideHidden(league: League): boolean {
@@ -48,7 +36,7 @@ function guideHidden(league: League): boolean {
   return guideDone(league).size < GUIDE_STEPS.length;
 }
 
-type Opened = null | 'advice' | 'glossary' | 'needs';
+type Opened = null | 'glossary' | 'queue';
 
 export default function Today() {
   const league = useLeague();
@@ -58,61 +46,28 @@ export default function Today() {
   const [openMsg, setOpenMsg] = useState<number | null>(null);
 
   const g = nextGame(league);
-  const gameDay = !!g && g.day <= league.day;
-  const lead = useLead(league);
   // what needs him (the bell counts the same: see needs.ts)
   const needs = useNeedsYou(league);
   const { items } = needs;
-  // the whole feed for the sheet. Today's own cards leave the owner to the job-security row, and the
-  // next opponent's missing plan to the slab
-  const full = useLeagueMemo(() => assistantFeed(league), [league]);
   const opp = g ? (g.home === league.userTid ? g.away : g.home) : undefined;
-  const noPlan = opp !== undefined && full.some((c) => c.id === `plan:${opp}`);
-  const feed = full.filter((c) => STAFF_AREAS.includes(c.area) && c.id !== `plan:${opp}`);
+  const noPlan = !!g && opp !== undefined && !planFor(league, opp, g);
+  // the owner's warning: his seat warm or hot, unless his ultimatum is in the queue already
   const forecast = useForecast(league);
   const js = useLeagueMemo(() => jobSecurity(league, forecast), [league, forecast]);
   const seat = !league.fired && !js.off && (js.heat === 'warm' || js.heat === 'hot') && !items.some((i) => i.kind === 'ultimatum');
   const hidden = guideHidden(league);
   const msg = openMsg !== null ? league.inbox.find((m) => m.id === openMsg) : undefined;
 
-  // (a card sat on Today a week without being acted on gives way to newer ones: see staffAge.ts)
-  const now = dayStamp(league.season, league.day);
-  const seen = useLeagueMemo(() => readSeen(league.id), [league]);
-  const advice = freshAdvice(feed, seen, now).slice(0, needs.count + (seat ? 1 : 0) >= 3 ? 1 : STAFF_SHOWN);
-  const shownIds = advice.map((c) => c.id).join('|');
-  const feedIds = full.map((c) => c.id).join('|');
-  useEffect(() => noteSeen(league.id, shownIds ? shownIds.split('|') : [], feedIds.split('|'), now), [league.id, shownIds, feedIds, now]);
-  const onToday = new Set([...advice.map((c) => c.id), `plan:${opp}`, ...(seat ? ['owner'] : [])]);
-  const moreAdvice = full.filter((c) => !onToday.has(c.id)).length;
-
-  // the hero: the game on game day; over the All-Star break, the weekend; between games the lead (or
-  // the next game); from the night his season is over until the draft, the season's end as a
-  // ceremony; otherwise, outside the season's games, where the season stands (the lead goes to the news)
-  const allStar = !!g && !gameDay && !!allStarPhase(league);
-  const leadIsHero = !!g && !gameDay && !!lead && !allStar;
-  const hero = !g ? (
-    seasonOver(league) ? (
-      <SeasonEndHero league={league} />
-    ) : (
-      <PhaseCard league={league} linked={items.map((i) => i.to)} />
-    )
-  ) : allStar ? (
-    <AllStarHero league={league} />
-  ) : leadIsHero ? (
-    // (keyed by what it tells: a new result or story arrives as one, it doesn't swap its words in place)
-    <LeadStory key={lead.kind === 'story' ? `s${lead.n.id}` : `g${lead.r.gid}`} league={league} lead={lead} />
-  ) : (
-    <NextGameSlab key={g.gid} league={league} g={g} noPlan={noPlan} />
-  );
   // motion: the count pops when a decision is settled or a new one lands
-  const counted = useChanged(needs.count);
-  // every row of Needs you, in order (see needs.ts); a message opens here
-  const rows = needRows(league, needs, (m) => {
+  const count = needs.count + (seat ? 1 : 0);
+  const counted = useChanged(count);
+  // every row of the queue, in order (see needs.ts), the owner's warning after the decisions; a message opens here
+  const decisions = needRows(league, needs, (m) => {
     setOpenMsg(m.id);
     markRead(m.id);
   });
-  // beside it, what doesn't wait on an answer: the owner when the seat is warm, and the staff's top advice
-  const staffRows = [
+  const rows = [
+    ...decisions.slice(0, items.length),
     ...(seat
       ? [
           <div role="listitem" className="td-need" key="owner">
@@ -120,87 +75,47 @@ export default function Today() {
           </div>,
         ]
       : []),
-    ...advice.map((c) => (
-      <div role="listitem" className="td-need" key={c.id}>
-        <AssistantRow card={c} />
-      </div>
-    )),
+    ...decisions.slice(items.length),
   ];
-  // a few on the front page (every call and every required one: they come first), the rest one tap away in a sheet
-  const shownNeeds = Math.max(NEEDS_SHOWN, items.filter((i) => i.required || CALL_KINDS.has(i.kind)).length);
-  const hiddenNeeds = Math.max(0, rows.length - shownNeeds);
+  // a few on the page (everything a sim would stop for: they come first), the rest one tap away in a sheet
+  const shown = Math.max(QUEUE_SHOWN, items.filter(stopsSim).length);
+  const more = Math.max(0, rows.length - shown);
 
   return (
     <main className="page td-page">
-      {hero}
+      {g ? <NextGameSlab key={g.gid} league={league} g={g} noPlan={noPlan} /> : <PhaseCard league={league} linked={items.map((i) => i.to)} />}
 
-      {/* the preseason: the weight of the years with this team */}
-      {league.phase === 'preseason' && <TenureKicker league={league} />}
-
-      {needs.rows > 0 && (
+      {rows.length > 0 && (
         <Section
-          title="Needs you"
+          title="Action queue"
           right={
-            hiddenNeeds > 0 ? (
-              <button type="button" className="card-link" aria-haspopup="dialog" onClick={() => setSheet('needs')}>
-                All {needs.count} <ChevronRight size={14} aria-hidden="true" />
+            more > 0 ? (
+              <button type="button" className="card-link" aria-haspopup="dialog" onClick={() => setSheet('queue')}>
+                All {count} <ChevronRight size={14} aria-hidden="true" />
               </button>
             ) : (
-              needs.count > 0 && (
+              count > 0 && (
                 <span key={counted.key} className={`td-count num ${counted.changed ? 'badge-pop' : ''}`} aria-hidden="true">
-                  {needs.count}
+                  {count}
                 </span>
               )
             )
           }
         >
-          <div className="td-needs" role="list" aria-label="Needs you">
-            {rows.slice(0, shownNeeds)}
+          <div className="td-needs" role="list" aria-label="Action queue">
+            {rows.slice(0, shown)}
           </div>
         </Section>
       )}
 
       <InstallRow />
 
-      {staffRows.length > 0 && (
-        <Section
-          title="From your staff"
-          right={
-            moreAdvice > 0 && (
-              <button type="button" className="card-link" aria-haspopup="dialog" onClick={() => setSheet('advice')}>
-                All advice <ChevronRight size={14} aria-hidden="true" />
-              </button>
-            )
-          }
-        >
-          <div className="td-needs" role="list" aria-label="From your staff">
-            {staffRows}
-          </div>
-        </Section>
-      )}
-
-      {/* the next game, when the lead or the weekend has the top */}
-      {(leadIsHero || allStar) && g && (
-        <Section title="Next game">
-          <NextGameRow league={league} g={g} />
-        </Section>
-      )}
-
       {inSeason(league) && !league.fired && <YourSeason league={league} />}
 
-      <Headlines league={league} lead={leadIsHero ? null : lead} />
-
-      {(digest || (moreAdvice > 0 && !staffRows.length) || hidden || league.settings.teaching !== false) && (
+      {(digest || hidden || league.settings.teaching !== false) && (
         <Section title="More">
           <div className="card flush td-more">
             <DigestRow />
-            {moreAdvice > 0 && !staffRows.length && (
-              <button type="button" className="td-mrow" aria-haspopup="dialog" onClick={() => setSheet('advice')}>
-                <span className="grow td-mrow-k">From your staff</span>
-                <span className="td-mrow-v">{moreAdvice}</span>
-                <ChevronRight size={18} className="dim" aria-hidden="true" />
-              </button>
-            )}
             {hidden && (
               <button type="button" className="td-mrow" disabled={simming} onClick={() => edit((l) => showGuide(l))}>
                 <span className="grow td-mrow-k">Show the first-week guide</span>
@@ -217,30 +132,13 @@ export default function Today() {
         </Section>
       )}
 
-      <Sheet open={sheet === 'needs'} onClose={() => setSheet(null)} title="Needs you">
-        <div className="td-needs" role="list" aria-label="Needs you">
+      <Sheet open={sheet === 'queue'} onClose={() => setSheet(null)} title="Action queue">
+        <div className="td-needs" role="list" aria-label="Action queue">
           {rows}
         </div>
-      </Sheet>
-      <Sheet open={sheet === 'advice'} onClose={() => setSheet(null)} title="From your staff">
-        <AllAdvice feed={full} />
       </Sheet>
       <GlossarySheet open={sheet === 'glossary'} onClose={() => setSheet(null)} />
       <MessageSheet league={league} m={msg} onClose={() => setOpenMsg(null)} />
     </main>
-  );
-}
-
-/** The whole feed, the owner's word included. */
-function AllAdvice({ feed }: { feed: AssistantCard[] }) {
-  if (!feed.length) return <div className="empty">Nothing from the staff right now.</div>;
-  return (
-    <div className="card flush ag-list" role="list" aria-label="All advice">
-      {feed.map((c) => (
-        <div role="listitem" key={c.id}>
-          <AssistantRow card={c} />
-        </div>
-      ))}
-    </div>
   );
 }

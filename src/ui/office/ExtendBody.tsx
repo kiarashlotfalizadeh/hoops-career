@@ -10,7 +10,7 @@ import { clamp } from '../../core/random';
 import { CAP_FOR, payroll } from '../../core/league/helpers';
 import { extensionBlockedReason, extensionMaxYears, extensionRefusal, playerMax, teamAppeal } from '../../core/league/contracts';
 import { teamTaxBill } from '../../core/league/finances';
-import { YEAR_PREMIUM, type OfferResult, askFor, extensionFrozenReason, talkAsk, talkSalaries, talkState, userExtend } from '../../core/league/negotiation';
+import { YEAR_PREMIUM, type OfferResult, askFor, talkAsk, talkSalaries, talkState, userExtend } from '../../core/league/negotiation';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { useLeague, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
@@ -41,9 +41,6 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
   const askAt = askFor(league, p, 'extend', years);
   const blocked = extensionBlockedReason(league, p);
   const refusal = extensionRefusal(league, p);
-  // the owner's freeze: no raise on what he's paid now (past his minimum then)
-  const frozenWhy = blocked || refusal ? null : extensionFrozenReason(league, p, amount);
-  const frozenTop = Math.max(salaryFor(p, exp), minAmt);
   const off = !!talkState(league, p, 'extend').closed;
   const appeal = teamAppeal(league, tid, p);
   const ai = appealInfo(appeal);
@@ -135,21 +132,10 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
           amount={amount}
           years={years}
           reply={reply}
-          counterBlocked={(c) => extensionFrozenReason(league, p, c.amount)}
+          counterBlocked={() => null}
           impact={(c) => taxLine(league, pay, pay + c.amount, season) ?? { text: `${shortSeason(season)} payroll ${money(pay + c.amount)}`, tone: 'dim' }}
           onAcceptCounter={(c) => (setAmount(c.amount), setYears(c.years), submit(c))}
         />
-      )}
-
-      {frozenWhy && (
-        <Callout tone="bad" icon={<Ban size={18} className="bad" />}>
-          <b>{frozenWhy}</b>
-          <div className="chips fo-callout-btns">
-            <button className="btn xs" onClick={() => set(frozenTop)}>
-              Offer {moneyExact(frozenTop)} instead
-            </button>
-          </div>
-        </Callout>
       )}
 
       <section className="fo-capimpact" aria-label={`${shortSeason(season)} payroll`}>
@@ -177,11 +163,7 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
         <Link to={`/player/${p.pid}`} className="btn" onClick={onClose}>
           Profile
         </Link>
-        <button
-          className={`btn grow ${!blocked && !refusal && !off && !frozenWhy ? 'primary' : ''}`}
-          disabled={!!blocked || !!refusal || off || !!frozenWhy || busy}
-          onClick={() => submit()}
-        >
+        <button className={`btn grow ${!blocked && !refusal && !off ? 'primary' : ''}`} disabled={!!blocked || !!refusal || off || busy} onClick={() => submit()}>
           Make offer · {years} yr{years > 1 ? 's' : ''} · {money(total)}
         </button>
       </div>

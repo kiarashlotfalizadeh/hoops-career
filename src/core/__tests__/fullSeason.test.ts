@@ -19,7 +19,7 @@ import { testLeague } from '../../state/__tests__/fixtures';
 import { migrate } from '../../state/persistence';
 import { accoladeScore, accolades } from '../../ui/league/shared';
 import { advancedView } from '../../ui/stats';
-import { forecast, forecastable, gameStakes, leagueForecast, pct, rosterWorth, type Forecast } from '../analysis/odds';
+import { forecast, forecastable, leagueForecast, pct, rosterWorth, type Forecast } from '../analysis/odds';
 import { seasonAdvanced, type Advanced } from '../analysis/advanced';
 import { createLeague, defaultSettings } from '../league/create';
 import { hallOfFameScore, simDay } from '../league/season';
@@ -192,12 +192,6 @@ describe('a season played', () => {
       expect(win.teams[g.home].w - loss.teams[g.home].w).toBeCloseTo(1, 9);
       expect(win.teams[g.home].reach[0]).toBeGreaterThanOrEqual(loss.teams[g.home].reach[0] - 0.01);
       expect(win.teams[g.away].reach[0]).toBeLessThanOrEqual(loss.teams[g.away].reach[0] + 0.01);
-      // the preview's stakes, from the team's side; nothing for a game it isn't in, or one already played
-      const st = gameStakes(x, g.gid, g.away)!;
-      expect(st.win).toBeGreaterThanOrEqual(st.loss - 0.01);
-      expect(gameStakes(x, g.gid, x.teams.find((t) => t.tid !== g.home && t.tid !== g.away)!.tid)).toBeNull();
-      const played = x.schedule.find((s) => s.played)!;
-      expect(gameStakes(x, played.gid, played.home)).toBeNull();
     }
 
     // a weekly trail of the user's odds, and a damaged one goes on load

@@ -151,14 +151,6 @@
 .tx-dock-m.bad {
   color: var(--bad);
 }
-.tx-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  font-size: 12.5px;
-  font-weight: 640;
-  color: var(--accent-text);
-}
 
 /* your five on the floor: a maple half court (the live game's floor, from the bench), the boards in
    two honey tones with their seams, your colour painted in the key and the centre circle, the lines

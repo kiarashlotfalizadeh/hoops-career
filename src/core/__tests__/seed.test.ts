@@ -104,7 +104,7 @@ describe('real-player seed', () => {
         for (const t of league.teams) {
           const roster = teamPlayers(league, t.tid);
           expect(roster.length).toBeGreaterThanOrEqual(CAP.rosterMin);
-          if (t.tid !== league.userTid) expect(roster.filter((p) => !p.contract.twoWay).length).toBeLessThanOrEqual(CAP.rosterMax);
+          if (t.tid !== league.userTid) expect(roster.length).toBeLessThanOrEqual(CAP.rosterMax);
         }
       }
 
@@ -142,7 +142,7 @@ describe('real-player seed', () => {
             expect.objectContaining({ name: `${sp.first} ${sp.last}`, season: league.season, amount: sp.contract!.salaries[0] }),
           );
         }
-        for (const p of Object.values(league.players)) if (p.tid >= 0 && !p.contract.twoWay) expect(p.contract.salaries[0]).toBeGreaterThanOrEqual(CAP.minContract);
+        for (const p of Object.values(league.players)) if (p.tid >= 0) expect(p.contract.salaries[0]).toBeGreaterThanOrEqual(CAP.minContract);
 
         // puts first-round picks still on their first deal on the rookie scale: the last two classes' first-rounders
         const recent = seed.players.filter((sp) => sp.draft?.round === 1 && sp.draft.year >= league.season - 2 && sp.contract && !sp.contract.twoWay);
@@ -226,14 +226,10 @@ describe('real-player seed', () => {
       expect(Object.values(make(seed, { ...defaultSettings(), injuries: false }).players).some((p) => p.injury)).toBe(false);
     }
 
-    // marks two-way contracts, which AI cuts and the roster limit leave out
-    if (seed.players.some((p) => p.contract?.twoWay)) {
-      const twoWay = Object.values(league.players).filter((p) => p.contract.twoWay);
-      expect(twoWay.length).toBeGreaterThan(0);
-      for (const t of league.teams) {
-        if (t.tid === league.userTid) continue;
-        expect(teamPlayers(league, t.tid).filter((p) => !p.contract.twoWay).length).toBeLessThanOrEqual(CAP.rosterMax);
-      }
+    // the league has no two-way deals: a real player on one starts as a free agent, and no roster is past 15
+    for (const t of league.teams) {
+      if (t.tid === league.userTid) continue;
+      expect(teamPlayers(league, t.tid).length).toBeLessThanOrEqual(CAP.rosterMax);
     }
   }, 120_000);
 });

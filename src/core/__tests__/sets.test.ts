@@ -364,18 +364,18 @@ describe('sets in the engine', () => {
       // and again 2026-10-28, when the threes were recentred: K.recenter.three, and again that day, when Five-Out,
       // Pace & Space, Ice and the 2-3 zone were retuned and the staffs' reads refit)
       // (and again 2026-11-09, the game-day realism rounds: see engineDefense.test.ts; and all of them again 2026-11-10,
-      // the tactics rewrite, tactics v2: see engineDefense.test.ts)
+      // the tactics rewrite, tactics v2: see engineDefense.test.ts; and all of them again 2026-11-22, when two-way deals were cut)
       const expected = {
         ai: [
-          [131, 124, 79, 49, 8, 21, 10, 0],
-          [105, 100, 91, 30, 8, 14, 5, 0],
-          [125, 118, 93, 23, 6, 30, 22, 1],
+          [132, 134, 90, 51, 9, 29, 9, 0],
+          [98, 95, 93, 22, 9, 16, 8, 0],
+          [102, 95, 92, 25, 7, 25, 11, 0],
         ],
         // (taken again when play calls from the bench were retired, and the first and third games when garbage time came for both benches from late in the third quarter, with the team up big easing off and calling off its press; all of them again 2026-11-09, the game-day realism round, and its second round the same day)
         coached: [
           [127, 118, 95, 53, 14, 21, 16, 0],
-          [123, 113, 98, 40, 13, 18, 12, 0],
-          [108, 111, 78, 28, 12, 27, 20, 0],
+          [106, 110, 92, 36, 10, 36, 16, 0],
+          [115, 131, 77, 28, 9, 37, 15, 0],
         ],
       };
       const fp = (res: ReturnType<GameSim['result']>) => [res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot];

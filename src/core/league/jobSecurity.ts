@@ -22,8 +22,7 @@ import {
   type OwnerGoals,
   type Ultimatum,
 } from './ownerGoals';
-import { BLEED_GRADE, DEBT_LIMIT, FREEZE_GRADE, booksOf, booksOutlook, frozen } from './books';
-import { addInbox, andList, curTeamSeason, revenueScale } from './helpers';
+import { addInbox, andList, curTeamSeason } from './helpers';
 import type { Forecast, TeamOdds } from '../analysis/odds';
 import { ultimatumSaid } from './ownerVoice';
 
@@ -38,9 +37,9 @@ export interface JobSecurity {
   /** One line: where it stands and why. */
   line: string;
   /**
-   * Set when the season is heading for the sack whatever the standing says (a live ultimatum, or the
-   * books under the freeze projected to close where the review fires him): the line, said under the
-   * score, which is held on the hot seat (under the firing line when it's on course to happen).
+   * Set when the season is heading for the sack whatever the standing says (a live ultimatum): the
+   * line, said under the score, which is held on the hot seat (under the firing line when it's on
+   * course to happen).
    */
   danger?: string;
   /** The standing now (−1..1), and where this season's review would leave it as things project. */
@@ -110,22 +109,6 @@ const HEAT: { min: number; heat: SeatHeat; label: string }[] = [
 /** The meter's word for a score ("Steady", "Hot seat"): the one ladder every screen names the owner's standing by. */
 export const seatHeat = (score: number) => HEAT.find((x) => score >= x.min)!;
 
-/**
- * Where the books' close projects under the freeze, as the review will read it (see booksVerdict):
- * in the red (its grade capped), and deeper than at the last review (the final warning's cap, or the
- * sack after one or past the debt limit). Null when the budget isn't frozen or the close projects in
- * the black.
- */
-export function frozenBooksOutlook(league: League): { cap: number; deeper: boolean; fire: boolean } | null {
-  const b = booksOf(league);
-  if (!b || !frozen(league) || b.season >= league.season) return null;
-  // (as the review reads them: the tax the owner signed off on doesn't count, see sanctionedTax)
-  const end = booksOutlook(league).judged;
-  if (end >= 0) return null;
-  const deeper = b.close !== undefined && end < b.close;
-  return { cap: deeper ? BLEED_GRADE : FREEZE_GRADE, deeper, fire: deeper && (b.stage === 'final' || end < -DEBT_LIMIT * revenueScale(league)) };
-}
-
 /** The season's grade if each goal ends where it projects (null without goals this season). */
 function projectedGrade(league: League, og: OwnerGoals, fc?: Forecast | null): number | null {
   const prog = ownerProgress(league, og, fc);
@@ -135,13 +118,12 @@ function projectedGrade(league: League, og: OwnerGoals, fc?: Forecast | null): n
   const wg = wins ? gradeGoal(league, og, wins.goal, wins.projected) : undefined;
   const sum = prog.reduce((a, p) => a + p.goal.weight * gradeGoal(league, og, p.goal, p.projected, wg), 0);
   // a record projected under his floor caps it, as the review will; so does a season past the
-  // rebuild allowance projected out of the postseason, and books projected in the red under the freeze
+  // rebuild allowance projected out of the postseason
   const post = prog.find((p) => p.goal.kind === 'postseason');
-  const books = frozenBooksOutlook(league);
-  return Math.min(sum, wins ? floorCap(og, wins.projected, og.games) : 1, post ? patienceCap(og, post.projected) : 1, books?.cap ?? 1);
+  return Math.min(sum, wins ? floorCap(og, wins.projected, og.games) : 1, post ? patienceCap(og, post.projected) : 1);
 }
 
-/** The score the meter is held at (most) with a live ultimatum the season projects to meet: the top of the hot seat (on course to miss it, or for the books' sack: just under the firing line). */
+/** The score the meter is held at (most) with a live ultimatum the season projects to meet: the top of the hot seat (on course to miss it: just under the firing line). */
 const ULTIMATUM_SCORE = 31;
 
 /**
@@ -170,18 +152,11 @@ export function jobSecurity(league: League, fc?: Forecast | null): JobSecurity {
   const off = !league.settings.jobSecurity;
   const grace = graceLeft(league);
   const ultimatum = og?.ultimatum;
-  // the sack on the way whatever the standing: a live ultimatum, or the books under the freeze
-  // heading where the review fires him. The meter says so: hot, under the line when it's on course
+  // the sack on the way whatever the standing: a live ultimatum. The meter says so: hot, under the line when it's on course
   const live = og && !league.fired && !off ? ultimatumOutlook(league, og, fc) : null;
-  const booksFire = !league.fired && !off && canBeFired(league) && !!frozenBooksOutlook(league)?.fire;
-  const danger =
-    live && !live.met
-      ? `Ultimatum: ${ultimatum!.text.toLowerCase()}, or you're fired.`
-      : booksFire
-        ? "The books are heading deeper into the red under the freeze. Close there and you're fired, whatever you win."
-        : undefined;
+  const danger = live && !live.met ? `Ultimatum: ${ultimatum!.text.toLowerCase()}, or you're fired.` : undefined;
   const raw = toScore(projected);
-  const score = booksFire || (live && !live.onCourse) ? Math.min(raw, toScore(FIRING_LINE) - 1) : danger ? Math.min(raw, ULTIMATUM_SCORE) : raw;
+  const score = live && !live.onCourse ? Math.min(raw, toScore(FIRING_LINE) - 1) : danger ? Math.min(raw, ULTIMATUM_SCORE) : raw;
   const h = seatHeat(score);
   let line: string;
   if (league.fired) line = 'You were fired. Take a job offer from Career.';

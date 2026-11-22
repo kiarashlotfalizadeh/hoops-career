@@ -32,11 +32,12 @@ export const CAP = {
   salaryCap: 165_000,
   luxuryTax: 201_000,
   /**
-   * The aprons above the tax line (the 2023 CBA's), at the 2025-26 ratios to the cap: the first
-   * 1.267× the cap, the second 1.344×. Teams over them lose tools (see contracts.ts and trades.ts).
+   * Where AI teams stop spending above the tax line: the most a contender budgets for (1.267× the
+   * cap) and the line no AI team goes past (1.344×). Habits of the AI's front offices, not rules:
+   * the league has a soft cap and a luxury tax, and nothing else above them.
    */
-  firstApron: 209_100,
-  secondApron: 221_800,
+  spendLine: 209_100,
+  spendTop: 221_800,
   /** The tax on the first bracket over the line; each bracket is TAX_BRACKET_PCT of the cap (see luxuryTaxBill). */
   taxRate: 1.5,
   minPayroll: 148_500, // 90% of cap
@@ -48,6 +49,8 @@ export const CAP = {
   growth: 0.06,
   rosterMax: 15,
   rosterMin: 13,
+  /** A team over the cap after a trade may take back this share of the salary it sends (plus tradeMatchBuffer). */
+  tradeMatch: 1.25,
   /** Trade matching's buffer as a share of the cap ($0.25M at the 2025-26 cap): see tradeMatchLimit. */
   tradeMatchBufferPct: 0.0016,
 };
@@ -61,14 +64,6 @@ export const TAX_BRACKET_PCT = 0.0368;
 export const TAX_RATES = [1.5, 1.75, 2.5, 3.25];
 export const TAX_RATE_STEP = 0.5;
 export const REPEATER_EXTRA = 1;
-
-/**
- * Trade salary matching for a team over the cap after the trade (the 2023 CBA's tiers, as shares of
- * the cap): up to 4.85% of the cap sent, it may take back 200% of it plus the buffer; up to 18.75%,
- * what it sends plus 4.85% of the cap; above that, 125% plus the buffer.
- */
-export const MATCH_SMALL_PCT = 0.0485;
-export const MATCH_MID_PCT = 0.1875;
 
 /** First-round rookie scale (year-1 salary in $K) by pick, for the 2026-27 cap. */
 export const ROOKIE_SCALE: number[] = [

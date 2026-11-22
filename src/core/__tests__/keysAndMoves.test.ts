@@ -1,20 +1,15 @@
-// Keys to the game: three numbers for tonight read from the games before it, the same on the
-// pre-game screen, in the live game and in the stored result, graded with the result. And the
-// coach's moves in a live game and what each did (analysis/moves.ts): each measured while it was
+// The coach's moves in a live game and what each did (analysis/moves.ts): each measured while it was
 // in effect against the stretch before it, and called better, worse or early against the noise.
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { testLeague, toGameDay } from '../../state/__tests__/fixtures';
-import { clearLive, prepareLive } from '../../state/live';
+import { testLeague } from '../../state/__tests__/fixtures';
+import { clearLive } from '../../state/live';
 import { migrate } from '../../state/persistence';
-import { userGameOnDay } from '../league/games';
-import { teamSeason } from '../league/helpers';
 import { simDay } from '../league/season';
-import { gameKeys, gradeKey, keyState, keyValue } from '../analysis/keys';
 import { coachMoves, moveRate, moveText, MOVE_BASE_TRIPS, MOVE_MIN_TRIPS } from '../analysis/moves';
 import { defaultTactics, cloneTactics } from '../sim/tactics';
 import type { PossLog } from '../sim/log';
-import type { CoachMove, GameResult, League, LiveOp, ScheduledGame } from '../types';
+import type { CoachMove, GameResult, League, LiveOp } from '../types';
 import { nightLine, seasonCoaching, seasonCoachingLine } from '../analysis/debrief';
 
 afterEach(() => clearLive());
@@ -38,155 +33,31 @@ const trip = (off: 0 | 1, pts: number, finish: PossLog['finish'] = 'spotup'): Po
   help: 50,
 });
 
-describe('keys to the game and coach moves', () => {
-  it('set keys from the right numbers and grade them, and measure and name the coach’s moves', () => {
-    // keys to the game: on opening night come from the other coach and his roster: three at most, never two on one number
-    {
-      const l = testLeague('keys-open');
-      const g = userGameOnDay(l, l.day) ?? l.schedule.find((x) => !x.played && (x.home === l.userTid || x.away === l.userTid))!;
-      const keys = gameKeys(l, g);
-      expect(keys.length).toBeGreaterThan(0);
-      expect(keys.length).toBeLessThanOrEqual(3);
-      expect(new Set(keys.map((k) => `${k.side}:${k.stat}`)).size).toBe(keys.length);
-      for (const k of keys) {
-        expect(k.target).toBeGreaterThan(0);
-        expect(k.goal).toMatch(/\d/);
-        expect(k.why.length).toBeGreaterThan(5);
-      }
-      // only the user's games have keys
-      const other = l.schedule.find((x) => x.home !== l.userTid && x.away !== l.userTid)!;
-      expect(gameKeys(l, other)).toEqual([]);
-    }
-
-    // read the season once there are games, stay put through the day, and are graded with the result as the preview set them
-    {
-      const l = testLeague('keys-season', 5);
-      for (let i = 0; i < 30; i++) simDay(l);
-      toGameDay(l);
-      let g = userGameOnDay(l, l.day)!;
-      let before = gameKeys(l, g);
-      // (a night against an opponent that stands out on three numbers, as most do a month in)
-      for (let next = 0; before.length < 3 && next < 5; next++) {
-        simDay(l);
-        toGameDay(l);
-        g = userGameOnDay(l, l.day)!;
-        before = gameKeys(l, g);
-      }
-      expect(before.length).toBe(3);
-      // the season's own numbers name a rank or a scorer's average
-      expect(before.some((k) => /of 30|a game/.test(k.why))).toBe(true);
-      // the day's other games (played before the live game) don't move them
-      const lg = prepareLive(l)!;
-      expect(gameKeys(l, g)).toEqual(before);
-      lg.simTo('end');
-      const res = lg.commit(l);
-      expect(res.keys?.map((k) => k.goal)).toEqual(before.map((k) => k.goal));
-      for (const [i, k] of before.entries()) {
-        const v = keyValue(k, res, lg.userSide);
-        expect(res.keys![i].value).toBe(v);
-        if (v !== null) expect(res.keys![i].met).toBe(k.dir === 'max' ? v <= k.target : v >= k.target);
-      }
-      clearLive();
-    }
-
-    // on a new season's first nights read last season's team totals, not the few meetings its results keep
-    {
-      const l = testLeague('keys-last', 4);
-      for (let i = 0; i < 30; i++) simDay(l);
-      // what was played becomes last season, its results kept as a new season keeps them: the user's only
-      const S = l.season;
-      for (const t of l.teams) for (const s of t.seasons) s.season = S - 1;
-      for (const p of Object.values(l.players)) for (const s of p.stats) if (s.season === S) s.season = S - 1;
-      l.games = l.games.filter((g) => g.home.tid === l.userTid || g.away.tid === l.userTid).map((g) => ({ ...g, season: S - 1 }));
-      for (const t of l.teams) teamSeason(t, S);
-      // (an opponent the user met whose numbers last season give a full set of three keys)
-      const against = (opp: number): ScheduledGame => ({ gid: l.nextGid, day: 0, home: l.userTid, away: opp, type: 'regular' });
-      const met = [...new Set(l.games.filter((g) => g.type === 'regular').map((g) => (g.home.tid === l.userTid ? g.away.tid : g.home.tid)))];
-      const opp = met.find((t) => gameKeys(l, against(t)).length === 3)!;
-      expect(opp).toBeDefined();
-      // five meetings with it (the Cup can make five): enough for a team's own sample
-      const meeting = l.games.find((g) => g.type === 'regular' && (g.home.tid === opp || g.away.tid === opp))!;
-      for (let i = l.games.filter((g) => g.home.tid === opp || g.away.tid === opp).length; i < 5; i++) l.games.push({ ...structuredClone(meeting), gid: l.nextGid++ });
-      const g: ScheduledGame = { ...against(opp), gid: l.nextGid++ };
-      const keys = gameKeys(l, g);
-      expect(keys.length).toBe(3);
-      expect(keys.some((k) => /of 30 last season|last season, the most/.test(k.why))).toBe(true);
-      // the same with no results kept at all: they come from the season's totals
-      expect(gameKeys({ ...l, games: [] }, g)).toEqual(keys);
-    }
-
-    // say where a key stands live: decided early, on pace, behind, and void for a player who sat
-    {
-      const max = { dir: 'max' as const, target: 10 };
-      const min = { dir: 'min' as const, target: 27 };
-      expect(keyState(max, 11, 0.5, false)).toBe('missed');
-      expect(keyState(max, 4, 0.5, false)).toBe('on');
-      expect(keyState(max, 7, 0.5, false)).toBe('behind');
-      expect(keyState(max, 10, 1, true)).toBe('met');
-      expect(keyState(min, 27, 0.7, false)).toBe('met');
-      expect(keyState(min, 10, 0.5, false)).toBe('behind');
-      expect(keyState(min, 14, 0.5, false)).toBe('on');
-      expect(keyState(min, 26, 1, true)).toBe('missed');
-      expect(keyState(max, null, 1, true)).toBe('void');
-      // a scorer who didn't play: no verdict
-      const res = { home: { players: [{ pid: 9, min: 0, pts: 0 }] }, away: { players: [] } } as unknown as GameResult;
-      const grade = gradeKey(
-        { id: 'star', title: 'Make him work', goal: 'Hold him to 24 points or fewer', why: '', side: 'them', stat: 'pts', pid: 9, dir: 'max', target: 24 },
-        res,
-        1,
-      );
-      expect(grade).toMatchObject({ value: null, met: null });
-    }
-
-    // read the offensive glass as a share of the misses, never decided before the end
-    {
-      const box = (orb: number, drb: number) => ({ t: { orb, drb }, players: [] });
-      const res = { home: box(9, 30), away: box(12, 36) } as unknown as GameResult;
-      // the user is home: his 9 offensive rebounds of the 9 + 36 chances on his misses
-      expect(keyValue({ side: 'us', stat: 'orb' }, res, 0)).toBe(20);
-      expect(keyValue({ side: 'them', stat: 'orb' }, res, 0)).toBe(29);
-      const glass = { dir: 'max' as const, target: 27, stat: 'orb' as const };
-      expect(keyState(glass, 29, 0.25, false)).toBe('behind');
-      expect(keyState(glass, 25, 0.25, false)).toBe('on');
-      expect(keyState(glass, 29, 1, true)).toBe('missed');
-      const grade = gradeKey(
-        { id: 'glass', title: 'Keep them off the glass', goal: 'Hold BOS to 27% of their misses or fewer', why: '', side: 'them', stat: 'orb', dir: 'max', target: 27 },
-        res,
-        0,
-      );
-      expect(grade).toMatchObject({ value: 29, met: false, pct: true });
-    }
-
-    // a damaged list in a save goes
+describe('coach moves', () => {
+  it('measure and name the coach’s moves', () => {
+    // a save from when results kept keys to the game drops them
     {
       const l = testLeague('keys-save');
-      for (let i = 0; i < 6; i++) simDay(l);
-      const mine = l.games.filter((g) => g.keys);
-      expect(mine.length).toBeGreaterThan(0);
+      for (let i = 0; i < 3; i++) simDay(l);
       const copy = structuredClone(l);
-      const [a, b] = copy.games.filter((g) => g.keys);
-      (a.keys as unknown[])[0] = { id: 'x', title: 3 };
-      const keep = structuredClone(b.keys);
-      const back = migrate(copy);
-      expect(back.games.find((g) => g.gid === a.gid)!.keys).toBeUndefined();
-      expect(back.games.find((g) => g.gid === b.gid)!.keys).toEqual(keep);
+      (copy.games[0] as unknown as { keys: unknown }).keys = [{ id: 'glass', title: 'Keep them off the glass' }];
+      expect('keys' in migrate(copy).games[0]).toBe(false);
     }
     // coach moves
     {
       const names = (pid: number) => `P${pid}`;
 
-      // what the staff makes of the night's moves (measured after the final), in words: that they seemed to
-      // help or hurt when clear of even, too close to say inside two standard errors, the move that
-      // mattered most when one clearly did; and the season's added up where it was measured
+      // what the night's moves were worth (measured after the final), as a figure: the points with their
+      // give or take, toned only clear of even (two standard errors), the move that mattered most when
+      // one clearly did; and the season's added up where it was measured
       {
         const worth = (pts: number, raw: number, se: number, top?: { text: string; pts: number; se: number }) =>
           ({ home: { tid: 3 }, away: { tid: 4 }, season: 2026, movesWorth: { pts, raw, se, win: 0.05, n: 200, moves: 4, ...(top && { top }) } }) as unknown as GameResult;
-        // (words only: no figure, no method)
-        expect(nightLine(worth(1.8, 2.6, 0.9))).toMatchObject({ text: 'Your moves seemed to help tonight', detail: '', tone: 'good' });
-        expect(nightLine(worth(-1.4, -2.2, 1.0), true)!.text).toBe("The staff's moves seemed to hurt tonight");
+        expect(nightLine(worth(1.8, 2.6, 0.9))).toEqual({ text: 'Your moves: +1.8 pts', detail: 'Give or take 0.9.', tone: 'good' });
+        expect(nightLine(worth(-1.4, -2.2, 1.0), true)).toMatchObject({ text: "The staff's moves: −1.4 pts", tone: 'bad' });
         const close = nightLine(worth(0.3, 0.5, 0.9, { text: 'Pick-and-roll coverage: Hedge → Drop', pts: 1.4, se: 0.6 }))!;
-        expect(close).toMatchObject({ text: 'Too close to say whether your moves helped tonight', tone: 'dim' });
-        expect(close.detail).toBe('Mattered most · Pick-and-roll coverage: Hedge → Drop.');
+        expect(close).toMatchObject({ text: 'Your moves: +0.3 pts', tone: 'dim' });
+        expect(close.detail).toBe("Give or take 0.9, inside one night's noise. Mattered most: Pick-and-roll coverage: Hedge → Drop (+1.4 pts).");
         expect(nightLine({ ...worth(0, 0, 1), movesWorth: undefined })).toBeNull();
         // moves only in crunch time (a late play call) are judged by the win chance, as the bench's late
         // calls are: a call that won it moves the margin a point and the result far more
@@ -204,14 +75,14 @@ describe('keys to the game and coach moves', () => {
             const g = worth(0.2, 0.2, 0.3);
             return { ...g, moves, movesWorth: { ...g.movesWorth!, moves: moves.length, win, ...(winSe !== undefined && { winSe }) } } as GameResult;
           };
-          expect(nightLine(late(0.09, 0.02))).toMatchObject({ text: 'Your call seemed to help tonight', tone: 'good' });
-          expect(nightLine(late(0.09, 0.06))).toMatchObject({ text: 'Too close to say whether your call helped tonight', tone: 'dim' });
+          expect(nightLine(late(0.09, 0.02))).toMatchObject({ text: 'Your call: +9% to win', detail: 'Give or take 2%.', tone: 'good' });
+          expect(nightLine(late(0.09, 0.06))).toMatchObject({ text: 'Your call: +9% to win', tone: 'dim' });
           // (a reading from before its noise was kept: by the points)
-          expect(nightLine(late(0.09, undefined))!.text).toBe('Too close to say whether your call helped tonight');
+          expect(nightLine(late(0.09, undefined))).toMatchObject({ text: 'Your call: +0.2 pts', tone: 'dim' });
           // earlier moves: by the points, unless the win chance reads clearer
           const early = { ...play, kind: 'tactics', q: 2, clock: 300 };
-          expect(nightLine(late(0.01, 0.02, [early, play]))!.text).toBe('Too close to say whether your moves helped tonight');
-          expect(nightLine(late(-0.08, 0.02, [early, play]), true)).toMatchObject({ text: "The staff's moves seemed to hurt tonight", tone: 'bad' });
+          expect(nightLine(late(0.01, 0.02, [early, play]))).toMatchObject({ text: 'Your moves: +0.2 pts', tone: 'dim' });
+          expect(nightLine(late(-0.08, 0.02, [early, play]), true)).toMatchObject({ text: "The staff's moves: −8% to win", tone: 'bad' });
         }
         const league = {
           season: 2026,
@@ -219,7 +90,7 @@ describe('keys to the game and coach moves', () => {
           games: [worth(1.8, 2.6, 0.9), worth(0.3, 0.5, 1.2), { ...worth(2, 2, 1), season: 2025 }, { ...worth(0, 0, 1), movesWorth: undefined }],
         } as unknown as League;
         expect(seasonCoaching(league)).toEqual({ pts: 2.1, raw: 3.1, se: 1.5, games: 2 });
-        expect(seasonCoachingLine(league)).toBe('Your live coaching this season seems to help, over 2 games');
+        expect(seasonCoachingLine(league)).toBe('Your live coaching this season: +2.1 pts ±1.5, over 2 games');
         expect(seasonCoachingLine({ ...league, games: league.games.slice(0, 1) })).toBeNull();
         expect(seasonCoaching({ ...league, userTid: 9 })).toBeNull();
       }

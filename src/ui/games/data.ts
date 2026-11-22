@@ -56,7 +56,7 @@ export function planSize(plan: GamePlan | null): number {
 }
 
 /** How long a plan lasts, as its status line says it. */
-export const SCOPE_WORD: Record<PlanScope, string> = { next: 'next game', series: 'this series', season: 'all season' };
+export const SCOPE_WORD: Record<PlanScope, string> = { next: 'next game', series: 'this series' };
 
 /**
  * The plan that applies against `opp` (in `g`), as every screen says it: "Plan: 3 changes · next

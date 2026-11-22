@@ -1,4 +1,4 @@
-// "Since you changed it" (Tactics → Analysis → Report) and the bar the staff's measuring takes on
+// "Since you changed it" (Tactics → Season Analysis) and the bar the staff's measuring takes on
 // Tactics after Done. A change shows what it moved and what the staff makes of it in words: as it was
 // made (a forecast on the games ahead: "Should help", "Could hurt"), then again once CHECK_AFTER games
 // have been played (the check: "Seems to help", "Seems to hurt" with a tap to put it back, or "Too close to call"). The reading behind the words stays under the hood (paired

@@ -369,14 +369,7 @@
     background: var(--surface);
   }
 }
-.lv-br-story {
-  margin: 0;
-  font-size: 15.5px;
-  font-weight: 480;
-  line-height: 1.42;
-  color: var(--text);
-  text-wrap: pretty;
-}
+
 .lv-br-chips {
   display: flex;
   flex-wrap: wrap;
@@ -437,6 +430,14 @@
   font-stretch: 110%;
   font-weight: 880;
   letter-spacing: -0.02em;
+}
+.lv-br-edge-who .num {
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+.lv-br-edge-luck {
+  color: var(--text-dim);
 }
 .lv-br-edge-d {
   grid-column: 1 / -1;

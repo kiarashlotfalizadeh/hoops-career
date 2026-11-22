@@ -226,7 +226,7 @@ export default function Settings() {
                 on={st.moments !== false}
                 onChange={(v) => set('moments', v)}
                 label="Big moments"
-                help="Titles, awards, big signings and front-page stories take the screen for a moment. An ultimatum or a firing shows even with this off."
+                help="Titles, series, awards and big signings take the screen for a moment. An ultimatum or a firing shows even with this off."
               />
             </fieldset>
           </Section>
@@ -237,14 +237,7 @@ export default function Settings() {
                 on={st.stopOnNews !== false}
                 onChange={(v) => set('stopOnNews', v)}
                 label="Pause sims for what needs you"
-                help="Sims stop when a choice is yours: a star hurt, a skid, the deadline. The staff handles the rest, and the digest says what it did."
-              />
-              <Toggle
-                on={st.stopOnNews !== false && loopSetting(league, 'stopForBigGames')}
-                onChange={(v) => setLoop('stopForBigGames', v)}
-                disabled={st.stopOnNews === false}
-                label="Pause before your biggest games"
-                help="A long sim stops on the morning of your biggest nights, so you coach them."
+                help="Long sims stop only for a decision the league waits on, a trade offer or request, a starter hurt, the deadline and a playoff series. The staff handles the rest."
               />
               <Toggle
                 on={loopSetting(league, 'digest')}
