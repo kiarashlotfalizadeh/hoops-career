@@ -68,6 +68,7 @@ import { CLIPS, DUNKS, I, type ClipId, type Gesture } from './clips';
 import { merged, type Thing } from './glb';
 import { lookOf, SKINS, STYLES, type Look } from './look';
 import { ANKLE, BALL_R, J, PELVIS_LEAN, Puppet, THIGH, type Body } from './puppet';
+import { CLOTH, FRAME, KNOTS, ShortsSim } from './cloth';
 
 /** The grey the figures were before each had a skin of his own (look.ts): what the benches still wear until they take theirs from there. */
 export const FIGURE = '#7b7d88';
@@ -140,7 +141,21 @@ export const B = {
   spine: 49,
   neck: 50,
 } as const;
-const BONES = 51;
+/**
+ * And his shorts' cloth: a bone at each knot of it (see cloth.ts), after the ones above. His left leg's hoops from the
+ * first down, then his right's; the model names each `h`, its leg, its hoop and its knot (figure.py's cloth_name).
+ */
+const CLOTH_AT = 51;
+const clothBone = (leg: number, hoop: number, knot: number) => CLOTH_AT + leg * KNOTS + hoop * CLOTH.n + knot;
+const BONES = CLOTH_AT + 2 * KNOTS;
+/** Which of ours a bone of the model is, by its name (none: not one the figure has). */
+function boneOf(name: string): number | undefined {
+  const k = (B as Record<string, number | undefined>)[name];
+  if (k !== undefined) return k;
+  const m = /^h([lr])(\d)(\d)$/.exec(name);
+  if (!m || +m[2] > CLOTH.rows || +m[3] >= CLOTH.n) return undefined;
+  return clothBone(m[1] === 'l' ? 0 : 1, +m[2], +m[3]);
+}
 /**
  * His back between his hips and his chest, as the skin bends along it (see `trunk`). The bone in the small of his
  * back is this far up the line from his hips to his chest (figure.py's SPINE_AT), and has taken this much of the turn
@@ -569,6 +584,11 @@ export interface Geo {
   /** The skin counts its bones in the model's order: which of ours each is, and the way back to it from the body as built. */
   order: number[];
   inverse: Matrix4[];
+  /**
+   * His shorts' cloth as he is built (see cloth.ts): each knot from its leg's hip joint (his left leg's hoops from the
+   * first down, then his right's; x, y, z, ft). None: a model whose shorts hang on no cloth.
+   */
+  cloth: Float32Array | null;
   /** How high the shorts reach (ft, as built): their picture runs from one to the other. */
   shorts: [number, number];
   /** His hair's fuzz: the scalp again in layers, each a little further out (see fuzzOf). */
@@ -1074,11 +1094,21 @@ export function figureGeo(keep: <T extends { dispose(): void }>(o: T) => T, mode
   const { geo, materials } = merged(fig);
   for (const p of fig.parts) p.geo.dispose();
   const order = fig.bones.map((b) => {
-    const k = (B as Record<string, number | undefined>)[b.name];
+    const k = boneOf(b.name);
     if (k === undefined) throw new Error(`figure.glb: a bone the puppet doesn't have (${b.name})`);
     return k;
   });
   const inverse = fig.bones.map((b) => b.inverse);
+  // (where each knot of his shorts' cloth is as built: a bone's way back is to where it is)
+  let knots: Float32Array | null = new Float32Array(2 * KNOTS * 3);
+  for (let leg = 0; leg < 2 && knots; leg++) {
+    const hip = order.indexOf(leg ? B.thr : B.thl);
+    for (let i = 0; i < KNOTS && knots; i++) {
+      const at = order.indexOf(CLOTH_AT + leg * KNOTS + i);
+      if (at < 0 || hip < 0) knots = null;
+      else for (let c = 0; c < 3; c++) knots[(leg * KNOTS + i) * 3 + c] = inverse[hip].elements[12 + c] - inverse[at].elements[12 + c];
+    }
+  }
   const { shorts, piece, cloth, tubes } = sheetUv(geo, materials, order, inverse, SIZED.get(fig));
   SIZED.set(fig, { cloth, tubes });
   const fuzz = keep(fuzzOf(geo, piece));
@@ -1105,7 +1135,7 @@ export function figureGeo(keep: <T extends { dispose(): void }>(o: T) => T, mode
   const lowM = merged(low);
   for (const p of low.parts) p.geo.dispose();
   const lowOrder = low.bones.map((b) => {
-    const k = (B as Record<string, number | undefined>)[b.name];
+    const k = boneOf(b.name);
     if (k === undefined) throw new Error(`figure.glb: a bone the puppet doesn't have (${b.name})`);
     return k;
   });
@@ -1129,6 +1159,7 @@ export function figureGeo(keep: <T extends { dispose(): void }>(o: T) => T, mode
     wears: materials,
     order,
     inverse,
+    cloth: knots,
     shorts,
     fuzz,
     fuzzFor,
@@ -3549,8 +3580,12 @@ function paint(kit: MatchKit, num: string, name: string, mark: string, gear: Gea
 }
 
 /** (Shallower and less even than they were: on a light kit, close up, they were deep stripes a hand apart.) */
-/** The folds his kit hangs in (see foldsOf): how deep a vest's are, his shorts', and the short ones where cloth is pulled or bunched (ft); how dark the bottom of one is (a share). */
-const FOLDS = ['0.036', '0.042', '0.026'] as const;
+/** The folds his kit hangs in (see foldsOf): how deep a vest's are, his shorts', and the short ones where cloth is pulled or bunched (ft); how deep the ones a leg of his shorts gathers in, were all of it ridden up (it never is: a quarter at the most); how dark the bottom of one is (a share). */
+const FOLDS = ['0.036', '0.042', '0.026', '0.16'] as const;
+/** A vest wrung by his chest's turn on his hips: how far its folds as built wind round him (radians a radian of the turn), and how much of the turn (a radian of it) is the whole of what wringing does to them. */
+const WRUNG = ['0.9', '1.8'] as const;
+/** How much deeper it bunches at his waist, a radian he bends over that way. */
+const BENT = '3.5';
 const FOLD_SHADE = '0.18';
 /** Where his vest's picture and his shorts' are on the sheet (uv). */
 const ON_VEST = (uv: string) => `( ${uv}.y > ${(1 - (R_VEST[1] + R_VEST[3]) / SHEET).toFixed(4)} )`;
@@ -3574,9 +3609,17 @@ const VEST_LOOSE = 0.05;
  */
 const WAIST_TOP = 3.77;
 const TUCK_IN = 0.045;
+/**
+ * And it is loose there, so it moves: left behind a beat when he goes and carried on when he stops (uSwing: how far,
+ * as he is built, ft; Fig.place says), and hung off him by its own weight when he bends over, off his belly bent
+ * forward and off the small of his back arched (this far a radian of it, ft).
+ */
+const VEST_SWING = [0.3, 0.085] as const;
+const VEST_FALL = 0.11;
 const VEST_HANG = /* glsl */ `if ${ON_VEST('uv')} {
   float low = smoothstep( 5.2, 4.2, position.y ) * smoothstep( ${WAIST_TOP.toFixed(2)}, ${(WAIST_TOP + 0.18).toFixed(2)}, position.y );
   transformed += normal * ${VEST_LOOSE} * low * ( 0.75 + 0.25 * sin( position.x * 7.0 + position.z * 5.0 + position.y * 2.0 ) );
+  transformed += uSwing * low + normal * ${VEST_FALL} * low * max( 0.0, uDrape.y * normal.z );
   transformed -= normal * ${TUCK_IN} * ( 1.0 - smoothstep( ${(WAIST_TOP + 0.03).toFixed(2)}, ${(WAIST_TOP + 0.18).toFixed(2)}, position.y ) );
 }`;
 /**
@@ -3586,6 +3629,7 @@ const VEST_HANG = /* glsl */ `if ${ON_VEST('uv')} {
  */
 const STUFF_PARS = /* glsl */ `
 uniform sampler2D uStuff;
+uniform vec4 uDrape;
 // (how much of the sky the baked shade says a point of his skin sees, 1 all of it: down in a hollow the shine of the
 // building and the lamps is shut out as its light is, or his eyes' sockets and his nostrils glint)
 float shutK = 1.0;
@@ -3617,6 +3661,11 @@ float noise3( vec3 x );
 // tight over his chest and shoulders and hangs looser to its hem: long folds down it, pulled a little toward each
 // armhole, and where it is tucked in at his waist it bunches in short ones across. Shorts hang in deeper ones down
 // each leg from his waistband, and pull across from his crotch)
+// (And they are his folds now, not the model's: uDrape is how his chest is turned on his hips and bent over them
+// (radians: to his left, forward), and how far each leg of his shorts is bunched up his thigh (his left's, his right's,
+// of 1). A vest turned at the chest and held at the waist is wrung: its long folds wind round him the way he turns,
+// deeper, and others cross it from one hip to the other shoulder; bent over, it bunches at his waist on the side he
+// bends to. A leg of his shorts ridden up is gathered in folds across it.)
 float foldsOf( vec3 p, float shorts ) {
   float warp = noise3( vec3( p.x * 1.3, p.y * 1.1, p.z * 1.3 ) + 4.0 ) - 0.5;
   if ( shorts > 0.5 ) {
@@ -3627,14 +3676,24 @@ float foldsOf( vec3 p, float shorts ) {
     float b = noise3( q * 2.3 + 7.1 );
     float pull = noise3( vec3( ( p.y - 3.1 + abs( p.x ) * 0.9 ) * 6.5, p.z * 1.2, 3.0 + sign( p.x ) ) );
     float cross = ( 1.0 - smoothstep( 0.1, 0.55, abs( p.x ) ) ) * smoothstep( 0.0, 0.25, p.z + 0.1 );
-    return ${FOLDS[1]} * hang * ( a + 0.4 * b - 0.3 * abs( 2.0 * a - 1.0 ) ) + ${FOLDS[2]} * cross * pull;
+    float up = ( p.x > 0.0 ? uDrape.z : uDrape.w ) * smoothstep( 3.0, 2.6, p.y );
+    float gather = noise3( vec3( p.x * 2.2 + warp * 2.0, p.y * 10.0 + warp * 3.0, p.z * 2.2 ) );
+    return ${FOLDS[1]} * hang * ( a + 0.4 * b - 0.3 * abs( 2.0 * a - 1.0 ) ) + ${FOLDS[2]} * cross * pull + ${FOLDS[3]} * up * gather;
   }
   float hang = smoothstep( 5.3, 4.15, p.y );
-  vec3 q = vec3( p.x * 4.8 + warp * 3.6, p.y * 0.7 + 0.6 * abs( p.x ), p.z * 4.8 - warp * 3.6 );
+  // (wrung: the cloth as built turned round him, further the higher, about the middle of its hang)
+  float wrung = uDrape.x * ${WRUNG[0]} * ( smoothstep( 3.9, 5.2, p.y ) - 0.5 );
+  vec2 xz = vec2( p.x * cos( wrung ) - p.z * sin( wrung ), p.x * sin( wrung ) + p.z * cos( wrung ) );
+  vec3 q = vec3( xz.x * 4.8 + warp * 3.6, p.y * 0.7 + 0.6 * abs( p.x ), xz.y * 4.8 - warp * 3.6 );
   float a = noise3( q );
   float b = noise3( q * 2.4 + 3.3 );
-  float bunch = smoothstep( 4.3, 3.85, p.y ) * noise3( vec3( p.x * 1.6 + warp, p.y * 8.0, p.z * 1.6 ) );
-  return ${FOLDS[0]} * ( 0.45 + 0.55 * hang ) * ( 0.55 * a + 0.4 * b + 0.3 * abs( 2.0 * a - 1.0 ) ) + ${FOLDS[2]} * 0.7 * bunch;
+  float turned = min( 1.0, abs( uDrape.x ) * ${WRUNG[1]} );
+  float across = noise3( vec3( ( atan( p.x, p.z ) * 0.75 + sign( uDrape.x ) * ( p.y - 4.3 ) * 0.9 ) * 5.5, p.y * 0.5 + warp, 1.7 ) );
+  float bent = max( 0.0, uDrape.y * sign( p.z ) );
+  float bunch = smoothstep( 4.3 + 0.3 * bent, 3.85, p.y ) * noise3( vec3( p.x * 1.6 + warp, p.y * 8.0, p.z * 1.6 ) );
+  return ${FOLDS[0]} * ( 0.45 + 0.55 * hang ) * ( 1.0 + 1.3 * turned ) * ( 0.55 * a + 0.4 * b + 0.3 * abs( 2.0 * a - 1.0 ) )
+    + ${FOLDS[2]} * 0.7 * bunch * ( 1.0 + ${BENT} * bent )
+    + ${FOLDS[2]} * 3.4 * turned * hang * smoothstep( 3.85, 4.2, p.y ) * ( across - 0.3 * abs( 2.0 * across - 1.0 ) );
 }
 float noise3( vec3 x ) {
   vec3 i = floor( x );
@@ -3884,6 +3943,10 @@ interface Told {
   uShape2: { value: Vector4 };
   /** How his head is turned in the world (from as built): his eyes' round is lit as it faces (see EYES). */
   uHead: { value: Matrix3 };
+  /** His kit as it hangs now (see foldsOf): his chest's turn on his hips and its bend over them (radians), and how far each leg of his shorts is bunched up (of 1). */
+  uDrape: { value: Vector4 };
+  /** How far the loose of his vest is left behind him (as he is built, ft: see VEST_SWING). */
+  uSwing: { value: Vector3 };
   /** What the game has done to his skin (see Fig.skin): how wet it is with sweat, how flushed he is, how tired his eyes are; and how lived-in his face is (Look.age). */
   uWorn: { value: Vector4 };
   /** The lines his face makes as it moves (see CREASE_DEEP): his brows raised, drawn down, his eyes narrowed, shut tight. */
@@ -4405,7 +4468,7 @@ export function stuffMaterial(
     sh.vertexShader = sh.vertexShader
       .replace(
         '#include <common>',
-        `#include <common>\nuniform sampler2D uStuff;\nattribute vec3 aShape;\nvarying vec3 vRest;${micro ? '\nvarying vec3 vRestN;' : ''}\n#ifndef USE_UV1\nattribute vec2 uv1;\n#endif\nvarying vec2 vTwist;${anat ? '\nvarying vec2 vAnatUv;' : ''}\n${FACE_SHAPE}\n${FACE_MOVE}`,
+        `#include <common>\nuniform sampler2D uStuff;\nuniform vec4 uDrape;\nuniform vec3 uSwing;\nattribute vec3 aShape;\nvarying vec3 vRest;${micro ? '\nvarying vec3 vRestN;' : ''}\n#ifndef USE_UV1\nattribute vec2 uv1;\n#endif\nvarying vec2 vTwist;${anat ? '\nvarying vec2 vAnatUv;' : ''}\n${FACE_SHAPE}\n${FACE_MOVE}`,
       )
       .replace(
         '#include <beginnormal_vertex>',
@@ -5210,6 +5273,8 @@ const QA = new Quaternion();
 const QB = new Quaternion();
 const EU = new Euler();
 const UP = new Vector3(0, 1, 0);
+/** His two legs on the floor, as cloth.ts takes them (see drape). */
+const LEGS = new Float32Array(2 * FRAME);
 const XA = new Vector3(1, 0, 0);
 const ZA = new Vector3(0, 0, 1);
 
@@ -5229,6 +5294,10 @@ export class Fig {
   private readonly digits = Float32Array.from([...LOOSE, ...LOOSE]);
   /** His hands' own clock (ms): see HAND_LIFE. */
   private handMs = 0;
+  /** His shorts' cloth (see drape); none on a man with no skin of his own, or a model whose shorts hang on none. */
+  private cloth: ShortsSim | null = null;
+  /** How much thicker than the model's his thighs are, and his calves (see frame). */
+  private readonly legs = [1, 1];
   readonly shadow: Mesh;
   readonly ring: Mesh;
   private readonly own: { dispose(): void }[] = [];
@@ -5379,6 +5448,8 @@ export class Fig {
       uShape: { value: new Vector4(look.face.cheeks, look.face.full, look.face.point, look.face.flare) },
       uShape2: { value: new Vector4((look.face.lips - 0.5) * 2, (look.face.ridge - 0.45) * 2, look.face.deep, look.face.wings) },
       uHead: { value: new Matrix3() },
+      uDrape: { value: new Vector4() },
+      uSwing: { value: new Vector3() },
       uWorn: { value: new Vector4(0, 0, 0, look.age) },
       uCrease: { value: new Vector4() },
     };
@@ -5506,6 +5577,16 @@ export class Fig {
       this.cuffs.receiveShadow = true;
       this.group.add(this.cuffs);
     }
+    if (geo.cloth) {
+      // (each knot as built, his own size: his thigh's bone is that much thicker and longer than the model's)
+      const rest = Float32Array.from(geo.cloth);
+      for (let i = 0; i < rest.length; i += 3) {
+        rest[i] *= this.legs[0];
+        rest[i + 1] *= body.s;
+        rest[i + 2] *= this.legs[0];
+      }
+      this.cloth = new ShortsSim(rest, this.legs[0], body.s, this.legs[1]);
+    }
     this.bodies();
   }
 
@@ -5588,6 +5669,10 @@ export class Fig {
     for (const k of [B.ual, B.uar]) scale(k, thick * arm, s, thick * arm);
     for (const k of [B.fal, B.far]) scale(k, thick * arm * low, s, thick * arm * low);
     for (const k of [B.thl, B.thr, B.hemL, B.hemR]) scale(k, thick * leg, s, thick * leg);
+    // (his shorts' cloth is cut to his thighs)
+    for (let k = CLOTH_AT; k < BONES; k++) scale(k, thick * leg, s, thick * leg);
+    this.legs[0] = thick * leg;
+    this.legs[1] = thick * leg * low;
     for (const k of [B.shl, B.shr]) scale(k, thick * leg * low, s, thick * leg * low);
     for (const k of [B.hal, B.har, B.ftl, B.ftr]) scale(k, s, s, s);
     for (const hand of DIGIT_BONES) for (const [k1, k2] of hand) for (const k of [k1, k2]) scale(k, s, s, s);
@@ -6021,9 +6106,92 @@ export class Fig {
       this.bones[bone].position.set(A.x + p.trail.x * give, A.y + p.trail.y * give * 0.5, A.z + p.trail.z * give);
       this.bones[bone].quaternion.copy(this.bones[th].quaternion);
     }
+    this.drape();
+    // his kit as it hangs now: his chest's turn on his hips and its bend over them (eased: a fold doesn't jump), what
+    // his vest's loose is left behind by, and how far each leg of his shorts is bunched up
+    const ease = 1 - Math.exp(-p.frameMs / 90);
+    const hang = this.told.uDrape.value;
+    QA.copy(hipQ).invert().multiply(this.bones[B.chest].quaternion);
+    A.set(0, 0, 1).applyQuaternion(QA);
+    C.set(0, 1, 0).applyQuaternion(QA);
+    hang.x += (Math.atan2(A.x, A.z) - hang.x) * ease;
+    hang.y += (Math.atan2(C.z, C.y) - hang.y) * ease;
+    hang.z = this.cloth?.bunch[0] ?? 0;
+    hang.w = this.cloth?.bunch[1] ?? 0;
+    const back = Math.min(1, VEST_SWING[0] / Math.max(1e-6, far)) * (VEST_SWING[1] / VEST_SWING[0]);
+    this.told.uSwing.value.set(p.trail.x * back, p.trail.y * back * 0.5, p.trail.z * back);
 
     this.shadow.position.set(p.x, 0.03, p.z);
     this.ring.position.set(p.x, 0.045, p.z);
+  }
+
+  /**
+   * His shorts as cloth (see cloth.ts): below his seat each leg of them hangs, swings and lies on his thigh, a bone at
+   * each knot of it. The cloth is on the floor, not on him: its knots are told where his legs are there, moved on by
+   * his body's own time, and read back into his own frame. Not while only his far body is drawn (its shorts hang on
+   * the two bones above): the cloth is hung afresh when his full one is back.
+   */
+  private drape() {
+    const sim = this.cloth;
+    if (!sim) return;
+    if (this.plain && !this.close) {
+      sim.forget();
+      return;
+    }
+    const p = this.pup;
+    const j = p.j;
+    const c = Math.cos(p.yaw);
+    const sn = Math.sin(p.yaw);
+    const L = LEGS;
+    /** A point of his own frame on the floor, into L at `o`; a way of his own frame there. */
+    const put = (o: number, x: number, y: number, z: number) => {
+      L[o] = x * c + z * sn + p.x;
+      L[o + 1] = y;
+      L[o + 2] = z * c - x * sn + p.z;
+    };
+    const way = (o: number, v: Vector3) => {
+      L[o] = v.x * c + v.z * sn;
+      L[o + 1] = v.y;
+      L[o + 2] = v.z * c - v.x * sn;
+    };
+    // (the cloth leaves his seat along his thigh, but not turned with it: his thigh's bone turns about its own length
+    // as his knee folds one way or another, his shorts are sewn to his seat. Hung from the bone as it is turned, a leg of
+    // them was wrung like a rag each time it turned, and wrung is shorter: the hem rode up his thigh and stayed there)
+    C.set(1, 0, 0).applyQuaternion(this.bones[B.pelvis].quaternion);
+    for (const [leg, th, k, f] of [
+      [0, B.thl, J.kl, J.fl],
+      [1, B.thr, J.kr, J.fr],
+    ] as const) {
+      const bone = this.bones[th];
+      const o = leg * FRAME;
+      put(o, bone.position.x, bone.position.y, bone.position.z);
+      Yv.set(0, 1, 0).applyQuaternion(bone.quaternion);
+      X.copy(C).addScaledVector(Yv, -C.dot(Yv));
+      if (X.lengthSq() < 0.04) X.set(1, 0, 0).applyQuaternion(bone.quaternion);
+      X.normalize();
+      way(o + 3, X);
+      way(o + 6, Yv);
+      way(o + 9, Z.crossVectors(X, Yv));
+      put(o + 12, j[k * 3], j[k * 3 + 1], j[k * 3 + 2]);
+      put(o + 15, j[f * 3], j[f * 3 + 1], j[f * 3 + 2]);
+    }
+    sim.step(p.frameMs / 1000, L);
+    const { at, turn } = sim;
+    QB.setFromAxisAngle(UP, -p.yaw);
+    for (let leg = 0; leg < 2; leg++)
+      for (let h = 1; h <= CLOTH.rows; h++) {
+        const t = (leg * CLOTH.rows + h - 1) * 9;
+        MAT.set(turn[t], turn[t + 1], turn[t + 2], 0, turn[t + 3], turn[t + 4], turn[t + 5], 0, turn[t + 6], turn[t + 7], turn[t + 8], 0, 0, 0, 0, 1);
+        QA.setFromRotationMatrix(MAT).premultiply(QB);
+        for (let m = 0; m < CLOTH.n; m++) {
+          const o = (leg * KNOTS + h * CLOTH.n + m) * 3;
+          const x = at[o] - p.x;
+          const z = at[o + 2] - p.z;
+          const bone = this.bones[clothBone(leg, h, m)];
+          bone.position.set(x * c - z * sn, at[o + 1], z * c + x * sn);
+          bone.quaternion.copy(QA);
+        }
+      }
   }
 
   /**

@@ -2230,6 +2230,9 @@ export class CourtScene {
     this.lens.exposure = (this.lit ??= this.lens.exposure) * this.arena.house;
     this.sizeBall();
     this.closeUp(this.camera);
+    // (the shutter's smear on a whip of the camera and a thrown ball: none with reduced motion)
+    this.lens.shutter = calm ? 0 : 1;
+    this.lens.ball = this.ball;
     this.lens.render(this.scene, this.camera, real);
     return labels;
   }

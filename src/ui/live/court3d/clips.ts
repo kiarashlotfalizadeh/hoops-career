@@ -261,17 +261,41 @@ const ON_HIPS: PoseKey = { lx: -0.2, ly: -1.36, lz: -0.06, rx: -0.2, ry: -1.36, 
 /** Bent over, his hands on his knees, arms straight. */
 const ON_KNEES: PoseKey = { hip: -0.8, lean: 0.75, wide: 0.22, lx: -0.3, ly: -2.3, lz: -0.19, rx: -0.3, ry: -2.3, rz: -0.19 };
 /** A dunk as it is thrown down: his back, which was a bow as he reached, crunched forward over his hips. */
-const SLAM: PoseKey = { curl: 0.18, ptip: -0.08 };
+const SLAM: PoseKey = { curl: 0.3, ptip: -0.1 };
 /** The dunk up to the slam (DUNK_AT): the gather, the two-foot leap and the reach. Every dunk shares it, so the ball meets the rim on time. */
 const DUNK_UP: [number, PoseKey][] = [
   [-340, { ...DRIBBLE, by: 2.8, bz: 1.3, gl: 0 }],
-  [-170, { hip: -0.62, by: 4.2, lean: 0.22 }],
-  [-40, { hip: 0.2, air: 0.4, by: 5.6, leap: 0.25 }],
-  [70, { hip: 1.9, air: 1, by: 8.6, leap: 0.8, flu: 0.7, flf: 0.3, fru: 0.5, frf: -0.3, lean: -0.08 }],
-  [150, { hip: 2.3, air: 1, by: 8.5, leap: 1, flu: 0.8, flf: 0.4, fru: 0.6, frf: -0.4, lean: 0.05 }],
-  // (the slam: his ribs thrown down over his hips after the ball)
-  [200, { hip: 2.25, air: 1, by: 7.6, leap: 1, flu: 0.8, flf: 0.5, fru: 0.6, frf: -0.3, lean: 0.2, ...SLAM }],
+  // (sat down into both legs to go up, the ball brought down in both hands to his knees and his chest over it)
+  [-170, { hip: -0.72, by: 3.4, bz: 0.95, lean: 0.32, wide: 0.22 }],
+  [-40, { hip: 0.2, air: 0.4, by: 5.9, leap: 0.25, lean: 0.1 }],
+  // (going up he is a bow from his heels to the ball: his chest back, his heels behind him)
+  [70, { hip: 1.9, air: 1, by: 8.7, bz: 0.7, leap: 0.8, flu: 0.8, flf: -0.45, fru: 0.65, frf: -0.6, lean: -0.22, curl: -0.2, ptip: 0.06 }],
+  [150, { hip: 2.3, air: 1, by: 8.6, bz: 0.75, leap: 1, flu: 1.0, flf: 0, fru: 0.85, frf: -0.2, lean: -0.12, curl: -0.2, ptip: 0.04 }],
+  // (the slam: his ribs thrown down over his hips after the ball, and his knees up under him as the bow snaps shut)
+  [200, { hip: 2.25, air: 1, by: 7.6, leap: 1, flu: 1.2, flf: 0.7, fru: 1.05, frf: 0.5, lean: 0.38, ...SLAM }],
 ];
+/**
+ * A dunker's coming down: let go, his legs swing on under the ring and reach for the floor one before the other;
+ * he touches it nearly straight, sinks deep into both legs with his hands out in front of him, and is most of the
+ * way up again as the move ends. `first`: the foot down first (1 his left); `to`: when the move ends (its last key).
+ */
+const dunkDown = (first: 1 | -1, to: number, turn = 0): [number, PoseKey][] => {
+  const [a, b] = first > 0 ? (['flu', 'fru'] as const) : (['fru', 'flu'] as const);
+  const [af, bf] = first > 0 ? (['flf', 'frf'] as const) : (['frf', 'flf'] as const);
+  const free: PoseKey = { gl: 0, gr: 0 };
+  return [
+    [
+      to - 200,
+      { ...free, hip: 0.3, air: 1, leap: 1, [a]: 0.04, [af]: 0.12, [b]: 0.32, [bf]: 0, lx: 0.6, ly: -0.3, lz: 0.75, rx: 0.55, ry: -0.2, rz: 0.75, lean: 0.14, twist: turn * 0.6 },
+    ],
+    [to - 165, { ...free, hip: -0.1, leap: 1, lx: 0.65, ly: -0.6, lz: 0.75, rx: 0.6, ry: -0.5, rz: 0.75, lean: 0.2, wide: 0.2, sway: 0.08 * first, twist: turn * 0.45 }],
+    [
+      to - 90,
+      { ...free, hip: -0.62, leap: 1, lx: 0.7, ly: -0.95, lz: 0.62, rx: 0.62, ry: -0.85, rz: 0.66, lean: 0.32, wide: 0.3, sway: 0.1 * first, twist: turn * 0.3 + 0.08 * first },
+    ],
+    [to, { ...free, hip: -0.12, leap: 0.95, lean: 0.08, wide: 0.12 }],
+  ];
+};
 /** A free throw's bounce: one, off the floor at his right foot, between his catching it and setting (0: it goes up). */
 const FT_BOUNCES: [number, number][] = [
   [-800, -590],
@@ -639,11 +663,16 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
     { gr: 1, bx: 0.45 },
     [
       [-300, { ...DRIBBLE, by: 2.8 }],
-      [-150, { hip: -0.45, by: 4.2, bz: 0.9, gl: 1, lean: 0.15 }],
-      [0, { hip: 0.6, air: 1, by: 7.3, bz: 1.05, flu: 0.5, flf: 0.5 }],
-      [45, { hip: 0.75, air: 1, gr: 0, rx: 0.2, ry: 1.9, rz: 1.1, flu: 0.5, flf: 0.5 }],
-      [300, { hip: -0.25, gr: 0, rx: 0.2, ry: 0.8, rz: 0.8 }],
-      [480, { gr: 0 }],
+      [-150, { hip: -0.45, by: 4.0, bz: 0.9, gl: 1, lean: 0.18 }],
+      // (up off one foot, his knee coming with the ball, and the ball let go at the top off his fingers with his arm long:
+      // a push up over the big man, not a shot)
+      [-60, { hip: -0.1, air: 0.3, by: 5.7, bz: 0.95, gl: 0.6, flu: 0.3, flf: 0.4, lean: 0.08 }],
+      [0, { hip: 0.6, air: 1, by: 7.5, bz: 1.1, gl: 0, lx: 0.6, ly: 0.2, lz: 0.7, flu: 0.8, flf: 0.65, fru: 0.1, frf: -0.2, lean: -0.05, nod: 0.1 }],
+      [45, { hip: 0.75, air: 1, gr: 0, gl: 0, rx: 0.15, ry: 2.0, rz: 1.0, lx: 0.6, ly: -0.1, lz: 0.6, flu: 0.75, flf: 0.6, fru: 0.12, frf: -0.15, lean: -0.05, nod: 0.1 }],
+      // (his hand stays up after it as he comes down)
+      [160, { hip: 0.45, air: 1, gr: 0, gl: 0, rx: 0.15, ry: 1.9, rz: 1.15, lx: 0.55, ly: -0.5, lz: 0.5, flu: 0.3, flf: 0.3, fru: 0.05 }],
+      [300, { hip: -0.32, gr: 0, gl: 0, rx: 0.2, ry: 1.0, rz: 0.9, lx: 0.5, ly: -0.9, lz: 0.45, lean: 0.14, wide: 0.15 }],
+      [480, { gr: 0, gl: 0 }],
     ],
     { grip: 'under' },
   ),
@@ -706,29 +735,141 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
     { gr: 1, gl: 1, bx: 0, bz: 1 },
     [
       ...DUNK_UP,
-      [230, { hip: 2.15, air: 1, gl: 0, gr: 0, lx: 0.15, ly: 1.75, lz: 0.9, rx: 0.15, ry: 1.75, rz: 0.9, leap: 1, flu: 0.7, flf: 0.6, fru: 0.5, frf: 0.2, lean: 0.15, ...SLAM }],
-      [330, { hip: 1.5, air: 1, gl: 0, gr: 0, lx: 0.3, ly: 1.2, lz: 0.6, rx: 0.3, ry: 1.2, rz: 0.6, leap: 1 }],
-      [500, { hip: -0.4, gl: 0, gr: 0, leap: 1, lx: 0.5, ly: -0.8, lz: 0.5, rx: 0.5, ry: -0.8, rz: 0.5 }],
-      [620, { gl: 0, gr: 0, leap: 0.95 }],
+      [
+        230,
+        {
+          hip: 2.15,
+          air: 1,
+          gl: 0,
+          gr: 0,
+          lx: 0.15,
+          ly: 1.75,
+          lz: 0.9,
+          rx: 0.15,
+          ry: 1.75,
+          rz: 0.9,
+          leap: 1,
+          flu: 1.0,
+          flf: 0.9,
+          fru: 0.85,
+          frf: 0.75,
+          lean: 0.3,
+          curl: 0.24,
+          ptip: -0.08,
+        },
+      ],
+      [330, { hip: 1.5, air: 1, gl: 0, gr: 0, lx: 0.45, ly: 0.7, lz: 0.9, rx: 0.4, ry: 0.9, rz: 0.85, leap: 1, flu: 0.3, flf: 0.5, fru: 0.55, frf: 0.3, lean: 0.02 }],
+      ...dunkDown(1, 620),
     ],
     { grip: 'side' },
   ),
-  // (one hand: the ball cocked high behind his head in his right, the left arm out for balance, thrown down through the ring)
+  // (one hand, off one foot: the ball cocked high behind his head in his right as his left knee drives up, his left arm
+  // out wide of him for balance; thrown down through the ring as his right shoulder comes through and that arm sweeps back)
   dunk1: clip(
     'dunk1',
     'shot',
     0,
     { gr: 1, gl: 1, bx: 0.1, bz: 1 },
     [
-      ...DUNK_UP.slice(0, 2),
-      [-40, { hip: 0.2, air: 0.4, by: 5.8, bx: 0.3, bz: 0.7, leap: 0.25, gl: 0.2 }],
-      [70, { hip: 1.9, air: 1, by: 9.1, bx: 0.45, bz: 0.15, leap: 0.8, gl: 0, lx: 0.85, ly: 0.2, lz: 0.6, flu: 0.9, flf: 0.6, fru: 0.2, frf: -0.4, lean: -0.12, tilt: 0.12 }],
-      [150, { hip: 2.3, air: 1, by: 9.2, bx: 0.4, bz: 0.45, leap: 1, gl: 0, lx: 0.9, ly: 0.4, lz: 0.5, flu: 0.95, flf: 0.7, fru: 0.25, frf: -0.4, lean: -0.05, tilt: 0.14 }],
-      [200, { hip: 2.25, air: 1, by: 8.0, bx: 0.2, bz: 1.1, leap: 1, gl: 0, lx: 0.9, ly: 0.3, lz: 0.5, flu: 0.85, flf: 0.6, fru: 0.3, frf: -0.3, lean: 0.22, tilt: 0.06, ...SLAM }],
-      [240, { hip: 2.1, air: 1, gl: 0, gr: 0, lx: 0.8, ly: 0.1, lz: 0.5, rx: 0.15, ry: 1.2, rz: 1.1, leap: 1, flu: 0.7, flf: 0.6, fru: 0.4, frf: 0.1, lean: 0.25, ...SLAM }],
-      [340, { hip: 1.4, air: 1, gl: 0, gr: 0, lx: 0.6, ly: -0.3, lz: 0.5, rx: 0.3, ry: 0.2, rz: 0.8, leap: 1 }],
-      [500, { hip: -0.45, gl: 0, gr: 0, leap: 1, lx: 0.5, ly: -0.9, lz: 0.5, rx: 0.5, ry: -0.8, rz: 0.5, lean: 0.2 }],
-      [640, { gl: 0, gr: 0, leap: 0.95 }],
+      DUNK_UP[0],
+      // (off a stride, not out of a squat: less of a crouch, the ball gathered to his right hip)
+      [-170, { hip: -0.5, by: 3.7, bx: 0.55, bz: 0.85, lean: 0.26, twist: -0.12 }],
+      [-40, { hip: 0.2, air: 0.4, by: 5.8, bx: 0.5, bz: 0.65, leap: 0.25, gl: 0.2, lx: 0.9, ly: -0.9, lz: 0.45, flu: 0.4, flf: 0.5, lean: 0.06, twist: -0.2 }],
+      [
+        70,
+        {
+          hip: 1.9,
+          air: 1,
+          by: 9.1,
+          bx: 0.5,
+          bz: 0.05,
+          leap: 0.8,
+          gl: 0,
+          lx: 1.2,
+          ly: -0.15,
+          lz: 0.5,
+          flu: 1.05,
+          flf: 0.75,
+          fru: 0.25,
+          frf: -0.55,
+          lean: -0.18,
+          tilt: 0.12,
+          twist: -0.3,
+        },
+      ],
+      [
+        150,
+        {
+          hip: 2.3,
+          air: 1,
+          by: 9.2,
+          bx: 0.45,
+          bz: 0.35,
+          leap: 1,
+          gl: 0,
+          lx: 1.28,
+          ly: -0.45,
+          lz: 0.2,
+          flu: 1.0,
+          flf: 0.7,
+          fru: 0.35,
+          frf: -0.5,
+          lean: -0.08,
+          tilt: 0.14,
+          twist: -0.18,
+        },
+      ],
+      [
+        200,
+        {
+          hip: 2.25,
+          air: 1,
+          by: 8.0,
+          bx: 0.2,
+          bz: 1.1,
+          leap: 1,
+          gl: 0,
+          lx: 1.05,
+          ly: -1.0,
+          lz: -0.3,
+          flu: 0.8,
+          flf: 0.5,
+          fru: 0.55,
+          frf: 0.2,
+          lean: 0.24,
+          tilt: 0.04,
+          twist: 0.22,
+          ...SLAM,
+        },
+      ],
+      [
+        240,
+        {
+          hip: 2.1,
+          air: 1,
+          gl: 0,
+          gr: 0,
+          lx: 0.95,
+          ly: -1.1,
+          lz: -0.3,
+          rx: 0.15,
+          ry: 1.4,
+          rz: 1.1,
+          leap: 1,
+          flu: 0.7,
+          flf: 0.65,
+          fru: 0.6,
+          frf: 0.45,
+          lean: 0.24,
+          twist: 0.25,
+          ...SLAM,
+        },
+      ],
+      [
+        340,
+        { hip: 1.4, air: 1, gl: 0, gr: 0, lx: 0.75, ly: -0.7, lz: 0.2, rx: 0.35, ry: 0.4, rz: 0.85, leap: 1, flu: 0.5, flf: 0.3, fru: 0.25, frf: 0.3, lean: 0.12, twist: 0.15 },
+      ],
+      ...dunkDown(-1, 640, 0.15),
     ],
     { grip: 'under' },
   ),
@@ -865,9 +1006,9 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
     { gr: 1, gl: 1, bx: 0, bz: 1 },
     [
       ...DUNK_UP.slice(0, 3),
-      [70, { hip: 1.9, air: 1, by: 8.3, bx: -0.25, bz: 0.6, leap: 0.8, flu: 0.8, flf: 0.3, fru: 0.6, frf: -0.2, lean: -0.12, twist: 0.8, tilt: -0.08, nod: -0.1 }],
-      [150, { hip: 2.3, air: 1, by: 9.3, bx: -0.1, bz: 0.6, leap: 1, flu: 0.85, flf: 0.4, fru: 0.7, frf: -0.1, lean: -0.28, twist: 1.35, nod: -0.22 }],
-      [200, { hip: 2.25, air: 1, by: 7.8, bx: 0, bz: 1.0, leap: 1, flu: 0.8, flf: 0.5, fru: 0.6, frf: 0.1, lean: -0.32, twist: 1.5, nod: -0.28 }],
+      [70, { hip: 1.9, air: 1, by: 8.3, bx: -0.25, bz: 0.6, leap: 0.8, flu: 0.8, flf: -0.2, fru: 0.6, frf: -0.45, lean: -0.12, twist: 0.8, tilt: -0.08, nod: -0.1 }],
+      [150, { hip: 2.3, air: 1, by: 9.3, bx: -0.1, bz: 0.6, leap: 1, flu: 0.9, flf: 0.1, fru: 0.75, frf: -0.25, lean: -0.28, twist: 1.35, nod: -0.22 }],
+      [200, { hip: 2.25, air: 1, by: 7.8, bx: 0, bz: 1.0, leap: 1, flu: 0.95, flf: 0.55, fru: 0.8, frf: 0.3, lean: -0.32, twist: 1.5, nod: -0.28 }],
       [
         240,
         {
@@ -891,9 +1032,9 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
           nod: -0.2,
         },
       ],
-      [340, { hip: 1.5, air: 1, gl: 0, gr: 0, lx: 0.3, ly: 1.0, lz: 0.6, rx: 0.3, ry: 1.0, rz: 0.6, leap: 1, lean: -0.1, twist: 0.8 }],
-      [500, { hip: -0.42, gl: 0, gr: 0, leap: 1, lx: 0.5, ly: -0.8, lz: 0.5, rx: 0.5, ry: -0.8, rz: 0.5, twist: 0.25 }],
-      [620, { gl: 0, gr: 0, leap: 0.95 }],
+      [340, { hip: 1.5, air: 1, gl: 0, gr: 0, lx: 0.4, ly: 0.7, lz: 0.75, rx: 0.4, ry: 0.8, rz: 0.75, leap: 1, lean: -0.04, twist: 0.8, flu: 0.3, flf: 0.3, fru: 0.5, frf: 0.1 }],
+      // (he comes down still turned, and the turn goes out of him as he sinks)
+      ...dunkDown(1, 620, 0.55),
     ],
     { grip: 'side' },
   ),
@@ -1089,21 +1230,29 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
   ),
 
   // --- the rest of the game (0: the ball gets there, or the shot goes up) ---
+  // (a board: sat down under it with his arms back and his eyes on it, his arms thrown up as he goes and both hands
+  // on it at the top of his reach; it is ripped down to his chin as he falls, and he lands wide and turned over it)
   rebound: clip('rebound', 'shot', 0, { bx: 0, bz: 0.45 }, [
-    [-330, { hip: -0.55, lx: 0.6, ly: -0.4, lz: 0.6, rx: 0.6, ry: -0.4, rz: 0.6, by: 8.4, wide: 0.3 }],
-    [-150, { hip: 0.1, air: 0.3, lx: 0.3, ly: 1.4, lz: 0.5, rx: 0.3, ry: 1.4, rz: 0.5, by: 8.4, gl: 0.3, gr: 0.3 }],
-    [0, { hip: 1.5, air: 1, lx: 0.1, ly: 2, lz: 0.45, rx: 0.1, ry: 2, rz: 0.45, by: 8.4, gl: 1, gr: 1 }],
-    [170, { hip: 0.5, air: 1, by: 6.4, gl: 1, gr: 1 }],
-    [320, { ...HOLD, hip: -0.4, by: 4.6, wide: 0.4 }],
-    [460, { ...HOLD }],
+    [-330, { hip: -0.6, lx: 0.6, ly: -1.05, lz: 0.3, rx: 0.6, ry: -1.05, rz: 0.3, by: 8.4, wide: 0.35, lean: 0.22, nod: 0.25 }],
+    [-200, { hip: -0.35, lx: 0.5, ly: -0.3, lz: 0.7, rx: 0.5, ry: -0.3, rz: 0.7, by: 8.4, wide: 0.3, lean: 0.14, nod: 0.3 }],
+    [-90, { hip: 0.3, air: 0.3, lx: 0.3, ly: 1.5, lz: 0.5, rx: 0.3, ry: 1.5, rz: 0.5, by: 8.4, gl: 0.3, gr: 0.3, nod: 0.3 }],
+    [0, { hip: 1.5, air: 1, lx: 0.1, ly: 2.05, lz: 0.4, rx: 0.1, ry: 2.05, rz: 0.4, by: 8.4, gl: 1, gr: 1, lean: -0.05, nod: 0.3 }],
+    [80, { hip: 1.2, air: 1, by: 7.3, bz: 0.5, gl: 1, gr: 1, nod: 0.1 }],
+    [170, { hip: 0.5, air: 1, by: 5.9, bz: 0.55, gl: 1, gr: 1, lean: 0.06 }],
+    [320, { ...HOLD, hip: -0.48, by: 4.85, bx: 0.25, bz: 0.6, wide: 0.5, lean: 0.2, twist: -0.22 }],
+    [460, { ...HOLD, wide: 0.25, twist: -0.08 }],
   ]),
+  // (a shot sent back: out of his crouch with his hand cocked low, up with it straight over his head and his other arm
+  // down and back against it, his body a line from that hip to that hand; the swat is his arm thrown forward and down
+  // through the ball, his shoulder and his ribs after it, and he lands turned the way it went)
   block: clip('block', 'shot', 0, {}, [
-    [-260, { hip: -0.55, lx: 0.7, ly: -0.6, lz: 0.6, rx: 0.5, ry: -0.2, rz: 0.7 }],
-    [-50, { hip: 0.1, air: 0.3, rx: 0.2, ry: 1.2, rz: 0.7 }],
-    [130, { hip: 1.7, air: 1, rx: 0.1, ry: 2.1, rz: 0.75, lx: 0.6, ly: -0.3, lz: 0.5, lean: 0.06 }],
-    // (the swat: his arm thrown forward through the ball, his ribs after it)
-    [220, { hip: 1.5, air: 1, rx: 0.1, ry: 1.9, rz: 1.3, lx: 0.6, ly: -0.3, lz: 0.5, lean: 0.12, curl: 0.08, ptip: -0.06 }],
-    [400, { hip: -0.35, rx: 0.4, ry: 0, rz: 0.7 }],
+    [-260, { hip: -0.55, lx: 0.7, ly: -0.9, lz: 0.5, rx: 0.45, ry: -0.7, rz: 0.45, lean: 0.18, nod: 0.15 }],
+    [-50, { hip: 0.1, air: 0.3, rx: 0.25, ry: 1.0, rz: 0.6, lx: 0.65, ly: 0.1, lz: 0.6, lean: 0.06, nod: 0.2 }],
+    [70, { hip: 1.3, air: 1, rx: 0.15, ry: 2.0, rz: 0.45, lx: 0.75, ly: -0.3, lz: 0.4, lean: -0.04, twist: -0.2, tilt: 0.06, nod: 0.22 }],
+    [130, { hip: 1.7, air: 1, rx: 0.1, ry: 2.15, rz: 0.6, lx: 0.8, ly: -0.65, lz: 0.25, lean: 0.02, twist: -0.1, tilt: 0.1, nod: 0.2 }],
+    [220, { hip: 1.5, air: 1, rx: 0, ry: 1.75, rz: 1.5, lx: 0.85, ly: -1.0, lz: -0.3, lean: 0.2, twist: 0.3, tilt: 0.04, curl: 0.1, ptip: -0.06, nod: -0.05 }],
+    [300, { hip: 0.8, air: 1, rx: -0.15, ry: 0.8, rz: 1.3, lx: 0.8, ly: -0.9, lz: -0.2, lean: 0.22, twist: 0.38, curl: 0.06 }],
+    [400, { hip: -0.4, rx: 0.3, ry: -0.5, rz: 0.7, lx: 0.7, ly: -0.9, lz: 0.4, lean: 0.2, twist: 0.15, wide: 0.3 }],
     [520, {}],
   ]),
   contest: clip('contest', 'shot', 0, { wide: 0.3 }, [

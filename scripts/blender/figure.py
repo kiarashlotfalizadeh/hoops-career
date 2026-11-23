@@ -100,8 +100,30 @@ FINGER_LEAVES = {f'{d}{k}{sfx}': (f'{d}1{sfx}' if k == 2 else f'ha{sfx}') for d 
 girdled = False
 
 
+# (and, on the player only, his shorts' legs as cloth: below where each leg of them leaves his seat, a hoop of bones at
+# each of a few heights down to the hem, CLOTH_R of them round the leg. court3d/cloth.ts hangs each hoop from the one
+# above by cords that go slack and never stretch, lets it fall, swing and lie against his thigh, and figure.ts puts
+# each bone where its knot of the cloth is. The first height is no bones: the cloth there is his thigh's, as all of it
+# was (its bones are in the file all the same, and nothing hangs on them: cloth.ts reads where the hoop is from them).
+# `clothed`: the body being built has them (his far one, and the people round the floor, keep the two bones that
+# lag, hemL and hemR). CLOTH_AT: where each bone is as he is built, found on the shorts as they are cut (see cloth_measure).
+CLOTH_R = 8
+CLOTH_Y = (HIP - 0.4, HIP - 0.76, HIP - 1.13, HEM)
+clothed = False
+CLOTH_AT = {}
+CLOTH_AXIS = [HIP_W, 0.0]
+
+
+def cloth_name(s, k, m):
+    return f"h{'l' if s > 0 else 'r'}{k}{m}"
+
+
+def cloth_leaves():
+    return {cloth_name(s, k, m): ('thl' if s > 0 else 'thr') for s in (1, -1) for k in range(len(CLOTH_Y)) for m in range(CLOTH_R)}
+
+
 def leaves():
-    return {**LEAVES, **FINGER_LEAVES, **GIRDLE, **AXILLA, **TRUNK} if girdled else {**LEAVES, **FINGER_LEAVES}
+    return {**LEAVES, **FINGER_LEAVES, **GIRDLE, **AXILLA, **TRUNK, **cloth_leaves()} if girdled else {**LEAVES, **FINGER_LEAVES}
 SKIN, HAIR, JERSEY, TRIM_M, CLOTH, SHOE, WHITE = 'skin', 'hair', 'jersey', 'trim', 'cloth', 'shoe', 'white'
 # hair that is a shape of its own (a man wears one of them or none: figure.ts leaves the others out)
 BUN, TAIL, TWISTS, LOCS, BRAIDS, AFRO, HIGHTOP, CURLS = 'bun', 'tail', 'twists', 'locs', 'braids', 'afro', 'hightop', 'curls'
@@ -1255,7 +1277,7 @@ def weights(p, kind):
         k = sstep(KN_Y + 0.26, KN_Y - 0.26, y)
         f = sstep(AN_Y + 0.3, AN_Y + 0.02, y)
         for share, th, sh, ft, hem in ((left, 'thl', 'shl', 'ftl', 'hemL'), (1 - left, 'thr', 'shr', 'ftr', 'hemR')):
-            lag = sstep(0.42, 1.0, (WAIST - y) / (WAIST - HEM)) * 0.55 if kind == SHORTS else 0.0
+            lag = sstep(0.42, 1.0, (WAIST - y) / (WAIST - HEM)) * 0.55 if kind == SHORTS and not clothed else 0.0
             w[th] = rest * legs * share * (1 - k) * (1 - lag)
             w[hem] = rest * legs * share * (1 - k) * lag
             w[sh] = rest * legs * share * k * (1 - f)
@@ -1276,9 +1298,91 @@ def weights(p, kind):
         w['chest'], w['neck'], w['head'] = up * a * b * max(0.0, 1 - 2 * t), up * a * b * (1 - abs(2 * t - 1) + 0.04 * hd), up * a * b * hd * 0.96
     else:
         w['pelvis'], w['chest'], w['head'] = up * (1 - c), up * c * (1 - n), up * c * n
+    if kind == SHORTS and clothed:
+        w = cloth_share(p, w)
     top = sorted(((v, k) for k, v in w.items() if v > 0.004), reverse=True)[:4]
     tot = sum(v for v, _ in top)
     return {k: v / tot for v, k in top}
+
+
+def cloth_share(p, w):
+    """
+    A point of his shorts below where a leg of them leaves his seat: its share of the cloth's bones, the two hoops it
+    is between and on each the two knots it is between (eased, so a hoop turned or a knot moved bends the cloth and
+    doesn't crease it). What the first height has of it stays with what it hung on before (`w`). Above the fork a point
+    near his middle is part each leg's: the seam between them stays one cloth.
+    """
+    x, y, z = p
+    if y >= CLOTH_Y[0] or not CLOTH_AT:
+        return w
+    ax, cz = CLOTH_AXIS
+    rows = len(CLOTH_Y) - 1
+    k0, t = rows - 1, 1.0
+    for k in range(rows):
+        if y > CLOTH_Y[k + 1]:
+            k0, t = k, sstep(CLOTH_Y[k], CLOTH_Y[k + 1], y)
+            break
+    out = {}
+    held = 0.0
+    left = sstep(-0.07, 0.07, x) if y > FORK - 0.03 else (1.0 if x > 0 else 0.0)
+    for s, share in ((1, left), (-1, 1 - left)):
+        if share <= 0:
+            continue
+        u = (math.atan2(z - cz, s * x - ax) / (2 * math.pi)) % 1.0 * CLOTH_R
+        m0 = int(u) % CLOTH_R
+        f = sstep(0.0, 1.0, u - int(u))
+        for k, wk in ((k0, 1 - t), (k0 + 1, t)):
+            if k == 0:
+                held += share * wk
+                continue
+            for m, wm in ((m0, 1 - f), ((m0 + 1) % CLOTH_R, f)):
+                n = cloth_name(s, k, m)
+                out[n] = out.get(n, 0.0) + share * wk * wm
+    for b, v in w.items():
+        out[b] = out.get(b, 0.0) + v * held
+    return out
+
+
+def cloth_measure(shorts, body):
+    """
+    Where each of the cloth's bones is as he is built (CLOTH_AT): on his shorts as they are cut, at its height, round
+    the line down the middle of a leg of them (CLOTH_AXIS: the middle of its hem). Above the fork a leg has no inside
+    of its own: a knot there is on the seam down his middle. And his thigh under them, for cloth.ts (printed: its
+    THIGH_R is these, by hand): how far out from the line down its middle his skin is, at each height and at his knee.
+    """
+    pts = np.array([G(v.co) for v in shorts.data.vertices])
+    hem = pts[(pts[:, 1] < HEM + 0.1) & (pts[:, 0] > 0)]
+    ax = float(hem[:, 0].max() + hem[:, 0].min()) / 2
+    cz = float(hem[:, 2].max() + hem[:, 2].min()) / 2
+    CLOTH_AXIS[:] = [ax, cz]
+    side = pts[pts[:, 0] > 0.0]
+    for k, y in enumerate(CLOTH_Y):
+        ring = side[np.abs(side[:, 1] - y) < 0.07]
+        ang = np.arctan2(ring[:, 2] - cz, ring[:, 0] - ax)
+        far = np.hypot(ring[:, 0] - ax, ring[:, 2] - cz)
+        for m in range(CLOTH_R):
+            a = 2 * math.pi * m / CLOTH_R
+            off = np.abs((ang - a + math.pi) % (2 * math.pi) - math.pi)
+            # (the points of the cloth nearest that way round: thinned, there may be none very near it)
+            near = next((off < w for w in (0.14, 0.22, 0.35) if (off < w).any()), off < 0)
+            # (toward his middle, no further than the seam)
+            most = ax / -math.cos(a) if math.cos(a) < -0.1 else 9.0
+            r = min(float(far[near].mean()), most) if near.any() else most
+            if r > 8:
+                raise RuntimeError(f'cloth: no shorts at {y:.2f}, {m}')
+            for s in (1, -1):
+                CLOTH_AT[cloth_name(s, k, m)] = (s * (ax + r * math.cos(a)), y, cz + r * math.sin(a))
+    rows = ', '.join('[' + ', '.join(f'{math.hypot(CLOTH_AT[cloth_name(1, k, m)][0] - ax, CLOTH_AT[cloth_name(1, k, m)][2] - cz):.3f}' for m in range(CLOTH_R)) + ']' for k in range(len(CLOTH_Y)))
+    print(f'[models] cloth: a leg of his shorts about x {ax:.3f}, z {cz:.3f}; its hoops out to {rows}')
+    his = np.array([G(v.co) for v in body.data.vertices])
+    his = his[(his[:, 0] > 0.04) & (his[:, 0] < 1.0)]
+    out = []
+    for y in (*CLOTH_Y, KN_Y):
+        ring = his[np.abs(his[:, 1] - y) < 0.04]
+        cx, cz = (float(ring[:, c].max() + ring[:, c].min()) / 2 for c in (0, 2))
+        far = np.hypot(ring[:, 0] - cx, ring[:, 2] - cz)
+        out.append(f'[{HIP - y:.2f}, {cx - HIP_W:.3f}, {cz:.3f}, {float(far.mean()):.3f}]')
+    print('[models] cloth: his thigh (how far down from his hip, its middle out from the joint and forward of it, how far round that his skin is): ' + ', '.join(out))
 
 
 def thenar(loc, s):
@@ -1396,6 +1500,10 @@ def rig(mesh):
         rest[sh] = Matrix.Translation((s * HIP_W, KN_Y, 0))
         rest[ft] = Matrix.Translation((s * HIP_W, AN_Y, 0))
         rest['hem' + sfx] = Matrix.Translation((s * HIP_W, KN_Y + 0.7, 0))
+        if girdled:
+            for k in range(len(CLOTH_Y)):
+                for m in range(CLOTH_R):
+                    rest[cloth_name(s, k, m)] = Matrix.Translation(CLOTH_AT[cloth_name(s, k, m)])
         # (each finger's and the thumb's two bones at its joints, turned as the hand is)
         for d, (_, (j1, _), (j2, _)) in DIGITS[s].items():
             rest[d + '1' + sfx.lower()] = f @ Matrix.Translation(j1)
@@ -1521,6 +1629,10 @@ def crop(body):
     return body
 
 
+# how much of what his thigh narrows by, down from his seat, the leg of his shorts comes in with it
+SLIM = 0.5
+
+
 def fit_shorts(shorts, body):
     """
     The shorts cut to the real man, from their waistband to their hem (the form is cut for a thicker trunk, and its
@@ -1547,8 +1659,11 @@ def fit_shorts(shorts, body):
     fit = []
     most = [0.0, 0.0, 0.0]
     for k, (b, s) in enumerate(zip(his, theirs)):
-        room = 0.05 + 0.045 * sstep(0.0, 4.0, k) + 0.035 * sstep(SEAT - 1.0, SEAT + LEG - 1.0, k)
-        most = [max(m, v + room) for m, v in zip(most, b)]
+        room = 0.05 + 0.045 * sstep(0.0, 4.0, k) + 0.02 * sstep(SEAT - 1.0, SEAT + LEG - 1.0, k)
+        # (down a leg the cloth comes in with his thigh, part of the way: SLIM. Kept at its widest all the way to the
+        # hem, a leg of them was a bell, a hand off his thigh at the knee)
+        come = [SLIM * max(0.0, a - c) for a, c in zip(his[k - 1], b)] if k >= SEAT else [0.0, 0.0, 0.0]
+        most = [max(m - c, v + room) for m, c, v in zip(most, come, b)]
         fit.append([m / v for m, v in zip(most, s)])
     bw, bf, bb = his[0]
     sw, sf, sb = theirs[0]
@@ -1618,7 +1733,8 @@ def kit(mid, q=1.0):
     slots(vest, [JERSEY, TRIM_M], lambda p: TRIM_M if pit(p, 1) > -TRIM or pit(p, -1) > -TRIM or vee(p) > -TRIM else JERSEY)
 
     # the shorts: their own shape over his hips, a leg each; a waistband, a hem band and a stripe down each side
-    shorts = shorts_form()
+    # (their folds as built shallow: the cloth moves now, and a deep fold that never does is a pleat pressed into it)
+    shorts = shorts_form(folds=0.011)
     if _real is not None:
         fit_shorts(shorts, mid)
     thin(shorts, 3320 * q)
@@ -1630,6 +1746,8 @@ def kit(mid, q=1.0):
     )
     slots(shorts, [CLOTH, TRIM_M], lambda p: TRIM_M if p[1] < HEM + 0.085 or p[1] > WAIST - 0.13 or stripe(p) else CLOTH)
     tag(shorts, SHORTS)
+    if clothed:
+        cloth_measure(shorts, mid)
 
     # the socks, a cuff at the top
     socks = mid
@@ -1751,6 +1869,12 @@ def on_eye(n, out=0.0):
     return c + (p - c).normalized() * (r + out)
 
 
+# how far up under his shorts' hem his thighs go on (ft): the cloth swings off them and rides up them now, and a thigh
+# that stopped a thumb above the hem was a hollow leg of cloth seen from below
+THIGH_UNDER = 0.5
+THIGH_IN = 0.075
+
+
 def dress_real(man):
     """The real man in his kit: as dress_player, but his skin is his own points (none thinned away), his head, ears and hands part of it."""
     global _scalp
@@ -1781,10 +1905,13 @@ def dress_real(man):
     under = UNDER
     cut(
         body,
-        [plane_pit(1, -under), plane_pit(-1, -under), plane_vee(1, -under), plane_vee(-1, -under), level(HEM + 0.12), level(SOCK_HI - 0.06)],
-        lambda p: pit(p, 1) > -under or pit(p, -1) > -under or (vee(p) > -under and p[1] > 4.9) or (SOCK_HI - 0.06 < p[1] < HEM + 0.12 and abs(p[0]) < 1.2),
+        [plane_pit(1, -under), plane_pit(-1, -under), plane_vee(1, -under), plane_vee(-1, -under), level(HEM + THIGH_UNDER), level(SOCK_HI - 0.06)],
+        lambda p: pit(p, 1) > -under or pit(p, -1) > -under or (vee(p) > -under and p[1] > 4.9) or (SOCK_HI - 0.06 < p[1] < HEM + THIGH_UNDER and abs(p[0]) < 1.2),
         under=5.7,
     )
+    # (and thinner there than he is, from a little way up: the cloth lies on a thigh that is round, for cloth.ts, and
+    # his is not, so where it lay on him his own came through it. Nothing of this is seen but from below, up the leg)
+    push(body, lambda p: -THIGH_IN * sstep(HEM + 0.05, HEM + 0.32, p[1]) if KN_Y < p[1] < HEM + THIGH_UNDER + 0.02 and abs(p[0]) < 1.0 else 0.0)
     vest, shorts, socks = kit(mid)
     for o in (vest, socks):
         tag(o, BY_PLACE)
@@ -2398,6 +2525,8 @@ def build(who='player'):
     materials()
     girdled = who == 'player'
     if who == 'player':
+        global clothed
+        clothed = True
         return finish(dress_real(real_player()) + hair_pieces(), 'figure')
     hi = fused()
     # (only the men on the floor have hair that is a shape of its own: the benches are seen from far off)
@@ -2612,6 +2741,7 @@ if __name__ == '__main__':
     anatomy.write(fig, _real, a['out'])
     fig.data.attributes.remove(fig.data.attributes['mhv'])
     # (and the same man far off: a second mesh on bones of the same names)
+    clothed = False
     low, low_rig = finish(dress_far(_real), 'figureFar')
     low_rig.name = 'figureFarRig'
     report(low)

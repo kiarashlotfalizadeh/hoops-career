@@ -6,6 +6,7 @@ import { DataTexture, RGFormat, ShaderLib, Texture, Vector3, type CanvasTexture 
 import { describe, expect, it } from 'vitest';
 import type { PlayerLook } from '../../core/types';
 import { ANAT_MM, anatOf } from '../live/court3d/anat';
+import { CLOTH, FRAME, KNOTS, ShortsSim } from '../live/court3d/cloth';
 import { knitTile, LAYERS, ribTile, skinTile, TILE } from '../live/court3d/detail';
 import { figureGeo, readFaces, RELIEF_MARK, seamSlopes, stuffMaterial, type Detail } from '../live/court3d/figure';
 import { merged, placed, readGlb, type Thing } from '../live/court3d/glb';
@@ -45,6 +46,8 @@ const BONES = [
 ];
 /** The leaves only the player has (figure.py's GIRDLE, AXILLA and TRUNK): a bone at each shoulder, one down each forearm, one his brows hang on and one for his lower lip, one under each armpit, and one in the small of his back and one in his neck. */
 const PLAYER_LEAVES = ['cll', 'clr', 'fwl', 'fwr', 'brow', 'lip', 'axl', 'axr', 'spine', 'neck'];
+/** And his shorts' cloth (figure.py's cloth_leaves, court3d/cloth.ts): a bone at each knot of it, each leg's hoops from the first down. */
+const CLOTH_BONES = ['l', 'r'].flatMap((leg) => Array.from({ length: KNOTS }, (_, i) => `h${leg}${Math.floor(i / CLOTH.n)}${i % CLOTH.n}`));
 /** Hair that is a shape of its own on the player (court3d/look.ts: a man wears one of them or none). */
 const HAIR_PIECES = ['bun', 'tail', 'twists', 'locs', 'braids', 'afro', 'hightop', 'curls'];
 /** The materials the app has a look for (court3d/figure.ts `wear`, court3d/arena.ts `dress`, court3d/props.ts: none of them exports its list). */
@@ -318,13 +321,13 @@ describe("the 3D court's models", () => {
     // the player: one skin on the puppet's 18 bones and the figure's seven leaves, every point of it on at most four of them, their weights adding up to one
     {
       const fig = figure.get('figure')!;
-      expect(fig.bones!.map((b) => b.name).sort()).toEqual([...BONES, ...PLAYER_LEAVES].sort());
+      expect(fig.bones!.map((b) => b.name).sort()).toEqual([...BONES, ...PLAYER_LEAVES, ...CLOTH_BONES].sort());
       for (const b of fig.bones!) expect(b.inverse.elements.every(Number.isFinite), `figure.glb: ${b.name}'s way back`).toBe(true);
       for (const p of fig.parts) {
         const [on, by] = [p.geo.getAttribute('skinIndex'), p.geo.getAttribute('skinWeight')];
         expect(Object.keys(p.geo.attributes), `figure (${p.material})`).toEqual(expect.arrayContaining(['color', 'skinIndex', 'skinWeight']));
         expect([on.itemSize, by.itemSize]).toEqual([4, 4]);
-        expect(most(on.array)).toBeLessThan(BONES.length + PLAYER_LEAVES.length);
+        expect(most(on.array)).toBeLessThan(BONES.length + PLAYER_LEAVES.length + CLOTH_BONES.length);
         let off = 0;
         for (let i = 0; i < by.count; i++) off = Math.max(off, Math.abs(by.getX(i) + by.getY(i) + by.getZ(i) + by.getW(i) - 1));
         expect(off, `figure (${p.material}): weights that do not add up to one`).toBeLessThan(0.02);
@@ -351,6 +354,107 @@ describe("the 3D court's models", () => {
       expect(geo.wearing(null, false).index!.count / 3, 'a low shoe leaves off what makes one high').toBe(triangles(fig) - pieces - size('high'));
       expect(geo.wearing('bun').index!.count, 'a piece of hair adds its own triangles').toBeGreaterThan(geo.body.index!.count);
       expect(geo.wearing('bun').getAttribute('position'), 'and shares the points').toBe(geo.body.getAttribute('position'));
+      // his shorts as cloth (court3d/cloth.ts): below his seat a leg of them hangs on the cloth's bones, its hem on them
+      // alone, and nothing but his shorts does; the first hoop's bones are in the file and nothing hangs on them
+      {
+        const at = new Map(fig.bones!.map((b, i) => [b.name, i]));
+        const cloth = new Set(CLOTH_BONES.map((n) => at.get(n)!));
+        const first = new Set(CLOTH_BONES.filter((n) => n[2] === '0').map((n) => at.get(n)!));
+        let [hem, low] = [0, 0];
+        for (const p of fig.parts) {
+          const [pos, on, by] = [p.geo.getAttribute('position'), p.geo.getAttribute('skinIndex'), p.geo.getAttribute('skinWeight')];
+          const kit = p.material === 'cloth' || p.material === 'trim';
+          for (let v = 0; v < pos.count; v++) {
+            let [w, w0] = [0, 0];
+            for (let c = 0; c < 4; c++) {
+              if (cloth.has(on.getComponent(v, c))) w += by.getComponent(v, c);
+              if (first.has(on.getComponent(v, c))) w0 += by.getComponent(v, c);
+            }
+            expect(w0, `figure (${p.material}): a point on the first hoop's bones`).toBe(0);
+            if (!kit || pos.getY(v) > 2.96) expect(w, `figure (${p.material}): a point at ${pos.getY(v).toFixed(2)} ft on the cloth's bones`).toBe(0);
+            else if (pos.getY(v) < 1.95) hem = Math.max(hem, 1 - w);
+            else if (pos.getY(v) < 2.5) low = Math.max(low, 1 - w);
+          }
+        }
+        expect(hem, "his hem off the cloth's bones").toBeLessThan(0.02);
+        expect(low, "the lower half of a leg of his shorts off the cloth's bones").toBeLessThan(0.02);
+        const geo = figureGeo((o) => o, figure);
+        expect(geo.cloth?.length).toBe(2 * KNOTS * 3);
+        // the cloth itself, on a man who stands, lifts a knee over his hip and puts it down, is thrown a step in one frame
+        // (a cut in a move that is not one in the plan), and falls faster than a thing falls: it hangs as it is built when
+        // he stands, rides up a raised thigh (no more than a quarter of it and a little) and comes back down, is round his
+        // thigh whatever happened, never up round his waist, and a frame with no time in it leaves it where it is
+        const sim = new ShortsSim(geo.cloth!, 1, 1, 1);
+        const legs = new Float32Array(2 * FRAME);
+        const pose = (a: number, x = 0, y = 3.35, z = 0) => {
+          for (let leg = 0; leg < 2; leg++) {
+            const [ang, hx] = [leg ? 0 : a, (leg ? -0.4 : 0.4) + x];
+            const [c, sn] = [Math.cos(ang), Math.sin(ang)];
+            legs.set([hx, y, z, 1, 0, 0, 0, c, -sn, 0, sn, c, hx, y - 1.62 * c, z + 1.62 * sn, hx, y - 1.62 * c - 1.55, z + 1.62 * sn], leg * FRAME);
+          }
+        };
+        /** How far down his left thigh the middle of its hem is, and how far out from the bone's line. */
+        const hemAt = (of = sim) => {
+          const o = CLOTH.rows * CLOTH.n * 3;
+          let [down, x, z] = [0, 0, 0];
+          for (let m = 0; m < CLOTH.n; m++) {
+            const d = [0, 1, 2].map((c) => of.at[o + m * 3 + c] - legs[c]);
+            x += (d[0] * legs[3] + d[1] * legs[4] + d[2] * legs[5]) / CLOTH.n;
+            down -= (d[0] * legs[6] + d[1] * legs[7] + d[2] * legs[8]) / CLOTH.n;
+            z += (d[0] * legs[9] + d[1] * legs[10] + d[2] * legs[11]) / CLOTH.n;
+          }
+          return [down, Math.hypot(x, z)];
+        };
+        const run = (frames: number, each: (i: number) => void = () => {}) => {
+          for (let i = 1; i <= frames; i++) {
+            each(i);
+            sim.step(1 / 60, legs);
+            expect(sim.at.every(Number.isFinite), 'a knot nowhere').toBe(true);
+          }
+        };
+        pose(0);
+        run(90);
+        const [long] = hemAt();
+        expect(long).toBeGreaterThan(1.45);
+        expect(long).toBeLessThan(1.53);
+        run(18, (i) => pose((1.7 * i) / 18));
+        run(30);
+        expect(hemAt()[0], 'a hem ridden up a raised thigh').toBeLessThan(long - 0.12);
+        expect(hemAt()[0], 'and no further than cloth bunches').toBeGreaterThan(0.4 + 0.65 * (long - 0.4));
+        expect(Math.max(...sim.bunch)).toBeGreaterThan(0.05);
+        run(18, (i) => pose(1.7 - (1.7 * i) / 18));
+        run(60);
+        expect(Math.abs(hemAt()[0] - long), 'a hem back down a lowered one').toBeLessThan(0.03);
+        const still = Float32Array.from(sim.at);
+        sim.step(0, legs);
+        expect(Array.from(sim.at)).toEqual(Array.from(still));
+        // (the lurch: most of a step forward in a frame, his thigh swung up with it, through the hoops that hung round it)
+        pose(0.7, 0, 3.35, 0.9);
+        run(90);
+        const fresh = new ShortsSim(geo.cloth!, 1, 1, 1);
+        fresh.step(1 / 60, legs);
+        expect(Math.abs(hemAt()[0] - hemAt(fresh)[0]), 'a hem after a lurch, against one hung there afresh').toBeLessThan(0.05);
+        expect(hemAt()[1], 'and round his thigh').toBeLessThan(0.2);
+        run(60, (i) => pose(0, i * 0.15, 3.35, 0.9));
+        run(60);
+        expect(Math.abs(hemAt()[0] - long), 'a hem after a jog').toBeLessThan(0.05);
+        run(30, (i) => pose(0, 9, 3.35 + (2 * i) / 30, 0.9));
+        run(20);
+        let high = Infinity;
+        run(14, (i) => {
+          pose(0, 9, 5.35 - 2 * (i / 14) ** 2, 0.9);
+          high = Math.min(high, hemAt()[0]);
+        });
+        expect(high, 'a hem on a man dropped at more than twice a fall').toBeGreaterThan(0.4 + 0.65 * (long - 0.4));
+        // (and his far body's shorts hang on none of it: the two bones that lag)
+        const far = figure.get('figureFar')!;
+        const farCloth = new Set(far.bones!.map((b, i) => (CLOTH_BONES.includes(b.name) ? i : -1)).filter((i) => i >= 0));
+        for (const p of far.parts) {
+          const [on, by] = [p.geo.getAttribute('skinIndex'), p.geo.getAttribute('skinWeight')];
+          for (let v = 0; v < on.count; v++)
+            for (let c = 0; c < 4; c++) if (by.getComponent(v, c) > 0) expect(farCloth.has(on.getComponent(v, c)), "figureFar on the cloth's bones").toBe(false);
+        }
+      }
       // the same man far off (figure.py's dress_far): what a lamp's shadow map, the floor's mirror and a slow device draw of
       // him. The same parts by the same names on bones of the same names, so his sheet's pictures lie on it too; no mouth
       // inside it and no map of his skin; and a man in it, whatever hair he wears, under 6,000 triangles to his 28,000

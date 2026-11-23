@@ -6,7 +6,8 @@
 //   with the ball, on the game's clock (the play's time half his own, as the 3D court plays it): ?move=pivot (held, the man on him,
 //   turned round and back on his pivot), drive (at the rim off the dribble: a layup), pullup (a jumper off a dribble at a run),
 //   cns (a catch and shoot), closeout (a defender running at a man, into his stance), beaten (in his stance, his man going by)
-//   &who=n (whose way of doing it: a layup's side and euro, a jumper's step-back go by it)  &turn=90 (degrees: the move turned round
+//   &pace=0.5 (the play's time against his own: a shot, a dunk, a rebound as the game plays them, at half; without it they are at his own)
+//   &who=n (whose way of doing it: a layup's side and euro, a jumper's step-back go by it)  &how=two|reverse|oop|... (the finish the play-by-play named)  &turn=90 (degrees: the move turned round
 //   on the floor, so a camera in front of the row sees it side on)
 //   &yaw=40 (degrees round him)  &zoom=1.4  &from=0&to=1200 (ms)  &n=8  &h=78&w=215 (his build)
 //   &seed=1 (the first man's own things: his look, sleeves, shoes; the next is seed+1)  &light=1 (the home kit)  &num=23&name=Brunson&mark=NYK
@@ -119,6 +120,9 @@ function drive(t: number): Drive {
     }
     case 'rebound':
       return t < 400 ? still('boxout') : { ...still('rebound'), ms: t - 400, dur: 650 };
+    // (a shot sent back: out of his stance, up at it; the swat comes as the move ends)
+    case 'block':
+      return t < 400 ? still('defend') : t < 1050 ? { ...still('block'), ms: t - 400, dur: 650 } : still('defend');
     // (these on the game's clock: t is the play's ms, a speed is ft a play's second, twice the body's)
     case 'pivot': {
       const yaw = t < 300 ? 0 : t < 800 ? Math.min(2.6, ((t - 300) * 7) / 1000) : Math.max(0.6, 2.6 - ((t - 800) * 5) / 1000);
@@ -414,7 +418,7 @@ const CUES = q.get('cue') === 'all' ? Object.keys(GESTURES) : (q.get('cue')?.spl
 const cued = new Set<number>();
 
 /** One figure a step on, then put where its lane is (it runs on the spot). */
-const PLAY = new Set(['pivot', 'drive', 'pullup', 'cns', 'closeout', 'beaten']).has(move) ? 0.5 : 1;
+const PLAY = num('pace', new Set(['pivot', 'drive', 'pullup', 'cns', 'closeout', 'beaten']).has(move) ? 0.5 : 1);
 const TURN = (num('turn', 0) * Math.PI) / 180;
 const turned = <T extends { x: number; z: number } | undefined>(p: T): T =>
   p && ({ ...p, x: p.x * Math.cos(TURN) + p.z * Math.sin(TURN), z: -p.x * Math.sin(TURN) + p.z * Math.cos(TURN) } as T);
@@ -426,7 +430,16 @@ function step(k: (typeof figs)[number], dt: number) {
     cued.add(i);
   }
   const d0 = drive(k.t);
-  const d = { ...d0, ...turned({ x: d0.x, z: d0.z }), yaw: d0.yaw + TURN, aim: turned(d0.aim), press: turned(d0.press), touch: turned(d0.touch), who: num('who', 0) };
+  const d = {
+    ...d0,
+    ...turned({ x: d0.x, z: d0.z }),
+    yaw: d0.yaw + TURN,
+    aim: turned(d0.aim),
+    press: turned(d0.press),
+    touch: turned(d0.touch),
+    who: num('who', 0),
+    how: (q.get('how') ?? undefined) as Drive['how'],
+  };
   k.f.pup.update(d, dt * PLAY, dt);
   const b = d.ball ? k.f.pup.carry({ x: 0, y: 0, z: 0 }) : null;
   k.f.pup.arms(b);

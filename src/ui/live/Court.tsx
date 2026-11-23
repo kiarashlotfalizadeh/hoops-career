@@ -13,7 +13,7 @@
 // With no possession to draw the court is never empty: the fives line up for the tip, the players
 // stand where the last play left them (a huddle, a stop), or the floor shows the shot chart (a break).
 import { useEffect, useRef, type MutableRefObject } from 'react';
-import { BASKET, COURT_LEN, tangents, toWorld, type Frame, type Pt, type Script } from './choreo';
+import { BASKET, COURT_LEN, tangents, toWorld, type Act, type Frame, type Pt, type Script } from './choreo';
 import type { ShotRecord, Team } from '../../core/types';
 import { FRANCHISES, type FranchiseDef } from '../../core/teams';
 import { inkOn, neutralVenue, outShirt, venueLook, type MatchKit, type Venue } from '../teamColors';
@@ -223,6 +223,64 @@ function hermite(a: Pt, b: Pt, ma: Pt, mb: Pt, u: number, dt: number): Pt {
   const h01 = -2 * u3 + 3 * u2;
   const h11 = u3 - u2;
   return { x: h00 * a.x + h10 * dt * ma.x + h01 * b.x + h11 * dt * mb.x, y: h00 * a.y + h10 * dt * ma.y + h01 * b.y + h11 * dt * mb.y };
+}
+
+/**
+ * A man going somewhere hard does not ease into it and out of it evenly. From a standing start he bursts: he is up to
+ * his pace in the first quarter of the move, not the first half. Into a stop he brakes late: he holds his pace and
+ * pulls up over the last of it. Each is a bend of the move's own time (`snap`), for the men who go like that (SNAPPY:
+ * a drive, a cut, a defender off the ball going to a man) over a move long enough to be one (SNAP.far, ft), at
+ * the end of it where he stands still: where he runs on through a keyframe, his pace through it is the path's own.
+ * SNAP: how much the start is bent, and the stop. Neither makes him faster anywhere than the path drew him: choreo
+ * paces the play so that nobody is asked for more than a man's top speed, and a bend that would is halved until it
+ * doesn't, or left out. The man on the ball in his stance is left even: his feet are a slide's. (What it costs, by
+ * the motion lab's count over a game at 2x: some twenty-five more moments of a foot sliding in 240, most of them a
+ * defender's as the man he guards bursts; stride breaks down a few in a hundred; nobody over his top speed.)
+ */
+const SNAPPY = new Set<Act>(['drive', 'move', 'defend']);
+const SNAP = { burst: 0.45, brake: 0.4, far: 4 };
+const snap = (u: number, burst: number, brake: number) => u + burst * u * (1 - u) * (1 - u) - brake * u * u * (1 - u);
+/** Each man's bends through each move of a script: [frame][his burst into it, his brake at its end, ...]. */
+const snapCache = new WeakMap<Script, Float32Array[]>();
+function snapsOf(sc: Script): Float32Array[] {
+  const hit = snapCache.get(sc);
+  if (hit) return hit;
+  const f = sc.frames;
+  const tan = tangentsOf(sc);
+  const nO = sc.oPids.length;
+  const n = nO + sc.dPids.length;
+  const still = (m: Pt | undefined) => !m || (m.x === 0 && m.y === 0);
+  const out = f.map((b, i) => {
+    const row = new Float32Array(n * 2);
+    const a = f[i - 1];
+    if (!a || !b.dur) return row;
+    for (let j = 0; j < n; j++) {
+      const [pa, pb] = j < nO ? [a.o[j], b.o[j]] : [a.d[j - nO], b.d[j - nO]];
+      if (!pa || !pb || !SNAPPY.has(b.act[j]) || Math.hypot(pb.x - pa.x, pb.y - pa.y) < SNAP.far) continue;
+      const [ma, mb] = [tan[i - 1]?.[j] ?? ZERO, tan[i]?.[j] ?? ZERO];
+      let k0 = still(ma) ? SNAP.burst : 0;
+      let k1 = still(mb) ? SNAP.brake : 0;
+      if (!k0 && !k1) continue;
+      // (the farthest he goes in a sixteenth of the move, bent so and not)
+      const most = (c0: number, c1: number) => {
+        let [far, was] = [0, pa];
+        for (let s = 1; s <= 16; s++) {
+          const p = hermite(pa, pb, ma, mb, snap(s / 16, c0, c1), b.dur);
+          far = Math.max(far, Math.hypot(p.x - was.x, p.y - was.y));
+          was = p;
+        }
+        return far;
+      };
+      const plain = most(0, 0) * 1.01;
+      for (let tries = 0; tries < 3 && most(k0, k1) > plain; tries++) [k0, k1] = [k0 / 2, k1 / 2];
+      if (most(k0, k1) > plain) continue;
+      row[j * 2] = k0;
+      row[j * 2 + 1] = k1;
+    }
+    return row;
+  });
+  snapCache.set(sc, out);
+  return out;
 }
 
 /** Canvas text in the app's face, condensed like its scoreboard figures. */
@@ -558,13 +616,14 @@ export function pose(sc: Script, t: number, calm: boolean): Pose {
   const end = i >= f.length;
   const a = end ? f[f.length - 1] : f[i - 1];
   const b = end ? a : f[i];
-  // (the players' paths run on the move's own time; the ball and the labels on it eased)
+  // (the players' paths run on the move's own time, bent where a man bursts or brakes: see snap; the ball and the labels on it eased)
   const lu = end || !b.dur ? 1 : Math.min(1, (t - acc) / b.dur);
   const u = calm ? lu : ease(lu);
   const bi = Math.min(i, f.length - 1);
   const tan = tangentsOf(sc);
   const nO = sc.oPids.length;
-  const path = (pa: Pt, pb: Pt, j: number) => (lu >= 1 ? pb : hermite(pa, pb, tan[bi - 1]?.[j] ?? ZERO, tan[bi]?.[j] ?? ZERO, lu, b.dur));
+  const bend = snapsOf(sc)[bi];
+  const path = (pa: Pt, pb: Pt, j: number) => (lu >= 1 ? pb : hermite(pa, pb, tan[bi - 1]?.[j] ?? ZERO, tan[bi]?.[j] ?? ZERO, snap(lu, bend[j * 2], bend[j * 2 + 1]), b.dur));
   const o = sc.oPids.map((_, j) => path(a.o[j], b.o[j], j));
   const d = sc.dPids.map((_, j) => path(a.d[j], b.d[j], nO + j));
   const carrier = a.hold !== undefined && a.hold >= 0 && a.hold === b.hold ? (a.hold < nO ? o[a.hold] : d[a.hold - nO]) : undefined;

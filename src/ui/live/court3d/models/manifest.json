@@ -1,21 +1,21 @@
 {
   "figure": {
-    "sources": "cf94d62911be6d5ef8e4ad9e5ae234702be76aa542dae55c2f65890a71624d59",
+    "sources": "139633e4fc8617c209fd576befe3974e12ffc4113b8c78633c7d8215af85cf52",
     "pack": 3,
     "blender": "Blender 5.2.1 LTS",
-    "bytes": 1241076,
+    "bytes": 1259168,
     "extras": {
       "faces.bin": {
         "bytes": 154100,
         "sha256": "dfe8f833406527dd2ea30b7ec2660f70e6e49159de2481819c6e2f6797601f45"
       },
       "skin-anat.png": {
-        "bytes": 292929,
-        "sha256": "7d1eceb4f09bb3cede80ee93fc6e0779067689f99fba5bd66277f1d3bdd0c84b"
+        "bytes": 308613,
+        "sha256": "c7d975708b5069445730af2626a5d008d75dca9c1bef66981504bbb66f0ab3ea"
       },
       "skin-anat-1024.png": {
-        "bytes": 114061,
-        "sha256": "3a74f7e6945d51856e4cb6d6c163bc706b59ccb4eb3dcaef9ace0b72038d1ca7"
+        "bytes": 119839,
+        "sha256": "7dfea06ff2702f9f17dc66225b7fcf1f61ec33f2c89d186499bf51f872bd757d"
       },
       "anat.json": {
         "bytes": 1643,
@@ -24,13 +24,13 @@
     }
   },
   "people": {
-    "sources": "684523641ac662c91f57d39580c5b675482746cac0ff343c0f3696ac8f4f6ccf",
+    "sources": "44016a30ded109de98bef93164a51242b8e74313d605b3c0bb30fd95e3d23ba6",
     "pack": 3,
     "blender": "Blender 5.2.1 LTS",
-    "bytes": 1214472
+    "bytes": 1213020
   },
   "arena": {
-    "sources": "9cf534b2562ac4ad1bdccbba0dca8bba4f73ccabbca4c37557c42ff9d4d210d0",
+    "sources": "ab2b90d55e6bd793840c0680dc5f5515621f6ffa975ef3e0ddd4f77701b3ac56",
     "pack": 3,
     "blender": "Blender 5.2.1 LTS",
     "bytes": 932144

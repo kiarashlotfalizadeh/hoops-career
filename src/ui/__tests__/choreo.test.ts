@@ -26,6 +26,7 @@ import { blocked, CAM_KINDS, camKind, clearSeat, clutter, fenced, Operator, seen
 import { captured, CHANNELS, CLIPS, DUNK_AT, DUNKS, GESTURES, I, mirror, N, PASSES, sample, span } from '../live/court3d/clips';
 import { occasionOf, postOf } from '../live/occasion';
 import { matchKits, outShirt } from '../teamColors';
+import { KNOTS } from '../live/court3d/cloth';
 import { B, faceT, figureGeo, follow, handOf, kitStyle } from '../live/court3d/figure';
 import { readGlb } from '../live/court3d/glb';
 import arenaGlb from '../live/court3d/models/arena.glb?inline';
@@ -956,7 +957,8 @@ describe('live court choreography', () => {
     {
       const glb = (file: string) => readGlb(Uint8Array.from(atob(file.slice(file.indexOf(',') + 1)), (ch) => ch.charCodeAt(0)).buffer);
       const geo = figureGeo((o) => o, glb(figureGlb));
-      expect([...geo.order].sort((x, y) => x - y)).toEqual(Array.from({ length: 51 }, (_, i) => i));
+      // (the puppet's and the figure's own 51, and a bone at each knot of his shorts' cloth: see court3d/cloth.ts)
+      expect([...geo.order].sort((x, y) => x - y)).toEqual(Array.from({ length: 51 + 2 * KNOTS }, (_, i) => i));
       // (no scalp of its own: his head is a real man's, one skin, and his hair is painted on its picture)
       expect(geo.wears).toEqual(expect.arrayContaining(['skin', 'jersey', 'trim', 'cloth', 'shoe', 'white']));
       // the bands that stand off his limbs (a sock's top, a wristband): each goes round the limb where it is asked for,

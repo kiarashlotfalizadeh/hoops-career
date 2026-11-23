@@ -17,7 +17,8 @@
 // - The picture (`Lens`): on the top step the scene is drawn into a target of its own, as it would be to
 //   the screen; where things meet is darkened (ao.ts), the brightest of it (the lamps in the varnish,
 //   the glints, a lit board) glows a little, the corners are a shade darker, it is graded as a broadcast
-//   is (a hair warm, the blacks deep, the colours as painted), and behind a close-up's man it goes soft. A device that can't keep up draws straight to the screen (see Court3D's STEPS).
+//   is (a hair warm, the blacks deep, the colours as painted), behind a close-up's man it goes soft, and what a
+//   whipped camera or a thrown ball takes across it in a frame is smeared as a shutter smears it. A device that can't keep up draws straight to the screen (see Court3D's STEPS).
 import {
   AdditiveBlending,
   BackSide,
@@ -28,6 +29,7 @@ import {
   Float32BufferAttribute,
   Group,
   HalfFloatType,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   NoBlending,
@@ -41,6 +43,7 @@ import {
   UnsignedByteType,
   Vector2,
   Vector3,
+  Vector4,
   WebGLRenderTarget,
   type Camera,
   type MeshStandardMaterial,
@@ -931,6 +934,25 @@ const BALANCE = new Vector3(1.007, 1.0, 0.993);
 const EXPOSURE = 1.14;
 /** An exposure bump dies away over this long (ms). */
 const BUMP_MS = 260;
+/**
+ * The shutter. A camera's is open for part of each frame, and what moves across the picture in that time is left on
+ * it as a smear: SHUTTER of the frame's move (a half is a film camera's). Only what goes far enough in a frame to
+ * be one: a dot of the picture that moves less than SHUTTER_FROM (of the picture's height) stays as sharp as it is,
+ * and no smear is longer than SHUTTER_MOST. So a camera following the play, which moves the picture a hair a frame,
+ * is sharp, and one whipped across the floor to a break, or swung onto a man, is not while it goes; and a ball
+ * thrown fast enough to cross BALL_FROM of the height in a frame is a streak for as long as it is. A cut is not a
+ * move (the camera turned past SHUTTER_CUT, a cosine, or gone SHUTTER_JUMP ft, between two frames): none across
+ * one. None with reduced motion, in a still, or a step down.
+ */
+const SHUTTER = 0.5;
+const SHUTTER_FROM = 0.006;
+const SHUTTER_MOST = 0.03;
+const SHUTTER_TAPS = 7;
+const SHUTTER_CUT = 0.975;
+const SHUTTER_JUMP = 8;
+const BALL_FROM = 0.012;
+/** The ball's radius (ft: puppet.ts BALL_R), for its streak. */
+const BALL_FT = 0.39;
 
 /**
  * The picture as drawn is kept in the screen's own terms, its tone curve on (see Lens): back to light,
@@ -1070,11 +1092,38 @@ const FINISH = /* glsl */ `
   uniform sampler2D tSofter;
   uniform vec2 uDot;
   uniform float uSharp;
+  uniform mat4 uWas;
+  uniform float uShutter;
+  uniform vec4 uBallGo;
+  uniform float uBallR;
   ${UNSHARP}
   varying vec2 vUv;
   void main() {
     vec3 s = texture2D(tScene, vUv).rgb;
-    if (uSharp > 0.0) {
+    // (the shutter: how far this dot of the world went across the picture while it was open. Where the thing at the
+    // dot is in the world is had from how deep it is, and where that was on the last picture from the last camera
+    // (uWas): so it is the camera's own move that smears, and a thing that moves is taken to stand still, but for
+    // the ball, whose own way across the picture is told (uBallGo: where it is, and where it was a frame ago))
+    vec2 smear = vec2(0.0);
+    if (uShutter > 0.0) {
+      vec2 asp = vec2(uAspect, 1.0);
+      vec4 was = uWas * vec4(vUv * 2.0 - 1.0, texture2D(tDepth, vUv).r * 2.0 - 1.0, 1.0);
+      if (was.w > 0.0) smear = (vUv - (was.xy / was.w * 0.5 + 0.5)) * uShutter;
+      float far = length(smear * asp);
+      smear *= far > 1e-5 ? clamp(far - ${SHUTTER_FROM}, 0.0, ${SHUTTER_MOST}) / far : 0.0;
+      if (uBallR > 0.0) {
+        vec2 went = uBallGo.xy - uBallGo.zw;
+        vec2 ab = went * uShutter * asp;
+        vec2 ap = (vUv - (uBallGo.xy - went * uShutter)) * asp;
+        float off = length(ap - ab * clamp(dot(ap, ab) / max(dot(ab, ab), 1e-9), 0.0, 1.0));
+        smear = mix(smear, went * uShutter, 1.0 - smoothstep(uBallR * 0.75, uBallR * 1.2, off));
+      }
+    }
+    if (length(smear / uDot) > 0.75) {
+      vec3 sum = vec3(0.0);
+      for (int i = 0; i < ${SHUTTER_TAPS}; i++) sum += texture2D(tScene, vUv + smear * (float(i) / ${(SHUTTER_TAPS - 1).toFixed(1)} - 0.5)).rgb;
+      s = sum / ${SHUTTER_TAPS.toFixed(1)};
+    } else if (uSharp > 0.0) {
       // (a lens's crispness put back after the samples are averaged: more where the picture is quiet (the wood's
       // grain, a kit's knit, a face), all but none across an edge that is already hard, so no line gets a halo
       // and no stair gets steeper)
@@ -1114,6 +1163,11 @@ const FINISH = /* glsl */ `
     s += (fract((q3.x + q3.y) * q3.z) - 0.5) / 255.0;
     gl_FragColor = vec4(s, 1.0);
   }`;
+
+const VP = new Matrix4();
+const AT = new Vector3();
+const WAY = new Vector3();
+const B4 = new Vector4();
 
 const target = (w: number, h: number, samples = 0, type: typeof HalfFloatType | typeof UnsignedByteType = HalfFloatType) => {
   const rt = new WebGLRenderTarget(w, h, { type, samples, depthBuffer: samples > 0 });
@@ -1155,6 +1209,16 @@ export class Lens {
   drama = 0;
   /** What has to be drawn before a picture from this camera can be (the floor's mirror: arena.ts reflect). */
   before: ((camera: Camera) => void) | null = null;
+  /** The shutter's smear (see SHUTTER): how much of it (0: none, as with reduced motion; 1: all), and where the ball is on the floor (null: no streak of its own). */
+  shutter = 0;
+  ball: Vector3 | null = null;
+  /** The last picture's camera (its view and lens as one, where it stood, the way it looked) and the ball on it; none yet, or not one to smear from (a still was drawn since). */
+  private readonly wasCam = new Matrix4();
+  private readonly wasAt = new Vector3();
+  private readonly wasWay = new Vector3();
+  private readonly wasBall = new Vector2();
+  private wasBallOn = false;
+  private wasOn = false;
   readonly ao: Occlusion;
   private focusAt = 0;
   private focusTo = 0;
@@ -1201,6 +1265,10 @@ export class Lens {
       tSofter: { value: null },
       uDot: { value: new Vector2() },
       uSharp: { value: SHARP },
+      uWas: { value: new Matrix4() },
+      uShutter: { value: 0 },
+      uBallGo: { value: new Vector4() },
+      uBallR: { value: 0 },
       tAo: { value: null },
       uAo: { value: 0 },
       uGlow: { value: GLOW / GLOW_STEPS },
@@ -1310,7 +1378,8 @@ export class Lens {
     const persp = (camera as PerspectiveCamera).isPerspectiveCamera;
     const dof = this.focusAmt > 0 && persp;
     const occlude = this.occlude && persp;
-    if ((dof || occlude) && !this.scene.depthTexture) {
+    const moving = this.shutter > 0 && persp && ms > 0;
+    if ((dof || occlude || moving) && !this.scene.depthTexture) {
       // (asked for the first time: the picture's depth is kept from now on)
       this.scene.depthTexture = new DepthTexture(this.w, this.h);
       this.scene.dispose();
@@ -1319,6 +1388,7 @@ export class Lens {
     r.render(scene, camera);
 
     const f = this.finish.uniforms;
+    this.smear(camera, moving);
     f.uAo.value = occlude ? AO : 0;
     if (occlude) f.tAo.value = this.ao.render(this.scene.depthTexture!, camera as PerspectiveCamera);
 
@@ -1354,6 +1424,7 @@ export class Lens {
     // then a quarter and an eighth, which the finish reads
     (f.uFocus.value as Vector2).set(this.focusAt, this.focusTo);
     f.uFocusAmt.value = dof ? this.focusAmt : 0;
+    if (f.uShutter.value > 0) f.tDepth.value = this.scene.depthTexture;
     if (dof) {
       if (!this.soft.length) {
         this.soft = [target(1, 1), target(1, 1), target(1, 1)];
@@ -1391,6 +1462,50 @@ export class Lens {
     this.tri.material = this.finish;
     r.setRenderTarget(null);
     r.render(this.tri, this.cam);
+  }
+
+  /**
+   * The shutter's smear for the picture just drawn (see SHUTTER): what takes this picture's dots to the last one's,
+   * and the ball's way across it; then this camera and this ball are the last ones. `moving`: a frame of the game
+   * with the shutter on. Anything else (a still, a picture drawn for a cut's hook) smears nothing, and nothing is
+   * smeared from it.
+   */
+  private smear(camera: Camera, moving: boolean) {
+    const f = this.finish.uniforms;
+    f.uShutter.value = 0;
+    f.uBallR.value = 0;
+    if (!moving) {
+      this.wasOn = this.wasBallOn = false;
+      return;
+    }
+    const pc = camera as PerspectiveCamera;
+    VP.multiplyMatrices(pc.projectionMatrix, pc.matrixWorldInverse);
+    AT.setFromMatrixPosition(pc.matrixWorld);
+    pc.getWorldDirection(WAY);
+    // (the same camera a frame on, not another one)
+    const same = this.wasOn && WAY.dot(this.wasWay) > SHUTTER_CUT && AT.distanceTo(this.wasAt) < SHUTTER_JUMP;
+    if (same) {
+      (f.uWas.value as Matrix4).copy(VP).invert().premultiply(this.wasCam);
+      f.uShutter.value = SHUTTER * Math.min(1, this.shutter);
+    }
+    let on = false;
+    if (this.ball) {
+      B4.set(this.ball.x, this.ball.y, this.ball.z, 1).applyMatrix4(VP);
+      if (B4.w > 0.5) {
+        on = true;
+        const [x, y] = [(B4.x / B4.w) * 0.5 + 0.5, (B4.y / B4.w) * 0.5 + 0.5];
+        const go = f.uBallGo.value as Vector4;
+        go.set(x, y, this.wasBall.x, this.wasBall.y);
+        const far = Math.hypot((x - this.wasBall.x) * (this.w / this.h), y - this.wasBall.y);
+        if (same && this.wasBallOn && far > BALL_FROM && far < 0.3) f.uBallR.value = (BALL_FT * pc.projectionMatrix.elements[5]) / (2 * B4.w);
+        this.wasBall.set(x, y);
+      }
+    }
+    this.wasBallOn = on;
+    this.wasCam.copy(VP);
+    this.wasAt.copy(AT);
+    this.wasWay.copy(WAY);
+    this.wasOn = true;
   }
 
   dispose() {
