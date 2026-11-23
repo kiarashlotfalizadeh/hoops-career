@@ -277,18 +277,40 @@ const DUNK_UP: [number, PoseKey][] = [
 /**
  * A dunker's coming down: let go, his legs swing on under the ring and reach for the floor one before the other;
  * he touches it nearly straight, sinks deep into both legs with his hands out in front of him, and is most of the
- * way up again as the move ends. `first`: the foot down first (1 his left); `to`: when the move ends (its last key).
+ * way up again as the move ends. `first`: the foot down first (1 his left); `to`: when the move ends (its last key);
+ * `turn`, `hips`: how far his chest, and his hips, are still turned to his left as he comes down (it goes out of him as he sinks).
  */
-const dunkDown = (first: 1 | -1, to: number, turn = 0): [number, PoseKey][] => {
+const dunkDown = (first: 1 | -1, to: number, turn = 0, hips = 0): [number, PoseKey][] => {
   const [a, b] = first > 0 ? (['flu', 'fru'] as const) : (['fru', 'flu'] as const);
   const [af, bf] = first > 0 ? (['flf', 'frf'] as const) : (['frf', 'flf'] as const);
   const free: PoseKey = { gl: 0, gr: 0 };
   return [
     [
       to - 200,
-      { ...free, hip: 0.3, air: 1, leap: 1, [a]: 0.04, [af]: 0.12, [b]: 0.32, [bf]: 0, lx: 0.6, ly: -0.3, lz: 0.75, rx: 0.55, ry: -0.2, rz: 0.75, lean: 0.14, twist: turn * 0.6 },
+      {
+        ...free,
+        hip: 0.3,
+        air: 1,
+        leap: 1,
+        [a]: 0.04,
+        [af]: 0.12,
+        [b]: 0.32,
+        [bf]: 0,
+        lx: 0.6,
+        ly: -0.3,
+        lz: 0.75,
+        rx: 0.55,
+        ry: -0.2,
+        rz: 0.75,
+        lean: 0.14,
+        twist: turn * 0.6,
+        pyaw: hips * 0.6,
+      },
     ],
-    [to - 165, { ...free, hip: -0.1, leap: 1, lx: 0.65, ly: -0.6, lz: 0.75, rx: 0.6, ry: -0.5, rz: 0.75, lean: 0.2, wide: 0.2, sway: 0.08 * first, twist: turn * 0.45 }],
+    [
+      to - 165,
+      { ...free, hip: -0.1, leap: 1, lx: 0.65, ly: -0.6, lz: 0.75, rx: 0.6, ry: -0.5, rz: 0.75, lean: 0.2, wide: 0.2, sway: 0.08 * first, twist: turn * 0.45, pyaw: hips * 0.3 },
+    ],
     [
       to - 90,
       { ...free, hip: -0.62, leap: 1, lx: 0.7, ly: -0.95, lz: 0.62, rx: 0.62, ry: -0.85, rz: 0.66, lean: 0.32, wide: 0.3, sway: 0.1 * first, twist: turn * 0.3 + 0.08 * first },
@@ -1006,9 +1028,12 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
     { gr: 1, gl: 1, bx: 0, bz: 1 },
     [
       ...DUNK_UP.slice(0, 3),
-      [70, { hip: 1.9, air: 1, by: 8.3, bx: -0.25, bz: 0.6, leap: 0.8, flu: 0.8, flf: -0.2, fru: 0.6, frf: -0.45, lean: -0.12, twist: 0.8, tilt: -0.08, nod: -0.1 }],
-      [150, { hip: 2.3, air: 1, by: 9.3, bx: -0.1, bz: 0.6, leap: 1, flu: 0.9, flf: 0.1, fru: 0.75, frf: -0.25, lean: -0.28, twist: 1.35, nod: -0.22 }],
-      [200, { hip: 2.25, air: 1, by: 7.8, bx: 0, bz: 1.0, leap: 1, flu: 0.95, flf: 0.55, fru: 0.8, frf: 0.3, lean: -0.32, twist: 1.5, nod: -0.28 }],
+      // (all of him comes round, his hips after his chest, until his back is to the rim: turned only half way he was side
+      // on to it, the ball came no nearer the rim than his far hand could take it, and his near arm was folded up beside
+      // his head. His back to it, both arms go up and back over his head the same)
+      [70, { hip: 1.9, air: 1, by: 8.4, bx: -0.2, bz: 0.5, leap: 0.8, flu: 0.8, flf: -0.2, fru: 0.6, frf: -0.45, lean: -0.06, twist: 1.2, pyaw: 0.55, tilt: -0.06, nod: -0.05 }],
+      [150, { hip: 2.3, air: 1, by: 9.2, bx: -0.05, bz: 0.7, leap: 1, flu: 0.9, flf: 0.1, fru: 0.75, frf: -0.25, lean: 0.12, twist: 2.3, pyaw: 1.05, curl: -0.18, nod: 0.08 }],
+      [200, { hip: 2.25, air: 1, by: 7.8, bx: 0, bz: 1.0, leap: 1, flu: 0.95, flf: 0.55, fru: 0.8, frf: 0.3, lean: 0.2, twist: 2.7, pyaw: 1.25, curl: -0.22, nod: 0.12 }],
       [
         240,
         {
@@ -1016,25 +1041,49 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
           air: 1,
           gl: 0,
           gr: 0,
-          lx: 0.15,
-          ly: 1.55,
-          lz: 0.9,
-          rx: 0.15,
-          ry: 1.55,
-          rz: 0.9,
+          lx: 0.3,
+          ly: 1.75,
+          lz: -0.55,
+          rx: 0.3,
+          ry: 1.75,
+          rz: -0.55,
           leap: 1,
           flu: 0.6,
           flf: 0.5,
           fru: 0.5,
           frf: 0.2,
-          lean: -0.26,
-          twist: 1.4,
-          nod: -0.2,
+          lean: 0.16,
+          twist: 2.45,
+          pyaw: 1.1,
+          curl: -0.16,
+          nod: 0.08,
         },
       ],
-      [340, { hip: 1.5, air: 1, gl: 0, gr: 0, lx: 0.4, ly: 0.7, lz: 0.75, rx: 0.4, ry: 0.8, rz: 0.75, leap: 1, lean: -0.04, twist: 0.8, flu: 0.3, flf: 0.3, fru: 0.5, frf: 0.1 }],
+      [
+        340,
+        {
+          hip: 1.5,
+          air: 1,
+          gl: 0,
+          gr: 0,
+          lx: 0.45,
+          ly: 0.55,
+          lz: 0.5,
+          rx: 0.45,
+          ry: 0.6,
+          rz: 0.5,
+          leap: 1,
+          lean: 0.06,
+          twist: 1.35,
+          pyaw: 0.6,
+          flu: 0.3,
+          flf: 0.3,
+          fru: 0.5,
+          frf: 0.1,
+        },
+      ],
       // (he comes down still turned, and the turn goes out of him as he sinks)
-      ...dunkDown(1, 620, 0.55),
+      ...dunkDown(1, 620, 1.1, 0.5),
     ],
     { grip: 'side' },
   ),

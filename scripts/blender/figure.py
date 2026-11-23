@@ -1875,6 +1875,37 @@ THIGH_UNDER = 0.5
 THIGH_IN = 0.075
 
 
+def thigh_in(body):
+    """
+    His thighs under his shorts thinner than he is, from a little way up from the hem: the cloth lies on a thigh that
+    is round, for cloth.ts, and his is not, so where it lay on him his own came through it. Nothing of this is seen
+    but from below, up the leg. Each point is drawn level toward the line down the middle of its thigh, not along the
+    way its skin faces: at the top of it his thigh widens to his hip, the skin there faces as much down as out, and
+    drawn in along that its edge went up and not in, a rim as far out as the cloth lying on him (a line of skin through
+    the side of his shorts when his knee came up).
+    """
+    pts = np.array([G(v.co) for v in body.data.vertices])
+    leg = pts[(pts[:, 0] > 0.04) & (pts[:, 0] < 1.0)]
+    ys = np.arange(KN_Y, HEM + THIGH_UNDER + 0.03, 0.05)
+    mids = []
+    for y in ys:
+        ring = leg[np.abs(leg[:, 1] - y) < 0.05]
+        mids.append([float(ring[:, c].max() + ring[:, c].min()) / 2 for c in (0, 2)] if len(ring) else mids[-1])
+    mids = np.array(mids)
+    for v in body.data.vertices:
+        p = G(v.co)
+        if not (KN_Y < p[1] < HEM + THIGH_UNDER + 0.02 and 0.0 < abs(p[0]) < 1.0):
+            continue
+        s = 1 if p[0] > 0 else -1
+        dx = p[0] - s * float(np.interp(p[1], ys, mids[:, 0]))
+        dz = p[2] - float(np.interp(p[1], ys, mids[:, 1]))
+        far = math.hypot(dx, dz)
+        k = min(THIGH_IN * sstep(HEM + 0.05, HEM + 0.32, p[1]), 0.6 * far)
+        if far > 1e-6:
+            v.co = B(p[0] - dx / far * k, p[1], p[2] - dz / far * k)
+    body.data.update()
+
+
 def dress_real(man):
     """The real man in his kit: as dress_player, but his skin is his own points (none thinned away), his head, ears and hands part of it."""
     global _scalp
@@ -1909,9 +1940,7 @@ def dress_real(man):
         lambda p: pit(p, 1) > -under or pit(p, -1) > -under or (vee(p) > -under and p[1] > 4.9) or (SOCK_HI - 0.06 < p[1] < HEM + THIGH_UNDER and abs(p[0]) < 1.2),
         under=5.7,
     )
-    # (and thinner there than he is, from a little way up: the cloth lies on a thigh that is round, for cloth.ts, and
-    # his is not, so where it lay on him his own came through it. Nothing of this is seen but from below, up the leg)
-    push(body, lambda p: -THIGH_IN * sstep(HEM + 0.05, HEM + 0.32, p[1]) if KN_Y < p[1] < HEM + THIGH_UNDER + 0.02 and abs(p[0]) < 1.0 else 0.0)
+    thigh_in(body)
     vest, shorts, socks = kit(mid)
     for o in (vest, socks):
         tag(o, BY_PLACE)

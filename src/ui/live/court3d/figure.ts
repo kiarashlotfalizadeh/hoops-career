@@ -6174,6 +6174,11 @@ export class Fig {
       way(o + 9, Z.crossVectors(X, Yv));
       put(o + 12, j[k * 3], j[k * 3 + 1], j[k * 3 + 2]);
       put(o + 15, j[f * 3], j[f * 3 + 1], j[f * 3 + 2]);
+      // (and how far the bone is turned about itself from that: his thigh's skin turns with it, and what the cloth
+      // lies on is his thigh where it is)
+      D.set(1, 0, 0).applyQuaternion(bone.quaternion);
+      L[o + 18] = D.dot(X);
+      L[o + 19] = D.dot(Z);
     }
     sim.step(p.frameMs / 1000, L);
     const { at, turn } = sim;

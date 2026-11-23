@@ -23,13 +23,29 @@ export const THIGH_R = [
   [1.49, -0.048, -0.004, 0.216],
   [1.62, -0.022, -0.027, 0.213],
 ] as const;
+/**
+ * His thigh is not round, and THIGH_R has how far round its middle his skin is on the whole: at the hem and his knee
+ * the front of it stands this much further out than that (ft, as built: 0.250 against 0.216, measured on the model).
+ * Higher up it doesn't matter (his skin under the cloth is drawn in, see figure.py's THIGH_IN); from the hem down it is
+ * his skin as he is, and cloth lying on the front of a lifted thigh was a hair off the round one and inside his own.
+ */
+const QUAD = 0.034;
 /** His calf, for the cloth (ft, as built): how thick at his knee and at his ankle. */
 export const SHIN_R = [0.2, 0.13] as const;
 /**
- * A leg, as figure.ts tells it (FRAME numbers): where his hip joint is, his thigh bone's own three axes (its left, up
- * along it, its front), his knee, his ankle.
+ * A leg, as figure.ts tells it (FRAME numbers): where his hip joint is, his thigh's three axes (its left, up along it,
+ * its front: the cloth's, which leaves his seat along his thigh but is not turned about it), his knee, his ankle, and
+ * how far his thigh bone itself is turned about its own length from those axes (the cosine and the sine of it).
  */
-export const FRAME = 18;
+export const FRAME = 20;
+/**
+ * His thigh's skin turns about the bone with it, and its middle is not on the line of the bone (a hand in front of it,
+ * half way down): a knee lifted and folded to one side turns the bone 50 to 70 degrees, and his thigh was then an inch
+ * to one side of where the cloth took it to be, and out through it. How much of the bone's turn his thigh has at each
+ * height of THIGH_R: none where the cloth leaves his seat (his seat doesn't turn), all of it from the next down (his
+ * skin is drawn under the cloth from a little below that, and half of it there left the top of it showing).
+ */
+const ROLLED = [0, 1, 1, 1, 1] as const;
 
 /**
  * The longest step of the cloth's time (s), and the most of them in a frame: a longer frame's steps are longer. One
@@ -177,6 +193,8 @@ export class ShortsSim {
   private readonly otherIn: number;
   /** How far each hoop's middle may be from his thigh's (ft: see around). */
   private readonly slack = new Float32Array(CLOTH.rows + 1);
+  /** Each leg's thigh's middle at each height of THIGH_R, from the line of the bone, as the bone is turned this step (out, forward: see ROLLED). */
+  private readonly mids = new Float64Array(2 * THIGH_R.length * 2);
   /** Which knots lie on him this step. */
   private readonly on = new Uint8Array(2 * KNOTS);
   private fresh = true;
@@ -192,7 +210,7 @@ export class ShortsSim {
    */
   constructor(rest: Float32Array, wide: number, tall: number, calf: number) {
     this.rest = Float32Array.from(rest);
-    this.thigh = [1, -1].map((s) => THIGH_R.map(([d, x, z, r]) => [d * tall, s * x * wide, z * wide, r * wide]));
+    this.thigh = [1, -1].map((s) => THIGH_R.map(([d, x, z, r], k) => [d * tall, s * x * wide, z * wide, (r + (k >= CLOTH.rows ? QUAD : 0)) * wide]));
     this.shin = [SHIN_R[0] * calf, SHIN_R[1] * calf];
     this.otherFrom = OTHER_FROM * tall;
     this.otherIn = OTHER_IN * wide;
@@ -339,6 +357,22 @@ export class ShortsSim {
     }
   }
 
+  /** Where his thighs' middles are this step (mids), his thigh bones turned as `this.leg` has them. */
+  private roll() {
+    for (let leg = 0; leg < 2; leg++) {
+      const b = leg * FRAME;
+      const turn = Math.atan2(this.leg[b + 19], this.leg[b + 18]);
+      const T = this.thigh[leg];
+      for (let k = 0; k < T.length; k++) {
+        const c = Math.cos(turn * ROLLED[k]);
+        const s = Math.sin(turn * ROLLED[k]);
+        const o = (leg * T.length + k) * 2;
+        this.mids[o] = T[k][1] * c - T[k][2] * s;
+        this.mids[o + 1] = T[k][1] * s + T[k][2] * c;
+      }
+    }
+  }
+
   /** The cloth as it hangs on him where he is, still. */
   private hang(legs: Float32Array) {
     this.fresh = false;
@@ -373,6 +407,7 @@ export class ShortsSim {
     const { at, vel, was, home, on } = this;
     const { n, rows } = CLOTH;
     this.homes(this.leg);
+    this.roll();
     const still = sec > 0 ? 1 : Math.exp(-h * STILL);
     for (let leg = 0; leg < 2; leg++) {
       const base = leg * KNOTS * 3;
@@ -525,20 +560,23 @@ export class ShortsSim {
   private thighOff(leg: number, o: number, room: number, from: number): boolean {
     const { at } = this;
     const T = this.thigh[leg];
+    const M = this.mids;
+    const m0 = leg * T.length * 2;
     this.local(this.leg, leg, at[o], at[o + 1], at[o + 2]);
     const down = -L[1];
     const last = T.length - 1;
     // (above his hip joint there is no thigh; past his knee, its round end)
     if (down < from) return false;
-    let [cx, cz, r] = [T[last][1], T[last][2], T[last][3]];
+    let [cx, cz, r] = [M[m0 + last * 2], M[m0 + last * 2 + 1], T[last][3]];
     let dy = 0;
-    if (down <= T[0][0]) [cx, cz, r] = [T[0][1], T[0][2], T[0][3]];
+    if (down <= T[0][0]) [cx, cz, r] = [M[m0], M[m0 + 1], T[0][3]];
     else if (down < T[last][0]) {
       let k = 0;
       while (down > T[k + 1][0]) k++;
       const u = (down - T[k][0]) / (T[k + 1][0] - T[k][0]);
-      cx = T[k][1] + (T[k + 1][1] - T[k][1]) * u;
-      cz = T[k][2] + (T[k + 1][2] - T[k][2]) * u;
+      const i = m0 + k * 2;
+      cx = M[i] + (M[i + 2] - M[i]) * u;
+      cz = M[i + 1] + (M[i + 3] - M[i + 1]) * u;
       r = T[k][3] + (T[k + 1][3] - T[k][3]) * u;
     } else dy = down - T[last][0];
     const dx = L[0] - cx;
@@ -574,8 +612,10 @@ export class ShortsSim {
     let i = 0;
     while (i < last - 1 && down > T[i + 1][0]) i++;
     const u = (down - T[i][0]) / (T[i + 1][0] - T[i][0]);
-    const dx = L[0] - (T[i][1] + (T[i + 1][1] - T[i][1]) * u);
-    const dz = L[2] - (T[i][2] + (T[i + 1][2] - T[i][2]) * u);
+    const M = this.mids;
+    const m = (leg * T.length + i) * 2;
+    const dx = L[0] - (M[m] + (M[m + 2] - M[m]) * u);
+    const dz = L[2] - (M[m + 1] + (M[m + 3] - M[m + 1]) * u);
     const d = Math.hypot(dx, dz);
     if (d <= this.slack[k]) return;
     const back = (d - this.slack[k]) / d;

@@ -45,7 +45,7 @@ import {
   WebGLRenderer,
 } from 'three';
 import type { Act } from '../../../src/ui/live/choreo';
-import { GESTURES, type Gesture } from '../../../src/ui/live/court3d/clips';
+import { DUNK_AT, GESTURES, isDunk, type Gesture } from '../../../src/ui/live/court3d/clips';
 import { anatOf } from '../../../src/ui/live/court3d/anat';
 import { Fig, figureGeo, settleHeads, type Feel, type Geo } from '../../../src/ui/live/court3d/figure';
 import { arenaLight } from '../../../src/ui/live/court3d/lens';
@@ -441,7 +441,10 @@ function step(k: (typeof figs)[number], dt: number) {
     how: (q.get('how') ?? undefined) as Drive['how'],
   };
   k.f.pup.update(d, dt * PLAY, dt);
-  const b = d.ball ? k.f.pup.carry({ x: 0, y: 0, z: 0 }) : null;
+  // (a dunk stays in his hands to the rim, as the scene has it: the play's ball is the shot's from when he leaves the floor)
+  const one = k.f.pup.one;
+  const slam = !!one && isDunk(one.id) && one.tau < DUNK_AT;
+  const b = d.ball || slam ? k.f.pup.carry({ x: 0, y: 0, z: 0 }) : null;
   k.f.pup.arms(b);
   if (ARMS) reach(k.f, (ARMS === 'all' ? Object.keys(REACH) : ARMS.split(','))[figs.indexOf(k) % (ARMS === 'all' ? Object.keys(REACH).length : ARMS.split(',').length)]);
   // (where the ball is, as the scene tells a man who has it: his hands lie on it)
