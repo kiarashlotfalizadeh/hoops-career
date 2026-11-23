@@ -1,13 +1,13 @@
 {
   "figure": {
-    "sources": "fc133c811471a3d16514883f907432618a142605122a8e32fa413f09851e8ba1",
+    "sources": "cf94d62911be6d5ef8e4ad9e5ae234702be76aa542dae55c2f65890a71624d59",
     "pack": 3,
     "blender": "Blender 5.2.1 LTS",
-    "bytes": 1240520,
+    "bytes": 1241076,
     "extras": {
       "faces.bin": {
-        "bytes": 153956,
-        "sha256": "c4017757521ed71dc346a317c188db91840384a8e6e38f5ba5824c3b2b25d7c2"
+        "bytes": 154100,
+        "sha256": "dfe8f833406527dd2ea30b7ec2660f70e6e49159de2481819c6e2f6797601f45"
       },
       "skin-anat.png": {
         "bytes": 292929,
@@ -24,13 +24,13 @@
     }
   },
   "people": {
-    "sources": "f12b12e7de49bbb783cfeae0e6eaa4d7f309fcf1d030984892f857c85173cbcd",
+    "sources": "684523641ac662c91f57d39580c5b675482746cac0ff343c0f3696ac8f4f6ccf",
     "pack": 3,
     "blender": "Blender 5.2.1 LTS",
     "bytes": 1214472
   },
   "arena": {
-    "sources": "e65a4906945daa269656c85ccb83277e221fbef4f061ab43c83268381bae1a08",
+    "sources": "9cf534b2562ac4ad1bdccbba0dca8bba4f73ccabbca4c37557c42ff9d4d210d0",
     "pack": 3,
     "blender": "Blender 5.2.1 LTS",
     "bytes": 932144

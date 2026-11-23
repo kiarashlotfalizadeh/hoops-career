@@ -85,6 +85,13 @@ GIRDLE = {'cll': 'chest', 'clr': 'chest', 'fwl': 'fal', 'fwr': 'far', 'brow': 'h
 # (and, under each shoulder's, one his armpit hangs on: figure.ts turns it as the shoulder's, but about the hollow of the
 # armpit, not the joint, so an arm raised overhead stretches the skin under it up from his side, not out from it in a shelf)
 AXILLA = {'axl': 'chest', 'axr': 'chest'}
+# (and one in the small of his back, between his pelvis and his ribs, and one in his neck, between his ribs and his head:
+# figure.ts puts the first on the curve of his spine and turns it part of the way from his hips to his chest, and the
+# second along his neck, turned half way from his chest to his head. His back bends and turns along its length, and a
+# head turned to the side turns his neck along its own, not in a wrung band under his jaw. SPINE_AT: how far up his
+# trunk's line the first is; NECK_AT: how far up from his chest's joint the foot of the second (figure.ts's, both))
+TRUNK = {'spine': 'pelvis', 'neck': 'chest'}
+SPINE_AT, NECK_AT = 0.42, 0.22
 # (and each finger a hand of its own: LEAVES' kn1 and kn2 are his middle finger's knuckle and middle joint, and these his
 # index, ring and little fingers' and his thumb's (its root, down in the heel of his hand, and its middle knuckle), on
 # everyone: a hand closes into a fist, points, spreads over the ball, its thumb round it)
@@ -94,7 +101,7 @@ girdled = False
 
 
 def leaves():
-    return {**LEAVES, **FINGER_LEAVES, **GIRDLE, **AXILLA} if girdled else {**LEAVES, **FINGER_LEAVES}
+    return {**LEAVES, **FINGER_LEAVES, **GIRDLE, **AXILLA, **TRUNK} if girdled else {**LEAVES, **FINGER_LEAVES}
 SKIN, HAIR, JERSEY, TRIM_M, CLOTH, SHOE, WHITE = 'skin', 'hair', 'jersey', 'trim', 'cloth', 'shoe', 'white'
 # hair that is a shape of its own (a man wears one of them or none: figure.ts leaves the others out)
 BUN, TAIL, TWISTS, LOCS, BRAIDS, AFRO, HIGHTOP, CURLS = 'bun', 'tail', 'twists', 'locs', 'braids', 'afro', 'hightop', 'curls'
@@ -1257,7 +1264,18 @@ def weights(p, kind):
     c = sstep(HIP + 0.2, HIP + 1.5, y)
     # (his neck never goes all the way with his head: figure.ts tells his head from his neck by that)
     n = sstep(CHEST_Y + 0.17, CHEST_Y + 0.62, y) * 0.96
-    w['pelvis'], w['chest'], w['head'] = up * (1 - c), up * c * (1 - n), up * c * n
+    if girdled:
+        # (his pelvis gives way to the small of his back, and that to his ribs; his ribs to his neck, and that to his
+        # head: each over a span of its own, so a bend or a turn is shared out along him)
+        sp = HIP + SPINE_AT * TORSO
+        a = sstep(HIP + 0.15, sp + 0.1, y)
+        b = sstep(sp - 0.1, HIP + 1.5, y)
+        t = sstep(CHEST_Y + 0.17, CHEST_Y + 0.62, y)
+        hd = max(0.0, 2 * t - 1)
+        w['pelvis'], w['spine'] = up * (1 - a), up * a * (1 - b)
+        w['chest'], w['neck'], w['head'] = up * a * b * max(0.0, 1 - 2 * t), up * a * b * (1 - abs(2 * t - 1) + 0.04 * hd), up * a * b * hd * 0.96
+    else:
+        w['pelvis'], w['chest'], w['head'] = up * (1 - c), up * c * (1 - n), up * c * n
     top = sorted(((v, k) for k, v in w.items() if v > 0.004), reverse=True)[:4]
     tot = sum(v for v, _ in top)
     return {k: v / tot for v, k in top}
@@ -1367,6 +1385,8 @@ def rig(mesh):
         'chest': Matrix.Translation((0, CHEST_Y, 0)),
         'head': Matrix.Translation((0, HEAD_Y, 0)),
         'hem': Matrix.Translation((0, HIP - 0.03, 0)),
+        'spine': Matrix.Translation((0, HIP + SPINE_AT * TORSO, 0)),
+        'neck': Matrix.Translation((0, CHEST_Y + NECK_AT, 0)),
     }
     for s, sfx, ua, fa, ha, th, sh, ft in ((1, 'L', 'ual', 'fal', 'hal', 'thl', 'shl', 'ftl'), (-1, 'R', 'uar', 'far', 'har', 'thr', 'shr', 'ftr')):
         f = arm_frame(s)
@@ -2398,6 +2418,8 @@ def report(fig):
 FACE_GRID = 1 / 4096
 #: Which bones a point of his head hangs on (the hair's swing is not his face).
 FACE_BONES = ('head', 'jaw', 'nose', 'brow', 'lip')
+# (and half of what hangs on his neck's own bone, which is turned half way to his head: a point of the top of his neck
+# is as much his head's as it was when his neck hung on his chest and his head alone: see TRUNK)
 #: How many times each shape is smoothed over his head (a feature's own, a whole head's: see faces_bin).
 FACE_SMOOTH = (8, 20, 30)
 
@@ -2453,7 +2475,7 @@ def faces_bin(fig, path):
     names = {g.index: g.name for g in fig.vertex_groups}
     keys, points = {}, []
     for v in me.vertices:
-        on = sum(g.weight for g in v.groups if names[g.group] in FACE_BONES)
+        on = sum(g.weight * (0.5 if names[g.group] == 'neck' else 1.0) for g in v.groups if names[g.group] in FACE_BONES or names[g.group] == 'neck')
         if on < 0.5:
             continue
         p = G(v.co)
@@ -2525,7 +2547,7 @@ def faces_bin_real(fig, man, path):
     me.attributes['mhv'].data.foreach_get('value', mhv)
     keys, points, src = {}, [], []
     for v in me.vertices:
-        on = sum(g.weight for g in v.groups if names[g.group] in FACE_BONES)
+        on = sum(g.weight * (0.5 if names[g.group] == 'neck' else 1.0) for g in v.groups if names[g.group] in FACE_BONES or names[g.group] == 'neck')
         if on < 0.5 or mhv[v.index] < 0.5:
             continue
         q = tuple(int(round(c / FACE_GRID)) for c in G(v.co))

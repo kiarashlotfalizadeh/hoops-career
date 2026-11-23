@@ -67,7 +67,7 @@ import { GRAIN_MM, LAYERS, STEEP, TILE, TILE_MM, tilesOf } from './detail';
 import { CLIPS, DUNKS, I, type ClipId, type Gesture } from './clips';
 import { merged, type Thing } from './glb';
 import { lookOf, SKINS, STYLES, type Look } from './look';
-import { ANKLE, BALL_R, J, Puppet, THIGH, type Body } from './puppet';
+import { ANKLE, BALL_R, J, PELVIS_LEAN, Puppet, THIGH, type Body } from './puppet';
 
 /** The grey the figures were before each had a skin of his own (look.ts): what the benches still wear until they take theirs from there. */
 export const FIGURE = '#7b7d88';
@@ -135,8 +135,21 @@ export const B = {
   // (and one under each shoulder's, his armpit's: see `axilla`)
   axl: 47,
   axr: 48,
+  // (and one in the small of his back, between his pelvis and his ribs, and one in his neck, between his ribs and his
+  // head: his back bends and turns along its length, and his neck along its own: see `trunk`)
+  spine: 49,
+  neck: 50,
 } as const;
-const BONES = 49;
+const BONES = 51;
+/**
+ * His back between his hips and his chest, as the skin bends along it (see `trunk`). The bone in the small of his
+ * back is this far up the line from his hips to his chest (figure.py's SPINE_AT), and has taken this much of the turn
+ * between them there: a man's waist turns little, most of it is his ribs'.
+ */
+const SPINE_AT = 0.42;
+const SPINE_TURN = 0.38;
+/** The foot of his neck's bone, up his ribs' own line from his chest's joint (ft on the 6 ft 6 body: figure.py's NECK_AT). */
+const NECK_AT = 0.22;
 /** How far out from his sides his arms are as built (figure.py's ARM_OUT). */
 const ARM_OUT = (38 * Math.PI) / 180;
 /** Where his armpit's bone turns about (see `axilla`): in from the shoulder's joint and down from it, ft on the 6 ft 6 body. */
@@ -5558,6 +5571,8 @@ export class Fig {
     scale(B.pelvis, bulk * s, s, deep);
     scale(B.chest, bulk * s * wide * (body.shoulders ?? 1), s, deep);
     scale(B.hem, bulk * s, s, deep);
+    // (the small of his back is as wide as his hips and his chest make it, there)
+    scale(B.spine, bulk * s * (1 + (wide * (body.shoulders ?? 1) - 1) * SPINE_AT), s, deep);
     // (and each has a face of his own: a wider or a longer head, his jaw, his nose)
     const hs = Math.sqrt(s) * 1.0;
     const face = look.face;
@@ -5568,6 +5583,8 @@ export class Fig {
     scale(B.hair, hs * face.wide, hs * face.long, hd);
     scale(B.brow, hs * face.wide, hs * face.long, hd);
     scale(B.lip, hs * face.wide, hs * face.long, hd);
+    // (and his neck half way from his chest's size to his head's)
+    scale(B.neck, (bulk * s * wide * (body.shoulders ?? 1) + hs * face.wide) / 2, (s + hs * face.long) / 2, (deep + hd) / 2);
     for (const k of [B.ual, B.uar]) scale(k, thick * arm, s, thick * arm);
     for (const k of [B.fal, B.far]) scale(k, thick * arm * low, s, thick * arm * low);
     for (const k of [B.thl, B.thr, B.hemL, B.hemR]) scale(k, thick * leg, s, thick * leg);
@@ -5581,6 +5598,62 @@ export class Fig {
     const b = this.bones[k];
     b.position.copy(at);
     b.quaternion.setFromRotationMatrix(MAT.makeBasis(x, y, z));
+  }
+
+  /**
+   * The small of his back: a bone on the curve his spine makes from his pelvis to his ribs. The curve leaves his hips
+   * the way his pelvis is tipped and comes into his chest the way his ribs are, so a man leant over from upright hips
+   * has a rounded back, one with his hips thrust under him and his chest back an arched one, and one who leans with
+   * his hips a straight one; the bone is on it SPINE_AT of the way up, turned along it there, and round it by its share
+   * of the turn between his hips and his chest. His skin goes from his pelvis to it and from it to his chest: bent and
+   * turned in two gentle steps, not one across his waist.
+   */
+  private trunk() {
+    const hips = this.bones[B.pelvis];
+    const chest = this.bones[B.chest];
+    const T = A.copy(chest.position).sub(hips.position).length();
+    const t = SPINE_AT;
+    const [t2, t3] = [t * t, t * t * t];
+    // (the pelvis's own up and the ribs', each as long as the trunk: a Hermite curve's ends)
+    const from = C.set(0, 1, 0).applyQuaternion(hips.quaternion).multiplyScalar(T);
+    const to = D.set(0, 1, 0).applyQuaternion(chest.quaternion).multiplyScalar(T);
+    const b = this.bones[B.spine];
+    b.position
+      .copy(hips.position)
+      .multiplyScalar(2 * t3 - 3 * t2 + 1)
+      .addScaledVector(from, t3 - 2 * t2 + t)
+      .addScaledVector(chest.position, 3 * t2 - 2 * t3)
+      .addScaledVector(to, t3 - t2);
+    Yv.copy(hips.position)
+      .multiplyScalar(6 * t2 - 6 * t)
+      .addScaledVector(from, 3 * t2 - 4 * t + 1)
+      .addScaledVector(chest.position, 6 * t - 6 * t2)
+      .addScaledVector(to, 3 * t2 - 2 * t)
+      .normalize();
+    Q.copy(hips.quaternion).slerp(chest.quaternion, SPINE_TURN);
+    X.set(1, 0, 0).applyQuaternion(Q);
+    X.addScaledVector(Yv, -X.dot(Yv)).normalize();
+    this.set(B.spine, b.position, X, Yv, Z.crossVectors(X, Yv));
+  }
+
+  /**
+   * His neck's own bone: at its foot on his ribs, along the line from there to where his head sits (which comes
+   * forward as he looks down and goes back as he looks up: the bend is his neck's), and turned half way from his
+   * chest to his head. A head turned to the side turns his neck along its length, not in a wrung band under his jaw.
+   */
+  private nape(head: Bone) {
+    const chest = this.bones[B.chest];
+    const { s } = this.pup.body;
+    const b = this.bones[B.neck];
+    b.position
+      .set(0, NECK_AT * s, 0)
+      .applyQuaternion(chest.quaternion)
+      .add(chest.position);
+    Yv.copy(head.position).sub(b.position).normalize();
+    Q.copy(chest.quaternion).slerp(head.quaternion, 0.5);
+    X.set(1, 0, 0).applyQuaternion(Q);
+    X.addScaledVector(Yv, -X.dot(Yv)).normalize();
+    this.set(B.neck, b.position, X, Yv, Z.crossVectors(X, Yv));
   }
 
   /**
@@ -5672,9 +5745,12 @@ export class Fig {
     this.group.rotation.y = p.yaw;
     const at = (k: number, v: Vector3) => v.set(j[k * 3], j[k * 3 + 1], j[k * 3 + 2]);
 
-    // the hips: across the hip joints, upright but for the spine's lean
+    // the hips: across the hip joints, pitched forward by their share of his trunk's lean (and as the pose tips them)
     X.copy(at(J.jl, A)).sub(at(J.jr, C)).normalize();
-    Yv.set(p.up.x * 0.35, 1, p.up.z * 0.35).normalize();
+    // (about the line of his hips, the way they face: PELVIS_LEAN of what his trunk's line leans that way)
+    Z.crossVectors(X, UP).normalize();
+    const pitch = Math.max(-0.6, Math.min(1.1, PELVIS_LEAN * Math.asin(Math.max(-1, Math.min(1, p.line.x * Z.x + p.line.y * Z.y + p.line.z * Z.z))) + P[I.ptip]));
+    Yv.copy(UP).addScaledVector(Z, Math.tan(pitch)).normalize();
     Z.crossVectors(X, Yv).normalize();
     Yv.crossVectors(Z, X);
     this.set(B.pelvis, at(J.hips, A), X, Yv, Z);
@@ -5684,6 +5760,7 @@ export class Fig {
     Yv.set(p.up.x, p.up.y, p.up.z);
     Z.set(p.front.x, p.front.y, p.front.z);
     this.set(B.chest, at(J.chest, A), X, Yv, Z);
+    this.trunk();
     const head = this.bones[B.head];
     head.position.copy(at(J.head, A));
     // (looking down, his neck bends from its foot as well as at his skull: his head comes forward as it tips, so his
@@ -5696,6 +5773,7 @@ export class Fig {
       .multiply(Q.setFromAxisAngle(XA, -P[I.nod] * 0.8))
       // (and what his face does with his head: a nod, a shake, thrown back, tipped: see face, a frame ago)
       .multiply(this.tilt);
+    this.nape(head);
     // (his jaw and his nose go with his head: only their size is their own)
     for (const [k, from] of [
       [B.jaw, JAW_AT],

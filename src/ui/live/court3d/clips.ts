@@ -42,6 +42,8 @@ export const CHANNELS = [
   'turn', // head turned to his left
   'lsw', // an elbow swung round its arm, from where it hangs
   'rsw',
+  'curl', // his ribs pitched forward past the line of his trunk (a rounded back), or back from it (an arched one)
+  'ptip', // his pelvis pitched forward more than its usual share of his lean (his seat out), or less (tucked under)
 ] as const;
 export type Channel = (typeof CHANNELS)[number];
 export const N = CHANNELS.length;
@@ -81,6 +83,8 @@ const REST: Record<Channel, number> = {
   turn: 0,
   lsw: 0,
   rsw: 0,
+  curl: 0,
+  ptip: 0,
 };
 
 export type ClipId =
@@ -208,10 +212,38 @@ function clip(id: ClipId, kind: Clip['kind'], dur: number, base: PoseKey, keys: 
     kind,
     dur,
     at: own.map((k) => k[0]),
-    poses: own.map(([, key]) => Float32Array.from(CHANNELS, (c) => key[c] ?? start[c])),
+    poses: own.map(([, key]) => {
+      const P = Float32Array.from(CHANNELS, (c) => key[c] ?? start[c]);
+      // (his back, where neither the key nor the clip says how it is: as the rest of him has it)
+      const [curl, ptip] = backOf(P);
+      if (key.curl === undefined && base.curl === undefined) P[I.curl] = curl;
+      if (key.ptip === undefined && base.ptip === undefined) P[I.ptip] = ptip;
+      return P;
+    }),
     grip: 'side',
     ...extra,
   };
+}
+
+/**
+ * How a keyed pose's back is curved, from the rest of it (the pose's `curl` and `ptip`: a take measures them, see
+ * scripts/mocap/build.ts, and what the takes show is what is said here). His back is hollowed by as much as his
+ * pelvis is pitched forward of his ribs. A man reaching overhead arches: his ribs go back off the line of his trunk
+ * while his pelvis stays tipped forward under them, and in the air his whole body is a bow from his heels to the
+ * ball. One sat down into his legs on the floor has his seat back, hinged at his hips with his back straight; and one
+ * bent far over (his hands on his knees) is rounded, his hips nearly upright under him. A hand on the ball says
+ * nothing of where it is (a key's hand is the ball's): the ball does.
+ */
+const BACK = { arch: 0.3, bow: 0.08, sit: 0.28, round: 0.25 } as const;
+function backOf(P: Float32Array): [number, number] {
+  const unit = (v: number) => Math.max(0, Math.min(1, v));
+  const air = unit(P[I.air]);
+  const [gl, gr] = [unit(P[I.gl]), unit(P[I.gr])];
+  const high = (y: number) => unit((y - 0.9) / 1.1);
+  const reach = Math.max((1 - gl) * high(P[I.ly]), (1 - gr) * high(P[I.ry]), Math.max(gl, gr) * unit((P[I.by] - 6.9) / 1.6));
+  const crouch = unit(-P[I.hip] / 0.8) * (1 - air);
+  const over = unit((P[I.lean] - 0.45) / 0.4);
+  return [BACK.round * over - BACK.arch * reach * (0.5 + 0.5 * air), BACK.sit * crouch * (1 - over) + BACK.bow * reach * air];
 }
 
 /** Standing, arms down, as numbers (what a gesture's trunk channels are measured from). */
@@ -228,6 +260,8 @@ const DRIBBLE: PoseKey = { ...GUARD_ARM, bx: 0.95, bz: 0.8, rx: 0.4, ry: -2.0, r
 const ON_HIPS: PoseKey = { lx: -0.2, ly: -1.36, lz: -0.06, rx: -0.2, ry: -1.36, rz: -0.06 };
 /** Bent over, his hands on his knees, arms straight. */
 const ON_KNEES: PoseKey = { hip: -0.8, lean: 0.75, wide: 0.22, lx: -0.3, ly: -2.3, lz: -0.19, rx: -0.3, ry: -2.3, rz: -0.19 };
+/** A dunk as it is thrown down: his back, which was a bow as he reached, crunched forward over his hips. */
+const SLAM: PoseKey = { curl: 0.18, ptip: -0.08 };
 /** The dunk up to the slam (DUNK_AT): the gather, the two-foot leap and the reach. Every dunk shares it, so the ball meets the rim on time. */
 const DUNK_UP: [number, PoseKey][] = [
   [-340, { ...DRIBBLE, by: 2.8, bz: 1.3, gl: 0 }],
@@ -235,7 +269,8 @@ const DUNK_UP: [number, PoseKey][] = [
   [-40, { hip: 0.2, air: 0.4, by: 5.6, leap: 0.25 }],
   [70, { hip: 1.9, air: 1, by: 8.6, leap: 0.8, flu: 0.7, flf: 0.3, fru: 0.5, frf: -0.3, lean: -0.08 }],
   [150, { hip: 2.3, air: 1, by: 8.5, leap: 1, flu: 0.8, flf: 0.4, fru: 0.6, frf: -0.4, lean: 0.05 }],
-  [200, { hip: 2.25, air: 1, by: 7.6, leap: 1, flu: 0.8, flf: 0.5, fru: 0.6, frf: -0.3, lean: 0.2 }],
+  // (the slam: his ribs thrown down over his hips after the ball)
+  [200, { hip: 2.25, air: 1, by: 7.6, leap: 1, flu: 0.8, flf: 0.5, fru: 0.6, frf: -0.3, lean: 0.2, ...SLAM }],
 ];
 /** A free throw's bounce: one, off the floor at his right foot, between his catching it and setting (0: it goes up). */
 const FT_BOUNCES: [number, number][] = [
@@ -671,7 +706,7 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
     { gr: 1, gl: 1, bx: 0, bz: 1 },
     [
       ...DUNK_UP,
-      [230, { hip: 2.15, air: 1, gl: 0, gr: 0, lx: 0.15, ly: 1.75, lz: 0.9, rx: 0.15, ry: 1.75, rz: 0.9, leap: 1, flu: 0.7, flf: 0.6, fru: 0.5, frf: 0.2, lean: 0.15 }],
+      [230, { hip: 2.15, air: 1, gl: 0, gr: 0, lx: 0.15, ly: 1.75, lz: 0.9, rx: 0.15, ry: 1.75, rz: 0.9, leap: 1, flu: 0.7, flf: 0.6, fru: 0.5, frf: 0.2, lean: 0.15, ...SLAM }],
       [330, { hip: 1.5, air: 1, gl: 0, gr: 0, lx: 0.3, ly: 1.2, lz: 0.6, rx: 0.3, ry: 1.2, rz: 0.6, leap: 1 }],
       [500, { hip: -0.4, gl: 0, gr: 0, leap: 1, lx: 0.5, ly: -0.8, lz: 0.5, rx: 0.5, ry: -0.8, rz: 0.5 }],
       [620, { gl: 0, gr: 0, leap: 0.95 }],
@@ -689,8 +724,8 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
       [-40, { hip: 0.2, air: 0.4, by: 5.8, bx: 0.3, bz: 0.7, leap: 0.25, gl: 0.2 }],
       [70, { hip: 1.9, air: 1, by: 9.1, bx: 0.45, bz: 0.15, leap: 0.8, gl: 0, lx: 0.85, ly: 0.2, lz: 0.6, flu: 0.9, flf: 0.6, fru: 0.2, frf: -0.4, lean: -0.12, tilt: 0.12 }],
       [150, { hip: 2.3, air: 1, by: 9.2, bx: 0.4, bz: 0.45, leap: 1, gl: 0, lx: 0.9, ly: 0.4, lz: 0.5, flu: 0.95, flf: 0.7, fru: 0.25, frf: -0.4, lean: -0.05, tilt: 0.14 }],
-      [200, { hip: 2.25, air: 1, by: 8.0, bx: 0.2, bz: 1.1, leap: 1, gl: 0, lx: 0.9, ly: 0.3, lz: 0.5, flu: 0.85, flf: 0.6, fru: 0.3, frf: -0.3, lean: 0.22, tilt: 0.06 }],
-      [240, { hip: 2.1, air: 1, gl: 0, gr: 0, lx: 0.8, ly: 0.1, lz: 0.5, rx: 0.15, ry: 1.2, rz: 1.1, leap: 1, flu: 0.7, flf: 0.6, fru: 0.4, frf: 0.1, lean: 0.25 }],
+      [200, { hip: 2.25, air: 1, by: 8.0, bx: 0.2, bz: 1.1, leap: 1, gl: 0, lx: 0.9, ly: 0.3, lz: 0.5, flu: 0.85, flf: 0.6, fru: 0.3, frf: -0.3, lean: 0.22, tilt: 0.06, ...SLAM }],
+      [240, { hip: 2.1, air: 1, gl: 0, gr: 0, lx: 0.8, ly: 0.1, lz: 0.5, rx: 0.15, ry: 1.2, rz: 1.1, leap: 1, flu: 0.7, flf: 0.6, fru: 0.4, frf: 0.1, lean: 0.25, ...SLAM }],
       [340, { hip: 1.4, air: 1, gl: 0, gr: 0, lx: 0.6, ly: -0.3, lz: 0.5, rx: 0.3, ry: 0.2, rz: 0.8, leap: 1 }],
       [500, { hip: -0.45, gl: 0, gr: 0, leap: 1, lx: 0.5, ly: -0.9, lz: 0.5, rx: 0.5, ry: -0.8, rz: 0.5, lean: 0.2 }],
       [640, { gl: 0, gr: 0, leap: 0.95 }],
@@ -705,9 +740,54 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
     { gr: 1, gl: 1, bx: 0, bz: 1 },
     [
       ...DUNK_UP,
-      [230, { hip: 2.15, air: 1, gl: 0, gr: 0, lx: 0.2, ly: 1.85, lz: 0.75, rx: 0.2, ry: 1.85, rz: 0.75, leap: 1, flu: 0.5, flf: 0.4, fru: 0.4, frf: 0.2, lean: 0.12 }],
-      [330, { hip: 2.05, air: 1, gl: 0, gr: 0, lx: 0.25, ly: 1.95, lz: 0.6, rx: 0.25, ry: 1.95, rz: 0.6, leap: 1, flu: 0.1, flf: 0.15, fru: 0.05, frf: 0.1, lean: -0.04 }],
-      [520, { hip: 1.95, air: 1, gl: 0, gr: 0, lx: 0.25, ly: 1.95, lz: 0.55, rx: 0.25, ry: 1.95, rz: 0.55, leap: 1, flu: 0.2, flf: 0.3, fru: 0.15, frf: 0.25, lean: 0.02 }],
+      [230, { hip: 2.15, air: 1, gl: 0, gr: 0, lx: 0.2, ly: 1.85, lz: 0.75, rx: 0.2, ry: 1.85, rz: 0.75, leap: 1, flu: 0.5, flf: 0.4, fru: 0.4, frf: 0.2, lean: 0.12, ...SLAM }],
+      // (hung from the ring by his hands his body is let out long under them: his legs swing through and back)
+      [
+        330,
+        {
+          hip: 2.05,
+          air: 1,
+          gl: 0,
+          gr: 0,
+          lx: 0.25,
+          ly: 1.95,
+          lz: 0.6,
+          rx: 0.25,
+          ry: 1.95,
+          rz: 0.6,
+          leap: 1,
+          flu: 0.1,
+          flf: 0.15,
+          fru: 0.05,
+          frf: 0.1,
+          lean: -0.04,
+          curl: -0.12,
+          ptip: -0.04,
+        },
+      ],
+      [
+        520,
+        {
+          hip: 1.95,
+          air: 1,
+          gl: 0,
+          gr: 0,
+          lx: 0.25,
+          ly: 1.95,
+          lz: 0.55,
+          rx: 0.25,
+          ry: 1.95,
+          rz: 0.55,
+          leap: 1,
+          flu: 0.2,
+          flf: 0.3,
+          fru: 0.15,
+          frf: 0.25,
+          lean: 0.02,
+          curl: 0.04,
+          ptip: 0.02,
+        },
+      ],
       [640, { hip: 1.0, air: 1, gl: 0, gr: 0, lx: 0.4, ly: 1.0, lz: 0.5, rx: 0.4, ry: 1.0, rz: 0.5, leap: 1 }],
       [780, { hip: -0.45, gl: 0, gr: 0, leap: 1, lx: 0.5, ly: -0.8, lz: 0.5, rx: 0.5, ry: -0.8, rz: 0.5, lean: 0.15 }],
       [900, { gl: 0, gr: 0, leap: 0.95 }],
@@ -828,8 +908,30 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
       ...DUNK_UP.slice(0, 3),
       [70, { hip: 1.9, air: 1, by: 9.3, bz: 0.05, leap: 0.8, flu: 1.0, flf: 0.5, fru: 0.95, frf: 0.4, lean: -0.22, nod: 0.1 }],
       [140, { hip: 2.3, air: 1, by: 9.5, bz: -0.1, leap: 1, flu: 1.1, flf: 0.6, fru: 1.0, frf: 0.5, lean: -0.28, nod: 0.1 }],
-      [200, { hip: 2.25, air: 1, by: 7.7, bz: 1.05, leap: 1, flu: 0.8, flf: 0.5, fru: 0.7, frf: 0.2, lean: 0.3 }],
-      [240, { hip: 2.1, air: 1, gl: 0, gr: 0, lx: 0.15, ly: 1.6, lz: 1.0, rx: 0.15, ry: 1.6, rz: 1.0, leap: 1, flu: 0.6, flf: 0.5, fru: 0.5, frf: 0.2, lean: 0.3 }],
+      [200, { hip: 2.25, air: 1, by: 7.7, bz: 1.05, leap: 1, flu: 0.8, flf: 0.5, fru: 0.7, frf: 0.2, lean: 0.3, curl: 0.24, ptip: -0.06 }],
+      [
+        240,
+        {
+          hip: 2.1,
+          air: 1,
+          gl: 0,
+          gr: 0,
+          lx: 0.15,
+          ly: 1.6,
+          lz: 1.0,
+          rx: 0.15,
+          ry: 1.6,
+          rz: 1.0,
+          leap: 1,
+          flu: 0.6,
+          flf: 0.5,
+          fru: 0.5,
+          frf: 0.2,
+          lean: 0.3,
+          curl: 0.24,
+          ptip: -0.06,
+        },
+      ],
       [340, { hip: 1.5, air: 1, gl: 0, gr: 0, lx: 0.3, ly: 1.1, lz: 0.6, rx: 0.3, ry: 1.1, rz: 0.6, leap: 1, lean: 0.12 }],
       [500, { hip: -0.42, gl: 0, gr: 0, leap: 1, lx: 0.5, ly: -0.8, lz: 0.5, rx: 0.5, ry: -0.8, rz: 0.5 }],
       [620, { gl: 0, gr: 0, leap: 0.95 }],
@@ -892,9 +994,50 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
       ],
       [
         200,
-        { hip: 2.25, air: 1, by: 8.0, bx: 0.3, bz: 1.1, leap: 1, gl: 0, lx: 0.8, ly: -0.3, lz: 0.4, flu: 0.85, flf: 0.6, fru: 0.3, frf: -0.3, lean: 0.2, tilt: 0.08, twist: 0.1 },
+        {
+          hip: 2.25,
+          air: 1,
+          by: 8.0,
+          bx: 0.3,
+          bz: 1.1,
+          leap: 1,
+          gl: 0,
+          lx: 0.8,
+          ly: -0.3,
+          lz: 0.4,
+          flu: 0.85,
+          flf: 0.6,
+          fru: 0.3,
+          frf: -0.3,
+          lean: 0.2,
+          tilt: 0.08,
+          twist: 0.1,
+          ...SLAM,
+        },
       ],
-      [240, { hip: 2.1, air: 1, gl: 0, gr: 0, lx: 0.8, ly: -0.4, lz: 0.4, rx: 0.15, ry: 1.2, rz: 1.1, leap: 1, flu: 0.7, flf: 0.6, fru: 0.4, frf: 0.1, lean: 0.25, twist: 0.2 }],
+      [
+        240,
+        {
+          hip: 2.1,
+          air: 1,
+          gl: 0,
+          gr: 0,
+          lx: 0.8,
+          ly: -0.4,
+          lz: 0.4,
+          rx: 0.15,
+          ry: 1.2,
+          rz: 1.1,
+          leap: 1,
+          flu: 0.7,
+          flf: 0.6,
+          fru: 0.4,
+          frf: 0.1,
+          lean: 0.25,
+          twist: 0.2,
+          ...SLAM,
+        },
+      ],
       [340, { hip: 1.4, air: 1, gl: 0, gr: 0, lx: 0.6, ly: -0.5, lz: 0.5, rx: 0.3, ry: 0.2, rz: 0.8, leap: 1 }],
       [500, { hip: -0.45, gl: 0, gr: 0, leap: 1, lx: 0.5, ly: -0.9, lz: 0.5, rx: 0.5, ry: -0.8, rz: 0.5, lean: 0.2 }],
       [640, { gl: 0, gr: 0, leap: 0.95 }],
@@ -958,14 +1101,16 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
     [-260, { hip: -0.55, lx: 0.7, ly: -0.6, lz: 0.6, rx: 0.5, ry: -0.2, rz: 0.7 }],
     [-50, { hip: 0.1, air: 0.3, rx: 0.2, ry: 1.2, rz: 0.7 }],
     [130, { hip: 1.7, air: 1, rx: 0.1, ry: 2.1, rz: 0.75, lx: 0.6, ly: -0.3, lz: 0.5, lean: 0.06 }],
-    [220, { hip: 1.5, air: 1, rx: 0.1, ry: 1.9, rz: 1.3, lx: 0.6, ly: -0.3, lz: 0.5, lean: 0.12 }],
+    // (the swat: his arm thrown forward through the ball, his ribs after it)
+    [220, { hip: 1.5, air: 1, rx: 0.1, ry: 1.9, rz: 1.3, lx: 0.6, ly: -0.3, lz: 0.5, lean: 0.12, curl: 0.08, ptip: -0.06 }],
     [400, { hip: -0.35, rx: 0.4, ry: 0, rz: 0.7 }],
     [520, {}],
   ]),
   contest: clip('contest', 'shot', 0, { wide: 0.3 }, [
     [-220, { hip: -0.45, lx: 0.9, ly: -0.8, lz: 0.7, rx: 0.5, ry: 0.4, rz: 1 }],
-    [40, { hip: 0.4, air: 0.8, rx: 0.15, ry: 2.05, rz: 0.9, lx: 0.8, ly: -0.6, lz: 0.6, lean: 0.1 }],
-    [230, { hip: -0.25, rx: 0.2, ry: 1.6, rz: 0.9, lx: 0.8, ly: -0.8, lz: 0.5 }],
+    // (a hand up at the shot, his body going at the shooter under it: straight, not bowed back as for a board)
+    [40, { hip: 0.4, air: 0.8, rx: 0.15, ry: 2.05, rz: 0.9, lx: 0.8, ly: -0.6, lz: 0.6, lean: 0.1, curl: -0.08, ptip: 0 }],
+    [230, { hip: -0.25, rx: 0.2, ry: 1.6, rz: 0.9, lx: 0.8, ly: -0.8, lz: 0.5, curl: -0.03 }],
     // (the arm comes down round him, out in front and to his side at its length, not folded down through his shoulder)
     [295, { hip: -0.24, rx: 0.85, ry: 1.1, rz: 1.25, lx: 0.85, ly: -0.95, lz: 0.5 }],
     [360, { hip: -0.22, rx: 1.25, ry: 0.05, rz: 1.35, lx: 0.88, ly: -1.1, lz: 0.5 }],
@@ -1042,7 +1187,28 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
   bump: clip('bump', 'shot', 0, { wide: 0.15 }, [
     [0, { hip: -0.12, lx: 0.6, ly: 0.9, lz: 0.4, rx: 0.6, ry: 0.9, rz: 0.4 }],
     [200, { hip: -0.55, lean: 0.28, lx: 0.45, ly: -1.3, lz: -0.45, rx: 0.45, ry: -1.3, rz: -0.45 }],
-    [400, { hip: 1.05, air: 1, lean: 0.18, surge: 0.2, nod: 0.35, lx: 0.95, ly: 0.2, lz: -0.65, rx: 0.95, ry: 0.2, rz: -0.65, flu: 0.35, flf: -0.3, fru: 0.35, frf: -0.3 }],
+    [
+      400,
+      {
+        hip: 1.05,
+        air: 1,
+        lean: 0.18,
+        surge: 0.2,
+        nod: 0.35,
+        lx: 0.95,
+        ly: 0.2,
+        lz: -0.65,
+        rx: 0.95,
+        ry: 0.2,
+        rz: -0.65,
+        flu: 0.35,
+        flf: -0.3,
+        fru: 0.35,
+        frf: -0.3,
+        curl: -0.28,
+        ptip: 0.1,
+      },
+    ],
     [580, { hip: 0.55, air: 1, lean: 0.02, surge: 0.05, lx: 0.8, ly: 1.4, lz: 0.15, rx: 0.8, ry: 1.4, rz: 0.15, flu: 0.2, fru: 0.2 }],
     [780, { hip: -0.32, lx: 0.6, ly: 1.5, lz: 0.3, rx: 0.6, ry: 1.5, rz: 0.3 }],
     [980, { hip: -0.1, lx: 0.6, ly: 0.9, lz: 0.4, rx: 0.6, ry: 0.9, rz: 0.4 }],
@@ -1071,28 +1237,26 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
     [0.5, { sway: -0.06, proll: -0.03, nod: 0.06 }],
     [1, { sway: 0.08, proll: 0.04, nod: -0.12 }],
   ]),
-  // --- off the ball with the play live: a man waiting for it is on his toes, not stood to attention ---
-  // (hands ready in front of him for the pass, knees bent, his weight going from foot to foot)
-  spot: clip('spot', 'loop', 3100, { hip: -0.22, lean: 0.13, wide: 0.24, lx: 0.22, ly: -1.22, lz: 0.72, rx: 0.22, ry: -1.22, rz: 0.72, lsw: 0.25, rsw: 0.25 }, [
-    [0, { sway: 0.07, proll: 0.025 }],
-    [0.27, { hip: -0.28, ly: -1.3, ry: -1.26 }],
-    [0.5, { sway: -0.07, proll: -0.025 }],
-    [0.76, { hip: -0.27, ly: -1.25, ry: -1.32 }],
-    [1, { sway: 0.07, proll: 0.025 }],
+  // --- off the ball with the play live ---
+  // (what a man waiting for the ball does with his weight, his feet and his eyes is his own: Puppet.wait. These are his
+  // carriage, which is everyone's: knees a little bent, his weight off his heels, his arms let hang, not held up)
+  // (most of the time: loose, a little sat down, his hands hanging a touch in front of him)
+  spot: clip('spot', 'loop', 4300, { hip: -0.1, lean: 0.07, wide: 0.1, lx: 0.24, ly: -1.93, lz: 0.22, rx: 0.24, ry: -1.93, rz: 0.22 }, [
+    [0, {}],
+    [0.45, { hip: -0.12, lz: 0.28, rz: 0.18 }],
+    [1, {}],
   ]),
-  // (lower, his hands loose by his thighs: he could cut or stay)
-  spot2: clip('spot2', 'loop', 2700, { hip: -0.3, lean: 0.2, wide: 0.32, lx: 0.4, ly: -1.72, lz: 0.42, rx: 0.4, ry: -1.72, rz: 0.42 }, [
-    [0, { sway: -0.06, proll: -0.02 }],
-    [0.3, { hip: -0.36, lz: 0.5, rz: 0.36 }],
-    [0.55, { sway: 0.07, proll: 0.03, lean: 0.17 }],
-    [0.8, { hip: -0.34, lz: 0.36, rz: 0.5 }],
-    [1, { sway: -0.06, proll: -0.02 }],
+  // (near the ball and wanting it: lower, his hands up in front of his belt where the pass can be put, his elbows down)
+  spot2: clip('spot2', 'loop', 3700, { hip: -0.24, lean: 0.15, wide: 0.24, lx: 0.12, ly: -1.02, lz: 0.68, rx: 0.12, ry: -1.02, rz: 0.68 }, [
+    [0, {}],
+    [0.5, { hip: -0.27, ly: -1.08, ry: -0.98 }],
+    [1, {}],
   ]),
-  // (standing taller, a hand on his hip, the other loose: the far side of the floor)
-  spot3: clip('spot3', 'loop', 3600, { hip: -0.1, lean: 0.07, wide: 0.18, lx: 0.3, ly: -1.9, lz: 0.2, rx: -0.2, ry: -1.36, rz: -0.06 }, [
-    [0, { sway: 0.09, proll: 0.04, tilt: -0.03 }],
-    [0.5, { sway: -0.03, proll: -0.015, hip: -0.14, lz: 0.3 }],
-    [1, { sway: 0.09, proll: 0.04, tilt: -0.03 }],
+  // (the far side of the floor: standing taller, his hands on his hips)
+  spot3: clip('spot3', 'loop', 4800, { ...ON_HIPS, hip: -0.05, lean: 0.03, wide: 0.12 }, [
+    [0, { nod: -0.04 }],
+    [0.5, { nod: 0.04 }],
+    [1, { nod: -0.04 }],
   ]),
   // (bent over getting his breath back, head up to see the floor)
   knees: clip('knees', 'loop', 2400, { ...ON_KNEES, nod: 0.3 }, [

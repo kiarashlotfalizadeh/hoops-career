@@ -43,8 +43,8 @@ const BONES = [
   'nose',
   'hair',
 ];
-/** The leaves only the player has (figure.py's GIRDLE): a bone at each shoulder, one down each forearm, one his brows hang on and one for his lower lip. */
-const PLAYER_LEAVES = ['cll', 'clr', 'fwl', 'fwr', 'brow', 'lip', 'axl', 'axr'];
+/** The leaves only the player has (figure.py's GIRDLE, AXILLA and TRUNK): a bone at each shoulder, one down each forearm, one his brows hang on and one for his lower lip, one under each armpit, and one in the small of his back and one in his neck. */
+const PLAYER_LEAVES = ['cll', 'clr', 'fwl', 'fwr', 'brow', 'lip', 'axl', 'axr', 'spine', 'neck'];
 /** Hair that is a shape of its own on the player (court3d/look.ts: a man wears one of them or none). */
 const HAIR_PIECES = ['bun', 'tail', 'twists', 'locs', 'braids', 'afro', 'hightop', 'curls'];
 /** The materials the app has a look for (court3d/figure.ts `wear`, court3d/arena.ts `dress`, court3d/props.ts: none of them exports its list). */

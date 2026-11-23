@@ -119,6 +119,14 @@ export const THIGH = 1.62;
 export const SHIN = 1.55;
 export const ANKLE = 0.28;
 export const TORSO = 1.95;
+/** His ribs are pitched no farther than this from the line of his trunk (radians: see `spine`). */
+export const CURL_MOST = 0.5;
+/**
+ * His pelvis pitches forward by this share of his trunk's lean (and by the pose's `ptip` more: figure.ts turns the
+ * bone, a take's own is measured against it in scripts/mocap/build.ts). A ballplayer leans from his hips, his seat
+ * going back as his chest comes forward.
+ */
+export const PELVIS_LEAN = 0.5;
 export const SHOULDER = 0.84;
 export const HIP_W = 0.4;
 export const UARM = 1.1;
@@ -1152,8 +1160,17 @@ export interface Tape {
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const IDLES: ClipId[] = ['idle', 'idle2', 'idle3'];
-/** How a man off the ball waits with the play live: ready for it, mostly; no two alike for long. */
-const SPOTS: ClipId[] = ['spot', 'spot', 'spot2', 'spot2', 'spot3'];
+/** How a man off the ball waits with the play live (see stand, and wait for what he does in them). */
+const WAITS = new Set<ClipId>(['spot', 'spot2', 'spot3']);
+/**
+ * Waiting, his weight is on one leg (his hips over its foot and its hip up: see weigh), his chest tipped back a little
+ * over it (WEIGHT_TILT radians, all on the one leg), the other knee easy; held a while and then put over onto the other
+ * one (or back between them). How long it is held (ms, at the least and the most), and how quickly it goes over (ms:
+ * about the time to get most of the way).
+ */
+const WEIGHT_TILT = 0.035;
+const WEIGHT_HOLD: [number, number] = [1300, 4300];
+const WEIGHT_MS = 520;
 /** The ways of standing (alert, at rest, spent). */
 const STANDING = new Set<ClipId>(['idle', 'idle2', 'idle3', 'shift', 'hips', 'knees', 'spot', 'spot2', 'spot3']);
 /** He turns to face a thing no faster than this (radians a second), and his head on his shoulders no faster than this: a turn, not a snap. */
@@ -1451,9 +1468,12 @@ function reach(j: Float32Array, a: number, mid: number, t: number, l1: number, l
 /**
  * The trunk for a pose: hips, hip joints, chest, head and shoulders into `j`, and the chest's axes
  * (its spine `u`, its front `f`, its left `l`) in his own frame. `vf`/`vs`: a little more lean for
- * his speed ahead and aside.
+ * his speed ahead and aside. His chest is at the end of his trunk's line (`line`, if asked for: from
+ * between his hips to between his shoulders, leant and tipped as the pose has it), and his ribs sit on
+ * the end of it pitched as his back is curved (the pose's `curl`): rounded forward past the line, or
+ * arched back from it. His neck, head and shoulders go with his ribs.
  */
-export function spine(P: Float32Array, body: Body, hipY: number, j: Float32Array, u: V3, f: V3, l: V3, vf = 0, vs = 0) {
+export function spine(P: Float32Array, body: Body, hipY: number, j: Float32Array, u: V3, f: V3, l: V3, vf = 0, vs = 0, line?: V3) {
   const { s, bulk } = body;
   const put = (k: number, x: number, y: number, z: number) => {
     j[k * 3] = x;
@@ -1478,6 +1498,7 @@ export function spine(P: Float32Array, body: Body, hipY: number, j: Float32Array
   u.y = Math.sqrt(Math.max(0.2, 1 - u.x * u.x - u.z * u.z));
   const T = TORSO * s;
   put(J.chest, hx + u.x * T, hipY + u.y * T, hz + u.z * T);
+  if (line) [line.x, line.y, line.z] = [u.x, u.y, u.z];
   // its front (square to its spine) and its left, turned by the twist
   const fzn = Math.hypot(u.y, u.z) || 1;
   const f0y = -u.z / fzn;
@@ -1493,6 +1514,19 @@ export function spine(P: Float32Array, body: Body, hipY: number, j: Float32Array
   l.x = l0x * ct;
   l.y = l0y * ct - f0y * st;
   l.z = l0z * ct - f0z * st;
+  // (and his ribs pitched about that left, as his back is curved: his shoulders' line stays where the twist put it)
+  const curl = clamp(P[I.curl], -CURL_MOST, CURL_MOST);
+  if (curl) {
+    const cc = Math.cos(curl);
+    const sc = Math.sin(curl);
+    const [ux, uy, uz] = [u.x, u.y, u.z];
+    u.x = ux * cc + f.x * sc;
+    u.y = uy * cc + f.y * sc;
+    u.z = uz * cc + f.z * sc;
+    f.x = f.x * cc - ux * sc;
+    f.y = f.y * cc - uy * sc;
+    f.z = f.z * cc - uz * sc;
+  }
   const cx = j[J.chest * 3];
   const cyy = j[J.chest * 3 + 1];
   const cz = j[J.chest * 3 + 2];
@@ -1639,6 +1673,8 @@ export class Puppet {
   readonly left: V3 = { x: 1, y: 0, z: 0 };
   readonly front: V3 = { x: 0, y: 0, z: 1 };
   readonly up: V3 = { x: 0, y: 1, z: 0 };
+  /** The line of his trunk, from between his hips to his chest (his ribs' own up is `up`: see `spine`). */
+  readonly line: V3 = { x: 0, y: 1, z: 0 };
   readonly pose = new Float32Array(N);
   clip: ClipId = 'idle';
   /** The move he's in the middle of (a shot, a catch), and where in it (ms around its moment). */
@@ -1765,6 +1801,19 @@ export class Puppet {
   private offArm = 0;
   private offW = 0;
   private standW = 0;
+  /** How he waits off the ball (see wait): his own. */
+  private weightK = 1;
+  private weightSlow = 1;
+  private waitFoot = 0;
+  private waitAhead = 0.2;
+  private waitLow = 0;
+  private wantsK = 0.4;
+  /** Where his weight is going (-1: on his right leg, 1: his left), where it is and how fast it is going there, and how long until he moves it. */
+  private weightTo = 1;
+  private weightAt = 0;
+  private weightV = 0;
+  private weightIn = 0;
+  private weightN = 0;
   private standLow = 0;
   private handsUp = 0;
   private swipeK = 1;
@@ -4128,6 +4177,10 @@ export class Puppet {
     } else if (this.loading && one?.id === 'jumper') {
       F[1] = LOAD_STAGGER / 2;
       F[0] = -LOAD_STAGGER / 2;
+    } else if (WAITS.has(this.clip) && !one) {
+      // (waiting, his feet aren't side by side: one a little ahead, the same one every time, by his own way of standing)
+      F[this.waitFoot] = this.waitAhead / 2;
+      F[1 - this.waitFoot] = -this.waitAhead / 2;
     }
     if (this.plantFwd > 0) F[this.lefty ? 0 : 1] = this.plantFwd;
     return F;
@@ -4235,6 +4288,16 @@ export class Puppet {
     if (heavy > 0.5) this.hopper = false;
     else if (burst > 0.5) this.hopper = true;
     this.beat *= 1 + 0.1 * craft + 0.06 * burst - 0.08 * heavy;
+    // (and how he waits off the ball: how far his weight goes over and how long he keeps it there, which foot he
+    // stands with ahead of the other and by how much, how much he sits, and how often he shows his hands for it)
+    this.weightK = clamp(0.6 + 0.65 * r(168) + 0.15 * glide - 0.2 * heavy, 0.4, 1.3);
+    this.weightSlow = 0.7 + 0.7 * r(169) + 0.2 * heavy - 0.15 * burst;
+    this.waitFoot = r(170) < 0.5 ? 0 : 1;
+    this.waitAhead = 0.1 + 0.32 * r(171);
+    this.waitLow = clamp((r(172) - 0.3) * 0.1 + 0.05 * burst - 0.03 * glide, -0.03, 0.09);
+    this.wantsK = clamp(0.25 + 0.35 * r(173) + 0.2 * craft + 0.1 * burst, 0.1, 0.8);
+    this.weightTo = r(174) < 0.5 ? 1 : -1;
+    this.weightIn = WEIGHT_HOLD[0] * r(175);
     // (and his timing: how fast he turns, how quickly he is into his next thing, how quick his hands are, how hard he
     // drives off his first step, how often he changes hands standing with it)
     this.turnK = 1 + 0.15 * burst - 0.05 * glide - 0.15 * heavy;
@@ -4469,18 +4532,25 @@ export class Puppet {
     this.resting = rest;
     const r = hash(this.who, ++this.standN);
     const tired = Math.max(this.effort, d.tired ? TIRED_LATE : 0);
-    // (the play is live and the ball isn't his: on his toes for it. Holding it, or between whistles, he stands as he stands)
+    // (the play is live and the ball isn't his: ready for it. Holding it, or between whistles, he stands as he stands)
     if (!rest) {
-      this.idle = d.act === 'stand' || d.act === 'move' ? SPOTS[Math.floor(r * SPOTS.length)] : IDLES[Math.floor(r * IDLES.length)];
-      // (a hand on his hip is for the far side of the floor: near the ball he is ready for it)
-      if (this.idle === 'spot3' && !(d.look && Math.hypot(d.look.x - this.x, d.look.z - this.z) > WEAK_SIDE)) this.idle = r < 0.9 ? 'spot' : 'spot2';
+      if (d.act !== 'stand' && d.act !== 'move') this.idle = IDLES[Math.floor(r * IDLES.length)];
+      else {
+        // (near the ball he is loose or wanting it, by how much he likes to show his hands; on the far side he may stand
+        // tall with his hands on his hips, or, late and blown, bend over with them on his knees)
+        const far = !!d.look && Math.hypot(d.look.x - this.x, d.look.z - this.z) > WEAK_SIDE;
+        const wants = this.wantsK * (far ? 0.4 : 1);
+        if (far && tired > 0.35 && r < 0.22) this.idle = 'knees';
+        else if (far && r < 0.32) this.idle = 'spot3';
+        else this.idle = hash(this.who, 3000 + this.standN) < wants ? 'spot2' : 'spot';
+      }
     }
     // (late in a close one a dead ball is a chance to get his breath: hands on his knees. Not once it is over: he is
     // shaking a hand or holding a teammate, and two bent over face to face put their heads together)
     else if (fresh && !d.over && (tired > 0.5 || (!!d.tired && r < 0.4))) this.idle = 'knees';
     else if (tired > 0.3) this.idle = r < 0.6 ? 'hips' : 'shift';
     else this.idle = r < 0.3 ? 'hips' : r < 0.65 ? 'shift' : r < 0.85 ? 'idle' : 'idle3';
-    this.standMs = this.idle === 'knees' ? 1600 + r * 1200 : 2600 + r * 3200;
+    this.standMs = this.idle === 'knees' ? 1600 + r * 1200 : WAITS.has(this.idle) ? 3200 + r * 4400 : 2600 + r * 3200;
     return this.idle;
   }
 
@@ -4641,6 +4711,39 @@ export class Puppet {
   }
 
   /**
+   * A man waiting off the ball, his own way (see WAITS): sat down his own amount; his weight on one leg, held there a
+   * while (his own while, never the same twice) and then put over onto the other, or back between them, swung over
+   * and settled as a body's weight is, not rocked from side to side on a beat; his hands never quite still. Out of
+   * it, his weight comes back between his feet.
+   */
+  private wait(d: Drive, id: ClipId, own: number, t: number, ph: number) {
+    const P = this.pose;
+    const waiting = WAITS.has(id) && !this.one && !d.ball;
+    if (waiting && (this.weightIn -= own) <= 0) {
+      const q = hash(this.who, 1000 + ++this.weightN);
+      const q2 = hash(this.who, 2000 + this.weightN);
+      const side = this.weightTo >= 0 ? 1 : -1;
+      // (over onto the other leg, mostly; now and then back between them, or harder onto the one he is on)
+      this.weightTo = q < 0.68 ? -side * (0.65 + 0.35 * q2) : q < 0.86 ? side * 0.15 * q2 : side;
+      this.weightIn = (WEIGHT_HOLD[0] + (WEIGHT_HOLD[1] - WEIGHT_HOLD[0]) * q2) * this.weightSlow;
+    }
+    const to = waiting ? this.weightTo : 0;
+    const w = 1000 / WEIGHT_MS;
+    const k = Math.min(own, 50) / 1000;
+    this.weightV += ((to - this.weightAt) * w * w - 2 * w * this.weightV) * k;
+    this.weightAt += this.weightV * k;
+    // (his hips go over the foot he is on as weigh puts them; his chest leans back the other way over it)
+    P[I.tilt] -= WEIGHT_TILT * clamp(this.weightAt * this.weightK, -1, 1);
+    if (!waiting) return;
+    P[I.hip] -= this.waitLow;
+    // (his hands: never quite still, each on its own slow time)
+    P[I.lz] += 0.035 * Math.sin(t * 0.83 + ph);
+    P[I.rz] += 0.035 * Math.sin(t * 0.67 + ph * 2.3);
+    P[I.ly] += 0.025 * Math.sin(t * 0.59 + ph * 3.1);
+    P[I.ry] += 0.025 * Math.sin(t * 0.71 + ph * 1.7);
+  }
+
+  /**
    * What keeps a man alive between the moves the plan gives him: his breath (deeper and quicker the harder he
    * has been going), a defender's hands that are never still and the little reset he makes in his stance,
    * and the lean of starting and stopping.
@@ -4661,6 +4764,7 @@ export class Puppet {
     }
     const t = this.loopT / 1000;
     const ph = this.who * 0.37;
+    this.wait(d, id, own, t, ph);
     if (id === 'stance' || id === 'ready' || id === 'shuffle') {
       const a = FLUTTER * (id === 'shuffle' ? 0.5 : 1);
       P[I.ly] += a * Math.sin(t * 10.7 + ph);
@@ -5439,8 +5543,10 @@ export class Puppet {
     else if (down[0]) {
       const last = this.strikeMs[0] <= this.strikeMs[1] ? 0 : 1;
       const still = sp < 1.5 && Math.min(...this.strikeMs) > TRANSFER_MS * 2;
-      want = still ? 0.5 : last ? 0 : 1;
-      tau = still ? STAND_WEIGH_MS : TRANSFER_MS;
+      // (stood still he is on both, or, waiting off the ball, on the leg his own way of waiting has him on: see wait)
+      const waits = still && WAITS.has(this.clip) && !this.one;
+      want = waits ? 0.5 + 0.5 * clamp(this.weightAt * this.weightK, -1, 1) : still ? 0.5 : last ? 0 : 1;
+      tau = waits ? WEIGH_MS : still ? STAND_WEIGH_MS : TRANSFER_MS;
     }
     if (own > 0) this.loadL += (want - this.loadL) * (1 - Math.exp(-own / tau));
     const fast = clamp((this.ownMs - BOB_FROM_MS) / (BOB_FAST_MS - BOB_FROM_MS), 0, 1);
@@ -5585,7 +5691,7 @@ export class Puppet {
     // (his pelvis turned with his legs, opened ahead of him: see LEAD_FROM; his chest stays with the way he faces)
     const pyaw = P[I.pyaw];
     P[I.pyaw] += this.hipLead * LEAD_PELVIS;
-    spine(P, this.body, hipY, j, this.up, this.front, this.left, vf * keyed, vs * keyed);
+    spine(P, this.body, hipY, j, this.up, this.front, this.left, vf * keyed, vs * keyed, this.line);
     P[I.pyaw] = pyaw;
     put(J.fl, fl[0], fl[1], fl[2]);
     put(J.fr, fl[3], fl[4], fl[5]);
@@ -5975,9 +6081,19 @@ export class Puppet {
     ON.x = b.x + by.v.x * ahead;
     ON.y = Math.max(BALL_R, b.y + by.v.y * ahead);
     ON.z = b.z + by.v.z * ahead;
-    const d = Math.hypot(this.x - b.x, this.z - b.z) || 1;
-    MINE.x = (this.x - b.x) / d;
-    MINE.z = (this.z - b.z) / d;
+    // (his side of its path: square to the way it is going, toward him. From where the ball is now, a pass coming
+    // across in front of him would put his hand on along its path ahead of it, and the ball would catch it up)
+    let [mx, mz] = [this.x - b.x, this.z - b.z];
+    const v = Math.hypot(by.v.x, by.v.z);
+    if (v > 1) {
+      const [ux, uz] = [by.v.x / v, by.v.z / v];
+      const along = mx * ux + mz * uz;
+      const [px, pz] = [mx - along * ux, mz - along * uz];
+      if (Math.hypot(px, pz) > 0.05 * this.body.s) [mx, mz] = [px, pz];
+    }
+    const d = Math.hypot(mx, mz) || 1;
+    MINE.x = mx / d;
+    MINE.z = mz / d;
     clearOf(w, b, ON, r + BALL_R + DODGE_GAP * this.body.s, soft, MINE);
     const moved = Math.hypot(w.x - x0, w.y - y0, w.z - z0);
     if (moved > 0) {

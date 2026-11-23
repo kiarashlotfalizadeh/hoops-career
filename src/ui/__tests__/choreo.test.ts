@@ -956,7 +956,7 @@ describe('live court choreography', () => {
     {
       const glb = (file: string) => readGlb(Uint8Array.from(atob(file.slice(file.indexOf(',') + 1)), (ch) => ch.charCodeAt(0)).buffer);
       const geo = figureGeo((o) => o, glb(figureGlb));
-      expect([...geo.order].sort((x, y) => x - y)).toEqual(Array.from({ length: 49 }, (_, i) => i));
+      expect([...geo.order].sort((x, y) => x - y)).toEqual(Array.from({ length: 51 }, (_, i) => i));
       // (no scalp of its own: his head is a real man's, one skin, and his hair is painted on its picture)
       expect(geo.wears).toEqual(expect.arrayContaining(['skin', 'jersey', 'trim', 'cloth', 'shoe', 'white']));
       // the bands that stand off his limbs (a sock's top, a wristband): each goes round the limb where it is asked for,

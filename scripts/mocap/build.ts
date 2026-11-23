@@ -12,10 +12,12 @@
 // data/raw/mocap (not in the repository). Run: npm run mocap:build
 import { writeFileSync } from 'node:fs';
 import { CHANNELS, I, mirror, N } from '../../src/ui/live/court3d/clips';
-import { ANKLE, BALL_R, elbowPole, FARM, HIP, HIP_W, J, SHIN, spine, THIGH, UARM, type V3 } from '../../src/ui/live/court3d/puppet';
+import { ANKLE, BALL_R, CURL_MOST, elbowPole, FARM, HIP, HIP_W, J, PELVIS_LEAN, SHIN, spine, THIGH, UARM, type V3 } from '../../src/ui/live/court3d/puppet';
 import { readBvh, type M3, type Take, type V } from './bvh';
 
 const PALM = BALL_R + 0.12;
+/** A man standing easy has his pelvis tipped this far forward in a take (radians): the body as built already stands so. */
+const PELVIS_REST = 0.06;
 /** An elbow points in toward his middle no more than this (the sine of how far in from square to his side). */
 const INWARD = 0.35;
 const BODY = { s: 1, bulk: 1 };
@@ -61,6 +63,11 @@ interface Spec {
   tempo?: number;
   /** Hips above standing, multiplied (a jump made bigger). */
   jump?: number;
+  /**
+   * The man in the take bent over from his waist, his hips upright under a rounded back, where a ballplayer hinges at
+   * his hips and keeps his back straight: most of the take's curve is left out, and his seat set a little back.
+   */
+  straight?: boolean;
 }
 
 const SPECS: Spec[] = [
@@ -69,12 +76,29 @@ const SPECS: Spec[] = [
   { id: 'idle2', src: '127_04', kind: 'loop', from: 0, to: 0.9 },
   { id: 'idle3', src: '124_06', kind: 'loop', from: 4.45, to: 5.0 },
   // getting around
-  { id: 'walk', src: '06_01', kind: 'gait', from: 0.5, to: 4 },
+  // (the walker's and the dribblers' hips were measured tucked under them, upright as they stood: a calibration's, not a carriage: set level)
+  { id: 'walk', src: '06_01', kind: 'gait', from: 0.5, to: 4, level: { ptip: 0 } },
   // (a steady jog, a run at pace, and the hardest-driven take there is. Each runner carried himself his own way: a
   // hunch, his head turned to something. The stride is his; the carriage is set to a ballplayer's)
-  { id: 'jog', src: '127_13', kind: 'gait', from: 0, to: 1.6, level: { lean: 0.15, hip: -0.1, turn: 0, nod: 0.03, ly: -1.3, ry: -1.3, lz: 0.4, rz: 0.4 } },
-  { id: 'run', src: '102_05', kind: 'gait', from: 0, to: 0.9, win: 0.07, level: { lean: 0.21, hip: -0.1, turn: 0, nod: 0.06, ly: -1.15, ry: -1.15, lz: 0.45, rz: 0.45 } },
-  { id: 'sprint', src: '127_06', kind: 'gait', from: 0, to: 1.5, swing: 1.45, level: { lean: 0.38, hip: -0.16, turn: 0, nod: 0.16, ly: -0.85, ry: -0.85, lz: 0.5, rz: 0.5 } },
+  { id: 'jog', src: '127_13', kind: 'gait', from: 0, to: 1.6, level: { lean: 0.15, hip: -0.1, turn: 0, nod: 0.03, ly: -1.3, ry: -1.3, lz: 0.4, rz: 0.4, curl: 0, ptip: 0.03 } },
+  {
+    id: 'run',
+    src: '102_05',
+    kind: 'gait',
+    from: 0,
+    to: 0.9,
+    win: 0.07,
+    level: { lean: 0.21, hip: -0.1, turn: 0, nod: 0.06, ly: -1.15, ry: -1.15, lz: 0.45, rz: 0.45, curl: 0, ptip: 0.05 },
+  },
+  {
+    id: 'sprint',
+    src: '127_06',
+    kind: 'gait',
+    from: 0,
+    to: 1.5,
+    swing: 1.45,
+    level: { lean: 0.38, hip: -0.16, turn: 0, nod: 0.16, ly: -0.85, ry: -0.85, lz: 0.5, rz: 0.5, curl: 0, ptip: 0.1 },
+  },
   // (backing up: a man walking backward with a ball, his arms put out as a defender's)
   {
     id: 'backpedal',
@@ -82,16 +106,17 @@ const SPECS: Spec[] = [
     kind: 'gait',
     from: 0.3,
     to: 3.1,
-    level: { hip: -0.3, lean: 0.06, turn: 0, nod: 0.05, lx: 0.75, rx: 0.75, ly: -1.3, ry: -1.3, lz: 0.55, rz: 0.55 },
+    level: { hip: -0.3, lean: 0.06, turn: 0, nod: 0.05, lx: 0.75, rx: 0.75, ly: -1.3, ry: -1.3, lz: 0.55, rz: 0.55, curl: 0, ptip: 0.1 },
   },
   // pulling up out of a run (0: he's nearly stopped), and a defender closing out and breaking down into his stance
-  { id: 'stop', src: '127_05', kind: 'shot', from: 0.7, to: 1.75, anchor: 0.7, rate: 500, ground: true },
-  { id: 'closeout', src: '102_25', kind: 'shot', from: 1.45, to: 2.4, anchor: 1.45, rate: 500, ground: true },
+  { id: 'stop', src: '127_05', kind: 'shot', from: 0.7, to: 1.75, anchor: 0.7, rate: 500, ground: true, straight: true },
+  { id: 'closeout', src: '102_25', kind: 'shot', from: 1.45, to: 2.4, anchor: 1.45, rate: 500, ground: true, straight: true },
   // (a first step: from standing into a run, the lean and the drive of the arms that get him going; 0: he pushes off)
-  { id: 'start', src: '102_30', kind: 'shot', from: 0.2, to: 1.3, anchor: 0.2, rate: 500, ground: true },
+  { id: 'start', src: '102_30', kind: 'shot', from: 0.2, to: 1.3, anchor: 0.2, rate: 500, ground: true, straight: true },
   // guarding (the slide is captured going right; the clip goes left, and the puppet flips it back)
   // (the men in these takes bent at the waist with their hands hanging: a defender sits, his back near straight,
-  // his hands up and out where the ball and the pass are. The feet and the weight are the takes'; the carriage is set)
+  // his hands up and out where the ball and the pass are. The feet and the weight are the takes'; the carriage is set:
+  // his seat back and his ribs on the line of his trunk, not rounded over it as theirs were)
   {
     id: 'shuffle',
     src: '102_27',
@@ -100,7 +125,7 @@ const SPECS: Spec[] = [
     to: 1.3,
     slide: true,
     mirror: true,
-    level: { turn: 0, lean: 0.27, hip: -0.56, nod: 0.08, lx: 1.2, ly: -0.72, lz: 0.72, rx: 1.2, ry: -0.72, rz: 0.72 },
+    level: { turn: 0, lean: 0.27, hip: -0.56, nod: 0.08, lx: 1.2, ly: -0.72, lz: 0.72, rx: 1.2, ry: -0.72, rz: 0.72, curl: 0, ptip: 0.16 },
   },
   // (on the ball: one hand up at it, the other out in the lane)
   {
@@ -109,7 +134,7 @@ const SPECS: Spec[] = [
     kind: 'loop',
     from: 1.85,
     to: 2.25,
-    level: { turn: 0, lean: 0.29, hip: -0.6, nod: 0.1, lx: 1.15, ly: -0.8, lz: 0.8, rx: 0.5, ry: -0.05, rz: 1.1 },
+    level: { turn: 0, lean: 0.29, hip: -0.6, nod: 0.1, lx: 1.15, ly: -0.8, lz: 0.8, rx: 0.5, ry: -0.05, rz: 1.1, curl: 0, ptip: 0.16 },
   },
   {
     id: 'ready',
@@ -117,14 +142,14 @@ const SPECS: Spec[] = [
     kind: 'loop',
     from: 2.25,
     to: 2.65,
-    level: { turn: 0, lean: 0.2, hip: -0.42, nod: 0.06, lx: 0.95, ly: -1.02, lz: 0.62, rx: 0.95, ry: -1.02, rz: 0.62 },
+    level: { turn: 0, lean: 0.2, hip: -0.42, nod: 0.06, lx: 0.95, ly: -1.02, lz: 0.62, rx: 0.95, ry: -1.02, rz: 0.62, curl: 0, ptip: 0.12 },
   },
   // with the ball
-  { id: 'dribble', src: '86_14', kind: 'loop', from: 22.0, to: 25.6, ball: 'dribble', grip: 'top', tempo: 1.2, add: { hip: -0.36, lean: 0.13, wide: 0.28 } },
-  { id: 'dribbleRun', src: '06_04', kind: 'loop', from: 0.4, to: 3.0, ball: 'dribble', grip: 'top', add: { hip: -0.1, lean: 0.05 } },
+  { id: 'dribble', src: '86_14', kind: 'loop', from: 22.0, to: 25.6, ball: 'dribble', grip: 'top', tempo: 1.2, add: { hip: -0.36, lean: 0.13, wide: 0.28, ptip: 0.1 } },
+  { id: 'dribbleRun', src: '06_04', kind: 'loop', from: 0.4, to: 3.0, ball: 'dribble', grip: 'top', add: { hip: -0.1, lean: 0.05 }, level: { ptip: 0.03 } },
   // (walking it up, and backing away with it)
-  { id: 'dribbleWalk', src: '06_02', kind: 'loop', from: 2.2, to: 4.9, ball: 'dribble', grip: 'top', add: { hip: -0.08, lean: 0.03 } },
-  { id: 'dribbleBack', src: '06_06', kind: 'loop', from: 0.3, to: 3.1, ball: 'dribble', grip: 'top', add: { hip: -0.14, lean: 0.04 } },
+  { id: 'dribbleWalk', src: '06_02', kind: 'loop', from: 2.2, to: 4.9, ball: 'dribble', grip: 'top', add: { hip: -0.08, lean: 0.03 }, level: { ptip: 0.02 } },
+  { id: 'dribbleBack', src: '06_06', kind: 'loop', from: 0.3, to: 3.1, ball: 'dribble', grip: 'top', add: { hip: -0.14, lean: 0.04 }, level: { ptip: 0.06 } },
   {
     id: 'crossover',
     src: '06_14',
@@ -138,7 +163,7 @@ const SPECS: Spec[] = [
       { hand: 'r', from: -1, to: 0.36 },
       { hand: 'l', from: 0.56, to: 2 },
     ],
-    add: { hip: -0.3, lean: 0.1 },
+    add: { hip: -0.3, lean: 0.1, ptip: 0.28 },
   },
   // a chest pass, from drawing it in (0: it leaves his hands)
   { id: 'pass', src: '15_12', kind: 'shot', from: 16.98, to: 17.95, anchor: 17.36, rate: 540, ball: [{ hand: 'both', from: -1, to: 17.36 }] },
@@ -299,12 +324,36 @@ function poseAt(m: Measured, ft: number, spec: Spec): { pose: Float32Array; hand
   const sl = dir(sub(at('LeftArm'), at('RightArm')));
   P[I.twist] = Math.atan2(-(sl[0] * Fr.x + sl[1] * Fr.y + sl[2] * Fr.z), sl[0] * L.x + sl[1] * L.y + sl[2] * L.z);
   spine(P, BODY, hipY, JT, U, Fr, L);
+  const R = (name: string): M3 => m.take.rot[f0 + 1][m.ix[name]];
+  // how his back is curved. The line of his trunk says where his chest is, not how his ribs sit on the end of it: a
+  // man bent over from upright hips has his ribs pitched past the line (a rounded back), one reaching up and back for
+  // the ball has them behind it (an arched one). His ribs' own up (the take's upper spine) against the line, forward
+  // in his chest's own frame, is the pose's `curl`; and his pelvis's own pitch about the line of his hips, against the
+  // share of his lean a pelvis usually takes, its `ptip` (a ballplayer's seat goes back as he sits into a stance; a
+  // jumper's hips come through under him at the top). The skin's spine runs from the one to the other (figure.ts).
+  const line: V = [U.x, U.y, U.z];
+  const ribs = R('Spine1');
+  const ru = dir([ribs[1], ribs[4], ribs[7]]);
+  P[I.curl] = clamp(Math.atan2(ru[0] * Fr.x + ru[1] * Fr.y + ru[2] * Fr.z, ru[0] * U.x + ru[1] * U.y + ru[2] * U.z), -CURL_MOST, CURL_MOST);
+  const pr = R('Hips');
+  const pu = dir([pr[1], pr[4], pr[7]]);
+  const across = dir(pl);
+  const pfn = Math.hypot(across[0], across[2]) || 1;
+  const pf: V = [-across[2] / pfn, 0, across[0] / pfn];
+  P[I.ptip] = clamp(Math.atan2(dot(pu, pf), pu[1]) - PELVIS_REST - PELVIS_LEAN * Math.asin(clamp(dot(line, pf), -1, 1)), -0.5, 0.5);
+  if (spec.straight) {
+    P[I.curl] *= 0.3;
+    P[I.ptip] = P[I.ptip] * 0.3 + 0.08;
+  }
+  // (a take whose carriage is set, `level`, has its back set too: his hands are measured from his chest as it will be,
+  // not from the take's own rounded one, or they would swing off a chest that isn't there)
+  if (spec.level?.curl !== undefined) P[I.curl] = 0;
+  spine(P, BODY, hipY, JT, U, Fr, L);
   // where his head looks: up or down against his chest, and round from the way he faces. Not round from his chest:
   // the puppet turns his head from wherever his chest is to the thing he looks at (Puppet.gaze), and a pose's turn is
   // what it adds to that. A shooter stands turned from his target and looks at it: measured against his chest, his
   // head's turn was his chest's the other way, and the puppet, having already turned his head back over his chest,
   // turned it that far again: he shot with his body one side of the rim and his eyes as far the other side of it.
-  const R = (name: string): M3 => m.take.rot[f0 + 1][m.ix[name]];
   const hr = R('Head');
   const hf = dir([hr[2], hr[5], hr[8]]);
   const cu = hf[0] * U.x + hf[1] * U.y + hf[2] * U.z;
