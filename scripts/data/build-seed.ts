@@ -35,7 +35,7 @@ import {
   type RosterRow,
 } from './parse';
 import { PROSPECT_HINTS, aggregate, deriveRatings, popStats, prospectRatings, type Agg } from './derive';
-import { VALUE_BAND, calibrate, valueWeights, type CalibReport, type StyleTarget, type ValueTarget } from './calibrate';
+import { calibrate, valueBand, valueWeights, type CalibReport, type StyleTarget, type ValueTarget } from './calibrate';
 import { IMPACT_SEASONS, buildNbaProfile } from './nba/build';
 import { profilesByBbref, type PbpAgg } from './nba/profile';
 import { NBA_RAW } from './nba/fetch';
@@ -507,7 +507,7 @@ async function main() {
       `value moves from the evidence (rostered players): ${(['oiq', 'diq', 'perD', 'intD', 'blk'] as const)
         .map(
           (k) =>
-            `${k} ${(moved(k).reduce((a, d) => a + Math.abs(d), 0) / projected.length).toFixed(1)} on average, ${moved(k).filter((d) => Math.abs(d) > VALUE_BAND - 0.5).length} at ±${VALUE_BAND}`,
+            `${k} ${(moved(k).reduce((a, d) => a + Math.abs(d), 0) / projected.length).toFixed(1)} on average, ${moved(k).filter((d) => d < 0.5 - valueBand(k)[0] || d > valueBand(k)[1] - 0.5).length} at -${valueBand(k)[0]} or +${valueBand(k)[1]}`,
         )
         .join('; ')}`,
     );

@@ -6,6 +6,7 @@
 
 import type { ShotZone } from '../../types';
 import { clamp } from '../../random';
+import { defRead } from '../../ratings';
 import { K } from './constants';
 import { TK } from './tk';
 import type { SP, ST, LateMode, ActionResult } from './state';
@@ -117,7 +118,7 @@ export const pnrMethods = {
       rollPull = 1 + (k.contest - 1) * 0.6;
     } else if (cov === 'hedge') {
       const k = TK.cov.hedge;
-      const recover = (dS.r.spd - S.r.spd) / k.speed + (dS.r.diq - 50) / 150;
+      const recover = (dS.r.spd - S.r.spd) / k.speed + (defRead(dS.r.diq) - 50) / 150;
       advH -= k.stall;
       this.impact('hedge_stall', def.side, k.stall * 0.08, H.pid);
       roll += k.roll - recover;

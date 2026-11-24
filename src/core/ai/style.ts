@@ -10,7 +10,7 @@
 
 import type { ActionType, CoachProfile, CoachStyle, DefenseTactics, OffenseTactics, Player, PnrCoverage } from '../types';
 import { ACTION_TYPES } from '../types';
-import { composites } from '../ratings';
+import { composites, defRead } from '../ratings';
 import { COVERAGE_META, DEF_PRESETS, OFF_PRESETS } from '../sim/tactics';
 import { type Rng, clamp } from '../random';
 import real from '../../data/realStyles.json';
@@ -244,13 +244,13 @@ export function coverageFor(players: Player[], style: Pick<CoachStyle, 'coverage
   const spread = Math.max(...hgts) - Math.min(...hgts);
   const per6 = six.reduce((a, x) => a + x.c.perDef, 0) / six.length;
   const steals = cs.reduce((a, x) => a + x.c.steal, 0) / cs.length;
-  const diq6 = six.reduce((a, x) => a + x.p.ratings.diq, 0) / six.length;
+  const diq6 = six.reduce((a, x) => a + defRead(x.p.ratings.diq), 0) / six.length;
   const rim = big.c.rimProt;
   const spd = big.p.ratings.spd;
   const drop = -0.3 + (rim - 60) / 8 - (spd - 38) / 12;
   const score: Record<PnrCoverage, number> = {
     drop,
-    hedge: Math.min(1.5, (spd - 44) / 6) + (big.p.ratings.diq - 50) / 15 - (rim - 60) / 12 - 1.2,
+    hedge: Math.min(1.5, (spd - 44) / 6) + (defRead(big.p.ratings.diq) - 50) / 15 - (rim - 60) / 12 - 1.2,
     // (capped: a fictional league's players rate higher on both ends, and read uncapped half its staffs switched)
     switch: Math.min(1.2, (per6 - 51.5) / 1.2) - (spread - 32) / 10 + Math.min(0.5, (spd - 40) / 20) - 0.5,
     ice: (diq6 - 52) / 3 + drop * 0.4 - 1.1,

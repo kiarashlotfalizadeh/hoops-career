@@ -1,5 +1,5 @@
 import type { League, Player, PlayerStats, SeasonAwards } from '../types';
-import { composites } from '../ratings';
+import { composites, defRead } from '../ratings';
 import { playerAge } from '../playerGen';
 import { clamp } from '../random';
 import { addInbox, addNews, andList, curTeamSeason, playerName, seasonTotals, teamCity, winPct } from './helpers';
@@ -90,7 +90,7 @@ export function allLeagueScore(c: Cand) {
 export function dpoyScore(c: Cand, ctx: DefContext = { lgDRtg: 0, teamDRtg: new Map() }) {
   const cm = composites(c.p.ratings);
   const per = (x: number) => x / c.gp;
-  const dRat = 0.25 * cm.perDef + 0.25 * cm.intDef + 0.3 * cm.rimProt + 0.2 * c.p.ratings.diq;
+  const dRat = 0.25 * cm.perDef + 0.25 * cm.intDef + 0.3 * cm.rimProt + 0.2 * defRead(c.p.ratings.diq);
   // without league context (live ladders) the team terms drop out
   const teamD = ctx.lgDRtg > 0 ? (ctx.teamDRtg.get(c.s.tid) ?? ctx.lgDRtg) : 0;
   // on/off: points allowed per 100 with him on the floor vs his team's season

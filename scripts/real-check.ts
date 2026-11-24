@@ -156,6 +156,12 @@ console.log('  ' + lg.map(([k, v, t]) => `${k} ${v < 2 ? v.toFixed(3) : v.toFixe
     return `vs the players' ${label} at sim minutes (SD ${sd(proj).toFixed(2)}): r ${(cov(net, proj) / sd(net) / sd(proj)).toFixed(2)}, slope ${(cov(net, proj) / sd(proj) ** 2).toFixed(2)}`;
   };
   console.log(`  team net rating SD ${sd(net).toFixed(2)} (NBA 5.4-6.1); ${vs('bpm', 'real BPM')}${projected.size ? `; ${vs('proj', 'projected impact')}` : ''}`);
+  // (each end's own spread between teams: the defensive one is what the defensive ratings' scale must not widen)
+  const ortg = ts.map((x) => (x.ptsFor / Math.max(1, x.poss)) * 100);
+  const drtg = ts.map((x) => (x.ptsAgainst / Math.max(1, x.oppPoss)) * 100);
+  console.log(
+    `  team offensive rating SD ${sd(ortg).toFixed(2)}, defensive rating SD ${sd(drtg).toFixed(2)} (NBA roughly 3 to 4 each), best and worst defense ${Math.min(...drtg).toFixed(1)} and ${Math.max(...drtg).toFixed(1)}`,
+  );
 }
 const zl = (z: 'rim' | 'paint' | 'mid' | 'three') => `${z} ${((100 * engineDiag.ast[z]) / Math.max(1, engineDiag.made[z])).toFixed(0)}%`;
 console.log(`  assisted share of makes: ${zl('rim')}, ${zl('paint')}, ${zl('mid')}, ${zl('three')} (NBA ~65/45/40/85)`);

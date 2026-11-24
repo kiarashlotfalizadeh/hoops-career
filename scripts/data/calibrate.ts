@@ -14,7 +14,7 @@ import { GameSim, type Stint } from '../../src/core/sim/engine';
 import { Rng, clamp } from '../../src/core/random';
 import { autoRotation, autoTactics, rankedPresets } from '../../src/core/ai/coachAI';
 import { applyDefPreset, applyOffPreset, cloneTactics } from '../../src/core/sim/tactics';
-import { clampRatings } from '../../src/core/ratings';
+import { DEF_READ, clampRatings, defRead } from '../../src/core/ratings';
 import { refreshPlayerDerived } from '../../src/core/playerGen';
 import { teamPlayers } from '../../src/core/league/helpers';
 import type { Agg } from './derive';
@@ -291,30 +291,40 @@ export interface ValueTarget {
   off: number;
   def: number;
   defW: Partial<Record<RatingKey, number>>;
-  /** His ratings as his evidence derived them: value moves each skill at most VALUE_BAND from there. */
+  /** His ratings as his evidence derived them: value moves each skill at most its band (valueBand) from there. */
   from: Ratings;
 }
 
 /**
  * The skills that carry a player's value: the ones whose evidence is his impact (derive.ts reads
- * them from box plus-minus, RAPM, matchup and rim defense) and whose part in the engine is what his
- * teammates get, not his own line. At the offensive end that is feel (offensive IQ, which lifts every
- * shot the five take); at the defensive end team defense (defensive IQ), then the perimeter or the
- * interior with rim contests by where he defends, from his derived ratings. Shooting, handling,
- * passing, free throws, rebounding, steals, size and athleticism never move for value: his real line
- * pins them.
+ * them from box plus-minus and RAPM) and whose part in the engine is what his teammates get, not his
+ * own line. At the offensive end that is feel (offensive IQ, which lifts every shot the five take); at
+ * the defensive end team defense (defensive IQ), and the interior with rim contests by how much of his
+ * defending is done there, from his derived ratings. Shooting, handling, passing, free throws,
+ * rebounding, steals, blocks, size and athleticism never move for value: his real line pins them.
+ *
+ * Perimeter defense never moves either. It used to take a perimeter player's defensive miss with his
+ * defensive IQ, and that turned the scale over: the engine values a ball hawk's steals and a long
+ * guard's size above his impact, so the stoppers went down to the bottom of the band (Caruso from 75
+ * to 60, the Thompsons from 72 to 58 and 60) while small scorers the engine undervalues went up to
+ * the top of it (Edwards, Maxey, Irving and Tyus Jones from 56-62 to 71-73: the league's four best
+ * "perimeter defenders"). His perimeter defense is now what his matchups, lineups and steals say,
+ * and his defensive IQ takes the perimeter's share of the miss.
  */
 export function valueWeights(r: Ratings): Pick<ValueTarget, 'defW'> {
-  const inside = clamp(0.5 + (r.intD + r.blk + r.hgt - r.perD - r.stl - r.spd) / 120, 0.15, 0.85);
+  // (perimeter defense as the game plays it, so the split sits where it did on the narrower scale)
+  const inside = clamp(0.5 + (r.intD + r.blk + r.hgt - defRead(r.perD) - r.stl - r.spd) / 120, 0.15, 0.85);
   // (shot blocking is his box score's, like steals: the blocks he gets pin it, and fans read it as his
-  // blocks; a rim protector the engine values above his impact gives it back in interior defense)
-  return { defW: { diq: 1, perD: 1.4 * (1 - inside), intD: 1.7 * inside } };
+  // blocks; a rim protector the engine values above his impact gives it back in interior defense.
+  // Defensive IQ in stored points: 1 as the game plays it, plus 0.8 for the perimeter's share, about
+  // what the 1.4 a point of perimeter defense took was worth in the engine)
+  return { defW: { diq: (1 + 0.8 * (1 - inside)) / DEF_READ, intD: 1.7 * inside } };
 }
 
 /**
  * Rating points per point per 100 of value missed: about what moves his simulated RAPM by one
- * (feel is worth about 0.1 a point with his own scoring held still; team, perimeter and interior
- * defense with rim contests together about 0.11).
+ * (feel is worth about 0.1 a point with his own scoring held still; team and interior defense with
+ * rim contests together about 0.11, at valueWeights' shares).
  */
 const VALUE_GAIN = { off: 10, def: 9 };
 /** The most a value step moves a skill in one pass. */
@@ -326,8 +336,21 @@ const VALUE_STEP_MAX = 6;
  * role player's below, a rim protector's blocks and boards above, a small guard's defense below),
  * and closing those gaps entirely would push their feel and defense to the ends of the scale; within
  * the band they close as far as their evidence allows, and the build reports what is left.
+ * Defensive IQ goes down as far as any skill does as the game plays it (ratings.ts DEF_READ: 22.5
+ * stored points), and up 15 stored points, see valueBand.
  */
 export const VALUE_BAND = 15;
+/**
+ * The band around his evidence value moves a skill within, in the points it is stored in: [down, up].
+ * Defensive IQ's is not even. Down, it is the 15 points every skill has as the game plays them: with
+ * perimeter defense out of the fit it takes a perimeter player's whole miss, and at 15 stored points
+ * the players the engine values above their impact (ball hawks, long guards, rim protectors) stayed
+ * above it, a hundred of them at the floor and Oklahoma City's rotation most of all, which won 25 of
+ * the star check's 64 titles. Up, it stays 15 stored points: at 22.5 the players the engine
+ * undervalues came out at the top of the league's defensive IQ, Cole Anthony and Collin Gillespie at
+ * 85 on the card with evidence of 53.
+ */
+export const valueBand = (k: RatingKey): [number, number] => (k === 'diq' ? [VALUE_BAND / DEF_READ, VALUE_BAND] : [VALUE_BAND, VALUE_BAND]);
 /** Possessions of simulated RAPM at which a value miss counts for half (it is noisy below). */
 const VALUE_POSS = 8000;
 /** How much each older batch of stints counts in the value fit (ratings have moved since). */
@@ -347,7 +370,7 @@ export const FEEL_IN_SCORING: Partial<Record<RatingKey, number>> = { ins: 0.61, 
 /** Move his value skills by `moves`, each within the band around his evidence, what his feel gains coming back out of his scoring. */
 function shiftValue(r: Ratings, from: Ratings, moves: Partial<Record<RatingKey, number>>) {
   const was = r.oiq;
-  for (const [k, x] of Object.entries(moves) as [RatingKey, number][]) r[k] = clamp(r[k] + x, from[k] - VALUE_BAND, from[k] + VALUE_BAND);
+  for (const [k, x] of Object.entries(moves) as [RatingKey, number][]) r[k] = clamp(r[k] + x, from[k] - valueBand(k)[0], from[k] + valueBand(k)[1]);
   clampRatings(r);
   for (const [k, w] of Object.entries(FEEL_IN_SCORING) as [RatingKey, number][]) r[k] -= w * (r.oiq - was);
   clampRatings(r);
@@ -362,7 +385,7 @@ export function valueStep(r: Ratings, t: Pick<ValueTarget, 'defW' | 'from'>, mis
   shiftValue(r, t.from, moves);
 }
 
-const VALUE_SKILLS: RatingKey[] = ['oiq', 'diq', 'perD', 'intD'];
+const VALUE_SKILLS: RatingKey[] = ['oiq', 'diq', 'intD'];
 
 export function calibrate(
   league: League,

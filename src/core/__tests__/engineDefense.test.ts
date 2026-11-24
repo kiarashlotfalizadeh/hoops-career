@@ -329,31 +329,34 @@ describe('engine defense', () => {
       // All of them again 2026-11-23, when a fictional league's rosters came to be drawn by position
       // (two point guards, three shooting guards...: a starting five of one of each), its stars' talent
       // went mostly into creating, and heavy minute loads stopped adding in-game injury risk.
+      // All of them again 2026-11-24, when the engine came to read perimeter defense and defensive IQ at two
+      // thirds weight (ratings.ts DEF_READ: the composites and the five's team defense). The new games are
+      // ordinary ones: 83 to 133 points, 77 to 103 shots, 13 to 49 threes, 13 to 32 free throws, one overtime.
       const expected: Record<string, number[][]> = {
         default: [
-          [125, 115, 86, 46, 11, 19, 10, 0],
-          [127, 123, 84, 28, 11, 31, 10, 0],
-          [110, 118, 81, 36, 9, 14, 16, 0],
+          [122, 114, 80, 42, 8, 20, 10, 0],
+          [108, 120, 85, 29, 7, 30, 10, 0],
+          [102, 120, 86, 31, 5, 15, 15, 0],
         ],
         zone23: [
-          [125, 117, 84, 38, 11, 21, 9, 0],
-          [115, 121, 102, 15, 13, 33, 6, 0],
-          [102, 98, 87, 38, 11, 9, 21, 0],
+          [125, 122, 86, 39, 9, 17, 10, 0],
+          [112, 119, 95, 22, 11, 22, 8, 0],
+          [95, 108, 89, 30, 11, 25, 18, 0],
         ],
         zone32: [
-          [115, 128, 78, 41, 9, 35, 11, 0],
-          [112, 134, 93, 20, 12, 24, 6, 0],
-          [103, 118, 90, 32, 10, 19, 22, 0],
+          [118, 123, 84, 38, 10, 21, 11, 0],
+          [108, 128, 91, 19, 8, 26, 9, 0],
+          [97, 119, 99, 29, 12, 15, 14, 0],
         ],
         double: [
-          [132, 127, 84, 39, 11, 17, 10, 0],
-          [103, 128, 80, 29, 4, 26, 16, 0],
-          [93, 110, 83, 26, 5, 18, 20, 0],
+          [133, 122, 82, 39, 10, 18, 11, 0],
+          [124, 131, 103, 29, 16, 13, 8, 0],
+          [83, 115, 86, 28, 11, 13, 18, 0],
         ],
         hunt: [
-          [141, 132, 87, 44, 11, 27, 9, 1],
-          [118, 127, 95, 14, 7, 23, 7, 0],
-          [100, 117, 85, 35, 9, 21, 14, 0],
+          [124, 119, 82, 44, 11, 19, 9, 0],
+          [117, 127, 96, 13, 10, 28, 8, 0],
+          [118, 123, 100, 33, 14, 20, 16, 1],
         ],
       };
       const patches: Record<string, TacticsPatch | undefined> = {

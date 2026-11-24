@@ -364,19 +364,20 @@ describe('sets in the engine', () => {
       // and again 2026-10-28, when the threes were recentred: K.recenter.three, and again that day, when Five-Out,
       // Pace & Space, Ice and the 2-3 zone were retuned and the staffs' reads refit)
       // (and again 2026-11-09, the game-day realism rounds: see engineDefense.test.ts; and all of them again 2026-11-10,
-      // the tactics rewrite, tactics v2: see engineDefense.test.ts; and all of them again 2026-11-22, when two-way deals were cut)
+      // the tactics rewrite, tactics v2: see engineDefense.test.ts; and all of them again 2026-11-22, when two-way deals were cut;
+      // and all of them again 2026-11-24, when the engine came to read perimeter defense and defensive IQ at two thirds weight: see engineDefense.test.ts)
       const expected = {
         ai: [
-          [125, 115, 86, 46, 11, 19, 10, 0],
-          [127, 123, 84, 28, 11, 31, 10, 0],
-          [110, 118, 81, 36, 9, 14, 16, 0],
+          [122, 114, 80, 42, 8, 20, 10, 0],
+          [108, 120, 85, 29, 7, 30, 10, 0],
+          [102, 120, 86, 31, 5, 15, 15, 0],
         ],
         // (all of them again 2026-11-23, a fictional league's rosters drawn by position: see engineDefense.test.ts)
         // (taken again when play calls from the bench were retired, and the first and third games when garbage time came for both benches from late in the third quarter, with the team up big easing off and calling off its press; all of them again 2026-11-09, the game-day realism round, and its second round the same day)
         coached: [
-          [124, 111, 81, 37, 9, 23, 18, 0],
-          [138, 110, 89, 30, 7, 25, 19, 0],
-          [113, 124, 76, 26, 9, 34, 15, 0],
+          [122, 107, 79, 30, 9, 19, 21, 0],
+          [126, 100, 95, 32, 6, 25, 16, 0],
+          [115, 111, 77, 29, 6, 32, 12, 0],
         ],
       };
       const fp = (res: ReturnType<GameSim['result']>) => [res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot];

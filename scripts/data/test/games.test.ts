@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { deriveRatings, popStats, type Agg } from '../derive';
-import { VALUE_BAND, valueStep, valueWeights } from '../calibrate';
+import { VALUE_BAND, valueBand, valueStep, valueWeights } from '../calibrate';
 import { rapm } from '../value';
 import { hashInputs, pinInputs } from '../inputs';
 import type { PbpAgg } from '../nba/profile';
@@ -16,7 +16,7 @@ import { readBoxScores, type BoxLine } from '../games/boxscores';
 import { PBP_COLUMNS, readPlayByPlay, whoCameOn } from '../games/playbyplay';
 import { agedImpact, agingStep, estimateImpact } from '../games/impact';
 import { seedLine } from '../games/lines';
-import { composites, emptyRatings } from '../../../src/core/ratings';
+import { DEF_READ, composites, emptyRatings } from '../../../src/core/ratings';
 import { Rng } from '../../../src/core/random';
 import { BBREF_TO_TID } from '../../../src/core/teams';
 import { K, type Stint } from '../../../src/core/sim/engine';
@@ -388,13 +388,15 @@ describe('the game files and the value target', () => {
       ).get(0)!.off - truth[0].off,
     ).toBeGreaterThan(1.5);
 
-    // a value miss on defense goes where he defends: a wing's on the perimeter, a big's inside
+    // a value miss on defense goes where he defends: a wing's to his team defense, a big's inside as well
+    // (never to perimeter defense: his matchups, lineups and steals pin it)
     const wing = { ...emptyRatings(), hnd: 70, pas: 40, perD: 65, spd: 70, stl: 60, intD: 40, blk: 35, hgt: 40 };
     const big = { ...emptyRatings(), hnd: 35, pas: 75, perD: 40, spd: 35, stl: 40, intD: 75, blk: 80, hgt: 85 };
     const ww = valueWeights(wing);
     const bw = valueWeights(big);
-    expect(ww.defW.perD!).toBeGreaterThan(ww.defW.intD!);
-    expect(bw.defW.intD!).toBeGreaterThan(bw.defW.perD!);
+    expect(ww.defW.perD).toBeUndefined();
+    expect(ww.defW.diq!).toBeGreaterThan(bw.defW.diq!);
+    expect(ww.defW.diq!).toBeGreaterThan(ww.defW.intD!);
     // (shot blocking is his box score's, like steals: value never moves it, a big's interior defense takes it)
     expect(bw.defW.blk).toBeUndefined();
     expect(bw.defW.intD!).toBeGreaterThan(ww.defW.intD!);
@@ -422,7 +424,10 @@ describe('the game files and the value target', () => {
     // however far the engine is from his projection, value moves a skill no further than the band around his evidence
     for (let i = 0; i < 20; i++) valueStep(after, { ...ww, from: before }, { off: 5, def: -5 }, 1);
     expect(after.oiq).toBeCloseTo(before.oiq + VALUE_BAND, 5);
-    expect(after.diq).toBeCloseTo(before.diq - VALUE_BAND, 5);
+    // (defensive IQ goes down the band as the game plays it, 22.5 stored points, and up 15)
+    expect(after.diq).toBeCloseTo(before.diq - VALUE_BAND / DEF_READ, 5);
+    expect(valueBand('diq')).toEqual([VALUE_BAND / DEF_READ, VALUE_BAND]);
+    expect(after.perD).toBe(before.perD);
 
     // impact ratings start from the evidence alone: box plus-minus without a play-by-play profile
     const none = deriveRatings(base(), bio, pop, 'x').r;

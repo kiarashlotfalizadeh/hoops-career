@@ -62,6 +62,23 @@ export const fmtHeight = (inches: number) => {
 // ---------------------------------------------------------------- composites
 // Skill composites shared by the engine, AI coach and UI (so explanations match the math).
 
+/**
+ * How much of a point of perimeter defense or defensive IQ the game plays. Both are stored and shown
+ * on the scale every skill uses, the league's best in the 90s, but a point of either is worth less on
+ * the floor than a point of shooting or shot blocking: fitted to real players' lineups
+ * (scripts/data/derive.ts, calibrate.ts), the gap between the league's best stopper and its worst is
+ * worth what two thirds of it would be at full weight. Real players' two ratings used to sit on that
+ * narrower scale (the best stopper a raw 73, shown 83, where the best shot blocker is 100 and drafted
+ * players reached 93). Now the seed stores them one and a half times as wide and everything on the
+ * floor that computes with them (the composites, the five's team defense) reads them through
+ * `defRead`: about 50, at this weight. A real league plays as it did, and generated players' defense,
+ * which was always on the wide scale, counts a third less than it used to. OVR reads the stored
+ * ratings (see ovrRaw).
+ */
+export const DEF_READ = 2 / 3;
+/** A perimeter defense or defensive IQ rating as the game plays it (see DEF_READ). */
+export const defRead = (v: number) => 50 + (v - 50) * DEF_READ;
+
 export interface Composites {
   rim: number; // finishing at rim
   close: number; // floaters / short paint shots
@@ -90,6 +107,8 @@ export interface Composites {
 }
 
 export function composites(r: Ratings): Composites {
+  const perD = defRead(r.perD);
+  const diq = defRead(r.diq);
   return {
     rim: 0.45 * r.ins + 0.18 * r.ath + 0.17 * r.hgt + 0.1 * r.str + 0.1 * r.oiq,
     close: 0.45 * r.ins + 0.3 * r.mid + 0.15 * r.oiq + 0.1 * r.hgt,
@@ -108,11 +127,11 @@ export function composites(r: Ratings): Composites {
     // (finishing is not in it: a finisher's trips to the line come with his shots at the rim, so the
     // rating that says how often he gets there is drawing fouls)
     foulDraw: 0.75 * r.drw + 0.25 * r.str,
-    perDef: 0.45 * r.perD + 0.22 * r.spd + 0.15 * r.diq + 0.1 * r.hgt + 0.08 * r.ath,
-    intDef: 0.38 * r.intD + 0.25 * r.hgt + 0.17 * r.str + 0.12 * r.diq + 0.08 * r.ath,
+    perDef: 0.45 * perD + 0.22 * r.spd + 0.15 * diq + 0.1 * r.hgt + 0.08 * r.ath,
+    intDef: 0.38 * r.intD + 0.25 * r.hgt + 0.17 * r.str + 0.12 * diq + 0.08 * r.ath,
     rimProt: 0.42 * r.blk + 0.28 * r.hgt + 0.15 * r.ath + 0.15 * r.intD,
-    steal: 0.75 * r.stl + 0.15 * r.diq + 0.1 * r.spd,
-    helpD: 0.6 * r.diq + 0.15 * r.spd + 0.15 * r.hgt + 0.1 * r.blk,
+    steal: 0.75 * r.stl + 0.15 * diq + 0.1 * r.spd,
+    helpD: 0.6 * diq + 0.15 * r.spd + 0.15 * r.hgt + 0.1 * r.blk,
     orb: 0.45 * r.oreb + 0.25 * r.hgt + 0.15 * r.ath + 0.15 * r.str,
     drb: 0.45 * r.dreb + 0.3 * r.hgt + 0.1 * r.ath + 0.15 * r.str,
     spacing: clamp((r.tp - 25) * 1.45, 0, 100),
@@ -185,7 +204,13 @@ export function ovrWeights(r: Ratings): Ratings {
   return w;
 }
 
-/** Size-aware blend of the guard and big weightings. */
+/**
+ * Size-aware blend of the guard and big weightings, on the ratings as stored. (Perimeter defense and
+ * defensive IQ count at their full weight here, not at DEF_READ: read at two thirds, a summer's
+ * development and the league's anchors, which move every skill by what a raw point of OVR takes,
+ * lifted the stars' scoring with their level, and the star check's leagues had a 35-point scorer in
+ * 24 of 64 seasons, with 8 at full weight.)
+ */
 export function ovrRaw(r: Ratings): number {
   const big = clamp((r.hgt - 40) / 40, 0, 1);
   let s = 0;
@@ -494,7 +519,7 @@ export function defRoleFitsFrom(c: Composites, r: Ratings): Record<DefRole, numb
   return {
     standard: general,
     poa: 0.55 * c.perDef + 0.25 * c.steal + 0.2 * r.spd - big(15),
-    stopper: 0.6 * c.perDef + 0.2 * r.diq + 0.2 * Math.min(r.hgt, 65) - big(8),
+    stopper: 0.6 * c.perDef + 0.2 * defRead(r.diq) + 0.2 * Math.min(r.hgt, 65) - big(8),
     anchor: 0.6 * c.rimProt + 0.4 * c.intDef - small(20),
     roamer: 0.55 * c.helpD + 0.25 * c.steal + 0.2 * c.rimProt,
     hide: clamp(110 - general, 30, 75),

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { parquetReadObjects } from 'hyparquet';
 import { zstdDecompressSync } from 'node:zlib';
 import { clamp } from '../../../src/core/random';
-import { clampRatings, heightToRating } from '../../../src/core/ratings';
+import { DEF_READ, clampRatings, heightToRating } from '../../../src/core/ratings';
 import type { Ratings, Tendencies } from '../../../src/core/types';
 import { normName } from './crosswalk';
 import { COLLEGE_SEASONS } from './sources';
@@ -208,11 +208,12 @@ export function collegeRatings(c: CollegeAgg, pop: CollegePop, heightIn: number,
     oiq: 46 + 5 * z('ts') + 3 * z('ast40') - 2 * z('tov40'),
     drw: 46 + 9 * z('fta40') + 3 * z('ftr'),
     post: 28 + 8 * hz + 5 * z('usg') + 4 * wz - 4 * z('tpar'),
-    perD: 48 + 5 * z('stl40') - 3 * hz,
+    // (perimeter defense and defensive IQ on the wide scale they are stored on, as derive.ts DEF_WIDE)
+    perD: 50 + (5 * z('stl40') - 3 * hz - 2) / DEF_READ,
     intD: 44 + 6 * z('blk40') + 6 * hz + 3 * z('drb40'),
     stl: 48 + 12 * z('stl40'),
     blk: 44 + 12 * z('blk40') + 4 * hz,
-    diq: 46 + 3 * z('stl40') + 3 * z('blk40') + 2 * z('drb40'),
+    diq: 50 + (3 * z('stl40') + 3 * z('blk40') + 2 * z('drb40') - 4) / DEF_READ,
     oreb: 46 + 12 * z('orb40') + 3 * hz,
     dreb: 46 + 12 * z('drb40') + 3 * hz,
   };

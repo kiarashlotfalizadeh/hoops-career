@@ -5,7 +5,7 @@
 // floor what his projected impact says (games/impact.ts).
 
 import type { Ratings, Tendencies } from '../../src/core/types';
-import { clampRatings, heightToRating } from '../../src/core/ratings';
+import { DEF_READ, clampRatings, heightToRating } from '../../src/core/ratings';
 import { Rng, clamp, hashString } from '../../src/core/random';
 import { genRatings } from '../../src/core/playerGen';
 import type { AdvRow, PerGameRow } from './parse';
@@ -244,6 +244,16 @@ export const reliability = (wMin: number) => wMin / (wMin + 500);
 /** A feature's z-score against the population, regressed by the sample's reliability and capped at ±3.6 (0 when missing). */
 export const zScore = (x: number, mean: number, sd: number, rel: number) => (Number.isFinite(x) ? clamp(((x - mean) / sd) * rel, -3.6, 3.6) : 0);
 
+/**
+ * How wide perimeter defense and defensive IQ are stored: the evidence's points over the weight the
+ * game plays them at (ratings.ts DEF_READ). Their evidence is three or four partly independent
+ * measures added up (matchups, lineups, steals), and a sum of those has no long top end the way one
+ * stat does: at the evidence's own points the league's best stopper came out a raw 75 (shown 84)
+ * where its best thief and shot blocker are 100, and generated players reached 93. Stored this wide,
+ * the best real stoppers read 85 to 91 and the order between players is the evidence's.
+ */
+export const DEF_WIDE = 1 / DEF_READ;
+
 /** Derive ratings from stats. `rel` (0..1) is the sample reliability used to regress. */
 export function deriveRatings(a: Agg, bio: Bio, pop: PopStats, seedKey: string): { r: Ratings; tend: Tendencies; rel: number } {
   const f = features(a) as Record<string, number>;
@@ -261,6 +271,7 @@ export function deriveRatings(a: Agg, bio: Bio, pop: PopStats, seedKey: string):
   const wz = ((bio.weightLb || 220) - 220) / 25;
   const rng = new Rng(hashString(seedKey));
   const age = bio.age || a.lastAge || 26;
+  const W = DEF_WIDE;
   // Impact ratings start from the evidence (box plus-minus, RAPM, matchup and rim defense); the
   // calibration then moves them until his simulated value matches his projected impact (calibrate.ts).
   const r: Ratings = {
@@ -289,13 +300,14 @@ export function deriveRatings(a: Agg, bio: Bio, pop: PopStats, seedKey: string):
     oiq: has ? 50 + 5 * z('obpm') + 6 * z('rapmO') + 3 * z('ts') + 2 * z('usg') : 50 + 8 * z('obpm') + 4 * z('ts') + 3 * z('usg'),
     drw: has ? 48 + 9 * z('sfdRate') + 5 * z('fta36') : 48 + 11 * z('fta36') + 3 * z('ftr'),
     post: has ? 30 + 8 * hz + 9 * z('postShare') + 4 * z('usg') + 4 * wz : 30 + 9 * hz + 6 * z('usg') + 5 * wz - 4 * z('tpar'),
-    perD: has ? 50 + 5 * z('mdSaved') + 4 * z('rapmD') + 4 * z('stlPct') - 3 * hz : 50 + 6 * z('dbpm') + 6 * z('stlPct') - 3 * hz,
+    // (his matchups, his lineups and his steals: the calibration never moves it, calibrate.ts valueWeights)
+    perD: 50 + W * (has ? 5 * z('mdSaved') + 4 * z('rapmD') + 4 * z('stlPct') - 3 * hz : 6 * z('dbpm') + 6 * z('stlPct') - 3 * hz),
     intD: has
       ? 46 + 5 * z('rapmD') + 5 * z('blkRim') - 4 * z('rimFgAllowed') - 3 * z('rimDeter') + 6 * hz + 2 * z('drbPct')
       : 46 + 6 * z('dbpm') + 7 * z('blkPct') + 7 * hz + 3 * z('drbPct'),
     stl: 50 + 14 * z('stlPct'),
     blk: 46 + 13 * z('blkPct') + 4 * hz,
-    diq: has ? 50 + 5 * z('dbpm') + 7 * z('rapmD') + 2 * z('mdSaved') + z('stlPct') + z('blkPct') : 50 + 9 * z('dbpm') + 2 * z('stlPct') + 2 * z('blkPct'),
+    diq: 50 + W * (has ? 5 * z('dbpm') + 7 * z('rapmD') + 2 * z('mdSaved') + z('stlPct') + z('blkPct') : 9 * z('dbpm') + 2 * z('stlPct') + 2 * z('blkPct')),
     oreb: 48 + 14 * z(has && Number.isFinite(f.orbTrue) ? 'orbTrue' : 'orbPct') + 3 * hz,
     dreb: 48 + 14 * z(has && Number.isFinite(f.drbTrue) ? 'drbTrue' : 'drbPct') + 3 * hz,
   };

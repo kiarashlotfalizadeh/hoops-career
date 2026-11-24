@@ -7,7 +7,7 @@
 
 import type { CallId, GameAdjustment, GameResult, LineupStat, PbpEntry, Player, SetId, SetStat, ShotRecord, Tactics, TacticImpact, XShots } from '../../types';
 import { Rng, clamp } from '../../random';
-import { archetype, composites } from '../../ratings';
+import { archetype, composites, defRead } from '../../ratings';
 import { GAME } from '../../constants';
 import { type PlanPlayer, buildMinutePlan, planInputs, planRoles } from '../rotationPlan';
 import type { FinishType, PossLog } from '../log';
@@ -471,7 +471,7 @@ export class GameSim {
     t.pressQ = on.reduce((a, p) => a + (p.c.steal + p.c.perDef) / 2, 0) / on.length;
     t.secQ = on.reduce((a, p) => a + p.c.ballSec, 0) / on.length;
     t.feelQ = on.reduce((a, p) => a + 0.6 * p.r.oiq + 0.25 * p.r.pas + 0.15 * p.r.hnd, 0) / on.length;
-    t.defQ = on.reduce((a, p) => a + 0.5 * p.r.diq + 0.3 * p.r.perD + 0.2 * p.r.intD, 0) / on.length;
+    t.defQ = on.reduce((a, p) => a + 0.5 * defRead(p.r.diq) + 0.3 * defRead(p.r.perD) + 0.2 * p.r.intD, 0) / on.length;
     t.speed = on.reduce((a, p) => a + p.r.spd, 0) / on.length;
     t.lineupKey = on
       .map((p) => p.pid)
