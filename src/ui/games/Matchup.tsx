@@ -13,6 +13,7 @@ import { liveInProgress } from '../../state/live';
 import { guideStepOpen, nextOpponent } from '../../core/league/agenda';
 import { counterCandidates } from '../../core/ai/advisor';
 import { worthCall } from '../../core/ai/counterWorth';
+import { CHECK_AFTER } from '../../core/ai/tacticEdits';
 import { byWorth, counterItem, useCounterWorth, worthText } from './matchup/useCounterWorth';
 import { setPlanItem } from '../../core/league/gamePlans';
 import { act } from '../../state/actions';
@@ -157,6 +158,18 @@ function TipOff({ league, gid, opp, name }: { league: League; gid: number; opp: 
 }
 
 /**
+ * What of the coach's own work is in the forecast, in a line: his plan's measured counters and his
+ * checked tactical changes, in points; with neither, that tactics aren't in it until they're checked.
+ */
+function forecastIn(plan: number, edits: number): string {
+  const f = (v: number) => `${v > 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}`;
+  const parts = [Math.abs(plan) >= 0.05 && `your plan ${f(plan)}`, Math.abs(edits) >= 0.05 && `your checked changes ${f(edits)}`].filter(Boolean);
+  return parts.length
+    ? `In the forecast: ${parts.join(', ')} pts.`
+    : `Rosters, results and home court. Tactics move it once the staff has measured them: a counter in your plan, or a change checked after ${CHECK_AFTER} games.`;
+}
+
+/**
  * The hero: the next meeting as a board (away on the left, the two records, the favourite's chance to
  * win under them when there's a meeting left), the season series and your plan for them (`onPlan`: a tap to it; none on the Game Plan tab).
  */
@@ -214,11 +227,16 @@ function Hero({ league, opp, onPlan, compact }: { league: League; opp: number; o
             </span>
             <Help title="Chance to win">
               <p>
-                From both teams&apos; net ratings, tonight&apos;s rotations and home court. Your game plan counts where it changes who plays (its minutes and starters move this
-                number); what its tactics and matchups do is found out on the floor.
+                From both teams&apos; net ratings, tonight&apos;s rotations and home court. Your game plan counts where it changes who plays, and by any counter the staff measured
+                as a gain or a cost against them. A change to your tactics counts once the staff has checked it on played games (Tactics, Season Analysis). Until then, what it does
+                is found out on the floor.
               </p>
             </Help>
           </div>
+        )}
+        {proj && (
+          // what of the coach's own work is in the number, so a forecast that doesn't move says why
+          <div className="mu-hero-in small dim2">{forecastIn(g?.home === me ? proj.plan : -proj.plan, g?.home === me ? proj.edits : -proj.edits)}</div>
         )}
       </GameBoard>
       {(h2h.total > 0 || (g && onPlan)) && (

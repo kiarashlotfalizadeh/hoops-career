@@ -372,7 +372,8 @@ export function agenda(league: League): AgendaItem[] {
   }
 
   // a manual rotation that leaves a healthy regular at 0 minutes: said before the next game, not found in a box score
-  if (league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs') {
+  // (in the preseason too: a summer's arrivals are placed before opening night, not after it)
+  if (league.phase === 'preseason' || league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs') {
     const zero = noMinutes(league);
     if (zero.length)
       items.push({

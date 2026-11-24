@@ -5,12 +5,14 @@
 // strip of figures. Nothing else leads the page: no stories, no headlines, no advice feed. The way
 // back to "While you were away", the guide and the glossary sit under More.
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { League } from '../../core/types';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { edit } from '../../state/actions';
 import { GUIDE_STEPS, guideDone, showGuide, stopsSim } from '../../core/league/agenda';
 import { jobSecurity } from '../../core/league/jobSecurity';
+import { slideNote } from '../../core/league/calls';
 import { planFor } from '../../core/league/gamePlans';
 import { GlossarySheet } from '../components/Glossary';
 import { InstallRow } from '../components/InstallRow';
@@ -58,6 +60,7 @@ export default function Today() {
   const hidden = guideHidden(league);
   const msg = openMsg !== null ? league.inbox.find((m) => m.id === openMsg) : undefined;
 
+  const slide = useLeagueMemo(() => slideNote(league), [league]);
   // motion: the count pops when a decision is settled or a new one lands
   const count = needs.count + (seat ? 1 : 0);
   const counted = useChanged(count);
@@ -84,6 +87,17 @@ export default function Today() {
   return (
     <main className="page td-page">
       {g ? <NextGameSlab key={g.gid} league={league} g={g} noPlan={noPlan} /> : <PhaseCard league={league} linked={items.map((i) => i.to)} />}
+
+      {/* a losing slide: what the staff reads behind it and what it put in for the next game, a tap from that plan */}
+      {slide && (
+        <Link to={slide.to} className="card clickable td-slide" aria-label={`${slide.title}. ${slide.line} Open the ${slide.toLabel}.`}>
+          <span className="over">The slide · {slide.title}</span>
+          <span className="small">{slide.line}</span>
+          <span className="card-link">
+            {slide.toLabel} <ChevronRight size={14} aria-hidden="true" />
+          </span>
+        </Link>
+      )}
 
       {rows.length > 0 && (
         <Section

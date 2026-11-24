@@ -14,6 +14,8 @@ export interface PlanPlayer {
   endurance: number; // 0..100
   /** Hard minute cap: the plan never goes past it while anyone else has minutes to give. */
   cap?: number;
+  /** His minutes are the coach's own target (Rotation.set): the scaling to 240 goes to the others first. */
+  fixed?: boolean;
 }
 
 /** A rostered player as the plan sees him. */
@@ -44,24 +46,28 @@ export function planInputs(roster: PlanSource[], rot: Rotation, opts: { playoffs
   const ordered = depth.filter((p) => p.available);
   const missing = roster.filter((p) => !p.available).reduce((a, p) => a + (rot.minutes[p.pid] ?? 0), 0);
   const mins = ordered.map((p) => rot.minutes[p.pid] ?? 0);
+  // a target the coach set himself stands: the minutes of the players out go to the others
+  const fixed = ordered.map((p) => !!rot.manual && !!rot.set?.includes(p.pid) && (rot.minutes[p.pid] ?? 0) > 0);
   let toGive = missing;
   if (toGive > 0) {
     // a reserve promoted into the starting five takes over the minutes of the starter he replaces
     const outStarters = depth.slice(0, 5).filter((p) => !p.available);
     let k = 0;
     for (let i = 0; i < Math.min(5, ordered.length) && toGive > 0 && k < outStarters.length; i++) {
-      if (depth.indexOf(ordered[i]) < 5) continue;
+      if (depth.indexOf(ordered[i]) < 5 || fixed[i]) continue;
       const add = Math.min(toGive, Math.max(0, (rot.minutes[outStarters[k++].pid] ?? 0) - mins[i]));
       mins[i] += add;
       toGive -= add;
     }
     // then to the next bench players (those with low minutes), then spread
     for (let i = 5; i < mins.length && toGive > 0; i++) {
+      if (fixed[i]) continue;
       const add = Math.min(toGive, Math.max(0, 22 - mins[i]));
       mins[i] += add;
       toGive -= add;
     }
     for (let i = 0; i < mins.length && toGive > 0; i++) {
+      if (fixed[i]) continue;
       const add = Math.min(toGive, Math.max(0, 38 - mins[i]));
       mins[i] += add;
       toGive -= add;
@@ -98,9 +104,17 @@ export function planInputs(roster: PlanSource[], rot: Rotation, opts: { playoffs
     big: p.big,
     endurance: p.endurance,
     cap: caps[i],
+    ...(fixed[i] ? { fixed: true } : {}),
   }));
 }
 
+/**
+ * The plan's whole minutes for each player, adding up to `total`: the targets scaled to it. A target
+ * the coach set himself (`fixed`) is what he plays, and the others scale around it; only when they
+ * can't make up the difference (every one of them at his limit, or none with minutes) do the fixed
+ * ones scale too. Scaled all alike (until 2026-11-24), a star set to 36 in a rotation that added up
+ * to 280 was planned 31, and in one that added up to 217, 40.
+ */
 export function normalizeMinutes(players: PlanPlayer[], total = 240): number[] {
   const raw = players.map((p) => Math.max(0, Math.min(48, p.minutes)));
   const sum = raw.reduce((a, b) => a + b, 0);
@@ -110,7 +124,11 @@ export function normalizeMinutes(players: PlanPlayer[], total = 240): number[] {
     return players.length ? normalizeMinutes(even, total) : [];
   }
   const lim = players.map((p) => Math.min(46, p.cap ?? 46));
-  let scaled = raw.map((m) => (m * total) / sum);
+  const held = players.map((p, i) => !!p.fixed && raw[i] > 0);
+  const kept = raw.reduce((a, m, i) => a + (held[i] ? m : 0), 0);
+  // (the others' share of the total: all of it when nobody's target is fixed, as before)
+  const around = kept > 0 && kept < total && sum > kept;
+  let scaled = raw.map((m, i) => (around ? (held[i] ? m : (m * (total - kept)) / (sum - kept)) : (m * total) / sum));
   // cap at 46 (or the player's hard cap) and hand the overflow to the rest of the rotation; if
   // they are all capped, to the deep bench; only past that do caps give
   const spread = (open: (i: number) => boolean) => {
@@ -127,6 +145,7 @@ export function normalizeMinutes(players: PlanPlayer[], total = 240): number[] {
       scaled = scaled.map((m, i) => (m < lim[i] && open(i) ? m + (short * (lim[i] - m)) / room : m));
     }
   };
+  if (around) spread((i) => raw[i] > 0 && !held[i]);
   spread((i) => raw[i] > 0);
   spread(() => true);
   const left = total - scaled.reduce((a, b) => a + b, 0);

@@ -361,7 +361,15 @@ export function newEvents(
       if (p.out !== 1) continue;
       const before = prev?.sides[i].players.find((x) => x.pid === p.pid);
       if (prev && before?.out === 1) continue;
-      out.push({ id: `fo-${p.pid}`, kind: 'foulout', side: i as 0 | 1, pid: p.pid, text: `${names(p.pid)} has fouled out.`, at: next.elapsed });
+      // (thrown out on technicals is not a sixth foul: the banner says which)
+      out.push({
+        id: `fo-${p.pid}`,
+        kind: 'foulout',
+        side: i as 0 | 1,
+        pid: p.pid,
+        text: p.ejected ? `${names(p.pid)} has been ejected.` : `${names(p.pid)} has fouled out.`,
+        at: next.elapsed,
+      });
     }
   });
   adjustments

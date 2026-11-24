@@ -197,8 +197,9 @@ export function AgendaRow({ item }: { item: AgendaItem }) {
         </div>
       )}
       {armedChoice?.confirm && (
-        <div className="ag-why" role="status">
-          {armedChoice.confirm} Tap again to confirm.
+        // (the first tap only arms it: said loudly, so the row never reads as a tap that did nothing)
+        <div className="ag-why ag-arm" role="status">
+          <b>Tap “Confirm” to go ahead.</b> {armedChoice.confirm}
         </div>
       )}
       {choices.some((c) => c.blocked) && <div className="ag-why">{[...new Set(choices.map((c) => c.blocked).filter(Boolean))].join(' ')}</div>}

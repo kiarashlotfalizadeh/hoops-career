@@ -530,7 +530,8 @@ const ARRIVALS: ReadonlySet<string> = new Set(['sign', 'claim', 'tenDay', 'twoWa
 /**
  * The payroll a coach had no hand in, for `season` ($K): the contracts he inherited, at their
  * scheduled salaries (signed before his tenure, by players on the team since before he arrived: not
- * one he traded for, signed or claimed, nor a re-signing or an extension of his own), the
+ * one he signed or claimed, nor a re-signing or an extension of his own; a player he traded for
+ * counts by the inherited salary that went out for him, see `carried` below), the
  * rookie-scale deals of the team's own first-round picks, and the minimum deals that fill the roster
  * to its 13, and this season's dead money of contracts he inherited too (a release of his own of one
  * moves its salary to dead money, it doesn't add to the payroll: the staff's opening-night cuts of a
@@ -548,13 +549,47 @@ export function forcedPayroll(league: League, tid: number, season = league.seaso
   const arrived = new Set<number>();
   // (and the contracts he signed himself with players already here: a release of one of those is his dead money)
   const signed = new Set<number>();
+  // a contract from before him, at its scheduled salary for `season` (the deal as it was signed: an extension of his own isn't in it)
+  const scheduled = (p: Player | undefined) => {
+    if (!p || p.contract.start > from) return 0;
+    const i = season - p.contract.start;
+    return i >= 0 && i < p.contract.salaries.length ? p.contract.salaries[i] : 0;
+  };
+  // What of a player's salary the owner still signs off on, for one who came in a trade of the
+  // coach's: the inherited salary that went out for him, never more than his own. A trade of
+  // inherited contracts for one on about the same money is not the coach adding payroll: before
+  // this, trading two inherited players ($30.1M) for one ($25.8M) made the whole $25.8M "his own",
+  // the inherited figure fell under the owner's line, and the goal snapped from "keep it under
+  // $223.9M" to "get under the luxury tax" on a payroll the trade had cut (playtest, 2026-11-24).
+  const carried = new Map<number, number>();
   if (mine)
     for (const t of league.transactions ?? []) {
       // (moves made while he ran this team: the log marks them his)
       if (!t.user || !t.tids.includes(tid)) continue;
-      if (t.kind === 'trade') for (const side of t.sides ?? []) if (side.tid !== tid) for (const x of side.players) arrived.add(x.pid);
-      if (ARRIVALS.has(t.kind) && t.pid !== undefined && t.tids[0] === tid) arrived.add(t.pid);
-      if ((t.kind === 'resign' || t.kind === 'extend') && t.pid !== undefined && t.tids[0] === tid) signed.add(t.pid);
+      if (t.kind === 'trade') {
+        const sides = t.sides ?? [];
+        const out = sides.filter((x) => x.tid === tid).flatMap((x) => x.players.map((y) => y.pid));
+        const inn = sides.filter((x) => x.tid !== tid).flatMap((x) => x.players.map((y) => y.pid));
+        // (what went out: inherited salary, or what an earlier trade of his carried over to that player)
+        const sent = out.reduce((a, pid) => a + (arrived.has(pid) ? (carried.get(pid) ?? 0) : scheduled(league.players[pid])), 0);
+        const back = inn.reduce((a, pid) => a + (league.players[pid] ? salaryFor(league.players[pid], season) : 0), 0);
+        const share = back > 0 ? Math.min(1, sent / back) : 0;
+        for (const pid of inn) {
+          arrived.add(pid);
+          carried.set(pid, league.players[pid] ? salaryFor(league.players[pid], season) * share : 0);
+        }
+        // (one of his own going back out takes what it carried with it)
+        for (const pid of out) carried.delete(pid);
+      }
+      if (ARRIVALS.has(t.kind) && t.pid !== undefined && t.tids[0] === tid) {
+        arrived.add(t.pid);
+        carried.delete(t.pid);
+      }
+      if ((t.kind === 'resign' || t.kind === 'extend') && t.pid !== undefined && t.tids[0] === tid) {
+        signed.add(t.pid);
+        // (a new deal of his own with a player he traded for is his own in full)
+        carried.delete(t.pid);
+      }
     }
   let sum = 0;
   let n = 0;
@@ -568,7 +603,11 @@ export function forcedPayroll(league: League, tid: number, season = league.seaso
     const i = season - c.start;
     const sal = i >= 0 && i < c.salaries.length ? c.salaries[i] : 0;
     if (!inherited && !draftee) {
-      others.push(salaryFor(p, season));
+      const keep = Math.min(carried.get(p.pid) ?? 0, salaryFor(p, season));
+      if (keep > 0) {
+        sum += keep;
+        n++;
+      } else others.push(salaryFor(p, season));
       continue;
     }
     sum += sal;
@@ -939,7 +978,9 @@ export function goalsWhy(og: OwnerGoals, voice: 'mail' | 'screen' = 'mail'): str
     );
   else if (pg?.window)
     out.push(
-      me ? "The window is open, so I'll pay luxury tax for this team, up to that line. Past it, it's on you." : 'His window is open: he pays luxury tax up to that line. Past it, it counts against you.',
+      me
+        ? "The window is open, so I'll pay luxury tax for this team, up to that line. Past it, it's on you."
+        : 'His window is open: he pays luxury tax up to that line. Past it, it counts against you.',
     );
   else if (pg?.line !== undefined)
     out.push(

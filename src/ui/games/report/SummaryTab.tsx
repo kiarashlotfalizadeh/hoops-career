@@ -12,7 +12,7 @@ import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { GameResult, League } from '../../../core/types';
 import { buildGameReport, setLineText, type Factor, type GameReport } from '../../../core/analysis/gameReport';
-import { debrief, luckPts, nightLine, sameChange, seasonCoachingLine, type DebriefAdvice } from '../../../core/analysis/debrief';
+import { debrief, luckPts, moveWorthRead, moveWorthText, nightKindsLine, nightLine, sameChange, seasonCoachingRead, type DebriefAdvice } from '../../../core/analysis/debrief';
 import { ptsFig } from '../../../core/analysis/staffWords';
 import { applyPatch } from '../../../core/sim/tactics';
 import { persistableTactics, planFor, setPlanItem } from '../../../core/league/gamePlans';
@@ -79,7 +79,8 @@ function Summary({ res, league, report, highlights }: { res: GameResult; league:
   const luck = res.xShots ? luckPts(res, side) - luckPts(res, other) : null;
   const staffOnly = !!res.moves?.length && res.moves.every((m) => m.by === 'staff');
   const night = res.moves?.length ? nightLine(res, staffOnly) : null;
-  const season = night ? seasonCoachingLine(league, res.season) : null;
+  const season = night && !staffOnly ? seasonCoachingRead(league, res.season) : null;
+  const kindsLine = night ? nightKindsLine(res) : null;
   const tactical = report.factors.filter((f) => !f.luck);
   const lucky = report.factors.filter((f) => f.luck);
   const abbrevs = { us: league.teams[mine.tid].abbrev, them: opp.abbrev };
@@ -92,6 +93,8 @@ function Summary({ res, league, report, highlights }: { res: GameResult; league:
           <SumFig k={staffOnly ? "Staff's moves" : 'Your moves'} v={res.movesWorth.pts} help="The night played back with your in-game moves and without them." />
         )}
       </dl>
+      {/* (three readings of the same night, each on its own: the sum is the line under them) */}
+      <p className="gv-sum-note tiny dim">Three separate readings of the night. They overlap, so they don&apos;t add up to the margin.</p>
       {res.xShots && <MarginSum res={res} side={side} />}
 
       {d.hurt && (
@@ -184,20 +187,31 @@ function Summary({ res, league, report, highlights }: { res: GameResult; league:
       {res.moves && res.moves.length > 0 && (
         <Section title={staffOnly ? "The staff's moves" : 'Your moves'}>
           {night ? (
-            <details className={`gd-night tone-${night.tone}`}>
-              <summary>
-                <span className="grow gd-night-t num">{night.text}</span>
-                <ChevronDown size={16} className="gd-fold-c" aria-hidden="true" />
-              </summary>
+            // the night replayed with the moves and without: the figure, its give or take, each kind of move, and the season so far
+            <div className={`gd-night tone-${night.tone}`}>
+              <div className="gd-night-t num">{night.text}</div>
               <p className="small dim2">
-                {night.detail}
-                {season ? ` ${season}.` : ''}
+                The rest of the night replayed {res.movesWorth?.n ?? 0} times with {staffOnly ? 'the' : 'your'} moves and without them. {night.detail}
               </p>
-            </details>
+              {kindsLine && <p className="small dim2 num">By kind: {kindsLine}</p>}
+              {season && (
+                <p className="small gd-night-season">
+                  <b>This season.</b> {season.verdict}
+                </p>
+              )}
+            </div>
           ) : (
             measuringNight(res.gid) && <div className="gd-night small dim">The staff is playing the night back without your moves…</div>
           )}
-          <MovesList moves={res.moves} abbrevs={abbrevs} nameOf={nameOf} />
+          <MovesList
+            moves={res.moves}
+            abbrevs={abbrevs}
+            nameOf={nameOf}
+            worthOf={(i) => {
+              const r = moveWorthRead(res, i);
+              return r ? { text: moveWorthText(r), tone: r.clear ? (r.up ? 'good' : 'bad') : 'dim' } : undefined;
+            }}
+          />
         </Section>
       )}
 

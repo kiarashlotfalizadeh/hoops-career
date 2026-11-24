@@ -13,7 +13,7 @@ import { playerAge } from '../playerGen';
 import { seasonLabel } from '../constants';
 import { ordinal, plural, rankOf } from '../format';
 import { addInbox, addNews, andList, fmtDate, playerName, seasonTotals, sentence, shortName, teamPlayers } from './helpers';
-import { FOCUS_META, PRIORITY, devPriority, priorityChosen, priorityCost, priorityEffect } from './progression';
+import { FOCUS_META, PRIORITY, devPriority, lateShare, priorityChosen, priorityCost, priorityEffect } from './progression';
 import { awardRaces } from './awards';
 import { worldRng } from './world';
 
@@ -460,6 +460,8 @@ function reasonFor(league: League, p: Player, x: Pick<DevLine, 'group' | 'recent
     else if (st?.gp && mpg >= 15) out.push(`${mpg} minutes a night help`);
     else if (!st?.gp) out.push('No games, nothing to grow on');
     else if (mpg <= 6) out.push(`${mpg} minutes a night set him back. Young players who sit fall behind`);
+    // (the last points come slowest: progression.ts's LATE_POINTS, said once it takes a fifth of a good summer)
+    if (lateShare(p) <= 0.8) out.push(`At ${p.ovr} OVR the next points come slower: ${Math.round(lateShare(p) * 100)}% of a good summer counts`);
   } else if (age > GROWS_IN_SEASON) out.push('Players his age hold until the summer');
   // the staff's priority, where it reaches him (25 and under)
   if (age <= PRIORITY.maxAge && p.tid >= 0) {

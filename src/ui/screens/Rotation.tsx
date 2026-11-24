@@ -57,6 +57,8 @@ export default function Rotation() {
       const r = l.teams[l.userTid].rotation;
       fn(r);
       r.manual = true;
+      // what his targets add up to as he leaves them: minutes that go missing later left with a player
+      r.whole = players.reduce((a, p) => a + (r.minutes[p.pid] ?? 0), 0);
     });
   };
   const setAssistant = (on: boolean) => {
@@ -100,6 +102,8 @@ export default function Rotation() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(rot), playoffs]);
   const planned = healthyOrder.filter((pid) => (plan.norm[pid] ?? 0) > 0);
+  // the targets he set himself that the plan doesn't play as set (a cap under it, or more set than 240 holds)
+  const offTarget = rot.manual ? healthyOrder.filter((pid) => rot.set?.includes(pid) && (rot.minutes[pid] ?? 0) > 0 && plan.norm[pid] !== rot.minutes[pid]) : [];
 
   // the two rows that trade places slide to their new lines (measured before the swap, played after
   // it), and the one that moved up is washed once
@@ -144,6 +148,13 @@ export default function Rotation() {
           <b>{total}</b> min{total === 240 ? '' : ', scaled to 240'} · starters <b>{startMin}</b> · bench <b>{total - startMin}</b>
         </div>
         {injuredMin > 0 && <div className="tm-rsum-note warn">{injuredMin} injured minutes go to the healthy players.</div>}
+        {/* a target the coach set that the plan can't play: said here, not found in a box score */}
+        {offTarget.map((pid) => (
+          <div key={pid} className="tm-rsum-note warn">
+            {nameOf(pid)}: target {rot.minutes[pid]}, the plan has him at {plan.norm[pid]}
+            {rot.caps[pid] && rot.caps[pid] < rot.minutes[pid] ? ` (his cap is ${rot.caps[pid]})` : ''}.
+          </div>
+        ))}
         <div className="tm-auto">
           <Toggle
             on={!rot.manual}
@@ -257,8 +268,10 @@ export default function Rotation() {
         title="Stint plan"
         right={
           <Help title="Stint plan">
-            <p>Each player&apos;s planned minutes on the floor, quarter by quarter. It comes from your targets, scaled to 240.</p>
-            <p>The staff follows it at dead balls. Fouls, fatigue, injuries and blowouts change it.</p>
+            <p>
+              Each player&apos;s planned minutes on the floor, quarter by quarter. It comes from your targets, scaled to 240. A target you set yourself is kept: the others scale.
+            </p>
+            <p>The staff follows it at dead balls. Fouls, fatigue, injuries and blowouts change it, so a season&apos;s average runs under the target on a team that wins big.</p>
           </Help>
         }
       >
@@ -310,6 +323,7 @@ export default function Rotation() {
             starters={startSet}
             busy={simming}
             injured={new Set(players.filter((x) => x.injury).map((x) => x.pid))}
+            planned={ep.injury ? undefined : plan.norm[ep.pid]}
           />
         )}
       </Sheet>
@@ -321,7 +335,10 @@ export default function Rotation() {
 function RotationHelp() {
   return (
     <Help title="How rotations work">
-      <p>The first five healthy players start. Your minute targets become the stint plan below, scaled to 240 minutes.</p>
+      <p>
+        The first five healthy players start. Your minute targets become the stint plan below, scaled to 240 minutes. A target you set yourself is kept, and the others scale around
+        it.
+      </p>
       <p>
         MIN is his minutes a game this season. <Term id="sta">STA</Term> is stamina: a low one wants shorter stints. <Term id="closer">Closers</Term> finish the 4th quarter and
         overtime when healthy.
@@ -376,6 +393,7 @@ function EditPlayer({
   starters,
   busy,
   injured,
+  planned,
 }: {
   p: Player;
   rot: RotationT;
@@ -389,6 +407,8 @@ function EditPlayer({
   busy: boolean;
   /** Who's hurt: marked on his chip. */
   injured: Set<number>;
+  /** The minutes the stint plan has him at (none while he's out). */
+  planned: number | undefined;
 }) {
   const starting = starters.has(p.pid);
   const m = rot.minutes[p.pid] ?? 0;
@@ -435,8 +455,21 @@ function EditPlayer({
             max={MAX_MIN}
             disabled={busy}
             steppers
-            onChange={(x) => update((r) => void (r.minutes[p.pid] = x))}
+            onChange={(x) =>
+              update((r) => {
+                r.minutes[p.pid] = x;
+                // his target is the coach's own now: the plan plays him this and scales the others around it
+                r.set = [...(r.set ?? []).filter((pid) => pid !== p.pid), ...(x > 0 ? [p.pid] : [])];
+              })
+            }
             format={(x) => `${x} min`}
+            help={
+              planned === undefined || m === 0 || planned === m
+                ? undefined
+                : rot.set?.includes(p.pid)
+                  ? `The plan has him at ${planned}: ${cap && cap < m ? `his cap is ${cap}` : 'the targets you set add up to more than a game holds'}.`
+                  : `The plan has him at ${planned}: targets are scaled to 240, and the minutes of players who are out go to the others. Set his target here and the plan keeps it.`
+            }
           />
           <Slider
             label="Hard minute cap"

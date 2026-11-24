@@ -199,6 +199,17 @@
 .lv-mv-line {
   margin-top: 1px;
 }
+/* what the move was worth, the night replayed without just it (after the final) */
+.lv-mv-worth {
+  margin-top: 1px;
+  color: var(--text-dim);
+}
+.lv-mv-worth.tone-good {
+  color: var(--good);
+}
+.lv-mv-worth.tone-bad {
+  color: var(--bad);
+}
 
 .lv-mv-empty {
   padding: 2px 0;
@@ -219,4 +230,11 @@
   .lv-note {
     animation: none;
   }
+}
+
+/* the calls waiting behind the one that's up */
+.lv-notes-more {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 2px;
 }

@@ -42,9 +42,9 @@ const GROUP_OF: Record<RatingKey, Group> = {
 // added) average out to about zero and the anchor only corrects drift. A uniform cut there used to
 // shift the whole age curve down, so players peaked at 24-25 and fell 3-4 OVR a year after 30.
 // Skills and IQ hold into the late 20s and athleticism fades first. What a player's OVR does with
-// them, the young player's summers (YOUTH) and the anchors together, a year (dev-check, six leagues'
-// later summers, everyone in the league both preseasons): +1.4 to +1.5 at 22 or under, +0.4 at 23-26,
-// -1.3 at 27-31, -2.5 at 32-35 and -4.4 from 36.
+// them, the young player's summers (YOUTH) and the anchors together, a year (dev-check, nine leagues'
+// later summers, everyone in the league both preseasons, 2026-11-24): +1.5 at 22 or under, +0.4 to
+// +0.5 at 23-26, -1.1 to -1.2 at 27-31, -2.5 at 32-35 and -4.3 to -4.4 from 36.
 const CURVES: Record<Group, number[]> = {
   athletic: [1.3, 0.9, 0.5, 0.4, 0.2, 0.1, 0.1, -0.1, -0.2, -0.4, -0.7, -1, -1.3, -1.7, -2.1, -2.6, -3],
   end: [0.7, 0.7, 0.5, 0.4, 0.2, -0.1, -0.3, -0.3, -0.2, -0.3, -0.4, -0.6, -0.9, -1.3, -1.7, -2, -2.4],
@@ -96,8 +96,34 @@ const YOUNG_DOWN = 0.5;
  * drifts +0.1 a year), top-ten picks +2.0 to +2.5 a summer through 23 (one in fifteen lower after
  * three summers), picks 11-30 +1.3 to +1.7 and second-rounders +0.4 to +0.5. The league pays for it
  * where it always has, in what everyone gives the anchors: 27 to 31 lose 1.3 a year (1.2 before).
+ * A cut of it for the players who play ([1.0, 1.0, 0.9, 0.75, 0.45, 0.25, 0.1] with the bench's share
+ * raised to match, tried 2026-11-24 against top picks who became stars too often) is not the lever:
+ * the anchors hand what the young give up to everyone else, so the stars a league has last longer.
+ * star-check went from 3 seasons of 64 with a 70-win team to 9, a 42-game winning streak and two
+ * leagues with one champion in five years of eight. What slows a top pick is LATE_POINTS and the
+ * smaller PRIORITY.
  */
 const YOUTH = [1.6, 1.6, 1.4, 1.1, 0.6, 0.3, 0.1];
+/**
+ * The last points come slowest: a young player's good summer (and the staff's priority) counts in
+ * full up to `from` OVR and less each point past it, `least` of it from `to` up. A starter is still
+ * made in two or three summers; the climb from there to the top of the league is the rare story.
+ * Before it a league's own classes (a generated league's, and a real one's from its second draft)
+ * made stars of their top picks as a matter of course: three or more seasons on, 20% of top-five
+ * picks were 90+ and 53% were 85+, picks 6-10 16% and 44%, at +2.67 a summer through 23 (dev-check,
+ * three generated leagues, 2026-11-24), and a rebuilder's #4 and #9 picks went 76 to 91 and 87 by 22.
+ * With it and the smaller priority (PRIORITY), over six generated leagues: 13% and 50%, picks 6-10 3%
+ * and 18%, +2.16 a summer (the classes' generational prospects, whose climb is their own, are among
+ * those 90+: legends.ts); in three real leagues, whose first class is the real one, 4% and
+ * 38%, 2% and 13%. One top-ten pick in six is within 3 OVR of his draft night by then (three in ten in
+ * a real league; one in eight before). The league's shape is the anchors' (anchorOverallSpread), and
+ * star-check holds every shape with it (7 seasons of 64 with a 70-win team, the longest streak 33,
+ * no franchise with more than 3 titles of a league's 8; 3 seasons and 32 before it).
+ */
+const LATE_POINTS = { from: 77, to: 87, least: 0.3 };
+const latePoints = (ovr: number) => 1 - (1 - LATE_POINTS.least) * clamp((ovr - LATE_POINTS.from) / (LATE_POINTS.to - LATE_POINTS.from), 0, 1);
+/** The share of a good summer a young player keeps at his OVR (1: all of it; see LATE_POINTS), for the reports that explain his year. */
+export const lateShare = (p: Pick<Player, 'ovr' | 'peak'>) => (p.peak ? 1 : latePoints(p.ovr));
 /**
  * The share of it a young player gets by his minutes a game: all of it from BENCH.plays, less on the
  * bench, least under BENCH.sits (on top of develop()'s minutes term for his skills). A draftee's first
@@ -109,13 +135,19 @@ const BENCH = { plays: 15, sits: 6, some: 0.75, none: 0.4 };
  * Development priority, the one lever the user has on who grows: his staff's extra time goes to the
  * players he names (PRIORITY.slots at most, PRIORITY.maxAge or under), and comes out of his other
  * young players' (the rest of the roster of PRIORITY.maxAge or under). `gain`: rating points a year on
- * each of a priority player's skills (about +1.2 OVR a year in the middle of the scale; priorityEffect
+ * each of a priority player's skills (about +0.6 OVR a year in the middle of the scale; priorityEffect
  * gives a player's own figure); `cost`: what each priority player takes off every skill of each other
- * young player on the roster (about -0.25 OVR a year each: with four other young players, two
+ * young player on the roster (about -0.12 OVR a year each: with four other young players, two
  * priorities cost about what they add). Every AI team's staff pick their own two (staffPriority), and
- * the user's do until he chooses: nobody starts behind.
+ * the user's do until he chooses: nobody starts behind. A player near the top gets less of it, as of
+ * his own summers (LATE_POINTS). `gain` was 1.05 and `cost` 0.2 until 2026-11-24 (about +1.2 OVR a
+ * year): it stacked on a top pick's own summers, so top-ten picks with it gained +2.79 to +3.25 a
+ * summer through 23 against +1.23 to +1.73 without (dev-check, six leagues; +0.97 of it the
+ * priority's own), and a rebuilder who gave it to his two lottery picks every year had an 87 and a
+ * 91 by 22. Now +2.39 to +2.57 with it and +1.35 to +1.67 without (nine leagues), +0.41 its own: the
+ * rest of the gap is who the staff pick, the best prospects.
  */
-export const PRIORITY = { slots: 2, maxAge: 25, gain: 1.05, cost: 0.2 };
+export const PRIORITY = { slots: 2, maxAge: 25, gain: 0.55, cost: 0.1 };
 
 /**
  * A young player (through 25) makes up part of a down year the next: a year that fell short of what
@@ -348,11 +380,15 @@ export function develop(p: Player, season: number, ctx: DevContext, rng: Rng, fr
   let summer = young
     ? p.growth * 1.1 + arc + YOUTH[clamp(a - 19, 0, 6)] * played + (ctx.rebound ?? 0) / SUMMER_OVR + (swing < 0 ? swing * YOUNG_DOWN : swing)
     : p.growth * 0.4 + swing;
+  // (the last points come slowest: LATE_POINTS; a generational player's climb is his own)
+  const late = young && !p.peak ? latePoints(p.ovr) : 1;
+  if (summer > 0) summer *= late;
   if (fade > 0) summer = Math.min(0, summer);
   const coaching = ((ctx.coachDev - 50) / 50) * 0.7 + ((ctx.coachingBudget - 50) / 50) * 0.5;
   const practice = ctx.practice === 'intense' ? 0.45 : ctx.practice === 'light' ? -0.35 : 0;
-  const minutes = young && ctx.mpg !== null ? (ctx.mpg >= 25 ? 0.6 : ctx.mpg >= 15 ? 0.25 : ctx.mpg <= 6 ? -0.3 : 0) : 0;
-  const staff = ctx.staff ?? 0;
+  // (25 minutes or more: 0.6 until 2026-11-24, the same stack as the priority's on a lottery pick who starts)
+  const minutes = young && ctx.mpg !== null ? (ctx.mpg >= 25 ? 0.4 : ctx.mpg >= 15 ? 0.25 : ctx.mpg <= 6 ? -0.3 : 0) : 0;
+  const staff = (ctx.staff ?? 0) > 0 ? ctx.staff! * late : (ctx.staff ?? 0);
   const w = ovrWeights(p.ratings);
   const focus = FOCUS_KEYS[p.training];
   let focusGain = BALANCED_GAIN;
@@ -502,6 +538,8 @@ export function priorityEffect(league: Pick<League, 'ovrScale' | 'season'>, p: P
     if (g === 'hgt' || g === 'athletic' || g === 'end' || g === 'str') continue;
     raw += w[k] * points * (points > 0 ? ceilingRoom(p.ratings[k]) : 1);
   }
+  // (the staff's time adds less to a player already near the top, as his own summers do: LATE_POINTS)
+  if (points > 0 && !p.peak) raw *= latePoints(p.ovr);
   // (a player past 26 develops in the summer alone: develop's 0.8 of a year; the younger at the check-ins too)
   raw *= playerAge(p, league.season) > 26 ? 0.8 : 0.8 + 3 * 0.07;
   return worth(league.ovrScale, ovrRaw(p.ratings), raw);

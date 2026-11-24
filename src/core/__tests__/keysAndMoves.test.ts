@@ -10,7 +10,7 @@ import { coachMoves, moveRate, moveText, MOVE_BASE_TRIPS, MOVE_MIN_TRIPS } from 
 import { defaultTactics, cloneTactics } from '../sim/tactics';
 import type { PossLog } from '../sim/log';
 import type { CoachMove, GameResult, League, LiveOp } from '../types';
-import { nightLine, seasonCoaching, seasonCoachingLine } from '../analysis/debrief';
+import { moveWorthRead, moveWorthText, nightKindsLine, nightLine, seasonCoaching, seasonCoachingLine, seasonCoachingRead } from '../analysis/debrief';
 
 afterEach(() => clearLive());
 
@@ -89,10 +89,47 @@ describe('coach moves', () => {
           userTid: 3,
           games: [worth(1.8, 2.6, 0.9), worth(0.3, 0.5, 1.2), { ...worth(2, 2, 1), season: 2025 }, { ...worth(0, 0, 1), movesWorth: undefined }],
         } as unknown as League;
-        expect(seasonCoaching(league)).toEqual({ pts: 2.1, raw: 3.1, se: 1.5, games: 2 });
+        expect(seasonCoaching(league)).toMatchObject({ pts: 2.1, raw: 3.1, se: 1.5, games: 2, kinds: [] });
         expect(seasonCoachingLine(league)).toBe('Your live coaching this season: +2.1 pts ±1.5, over 2 games');
         expect(seasonCoachingLine({ ...league, games: league.games.slice(0, 1) })).toBeNull();
         expect(seasonCoaching({ ...league, userTid: 9 })).toBeNull();
+        // each move and each kind of move replayed on its own, and the season said in wins: nothing
+        // clear is said as nothing clear (the playtest's "show me what my calls did", 2026-11-24)
+        {
+          const g = (kinds: NonNullable<GameResult['movesWorth']>['kinds'], each?: NonNullable<GameResult['movesWorth']>['each']) =>
+            ({
+              home: { tid: 3 },
+              away: { tid: 4 },
+              season: 2026,
+              movesWorth: { pts: 0.2, raw: 0.3, se: 0.9, win: 0.01, winSe: 0.02, n: 200, moves: 9, kinds, each },
+            }) as unknown as GameResult;
+          const night = g(
+            [
+              { kind: 'timeout', raw: -0.2, se: 0.7, moves: 3 },
+              { kind: 'sub', raw: 2.4, se: 0.8, moves: 6 },
+            ],
+            [
+              { move: 0, raw: 0.3, se: 0.9 },
+              { move: 2, raw: -3, se: 1 },
+            ],
+          );
+          expect(nightKindsLine(night)).toMatch(/^3 timeouts −0\.\d pts ±0\.7 · 6 subs \+\d\.\d pts ±0\.8$/);
+          expect(nightKindsLine(g([{ kind: 'timeout', raw: 1, se: 1, moves: 2 }]))).toBeNull();
+          expect(moveWorthRead(night, 1)).toBeUndefined();
+          expect(moveWorthRead(night, 0)).toMatchObject({ pm: '±0.9', clear: false, up: true });
+          expect(moveWorthText(moveWorthRead(night, 0)!)).toMatch(/^Replayed without it: \+0\.\d pts ±0\.9, inside the noise\.$/);
+          expect(moveWorthRead(night, 2)).toMatchObject({ clear: true, up: false });
+          const many = { season: 2026, userTid: 3, games: Array.from({ length: 8 }, () => night) } as unknown as League;
+          const read = seasonCoachingRead(many)!;
+          expect(read).toMatchObject({ games: 8, clear: false, wins: '+0.1' });
+          expect(read.verdict).toMatch(/^No proof either way yet: over 8 games your in-game moves read .* inside the noise/);
+          expect(read.kinds.map((k) => [k.label, k.tone])).toEqual([
+            ['48 subs', 'good'],
+            ['24 timeouts', 'dim'],
+          ]);
+          expect(read.kinds[1].note).toMatch(/^Nothing in them so far/);
+          expect(read.kinds[0].note).toBe('Helping.');
+        }
       }
 
       // measure a change of coverage on their pick-and-roll trips while it was in effect, and name it as Tactics does

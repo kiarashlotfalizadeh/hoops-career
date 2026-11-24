@@ -245,8 +245,10 @@ describe('finances (L1, L15)', () => {
       expect(g).toMatchObject({ inherited: forced, ...(window ? { window: true } : {}) });
       l.ownerGoals = og;
       const pay = payroll(l, u);
-      // a trade of the inherited star for a player on the same salary: the payroll is the same, and what
-      // he inherited no longer counts the star
+      // a trade of the inherited star for a player on the same salary: the payroll is the same, and so is
+      // what the owner signs off on (the salary that came back stands in for the inherited salary that
+      // went out: before, the whole of it became "his own" and the goal flipped to the tax line on a
+      // trade that added nothing); a player who costs more than what went out is his own for the rest
       {
         const m = structuredClone(l);
         const other = (u + 1) % m.teams.length;
@@ -271,7 +273,13 @@ describe('finances (L1, L15)', () => {
           },
         ];
         expect(payroll(m, u)).toBe(pay);
-        expect(forcedPayroll(m, u)).toBeLessThan(forced - 10_000);
+        expect(forcedPayroll(m, u)).toBe(forced);
+        theirs.contract.salaries[0] += 12_000;
+        expect(payroll(m, u)).toBe(pay + 12_000);
+        expect(forcedPayroll(m, u)).toBe(forced);
+        // (and one on less: only what he is paid carries over)
+        theirs.contract.salaries[0] -= 24_000;
+        expect(forcedPayroll(m, u)).toBe(forced - 12_000);
       }
       // a signing of his own on top of it is his: what he inherited stays what it was
       const fa = freeAgents(l)[0];

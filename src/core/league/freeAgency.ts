@@ -30,6 +30,7 @@ import {
   type SigningRoute,
   aiOption,
   aiRoute,
+  appealTerms,
   askLean,
   askingContract,
   birdTier,
@@ -48,6 +49,7 @@ import {
   marketSalary,
   payrollBudget,
   playerPrefs,
+  talksSour,
   keepCeiling,
   aiTopLine,
   teamCore,
@@ -70,7 +72,7 @@ import {
   aiSigningRoute,
 } from './contracts';
 import { type OfferResult, hearOffer } from './negotiation';
-import { money, moneyExact } from '../format';
+import { money, moneyExact, plural } from '../format';
 import { askedOutReason, wantsOut } from './pulse';
 import { playerSays } from './voices';
 
@@ -1096,7 +1098,65 @@ function bidRouteNow(league: League, b: FaBid, p: Player): { route: SigningRoute
 }
 
 const yrs = (n: number) => `${n} yr${n > 1 ? 's' : ''}`;
-const PREF_LABEL: Record<keyof PlayerPrefs, string> = { winning: 'winning', money: 'money', role: 'playing time', market: 'market size' };
+
+/**
+ * Why he took the other offer, in the terms he weighed them (offerUtility): the money, what he asks
+ * of each team (his price moves up to 10% with a team's appeal: its record, its market, the role it
+ * has for him), the years against the years he wanted, and a small pull of his own. Every part that
+ * leaned their way is named, biggest first, with what it would have taken to win him: a losing bid
+ * that paid more had read only "they chose them" with "money matters most" under it (four of the
+ * playtest's ten lost one that way, 2026-11-24).
+ */
+function lostWhy(
+  league: League,
+  p: Player,
+  prefs: PlayerPrefs,
+  us: { tid: number; amount: number; years: number; utility: number },
+  them: { tid: number; amount: number; years: number; utility: number },
+): string {
+  const abbrev = league.teams[them.tid].abbrev;
+  const power = moneyPower(prefs);
+  const parts: { size: number; text: string }[] = [];
+  // the money itself
+  if (them.amount > us.amount) parts.push({ size: Math.pow(them.amount / us.amount, power), text: `${abbrev} paid more` });
+  // what he asks of each team: the same salary is worth more to him from the team he rates higher
+  const [leanU, leanT] = [askLean(league, p, us.tid), askLean(league, p, them.tid)];
+  if (leanU > leanT * 1.005) {
+    const [a, b] = [appealTerms(league, us.tid, p), appealTerms(league, them.tid, p)];
+    const gaps = (
+      [
+        ['winning', prefs.winning * (b.winning - a.winning), `their record (${pct3(b.wp)} against our ${pct3(a.wp)})`],
+        ['role', prefs.role * (b.role - a.role), 'a bigger role there'],
+        ['market', prefs.market * (b.market - a.market), 'their market'],
+      ] as [string, number, string][]
+    )
+      .filter((g) => g[1] > 0.004)
+      .sort((x, y) => y[1] - x[1]);
+    const sour = talksSour(league, us.tid, p) > 0 ? ' and our low offers earlier soured him on us' : '';
+    const over = Math.round((leanU / leanT - 1) * 100);
+    parts.push({
+      size: Math.pow(leanU / leanT, power),
+      text: `he rates ${abbrev} higher${gaps.length ? `, for ${gaps.map((g) => g[2]).join(' and ')}` : ''}${sour}, so the same salary counts for about ${Math.max(1, over)}% more from them`,
+    });
+  }
+  // the years against what he wanted of each
+  const want = (tid: number) => askingContract(league, p, tid).years;
+  const fit = (tid: number, years: number) => 1 / (1 + Math.abs(years - want(tid)) * 0.03);
+  const [fitU, fitT] = [fit(us.tid, us.years), fit(them.tid, them.years)];
+  if (fitT > fitU * 1.005) parts.push({ size: fitT / fitU, text: `he wanted ${plural(want(us.tid), 'year')} from us and we offered ${us.years}` });
+  parts.sort((x, y) => y.size - x.size);
+  // what would have won him: our money raised until our offer scored as theirs did
+  const need = Number.isFinite(us.utility) && us.utility > 0 ? Math.ceil((us.amount * Math.pow(them.utility / us.utility, 1 / power)) / 50) * 50 : 0;
+  const why = parts.length
+    ? `${parts
+        .map((x) => x.text)
+        .join('; ')
+        .replace(/^./, (c) => c.toUpperCase())}.`
+    : 'The two offers were as good as level to him, and he leaned their way: between offers this close it comes down to the player.';
+  return `${why}${need > us.amount ? ` Winning him would have taken about ${money(need)} a season from us.` : ''}`;
+}
+
+const pct3 = (x: number) => x.toFixed(3).replace(/^0/, '');
 
 /**
  * He decides on the user's offer: the user's (if it still fits) against the offers he weighs (see
@@ -1135,14 +1195,13 @@ function decideBid(league: League, b: FaBid) {
     const years = best.years;
     spendRoute(league, t.tid, best.route, season);
     signPlayer(league, p, t.tid, best.amount, years, { start: season, option: aiOption(league, p, best.amount, years), bird: best.bird });
-    const top = (Object.keys(PREF_LABEL) as (keyof PlayerPrefs)[]).sort((x, y) => prefs[y] - prefs[x])[0];
-    const appealT = teamAppeal(league, t.tid, p, prefs);
-    const appealU = teamAppeal(league, tid, p, prefs);
-    const reasons = [best.amount > b.amount ? 'they paid more' : '', appealT > appealU + 0.02 ? 'he liked their situation better' : ''].filter(Boolean);
+    const lost = route
+      ? ` ${lostWhy(league, p, prefs, { tid, amount: b.amount, years: b.years, utility: mine }, { tid: t.tid, amount: best.amount, years, utility: best.utility })}`
+      : '';
     addInbox(league, {
       from: 'Assistant GM',
       subject: `${name} signed with ${t.abbrev}`,
-      body: `${route ? `${name} chose ${teamCity(league, t)} over us` : `Our offer to ${name} fell through: ${why}. He signed with ${teamCity(league, t)}`}. Their offer: ${yrs(years)} at ${money(best.amount)}. ${ours}${route && reasons.length ? ` ${reasons.join(', and ').replace(/^./, (c) => c.toUpperCase())}. ${PREF_LABEL[top].replace(/^./, (c) => c.toUpperCase())} matters most to him.` : ''}`,
+      body: `${route ? `${name} chose ${teamCity(league, t)} over us` : `Our offer to ${name} fell through: ${why}. He signed with ${teamCity(league, t)}`}. Their offer: ${yrs(years)} at ${money(best.amount)}. ${ours}${lost}`,
       tone: 'bad',
       link: `/player/${p.pid}`,
     });

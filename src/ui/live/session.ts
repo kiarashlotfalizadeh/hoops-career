@@ -49,9 +49,17 @@ export function userSetup(league: League, lg: LiveGame): { tactics: Tactics; see
 export function eventBanner(e: LiveEvent): BannerItem {
   const { title, text } = eventLines(e);
   // the kicker already says what happened: an injury or a foul-out names the player, and the line says what it means
-  const who = e.kind === 'injury' ? title.replace(/ is hurt and out for the game$/, '') : e.kind === 'foulout' ? title.replace(/ has fouled out$/, '') : title;
-  const line = e.kind === 'injury' && who !== title ? 'Out for the rest of the game.' : e.kind === 'foulout' && who !== title ? "He's done for the night." : text;
-  return { id: e.id, tone: e.kind === 'adjust' ? 'info' : 'bad', kicker: EVENT_KICKER[e.kind], title: who, line: line || undefined };
+  const ejected = e.kind === 'foulout' && / has been ejected$/.test(title);
+  const who = e.kind === 'injury' ? title.replace(/ is hurt and out for the game$/, '') : e.kind === 'foulout' ? title.replace(/ has (?:fouled out|been ejected)$/, '') : title;
+  const line =
+    e.kind === 'injury' && who !== title
+      ? 'Out for the rest of the game.'
+      : e.kind === 'foulout' && who !== title
+        ? ejected
+          ? "Technical fouls: he's done for the night."
+          : "He's done for the night."
+        : text;
+  return { id: e.id, tone: e.kind === 'adjust' ? 'info' : 'bad', kicker: ejected ? 'Ejected' : EVENT_KICKER[e.kind], title: who, line: line || undefined };
 }
 
 /**

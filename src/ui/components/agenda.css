@@ -246,3 +246,11 @@ a.ag-head:active > svg:last-child {
 .guide-strip .btn {
   flex: none;
 }
+
+/* a choice armed by its first tap: the row says so in a block of its own, so it never reads as a dead tap */
+.ag-arm {
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  font-size: 13px;
+}

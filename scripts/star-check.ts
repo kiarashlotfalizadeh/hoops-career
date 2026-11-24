@@ -120,16 +120,16 @@ const BEST_RECORD_ALLOWANCE = 16;
  * 40% favourite all eight years gets there about one league in six, as the Bulls' 6 of 8 did; two
  * leagues of it is a default champion). Curry's record is 5.1 made threes a
  * game: the leader at most 5.2 in three seasons of four, and about a dozen 10-three nights a season
- * at most. Overtime in TARGETS.otRate of games, within OT_TOLERANCE. Foul-outs well under half the
- * 170-256 the review measured. A guard fails the check (SHAPE_FAILS) once the engine holds it; the
+ * at most. Overtime in TARGETS.otRate of games, within OT_TOLERANCE. Foul-outs within FOUL_OUTS a
+ * season (see there). A guard fails the check (SHAPE_FAILS) once the engine holds it; the
  * rest print as WATCH lines with the measured value and the target. Measured October 2026 over 64
  * seasons (eight leagues of eight, the opening-night seed), before and after the threes' volume
  * ceilings: streaks of 28 or less in 95% and 97% of seasons (at most 45 and 41, a 73-9 Thunder the
  * user had kept together at 1.9 times the cap and a 70-12 one in the first season); a 70-win team in
  * 3 seasons both times; the most titles by one franchise in a league 4 of 8 and 3 of 8, the
  * Thunder's 10 and 13 of the 64 in all; the threes leader at 5.2 or less in 64% and 86%; 15.2 and
- * 10.7 10-three nights; overtime in 3.1% of games both times; 202 and 207 foul-outs. Overtime and
- * foul-outs need engine work of their own and stay WATCH lines.
+ * 10.7 10-three nights; overtime in 3.1% of games both times; 202 and 207 foul-outs. Overtime
+ * stays a WATCH line.
  */
 const MAX_STREAK = 28;
 const MAX_STREAK_EVER = 40;
@@ -140,7 +140,14 @@ const TPM_LEADER = 5.2;
 const TPM_LEADER_SHARE = 0.75;
 const TPM10_TARGET = 12;
 const OT_TOLERANCE = 0.008;
-const MAX_FOUL_OUTS = 130;
+/**
+ * Foul-outs a regular season, the real league's range: its box scores (data/raw/games, six fouls in a
+ * player's line) have 217 to 283 a 1,230-game season from 2020-21 to 2025-26 (0.176 to 0.230 a game:
+ * 229, 265, 283, 234, 217, 261), and gameday-check holds the engine to 0.18-0.21 a game on the same
+ * evidence. This line read "130 or less" until 2026-11-24, from the round-3 review's guess that the
+ * 170-256 it saw was twice the NBA's: it never was, and the engine's 254-257 was a miss only here.
+ */
+const FOUL_OUTS: [number, number] = [200, 290];
 const SHAPE_FAILS = { streak: true, streakEver: true, seventy: true, titles: true, tpm: true, tpm10: true, ot: false, foulOuts: false };
 /**
  * The leagues CI plays: eight different runs from the same opening night, one of them with the user
@@ -325,8 +332,8 @@ function verdict(all: (SeasonReport & { seed: string })[]): boolean {
     },
     {
       fail: SHAPE_FAILS.foulOuts,
-      ok: mean((r) => r.foulOuts) <= MAX_FOUL_OUTS,
-      text: `${mean((r) => r.foulOuts).toFixed(0)} foul-outs a season (target ${MAX_FOUL_OUTS} or less; max ${max((r) => r.foulOuts)})`,
+      ok: mean((r) => r.foulOuts) >= FOUL_OUTS[0] && mean((r) => r.foulOuts) <= FOUL_OUTS[1],
+      text: `${mean((r) => r.foulOuts).toFixed(0)} foul-outs a season (target ${FOUL_OUTS[0]}-${FOUL_OUTS[1]}, the NBA's 217-283; max ${max((r) => r.foulOuts)})`,
     },
   ];
   for (const g of shape) console.log(`  ${g.fail ? 'SHAPE' : 'WATCH (not failing'}${g.fail ? ` (${g.ok ? 'met' : 'missed'})` : `, ${g.ok ? 'met' : 'missed'})`}: ${g.text}`);

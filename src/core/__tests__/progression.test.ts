@@ -10,6 +10,7 @@ import {
   annualProgression,
   devPriority,
   develop,
+  lateShare,
   priorityEffect,
   ratingMeans,
   staffPriority,
@@ -82,8 +83,10 @@ describe('player development', () => {
     const one = run([a.pid]);
     const raw = (c: League, pid: number) => ovrRaw(c.players[pid].ratings);
     // the same summer with and without: he gains, the other young player pays, a veteran doesn't
-    expect(raw(one, a.pid) - raw(none, a.pid)).toBeGreaterThan(0.15);
-    expect(raw(one, b.pid) - raw(none, b.pid)).toBeLessThan(-0.03);
+    // (0.15 and -0.03 while the priority's gain was 1.05 and its cost 0.2, until 2026-11-24; he is an 83, where
+    // the staff's time counts a little over half: the last points come slowest)
+    expect(raw(one, a.pid) - raw(none, a.pid)).toBeGreaterThan(0.08);
+    expect(raw(one, b.pid) - raw(none, b.pid)).toBeLessThan(-0.015);
     expect(Math.abs(raw(one, vet.pid) - raw(none, vet.pid))).toBeLessThan(0.05);
     // what it did is on the year's snapshot, and close to the figure the screen quoted before it
     const snap = (c: League, pid: number) => c.players[pid].ratingsHistory.at(-1)!.staff ?? 0;
@@ -96,6 +99,29 @@ describe('player development', () => {
     // 0.6 against the 1.32 quoted, where the team's other young players get 0.9 to 1.2 against 1.1 to 1.5)
     expect(snap(one, a.pid)).toBeGreaterThan(priorityEffect(l, a) * 0.4);
     expect(snap(one, a.pid)).toBeLessThan(priorityEffect(l, a) * 1.3);
+    // the last points come slowest: a good summer, and the staff's time, count for less the nearer a young
+    // player is to the top (a lottery pick at 90 by 22 is the rare story); a generational player's climb is his own
+    {
+      const kid = structuredClone(young.find((p) => !p.peak)!);
+      const at = (ovr: number, peak?: number) => ({ ...kid, ovr, ...(peak ? { peak } : {}) });
+      expect(lateShare(at(76))).toBe(1);
+      expect(lateShare(at(82))).toBeCloseTo(0.65, 2);
+      expect(lateShare(at(90))).toBeCloseTo(0.3, 2);
+      expect(lateShare(at(90, 4))).toBe(1);
+      expect(priorityEffect(l, at(84))).toBeCloseTo(priorityEffect(l, at(76)) * lateShare(at(84)), 5);
+      // the same good summer at 20, from the same ratings: less of it at 86 than at 76, and none of it lost on a bad one
+      const summer = (ovr: number, growth: number) => {
+        const c = structuredClone(at(ovr));
+        c.bornYear = l.season - 20;
+        c.growth = growth;
+        const from = ovrRaw(c.ratings);
+        develop(c, l.season, { coachDev: 50, coachingBudget: 50, practice: 'normal', mpg: 25, trajectory: growth > 0 ? 1.5 : -8 }, new Rng(9));
+        return ovrRaw(c.ratings) - from;
+      };
+      expect(summer(76, 1)).toBeGreaterThan(summer(86, 1) + 0.5);
+      expect(summer(86, 1)).toBeGreaterThan(0);
+      expect(summer(86, -1)).toBeCloseTo(summer(76, -1), 5);
+    }
     // the user's choice: two places, players of 25 or under on his roster
     const x = structuredClone(l);
     x.teams[tid].devPriority = [];

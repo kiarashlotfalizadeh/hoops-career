@@ -6,7 +6,7 @@
 import { X } from 'lucide-react';
 import type { League, TacticEdit } from '../../core/types';
 import { CHECK_AFTER, RECHECK_AFTER, editCall, editsOf, playedSince, recheckAhead } from '../../core/ai/tacticEdits';
-import { AHEAD, SINCE, leanTone } from '../../core/analysis/staffWords';
+import { AHEAD, SINCE, leanTone, ptsFig } from '../../core/analysis/staffWords';
 import { plural } from '../../core/format';
 import { fmtDate } from '../../core/league/helpers';
 import { Help, Section, Tag } from '../components/ui';
@@ -29,10 +29,14 @@ export function EditMeasureBar() {
   );
 }
 
+/** A check's figure, a fact about played games: "+0.9 a game ±0.4" (the replays' reading, shrunk toward even, and its give or take). */
+const checkFig = (e: TacticEdit) => (e.check ? `${ptsFig(e.check.pts, false)} a game ±${Math.max(0.1, e.check.se).toFixed(1)}` : '');
+
 /** A change's line under its name: when, and where it stands. */
 function metaOf(e: TacticEdit, league: League, measuring: boolean): string {
   const when = fmtDate(e.season, e.day);
-  if (measuring) return `${when} · The staff is watching…`;
+  // (a check already in stands: the measuring then is some other look at it)
+  if (measuring && !e.check) return `${when} · The staff is watching…`;
   const w = e.check ?? e.worth;
   if (!w) return `${when} · ${e.closed ? 'No read' : 'The staff reads it when you next open Team'}`;
   if (e.closed === 'reverted') return `${when} · put back${e.closedDay === undefined ? '' : ` ${fmtDate(e.season, e.closedDay)}`}`;
@@ -40,10 +44,10 @@ function metaOf(e: TacticEdit, league: League, measuring: boolean): string {
     // (one that couldn't tell: its one second look, and when; the season over, the first look stands)
     const left = Math.max(0, e.check.games + RECHECK_AFTER - playedSince(league, e).length);
     return e.season === league.season
-      ? `${when} · over ${plural(e.check.games, 'game')} · second look in ${plural(left, 'game')}`
-      : `${when} · over ${plural(e.check.games, 'game')} · final`;
+      ? `${when} · ${checkFig(e)} over ${plural(e.check.games, 'game')} · second look in ${plural(left, 'game')}`
+      : `${when} · ${checkFig(e)} over ${plural(e.check.games, 'game')} · final`;
   }
-  if (e.check) return `${when} · over ${plural(e.check.games, 'game')}${e.check.recheck ? ' · second look, final' : ' · final'}`;
+  if (e.check) return `${when} · ${checkFig(e)} over ${plural(e.check.games, 'game')}${e.check.recheck ? ' · second look, final' : ' · final'}`;
   const left = Math.max(0, CHECK_AFTER - playedSince(league, e).length);
   // (read on the games then ahead: a forecast until the check on played games)
   return e.closed ? `${when} · forecast only, never checked` : `${when} · forecast · check in ${plural(left, 'game')}`;
@@ -59,7 +63,7 @@ function EditRow({ e, league, measuring }: { e: TacticEdit; league: League; meas
         <span className="lr-name ellipsis">{e.what}</span>
         <span className="lr-meta tx-edmeta">{metaOf(e, league, measuring)}</span>
       </span>
-      {call && !measuring && <Tag tone={leanTone(call) || undefined}>{e.check ? SINCE[call] : AHEAD[call]}</Tag>}
+      {call && (!measuring || !!e.check) && <Tag tone={leanTone(call) || undefined}>{e.check ? SINCE[call] : AHEAD[call]}</Tag>}
       {back && (
         <button className="btn xs" onClick={() => putBackEdit(e)}>
           Put back

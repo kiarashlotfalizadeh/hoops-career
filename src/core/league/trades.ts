@@ -696,9 +696,25 @@ function playerView(league: League, p: Player, tid: number, incoming: boolean, a
   return { kind: 'player', id: p.pid, value, neutral, own, flipped: f };
 }
 
+/**
+ * What a first-round pick counts for in a deal with the user, over the player it's expected to
+ * become: both ways, the picks he sends and the ones he's sent, so nothing can be run in a circle
+ * for value. A pick priced at its expected player alone put a late first level with a 74 (a 13th
+ * man in this league's ratings) where the NBA's market pays a rotation player for one (a 77-78: 1.7
+ * times that here; a mid first a low-end starter, 1.6): a 64-win contender's four firsts bought
+ * nothing better than a 79, and "trade picks for help" was a dead lever (the playtest's contender,
+ * 2026-11-24: four firsts 37 against an 81 at 41 to a rebuilding seller; now 55). Not a pick on the
+ * clock in the draft under way: there it is the player. Among AI teams picks stay at 1, the market
+ * their deals were measured on.
+ */
+export const FIRST_MARKET = 1.5;
+/** A pick's value on the user's market: pickValue, a first at FIRST_MARKET (what every team counts it for in a deal with him). */
+export const marketPickValue = (league: League, dp: DraftPick) => pickValue(league, dp) * (firstOnMarket(league, dp) ? FIRST_MARKET : 1);
+const firstOnMarket = (league: League, dp: DraftPick) => dp.round === 1 && !(league.phase === 'draft' && dp.season === league.season && dp.pick !== undefined);
+
 /** A draft pick as team `tid` sees it in a deal (with the user unless `aiDeal`). */
 function pickView(league: League, dp: DraftPick, tid: number, incoming: boolean, aiDeal: boolean): AssetView {
-  const neutral = pickValue(league, dp);
+  const neutral = aiDeal ? pickValue(league, dp) : marketPickValue(league, dp);
   // (a pick hoarder's own picks are worth more to him going out: league/voices.ts)
   const gm = tid === league.userTid || incoming || dp.originalTid !== tid ? 1 : gmStyle(league, tid).ownPick;
   const own = neutral * PICK_LENS[league.teams[tid].strategy] * gm;

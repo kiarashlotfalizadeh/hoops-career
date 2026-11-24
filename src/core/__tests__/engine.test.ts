@@ -575,6 +575,27 @@ describe('engine rules', () => {
       po.T[1].score = 95;
       expect(po.lopsided(po.T[0])).toBe(false);
     }
+    // playoff defense: the same playoff games score less with it than without (K.playoffD: the playoffs ran 1 to 11
+    // points a team over the regular season, where the NBA's run 2 to 9 under), and no regular-season shot knows of it
+    {
+      const k = K as { playoffD: number };
+      const size = k.playoffD;
+      const points = (type: 'playoffs' | 'regular') => {
+        let pts = 0;
+        for (let g = 0; g < 40; g++) {
+          const res = new GameSim(side(g % 30), side((g + 7) % 30), { rng: new Rng(900 + g), type, injuries: false }).simToEnd();
+          pts += res.home.pts + res.away.pts;
+        }
+        return pts / 80;
+      };
+      const [po, reg] = [points('playoffs'), points('regular')];
+      k.playoffD = 0;
+      const [po0, reg0] = [points('playoffs'), points('regular')];
+      k.playoffD = size;
+      expect(size).toBeGreaterThan(0);
+      expect(po).toBeLessThan(po0 - 3);
+      expect(reg).toBe(reg0);
+    }
     // a third-quarter rout: both benches finish it, the team up big eases off, and a team up 20 calls off its press
     {
       type S = { pid: number; on: boolean; starter: boolean };

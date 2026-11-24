@@ -453,6 +453,10 @@ export interface NightWorth {
   n: number;
   moves: number;
   top?: { op: number; pts: number; se: number };
+  /** Every move measured on its own (the night without just it, against with all): its op's index, the reading and its standard error. */
+  each?: { op: number; raw: number; se: number }[];
+  /** Each kind of move left out of the night together (the timeouts, the subs...), the others kept: the reading, its standard error and the moves of the kind. */
+  kinds?: { kind: LiveOp['op']; raw: number; se: number; moves: number }[];
 }
 
 /** Continuations the night's moves are measured over (with them and without), and the leave-one-out readings of each move. */
@@ -531,6 +535,10 @@ export async function nightWorth(tip: GameSim, side: 0 | 1, ops: LiveOp[], opts:
   const all: number[] = [];
   const allWin: number[] = [];
   const by: number[][] = singles.map(() => []);
+  // the kinds of move the night had (two or more: a night of one kind is that kind's reading already)
+  const kindSet = [...new Set(one.map((x) => x.o.op))];
+  const kinds = kindSet.length > 1 ? kindSet : [];
+  const byKind: number[][] = kinds.map(() => []);
   for (let i = 0; i < games; i++) {
     if (i && i % chunk === 0) {
       opts.onProgress?.(i, total);
@@ -551,6 +559,16 @@ export async function nightWorth(tip: GameSim, side: 0 | 1, ops: LiveOp[], opts:
           rest.filter((_, m) => m !== x.i),
         );
         by[j].push(w.pts - less.pts);
+      });
+    if (i < NIGHT_MOVE_GAMES)
+      kinds.forEach((kind, j) => {
+        const less = playWith(
+          forkSim(s0, seed),
+          side,
+          steps,
+          rest.filter((o) => !(counted(o) && o.op === kind)),
+        );
+        byKind[j].push(w.pts - less.pts);
       });
   }
   opts.onProgress?.(total, total);
@@ -574,7 +592,15 @@ export async function nightWorth(tip: GameSim, side: 0 | 1, ops: LiveOp[], opts:
     const best = rs[a];
     if (clearOf(best.mean, best.se) && (b === undefined || Math.abs(best.mean) - Math.abs(rs[b].mean) >= best.se))
       out.top = { op: ops.indexOf(singles[a].o), pts: round1(shrinkWorth(best.mean, best.se)), se: round2(best.se) };
-  }
+    out.each = rs.map((x, j) => ({ op: ops.indexOf(singles[j].o), raw: round2(x.mean), se: round2(x.se) }));
+  } else out.each = [{ op: ops.indexOf(one[0].o), raw: round2(r.mean), se: round2(r.se) }];
+  const count = (kind: LiveOp['op']) => one.filter((x) => x.o.op === kind).length;
+  out.kinds = kinds.length
+    ? kinds.map((kind, j) => {
+        const x = paired(byKind[j]);
+        return { kind, raw: round2(x.mean), se: round2(x.se), moves: count(kind) };
+      })
+    : [{ kind: kindSet[0], raw: round2(r.mean), se: round2(r.se), moves: one.length }];
   return out;
 }
 

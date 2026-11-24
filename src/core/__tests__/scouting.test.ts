@@ -380,7 +380,7 @@ describe('scouting and the staff', () => {
         if (d.lesson) {
           expect(d.lesson.plan).toMatch(/^You went in with (your own|your staff's) playbook \(.+ · .+\) and /);
           expect(d.lesson.outcome).toMatch(/^You (won|lost) \d+-\d+\./);
-          expect(d.lesson.next).toMatch(/^(Tap the staff's fix below|Pick one counter|That plan was for)/);
+          expect(d.lesson.next).toMatch(/^(Tap the staff's fix below|The staff's reads are under Next time|Pick one counter|That plan was for)/);
           // the report reads the same after today's playbook changes: it names the setup that game was played with
           const later = structuredClone(league);
           const lt = later.teams[0].tactics;
@@ -535,9 +535,12 @@ describe('scouting and the staff', () => {
       // (a hot hand the defense let run is the engine's edge, told as one: not the looks)
       expect(rep.factors.some((f) => f.category === 'shooting' && !f.luck && !f.key?.startsWith('hot_hand'))).toBe(false);
       const luck = rep.factors.find((f) => f.luck);
-      expect(!!luck).toBe(Math.abs(efgSwing) >= 3);
+      // (the luck in points as scored, each side's makes against its looks: the figure the report's header shows too)
+      const fell = fgPts(us) - 2 * 0.53 * us.t.fga - (fgPts(them) - 2 * 0.53 * them.t.fga);
+      expect(!!luck).toBe(Math.abs(fell) >= 3);
       if (luck) {
-        expect(luck.pts).toBeCloseTo(efgSwing, 6);
+        expect(luck.pts).toBeCloseTo(fell, 6);
+        expect(luck.pts).toBeCloseTo(luckPts(res, me) - luckPts(res, (1 - me) as 0 | 1), 6);
         expect(luck.key).toBeUndefined();
         expect(luck.advice).toBeUndefined();
       }

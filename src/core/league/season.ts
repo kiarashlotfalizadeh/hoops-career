@@ -11,7 +11,7 @@ import { contractExp, playerAge } from '../playerGen';
 import { OFFSEASON_ROSTER_MAX, addInbox, addNews, dateToDay, playerName, prospects, standardRoster, teamCity, teamPlayers, teamSeason, withRng } from './helpers';
 import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
-import { applyStaffTactics, ensureRotation, gamesOnDay, playGame, youthNews } from './games';
+import { applyStaffTactics, ensureRotation, gamesOnDay, makeWhole, playGame, youthNews } from './games';
 import { freezeRecordNames, holdsSeasonRecord } from './records';
 import { TAX_SHARE_TO_NON_TAXPAYERS, aiTicketPrice, assessLuxuryTax, shareRevenue } from './finances';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
@@ -93,6 +93,9 @@ export function startRegularSeason(league: League): string[] {
     fillRosters(league, rng);
   });
   for (const t of league.teams) ensureRotation(league, t.tid);
+  // the coach's own rotation is whole on opening night: what its targets fall short of 240 is handed out
+  // (a save whose summer took minutes away with the players who left: see games.ts makeWhole)
+  if (league.teams[league.userTid]?.rotation.manual) makeWhole(league, league.userTid);
   // tickets priced where the gate peaks, the user's too (the franchise runs its own money): left at
   // the default, a contender's crowd paid $95-113 where the gate peaked at $123-152, $20-35M a season
   // short (OKC, four seasons, round 2026-10-25)

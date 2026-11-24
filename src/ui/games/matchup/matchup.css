@@ -11,6 +11,13 @@
   font-size: 0.56em;
 }
 
+/* what of the coach's own work is in the forecast, under it */
+.mu-hero-in {
+  margin-top: 6px;
+  text-align: center;
+  line-height: 1.4;
+}
+
 .mu-hero-foot {
   display: flex;
   align-items: center;

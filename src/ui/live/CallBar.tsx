@@ -185,10 +185,16 @@ export function CallBar(p: CallBarProps) {
     primary.current?.focus();
   }, [state]);
 
+  // the bar's end while the game plays: the speed it's playing at (a tap brings playback up, where 1×, 2×, 4× and Skip are) and the pause button
   const pauseBtn = (
-    <button type="button" className="lv-cb-pause" onClick={pauseFromBar} aria-label="Pause: playback controls">
-      <Pause size={16} fill="currentColor" aria-hidden="true" />
-    </button>
+    <>
+      <button type="button" className="lv-cb-spd" onClick={show} aria-label={`Speed ${speed}×: playback controls`}>
+        {speed}×
+      </button>
+      <button type="button" className="lv-cb-pause" onClick={pauseFromBar} aria-label="Pause: playback controls">
+        <Pause size={16} fill="currentColor" aria-hidden="true" />
+      </button>
+    </>
   );
 
   let key: string = state;
@@ -209,10 +215,25 @@ export function CallBar(p: CallBarProps) {
           {paused ? <Play size={16} fill="currentColor" aria-hidden="true" /> : <Pause size={16} fill="currentColor" aria-hidden="true" />}
           <span className="lv-cb-btn-t">{paused ? 'Resume' : 'Pause'}</span>
         </button>
+        {/* every speed a tap away (a narrow bar keeps the one button that steps through them) */}
+        <div className="lv-cb-speeds" role="group" aria-label="Speed">
+          {LIVE_SPEEDS.map((x) => (
+            <button
+              key={x.id}
+              type="button"
+              className={`lv-cb-sp${x.id === speed ? ' on' : ''}`}
+              aria-pressed={x.id === speed}
+              aria-label={`Speed ${x.label}`}
+              onClick={act(() => p.onSpeed(x.id))}
+            >
+              {x.label}
+            </button>
+          ))}
+        </div>
         <button type="button" className="lv-cb-btn fig" onClick={act(() => p.onSpeed(next.id))} aria-label={`Speed ${speed}×: change to ${next.label}`}>
           {speed}×
         </button>
-        <button type="button" className={`lv-cb-btn${keyPlays ? ' on' : ''}`} aria-pressed={keyPlays} aria-label="Key plays" onClick={act(p.onKeyPlays)}>
+        <button type="button" className={`lv-cb-btn kp${keyPlays ? ' on' : ''}`} aria-pressed={keyPlays} aria-label="Key plays" onClick={act(p.onKeyPlays)}>
           <Zap size={15} aria-hidden="true" />
           <span className="lv-cb-btn-t">Key plays</span>
         </button>

@@ -202,7 +202,8 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
               : undefined;
         a.push({ id: 'next', label: 'Sim to next game', sub, primary: true, sim: { kind: 'untilUserGame' } });
       }
-      a.push({ id: 'day', label: 'Sim 1 day', sim: { kind: 'days', n: 1 } });
+      // (any sim plays out a game left in progress first: said where it would happen, so a final never arrives unexplained)
+      a.push({ id: 'day', label: 'Sim 1 day', ...(live && !live.over ? { sub: 'Plays out your game in progress first.' } : {}), sim: { kind: 'days', n: 1 } });
       if (league.phase === 'regular') {
         const left = regularGamesLeft(league);
         // how far each sim goes, in your games: a sim of n days plays today and the n - 1 after it

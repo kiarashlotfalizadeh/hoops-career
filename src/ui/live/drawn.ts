@@ -16,8 +16,10 @@ export interface DrawnPlayer {
   fga: number;
   ftm: number;
   fta: number;
-  /** 0 ok, 1 fouled out, 2 injured or held out. */
+  /** 0 ok, 1 fouled out or ejected, 2 injured or held out. */
   out: 0 | 1 | 2;
+  /** Out on technicals, not on fouls (a banner says which). */
+  ejected?: boolean;
   on: boolean;
   /** Field goals in a row: made (positive) or missed (negative), the latest shots first (what a broadcast line counts). */
   streak: number;
@@ -127,6 +129,7 @@ export function snapshot(sim: GameSim, logs = 0): Drawn {
         ftm: p.b.ftm,
         fta: p.b.fta,
         out: p.out,
+        ...(p.ejected && { ejected: true }),
         on: p.on,
         streak: streak.get(p.pid) ?? 0,
         hot: p.hot,

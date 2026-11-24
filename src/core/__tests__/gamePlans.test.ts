@@ -447,8 +447,8 @@ describe('game plans', () => {
       expect(legacy.reviews[0].threads![0].rows[0][1]).toMatch(/^Checked on 10 games played with it: /);
       const w = readEdit(await play(check, 6)).worth;
       // an even reading is inconclusive, never "no effect": a tight one rules out a big swing, a wide one can't tell
-      expect(evenText({ raw: 0.1, se: 0.1 }, 12)).toMatch(/^Too close to call over 12 games: the replays rule out a big swing/);
-      expect(evenText({ raw: 0.1, se: 0.1 }, 12)).toMatch(/That's final\./);
+      expect(evenText({ raw: 0.1, se: 0.1 }, 12)).toMatch(/^Too close to call over 12 games: the replays put it between −0\.1 and \+0\.3 points a game, so no big swing/);
+      expect(evenText({ raw: 0.1, se: 0.1 }, 12)).toMatch(/That's final: the staff won't look again\./);
       expect(evenText({ raw: 0.2, se: 0.6 }, 12)).toMatch(/^Inconclusive over 12 games: .* one more look after 10 more games/);
       expect(evenText({ raw: 0.2, se: 0.6, recheck: true }, 22)).toMatch(/^Still inconclusive over 22 games: .* last look/);
       // the same first check saved again (the Team screens' and the sim morning's) is kept once

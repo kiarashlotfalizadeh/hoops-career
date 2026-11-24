@@ -4,12 +4,12 @@
 // tactics still give it (as a patch, for the plan against this opponent or for good).
 // Pure: it reads the stored result and the report built from it.
 
-import type { GameResult, League, Tactics, TacticsPatch } from '../types';
+import type { CoachMove, GameResult, League, Tactics, TacticsPatch } from '../types';
 import { plural } from '../format';
 import { playerName, shortName, teamCity } from '../league/helpers';
 import { playTypeBaselines } from './playTypes';
 import { buildGameReport, decidingFactors, type GameReport, type Factor } from './gameReport';
-import { worthCall } from '../ai/counterWorth';
+import { shrinkWorth, worthCall } from '../ai/counterWorth';
 import { ptsFig } from './staffWords';
 import { impactCounter } from '../ai/advisor';
 import { applyPatch, cloneTactics, tacticsDiff, emptyPatch } from '../sim/tactics';
@@ -153,12 +153,16 @@ function firstLesson(league: League, res: GameResult, side: 0 | 1, decided: Fact
         ? ' One night is too few to grade your plan.'
         : '';
   const outcome = `${mine > theirs ? 'You won' : 'You lost'} ${Math.max(mine, theirs)}-${Math.min(mine, theirs)}.${why}${planNight}`;
-  const fix = advice.find((a) => a.patch && a.label);
+  // (a fix the staff backs where the bench calls it has its one-tap button under Next time; one it has only
+  // read doesn't, and may measure as a cost against this opponent: the lesson doesn't tell him to tap what isn't there)
+  const fix = advice.find((a) => a.patch && a.label && a.worth) ?? advice.find((a) => a.patch && a.label);
   if (fix)
     return {
       plan: planText,
       outcome,
-      next: `Tap the staff's fix below, ${fix.label}, and apply it for every game. After ${CHECK_AFTER} games, Tactics → Season Analysis says whether it helped.`,
+      next: fix.worth
+        ? `Tap the staff's fix below, ${fix.label}, and apply it for every game. After ${CHECK_AFTER} games, Tactics → Season Analysis says whether it helped.`
+        : `The staff's reads are under Next time, ${fix.label} first. One it has measured as a gain has a button there; the rest are its read of one night, yours to try in Team → Tactics. After ${CHECK_AFTER} games, Season Analysis says whether a change helped.`,
     };
   if (!plan.length)
     return {
@@ -377,26 +381,110 @@ export function nightLine(res: GameResult, staff = false): { text: string; detai
   return line(ptsFig(w.pts), `${Math.max(0.1, w.se).toFixed(1)}`, Math.abs(w.raw) >= 2 * w.se && Math.abs(w.pts) >= 0.05, w.pts > 0);
 }
 
+/** A move's kind in the plural, for the readings by kind. */
+const KIND_WORD: Record<CoachMove['kind'], [string, string]> = {
+  timeout: ['timeout', 'timeouts'],
+  sub: ['sub', 'subs'],
+  tactics: ['tactical change', 'tactical changes'],
+  play: ['play call', 'play calls'],
+};
+const kindWord = (kind: CoachMove['kind'], n: number) => `${n} ${KIND_WORD[kind][n === 1 ? 0 : 1]}`;
+
+/** A reading of what a move (or a kind of move) was worth, as it's said: the figure, its give or take, and whether it's clear of the night's noise. */
+export interface MoveWorthRead {
+  /** "+0.4 pts": shrunk toward even by its noise, as every measured figure is. */
+  fig: string;
+  /** "±0.9". */
+  pm: string;
+  clear: boolean;
+  up: boolean;
+}
+
+const readOf = (raw: number, se: number): MoveWorthRead => {
+  const pts = Math.round(shrinkWorth(raw, se) * 10) / 10;
+  return { fig: ptsFig(pts), pm: `±${Math.max(0.1, se).toFixed(1)}`, clear: Math.abs(raw) >= 2 * se && Math.abs(pts) >= 0.05, up: raw > 0 };
+};
+
+/**
+ * What move `i` of the night (its place in GameResult.moves) was worth on its own: the night replayed
+ * without just it against the night as coached (MovesWorth.each). Undefined for a move that wasn't
+ * measured one by one (an older reading, or a move before the night's last few).
+ */
+export function moveWorthRead(res: GameResult, i: number): MoveWorthRead | undefined {
+  const x = res.movesWorth?.each?.find((e) => e.move === i);
+  return x && Number.isFinite(x.raw) && Number.isFinite(x.se) ? readOf(x.raw, x.se) : undefined;
+}
+
+/** "Replayed without it: +0.4 pts ±0.9, inside the noise." */
+export const moveWorthText = (r: MoveWorthRead) => `Replayed without it: ${r.fig} ${r.pm}${r.clear ? '' : ', inside the noise'}.`;
+
+/**
+ * The night's moves by kind, each kind left out of the replayed night together: "3 timeouts −0.2 pts
+ * ±0.7 · 5 subs +0.6 pts ±0.8". Null for a night of one kind (the night's own figure is that kind's)
+ * or one measured before the kinds were kept.
+ */
+export function nightKindsLine(res: GameResult): string | null {
+  const ks = (res.movesWorth?.kinds ?? []).filter((k) => Number.isFinite(k.raw) && Number.isFinite(k.se));
+  if (ks.length < 2) return null;
+  return ks.map((k) => `${kindWord(k.kind, k.moves)} ${readOf(k.raw, k.se).fig} ${readOf(k.raw, k.se).pm}`).join(' · ');
+}
+
+/** A season's live coaching by kind of move: the points as measured, their standard error, the moves and the games they were in. */
+export interface KindSum {
+  kind: CoachMove['kind'];
+  raw: number;
+  se: number;
+  moves: number;
+  games: number;
+}
+
 /**
  * The coach's live coaching over a season, as measured game by game (GameResult.movesWorth): the
- * points his moves added, the standard error of that sum, and the games it's over. Null before a
- * coached game was measured. The line reads where a coach's record is (Career: see seasonCoachingLine).
+ * points his moves added, the standard error of that sum, the wins they added (each night's change in
+ * the chance to win, summed) and the games it's over; and the same by kind of move (`kinds`: games
+ * measured since the kinds were kept). Null before a coached game was measured. The line reads where a
+ * coach's record is (Career: see seasonCoachingLine).
  */
-export function seasonCoaching(league: League, season = league.season, tid = league.userTid): { pts: number; raw: number; se: number; games: number } | null {
+export function seasonCoaching(
+  league: League,
+  season = league.season,
+  tid = league.userTid,
+): { pts: number; raw: number; se: number; games: number; wins: number; winsSe: number; kinds: KindSum[] } | null {
   let pts = 0;
   let raw = 0;
   let v = 0;
   let games = 0;
+  let wins = 0;
+  let wv = 0;
+  const kinds = new Map<CoachMove['kind'], { raw: number; v: number; moves: number; games: number }>();
   for (const g of league.games) {
     const w = g.movesWorth;
     if (g.season !== season || (g.home.tid !== tid && g.away.tid !== tid) || !w || !Number.isFinite(w.pts) || !Number.isFinite(w.raw) || !Number.isFinite(w.se)) continue;
+    // (a night the staff ran is its coaching, not his)
+    if (g.moves?.length && g.moves.every((m) => m.by === 'staff')) continue;
     pts += w.pts;
     raw += w.raw;
     v += w.se ** 2;
     games++;
+    if (Number.isFinite(w.win)) wins += w.win;
+    if (w.winSe !== undefined && Number.isFinite(w.winSe)) wv += w.winSe ** 2;
+    for (const k of w.kinds ?? []) {
+      if (!Number.isFinite(k.raw) || !Number.isFinite(k.se)) continue;
+      const cur = kinds.get(k.kind) ?? { raw: 0, v: 0, moves: 0, games: 0 };
+      kinds.set(k.kind, { raw: cur.raw + k.raw, v: cur.v + k.se ** 2, moves: cur.moves + k.moves, games: cur.games + 1 });
+    }
   }
   const r1 = (x: number) => Math.round(x * 10) / 10;
-  return games ? { pts: r1(pts), raw: r1(raw), se: r1(Math.sqrt(v)), games } : null;
+  if (!games) return null;
+  return {
+    pts: r1(pts),
+    raw: r1(raw),
+    se: r1(Math.sqrt(v)),
+    games,
+    wins: r1(wins),
+    winsSe: r1(Math.sqrt(wv)),
+    kinds: [...kinds].map(([kind, k]) => ({ kind, raw: r1(k.raw), se: r1(Math.sqrt(k.v)), moves: k.moves, games: k.games })),
+  };
 }
 
 /**
@@ -409,11 +497,61 @@ export function seasonCoachingLine(league: League, season = league.season, tid =
   return `Your live coaching this season: ${c.worth} pts ${c.pm}, over ${plural(c.games, 'game')}`;
 }
 
-/** The season's live coaching as the line reads it, in parts (Career's record row): its worth ("+4.2"), whether it's clear of even, its ± and the games. Null under two games. */
-export function seasonCoachingRead(league: League, season = league.season, tid = league.userTid): { worth: string; clear: boolean; pm: string; games: number } | null {
+/** Moves of a kind in a season before the staff will say there's nothing in them. */
+export const KIND_SAY_MOVES = 15;
+
+/**
+ * The season's live coaching as the line reads it, in parts (Career's record row, the report and
+ * Season Analysis): its worth ("+4.2"), whether it's clear of even, its ± and the games; the same in
+ * wins ("+0.3"); the verdict in a sentence, which says so when there's nothing to see yet; and a line
+ * for each kind of move, with the plain word on one that has had enough tries (KIND_SAY_MOVES) to
+ * show something and hasn't. Null under two games.
+ */
+export function seasonCoachingRead(
+  league: League,
+  season = league.season,
+  tid = league.userTid,
+): {
+  worth: string;
+  clear: boolean;
+  pm: string;
+  games: number;
+  wins: string;
+  winsPm: string;
+  verdict: string;
+  kinds: { label: string; fig: string; note: string; tone: 'good' | 'bad' | 'dim' }[];
+} | null {
   const c = seasonCoaching(league, season, tid);
   if (!c || c.games < 2) return null;
-  return { worth: sgn1(c.pts), clear: Math.abs(c.raw) >= 2 * c.se && Math.abs(c.pts) >= 0.05, pm: `±${Math.max(0.1, c.se).toFixed(1)}`, games: c.games };
+  const clear = Math.abs(c.raw) >= 2 * c.se && Math.abs(c.pts) >= 0.05;
+  const wins = `${c.wins > 0.04 ? '+' : c.wins < -0.04 ? '−' : ''}${Math.abs(c.wins).toFixed(1)}`;
+  const verdict = clear
+    ? c.raw > 0
+      ? `Your in-game moves have helped: about ${wins} wins over ${plural(c.games, 'game')} against the same nights replayed without them.`
+      : `Your in-game moves have cost you: about ${wins} wins over ${plural(c.games, 'game')} against the same nights replayed without them.`
+    : `No proof either way yet: over ${plural(c.games, 'game')} your in-game moves read ${sgn1(c.pts)} pts, inside the noise (±${Math.max(0.1, c.se).toFixed(1)}). The staff's bench would have done about as well.`;
+  const kinds = c.kinds
+    .filter((k) => k.moves > 0)
+    .sort((a, b) => b.moves - a.moves)
+    .map((k) => {
+      const kClear = Math.abs(k.raw) >= 2 * k.se && Math.abs(k.raw) >= 0.05;
+      const note = kClear
+        ? k.raw > 0
+          ? 'Helping.'
+          : 'Costing you.'
+        : k.moves >= KIND_SAY_MOVES
+          ? k.kind === 'timeout'
+            ? 'Nothing in them so far: a timeout rests legs and sets a play, it has not turned games.'
+            : 'Nothing clear in them so far.'
+          : 'Too few to say.';
+      return {
+        label: kindWord(k.kind, k.moves),
+        fig: `${sgn1(k.raw)} pts ±${Math.max(0.1, k.se).toFixed(1)}`,
+        note,
+        tone: (kClear ? (k.raw > 0 ? 'good' : 'bad') : 'dim') as 'good' | 'bad' | 'dim',
+      };
+    });
+  return { worth: sgn1(c.pts), clear, pm: `±${Math.max(0.1, c.se).toFixed(1)}`, games: c.games, wins, winsPm: `±${Math.max(0.1, c.winsSe).toFixed(1)}`, verdict, kinds };
 }
 
 /**

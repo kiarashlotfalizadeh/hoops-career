@@ -6,9 +6,12 @@
 // drop came from an injury's lasting damage (injuries.ts: the one change to a rating outside
 // development), how draft picks grow in their first four summers by where they were picked, and the
 // scouting: how often the staff's draft-night ranges hold the truth, and how far picks end from the
-// POT the room read (the figures the draft screen quotes, prospects.ts's OUTCOME_MISS).
+// POT the room read (the figures the draft screen quotes, prospects.ts's OUTCOME_MISS), top-ten picks
+// with the staff's priority against those without and the user's against the AI teams', how many of
+// them are stars or stalled three seasons on, and how soon a first season's bottom five win 50.
 // Fails (exit 1) when the first summer steps away from the later ones, when a swing past the bands
-// isn't explained by an injury, when top-ten picks don't grow or second-rounders jump too often, or
+// isn't explained by an injury, when top-ten picks don't grow, become stars too often or never
+// stall, when second-rounders jump too often, when bottom teams are back at 50 wins too soon, or
 // when the scouting's stated accuracy isn't the measured one (see the gates below).
 // Usage: npx tsx scripts/dev-check.ts [seasons] [spec,...]   spec: rngSeed[f][:TEAM]  ('f': a
 //   generated league in place of the real one; TEAM: the user's team, star-check's default else)
@@ -33,10 +36,12 @@ import { FRANCHISES } from '../src/core/teams';
 import type { League } from '../src/core/types';
 
 /**
- * The leagues the check plays: three from the real opening night and three generated ones. Six
- * seasons each, so a class has its first four summers and a league five summers to compare.
+ * The leagues the check plays: three from the real opening night and six generated ones (three until
+ * 2026-11-24: a league's own classes are what a long save is made of, and 45 top-five picks moved the
+ * share that became stars by ten points from one run to the next). Six seasons each, so a class has
+ * its first four summers and a league five summers to compare.
  */
-const DEFAULT_SPECS = ['42', '7', '2026', '42f', '7f', '11f'];
+const DEFAULT_SPECS = ['42', '7', '2026', '42f', '7f', '11f', '3f', '5f', '9f'];
 const DEFAULT_SEASONS = 6;
 
 /**
@@ -56,6 +61,21 @@ const BAND_SLACK = 1;
 const TOP_TEN_GAIN = 1.3;
 const TOP_TEN_BACK = 0.12;
 const LATE_JUMPS = 3.5;
+/**
+ * ...and the other side of it (2026-11-24, the round-2 playtest's rebuild in three years): a lottery
+ * pick at the top of the league by 22 is the rare story, and some stall. Three or more seasons on, at
+ * most TOP_FIVE_STARS of top-five picks are 90+ (20% in three generated leagues before the last
+ * points came slowest, progression.ts's LATE_POINTS; 13% in six after, 4% in three real ones, whose
+ * first class is the real one) and at least TOP_TEN_STALL of top-ten picks are within 3 OVR of their
+ * draft night (13% before; 16% and 30%). The staff's priority adds at most PRIORITY_SHARE to a
+ * top-ten pick's summer (+0.97 before, +0.41), and at most QUICK_REBUILDS of a first season's bottom
+ * five win 50 within three seasons of it (3 and 6 of 15 before, 9 of 30 and 2 of 15 after: staff-run
+ * teams were never the quick ones, the user's levers were).
+ */
+const TOP_FIVE_STARS = 0.18;
+const TOP_TEN_STALL = 0.12;
+const PRIORITY_SHARE = 0.7;
+const QUICK_REBUILDS = 0.45;
 /**
  * ...and the scouting: the staff's ranges on draft night hold the truth RANGE_HOLD of the time, give
  * or take RANGE_SLACK (they say four times in five), and the outcome figures the draft screen quotes
@@ -84,6 +104,9 @@ interface Year {
   legend: boolean;
   /** Whether the league generated him (a real league's own players never were prospects here). */
   drafted: boolean;
+  /** On the user's team at the new preseason, and what the staff's priority added to his year in OVR (his snapshot's `staff`; 0 without it). */
+  user: boolean;
+  staff: number;
 }
 
 /** One preseason's league: the rostered players' mean OVR and the counts at 80+, 85+ and 90+, and the season before's points a team game. */
@@ -103,6 +126,10 @@ interface Outcome {
   seasons: number;
   miss: number;
   ovr: number;
+  /** His OVR on draft night, his age as the league ended, and whether the user's team has him. */
+  from: number;
+  age: number;
+  user: boolean;
 }
 
 interface Report {
@@ -113,6 +140,9 @@ interface Report {
   /** The staff's ranges on draft night against the truth: how many held, of how many (OVR, POT). */
   held: { ovr: number; pot: number; n: number };
   outcomes: Outcome[];
+  /** Every team's regular-season wins, a row a season played (by tid), and the user's team. */
+  wins: number[][];
+  userTid: number;
 }
 
 const seasons = Number(process.argv[2] ?? DEFAULT_SEASONS);
@@ -153,6 +183,8 @@ function playLeague(spec: string): Report {
   // every player's OVR and POT at the last preseason (a draftee's: on draft night)
   let last = new Map(Object.values(league.players).map((p) => [p.pid, { ovr: p.ovr, pot: p.pot }]));
   const made = new Set<number>();
+  const draftNight = new Map<number, number>();
+  const wins: number[][] = [];
   const held = { ovr: 0, pot: 0, n: 0 };
   for (let s = 0; s < seasons - 1; s++) {
     if (startRegularSeason(league).length) {
@@ -180,6 +212,7 @@ function playLeague(spec: string): Report {
     }
     const games = league.games.filter((g) => g.season === league.season && g.type === 'regular');
     const ppg = mean(games.flatMap((g) => [g.home.pts, g.away.pts]));
+    wins.push(league.teams.map((t) => t.seasons.find((x) => x.season === league.season)?.won ?? 0));
     if (league.fired) takeJob(league, league.jobOffers?.offers[0]?.tid ?? standings(league).find((r) => r.tid !== league.userTid)!.tid);
     startDraft(league);
     // the staff's read of every prospect tonight against what he is
@@ -195,6 +228,7 @@ function playLeague(spec: string): Report {
     for (const p of Object.values(league.players)) {
       if (p.draft.year !== league.season || p.tid < -1) continue;
       made.add(p.pid);
+      draftNight.set(p.pid, p.ovr);
       last.set(p.pid, { ovr: p.ovr, pot: p.pot });
     }
     for (const p of expiringPlayers(league, league.userTid)) {
@@ -220,6 +254,8 @@ function playLeague(spec: string): Report {
         since: league.season - p.draft.year,
         drafted: made.has(p.pid),
         legend: !!p.peak,
+        user: p.tid === league.userTid,
+        staff: p.ratingsHistory[p.ratingsHistory.length - 1]?.staff ?? 0,
       });
     }
     last = new Map(Object.values(league.players).map((p) => [p.pid, { ovr: p.ovr, pot: p.pot }]));
@@ -228,9 +264,18 @@ function playLeague(spec: string): Report {
   const outcomes: Outcome[] = [];
   for (const p of Object.values(league.players)) {
     const c = made.has(p.pid) ? readCheck(league, p, false) : null;
-    if (c) outcomes.push({ slot: c.slot, seasons: c.seasons, miss: c.miss, ovr: p.ovr });
+    if (c)
+      outcomes.push({
+        slot: c.slot,
+        seasons: c.seasons,
+        miss: c.miss,
+        ovr: p.ovr,
+        from: draftNight.get(p.pid) ?? p.ovr,
+        age: playerAge(p, league.season),
+        user: p.tid === league.userTid,
+      });
   }
-  return { spec, fictional, years, shapes, held, outcomes };
+  return { spec, fictional, years, shapes, held, outcomes, wins, userTid: league.userTid };
 }
 
 const AGE_BANDS: [string, (a: number) => boolean][] = YEAR_BANDS.map((b, i) => [
@@ -347,6 +392,26 @@ function verdict(reports: Report[], label: string): string[] {
       `  second-rounders' years of +5 or more: ${late.length} over ${classes} classes (${(late.length / Math.max(1, classes)).toFixed(1)} a class, all their summers so far)`,
     );
     if (classes && late.length / classes > LATE_JUMPS) failures.push(`${label}: ${(late.length / classes).toFixed(1)} second-round years of +5 a class (at most ${LATE_JUMPS})`);
+    // the staff's priority and the user's team: nobody's picks grow on a lever the rest of the league lacks
+    const young = top.filter((y) => y.age <= 23);
+    const part = (name: string, ys: Year[]) => `${name} ${signed(mean(ys.map((y) => y.d)))} (${ys.length})`;
+    console.log(
+      `  picks 1-10 through 23, a summer: ${part(
+        'with the staff priority',
+        young.filter((y) => y.staff > 0),
+      )}, ${part(
+        'without',
+        young.filter((y) => y.staff <= 0),
+      )} · ${part(
+        "the user's",
+        young.filter((y) => y.user),
+      )}, ${part(
+        "AI teams'",
+        young.filter((y) => !y.user),
+      )} · priority's own share ${signed(mean(young.filter((y) => y.staff > 0).map((y) => y.staff)))}`,
+    );
+    const own = mean(young.filter((y) => y.staff > 0).map((y) => y.staff));
+    if (own > PRIORITY_SHARE) failures.push(`${label}: the staff's priority adds ${signed(own)} to a top-ten pick's summer (at most +${PRIORITY_SHARE})`);
     // where the classes with four summers stand (the design's tails: a top-three pick can miss, a late pick can hit)
     const four = reports.flatMap((r) => r.outcomes.filter((o) => o.seasons >= 4));
     const of = (from: number, to: number) => four.filter((o) => o.slot >= from && o.slot <= to);
@@ -354,6 +419,49 @@ function verdict(reports: Report[], label: string): string[] {
     console.log(
       `  four seasons on: picks 1-3 at ${lvl(of(1, 3))} (${of(1, 3).filter((o) => o.ovr < 76).length} of ${of(1, 3).length} under 76), picks 1-10 at ${lvl(of(1, 10))}, picks 11-30 at ${lvl(of(11, 30))} (${of(11, 30).filter((o) => o.ovr >= 82).length} of ${of(11, 30).length} at 82+), second-rounders still in the league at ${lvl(of(31, 60))} (${of(31, 60).filter((o) => o.ovr >= 78).length} of ${of(31, 60).length} at 78+)`,
     );
+  }
+  // top-ten picks three seasons on (a pick of 19 or 20 is 22 or 23): the star, the starter and the one who stalled
+  const three = reports.flatMap((r) => r.outcomes.filter((o) => o.seasons >= 3 && o.slot >= 1 && o.slot <= 10));
+  if (three.length) {
+    const share = (xs: Outcome[], is: (o: Outcome) => boolean) => `${((100 * xs.filter(is).length) / Math.max(1, xs.length)).toFixed(0)}%`;
+    const line = (name: string, xs: Outcome[]) =>
+      `${name} (${xs.length}): ${signed(mean(xs.map((o) => o.ovr - o.from)), 1)} since draft night, 90+ ${share(xs, (o) => o.ovr >= 90)}, 85+ ${share(xs, (o) => o.ovr >= 85)}, within 3 of draft night or lower ${share(xs, (o) => o.ovr - o.from <= 3)}`;
+    console.log(
+      `Top-ten picks three or more seasons on: ${line(
+        'picks 1-5',
+        three.filter((o) => o.slot <= 5),
+      )} · ${line(
+        'picks 6-10',
+        three.filter((o) => o.slot > 5),
+      )}`,
+    );
+    const stars = three.filter((o) => o.slot <= 5 && o.ovr >= 90).length / Math.max(1, three.filter((o) => o.slot <= 5).length);
+    const stalled = three.filter((o) => o.ovr - o.from <= 3).length / three.length;
+    if (three.length >= 30 && stars > TOP_FIVE_STARS)
+      failures.push(`${label}: ${(100 * stars).toFixed(0)}% of top-five picks are 90+ three or more seasons on (at most ${100 * TOP_FIVE_STARS}%)`);
+    if (three.length >= 30 && stalled < TOP_TEN_STALL)
+      failures.push(`${label}: ${(100 * stalled).toFixed(0)}% of top-ten picks stalled (within 3 of draft night three or more seasons on; at least ${100 * TOP_TEN_STALL}%)`);
+  }
+  // a rebuild's length: the bottom five of a league's first season, and how soon they win 50
+  const bottoms = reports.flatMap((r) =>
+    r.wins.length < 2
+      ? []
+      : r.wins[0]
+          .map((w, tid) => ({ w, tid }))
+          .sort((a, b) => a.w - b.w)
+          .slice(0, 5)
+          .map(({ tid }) => ({ user: tid === r.userTid, path: r.wins.map((row) => row[tid]) })),
+  );
+  if (bottoms.length) {
+    const n = Math.max(...bottoms.map((b) => b.path.length));
+    const by = Array.from({ length: n }, (_, i) => mean(bottoms.filter((b) => b.path[i] !== undefined).map((b) => b.path[i])).toFixed(0)).join(' ');
+    const fifty = (k: number) => bottoms.filter((b) => b.path.slice(0, k + 1).some((w) => w >= 50)).length;
+    console.log(
+      `Rebuilds: the first season's bottom five (${bottoms.length} teams${bottoms.some((b) => b.user) ? `, ${bottoms.filter((b) => b.user).length} the user's` : ''}) won ${by} by season; 50 wins within two seasons of it ${fifty(2)}, within three ${fifty(3)}, within four ${fifty(4)}`,
+    );
+    const quick = fifty(3) / bottoms.length;
+    if (n >= 4 && quick > QUICK_REBUILDS)
+      failures.push(`${label}: ${fifty(3)} of ${bottoms.length} bottom-five teams won 50 within three seasons (at most ${100 * QUICK_REBUILDS}%)`);
   }
   // the scouting: the staff's ranges on draft night, and how far picks end from the room's read of their POT
   const held = reports.reduce((a, r) => ({ ovr: a.ovr + r.held.ovr, pot: a.pot + r.held.pot, n: a.n + r.held.n }), { ovr: 0, pot: 0, n: 0 });

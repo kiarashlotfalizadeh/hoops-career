@@ -36,6 +36,16 @@ export function measureTonight(lg: LiveGame) {
       const op = w.top ? ops[w.top.op] : undefined;
       const mark = op && lg.marks.find((m) => m.op === op);
       const move = mark && res.moves ? moveOf(res.moves, mark) : undefined;
+      // each move measured on its own, by its place in the report's list (ops made together are one move: their readings add)
+      const each = new Map<number, { raw: number; v: number }>();
+      for (const x of w.each ?? []) {
+        const m = lg.marks.find((k) => k.op === ops[x.op]);
+        const i = m && res.moves ? res.moves.indexOf(moveOf(res.moves, m)!) : -1;
+        if (i < 0) continue;
+        const cur = each.get(i) ?? { raw: 0, v: 0 };
+        each.set(i, { raw: cur.raw + x.raw, v: cur.v + x.se ** 2 });
+      }
+      const r2 = (v: number) => Math.round(v * 100) / 100;
       const worth: MovesWorth = {
         pts: w.pts,
         raw: w.raw,
@@ -45,6 +55,8 @@ export function measureTonight(lg: LiveGame) {
         n: w.n,
         moves: w.moves,
         ...(w.top && move && { top: { text: move.text, pts: w.top.pts, se: w.top.se } }),
+        ...(each.size && { each: [...each].map(([i, x]) => ({ move: i, raw: r2(x.raw), se: r2(Math.sqrt(x.v)) })) }),
+        ...(w.kinds?.length && { kinds: w.kinds.flatMap((k) => (k.kind === 'manualSubs' ? [] : [{ ...k, kind: k.kind }])) }),
       };
       keepWorth(league, res, worth);
     })

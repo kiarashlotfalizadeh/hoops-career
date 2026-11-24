@@ -96,9 +96,10 @@ export function projectGame(league: League, sim: GameSim, neutral: boolean, rati
   const paces = [row(0), row(1)].filter((r) => r.gp > 0).map((r) => r.pace);
   const pace = paces.length ? paces.reduce((a, b) => a + b, 0) / paces.length : 100;
   const edge = neutral ? 0 : HOME_EDGE;
-  // the user's game plan for tonight, at what the staff measured it worth
+  // the user's game plan for tonight, at what the staff measured it worth, and his tactical changes the staff has checked on played games
   const plan = planPoints(league, sim.T[0].tid, sim.T[1].tid);
-  return { margin: projectMargin(netHome, netAway, pace, edge) + plan, netHome, netAway, edge, plan };
+  const edits = editPoints(league, sim.T[0].tid, sim.T[1].tid, ratings);
+  return { margin: projectMargin(netHome, netAway, pace, edge) + plan + edits, netHome, netAway, edge, plan, edits };
 }
 
 /** Most points a game a plan's measured counters add to a projection: each was measured alone, and together they overlap. */
@@ -115,6 +116,34 @@ export function planPoints(league: League, home: number, away: number): number {
   const opp = home === me ? away : home;
   const items = planFor(league, opp)?.items ?? [];
   const pts = items.reduce((a, it) => a + (it.pts ?? 0), 0);
+  const capped = Math.max(-PLAN_MAX_PTS, Math.min(PLAN_MAX_PTS, pts));
+  return home === me ? capped : -capped;
+}
+
+/** A checked change counts from this far from even, in points a game: counterWorth.ts's WORTH_MIN (kept apart: this module is read where games are set up). */
+export const EDIT_SAYS = 0.5;
+
+/**
+ * Points a game the user's own tactical changes add to the home side's projected margin (under 0 for
+ * the user away): the ones the staff has checked on played games and read as a gain or a cost
+ * (TacticEdit.check: paired replays of those games with the change and without), still in place. A
+ * change's games are in his season's net rating already, so each counts only by the share of the
+ * estimate that isn't those games (1 less its games since over the season's games and the prior's):
+ * a proven change moves the forecast at once and hands over to the results as they come in. A change
+ * only forecast (not checked yet) stays out: what it does is found out on the floor. At most
+ * PLAN_MAX_PTS either way.
+ */
+export function editPoints(league: League, home: number, away: number, ratings = leagueRatings(league)): number {
+  const me = league.userTid;
+  if (home !== me && away !== me) return 0;
+  const gp = ratings.rows[me]?.gp ?? 0;
+  let pts = 0;
+  for (const e of Array.isArray(league.tacticEdits) ? league.tacticEdits : []) {
+    const c = e.check;
+    if (!c || e.closed || e.season !== league.season || Math.abs(c.pts) < EDIT_SAYS) continue;
+    const since = league.schedule.reduce((n, g) => n + (g.played && g.day >= e.day && (g.home === me || g.away === me) ? 1 : 0), 0);
+    pts += c.pts * Math.max(0, 1 - since / (gp + PRIOR_GAMES));
+  }
   const capped = Math.max(-PLAN_MAX_PTS, Math.min(PLAN_MAX_PTS, pts));
   return home === me ? capped : -capped;
 }

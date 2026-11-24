@@ -640,8 +640,13 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     // contest) and how they fell against that, told apart: the second is the night's luck
     const [xu, xo] = userSide === 0 ? res.xShots : [res.xShots[1], res.xShots[0]];
     const xefg = (x: { pts: number }, fga: number) => x.pts / 2 / Math.max(1, fga);
+    // (the quality of the looks, at the two teams' average attempts: who took more shots is the
+    // turnovers' and the glass's to tell, not this row's)
     const looks = swing(xefg(xu, u.t.fga), xefg(xo, o.t.fga));
-    const fell = efgSwing - looks;
+    // the luck in points as scored, to the point: what each side's makes came to against what its looks
+    // were worth, the figure the report's header and its margin line show (taken as the rest of the
+    // eFG gap at average attempts, one report said luck +10.4 up top and +10.1 in this row)
+    const fell = u.t.fgm * 2 + u.t.tpm - xu.pts - (o.t.fgm * 2 + o.t.tpm - xo.pts);
     if (Math.abs(looks) >= 3) {
       const [hi, lo] = looks > 0 ? [xefg(xu, u.t.fga), xefg(xo, o.t.fga)] : [xefg(xo, o.t.fga), xefg(xu, u.t.fga)];
       const [mHi, mLo] = looks > 0 ? [fu.efg, fo.efg] : [fo.efg, fu.efg];

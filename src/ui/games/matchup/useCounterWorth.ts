@@ -26,6 +26,9 @@ const KEEP = 24;
 const measured = new Map<string, WorthState>();
 const listeners = new Set<() => void>();
 let running: string | null = null;
+/** Times a key's measurement has been started (a stopped one is started again, RETRIES times at most). */
+const retries = new Map<string, number>();
+const RETRIES = 4;
 
 const tell = () => listeners.forEach((f) => f());
 
@@ -70,6 +73,7 @@ function start(league: League, opp: number, key: string) {
       else {
         measured.delete(key);
         measured.set(key, { worth: new Map(out.map((w) => [w.id, w])), progress: 1 });
+        retries.delete(key);
         while (measured.size > KEEP) measured.delete(measured.keys().next().value!);
       }
       tell();
@@ -89,7 +93,7 @@ function start(league: League, opp: number, key: string) {
  * guide), with a game against them still to play; never while a sim runs (it waits for it).
  */
 export function useCounterWorth(league: League, opp: number): WorthState | null {
-  const [, bump] = useState(0);
+  const [n, bump] = useState(0);
   const simming = useStore((s) => !!s.sim);
   const inSeason = league.phase === 'preseason' || league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs';
   const next = inSeason ? nextMeeting(league, opp) : undefined;
@@ -99,9 +103,23 @@ export function useCounterWorth(league: League, opp: number): WorthState | null 
     listeners.add(f);
     return () => void listeners.delete(f);
   }, []);
+  // (`n`: a measurement another one stopped is asked for again while its page is still up. Stopped and
+  // never restarted, the counters read "Staff still looking…" for as long as the page stayed open:
+  // the playtest's phone player saw it from the preseason through week one. A few tries, so two
+  // measurements can't stop each other forever.)
   useEffect(() => {
-    if (key && !simming && !measured.has(key)) start(league, opp, key);
-  }, [key, simming, league, opp]);
+    if (!key || simming || measured.has(key)) return;
+    const tries = retries.get(key) ?? 0;
+    if (tries > RETRIES) return;
+    const go = () => {
+      if (measured.has(key)) return;
+      retries.set(key, tries + 1);
+      start(league, opp, key);
+    };
+    if (!tries) return go();
+    const t = setTimeout(go, 400 * tries);
+    return () => clearTimeout(t);
+  }, [key, simming, league, opp, n]);
   return key ? (measured.get(key) ?? { progress: 0 }) : null;
 }
 

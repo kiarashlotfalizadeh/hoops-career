@@ -90,7 +90,20 @@ export function moveLine(m: CoachMove, abbrevs: { us: string; them: string }, na
  * The night's moves, newest first, each with the score since, and no verdict: a move made after a hot stretch reads better afterwards whatever it did (the rate falls
  * back toward the usual either way), so "working" is left to the replayed night (see nightLine).
  */
-export function MovesList({ moves, abbrevs, nameOf, max }: { moves: CoachMove[]; abbrevs: { us: string; them: string }; nameOf: (pid: number) => string; max?: number }) {
+export function MovesList({
+  moves,
+  abbrevs,
+  nameOf,
+  max,
+  worthOf,
+}: {
+  moves: CoachMove[];
+  abbrevs: { us: string; them: string };
+  nameOf: (pid: number) => string;
+  max?: number;
+  /** After the final: what move `i` (its place in `moves`) was worth, the night replayed without just it (debrief.ts moveWorthRead). */
+  worthOf?: (i: number) => { text: string; tone: 'good' | 'bad' | 'dim' } | undefined;
+}) {
   const list = [...moves].reverse().slice(0, max ?? moves.length);
   if (!list.length) return <div className="lv-mv-empty small dim">Nothing changed yet. Your changes show here.</div>;
   return (
@@ -115,6 +128,10 @@ export function MovesList({ moves, abbrevs, nameOf, max }: { moves: CoachMove[];
               {m.text}
             </div>
             <div className="lv-mv-line small dim2">{moveLine(m, abbrevs, nameOf)}</div>
+            {(() => {
+              const w = worthOf?.(moves.length - 1 - i);
+              return w ? <div className={`lv-mv-worth small num tone-${w.tone}`}>{w.text}</div> : null;
+            })()}
           </div>
         </div>
       ))}

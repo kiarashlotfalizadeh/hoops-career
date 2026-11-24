@@ -1311,3 +1311,14 @@
     letter-spacing: -0.02em;
   }
 }
+
+/* a losing slide: the staff's read and what it put in, under the next game */
+.td-slide {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-left: 3px solid var(--warn);
+}
+.td-slide .small {
+  line-height: 1.45;
+}

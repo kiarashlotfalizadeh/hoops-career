@@ -99,6 +99,9 @@ function stopToast(l: League, stop: SimStop, from: ReadonlySet<string>): { toast
   if (stop === 'news') return { toast: [l.fired ? 'Stopped: the owner has let you go.' : "Stopped: the owner's ultimatum.", 'bad', l.fired ? '/office/career' : '/office/owner'] };
   const item = agenda(l).find((i) => stopsSim(i) && !from.has(i.id));
   if (item) return { toast: [`Needs you: ${item.title}`, item.tone === 'bad' ? 'bad' : 'neutral', '/'], call: true };
+  // a stop that is no card of the queue (a playoff series starting, an elimination game, a starter out): said in its own words
+  const own = l.stopCall?.season === l.season && l.stopCall.day === l.day ? l.stopCall : undefined;
+  if (stop === 'call' && own?.text) return { toast: [`Stopped: ${own.text}`, 'neutral', own.to ?? '/'] };
   if (stop === 'call') return { toast: ['Stopped: something needs you.', 'neutral', '/'], call: true };
   return undefined;
 }
@@ -323,9 +326,21 @@ export const useStore = create<AppState>((set, get) => ({
     if (live && !live.committed) {
       const undo = rollbackPoint(l);
       try {
-        live.commit(l);
+        // (where it was left, to say so: a sim started with a game in progress plays it out first)
+        const at = live.over ? null : { q: live.sim.q, clock: live.sim.clock };
+        const res = live.commit(l);
         changes++;
         set({ dirty: true });
+        if (at) {
+          const [a, h] = [l.teams[res.away.tid], l.teams[res.home.tid]];
+          const m = Math.floor(Math.max(0, at.clock) / 60);
+          const sec = String(Math.floor(Math.max(0, at.clock) % 60)).padStart(2, '0');
+          get().toast(
+            `Your game in progress was played out by the staff from ${at.q > 4 ? (at.q === 5 ? 'OT' : `${at.q - 4}OT`) : `Q${at.q}`} ${m}:${sec}. Final: ${a.abbrev} ${res.away.pts}, ${h.abbrev} ${res.home.pts}.`,
+            'neutral',
+            `/game/${res.gid}`,
+          );
+        }
       } catch (e) {
         console.error('finishing the live game failed', e);
         undo();

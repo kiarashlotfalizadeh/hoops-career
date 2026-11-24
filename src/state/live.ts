@@ -241,6 +241,9 @@ export class LiveGame {
    * when it can't be.
    */
   callPlay(set: CallId, pid?: number): boolean {
+    // (the same play already waiting to be run: a second tap is no second call, so the night's moves list it once)
+    const q = this.calledPlay;
+    if (q && q.set === set && (pid === undefined || q.pid === pid)) return true;
     return this.record({ op: 'play', args: { set, ...(pid !== undefined && { pid }) } });
   }
 

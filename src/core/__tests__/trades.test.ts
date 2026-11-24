@@ -33,6 +33,7 @@ import {
   pickRange,
   pickTermsNote,
   pickValue,
+  FIRST_MARKET,
   pickValueFor,
   playerValueFor,
   salaryMatchGap,
@@ -1181,7 +1182,8 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
     expect(less / full).toBeLessThan(1 - topOdds(l, dp, 10));
     executeTrade(l, prot);
     expect([dp.tid, dp.protection]).toEqual([AI, 10]);
-    expect(pickValue(l, dp)).toBeCloseTo(evaluateTrade(l, deal({}, { dpids: [dp.dpid] })).parts.outgoing[0].neutral, 9);
+    // (in a deal with the user a first counts at the market's rate: FIRST_MARKET over the player it's expected to become)
+    expect(pickValue(l, dp) * FIRST_MARKET).toBeCloseTo(evaluateTrade(l, deal({}, { dpids: [dp.dpid] })).parts.outgoing[0].neutral, 9);
     expect(pickLabel(l, dp)).toBe(`${dp.season} 1st (${l.teams[U].abbrev}) · top-10 prot.`);
     expect(pickTermsNote(l, dp)).toBe(`Stays with ${l.teams[U].abbrev} if it lands in the top 10.`);
     // frozen as the user sent it
@@ -1252,7 +1254,8 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
     const held = pickValue(l, dp);
     expect(held).toBeLessThan(full * 0.6);
     expect(evaluateTrade(l, o).parts.picksIn).toBeCloseTo(pickValueFor(l, { ...dp, tid: AI, protection: undefined }, AI, true), 6);
-    expect(neutralBalance(l, o).out).toBeCloseTo(held, 6);
+    // (the user's side of it at his market's rate for a first: FIRST_MARKET)
+    expect(neutralBalance(l, o).out).toBeCloseTo(held * FIRST_MARKET, 6);
     executeTrade(l, o);
     expect([dp.tid, dp.protection]).toEqual([AI, undefined]);
   }

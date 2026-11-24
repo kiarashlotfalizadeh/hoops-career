@@ -23,6 +23,9 @@ type Step = 'type' | 'team' | 'setup';
 
 const market = (pop: number) => (pop >= 9 ? 'Huge' : pop >= 5 ? 'Large' : pop >= 2.5 ? 'Mid-size' : 'Small');
 
+/** The league this visit to the wizard is building: its id and random seed, kept across the steps' remounts until Start career uses them. */
+let wizardLeague: { id: string; rngSeed: number } | null = null;
+
 export default function NewLeague() {
   const nav = useNavigate();
   const setLeague = useStore((s) => s.setLeague);
@@ -86,7 +89,12 @@ export default function NewLeague() {
   }, [seed]);
   // the league Start career creates: its id and random seed, drawn once, so the team step can build it
   // first to preview each owner's day-one asks (and a fictional league's rosters) as you'll get them
-  const [made] = useState(() => ({ id: `lg_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}`, rngSeed: Math.floor(Math.random() * 2 ** 32) >>> 0 }));
+  // (one identity for the whole visit to the wizard, whatever remounts the screen between its steps:
+  // drawn again per mount, the team step's owner read "27 wins · win-now" and the next step's "26 wins ·
+  // builder" for the same team, since an owner's personality hangs on the league's id)
+  const [made] = useState(
+    () => (wizardLeague ??= { id: `lg_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}`, rngSeed: Math.floor(Math.random() * 2 ** 32) >>> 0 }),
+  );
   const [preview, setPreview] = useState<{ key: string; teams: Record<number, TeamPreview> } | null>(null);
   // (built with the team you'd take over as the user's, so its owner's line is the one Start career gives:
   // the user's team keeps its whole roster for him to cut, which moves its owner's read a little)
@@ -175,6 +183,8 @@ export default function NewLeague() {
     await new Promise((r) => setTimeout(r, 30));
     try {
       const l = createLeague({ name: name.trim() || 'My League', userTid: tid!, coachName: coach.trim() || 'Coach', settings, role, seed: kind === 'real' ? seed : null, ...made });
+      // (the next league made this session is another league)
+      wizardLeague = null;
       setLeague(l);
       // if it fails, play on: the save banner says so and offers a backup, and later saves retry
       await useStore.getState().save();

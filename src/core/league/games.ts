@@ -357,16 +357,24 @@ export function keepManualRotation(rot: Rotation, players: Player[]) {
   rot.closers = rot.closers.filter((pid) => pids.has(pid));
   rot.restB2B = rot.restB2B.filter((pid) => pids.has(pid));
   for (const k of Object.keys(rot.caps)) if (!pids.has(+k)) delete rot.caps[+k];
+  if (rot.set) {
+    rot.set = rot.set.filter((pid) => pids.has(pid));
+    if (!rot.set.length) delete rot.set;
+  }
 }
 
 /** Whether a player is out hurt (not cleared for the next game). */
 const hurt = (p: Player) => (p.injury?.gamesRemaining ?? 0) > 0;
 
 /**
- * Give `pids` the minutes the staff would give them (between 10 and 30), taken from the rest of a
- * manual rotation in proportion to theirs: the total stays where it was.
+ * Give `pids` the minutes the staff would give them (between 10 and 30): out of `spare` first (the
+ * minutes of players who just left the roster), then from the rest of a manual rotation in
+ * proportion to theirs, so the total stays where it was. A target the coach set himself
+ * (Rotation.set) gives only what the others can't (they give up to half of theirs): taken from
+ * everyone alike (until 2026-11-24), a star set to 36 read 32 after two teammates came back from
+ * injuries and 31 by midseason. Returns what is left of `spare`.
  */
-export function giveShare(league: League, tid: number, pids: number[]) {
+export function giveShare(league: League, tid: number, pids: number[], spare = 0): number {
   const team = league.teams[tid];
   const rot = team.rotation;
   const players = teamPlayers(league, tid);
@@ -374,15 +382,69 @@ export function giveShare(league: League, tid: number, pids: number[]) {
     players.filter((p) => !hurt(p)),
     rot,
   ).minutes;
+  const take = (from: [string, number][], amount: number) => {
+    const pool = from.reduce((a, [, m]) => a + m, 0);
+    if (pool > 0 && amount > 0) for (const [k, m] of from) rot.minutes[+k] = Math.max(0, Math.round(m - (amount * m) / pool));
+  };
   for (const pid of pids) {
     const want = clamp(Math.round(staff[pid] ?? 16), 10, 30);
+    const free = Math.min(want, Math.max(0, Math.round(spare)));
+    spare -= free;
+    const need = want - free;
     const others = Object.entries(rot.minutes).filter(([k, m]) => +k !== pid && m > 0);
-    const pool = others.reduce((a, [, m]) => a + m, 0);
-    if (pool > 0) for (const [k, m] of others) rot.minutes[+k] = Math.max(0, Math.round(m - (want * m) / pool));
+    const own = others.filter(([k]) => rot.set?.includes(+k));
+    const rest = others.filter(([k]) => !rot.set?.includes(+k));
+    const fromRest = own.length ? Math.min(need, Math.floor(rest.reduce((a, [, m]) => a + m, 0) / 2)) : need;
+    take(rest, fromRest);
+    take(own, need - fromRest);
     rot.minutes[pid] = want;
     rot.held = rot.held?.filter((x) => x !== pid);
     rot.benched = rot.benched?.filter((x) => x !== pid);
+    rot.set = rot.set?.filter((x) => x !== pid);
+    if (rot.set && !rot.set.length) delete rot.set;
   }
+  return spare;
+}
+
+/** What a rotation's minutes add up to before the plan scales them (rotationPlan.ts). */
+const PLAN_TOTAL = 240;
+/** Minutes gone from a manual rotation at once that read as a starter's (see ensureRotation). */
+const STARTER_GONE = 26;
+
+/**
+ * Make a manual rotation whole again: hand out `spare` minutes (by default, what its targets fall
+ * short of 240), as a coach would the minutes of players who left. A starter who plays less than a
+ * player who left (`vacated`: the departed players' minutes) takes his minutes, the reserve who moved
+ * into the first five before anyone, then the bench's regulars play up to 22, then everyone who
+ * plays up to 34, then the next in line up to 16, then anyone up to 38.
+ * The targets the coach set himself, the players he keeps out and the ones out hurt stay as they are.
+ * Before it (2026-11-24) the minutes of a player who left went with him: a tester's rotation added up
+ * to 173 after his offseason, and the plan's scaling had his starters at 46 (a probe of the same: 178
+ * and 156 after two summers that nobody was re-signed in, 240 both opening nights with it).
+ */
+export function makeWhole(league: League, tid: number, spare?: number, vacated: number[] = []) {
+  const rot = league.teams[tid].rotation;
+  const byId = new Map(teamPlayers(league, tid).map((p) => [p.pid, p]));
+  const order = rot.order.filter((pid) => byId.has(pid));
+  const at = (pid: number) => rot.minutes[pid] ?? 0;
+  let left = Math.round(spare ?? PLAN_TOTAL - order.reduce((a, pid) => a + at(pid), 0));
+  if (left <= 0) return;
+  const skip = new Set([...(rot.set ?? []), ...(rot.benched ?? []), ...(rot.held ?? [])]);
+  const fit = order.filter((pid) => !hurt(byId.get(pid)!));
+  const open = fit.filter((pid) => !skip.has(pid));
+  const give = (pid: number, upTo: number) => {
+    const add = Math.min(left, Math.max(0, Math.round(upTo) - at(pid)));
+    if (add <= 0) return;
+    rot.minutes[pid] = at(pid) + add;
+    left -= add;
+  };
+  const five = fit.slice(0, 5);
+  const gone = [...vacated].sort((a, b) => b - a);
+  for (const pid of five.filter((x) => open.includes(x)).sort((a, b) => at(a) - at(b))) if (gone.length && at(pid) < gone[0]) give(pid, gone.shift()!);
+  for (const pid of open) if (!five.includes(pid) && at(pid) > 0) give(pid, 22);
+  for (const pid of open) if (at(pid) > 0) give(pid, 34);
+  for (const pid of open) if (!(at(pid) > 0)) give(pid, 16);
+  for (const pid of open) give(pid, 38);
 }
 
 /**
@@ -417,7 +479,20 @@ export function ensureRotation(league: League, tid: number) {
     // a manual rotation: who's new to the roster, and who was out at 0 and is fit again, gets the
     // staff's share of minutes (the coach changes it from there), not a silent 0 (the playtest's trap)
     const arrived = players.filter((p) => !rot.order.includes(p.pid) && !hurt(p) && !(rot.minutes[p.pid] > 0)).map((p) => p.pid);
-    if (stale) keepManualRotation(rot, players);
+    // the minutes of the players who left (a trade, a contract's end, a retirement) stay in the rotation: a
+    // newcomer's share comes out of them first, and the rest is handed out (makeWhole). A player who
+    // leaves takes his line out of the rotation there and then (contracts.ts leaveTeam), so what left is
+    // read off the total: what it was when the coach or the staff last left it (Rotation.whole), less
+    // what it is now. (A line still here for a player who isn't: the same, never past a whole rotation.)
+    const strays = Object.keys(rot.minutes)
+      .filter((k) => !pids.has(+k) && rot.minutes[+k] > 0)
+      .map((k) => rot.minutes[+k]);
+    if (stale || strays.length) keepManualRotation(rot, players);
+    const total = () => players.reduce((a, p) => a + (rot.minutes[p.pid] ?? 0), 0);
+    const now = total();
+    const freed = Math.max(0, Math.max(rot.whole ?? 0, Math.min(PLAN_TOTAL, now + strays.reduce((a, m) => a + m, 0))) - now);
+    // (a starter's worth of minutes gone: the reserve who moved into the five takes them first)
+    const vacated = strays.length ? strays : freed >= STARTER_GONE ? [Math.min(freed, 38)] : [];
     for (const p of players) if (hurt(p) && !(rot.minutes[p.pid] > 0) && !rot.held?.includes(p.pid)) rot.held = [...(rot.held ?? []), p.pid];
     const back = (rot.held ?? []).filter((pid) => pids.has(pid) && !hurt(league.players[pid]) && !(rot.minutes[pid] > 0));
     rot.held = rot.held?.filter((pid) => pids.has(pid) && !(rot.minutes[pid] > 0) && !back.includes(pid));
@@ -433,7 +508,9 @@ export function ensureRotation(league: League, tid: number) {
         .map((p) => p.pid),
     );
     const due = [...arrived, ...back].filter((pid) => top.has(pid));
-    if (due.length) giveShare(league, tid, due);
+    const spare = due.length ? giveShare(league, tid, due, freed) : freed;
+    if (spare > 0) makeWhole(league, tid, spare, vacated);
+    rot.whole = total();
   }
   const missingRoles = players.some((p) => team.tactics.offense.roles[p.pid] === undefined);
   // an assistant-run playbook follows the healthy roster: a long injury starting or ending can change

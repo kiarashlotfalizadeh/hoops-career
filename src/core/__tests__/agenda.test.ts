@@ -9,7 +9,7 @@ import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, roleSettings, type SeedData } from '../league/create';
 import { agenda, agendaBlocker, cutOrder, GUIDE_STEPS, guideDone, guideFinished, guideOpen, guideStepOpen, guideStepTitle, resolveAgenda, showGuide } from '../league/agenda';
 import { canStartRegularSeason, simDay, startRegularSeason } from '../league/season';
-import { CAP_FOR, curTeamSeason, fmtDate, freeAgents, payroll, playerName, standardRoster } from '../league/helpers';
+import { CAP_FOR, curTeamSeason, fmtDate, freeAgents, payroll, playerName, standardRoster, teamPlayers } from '../league/helpers';
 import { releasePlayer, signPlayer } from '../league/contracts';
 import { executeTrade } from '../league/trades';
 import { ensureRotation } from '../league/games';
@@ -181,6 +181,36 @@ describe('the agenda', () => {
       }
       expect(agenda(l).some((i) => i.kind === 'signings')).toBe(false);
       expect(standardRoster(l, l.userTid).length).toBe(CAP.rosterMin);
+    }
+
+    // a coach's own rotation with a healthy regular at no minutes is said before opening night, not after it
+    // (a summer's arrivals), and one tap gives him the staff's share out of the others'
+    {
+      const l = camp(5);
+      expect(l.phase).toBe('preseason');
+      ensureRotation(l, l.userTid);
+      const rot = l.teams[l.userTid].rotation;
+      rot.manual = true;
+      expect(agenda(l).some((i) => i.kind === 'minutes')).toBe(false);
+      const sixth = rot.order.find(
+        (pid) =>
+          rot.order.indexOf(pid) >= 5 &&
+          !l.players[pid].injury &&
+          [...teamPlayers(l, l.userTid)]
+            .sort((a, b) => b.ovr - a.ovr)
+            .slice(0, 8)
+            .some((p) => p.pid === pid),
+      )!;
+      const total = () => teamPlayers(l, l.userTid).reduce((a, p) => a + (rot.minutes[p.pid] ?? 0), 0);
+      const before = total();
+      delete rot.minutes[sixth];
+      const item = agenda(l).find((i) => i.kind === 'minutes')!;
+      expect(item).toMatchObject({ required: true, to: '/team/rotation', title: `${playerName(l.players[sixth])} has no minutes` });
+      expect(resolveAgenda(l, item.suggestion!.action).ok).toBe(true);
+      expect(rot.minutes[sixth]).toBeGreaterThanOrEqual(10);
+      expect(agenda(l).some((i) => i.kind === 'minutes')).toBe(false);
+      // (his share came out of the others': the rotation is no bigger than it was)
+      expect(total()).toBeLessThanOrEqual(before + 2);
     }
 
     // a fired coach's only way on is a new job

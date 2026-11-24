@@ -266,9 +266,14 @@ function ProfileTab({ league, k }: { league: League; k: CoachCareer }) {
               <Sparkles size={20} className="fo-lc-ic" aria-hidden="true" />
               <div className="grow fo-min0">
                 <div className="lr-name">Live coaching, this season</div>
-                <div className="lr-meta">{plural(live.games, 'game')} coached live</div>
+                <div className="lr-meta">
+                  {plural(live.games, 'game')} coached live · {live.worth} pts {live.pm} against the same nights without your moves ·{' '}
+                  {SINCE[!live.clear ? 'even' : live.worth.startsWith('+') ? 'gain' : 'cost'].toLowerCase()}
+                </div>
               </div>
-              <span className="bold">{SINCE[!live.clear ? 'even' : live.worth.startsWith('+') ? 'gain' : 'cost']}</span>
+              <span className="num bold" title="Wins your in-game moves added, as measured">
+                {live.wins} W
+              </span>
             </div>
           )}
         </div>
@@ -617,7 +622,12 @@ function OpeningRow({ league, o, open, busy }: { league: League; o: JobOpening; 
       <div className="grow fo-min0">
         <div className="lr-name ellipsis">
           {t.region} {t.name}
-          {ts ? <span className="num dim"> · {ts.won}-{ts.lost}</span> : null}
+          {ts ? (
+            <span className="num dim">
+              {' '}
+              · {ts.won}-{ts.lost}
+            </span>
+          ) : null}
         </div>
         <div className="tiny dim">
           Hired {hired?.name ?? 'a new coach'}

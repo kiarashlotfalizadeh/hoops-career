@@ -10,6 +10,8 @@ import type { Player, SigningRoute, TalkTerms } from '../../core/types';
 import { FREE_AGENT } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
+import { playerAge } from '../../core/playerGen';
+import { yearBand } from '../../core/league/progression';
 import { CAP_FOR, payroll, playerName, rosterMaxNow, shortName, standardRoster } from '../../core/league/helpers';
 import { CAP } from '../../core/constants';
 import {
@@ -69,6 +71,7 @@ export function ContractSheet({ pid, mode, onClose }: { pid: number | null; mode
 }
 
 const yrs = (n: number) => `${n} yr${n > 1 ? 's' : ''}`;
+const signedInt = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n)}`;
 type OptionChoice = 'none' | 'player' | 'team';
 
 /** The route tag on the cap card: how the signing is paid for. */
@@ -171,6 +174,20 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
       ? { text: `${cap.salaryCap - pay - c.amount >= 0 ? 'cap space' : 'over the cap by'} ${money(Math.abs(cap.salaryCap - pay - c.amount))} after`, tone: 'dim' }
       : { text: `${shortSeason(season)} payroll ${money(pay + c.amount)}`, tone: 'dim' });
 
+  // an offer at his ask or better signs him on the spot, and a signing can't be undone: its button
+  // takes a second tap, the first one saying so (a bid on a top free agent waits for his decision and
+  // can be withdrawn: it needs none). The playtest's capologist signed a player with one stray tap.
+  const signsNow = !bidding && amount >= askAt;
+  const armKey = `${amount}:${years}:${option ?? ''}`;
+  const [armed, setArmed] = useState<string | null>(null);
+  const press = () => {
+    if (signsNow && armed !== armKey) return setArmed(armKey);
+    setArmed(null);
+    submit();
+  };
+  // (what a year does to a player his age, from 31 on: the years on the deal are the question then)
+  const age = playerAge(p, season);
+  const band = yearBand(age);
   const submit = (terms: TalkTerms = { amount, years, option }) => {
     // a refused offer still counts in the talks (his patience): only the answer differs
     const res = settle<OfferResult>(
@@ -429,14 +446,30 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
         </section>
       )}
 
+      {age >= 31 && !overRights && (
+        <div className="tiny warn">
+          He&apos;ll be {age} in {shortSeason(season)}. A year at that age moves a player {signedInt(band.down)} to {signedInt(band.up)} OVR, most often down
+          {years > 1 ? `, and this deal runs ${yrs(years)}` : ''}.
+        </div>
+      )}
+
       <div className="fo-sheet-foot">
         <Link to={`/player/${p.pid}`} className="btn" onClick={onClose}>
           Profile
         </Link>
-        <button className={`btn grow ${!blocked ? 'primary' : ''}`} disabled={blocked || busy} onClick={() => submit()}>
-          {overRights ? 'No offer can re-sign him' : `${bidding ? (bid ? 'Update offer' : 'Submit offer') : 'Make offer'} · ${yrs(years)} · ${money(total)}`}
+        <button className={`btn grow ${!blocked ? (signsNow && armed === armKey ? 'danger' : 'primary') : ''}`} disabled={blocked || busy} onClick={press}>
+          {overRights
+            ? 'No offer can re-sign him'
+            : signsNow && armed === armKey
+              ? `Confirm: sign him · ${yrs(years)} · ${money(total)}`
+              : `${bidding ? (bid ? 'Update offer' : 'Submit offer') : 'Make offer'} · ${yrs(years)} · ${money(total)}`}
         </button>
       </div>
+      {signsNow && armed === armKey && !blocked && (
+        <div className="tiny warn" role="status">
+          This meets his ask: he signs on the spot, and a signing can&apos;t be undone. Tap again to sign him.
+        </div>
+      )}
     </div>
   );
 }

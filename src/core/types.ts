@@ -573,6 +573,18 @@ export interface Rotation {
   held?: number[];
   /** A manual rotation's players the coach chose to keep at 0 minutes: nothing asks him about them again. */
   benched?: number[];
+  /**
+   * A manual rotation's players whose minutes target the coach set himself: the plan plays them their
+   * target and scales the others to 240 around it, and a newcomer's or a returning player's share
+   * comes from the others first (see rotationPlan.ts normalizeMinutes, games.ts giveShare).
+   */
+  set?: number[];
+  /**
+   * What a manual rotation's targets added up to when the coach last left it (and the staff last looked):
+   * a total under it since means players left with their minutes, which are handed back out (games.ts
+   * ensureRotation, makeWhole).
+   */
+  whole?: number;
 }
 
 export interface Tactics {
@@ -989,6 +1001,17 @@ export interface MovesWorth {
   moves: number;
   /** The move that mattered most, when one clearly did: as the report lists it, its points (shrunk) and their standard error. */
   top?: { text: string; pts: number; se: number };
+  /**
+   * The moves measured one at a time (the night replayed without just that one, the others kept): the
+   * move's place in GameResult.moves, the reading in points of margin and its standard error. The
+   * night's last few only (liveWorth.ts NIGHT_MOVES_MAX). Absent in readings from before it was kept.
+   */
+  each?: { move: number; raw: number; se: number }[];
+  /**
+   * Each kind of move left out of the night together (every timeout, every sub...), the others kept:
+   * the reading, its standard error and how many moves of the kind there were. Absent in older readings.
+   */
+  kinds?: { kind: CoachMove['kind']; raw: number; se: number; moves: number }[];
 }
 
 /** One counter of the game plan a game was played with (GameResult.plan). */
@@ -1507,8 +1530,12 @@ export interface League {
   youthLean?: YouthLean;
   /** A call's look for a trade the user took (see calls.ts): a trade of his from transaction `txn` on settles it. */
   callLook?: { id: string; txn: number };
-  /** The staff call the last sim stopped for (see simCore.ts's runSim): Needs you leads with it that day. */
-  stopCall?: { id: string; season: number; day: number };
+  /**
+   * The staff call the last sim stopped for (see simCore.ts's runSim): Needs you leads with it that day.
+   * `text`, `to`: a stop that is no card of the queue (a playoff series of his starting, an elimination
+   * game, a starter out for a playoff game: calls.ts's postseasonStops), said as the sim ends.
+   */
+  stopCall?: { id: string; season: number; day: number; text?: string; to?: string };
   fired?: boolean;
   /** Free-agency day counter (0..30). */
   faDay: number;

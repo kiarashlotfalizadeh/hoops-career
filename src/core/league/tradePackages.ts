@@ -15,6 +15,7 @@ import {
   evaluateTrade,
   findPick,
   judgedPick,
+  marketPickValue,
   pickValue,
   pickValueFor,
   playerValueFor,
@@ -240,7 +241,8 @@ export function neutralBalance(league: League, offer: TradeOffer, side: 'a' | 'b
       [
         ...s.dpids.flatMap((d) => {
           const dp = findPick(league, d);
-          return dp ? [pickValue(league, judgedPick(dp, s, to, incoming))] : [];
+          // (on the user's market: a first counts for what every team counts it in a deal with him, trades.ts FIRST_MARKET)
+          return dp ? [marketPickValue(league, judgedPick(dp, s, to, incoming))] : [];
         }),
         ...(s.swaps ?? []).flatMap((y) => {
           const sp = swapPicks(league, s.tid, to, y);

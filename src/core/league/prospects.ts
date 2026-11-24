@@ -589,7 +589,10 @@ export const tierOfSlot = (slot: number) => PICK_TIERS.find((t) => slot >= t.fro
  * Measured by dev-check (six leagues of six seasons, 2026-11-23, the room's reads: medians of 4 to 5
  * in every tier, four picks in five within 8 or 9, first-rounders as often over as under and
  * second-rounders 3 under on average, as few of them get the minutes to grow): it prints the same
- * medians and fails when these drift more than a point from them.
+ * medians and fails when these drift more than a point from them. They held on 2026-11-24, when the
+ * last points were made the slowest (progression.ts's LATE_POINTS; nine leagues: 3 to 4, 4 to 5 and
+ * 5, top-ten picks 0.2 to 0.5 under their read on average where they had been 1.6 over in a
+ * league's own classes).
  */
 export const OUTCOME_MISS: Record<PickTier, number> = { top: 4, first: 5, second: 5 };
 /** Seasons since his draft from which a pick's read is judged. */

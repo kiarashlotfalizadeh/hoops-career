@@ -60,6 +60,7 @@ export function StaffView({
   substitute: (out: number, inn: number) => boolean;
 }) {
   const [allMoves, setAllMoves] = useState(false);
+  const [allCalls, setAllCalls] = useState(false);
   const decisions = notes.filter((n) => n.kind === 'decision');
   const reads = notes.filter((n) => n.kind === 'read');
   // (a player a call already offers to sub isn't offered twice)
@@ -70,9 +71,15 @@ export function StaffView({
       <AssistantHead key={read} name={assistant.name} initials={assistant.initials} read={read} />
       {decisions.length > 0 ? (
         <div className="lv-notes">
-          {decisions.slice(0, 3).map((n) => (
+          {/* one call at a time, the most urgent: the rest wait a tap away, so the console never stacks cards */}
+          {decisions.slice(0, allCalls ? 3 : 1).map((n) => (
             <NoteCard key={n.id} note={n} busy={busy} onAct={(a) => onAct(n, a)} onDismiss={() => onDismiss(n)} />
           ))}
+          {decisions.length > 1 && (
+            <button className="lv-mv-all lv-notes-more" onClick={() => setAllCalls((x) => !x)}>
+              {allCalls ? 'One at a time' : `${decisions.length - 1} more ${decisions.length === 2 ? 'call' : 'calls'}`}
+            </button>
+          )}
         </div>
       ) : (
         <div key={quiet ?? ''} className="lv-calm small dim" role="status">
@@ -80,9 +87,10 @@ export function StaffView({
         </div>
       )}
       <Trouble view={view} side={side} tactics={tactics} names={nameOf} subFor={subFor} substitute={substitute} skip={offered} />
-      {reads.length > 0 && (
+      {/* (a read waits while a call is up) */}
+      {reads.length > 0 && decisions.length === 0 && (
         <div className="lv-notes reads">
-          {reads.slice(0, 2).map((n) => (
+          {reads.slice(0, 1).map((n) => (
             <NoteCard key={n.id} note={n} onAct={(a) => onAct(n, a)} onDismiss={() => onDismiss(n)} />
           ))}
         </div>

@@ -688,9 +688,26 @@ export function aiMleRoom(league: League, tid: number, season = contractSeason(l
 
 /** How an AI team can pay a free agent this much (see signingRoute): its mid-level only as far as aiMleRoom reaches. */
 export function aiSigningRoute(league: League, tid: number, amount: number, season = contractSeason(league), p?: Pick<Player, 'experience'>, years?: number): SigningRoute | null {
-  const route = signingRoute(league, tid, amount, season, p, years);
+  let route = signingRoute(league, tid, amount, season, p, years);
+  // a rebuilder keeps REBUILD_ROOM of the cap unspent on other teams' free agents: its room is for the
+  // contracts it takes picks for. Its mid-level still pays for a deal that fits it.
+  if (route === 'space' && league.teams[tid]?.strategy === 'rebuild') {
+    const cap = CAP_FOR(league, season);
+    if (payroll(league, tid, season) + amount > cap.salaryCap * (1 - REBUILD_ROOM))
+      route = (years === undefined || years <= MLE_YEARS) && amount <= mleRoom(league, tid, season) ? 'mle' : null;
+  }
   return route === 'mle' && amount > aiMleRoom(league, tid, season) ? null : route;
 }
+
+/**
+ * The share of the cap a rebuilding AI team leaves unspent when it signs other teams' free agents
+ * with cap space (its own free agents and its draft picks aside). Without it every team with room
+ * spent it to the dollar in July: of nine teams under the cap when the real league's first summer
+ * opened, one had room when it closed ($18.8M), none by the next deadline, and a contract nobody
+ * wanted had no taker at any price (the playtest's capologist probed 29 teams, 2026-11-24). About
+ * $17M of a $175M cap: one mid-sized contract's worth, for which it asks picks (trades.ts ROOM_VALUE).
+ */
+export const REBUILD_ROOM = 0.1;
 
 /** A signing used this route: the mid-level is gone for the season once used. */
 export function spendRoute(league: League, tid: number, route: SigningRoute | null, season = contractSeason(league)) {

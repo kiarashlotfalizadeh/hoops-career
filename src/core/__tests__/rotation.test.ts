@@ -3,13 +3,14 @@
 // player's remembered role.
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
+import { leaveTeam } from '../league/contracts';
 import { teamPlayers } from '../league/helpers';
 import { buildMinutePlan, normalizeMinutes, planInputs, planRoles, starterTargets, type PlanPlayer, type PlanSource } from '../sim/rotationPlan';
 import { autoRotation, roleMemory, rosterSeason, sortByPosition, veteranCeiling } from '../ai/coachAI';
 import { blankStats, generatePlayer, DEFAULT_SCALE } from '../playerGen';
-import { youthLean } from '../league/games';
+import { ensureRotation, giveShare, makeWhole, youthLean } from '../league/games';
 import { Rng } from '../random';
-import type { Player, Rotation } from '../types';
+import { FREE_AGENT, type Player, type Rotation } from '../types';
 
 const players: PlanPlayer[] = [36, 34, 33, 31, 29, 24, 20, 16, 12, 5].map((m, i) => ({
   pid: i,
@@ -184,6 +185,82 @@ describe('rotations', () => {
       expect(m.slice(6).reduce((a, b) => a + b, 0)).toBe(16);
       // nobody with minutes: an even split among the first ten, in whole minutes
       expect(normalizeMinutes(players.slice(0, 7).map((p) => ({ ...p, minutes: 0 })))).toEqual([35, 35, 34, 34, 34, 34, 34]);
+    }
+    {
+      // a target the coach set himself is what the plan plays, whatever the rest add up to: the others
+      // scale to 240 around it (scaled all alike, a star set to 36 was planned 40 here, and 31 below)
+      const short = rotation({ minutes: Object.fromEntries([36, 30, 30, 28, 26, 22, 18, 14, 9, 4, 0, 0].map((m, i) => [i, m])), set: [0] });
+      expect(Object.values(short.minutes).reduce((a, b) => a + b, 0)).toBe(217);
+      const up = mins(planInputs(src, short));
+      expect(up[0]).toBe(36);
+      expect(total(up)).toBe(240);
+      expect(up[1]).toBeGreaterThan(30);
+      // (nobody's target set: all alike, as before)
+      expect(mins(planInputs(src, { ...short, set: undefined }))[0]).toBe(40);
+      const long = rotation({ minutes: Object.fromEntries([36, 38, 38, 36, 34, 30, 26, 20, 14, 8, 0, 0].map((m, i) => [i, m])), set: [0] });
+      const down = mins(planInputs(src, long));
+      expect(down[0]).toBe(36);
+      expect(total(down)).toBe(240);
+      expect(mins(planInputs(src, { ...long, set: undefined }))[0]).toBe(31);
+      // a teammate out: his minutes go to the others, not on top of the target
+      const out = mins(
+        planInputs(
+          src.map((p) => (p.pid === 2 ? { ...p, available: false } : p)),
+          rotation({ set: [0] }),
+        ),
+      );
+      expect(out[0]).toBe(36);
+      expect(total(out)).toBe(240);
+      // his cap still holds, and more set than a game holds scales everyone
+      expect(mins(planInputs(src, rotation({ set: [0], caps: { 0: 30 } })))[0]).toBe(30);
+      const all = mins(planInputs(src, rotation({ minutes: Object.fromEntries(src.map((p) => [p.pid, p.pid < 8 ? 40 : 0])), set: src.map((p) => p.pid) })));
+      expect(total(all)).toBe(240);
+      expect(all[0]).toBe(30);
+    }
+    {
+      // a manual rotation stays whole when the roster changes under it: the minutes of a player who left
+      // are handed out (they went with him: a rotation at 173 after a summer, the starters scaled to 46),
+      // and a newcomer's share comes from the others before a target the coach set
+      const l = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 5 });
+      ensureRotation(l, 0);
+      const rot = l.teams[0].rotation;
+      rot.manual = true;
+      ensureRotation(l, 0);
+      const sum = () => teamPlayers(l, 0).reduce((a, p) => a + (rot.minutes[p.pid] ?? 0), 0);
+      const whole = sum();
+      expect(Math.abs(whole - 240)).toBeLessThanOrEqual(2);
+      const [star, , gone] = rot.order;
+      rot.set = [star];
+      const target = rot.minutes[star];
+      const sixth = rot.order[5];
+      const was = rot.minutes[sixth];
+      expect(rot.minutes[gone]).toBeGreaterThan(was);
+      // (he leaves as a release, a trade or a contract's end takes him: his line goes with him)
+      leaveTeam(l.teams[0], gone);
+      l.players[gone].tid = FREE_AGENT;
+      expect(sum()).toBeLessThan(whole - 20);
+      ensureRotation(l, 0);
+      expect(rot.order).not.toContain(gone);
+      expect(rot.minutes[gone]).toBeUndefined();
+      expect(sum()).toBe(whole);
+      expect(rot.minutes[star]).toBe(target);
+      // (the reserve who moved into the five plays more for it)
+      expect(rot.order.indexOf(sixth)).toBe(4);
+      expect(rot.minutes[sixth]).toBeGreaterThan(was);
+      // a regular without minutes gets the staff's share from the others
+      const ninth = rot.order.find((pid) => (rot.minutes[pid] ?? 0) > 0 && pid !== star && rot.order.indexOf(pid) > 5)!;
+      rot.minutes[ninth] = 0;
+      const before = sum();
+      giveShare(l, 0, [ninth]);
+      expect(rot.minutes[ninth]).toBeGreaterThanOrEqual(10);
+      expect(rot.minutes[star]).toBe(target);
+      // (out of the others' minutes: the total stays, to the rounding)
+      expect(Math.abs(sum() - before)).toBeLessThanOrEqual(3);
+      // a rotation short of 240 from before the fix is made whole on opening night's call
+      for (const pid of rot.order.slice(1, 5)) rot.minutes[pid] -= 8;
+      makeWhole(l, 0);
+      expect(sum()).toBe(240);
+      expect(rot.minutes[star]).toBe(target);
     }
     {
       // treats hard caps as hard, handing the rest to teammates

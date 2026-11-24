@@ -470,11 +470,12 @@ export function saveCheck(league: League, id: number, w: CounterWorth, games: nu
   const lead = leadAssistant(league);
   const call = worthCall(w);
   const replayed = second ? 'I took the second look I promised, over every game since.' : 'I went back over the games since, with your change and without it.';
+  const fig = checkFigure(e.check);
   const body =
     call === 'gain'
-      ? `${replayed} It seems to have helped. I'd keep it.`
+      ? `${replayed} It seems to have helped: ${fig} over ${plural(games, 'game')}. I'd keep it.`
       : call === 'cost'
-        ? `${replayed} It seems to have hurt. Put it back from Team → Tactics → Season Analysis.`
+        ? `${replayed} It seems to have hurt: ${fig} over ${plural(games, 'game')}. Put it back from Team → Tactics → Season Analysis.`
         : `${replayed} ${evenText(e.check, games)}`;
   addInbox(league, {
     from: `${lead.name}, lead assistant`,
@@ -534,12 +535,17 @@ export function madeLine(e: TacticEdit): string {
       : `Forecast: no clear swing from your change. It's a style call. ${later}`;
 }
 
-/** The check's verdict, in words, on the games since. */
+/** A check's reading as a figure, a fact about played games: "+0.9 a game, give or take 0.4". */
+export const checkFigure = (c: Pick<CounterWorth, 'pts' | 'se'>) =>
+  `${c.pts > 0.04 ? '+' : c.pts < -0.04 ? '−' : ''}${Math.abs(c.pts).toFixed(1)} a game, give or take ${Math.max(0.1, c.se).toFixed(1)}`;
+
+/** The check's verdict on the games since, with its figure. */
 export function checkLine(e: TacticEdit): string {
   const c = e.check;
   if (!c) return '';
   const call = worthCall(c);
-  return call === 'gain' ? 'Your change seems to have helped.' : call === 'cost' ? 'Your change seems to have hurt.' : evenText(c, c.games);
+  const fig = `${checkFigure(c)} over ${plural(c.games, 'game')}`;
+  return call === 'gain' ? `Your change seems to have helped: ${fig}.` : call === 'cost' ? `Your change seems to have hurt: ${fig}.` : evenText(c, c.games);
 }
 
 /**
@@ -549,11 +555,16 @@ export function checkLine(e: TacticEdit): string {
  */
 export function evenText(w: Pick<CounterWorth, 'raw' | 'se'> & { recheck?: true }, games: number): string {
   const small = Math.abs(w.raw) + 2 * w.se < WORTH_MIN;
+  // (the range the replays leave it in: a fact about the games played)
+  const lo = w.raw - 2 * w.se;
+  const hi = w.raw + 2 * w.se;
+  const f = (x: number) => `${x > 0.04 ? '+' : x < -0.04 ? '−' : ''}${Math.abs(x).toFixed(1)}`;
+  const range = `between ${f(lo)} and ${f(hi)} points a game`;
   if (small)
-    return `Too close to call over ${games} games: the replays rule out a big swing either way, but it may still help or hurt a little. That's final. Keep it if you like how the team plays with it.`;
+    return `Too close to call over ${games} games: the replays put it ${range}, so no big swing either way. That's final: the staff won't look again. Keep it if you like how the team plays with it.`;
   return w.recheck
-    ? `Still inconclusive over ${games} games: the replays couldn't tell it apart from your old setup. That was the staff's last look. Keep it if you like how the team plays with it.`
-    : `Inconclusive over ${games} games: the replays couldn't tell it apart from your old setup. The staff takes one more look after ${RECHECK_AFTER} more games, if the season has them.`;
+    ? `Still inconclusive over ${games} games: the replays put it ${range} and couldn't tell it apart from your old setup. That was the staff's last look: more games won't settle a difference this small. Keep it if you like how the team plays with it.`
+    : `Inconclusive over ${games} games: the replays put it ${range} and couldn't tell it apart from your old setup. The staff takes one more look after ${RECHECK_AFTER} more games, if the season has them.`;
 }
 
 /** The call of a reading, for its tone. */

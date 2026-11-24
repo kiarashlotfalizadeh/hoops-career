@@ -202,6 +202,8 @@ export const shotsMethods = {
     // home court, the game's shooting conditions and the score
     if (!this.opts.neutral) p += off.side === 0 ? K.home : -K.home * 0.3;
     if (this.opts.edge) p += this.opts.edge[off.side];
+    // playoff defense (K.playoffD)
+    if (this.opts.type === 'playoffs') p -= K.playoffD;
     // a core that has played and won together (K.cohesion)
     p += off.coh;
     // the hot hand and the cold one, and a side on a run (FEEL.hot, FEEL.momentum)

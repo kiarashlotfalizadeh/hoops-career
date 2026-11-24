@@ -6,6 +6,7 @@ import { faAdvance, finishDraftPhase, newSeason, regularGamesLeft, simDay, start
 import { userGameOnDay } from '../core/league/games';
 import { schedulePlayoffDay } from '../core/league/playoffs';
 import { simStopIds } from '../core/league/agenda';
+import { postseasonStops } from '../core/league/calls';
 import { staffMorning } from '../core/league/callMeasure';
 import { markOffersSeen } from '../core/league/proposals';
 
@@ -125,8 +126,9 @@ export interface SimHooks {
  * (staffMorning: whatever the sim's length or settings, so a long sim and a short one make the same
  * ones). Under `stopOnNews`, a sim stops early (except one of a set number of days) only for what
  * needs an answer and wasn't open when it started (agenda.ts's stopsSim): a decision the league waits
- * on, an AI team's trade offer, a player's trade request, a starter hurt, the trade deadline, a
- * playoff series or play-in game of his starting. What it stopped for is kept (League.stopCall: the
+ * on, an AI team's trade offer, a player's trade request, a starter hurt, the trade deadline, and in
+ * the postseason a series or play-in game of his starting, a game that would end his season and a
+ * starter out for a playoff game (calls.ts's postseasonStops). What it stopped for is kept (League.stopCall: the
  * action queue leads with it). Stopping early changes nothing that's played: the next sim carries on
  * from the same day.
  */
@@ -141,7 +143,7 @@ export async function runSim(l: League, target: SimTarget, hooks: SimHooks = {})
   const [firedBefore, ultimatumBefore] = [!!l.fired, ultimatum()];
   const stops = l.settings.stopOnNews !== false && target.kind !== 'days';
   // (what was open when it started doesn't stop it again)
-  const before = new Set(stops ? simStopIds(l) : []);
+  const before = new Set(stops ? [...simStopIds(l), ...postseasonStops(l).map((x) => x.id)] : []);
   const every = hooks.checkpointDays ?? 20;
   let days = 0;
   /** The staff's morning: its measuring said on the progress bar, a stop asked for meanwhile honoured. */
@@ -154,8 +156,15 @@ export async function runSim(l: League, target: SimTarget, hooks: SimHooks = {})
   /** Something that needs an answer opened since the sim started: it stops the sim, and the queue leads with it. */
   const called = () => {
     const id = simStopIds(l).find((x) => !before.has(x));
-    if (id === undefined) return false;
-    l.stopCall = { id, season: l.season, day: l.day };
+    if (id !== undefined) {
+      l.stopCall = { id, season: l.season, day: l.day };
+      return true;
+    }
+    // the postseason's own stops, cards or not: a series of his starting, an elimination game, a starter out for a playoff game
+    const post = postseasonStops(l).find((x) => !before.has(x.id));
+    if (!post) return false;
+    before.add(post.id);
+    l.stopCall = { id: post.id, season: l.season, day: l.day, text: post.text, to: post.to };
     return true;
   };
   // (the morning it starts on first: a live game, a phase change or a change of his since the last sim can leave it to do)

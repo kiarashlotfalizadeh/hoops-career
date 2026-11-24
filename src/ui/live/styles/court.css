@@ -372,6 +372,71 @@
 .lv-cb-btn.end {
   margin-left: auto;
 }
+/* the speeds side by side, the one playing white on the ink: shown where the bar has the room (else
+   the one figure button steps through them) */
+.lv-cb-speeds {
+  display: none;
+  height: 44px;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--cb-wash);
+  padding: 0 3px;
+}
+.lv-cb-sp {
+  min-width: 38px;
+  height: 36px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  font-family: var(--mono);
+  font-stretch: normal;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.lv-cb-sp::after {
+  content: '';
+  position: absolute;
+  inset: -4px 0;
+}
+.lv-cb-sp.on {
+  background: var(--paper-ink);
+  color: var(--ink);
+}
+/* the speed the game is playing at, beside the pause button: a way into playback that says speeds exist */
+.lv-cb-spd {
+  height: 44px;
+  min-width: 36px;
+  padding: 0 4px;
+  font-family: var(--mono);
+  font-stretch: normal;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--cb-dim);
+}
+@container lv-cb (min-width: 330px) {
+  .lv-cb-tp .lv-cb-speeds {
+    display: inline-flex;
+  }
+  .lv-cb-tp .lv-cb-btn.fig {
+    display: none;
+  }
+}
+/* (with the three speeds out, a phone's bar has no room for Key plays' words too) */
+@container lv-cb (min-width: 330px) and (max-width: 470px) {
+  .lv-cb-tp .lv-cb-btn.kp .lv-cb-btn-t,
+  .lv-cb-tp .lv-cb-btn.go .lv-cb-btn-t {
+    display: none;
+  }
+  .lv-cb-tp .lv-cb-btn.kp,
+  .lv-cb-tp .lv-cb-btn.go {
+    width: 48px;
+    padding: 0;
+  }
+}
+@container lv-cb (max-width: 240px) {
+  .lv-cb-spd {
+    display: none;
+  }
+}
 /* an offer's buttons look smaller and keep the finger's 44px */
 .lv-cb-btn.sm {
   height: 34px;

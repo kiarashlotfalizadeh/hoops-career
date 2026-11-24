@@ -232,6 +232,18 @@ export const K = {
    * here, or to anything that moves a season's path, can tip it on sampling alone.
    */
   cohesion: { from: 0.55, fg: 0.002 },
+  /**
+   * Playoff defense: the field-goal percentage a playoff game takes off every shot, both sides alike.
+   * The real playoffs score less than the regular season (2020-21 to 2025-26 box scores: 105.6 to
+   * 110.2 points a team against 112.1 to 115.6, 2 to 9 lower), on tighter defense and a slower game.
+   * The engine's ran the other way: its playoff teams shorten to eight and play their best five 10%
+   * more (planInputs), which lifts their offense and nothing else, so over nine simulated
+   * postseasons (three leagues, 2026-11-24) a team scored 116.2 to 128.9 against its league's 113.6
+   * to 117.7 in the regular season, 1 to 11 higher (a third to a half of team-games at 130+ in a
+   * generated league: the playtest's 149-133). A playoff game only: the regular season, the cup and
+   * the fingerprints are untouched.
+   */
+  playoffD: 0.035,
   usageExp: 2.0,
   /**
    * A player's share of his team's possessions while he's on the floor levels off past useLevel: his

@@ -652,6 +652,46 @@ function skidDaily(league: League) {
 const skidTitle = (s: SkidCall) => (s.lost === s.of ? `${s.of} straight losses` : `${s.lost} losses in ${s.of}`);
 
 /** Counters the staff measures for a skid's next game: one, two from its second step. */
+/**
+ * What stops a long sim in the postseason besides the queue's calls, on the morning of one of the
+ * user's games: a series (or play-in game) of his starting tonight, a game that ends his season if he
+ * loses it, and one of his best five (STARTER_RANK, by OVR) out for it. Each once (its id). A series
+ * with nothing for the staff to change has no card (quietStart: both answers would be the same), but
+ * it is still the night a coach wants the game in front of him: simmed past unseen, the ten-persona
+ * playtest's phone player lost a conference final without a single input (2026-11-24).
+ */
+export function postseasonStops(league: League): { id: string; text: string; to: string }[] {
+  if (league.fired || (league.phase !== 'playin' && league.phase !== 'playoffs')) return [];
+  const me = league.userTid;
+  const g = userGameOnDay(league, league.day);
+  if (!g?.seriesId || g.played || (g.type !== 'playin' && g.type !== 'playoffs')) return [];
+  const opp = g.home === me ? g.away : g.home;
+  const abbrev = league.teams[opp].abbrev;
+  const to = `/games/${opp}`;
+  const out: { id: string; text: string; to: string }[] = [];
+  const start = seriesStart(league);
+  if (start) out.push({ id: `stop:${start.id}`, text: start.series ? `${seriesLabel(start.series)} vs ${abbrev} starts tonight.` : `Play-in vs ${abbrev} tonight.`, to });
+  const series = g.type === 'playoffs' ? league.playoffs.find((x) => x.id === g.seriesId) : undefined;
+  if (series && series.winner === undefined) {
+    const [w, l] = series.high === me ? [series.highWins, series.lowWins] : [series.lowWins, series.highWins];
+    const need = Math.max(w, l) + 1;
+    // (a best-of-seven: three losses and the next one ends it; the wins a series takes are the engine's, read off who has won)
+    if (l === 3 && need === 4)
+      out.push({ id: `stop:elim:${league.season}:${series.id}:${w}-${l}`, text: `Elimination game tonight: down ${l}-${w} to ${abbrev} in the ${seriesLabel(series)}.`, to });
+  }
+  const best = standardRoster(league, me)
+    .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
+    .slice(0, STARTER_RANK);
+  for (const p of best)
+    if (p.injury && p.injury.gamesRemaining > 0)
+      out.push({
+        id: `stop:out:${p.pid}:${p.injuryCount}`,
+        text: `${playerName(p)} is out tonight against ${abbrev} (${plural(p.injury.gamesRemaining, 'game')}).`,
+        to: '/team/rotation',
+      });
+  return out;
+}
+
 const skidMax = (s: SkidCall) => ((s.rung ?? 1) > 1 ? 2 : 1);
 
 /** Counters the staff puts in when he's behind in a series: one, two down two games, three facing elimination. */
@@ -918,6 +958,21 @@ function firstSlump(league: League) {
 }
 
 // ---------------------------------------------------------------- the staff's own picks
+
+/**
+ * A losing slide as Today shows it while its next game is still to play: how bad it is, what the
+ * staff reads behind it, and what it did about it (its counters for the next game, in once measured),
+ * a tap from that game's plan. The same words the digest carries, where a coach who is losing looks
+ * first: a newcomer at 0-4 found nothing on Today telling him what to try (the playtest, 2026-11-24).
+ */
+export function slideNote(league: League): { title: string; line: string; to: string; toLabel: string } | null {
+  if (league.fired) return null;
+  const s = skidOpen(league);
+  if (!s) return null;
+  const abbrev = league.teams[s.opp]?.abbrev ?? 'them';
+  const did = s.put ?? (s.luck ? 'Nothing in the plan to change for that: ride it out.' : `The staff is measuring its counters for the game against ${abbrev}.`);
+  return { title: skidTitle(s), line: `${s.diag ? `${s.diag} ` : ''}${did}`, to: `/games/${s.opp}?tab=plan`, toLabel: `Plan vs ${abbrev}` };
+}
 
 /**
  * What the calls' picks still wait on, measured before a sim decides whether to stop (see
