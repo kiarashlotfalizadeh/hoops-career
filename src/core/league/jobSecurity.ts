@@ -8,8 +8,9 @@
 // reach): met, it buys him back some standing; missed, he's fired whatever else went right.
 import type { League } from '../types';
 import { clamp } from '../random';
-import { FIRING_LINE, seasonsInCharge } from './owner';
+import { FIRING_LINE, poorLastSeason, seasonsInCharge } from './owner';
 import {
+  POOR_GRADE,
   POSTSEASON,
   WIN_SCALE,
   currentGoals,
@@ -50,6 +51,11 @@ export interface JobSecurity {
   /** The same from the next review on: after the season's review, next season's (see graceLeft). */
   left: number;
   ultimatum?: Ultimatum;
+  /**
+   * Last season with this owner graded poor and this season's review can fire the coach: a second
+   * poor one does, whatever the standing (owner.ts poorLastSeason). `again`: this season projects poor too.
+   */
+  strike?: { again: boolean };
   /** Job security is off in Settings: he never fires you. */
   off: boolean;
 }
@@ -125,6 +131,8 @@ function projectedGrade(league: League, og: OwnerGoals, fc?: Forecast | null): n
 
 /** The score the meter is held at (most) with a live ultimatum the season projects to meet: the top of the hot seat (on course to miss it: just under the firing line). */
 const ULTIMATUM_SCORE = 31;
+/** ...and with a poor season on file that a second would follow with the sack: the top of the warm seat. */
+const STRIKE_SCORE = 44;
 
 /**
  * A live ultimatum (one not yet met) and whether the season projects to meet it: the wins or the
@@ -155,7 +163,17 @@ export function jobSecurity(league: League, fc?: Forecast | null): JobSecurity {
   // the sack on the way whatever the standing: a live ultimatum. The meter says so: hot, under the line when it's on course
   const live = og && !league.fired && !off ? ultimatumOutlook(league, og, fc) : null;
   const danger = live && !live.met ? `Ultimatum: ${ultimatum!.text.toLowerCase()}, or you're fired.` : undefined;
-  const raw = toScore(projected);
+  // a strike on file (last season graded poor): the seat is warm at best all season, and under the
+  // line once this one projects poor too (as far as the season has been played: none of it on
+  // opening night). A season heading for the first strike is warm at best too: at 3-57 a coach in
+  // good standing had read "Steady", the season counting 40% of a standing it hadn't moved yet.
+  const reviewedNow = REVIEWED.has(league.phase);
+  const canStrike = !off && !league.fired && graceLeft(league, true) === 0;
+  const onStrike = canStrike && poorLastSeason(league, league.season + (reviewedNow ? 1 : 0)) && graceLeft(league, reviewedNow) === 0;
+  const heading = canStrike && grade !== null && grade <= POOR_GRADE && seasonPlayed(league, og) >= 0.25;
+  const again = onStrike && heading;
+  const strike = onStrike ? { again } : undefined;
+  const raw = Math.min(toScore(projected), again ? toScore(FIRING_LINE) - 1 : strike || heading ? STRIKE_SCORE : 100);
   const score = live && !live.onCourse ? Math.min(raw, toScore(FIRING_LINE) - 1) : danger ? Math.min(raw, ULTIMATUM_SCORE) : raw;
   const h = seatHeat(score);
   let line: string;
@@ -186,9 +204,14 @@ export function jobSecurity(league: League, fc?: Forecast | null): JobSecurity {
   const left = reviewed ? graceLeft(league, true) : grace;
   // (a new career's first season sets the standing outright, grace or not: said, so the grace isn't read as a free season)
   const sets = !reviewed && seasonWeight(league) >= 1;
+  if (heading && !strike && !danger) line += ` This season is heading for a poor grade (${Math.round(POOR_GRADE * 100)} or worse): two of those in a row and he fires you.`;
+  if (strike && !danger)
+    line += again
+      ? ' Last season graded poor and this one is heading the same way: a second in a row and he fires you.'
+      : ` Last season graded poor: a second in a row (${Math.round(POOR_GRADE * 100)} or worse) and he fires you.`;
   if (!off && left > 0 && (h.heat === 'warm' || h.heat === 'hot'))
     line += ` He can't fire you ${left === 1 ? (reviewed ? 'next season' : 'this season') : `for ${reviewed ? 'the next ' : ''}${left} seasons`}${sets ? ', but this season sets your standing with him' : ''}.`;
-  return { score, heat: h.heat, label: league.fired ? 'Fired' : h.label, line, ...(danger ? { danger } : {}), standing, projected, grace, left, ultimatum, off };
+  return { score, heat: h.heat, label: league.fired ? 'Fired' : h.label, line, ...(danger ? { danger } : {}), standing, projected, grace, left, ultimatum, ...(strike ? { strike } : {}), off };
 }
 
 /**

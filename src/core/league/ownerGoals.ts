@@ -1,15 +1,16 @@
 // The owner's goals for the user's season. On opening night the owner looks at the roster he has and
-// sets three or four goals for it, frozen for the season: a win total (what the season forecast
-// projects the roster to win, see leagueOutlook: the
-// number the press's "projected for N wins" reads; after the coach's first season with the team
-// raised a little toward what a team with its payroll's league rank should win, and never under
-// a win% floor, WIN_FLOOR, itself never closer than FLOOR_MARGIN wins under his read), a
+// sets three or four goals for it, frozen for the season: a win total (the middle of what the season
+// forecast projects the roster to win, see leagueOutlook: the number the press's "projected for N
+// wins" reads, never nudged over it, and past WIN_ASK_TOP wins only a third of the rest (see
+// winAsk); never under a win% floor, WIN_FLOOR, itself never closer than FLOOR_MARGIN wins under his
+// read), a
 // postseason goal from where that projects the team in its conference and its front office's
 // strategy (or a development goal for a rebuilder or a team projected out of the play-in: minutes
 // for players 23 or under, for REBUILD_SEASONS seasons in a row without the postseason; after that, the play-in at least and a higher floor, and only reaching the
-// postseason resets the clock), and a money goal (a profit from the season's budget at the league's
-// standard levers, or the luxury tax line for a team near or over it: a win-now owner's a little
-// past it). A season under the floor
+// postseason resets the clock), and a money goal for a team near or over the luxury tax: a payroll
+// line that follows the team's window (see payrollLine: the tax line for a team that isn't asked to
+// win a round, past it for one that is, and always room for the payroll he inherited), a side goal
+// whose weight is capped (SIDE_WEIGHT). A season under the floor
 // grades Poor or worse whatever else went right (see floorCap), and so does one past the rebuild
 // allowance that misses the postseason, lower each season it goes on (see patienceCap). Each
 // franchise's owner has a personality of his own (a builder, win-now or frugal), the
@@ -70,18 +71,24 @@ export interface OwnerGoal {
   end?: number;
   /** Postseason: the conference rank the roster projected to when the goal was set. */
   rank?: number;
-  /** Wins: the league rank of the team's payroll when it was set (1: the highest), when that raised the target. */
+  /** Wins, in goals from before 2026-11-24: the league rank of the team's payroll, when that raised the target (it no longer does). */
   payRank?: number;
+  /** Wins: the forecast's middle when the target is under it (see winAsk: a roster read past WIN_ASK_TOP wins). */
+  read?: number;
   /** Wins: last season's target with this team, when it held this one up (see WIN_SLIDE). */
   held?: number;
+  /** Wins, held: last season graded poor (POOR_GRADE), which is why the bar holds (with or without players sent away). */
+  after?: 'poor';
   /** Wins, held: the rotation players the coach traded away or released since last season's goals, best first (two at most; see movedOut). */
   gone?: string[];
   /**
-   * Payroll: the owner's own line (the tax line; a win-now owner's CAP.spendLine) when the target is the
-   * payroll the coach inherited past it (see forcedPayroll): the books don't count that payroll's tax,
-   * nor its salary past this line, against him (see books.ts sanctionedTax).
+   * Payroll: the owner's own line (see payrollLine) when the target is the payroll the coach
+   * inherited past it (see forcedPayroll), with PAYROLL_SLACK of room, or WINDOW_ROOM of the cap
+   * when his window is open (`window`).
    */
   line?: number;
+  /** Payroll: set with the window open (a postseason goal of a playoff round or more): he pays past the tax for it. */
+  window?: true;
   /**
    * Payroll, with a `line`: the payroll the coach inherited when the goal was set ($K, see
    * forcedPayroll), what the owner signs off on for the season: a trade of an inherited contract for
@@ -173,8 +180,33 @@ export const REVIEWS_KEPT = 10;
 export const SEASON_GAMES = 82;
 /** Wins above or below the target that max out the wins grade (a full season; a shorter stretch scales it down to half). */
 export const WIN_SCALE = 20;
-/** Payroll over or under its line, as a share of the tax line, that maxes out a payroll goal's grade. */
-export const PAYROLL_SCALE = 0.05;
+/**
+ * Payroll over or under its line, as a share of the tax line, that maxes out a payroll goal's grade
+ * (about $20M over). At 0.05 one mid-level signing over the line was the whole −100: the playtest's
+ * 62-win conference finalist graded "a poor season" on it.
+ */
+export const PAYROLL_SCALE = 0.1;
+/**
+ * The most a side goal weighs in the season's grade, whatever the owner's personality, his quirk and
+ * the market make of it: the money a fifth, the young players' minutes a third (what is over goes to
+ * the goals on the floor, or to the wins when there are no others). A frugal owner in a small market
+ * had weighed "add nothing to the payroll" at 40%, more than the wins: 62 wins and a game 7 in the
+ * conference finals graded −37 (the playtest, 2026-11-23).
+ */
+export const SIDE_WEIGHT: Partial<Record<OwnerGoalKind, number>> = { payroll: 0.2, youth: 0.35 };
+/**
+ * Wins (over a full season) up to which the win goal asks for all of the forecast's middle; past it,
+ * WIN_ASK_PAST of the rest. No owner holds 64 wins against a coach: the forecast's own middle for
+ * the league's best rosters is 66-72 wins, and "Win 72 games" made a miss of a 67-15 season.
+ */
+export const WIN_ASK_TOP = 60;
+export const WIN_ASK_PAST = 1 / 3;
+/**
+ * A season graded this or worse is a poor one (legacyReview's "Poor", the floor's cap): two in a row
+ * with the same owner, once the grace period is over, and he fires the coach whatever the standing
+ * (see owner.ts), and after one the bar doesn't come down with the roster (see planOwnerGoals).
+ */
+export const POOR_GRADE = -0.4;
 /** Games of the record so far that weigh as much as the roster's expectation in a projection. */
 export const PACE_PRIOR = 40;
 /** The most a development goal grades: minutes past its target are the coach's own to hand out, as a payroll kept under its line is (+30). */
@@ -198,10 +230,13 @@ export const FLOOR_GAMES = 20;
  * review, round 2), a firing by design.
  */
 export const FLOOR_MARGIN = 6;
-/** The most wins (over a full season) a payroll's league rank raises the win target by. */
-export const PAY_RAISE = 3;
-/** Room an inherited payroll's "add nothing to it" leaves, as a share of the tax line (about $0.5M). */
+/** Room a payroll line set at what he inherited leaves, as a share of the tax line (about $0.5M). */
 export const PAYROLL_SLACK = 0.0025;
+/**
+ * Room over the payroll he inherited that an owner whose window is open signs off on, as a share of
+ * the salary cap: one mid-level signing (contracts.ts MLE_PCT) and a minimum deal or two.
+ */
+export const WINDOW_ROOM = 0.1;
 
 /** The postseason levels a goal or a result names (index = level). */
 export const POSTSEASON: { goal: string; result: string }[] = [
@@ -578,13 +613,47 @@ const QUIRK_LEAN: Record<OwnerQuirk, Partial<Record<OwnerGoalKind, number>>> = {
   ghost: {},
   traditionalist: {},
 };
-/** Wins the owner adds to (or takes off) what the roster should win, over a full season. */
-const WIN_NUDGE: Record<OwnerPersonality, number> = { 'win-now': 2, builder: -1, frugal: -1 };
+/** Wins the owner takes off what the roster should win, over a full season: never any on top (the forecast's middle is the most he asks). */
+const WIN_NUDGE: Record<OwnerPersonality, number> = { 'win-now': 0, builder: -1, frugal: 0 };
 
-/** Weights that add up to exactly 1, in whole percents (the largest takes the rounding). */
+/** The wins he asks for a forecast of `expected` over `share` of a season: all of it up to WIN_ASK_TOP (a full season's), WIN_ASK_PAST of the rest. */
+export function winAsk(expected: number, share = 1): number {
+  const top = WIN_ASK_TOP * share;
+  return expected <= top ? expected : top + (expected - top) * WIN_ASK_PAST;
+}
+
+/**
+ * The payroll the owner signs off on ($K): the tax line; a win-now owner's a step past it
+ * (CAP.spendLine). With his window open (he asks for a playoff round or more) a step further each:
+ * the league's biggest spenders' line for a win-now owner (CAP.spendTop), spendLine for the others.
+ */
+export function payrollLine(cap: Pick<ReturnType<typeof CAP_FOR>, 'luxuryTax' | 'spendLine' | 'spendTop'>, who: OwnerPersonality, window: boolean): number {
+  if (window) return who === 'win-now' ? cap.spendTop : cap.spendLine;
+  return who === 'win-now' ? cap.spendLine : cap.luxuryTax;
+}
+
+/**
+ * Weights that add up to exactly 1, in whole percents (the largest takes the rounding), a side
+ * goal's never over its cap (SIDE_WEIGHT): what it gives up goes to the goals on the floor in their
+ * own proportions.
+ */
 function normalize(goals: OwnerGoal[]) {
   const sum = goals.reduce((a, g) => a + g.weight, 0);
-  for (const g of goals) g.weight = Math.round((g.weight / sum) * 100) / 100;
+  for (const g of goals) g.weight = g.weight / sum;
+  const floorGoals = goals.filter((g) => SIDE_WEIGHT[g.kind] === undefined);
+  const onFloor = floorGoals.reduce((a, g) => a + g.weight, 0);
+  if (onFloor > 0) {
+    let freed = 0;
+    for (const g of goals) {
+      const top = SIDE_WEIGHT[g.kind];
+      if (top !== undefined && g.weight > top) {
+        freed += g.weight - top;
+        g.weight = top;
+      }
+    }
+    for (const g of floorGoals) g.weight += (freed * g.weight) / onFloor;
+  }
+  for (const g of goals) g.weight = Math.round(g.weight * 100) / 100;
   const top = goals.reduce((a, g) => (g.weight > a.weight ? g : a), goals[0]);
   top.weight = Math.round((top.weight + 1 - goals.reduce((a, g) => a + g.weight, 0)) * 100) / 100;
 }
@@ -671,34 +740,38 @@ export function planOwnerGoals(league: League, tid: number, outlook: TeamOutlook
   else if (!rebuild && rank <= 10) level = 1;
   if (o.odds) while (level > 0 && levelOdds(o.odds, level) < POSTSEASON_ODDS) level--;
   if (patienceOut || paidToWin) level = Math.max(level, 1);
-  // wins: what the roster should win, nudged by the owner's personality, never under the floor; once
-  // the payroll is the coach's own (after his first season with the team, a payroll he didn't inherit
-  // whole) raised half-way to what a team paid like it should win (a payroll in the league's top half:
-  // the league's expectations sorted, the payroll's rank among them), PAY_RAISE wins at most; and
-  // outside a rebuild season never more than WIN_SLIDE under last season's full-season target with
-  // this team (a roster run down doesn't lower the bar for the coach who ran it down), nor held more
-  // than HOLD_OVER_READ over his read of the roster. The raise had held a first-season 76ers coach to
-  // 52 wins on a 41-win forecast, "for the league's 2nd-highest payroll", while the same owner called
-  // it the payroll he had inherited; the hold, a Wizards coach on Hard to 30 on a 16-win read.
-  // (what a team paid like it should win)
-  const byRank = paidToWin ? (outlook.map((x) => x.pct).sort((a, b) => b - a)[payRank - 1] ?? o.pct) : o.pct;
-  const pct = o.pct + Math.min(PAY_RAISE / SEASON_GAMES, 0.5 * Math.max(0, byRank - o.pct));
+  // wins: the middle of what the forecast gives the roster, a builder's a win under it (WIN_NUDGE:
+  // never over it), past WIN_ASK_TOP wins a third of the rest (winAsk), never under the floor. The
+  // bar holds (never more than WIN_SLIDE under last season's full-season target with this team, nor
+  // more than HOLD_OVER_READ over his read of the roster) only for a coach who ran the roster down
+  // himself: rotation players he traded away or let go since last season's goals (movedOut), or a
+  // season graded poor (POOR_GRADE), after which the bar holds in a rebuild season too, and the
+  // floor with it. Until 2026-11-24 it held for any roster that read 3 wins worse, whoever's doing
+  // (aging, injuries, free agents who walked): a Denver coach was asked for 50 on a 44-win forecast
+  // and graded −20 for winning 46 and a playoff round; and the target was raised by a win-now
+  // owner (+2) and by the payroll's rank (+3), so the league's best rosters were asked for 66-72.
   const expected = o.pct * o.left;
-  const last = level && opening ? lastWinsTarget(league, tid) : undefined;
-  const asked = Math.round(pct * o.left + WIN_NUDGE[who] * share);
+  const asked = Math.round(winAsk(expected + WIN_NUDGE[who] * share, share));
+  const lastReview = opening ? (league.ownerReviews ?? []).find((r) => r.tid === tid && r.season === league.season - 1) : undefined;
+  const poor = !!lastReview && lastReview.goals.length > 0 && lastReview.grade <= POOR_GRADE;
+  const gone = opening && (level || poor) ? movedOut(league, tid) : [];
+  const last = opening && (poor || (level > 0 && gone.length > 0)) ? lastWinsTarget(league, tid) : undefined;
   const hold = last !== undefined ? Math.min(last - WIN_SLIDE, Math.round(expected + HOLD_OVER_READ * share)) : 0;
-  const wins = clamp(Math.max(asked, hold), Math.max(1, Math.round(o.left * floor)), Math.round(o.left * 0.88));
-  const held = last !== undefined && wins > asked;
-  const gone = held ? movedOut(league, tid) : [];
+  const held = last !== undefined && hold > asked;
+  // (a held bar holds the floor too: FLOOR_MARGIN under it, so a roster run down doesn't lower what counts as a failed season)
+  if (held) base.floor = clamp(Math.round(Math.min(WIN_FLOOR + (patienceOut ? REBUILD_OVER_FLOOR : 0), (hold - FLOOR_MARGIN * share) / o.left) * 1000) / 1000, floor, 0.6);
+  const wins = clamp(Math.max(asked, hold), Math.max(1, Math.round(o.left * base.floor!)), Math.round(o.left * 0.88));
+  const read = Math.round(expected);
   goals.push({
     kind: 'wins',
     title: opening ? `Win ${wins} games` : `Win ${wins} of the last ${o.left} games`,
     target: wins,
     weight: lean('wins'),
     perGame: o.pct,
-    ...(pct - o.pct >= 0.02 ? { payRank } : {}),
+    ...(read - wins >= 2 ? { read } : {}),
     ...(held ? { held: last } : {}),
-    ...(gone.length ? { gone } : {}),
+    ...(held && poor ? { after: 'poor' as const } : {}),
+    ...(held && gone.length ? { gone } : {}),
   });
   // a season without a postseason goal is a rebuild season, one of the allowance; past it, the
   // season competes, and missing the postseason anyway caps its grade (see patienceCap)
@@ -719,29 +792,34 @@ export function planOwnerGoals(league: League, tid: number, outlook: TeamOutlook
       perGame: (0.85 * youngPg + 1_350 / SEASON_GAMES) * (who === 'builder' ? 1.1 : 1),
     });
   }
-  // money: a payroll near or over the tax line is the owner's concern, and the line is his limit
-  // (a win-now owner pays some tax for a contender: his line is a step past it, CAP.spendLine)
-  const line = cap.luxuryTax;
+  // money: a payroll near or over the tax line is the owner's concern, and his line follows the
+  // team's window (payrollLine): the tax line for a team he doesn't ask to win a round (a win-now
+  // owner's a step past it), further for one he does. A payroll the coach inherited past the line
+  // is the owner's own: the line becomes what he inherited, with PAYROLL_SLACK of room (so a coach
+  // who adds nothing is never over it by a rounding or the staff's own opening-night cuts, see
+  // forcedPayroll), or WINDOW_ROOM of the cap with the window open: a mid-level signing for a
+  // contender isn't held against its coach. "Add nothing to the payroll you inherited" had been the
+  // goal of every contender taken over (the Thunder open $15M past the tax): one mid-level signing
+  // scored it −100.
+  const window = level >= 3;
+  const own = payrollLine(cap, who, window);
   const market = team.pop < 3 ? 1.3 : team.pop > 7 ? 0.75 : 1;
-  // a payroll the coach inherited past the owner's line is the owner's own: the line becomes "add
-  // nothing to it":
-  // his figure rounded up, with PAYROLL_SLACK of room, so a coach who adds nothing is never over it by
-  // a rounding or the staff's own opening-night cuts (see forcedPayroll)
-  const payrollGoal = (own: number, under: string, getUnder: string) => {
-    const kept = forcedPay > own;
-    const target = kept ? Math.ceil((forcedPay + PAYROLL_SLACK * line) / 100) * 100 : own;
+  if (pay > cap.luxuryTax * 0.94 || forcedPay > own) {
+    const kept = forcedPay > own - (window ? WINDOW_ROOM * cap.salaryCap : 0);
+    const room = window ? WINDOW_ROOM * cap.salaryCap : PAYROLL_SLACK * cap.luxuryTax;
+    const target = kept ? Math.max(own, Math.ceil((forcedPay + room) / 100) * 100) : own;
     const over = pay > target;
+    const tax = target === cap.luxuryTax;
     goals.push({
       kind: 'payroll',
-      title: kept ? 'Add nothing to the payroll you inherited' : over ? getUnder : under,
+      title: tax ? (over ? 'Get under the luxury tax' : 'Stay under the luxury tax') : `${over ? 'Get' : 'Keep'} the payroll under ${money(target)}`,
       target,
       // a taxpayer's goal weighs more: what he pays for it comes out of his pocket
       weight: lean('payroll') * market * (over ? 1.3 : 1),
-      ...(kept ? { line: own, inherited: forcedPay } : {}),
+      ...(kept && forcedPay > own ? { line: own, inherited: forcedPay } : {}),
+      ...(window ? { window: true as const } : {}),
     });
-  };
-  if (who === 'win-now' && pay > line) payrollGoal(cap.spendLine, `Keep the payroll under ${money(cap.spendLine)}`, `Get the payroll under ${money(cap.spendLine)}`);
-  else if (pay > line * 0.94) payrollGoal(line, 'Stay under the luxury tax', 'Get under the luxury tax');
+  }
   // (nothing is asked of the gate or the budgets: the franchise runs its own money)
   normalize(goals);
   return base;
@@ -828,33 +906,49 @@ export function goalsWhy(og: OwnerGoals, voice: 'mail' | 'screen' = 'mail'): str
   const me = voice === 'mail';
   const out: string[] = [];
   const wins = og.goals.find((g) => g.kind === 'wins');
+  // (goals from before 2026-11-24, whose target the payroll's rank had raised)
   if (wins?.payRank) out.push(`You have the league's ${ordinalRank(wins.payRank)}-highest payroll. ${me ? 'I expect' : 'He expects'} a record to match it.`);
+  if (wins?.read !== undefined && !wins.held)
+    out.push(
+      me
+        ? `The forecast has this roster at ${wins.read} wins. I won't hold all of that against you: ${wins.target} is a season I'd sign for.`
+        : `The forecast has this roster at ${wins.read} wins. He asks for ${wins.target}: past ${WIN_ASK_TOP} he counts a third of the rest.`,
+    );
   if (wins?.held) {
     // (what got worse by his own hand, named: aging and free agents who walked aren't his doing)
     const gone = Array.isArray(wins.gone) ? wins.gone.filter((x) => typeof x === 'string') : [];
     const moves = gone.length ? `Since then you've traded or let go ${andList(gone)}` : '';
+    const poor = wins.after === 'poor' ? `Last season graded poor${moves ? '' : ', and the bar does not come down with the roster after one of those'}. ` : '';
     out.push(
-      `Last season ${me ? 'I' : 'he'} asked for ${wins.held} wins. ${
+      `${poor}Last season ${me ? 'I' : 'he'} asked for ${wins.held} wins. ${
         wins.target < wins.held - WIN_SLIDE
           ? `${moves ? `${moves}. ` : ''}${me ? "I'm holding" : 'He holds'} the bar at ${wins.target}, over ${me ? 'my' : 'his'} read of this roster.`
           : moves
             ? `${moves}, and that doesn't lower the bar by more than ${WIN_SLIDE}.`
-            : `${me ? "I don't" : "He doesn't"} lower the bar by more than ${WIN_SLIDE} in a season.`
+            : `${me ? "I don't" : "He doesn't"} lower the bar by more than ${WIN_SLIDE} after a season like that.`
       }`,
     );
   }
   // a payroll line past the tax: the tax up to it is his to pay
   const pg = og.goals.find((g) => g.kind === 'payroll');
-  if (pg?.line !== undefined)
+  if (pg?.window && pg.inherited !== undefined)
+    out.push(
+      me
+        ? `The window is open, so I'll pay for the roster you inherited and ${money(pg.target - pg.inherited)} on top: a mid-level signing is yours to make. Past that line, it's on you.`
+        : `His window is open: he pays for the payroll you inherited and ${money(pg.target - pg.inherited)} on top, room for a mid-level signing. Past that line, it counts against you.`,
+    );
+  else if (pg?.window)
+    out.push(
+      me ? "The window is open, so I'll pay luxury tax for this team, up to that line. Past it, it's on you." : 'His window is open: he pays luxury tax up to that line. Past it, it counts against you.',
+    );
+  else if (pg?.line !== undefined)
     out.push(
       me
         ? "You inherited this payroll, past my line. I won't hold it against you. Add to it and that's on you."
         : "You inherited this payroll, past his line. It won't count against you. Adding to it will.",
     );
   else if (pg && /^(Keep|Get) the payroll under /.test(pg.title))
-    out.push(
-      me ? "I'll pay some luxury tax for a contender, up to that line. Past it, it's on you." : "He pays a contender's luxury tax up to that line. Past it, it counts against you.",
-    );
+    out.push(me ? "I'll pay some luxury tax, up to that line. Past it, it's on you." : 'He pays some luxury tax, up to that line. Past it, it counts against you.');
   if (og.rebuild?.over) {
     const took = og.rebuild.year - 1 === 1 ? 'One season' : `${og.rebuild.year - 1} seasons`;
     const cap = grade100(patienceCap(og, 0));
@@ -1103,7 +1197,7 @@ export function gradeGoal(league: League, og: OwnerGoals, g: OwnerGoal, result: 
     }
     case 'payroll': {
       // a line kept is what the owner expects: +15, up to +30 with room to spare; over it costs 25, down to
-      // −100 at PAYROLL_SCALE of the tax line over (the luxury tax he pays for it)
+      // −100 at PAYROLL_SCALE of the tax line over (the luxury tax he pays for it); its weight is capped (SIDE_WEIGHT)
       const step = PAYROLL_SCALE * CAP_FOR(league, og.season).luxuryTax;
       return r2(result <= g.target ? 0.15 + 0.15 * clamp((g.target - result) / step, 0, 1) : -0.25 - 0.75 * clamp((result - g.target) / step, 0, 1));
     }
@@ -1234,7 +1328,17 @@ export function ownerProgress(league: League, og: OwnerGoals | undefined = curre
               : league.phase === 'playin'
                 ? 'Qualified for the playoffs'
                 : `Playing in the ${['', '', 'first round', 'second round', 'conference finals', 'Finals'][level]}`;
-        return { goal: g, now: level, projected: level, status, text: text.charAt(0).toUpperCase() + text.slice(1), fill: clamp(level / g.target, 0, 1) };
+        // a team still playing projects to his goal at least, as its status says: the round it's in
+        // read as where it ends had put a top seed's meter on the warm seat through every playoff run
+        // (the playtest's 64-18 and 65-17 champions: "Job security 40")
+        return {
+          goal: g,
+          now: level,
+          projected: still ? Math.max(level, g.target) : level,
+          status,
+          text: text.charAt(0).toUpperCase() + text.slice(1),
+          fill: clamp(level / g.target, 0, 1),
+        };
       }
       case 'payroll': {
         const settled = !regular;

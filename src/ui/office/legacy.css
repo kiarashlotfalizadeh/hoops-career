@@ -517,3 +517,41 @@ a.fo-rv-row:active {
     flex: none;
   }
 }
+
+/* Jobs: the reputation's figure with its rank, the parts that feed it, and the openings' rows */
+.fo-rep-head {
+  align-items: center;
+  gap: 12px;
+}
+
+.fo-rep-head .grow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fo-rep-v {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 900;
+  font-size: 44px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+.fo-rep-parts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.fo-rep-note {
+  margin: 8px 2px 0;
+}
+
+.fo-open-row {
+  align-items: center;
+}

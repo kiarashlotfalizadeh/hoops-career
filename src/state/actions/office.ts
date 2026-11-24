@@ -7,7 +7,7 @@ import { playerName, teamCity } from '../../core/league/helpers';
 import { dealTeams, evaluateDeal, evaluateTrade, executeDeal, executeTrade, type TradeLeg, type TradeOffer } from '../../core/league/trades';
 import { continueDraft, userDraftPick } from '../../core/league/season';
 import { releasePlayer, userBuyout } from '../../core/league/contracts';
-import { declineJob, takeJob } from '../../core/league/jobs';
+import { askForJob, declineJob, takeJob } from '../../core/league/jobs';
 import { act } from '../actions';
 import { movedNeedText } from '../../core/league/rosterNeed';
 import { useStore } from '../store';
@@ -122,6 +122,18 @@ export function takeTeam(league: League, tid: number): boolean {
     return false;
   }
   say(`Welcome to the ${t.region} ${t.name}, Coach.`, 'good');
+  return true;
+}
+
+/** Ask an opening that rates you level with its hire for the job: it makes the offer (see jobs.ts askForJob). */
+export function askAboutJob(league: League, tid: number): boolean {
+  let err: string | null = null;
+  if (!act('Asking about the job', (l) => void (err = askForJob(l, tid)))) return false;
+  if (err) {
+    say(err, 'bad');
+    return false;
+  }
+  say(`${teamCity(league, tid)} offered you the job. It stands until the draft.`, 'good');
   return true;
 }
 

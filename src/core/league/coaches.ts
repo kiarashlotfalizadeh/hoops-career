@@ -483,6 +483,19 @@ function hireScore(league: League, tid: number, c: Candidate, firedNow: boolean,
 /** How much an owner likes a candidate before the interviews' noise (see hireScore): the job market's read of the user against a team's hire. */
 export function candidateScore(league: League, tid: number, c: Candidate, firedNow: boolean): number {
   const strategy = league.teams[tid].strategy;
+  let s = marketScore(league, c);
+  if (c.career) {
+    if (strategy === 'contend') s += 0.3;
+    if (firedNow) s -= 0.3;
+  } else if (strategy === 'rebuild') s += 0.2;
+  return s;
+}
+
+/**
+ * A candidate's name in the league, whichever team is asking (candidateScore without a team's own
+ * lean): his reputation as the Jobs tab shows it (jobs.ts).
+ */
+export function marketScore(league: League, c: Candidate): number {
   const k = c.career;
   let s = (((c.profile.development + c.profile.tactics) / 2 - 60) / 12.5) * (k ? 0.25 : 0.5);
   if (k) {
@@ -491,9 +504,7 @@ export function candidateScore(league: League, tid: number, c: Candidate, firedN
     s += 0.7 * Math.min(2, recent.filter((l) => l.round === 5).length);
     s += 0.4 * Math.min(2, k.coy.filter((y) => y > league.season - 6).length);
     s += 0.1 * Math.min(4, recent.filter((l) => (l.round ?? -1) >= 1).length);
-    if (strategy === 'contend') s += 0.3;
-    if (firedNow) s -= 0.3;
-  } else if (strategy === 'rebuild') s += 0.2;
+  }
   return s;
 }
 

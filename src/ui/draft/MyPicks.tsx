@@ -1,15 +1,17 @@
-// Your picks in this draft (and yours that other teams hold), and after the draft its results: the
-// class in review (your haul graded, the best value and the biggest reach), then every pick by round.
+// Your picks in this draft (and yours that other teams hold) with how good your scouts' reads are, and
+// after the draft its results: the class in review (your haul graded, the best value and the biggest
+// reach), then every pick by round.
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { DraftPick, League, Player } from '../../core/types';
 import { playerName } from '../../core/league/helpers';
+import { OUTCOME_MISS, OUTCOME_SEASONS, WATCHED_DAYS, draftRecord, scoutingAccuracy, type ReadCheck } from '../../core/league/prospects';
 import { ordinal, plural } from '../../core/format';
 import { TeamLogo } from '../components/TeamLogo';
 import { OvrPot } from '../office/common';
 import { useLeagueMemo } from '../../state/store';
-import { Empty, Help, Section, Segmented } from '../components/ui';
+import { Empty, Help, Section, Segmented, Statline } from '../components/ui';
 import { pickProjection } from '../league/shared';
 import { PickRow } from '../league/PicksList';
 import { PICK_RANGE_NOTE, draftedThisYear, gradeTone, lotteryHidden, pickGrade, pickOrder, pickSlot, picksText, projectedSlot, type PickGrade } from './common';
@@ -43,6 +45,87 @@ export function PicksPoster({ league }: { league: League }) {
       )}
       {first && slot !== undefined && rest.length > 0 && <span className="dn-poster-s">Then {picksText(league, rest, proj)}</span>}
     </section>
+  );
+}
+
+const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '0');
+/** Picks a tier needs with OUTCOME_SEASONS behind them before the league's own drafts replace the model's figure. */
+const MIN_JUDGED = 8;
+
+/**
+ * How good the reads are, in the model's own numbers (core/league/prospects.ts): your scouts' margin
+ * on a prospect before and after they watch him and where that ranks, how far picks have ended from
+ * the POT read on draft night by where they went (this league's own drafts once it has them, the
+ * model's measured figure until then), and your staff's reads of your own picks, one a row.
+ */
+export function ScoutingAccuracy({ league }: { league: League }) {
+  const acc = useLeagueMemo(() => scoutingAccuracy(league), [league]);
+  const rec = useLeagueMemo(() => draftRecord(league), [league]);
+  const pm = (n: number) => `±${n}`;
+  const ownRow = (c: ReadCheck) => {
+    const p = league.players[c.pid];
+    return (
+      <Link key={c.pid} to={`/player/${c.pid}?tab=dev`} className="listrow fo-sel">
+        <span className="fo-rank">{c.slot}</span>
+        <div className="grow">
+          <div className="fo-name">{playerName(p)}</div>
+          <div className="fo-meta">
+            {c.year} · read {c.read.ovr} / POT {c.read.pot} · now {p.ovr} / {c.now}
+          </div>
+        </div>
+        <span className={`tag ${c.miss >= 3 ? 'good' : c.miss <= -3 ? 'warn' : ''}`}>
+          {c.miss >= 3 ? `Beat it ${signed(c.miss)}` : c.miss <= -3 ? `Under ${signed(c.miss)}` : `As read ${signed(c.miss)}`}
+        </span>
+      </Link>
+    );
+  };
+  return (
+    <Section
+      title="Scouting accuracy"
+      right={
+        <Help title="Scouting accuracy">
+          <p>A read is your staff&apos;s OVR and POT for a prospect, with a range. The range holds what he really is on draft night four times in five.</p>
+          <p>Scouts narrow it: {WATCHED_DAYS} days on a prospect bring the range to the second figure. The room is the league&apos;s shared read, which the big board ranks by.</p>
+          <p>
+            POT is where a player like him ends on average. From draft night on, his own summers and a course no scout can see decide it: the table shows how far picks have ended
+            from the POT read that night.
+          </p>
+        </Help>
+      }
+    >
+      <Statline
+        items={[
+          { k: 'Your scouts', v: ordinal(acc.rank), s: `of ${acc.of} front offices` },
+          { k: 'Unwatched', v: pm(acc.unwatched.ovr), s: `OVR · ${pm(acc.unwatched.pot)} POT` },
+          { k: `${WATCHED_DAYS} days`, v: pm(acc.watched.ovr), s: `OVR · ${pm(acc.watched.pot)} POT` },
+        ]}
+      />
+      <div className="tiny dim">
+        Four reads in five land inside these. The room: {pm(acc.room.ovr)} OVR, {pm(acc.room.pot)} POT. Other front offices: {pm(acc.sharpest.ovr)} to {pm(acc.poorest.ovr)} OVR.
+      </div>
+      <div className="over">Where picks end against the POT read on draft night · median miss, OVR</div>
+      <div className="card flush list">
+        {rec.tiers.map((t) => (
+          <div key={t.tier} className="listrow fo-sel">
+            <div className="grow">
+              <div className="fo-name">{t.label}</div>
+              <div className="fo-meta fo-wrap">
+                {t.n >= MIN_JUDGED
+                  ? `${plural(t.n, 'pick')} here, ${OUTCOME_SEASONS}+ seasons on · ${t.over} ended 3+ over the read, ${t.under} 3+ under`
+                  : "The model's figure, until this league has drafts to judge"}
+              </div>
+            </div>
+            <span className="fo-rank dn-miss">{pm(t.n >= MIN_JUDGED ? Math.round(t.miss) : OUTCOME_MISS[t.tier])}</span>
+          </div>
+        ))}
+      </div>
+      {rec.own.length > 0 && (
+        <>
+          <div className="over">Your staff&apos;s reads, in hindsight</div>
+          <div className="card flush list">{rec.own.slice(0, 8).map(ownRow)}</div>
+        </>
+      )}
+    </Section>
   );
 }
 
@@ -112,6 +195,7 @@ export function MyPicks({ league }: { league: League }) {
           </div>
         </Section>
       )}
+      <ScoutingAccuracy league={league} />
     </>
   );
 }

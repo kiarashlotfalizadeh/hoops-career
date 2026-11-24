@@ -23,7 +23,7 @@ import { applyHistory, type HistoryData } from './media/past';
 import { teamStrategyUpdate } from './aiTrades';
 import { goalsWhy, planOwnerGoals, previewTitle } from './ownerGoals';
 import { fillRosters, trimRosters } from './freeAgency';
-import { ratingMeans, ratingSpreads } from './progression';
+import { setAnchors } from './progression';
 import { injuryName, money } from '../format';
 
 export interface SeedPlayer {
@@ -481,8 +481,6 @@ export function createLeague(opts: CreateOpts): League {
     }
   }
   league.gm = drawTempers(league);
-  league.ratingAnchors = ratingMeans(league);
-  league.ratingSpreads = ratingSpreads(league);
   const realSeed = opts.seed && opts.seed.players.length ? opts.seed : null;
   ensureFuturePicks(league, Math.max(season + 4, realSeed?.picks ? (realSeed.picksThrough ?? 0) : 0));
   if (realSeed?.picks) applySeedPicks(league, realSeed.picks);
@@ -500,6 +498,8 @@ export function createLeague(opts: CreateOpts): League {
   // AI teams trim to 15 standard contracts
   if (opts.preseasonCuts !== false) trimRosters(league, (p) => releasePlayer(league, p, { news: false }));
   fillRosters(league, rng);
+  // what every summer holds the league to: the opening-night league, as its rosters now stand (progression.ts)
+  setAnchors(league);
   league.rng = rng.state;
   teamStrategyUpdate(league);
   // a real league's coaches play their franchises' real styles, with the coverage each roster calls for

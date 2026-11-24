@@ -43,8 +43,14 @@ const SIGMA_COMBINE = 3.3;
 /** How an error on the draft score splits: POT is harder to read than what he can do now. */
 const OVR_SHARE = 0.7;
 const POT_SHARE = 1.15;
-/** A range on screen holds the truth four times in five: ±1.28 standard deviations. */
+/**
+ * A range on screen holds the truth four times in five: ±1.28 standard deviations, less the half
+ * point the rounding already gives (a read and the truth are both whole numbers, so a range of ±h
+ * holds every error up to h + 0.5). Without that the staff's ranges held his OVR 89% of the time and
+ * his POT 86% on draft night (dev-check, 1,358 reads): wider than they said.
+ */
 const RANGE_Z = 1.28;
+const halfWidth = (sd: number) => Math.max(1, Math.round(RANGE_Z * sd - 0.5));
 
 /** A standard normal of its own for `key`, the same every time. */
 const fixedNormal = (key: string) => new Rng(mix32(hashString(key))).normal(0, 1);
@@ -87,9 +93,12 @@ function precision(league: League, tid: number, pid: number): Precision {
     const sharp = scoutSharpness(league, tid);
     return { q: AI_Q[0] + (AI_Q[1] - AI_Q[0]) * sharp, s: AI_S[0] + (AI_S[1] - AI_S[0]) * sharp };
   }
-  // the user's staff: the coaching budget pays the scouts (a poor one reads worse than the room), and days watching him bring him into focus
-  const b = clamp((league.teams[tid]?.budget.coaching ?? 50) / 100, 0, 1);
-  const days = scoutingState(league).looks[pid] ?? 0;
+  return staffPrecision(league, scoutingState(league).looks[pid] ?? 0);
+}
+
+/** The user's staff on a prospect watched `days` days: the coaching budget pays the scouts (a poor one reads worse than the room), and days watching him bring him into focus. */
+function staffPrecision(league: League, days: number): Precision {
+  const b = clamp((league.teams[league.userTid]?.budget.coaching ?? 50) / 100, 0, 1);
   const f = 1 - Math.exp((-days * (0.5 + b)) / FOCUS_DAYS);
   const q0 = 0.3 * b;
   return { q: q0 + (0.85 - q0) * f, s: (2.2 - 1.0 * b) * (1 - 0.55 * f) };
@@ -165,8 +174,8 @@ export function readRange(r: Read): ReadRange {
   const ovr = clamp(Math.round(r.ovr), 40, 99);
   const pot = clamp(Math.max(ovr, Math.round(r.pot)), 40, 99);
   if (r.sd <= 0) return { ovr, pot, ovrLo: ovr, ovrHi: ovr, potLo: pot, potHi: pot, exact: true };
-  const ho = Math.max(1, Math.round(RANGE_Z * OVR_SHARE * r.sd));
-  const hp = Math.max(1, Math.round(RANGE_Z * POT_SHARE * r.sd));
+  const ho = halfWidth(OVR_SHARE * r.sd);
+  const hp = halfWidth(POT_SHARE * r.sd);
   return { ovr, pot, ovrLo: clamp(ovr - ho, 40, 99), ovrHi: clamp(ovr + ho, 40, 99), potLo: clamp(pot - hp, 40, 99), potHi: clamp(pot + hp, 40, 99), exact: false };
 }
 
@@ -527,21 +536,131 @@ export function stockMove(p: Player): number | null {
   return r0 - r;
 }
 
-// ---------------------------------------------------------------- hindsight
+// ---------------------------------------------------------------- how good the reads are
+
+/** A read's margin: how far its OVR and its POT sit from the truth, as a range on screen is wide (plus or minus this many points holds the truth four times in five). */
+export interface Margin {
+  ovr: number;
+  pot: number;
+}
+
+const marginOf = (sd: number): Margin => ({ ovr: halfWidth(OVR_SHARE * sd), pot: halfWidth(POT_SHARE * sd) });
+const readSd = (league: League, x: Precision) => Math.hypot((1 - x.q) * consensusSigma(league), x.s);
+
+/** Days of scouting the accuracy figures quote for a watched prospect. */
+export const WATCHED_DAYS = FOCUS_DAYS;
 
 /**
- * A drafted player against how the room read him on draft night (Player.draft.read), for a draft
- * grade years on: his best OVR so far, its gap to the consensus POT, and a verdict once he's had
- * three summers ('early' before). Null for a draft before scouting.
+ * How sharp the user's scouts are, from the model the reads are drawn with (precision, consensusSigma):
+ * their margin today on a prospect of ordinary mystery they haven't watched and on one watched
+ * WATCHED_DAYS days, where the unwatched read ranks among the league's front offices (1 the
+ * sharpest; an AI team reads every prospect alike), and the sharpest and the poorest of those.
  */
-export function draftHindsight(
-  league: League,
-  p: Player,
-): { read: { ovr: number; pot: number; rank?: number }; peak: number; gap: number; verdict: 'early' | 'beat it' | 'as read' | 'bust' } | null {
-  const read = p.draft.read;
-  if (!read || p.draft.round === 0) return null;
+export function scoutingAccuracy(league: League): { rank: number; of: number; unwatched: Margin; watched: Margin; room: Margin; sharpest: Margin; poorest: Margin } {
+  const user = league.userTid;
+  const at = (days: number) => staffPrecision(league, days);
+  const mine = readSd(league, at(0));
+  const others = league.teams.filter((t) => t.tid !== user).map((t) => readSd(league, precision(league, t.tid, -1)));
+  return {
+    rank: 1 + others.filter((x) => x < mine).length,
+    of: others.length + 1,
+    unwatched: marginOf(mine),
+    watched: marginOf(readSd(league, at(WATCHED_DAYS))),
+    room: marginOf(consensusSigma(league)),
+    sharpest: marginOf(Math.min(...others, Infinity)),
+    poorest: marginOf(Math.max(...others, 0)),
+  };
+}
+
+/** Where a pick was made, for how reads have held up: the top ten, the rest of the first round, the second. */
+export type PickTier = 'top' | 'first' | 'second';
+export const PICK_TIERS: { id: PickTier; label: string; from: number; to: number }[] = [
+  { id: 'top', label: 'Picks 1-10', from: 1, to: 10 },
+  { id: 'first', label: 'Picks 11-30', from: 11, to: 30 },
+  { id: 'second', label: 'Second round', from: 31, to: 99 },
+];
+export const tierOfSlot = (slot: number) => PICK_TIERS.find((t) => slot >= t.from && slot <= t.to) ?? PICK_TIERS[2];
+
+/**
+ * How far a drafted player ends from the POT read on draft night, by where he was picked: the
+ * median miss in OVR, over picks with OUTCOME_SEASONS seasons or more behind them (see readCheck).
+ * A read's range holds his POT that night; where he goes from there is his summers and the arc no
+ * scout sees (progression.ts's trajectory, wider the later he was picked), and this is their size.
+ * Measured by dev-check (six leagues of six seasons, 2026-11-23, the room's reads: medians of 4 to 5
+ * in every tier, four picks in five within 8 or 9, first-rounders as often over as under and
+ * second-rounders 3 under on average, as few of them get the minutes to grow): it prints the same
+ * medians and fails when these drift more than a point from them.
+ */
+export const OUTCOME_MISS: Record<PickTier, number> = { top: 4, first: 5, second: 5 };
+/** Seasons since his draft from which a pick's read is judged. */
+export const OUTCOME_SEASONS = 2;
+
+/** A drafted player against a read of him from his draft night. */
+export interface ReadCheck {
+  pid: number;
+  year: number;
+  /** His pick overall, 1-60. */
+  slot: number;
+  /** The read judged: the user's staff's for his own picks, else the room's. */
+  read: { ovr: number; pot: number };
+  staff: boolean;
+  /** Where he stands against it: the better of his best OVR since and the POT he shows today (a player still growing is judged on where he is headed). */
+  now: number;
+  /** `now` less the read's POT: positive, he beat the read. */
+  miss: number;
+  seasons: number;
+}
+
+/** How a drafted player has turned out against his draft night's read (the staff's, for the user's own picks, where `own`). Null for a draft before scouting or an undrafted player. */
+export function readCheck(league: League, p: Player, own = true): ReadCheck | null {
+  const r = p.draft.read;
+  if (!r || p.draft.round === 0) return null;
+  const staff = own && !!r.staff;
+  const read = staff ? r.staff! : { ovr: r.ovr, pot: r.pot };
   const peak = Math.max(p.ovr, ...p.ratingsHistory.filter((h) => h.season > p.draft.year).map((h) => h.ovr));
-  const gap = peak - read.pot;
-  const verdict = league.season - p.draft.year < 3 ? 'early' : gap >= 3 ? 'beat it' : gap <= -6 ? 'bust' : 'as read';
-  return { read, peak, gap, verdict };
+  const now = Math.max(peak, p.retiredSeason === undefined ? p.pot : 0);
+  return {
+    pid: p.pid,
+    year: p.draft.year,
+    slot: (p.draft.round - 1) * league.teams.length + p.draft.pick,
+    read,
+    staff,
+    now,
+    miss: now - read.pot,
+    seasons: league.season - p.draft.year,
+  };
+}
+
+const median = (xs: number[]) => {
+  const v = [...xs].sort((a, b) => a - b);
+  return v.length ? (v[(v.length - 1) >> 1] + v[v.length >> 1]) / 2 : 0;
+};
+
+/**
+ * The league's reads in hindsight: every pick with OUTCOME_SEASONS seasons or more behind him against
+ * the room's read of his POT, by where he was picked (how many, the median miss either way, how many
+ * ended three or more over and three or more under), and the user's own picks against his staff's
+ * reads, newest first.
+ */
+export function draftRecord(league: League): { tiers: { tier: PickTier; label: string; n: number; miss: number; over: number; under: number }[]; own: ReadCheck[] } {
+  const all: ReadCheck[] = [];
+  const own: ReadCheck[] = [];
+  for (const p of Object.values(league.players)) {
+    const room = readCheck(league, p, false);
+    if (!room || room.seasons < OUTCOME_SEASONS) continue;
+    all.push(room);
+    if (p.draft.read?.staff) own.push(readCheck(league, p)!);
+  }
+  const tiers = PICK_TIERS.map((t) => {
+    const xs = all.filter((c) => c.slot >= t.from && c.slot <= t.to);
+    return {
+      tier: t.id,
+      label: t.label,
+      n: xs.length,
+      miss: median(xs.map((c) => Math.abs(c.miss))),
+      over: xs.filter((c) => c.miss >= 3).length,
+      under: xs.filter((c) => c.miss <= -3).length,
+    };
+  });
+  return { tiers, own: own.sort((a, b) => b.year - a.year || a.slot - b.slot) };
 }

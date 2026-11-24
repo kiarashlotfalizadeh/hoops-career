@@ -1,7 +1,7 @@
 import type { Contract, Player, PlayerStats, Pos, Ratings, Tendencies } from './types';
 import { Rng, clamp } from './random';
 import { NAME_POOLS } from './names';
-import { archetype, clampRatings, heightToRating, inferPos, ovrRaw, potential, toDisplay, type OvrScale } from './ratings';
+import { archetype, clampRatings, expectedGrowth, heightToRating, inferPos, ovrRaw, potential, toDisplay, type OvrScale } from './ratings';
 
 type Archetype = 'shooter' | 'slasher' | 'playmaker' | 'scorer' | 'athlete' | 'defender' | 'rimProtector' | 'stretch' | 'postScorer' | 'rebounder' | 'twoWay' | 'connector';
 
@@ -326,9 +326,33 @@ export function extensionStart(c: Contract): number | null {
   return c.next ? c.start + c.salaries.length : null;
 }
 
+/** Through this age a player is young to development: his summers lean up, a down year is partly made up (REBOUND) and his POT waits for it. */
+export const YOUNG_TO = 25;
+/** The share of a down year a young player makes up the next (see progression.ts's REBOUND, which is this). */
+export const REBOUND_SHARE = 0.4;
+
+/**
+ * How far the year that ended at `season`'s preseason fell short of what his age has him add, in
+ * OVR (0 or less: a year at or past it is no shortfall), from his snapshots of that preseason and the
+ * one before (`now`: his OVR in place of a snapshot not taken yet, mid-summer). 0 without both, or
+ * past YOUNG_TO.
+ */
+export function yearShortfall(p: Pick<Player, 'ratingsHistory' | 'bornYear'>, season: number, now?: number): number {
+  const age = season - p.bornYear;
+  if (age > YOUNG_TO) return 0;
+  const at = (s: number) => p.ratingsHistory.find((h) => h.season === s)?.ovr;
+  const to = at(season) ?? now;
+  const from = at(season - 1);
+  if (to === undefined || from === undefined) return 0;
+  return Math.min(0, to - from - (expectedGrowth(age - 1) - expectedGrowth(age)));
+}
+
 export function refreshPlayerDerived(p: Player, season: number, scale: OvrScale) {
   p.ovr = toDisplay(ovrRaw(p.ratings), scale);
-  p.pot = potential(p.ovr, playerAge(p, season), p.growth);
+  const age = playerAge(p, season);
+  // a young player's down year: his POT counts on the part of it he makes up (progression.ts's REBOUND)
+  const back = age <= YOUNG_TO && p.ratingsHistory.length ? -REBOUND_SHARE * yearShortfall(p, season, p.ovr) : 0;
+  p.pot = Math.min(99, potential(p.ovr, age, p.growth) + Math.round(back));
   p.archetype = archetype(p.ratings).label;
 }
 

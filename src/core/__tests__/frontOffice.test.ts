@@ -19,7 +19,7 @@ import { AI_RETRADE_DAYS, aiPackage, justTraded, sellable } from '../league/aiTr
 import { buildSimInput, restForPlayoffs, restVeterans, seedLocked, youthLean, youthMovement, youthNews } from '../league/games';
 import { ownerEvaluation, takeOverTeam } from '../league/owner';
 import { activeCoach, candidateScore, coachCareer, openStint, profileOf, registryProblems, userCoach, type CarouselMoves } from '../league/coaches';
-import { declineJob, makeJobOffers, takeJob } from '../league/jobs';
+import { askForJob, declineJob, makeJobOffers, reputation, takeJob } from '../league/jobs';
 import { faAdvance, simDay, startDraft, startFreeAgency, startRegularSeason } from '../league/season';
 import { playerAge } from '../playerGen';
 import { CAP } from '../constants';
@@ -523,6 +523,32 @@ describe('coaches', () => {
         .map((h) => h.tid);
       expect((x.jobOffers?.offers ?? []).map((o) => o.tid)).toEqual(want.slice(0, 2));
       expect((x.jobOffers?.offers ?? []).every((o) => o.kind === 'approach')).toBe(true);
+      // every opening is on file with both reads, whether or not it called: the Jobs tab names them
+      const market = x.jobMarket!.openings;
+      expect(market.map((o) => o.tid).sort()).toEqual(moves.hired.map((h) => h.tid).sort());
+      for (const o of market) {
+        const offered = (x.jobOffers?.offers ?? []).some((j) => j.tid === o.tid);
+        expect(o.status).toBe(offered ? 'offer' : o.you - o.hire >= 0 ? 'listen' : 'passed');
+        expect(o.you - o.hire).toBeCloseTo(scoreOf(x, o.tid, true) - scoreOf(x, o.tid, false), 1);
+      }
+      // one that rates him level with its hire hears him out when he asks, until the draft; one that doesn't, doesn't
+      x.phase = 'draftLottery';
+      const listen = market.find((o) => o.status === 'listen');
+      const passed = market.find((o) => o.status === 'passed');
+      if (passed) expect(askForJob(x, passed.tid)).toMatch(/rates its hire ahead of you/);
+      if (listen) {
+        expect(askForJob(x, listen.tid)).toBeNull();
+        expect(x.jobOffers!.offers.some((j) => j.tid === listen.tid && j.kind === 'opening')).toBe(true);
+        x.phase = 'draft';
+        expect(askForJob(x, listen.tid)).toMatch(/no longer open/);
+      }
+      // his reputation: the market's read on a 1-99 scale, ranked among the head coaches, with what feeds it
+      const rep = reputation(x)!;
+      expect(rep.score).toBeGreaterThanOrEqual(1);
+      expect(rep.score).toBeLessThanOrEqual(99);
+      expect(rep.rank).toBeGreaterThanOrEqual(1);
+      expect(rep.rank).toBeLessThanOrEqual(rep.of);
+      expect(rep.parts.map((r) => r.k)).toContain('Career record');
     }
 
     // taking a job is a takeover: the other offers go, the news calls it a hiring, the registry stays whole

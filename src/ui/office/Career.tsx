@@ -2,7 +2,8 @@
 // the league's head coaches and how the job stands, the teams that want you (take the job or turn it
 // down), then three tabs: Profile (the latest season's review, the honors cabinet, signature wins, the
 // record by team and in the playoffs, past reviews), Milestones (the career's timeline) and Jobs
-// (taking over any other team; your jobs are the Profile's record by team). ?review=<season> opens that season's review in place (SeasonReview).
+// (your reputation with what feeds it, and the summer's openings by name: who each hired, how its
+// owner rated you against him, and the ones you can ask about; in god mode, taking over any team). ?review=<season> opens that season's review in place (SeasonReview).
 // A fired coach lands here, on Jobs: the agenda's "Find a new job" and the flow both point to it,
 // and the league waits until he takes one.
 import { useMemo, useState } from 'react';
@@ -17,9 +18,9 @@ import { seasonsInCharge } from '../../core/league/owner';
 import { cabinet, coachRanks, gmLegacy, legacyOf, reviewPath, type Milestone, type SignatureWin, type Trophy as TrophyT } from '../../core/league/legacy';
 import { endText, gradeWord, type SeasonReview } from '../../core/league/legacyReview';
 import { agenda } from '../../core/league/agenda';
-import type { JobOffer } from '../../core/league/jobs';
+import { marketOpen, repScore, reputation, type JobOffer, type JobOpening } from '../../core/league/jobs';
 import { useLeague, useLeagueMemo } from '../../state/store';
-import { takeTeam, turnDownJob, useBusy } from '../../state/actions/office';
+import { askAboutJob, takeTeam, turnDownJob, useBusy } from '../../state/actions/office';
 import { AgendaRow } from '../components/Agenda';
 import { TeamLogo } from '../components/TeamLogo';
 import { CountUp, More, PageHeader, Section, Segmented, Statline } from '../components/ui';
@@ -126,17 +127,12 @@ function Profile({ league }: { league: League }) {
 
       {tab === 'profile' && k && <ProfileTab league={league} k={k} />}
       {tab === 'milestones' && <Milestones league={league} />}
-      {tab === 'jobs' &&
-        (league.settings.godMode || (league.fired && !offers.length) ? (
-          <TakeOver league={league} onTaken={() => nav('/')} />
-        ) : (
-          <div className="card empty">
-            {offers.length
-              ? `${offers.length > 1 ? 'Those offers are' : 'That offer is'} your way to another job.`
-              : 'Teams changing coaches call after the playoffs, if they rate you above their hire.'}{' '}
-            God mode in Settings puts you anywhere.
-          </div>
-        ))}
+      {tab === 'jobs' && (
+        <>
+          <JobsTab league={league} />
+          {(league.settings.godMode || (league.fired && !offers.length)) && <TakeOver league={league} onTaken={() => nav('/')} />}
+        </>
+      )}
     </main>
   );
 }
@@ -541,6 +537,109 @@ function OfferRow({ league, o, onTake, onTurnDown }: { league: League; o: JobOff
     </div>
   );
 }
+
+/**
+ * The job market: your reputation (the market's read of you on a 1-99 scale, its rank among the
+ * league's head coaches, and what feeds it), then the teams that changed coaches this summer, each
+ * with its hire and how its owner rated the two of you. One that rates you level with its hire
+ * listens when you ask, until the draft.
+ */
+function JobsTab({ league }: { league: League }) {
+  const rep = useLeagueMemo(() => reputation(league), [league]);
+  const market = league.jobMarket;
+  const open = marketOpen(league);
+  const busy = useBusy();
+  const when = market && (market.season === league.season && league.phase !== 'preseason' && league.phase !== 'regular' ? 'This summer' : seasonLabel(market.season));
+  return (
+    <>
+      {rep && (
+        <Section title="Reputation" right={<span className="tiny dim">What other owners see</span>}>
+          <div className="card">
+            <div className="row gap fo-rep-head">
+              <span className="fo-rep-v num">{rep.score}</span>
+              <span className="grow fo-min0">
+                <span className="bold">
+                  {ordinal(rep.rank)} of {rep.of} head coaches
+                </span>
+                <span className="tiny dim fo-lc-job-l">On a scale of 1 to 99. A team hires you when it rates you above the coach it would hire otherwise.</span>
+              </span>
+            </div>
+            <div className="fo-rep-parts">
+              {rep.parts.map((x) => (
+                <div key={x.k} className="row between small">
+                  <span className="dim2">{x.k}</span>
+                  <span className="num">
+                    {x.v} <span className={x.pts > 0 ? 'good' : x.pts < 0 ? 'bad' : 'dim'}>{x.pts > 0 ? `+${x.pts}` : x.pts < 0 ? `−${Math.abs(x.pts)}` : '0'}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Section>
+      )}
+      <Section title="Openings" right={when ? <span className="tiny dim">{when}</span> : undefined}>
+        {market?.openings.length ? (
+          <div className="card flush list">
+            {market.openings.map((o) => (
+              <OpeningRow key={o.tid} league={league} o={o} open={!!open} busy={busy} />
+            ))}
+          </div>
+        ) : (
+          <div className="card empty">
+            {league.fired
+              ? 'No team changed coaches this summer. The offers above are your way back in.'
+              : 'No team has changed coaches yet. Owners review their coaches after the playoffs, and every opening is listed here with how it rates you.'}
+          </div>
+        )}
+        {!!market?.openings.length && !league.fired && (
+          <p className="tiny dim fo-rep-note">
+            {open
+              ? 'Each owner adds his own lean to your reputation: a contender wants a record, a rebuilder gives a first-timer a look. Jobs you can ask about stay open until the draft.'
+              : 'Those jobs are filled. New openings come after the playoffs.'}
+          </p>
+        )}
+      </Section>
+    </>
+  );
+}
+
+/** One opening: the team and its record, who it hired (and let go), both reads on the reputation scale, and what you can do about it. */
+function OpeningRow({ league, o, open, busy }: { league: League; o: JobOpening; open: boolean; busy: boolean }) {
+  const t = league.teams[o.tid];
+  const hired = league.coaches?.find((c) => c.id === o.hired);
+  const let_ = o.fired !== undefined ? league.coaches?.find((c) => c.id === o.fired) : undefined;
+  const ts = t.seasons.find((x) => x.season === league.jobMarket?.season);
+  const [you, him] = [repScore(o.you), repScore(o.hire)];
+  const status = o.status === 'offer' ? 'Offered you the job' : o.status === 'listen' && open ? 'Would hear you out' : o.status === 'listen' ? 'Rated you level' : 'Passed on you';
+  return (
+    <div className="listrow fo-open-row">
+      <TeamLogo tid={t.tid} size={30} decorative />
+      <div className="grow fo-min0">
+        <div className="lr-name ellipsis">
+          {t.region} {t.name}
+          {ts ? <span className="num dim"> · {ts.won}-{ts.lost}</span> : null}
+        </div>
+        <div className="tiny dim">
+          Hired {hired?.name ?? 'a new coach'}
+          {let_ ? `, let ${let_.name} go` : ''}
+        </div>
+        <div className="tiny">
+          <span className={`tag ${o.status === 'offer' ? 'good' : o.status === 'listen' ? 'warn' : ''}`}>{status}</span>{' '}
+          <span className="num dim2">
+            Rated you {you}, {hired ? surname(hired.name) : 'their hire'} {him}
+          </span>
+        </div>
+      </div>
+      {o.status === 'listen' && open && (
+        <button className="btn xs" disabled={busy} onClick={() => askAboutJob(league, o.tid)}>
+          Ask
+        </button>
+      )}
+    </div>
+  );
+}
+
+const surname = (name: string) => name.split(/ (.+)/)[1] ?? name;
 
 /** Any team in the league: by conference, each with its record; the pick's strategy and books, and the move. */
 function TakeOver({ league, onTaken }: { league: League; onTaken: () => void }) {

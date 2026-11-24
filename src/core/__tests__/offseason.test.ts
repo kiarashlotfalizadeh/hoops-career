@@ -24,7 +24,20 @@ import {
   userDraftPick,
 } from '../league/season';
 import { aiChoose, draftNeed, draftOrder, draftPlayer, draftScore, draftUntilUser, generateDraftClass, lotteryOdds, nextPick, runLottery } from '../league/draft';
-import { consensusRead, prospectsDay, readRange, scoutDays, scoutList, seenPlayer, staffRead, stockMove, teamRead, toggleScout } from '../league/prospects';
+import {
+  consensusRead,
+  draftRecord,
+  prospectsDay,
+  readRange,
+  scoutDays,
+  scoutList,
+  scoutingAccuracy,
+  seenPlayer,
+  staffRead,
+  stockMove,
+  teamRead,
+  toggleScout,
+} from '../league/prospects';
 import { mockAvailable, mockDraft } from '../league/mockDraft';
 import { FIRED_REASON, askingContract, decideTeamOption, marketSalary, pendingOption, releasePlayer, valueScore } from '../league/contracts';
 import { expiringPlayers, faDay } from '../league/freeAgency';
@@ -185,6 +198,16 @@ describe('the draft', () => {
       }).length;
       expect(inside / cls.length).toBeGreaterThan(0.6);
       expect(inside / cls.length).toBeLessThan(0.95);
+      // the accuracy the draft screen quotes is the same model's: a watched prospect reads sharper than an
+      // unwatched one and than any front office's own board, and the staff rank among the 30
+      const acc = scoutingAccuracy(x);
+      expect(acc.rank).toBeGreaterThanOrEqual(1);
+      expect(acc.rank).toBeLessThanOrEqual(x.teams.length);
+      expect(acc.watched.pot).toBeLessThan(acc.unwatched.pot);
+      expect(acc.watched.pot).toBeLessThan(acc.sharpest.pot);
+      expect(acc.unwatched.pot).toBeLessThanOrEqual(acc.room.pot);
+      // (no draft of this league's to judge yet: the screen quotes the model's figure)
+      expect(draftRecord(x).tiers.every((t) => t.n === 0)).toBe(true);
       // AI boards disagree: the same prospect reads differently across front offices
       const scores = x.teams.filter((t) => t.tid !== x.userTid).map((t) => teamRead(x, t.tid, p0).score);
       expect(Math.max(...scores) - Math.min(...scores)).toBeGreaterThan(2);

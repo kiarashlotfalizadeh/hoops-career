@@ -24,6 +24,7 @@ import { numberTeam } from './jerseys';
 import { plural } from '../format';
 import { playbookLabel } from '../sim/playbooks';
 import { userYouth } from './youthLean';
+import { curTeamSeason } from './helpers';
 
 export function wearPerf(p: Player) {
   return 1 - clamp(p.wear - 40, 0, 60) / 1200; // up to -5% when badly worn down
@@ -40,11 +41,39 @@ export function wearInjuryRisk(p: Player) {
 
 /**
  * A team's injury risk with this many players already out: a training staff that is already
- * treating three or four players manages the rest's loads more carefully, and past CROWD_OUT.length
+ * treating two or three players manages the rest's loads more carefully, and past CROWD_OUT.length
  * nobody new goes down (a few players' knocks take them out a game or two, but the team never has
- * seven to eleven players out at once, as it did with every risk independent).
+ * seven to eleven players out at once, as it did with every risk independent). At [1, 1, 1, 0.75,
+ * 0.5, 0.25] some team still had six to eight out at once every season (two seeds of three, the risk
+ * read once before a game that then hurt two), 2-4% of all team-days with five or more: a playtester's
+ * contender had seven of fifteen out and fell to 8-14. Now a third of the roster at most.
  */
-const CROWD_OUT = [1, 1, 1, 0.75, 0.5, 0.25];
+const CROWD_OUT = [1, 1, 0.85, 0.6, 0.3];
+/** The most players a team has out at once: past it a new injury is a scare, not an absence (see CROWD_OUT; a game can hurt two). */
+export const MAX_OUT = CROWD_OUT.length;
+
+/** Games the MVP, All-League and the other votes ask of a player (awards.ts), and the nights to spare a staff keeps before it stops resting him. */
+const AWARD_GAMES = 65;
+const AWARD_SPARE = 3;
+/** A player good enough for the votes to matter to him (All-League and All-Defense reach this far down). */
+const AWARD_OVR = 82;
+
+/**
+ * Whether a night off would put his 65 games at risk: an awards-level player who can still reach
+ * the line with the games his team has left, with fewer than AWARD_SPARE to spare. A conference
+ * leader six games clear rests its best player on every back-to-back's second night, and a seed
+ * locked early rests its three best on alternate nights: with an injury on top, the league's best
+ * player on its best team finished short of the line and the MVP went to a lesser season (a
+ * playtester's 31.1-point scorer on a 62-win champion, twice in two leagues). Real staffs count the
+ * games.
+ */
+export function awardLineAtStake(league: League, p: Player | undefined, tid: number): boolean {
+  if (!p || p.ovr < AWARD_OVR || league.phase !== 'regular') return false;
+  const ts = curTeamSeason(league, tid);
+  const left = Math.max(0, 82 - ts.won - ts.lost);
+  const gp = p.stats.reduce((a, s) => a + (s.season === league.season && !s.playoffs && !s.real ? s.gp : 0), 0);
+  return gp + left >= AWARD_GAMES && gp + left - 1 < AWARD_GAMES + AWARD_SPARE;
+}
 
 /** Players out injured on a team now. */
 export function injuredCount(league: League, tid: number) {
@@ -462,7 +491,9 @@ function teamSimInput(
 ): SimTeamInput {
   const team = league.teams[tid];
   const players = teamPlayers(league, tid);
-  const rest: number[] = [];
+  let rest: number[] = [];
+  // (the nights off the user set himself are his: the award line below guards a staff's rest only)
+  const own = new Set(type === 'regular' && tid === league.userTid ? team.rotation.restB2B : []);
   if (type === 'regular' && playedYesterday(league, tid, day)) {
     for (const pid of team.rotation.restB2B) rest.push(pid);
     // AI load management for older stars
@@ -480,6 +511,8 @@ function teamSimInput(
   if (type === 'regular' && youthMovement(league, tid) >= 1) restVeterans(league, players, day, rest);
   // (the user's stars only when his staff runs the rotation)
   if (type === 'regular' && (tid !== league.userTid || !team.rotation.manual) && seedLocked(league, tid)) restForPlayoffs(players, day, rest);
+  // no staff rests a player out of the awards: the nights off stop while his 65 games are at stake
+  if (type === 'regular' && rest.length) rest = rest.filter((pid) => own.has(pid) || !awardLineAtStake(league, league.players[pid], tid));
   const perf: Record<number, number> = {};
   for (const p of players) perf[p.pid] = wearPerf(p);
   // practice intensity: intense camps build skills but add wear and injury risk
@@ -707,7 +740,8 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
     }
     for (const inj of sim.injuries) {
       const p = league.players[inj.pid];
-      if (p) applyInjury(league, p, rng);
+      // (a team with MAX_OUT players out already: he got up, see CROWD_OUT; the risk was read before a game that can hurt two)
+      if (p && injuredCount(league, p.tid) < MAX_OUT) applyInjury(league, p, rng);
     }
     // worn-down legs: a heavy load can end in a knock after the final buzzer (the engine's
     // in-game risk is per player on the floor, about two checks per offensive possession)

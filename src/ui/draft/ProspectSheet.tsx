@@ -5,7 +5,19 @@ import { Binoculars, Scale } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { DRAFT_PROSPECT } from '../../core/types';
 import { fmtDate, playerName } from '../../core/league/helpers';
-import { SCOUT_SLOTS, combineIn, scoutDays, scoutList, seenRange, toggleScout } from '../../core/league/prospects';
+import {
+  OUTCOME_MISS,
+  SCOUT_SLOTS,
+  WATCHED_DAYS,
+  combineIn,
+  draftRecord,
+  scoutDays,
+  scoutList,
+  scoutingAccuracy,
+  seenRange,
+  tierOfSlot,
+  toggleScout,
+} from '../../core/league/prospects';
 import { fmtHeight } from '../../core/ratings';
 import { keepFigures } from '../../core/format';
 import { playerAge } from '../../core/playerGen';
@@ -44,12 +56,22 @@ function StaffRead({ league, p }: { league: League; p: Player }) {
     edit((l) => void toggleScout(l, p.pid));
   };
   const status = me ? (me.auto ? "The staff's scouts are on him, near your pick" : 'Your scouts are on him') : days ? 'No scout on him now' : 'Not scouted yet';
+  // how far picks around his rank have ended from the POT read on draft night: this league's own drafts, or the model's figure until it has them
+  const tier = tierOfSlot(p.prospect?.rank ?? 60);
+  const past = draftRecord(league).tiers.find((t) => t.tier === tier.id);
+  const own = !!past && past.n >= 8;
+  const miss = own ? Math.round(past.miss) : OUTCOME_MISS[tier.id];
+  const acc = scoutingAccuracy(league);
   return (
     <div className="dn-scout">
       <div className="fo-meta">Staff read: {keepFigures(`OVR ${r.ovrLo}-${r.ovrHi} · POT ${r.potLo}-${r.potHi}`)}</div>
       <div className="tiny dim">
         {status}
-        {days ? ` · ${days} ${days === 1 ? 'day' : 'days'} watched` : ''}. The more they watch, the narrower the range.
+        {days ? ` · ${days} ${days === 1 ? 'day' : 'days'} watched` : ''}. The ranges hold what he is tonight four times in five; watching him narrows them (to ±{acc.watched.ovr}{' '}
+        OVR, ±{acc.watched.pot} POT after {WATCHED_DAYS} days).
+      </div>
+      <div className="tiny dim">
+        Where he ends is his own: {tier.label.toLowerCase()} have ended a median {miss} OVR from the POT read on draft night{own ? ` (${past.n} picks in this league)` : ''}.
       </div>
       {open && (
         <button className={`btn sm ${me && !me.auto ? '' : 'primary'}`} onClick={toggle}>

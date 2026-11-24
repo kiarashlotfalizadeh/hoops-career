@@ -6,11 +6,10 @@ import { Link } from 'react-router-dom';
 import { PencilLine, Ticket } from 'lucide-react';
 import type { League, Proposal } from '../../core/types';
 import { CAP_FOR, payroll, playerName, teamCity, teamName } from '../../core/league/helpers';
-import { declineProposal, markOffersSeen, openProposals, proposalError, proposalThird } from '../../core/league/proposals';
+import { declineProposal, markOffersSeen, offerRating, openProposals, proposalError, proposalThird } from '../../core/league/proposals';
 import { agenda, type AgendaItem } from '../../core/league/agenda';
 import { capSalary, type TradeOffer } from '../../core/league/trades';
 import { pickName } from '../draft/common';
-import { neutralBalance } from '../../core/league/tradePackages';
 import { salaryFor } from '../../core/playerGen';
 import { useLeagueMemo } from '../../state/store';
 import { act, touch } from '../../state/actions';
@@ -86,11 +85,10 @@ function OfferCard({
   const after = payroll(league, league.userTid, s) - out + inc;
   const pay = payroll(league, league.userTid, s);
   const tax = taxLine(league, pay, pay - out + inc, s);
-  // in neutral (league) value: every offer is at worst slightly against the user
-  const { net, out: worth } = neutralBalance(league, p.offer);
-  const share = worth > 0 ? net / worth : net >= 0 ? 1 : -1;
   const im = useLeagueMemo(() => tradeImpact(league, p.offer), [league, p]);
-  const verdict = share > 0.05 ? { l: 'In your favor', c: 'good' } : share < -0.05 ? { l: 'A little short', c: 'warn' } : { l: 'Fair value', c: 'info' };
+  // the staff's read (proposals.ts offerRating: neutral value, and what it does to your five best): the same call a long sim stops by
+  const read = offerRating(league, p);
+  const verdict = { l: read.label, c: read.rating === 'good' ? 'good' : read.rating === 'poor' ? 'warn' : 'info', why: read.why };
   // a three-team offer: each thing of yours with the team it goes to, each of theirs with the one it comes from
   const third = proposalThird(league, p);
   const route = (dir: 'to' | 'from') => (kind: 'p' | 'd', id: number) => {
@@ -140,6 +138,8 @@ function OfferCard({
           Payroll after <b className={after > cap.luxuryTax ? 'bad' : after > cap.salaryCap ? 'warn' : 'good'}>{money(after)}</b>
           {tax ? <span className={tax.tone}> · {tax.text}</span> : after > cap.salaryCap ? ' · over the cap' : ''}
         </div>
+        {/* the staff's read in a line: what the tag below stands for, and what a long sim stops by */}
+        <div className="tiny dim">{verdict.why}</div>
         <div className="row fo-offer-foot">
           <span className={`tag ${verdict.c}`}>{verdict.l}</span>
           <span className="grow" />

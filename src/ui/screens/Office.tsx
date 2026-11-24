@@ -19,6 +19,7 @@ import { TAX_SHARE_TO_NON_TAXPAYERS, teamTaxBill } from '../../core/league/finan
 import { openProposals } from '../../core/league/proposals';
 import { agenda, type AgendaKind } from '../../core/league/agenda';
 import { seasonsInCharge } from '../../core/league/owner';
+import { marketOpen } from '../../core/league/jobs';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { useBusy } from '../../state/actions/office';
 import { Bar, CountUp, Section, Sheet, Statline } from '../components/ui';
@@ -515,6 +516,8 @@ function Desks({ league }: { league: League }) {
   const up = contractsUp(league);
   const expiring = up.players.length;
   const jobOffers = league.jobOffers?.season === league.season ? league.jobOffers.offers.length : 0;
+  // openings that rate him level with their hire: his to ask about until the draft (Career → Jobs)
+  const jobAsks = marketOpen(league) ? league.jobMarket!.openings.filter((o) => o.status === 'listen').length : 0;
   const seasonsIn = seasonsInCharge(league);
 
   const desks: Desk[] = [
@@ -580,11 +583,13 @@ function Desks({ league }: { league: League }) {
       tone: js.off ? undefined : js.ultimatum || js.heat === 'hot' ? 'bad' : js.heat === 'warm' ? 'warn' : undefined,
     },
     {
-      to: '/office/career',
+      to: jobAsks && !jobOffers ? '/office/career?tab=jobs' : '/office/career',
       title: 'Career',
       sub: jobOffers
         ? `${plural(jobOffers, 'job offer')} · lapse${jobOffers === 1 ? 's' : ''} at the draft`
-        : seasonsIn < 1
+        : jobAsks
+          ? `${plural(jobAsks, 'opening')} would hear you out · until the draft`
+          : seasonsIn < 1
           ? `Your ${teamCity(league, team)} tenure starts next season`
           : `Season ${seasonsIn} with ${teamCity(league, team)}`,
       tone: jobOffers ? 'good' : undefined,

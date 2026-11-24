@@ -203,6 +203,10 @@ const STAR_AGE_PAY = 0.6;
 
 /** Fair annual salary ($K) for a player on the open market. */
 export function marketSalary(league: League, p: Player): number {
+  // (his potential counts in full, as in a trade: at half, 2026-11-24, an 83/86 at 23 cost 18% of the
+  // cap where he had cost 21%, teams kept three or four young stars under the tax, and eight leagues
+  // of eight seasons had nine 70-win teams, two at 76-6, and a 45-game winning streak; in full, four,
+  // none past 71 wins, and a longest streak of 28)
   let s = valueScore(league, p);
   const a = age(league, p);
   if (a >= 30) s += (a - 29) * 1.1 * STAR_AGE_PAY * clamp((p.ovr - 75) / 10, 0, 1);
@@ -457,6 +461,16 @@ export function extensionSalaries(league: League, p: Player, amount: number, yea
 }
 
 /**
+ * What a team's appeal does to his price there: up to 10% either way (a ring chaser's discount for
+ * a contender goes further, RING_DISCOUNT). The one exchange rate between a team's appeal and money:
+ * his asking price of a team (askingContract) and how he weighs its offer against another's
+ * (freeAgency.ts's offerUtility) both read it.
+ */
+export function askLean(league: League, p: Player, tid: number): number {
+  return clamp(1 / teamAppeal(league, tid, p), ringChase(league, p, tid) ? 1 / RING_DISCOUNT : 1 / 1.1, 1 / 0.9);
+}
+
+/**
  * What he asks of team `tid` (of the market, without one): his market value, an unsigned free
  * agent's price as it has come down (see faDay), over the years he wants. A star worth nearly the
  * max (MAX_ASK) asks his max of everyone, so his interest in a team decides where he signs (see
@@ -477,7 +491,7 @@ export function askingContract(league: League, p: Player, tid?: number): Ask {
   if (amount <= min && floor <= min) return { amount: min, years };
   const max = playerMax(league, p, cs, tid);
   if (!marked && market >= cap.maxContract(p.experience) * MAX_ASK) amount = max;
-  else if (tid !== undefined) amount *= clamp(1 / teamAppeal(league, tid, p), ringChase(league, p, tid) ? 1 / RING_DISCOUNT : 1 / 1.1, 1 / 0.9);
+  else if (tid !== undefined) amount *= askLean(league, p, tid);
   // (a good free agent's summer price holds a floor, a ring chaser's and a keen team's discount included)
   amount = Math.max(amount, floor);
   return { amount: clamp(Math.round(amount / 50) * 50, min, max), years };

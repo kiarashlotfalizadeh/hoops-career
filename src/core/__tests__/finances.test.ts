@@ -23,7 +23,8 @@ import { salaryFor } from '../playerGen';
 import { OWNER_PROFIT_RANGE, OWNER_PROFIT_TARGET, ownerMoneyScore } from '../league/owner';
 import { newSeason, simDay, startRegularSeason } from '../league/season';
 import { CAP, TAX_BRACKET_PCT } from '../constants';
-import { PAYROLL_SLACK, currentGoals, forcedPayroll, ownerProgress, planOwnerGoals } from '../league/ownerGoals';
+import { money } from '../format';
+import { PAYROLL_SLACK, WINDOW_ROOM, currentGoals, forcedPayroll, ownerProgress, planOwnerGoals } from '../league/ownerGoals';
 import { releaseDeadMoney, releasePlayer, signPlayer } from '../league/contracts';
 import type { League } from '../types';
 
@@ -235,9 +236,13 @@ describe('finances (L1, L15)', () => {
       expect(forced).toBeGreaterThan(cap.spendLine);
       const og = planOwnerGoals(l, u)!;
       const g = og.goals.find((x) => x.kind === 'payroll')!;
-      expect(g.title).toBe('Add nothing to the payroll you inherited');
-      // (rounded up, with PAYROLL_SLACK of room: a coach who adds nothing is never over it)
-      expect(g.target).toBe(Math.ceil((forced + PAYROLL_SLACK * cap.luxuryTax) / 100) * 100);
+      // (rounded up, with PAYROLL_SLACK of room, so a coach who adds nothing is never over it; with the
+      // window open, the owner asking for a playoff round or more, WINDOW_ROOM of the cap: a mid-level signing)
+      const window = (og.goals.find((x) => x.kind === 'postseason')?.target ?? 0) >= 3;
+      const room = window ? WINDOW_ROOM * cap.salaryCap : PAYROLL_SLACK * cap.luxuryTax;
+      expect(g.target).toBe(Math.ceil((forced + room) / 100) * 100);
+      expect(g.title).toBe(`Keep the payroll under ${money(g.target)}`);
+      expect(g).toMatchObject({ inherited: forced, ...(window ? { window: true } : {}) });
       l.ownerGoals = og;
       const pay = payroll(l, u);
       // a trade of the inherited star for a player on the same salary: the payroll is the same, and what
@@ -293,7 +298,8 @@ describe('finances (L1, L15)', () => {
       while (standardRoster(l, u).length < CAP.rosterMin) signPlayer(l, freeAgents(l)[0], u, cap.vetMin, 1, { news: false });
       expect(startRegularSeason(l)).toEqual([]);
       const g = currentGoals(l)!.goals.find((x) => x.kind === 'payroll')!;
-      expect(g.title).toBe('Add nothing to the payroll you inherited');
+      expect(g.title).toBe(`Keep the payroll under ${money(g.target)}`);
+      expect(g.inherited).toBeDefined();
       expect(payroll(l, u)).toBeLessThanOrEqual(g.target);
       expect(ownerProgress(l).find((x) => x.goal.kind === 'payroll')!.status).not.toBe('behind');
     }

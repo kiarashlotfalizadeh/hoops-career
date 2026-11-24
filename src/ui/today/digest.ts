@@ -9,6 +9,7 @@ import { curTeamSeason, fmtDate, shortName } from '../../core/league/helpers';
 import { injuryName, ordinal, outFor } from '../../core/format';
 import { gameStoryFor } from '../../core/analysis/gameStory';
 import { staffPicksSince } from '../../core/league/weekCall';
+import { offerRating, openProposals, type OfferRating } from '../../core/league/proposals';
 import { headOf, isHisStory, isLeagueStory, byWeight, resultOf, scoreText, storyLink, weightOf } from './front';
 
 /** Where the league stood when a sim started. */
@@ -110,6 +111,20 @@ export interface Digest {
   stop?: { text: string; tone: 'good' | 'bad' | 'neutral'; to: string; call?: true };
   /** What the staff did with calls the sim ran past (see weekCall.ts's staffPicksSince), under the calls open now. */
   picks?: string[];
+  /** AI teams' trade offers that came in the stretch, newest first, each with the staff's read: the ones the sim didn't stop for are batched here (see proposals.ts's stopsForOffer). */
+  offers?: DigestOffer[];
+}
+
+/** An offer of the stretch: its headline, the staff's read, and whether it still stands (its id then, to open it). */
+export interface DigestOffer {
+  mail: number;
+  subject: string;
+  label?: string;
+  rating?: OfferRating;
+  /** The open offer's id, or undefined once it has lapsed, been answered or withdrawn. */
+  open?: number;
+  /** "Stands until Dec 14", while it's open. */
+  due?: string;
 }
 
 /** The results a digest lists: all of a short stretch's; a longer one's newest RESULTS_NEW and its biggest nights. */
@@ -185,11 +200,16 @@ function momentOf(l: League, mine: NewsItem[], results: DigestResult[]): DigestM
  */
 export function toldMail(d: Digest, l: League, listed: number, needs: (id: number) => boolean): number[] {
   const told = new Set(['Medical Staff', 'Media Relations', 'League Office']);
-  return d.mail.filter((id, i) => {
-    const m = l.inbox.find((x) => x.id === id);
-    // (an AI team's offer was on Today's Needs you while it stood: once it has closed, its letter is told)
-    return !!m && !m.read && !needs(id) && (i < listed || told.has(m.from) || m.proposal !== undefined);
-  });
+  const unread = (id: number) => l.inbox.some((x) => x.id === id && !x.read);
+  // (an AI team's offer is in the digest's own block: once it has closed, its letter is told)
+  const closed = (d.offers ?? []).filter((o) => !openProposals(l).some((p) => p.id === o.open) && unread(o.mail)).map((o) => o.mail);
+  return [
+    ...d.mail.filter((id, i) => {
+      const m = l.inbox.find((x) => x.id === id);
+      return !!m && !m.read && !needs(id) && (i < listed || told.has(m.from));
+    }),
+    ...closed,
+  ];
 }
 
 const story = (n: { id: number; head?: string; text: string; weight?: 1 | 2 | 3 }): DigestStory => ({
@@ -267,9 +287,21 @@ export function buildDigest(mark: DigestMark, l: League, opts: { long?: boolean;
       injuries.push(`${shortName(l, pl)}: ${injuryName(pl.injury.type)} · ${outFor(pl.injury.gamesRemaining)}`);
     else if (!pl.injury && was !== undefined) back.push(shortName(l, pl));
   }
-  const mail = l.inbox.filter((m) => m.id >= mark.msgId && !m.read).map((m) => m.id);
+  // the offers of the stretch are their own block (with the staff's read), not mail to read one by one
+  const offerMail = l.inbox.filter((m) => m.id >= mark.msgId && m.proposal !== undefined);
+  const offers: DigestOffer[] = offerMail.map((m) => {
+    const p = openProposals(l).find((x) => x.id === m.proposal);
+    const read = p ? offerRating(l, p) : undefined;
+    return {
+      mail: m.id,
+      subject: m.subject,
+      ...(read ? { label: read.label, rating: read.rating } : {}),
+      ...(p ? { open: p.id, due: p.kind === 'pick' ? 'Until the pick is made' : `Stands until ${fmtDate(l.season, p.expires)}` } : {}),
+    };
+  });
+  const mail = l.inbox.filter((m) => m.id >= mark.msgId && !m.read && m.proposal === undefined).map((m) => m.id);
 
-  const empty = !moment && !results.length && !stories.length && !around.length && !mail.length && !injuries.length && !seed && !power;
+  const empty = !moment && !results.length && !stories.length && !around.length && !mail.length && !offers.length && !injuries.length && !seed && !power;
   if (empty) return null;
   const span =
     opts.span ??
@@ -292,6 +324,7 @@ export function buildDigest(mark: DigestMark, l: League, opts: { long?: boolean;
     mail,
     around,
     picks: staffPicksSince(l, mark.season, mark.day),
+    ...(offers.length ? { offers } : {}),
   };
 }
 
@@ -301,6 +334,7 @@ export function digestLine(d: Digest): string {
   if (d.record) parts.push(`${d.record.w}-${d.record.l}`);
   if (d.seed && d.seed.before !== d.seed.after) parts.push(`${d.seed.after < d.seed.before ? 'up' : 'down'} to ${ordinal(d.seed.after)}`);
   if (d.stories.length) parts.push(`${d.stories.length} ${d.stories.length === 1 ? 'story' : 'stories'}`);
+  if (d.offers?.length) parts.push(`${d.offers.length} trade offer${d.offers.length === 1 ? '' : 's'}`);
   if (d.mail.length) parts.push(`${d.mail.length} new message${d.mail.length === 1 ? '' : 's'}`);
   return parts.join(' · ') || d.span;
 }

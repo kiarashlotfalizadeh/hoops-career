@@ -5,8 +5,8 @@ import { clearAllPlans } from './gamePlans';
 import { autoTactics } from '../ai/coachAI';
 import { defaultTactics } from '../sim/tactics';
 import { swapJobs } from './coaches';
-import { REVIEWS_KEPT, currentGoals, goalsRecord, gradeOwnerGoals, resultText, setOwnerGoals, type OwnerGoalKind, type OwnerReview } from './ownerGoals';
-import { canBeFired, seasonWeight, ULTIMATUM_MET, ultimatumVerdict } from './jobSecurity';
+import { POOR_GRADE, REVIEWS_KEPT, currentGoals, goalsRecord, gradeOwnerGoals, resultText, setOwnerGoals, type OwnerGoalKind, type OwnerReview } from './ownerGoals';
+import { canBeFired, graceLeft, seasonWeight, ULTIMATUM_MET, ultimatumVerdict } from './jobSecurity';
 import { firingSaid, ownerWords, verdictOf } from './ownerVoice';
 import { cameoAtReview } from './ownerCameos';
 
@@ -75,6 +75,18 @@ const PART: Record<OwnerGoalKind, 'wins' | 'playoffs' | 'money' | 'youth'> = { w
 export const FIRING_LINE = -0.5;
 
 /**
+ * Last season's review by this team's owner was a poor one (graded POOR_GRADE or worse, on goals of
+ * his): the first strike. A second in a row, once the grace period is over, and he fires the coach
+ * whatever the standing (see ownerEvaluation). The standing alone, a running average that one season
+ * moves by 40%, had let a coach in good standing tank two seasons on purpose (graded −87 and −69)
+ * and keep his job: he was never fired in eleven seasons (the playtest, 2026-11-23).
+ */
+export function poorLastSeason(league: League, season = league.season): boolean {
+  const r = (league.ownerReviews ?? []).find((x) => x.tid === league.userTid && x.season === season - 1);
+  return !!r && r.goals.length > 0 && !r.crowned && r.grade <= POOR_GRADE;
+}
+
+/**
  * The owner's review after the playoffs: each of the season's goals graded −1..1 against its target
  * (see gradeGoal), the season's grade their weighted sum (held down by the floor or the rebuild
  * clock; lifted by a title), and the overall standing its running average:
@@ -85,7 +97,8 @@ export const FIRING_LINE = -0.5;
  * value. A season without goals (a save from before them, picked up in the postseason) is graded on
  * the old absolute scale: wins against .500 and the playoff round reached. The review goes into the history (the last REVIEWS_KEPT seasons) and the inbox, goal by
  * goal; after the grace period, with job security on, a standing under FIRING_LINE gets the coach
- * fired, and so does a missed ultimatum, whatever the season won. What he says about it (his verdict, the
+ * fired, and so does a missed ultimatum, whatever the season won, or a second poor season in a row
+ * (see poorLastSeason), whatever the standing. What he says about it (his verdict, the
  * warning, the sack) is his own, by his quirk (ownerVoice.ts); what he decides is the same for all.
  */
 export function ownerEvaluation(league: League) {
@@ -138,12 +151,15 @@ export function ownerEvaluation(league: League) {
   const youth = blend('youth');
   league.ownerMood = { wins: blend('wins') ?? 0, playoffs: blend('playoffs') ?? 0, money: blend('money') ?? 0, total: r2(total), ...(youth !== undefined ? { youth } : {}) };
   const fireable = canBeFired(league);
-  const fired = fireable && (total < FIRING_LINE || verdict === 'missed');
+  // (a second poor season in a row: the first was his warning, said at its review and on the meter all season)
+  const twice = !!og && !crowned && grade <= POOR_GRADE && poorLastSeason(league);
+  const fired = fireable && (total < FIRING_LINE || verdict === 'missed' || twice);
   const held = impatient ? 'patience' : floored ? 'floor' : undefined;
   // his first words on it, in his own manner (ownerVoice.ts): why he fired the coach, or how the season left him
   const words = ownerWords(league);
   const feeling = words.verdict[verdictOf(total)];
   const said = fired ? firingSaid(league, verdict === 'missed' ? { ultimatum: og!.ultimatum!.text } : 'results') : feeling;
+  const strike = fired && twice && verdict !== 'missed' && total >= FIRING_LINE;
   const review: OwnerReview = {
     season: league.season,
     tid,
@@ -168,6 +184,7 @@ export function ownerEvaluation(league: League) {
     lines.push(`${rec.won}-${rec.games - rec.won} is under anything I can accept, so nothing else saves this season's grade.`);
   }
   if (impatient && og?.rebuild) lines.push(`${og.rebuild.year} seasons in a row without the postseason. I said we compete, and we didn't. Nothing else saves this season's grade.`);
+  if (strike) lines.push('Two poor seasons in a row. I said after the first that I would not take a second.');
   if (fired) {
     league.fired = true;
     addInbox(league, {
@@ -181,7 +198,11 @@ export function ownerEvaluation(league: League) {
     return;
   }
   const answered = [verdict === 'met' ? words.answered : '', cameo.line ?? ''].filter(Boolean).join('\n');
-  const warning = total < -0.2 && fireable ? words.warning : '';
+  // (a poor season is a strike when next season's review can fire him: said now, so the second is no surprise)
+  const poorNow = !!og && !crowned && grade <= POOR_GRADE && league.settings.jobSecurity && graceLeft(league, true) === 0;
+  const warning = [total < -0.2 && fireable ? words.warning : '', poorNow ? 'That was a poor season. A second one in a row and you are out, whatever came before.' : '']
+    .filter(Boolean)
+    .join(' ');
   addInbox(league, {
     from: 'Owner',
     subject: 'Season review',

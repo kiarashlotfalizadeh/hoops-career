@@ -178,6 +178,27 @@ function DigestBody({ d }: { d: Digest }) {
         </DigestSection>
       )}
 
+      {!!d.offers?.length && (
+        <DigestSection title="Trade offers" more={{ label: 'Offers', to: '/office/trade?tab=offers' }} go={go}>
+          {d.offers.map((o) => {
+            // (as it stands now: an offer answered or lapsed since the sim ended is no longer on the table)
+            const live = o.open !== undefined && league.proposals?.some((p) => p.id === o.open);
+            return (
+              <button key={o.mail} type="button" className="dg-mail" onClick={() => go(live ? `/office/trade?offer=${o.open}` : `/inbox?m=${o.mail}`)}>
+                <span className="grow">
+                  <span className="dg-mail-s">
+                    {o.subject}
+                    {live && o.label && <span className={`tag ${o.rating === 'good' ? 'good' : o.rating === 'poor' ? 'warn' : 'info'}`}>{o.label}</span>}
+                  </span>
+                  <span className="dg-mail-f">{live ? o.due : 'No longer on the table'}</span>
+                </span>
+                <ChevronRight size={16} className="dim" aria-hidden="true" />
+              </button>
+            );
+          })}
+        </DigestSection>
+      )}
+
       {mail.length > 0 && (
         <DigestSection title="New mail" more={{ label: 'Inbox', to: '/inbox' }} go={go}>
           {mail.slice(0, MAIL_SHOWN).map((m) => (

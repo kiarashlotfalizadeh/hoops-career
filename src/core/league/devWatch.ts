@@ -13,7 +13,7 @@ import { playerAge } from '../playerGen';
 import { seasonLabel } from '../constants';
 import { ordinal, plural, rankOf } from '../format';
 import { addInbox, addNews, andList, fmtDate, playerName, seasonTotals, sentence, shortName, teamPlayers } from './helpers';
-import { FOCUS_META } from './progression';
+import { FOCUS_META, PRIORITY, devPriority, priorityChosen, priorityCost, priorityEffect } from './progression';
 import { awardRaces } from './awards';
 import { worldRng } from './world';
 
@@ -70,11 +70,13 @@ const GROWS_IN_SEASON = 26;
 /** Share of a year's development each check-in applies (inSeasonProgression's frac). */
 const CHECK_FRAC = 0.07;
 /**
- * A breakout: this far past what his age would have him add. Over a summer a young player's OVR
- * moves about ±3.5-4.5 (progression.ts), so 5 above the expected is about one young player in eight;
- * in season the check-ins move him a point or two, so 2 above it is rarer still.
+ * A breakout: this far past what his age would have him add. A year moves a player of 22 or under
+ * -2 to +6 OVR (the 5th and 95th percentiles, progression.ts's SUMMER_SD and YEAR_BANDS), about 1.5
+ * of it his age's, so 3.5 above the expected (a year of +5 at 21) is about one young player in
+ * fifteen; in season the check-ins move him a point or two, so 2 above it is rarer still. (5 above
+ * until 2026-11-23, when a summer's swings ran to ±4.5: one in eight then, nearly nobody now.)
  */
-const SUMMER_BREAKOUT = 5;
+const SUMMER_BREAKOUT = 3.5;
 const SEASON_BREAKOUT = 2;
 /** A scoring breakout: points a game up this much on last season, to at least SCORING_FLOOR, over SCORING_GAMES games or more. */
 const SCORING_JUMP = 6;
@@ -375,20 +377,65 @@ const FOCUS_KEYS: Record<string, RatingKey[]> = {
   conditioning: ['end', 'str', 'spd'],
 };
 
-/** The team's development setup in one line, ranked against the league (coaching skill and budget, practice: what develop() reads). */
+/** A figure in OVR a year to one decimal, signed ("+1.2", "−0.3"). */
+export const ovrYear = (x: number) => `${x < 0 ? '−' : '+'}${Math.abs(x).toFixed(1)}`;
+
+/**
+ * A team's development priority as it stands (progression.ts): who has it, what a year of it is
+ * worth to each (priorityEffect, the same sum develop() runs), and what it costs each of the roster's
+ * other young players (`others`, the cost a year in OVR, negative).
+ */
+export interface PriorityPlan {
+  /** Whether the user chose (else the staff's pick). */
+  chosen: boolean;
+  picks: { pid: number; gain: number }[];
+  others: { pid: number; cost: number }[];
+  /** Places still free. */
+  open: number;
+}
+
+export function priorityPlan(league: League, tid = league.userTid): PriorityPlan {
+  const list = devPriority(league, tid);
+  const roster = teamPlayers(league, tid);
+  const picks = list.map((pid) => ({ pid, gain: priorityEffect(league, league.players[pid]) }));
+  const others = roster
+    .filter((p) => !list.includes(p.pid) && playerAge(p, league.season) <= PRIORITY.maxAge)
+    .map((p) => ({ pid: p.pid, cost: priorityCost(league, p, list.length) }))
+    .sort((x, y) => league.players[y.pid].ovr - league.players[x.pid].ovr);
+  return { chosen: tid === league.userTid && priorityChosen(league), picks, others, open: PRIORITY.slots - list.length };
+}
+
+/** The priority in a sentence or two: who has it and for how much, and what the others pay, in OVR a year. */
+export function priorityLine(league: League, tid = league.userTid): string {
+  const plan = priorityPlan(league, tid);
+  const name = (pid: number) => shortName(league, league.players[pid]);
+  if (!plan.picks.length) return plan.chosen ? 'Staff priority: nobody. Every young player gets the same time.' : 'Staff priority: nobody 25 or under has room to grow.';
+  const who = andList(plan.picks.map((x) => `${name(x.pid)} (${ovrYear(x.gain)} OVR a year)`));
+  const cost = plan.others.length ? plan.others.reduce((a, x) => a + x.cost, 0) / plan.others.length : 0;
+  const pays = plan.others.length
+    ? ` The other ${plural(plan.others.length, 'player')} 25 or under ${plan.others.length === 1 ? 'grows' : 'each grow'} about ${Math.abs(cost).toFixed(1)} a year slower.`
+    : ' Nobody else on the roster is 25 or under, so it costs nothing.';
+  return `Staff priority${plan.chosen ? '' : " (the staff's pick)"}: ${who}.${pays}`;
+}
+
+/**
+ * The team's development setup: the staff's priority (the lever) and what the head coach's
+ * development rating is worth to every player (develop()'s coaching term, 0.7 rating points a skill
+ * at the top of the range, here in OVR a year at the middle of the scale), ranked against the league.
+ * A coaching budget or a practice load off the default (a save from before those were cut) still counts
+ * in develop(), so it is still said.
+ */
 export function setupLine(league: League, tid: number): string {
   const t = league.teams[tid];
   const n = league.teams.length;
-  const rank = (f: (x: (typeof league.teams)[number]) => number) => 1 + league.teams.filter((x) => f(x) > f(t)).length;
-  const budget = rank((x) => x.budget.coaching);
-  const coach = rank((x) => x.coach.development);
-  const practice =
-    t.practice === 'intense'
-      ? 'Intense practices speed the young players up.'
-      : t.practice === 'light'
-        ? 'Light practices slow the young players down.'
-        : 'Practices at a normal load.';
-  return `Coaching budget ${rankOf(budget, n)}. Development coaching ${rankOf(coach, n)}. ${practice}`;
+  const rank = 1 + league.teams.filter((x) => x.coach.development > t.coach.development).length;
+  // (0.7 rating points on each skill at 100: about 0.6 of his OVR is skills, at about 1.9 OVR a raw point, over 0.8 of a year)
+  const worth = ((t.coach.development - 50) / 50) * 0.7 * 0.6 * 1.9 * 0.8;
+  const old = [
+    t.budget.coaching !== 50 ? `Coaching budget ${t.budget.coaching}.` : '',
+    t.practice === 'intense' ? 'Intense practices speed the young players up.' : t.practice === 'light' ? 'Light practices slow the young players down.' : '',
+  ].filter(Boolean);
+  return [priorityLine(league, tid), `Development coaching ${rankOf(rank, n)}: ${ovrYear(worth)} OVR a year for every player.`, ...old].join(' ');
 }
 
 /** Why a player moved (or didn't) in what develop() reads: the month and the season, the ratings that moved, his minutes while he's young, his training focus. */
@@ -414,6 +461,12 @@ function reasonFor(league: League, p: Player, x: Pick<DevLine, 'group' | 'recent
     else if (!st?.gp) out.push('No games, nothing to grow on');
     else if (mpg <= 6) out.push(`${mpg} minutes a night set him back. Young players who sit fall behind`);
   } else if (age > GROWS_IN_SEASON) out.push('Players his age hold until the summer');
+  // the staff's priority, where it reaches him (25 and under)
+  if (age <= PRIORITY.maxAge && p.tid >= 0) {
+    const list = devPriority(league, p.tid);
+    if (list.includes(p.pid)) out.push(`He has the staff's priority: ${ovrYear(priorityEffect(league, p))} OVR a year`);
+    else if (list.length) out.push(`The staff's priority is elsewhere: ${ovrYear(priorityCost(league, p, list.length))} a year for him`);
+  }
   if (p.training !== 'balanced') {
     const keys = FOCUS_KEYS[p.training] ?? [];
     const label = FOCUS_META[p.training].label.toLowerCase();
@@ -785,11 +838,22 @@ export function devSummer(league: League) {
     .slice(-3)
     .reverse();
   const word = (x: (typeof mine)[number]) => `${name(x.p)} ${minus(x.d)} to ${to(x.p)}`;
-  const parts = [`The summer's work is in. ${setupLine(league, league.userTid)}`];
+  const parts = [`The summer's work is in.`];
+  // what the staff's priority did over the year, from each player's snapshot (annualProgression measured it)
+  const staff = mine.map((x) => ({ p: x.p, v: histAt(x.p, league.season)?.staff ?? 0 })).filter((x) => x.v);
+  const gained = staff.filter((x) => x.v > 0).sort((a, b) => b.v - a.v);
+  const paid = staff.filter((x) => x.v < 0);
+  if (gained.length)
+    parts.push(
+      `Staff priority added about ${andList(gained.map((x) => `${ovrYear(x.v)} to ${name(x.p)}`))} over the year.${
+        paid.length ? ` It cost ${andList(paid.map((x) => name(x.p)))} about ${Math.abs(paid.reduce((a, x) => a + x.v, 0) / paid.length).toFixed(1)} each.` : ''
+      }`,
+    );
   const ours = mine.filter((x) => breakouts.includes(x));
   if (ours.length) parts.push(`Breakout${ours.length > 1 ? 's' : ''}: ${andList(ours.map(word))}. That is well past what his age alone would add.`);
   if (up.length) parts.push(`Up: ${andList(up.filter((x) => !ours.includes(x)).map(word)) || 'see above'}.`);
   if (down.length) parts.push(`Down: ${andList(down.map(word))}.${down.some((x) => x.age >= 30) ? ' The age curve, mostly: athleticism goes first.' : ''}`);
+  parts.push(`For the season ahead. ${setupLine(league, league.userTid)}`);
   const big = ours[0] ?? up[0];
   addInbox(league, {
     from: 'Player Development',

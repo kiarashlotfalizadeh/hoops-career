@@ -15,7 +15,8 @@ import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { autoDraftUserPick, finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency, startRegularSeason } from '../league/season';
 import { nextPick } from '../league/draft';
 import { CAP_FOR, curTeamSeason, freeAgents, payroll, standardRoster, statsLine, teamSeason } from '../league/helpers';
-import { askingContract, releasePlayer, valueScore } from '../league/contracts';
+import { MLE_PCT, askingContract, releasePlayer, valueScore } from '../league/contracts';
+import { money } from '../format';
 import { userOffer } from '../league/freeAgency';
 import { FIRING_LINE, ownerEvaluation, takeOverTeam } from '../league/owner';
 import { ownerWords, verdictOf } from '../league/ownerVoice';
@@ -24,7 +25,12 @@ import {
   forcedPayroll,
   CROWN_GRADE,
   FLOOR_MARGIN,
-  PAY_RAISE,
+  POOR_GRADE,
+  SIDE_WEIGHT,
+  WINDOW_ROOM,
+  WIN_ASK_TOP,
+  payrollLine,
+  winAsk,
   PAYROLL_SLACK,
   FLOOR_GAMES,
   FLOOR_GRADE,
@@ -360,33 +366,43 @@ describe('two seasons of the real league', () => {
         } else expect(post!.target, t.abbrev).toBe(Math.min(want, most));
         if (post) expect(levelOdds(odds, post.target), t.abbrev).toBeGreaterThanOrEqual(POSTSEASON_ODDS);
         const pay = payroll(l, og.tid);
-        // (well under the tax he asks nothing of the money: the franchise runs its own)
-        if (pay <= line * 0.94) expect(goal(og, 'payroll'), t.abbrev).toBeUndefined();
-        // the tax line is his limit (a win-now owner's a little past it), or the payroll a coach would
-        // inherit past it: add nothing to that
+        // well under the tax he asks nothing of the money (the franchise runs its own). Near it, his
+        // line follows the window: the tax line (a win-now owner's a step past it), further when he
+        // asks for a playoff round or more; a payroll a coach would inherit past it is the owner's
+        // own, with PAYROLL_SLACK of room, or WINDOW_ROOM of the cap with the window open (a
+        // mid-level signing: "add nothing to the payroll you inherited" had scored one −100)
+        const cap = CAP_FOR(l);
+        const window = (post?.target ?? 0) >= 3;
+        const own = payrollLine(cap, ownerPersonality(l, og.tid), window);
+        const forced = forcedPayroll(l, og.tid);
+        if (pay <= line * 0.94 && forced <= own) expect(goal(og, 'payroll'), t.abbrev).toBeUndefined();
         else {
-          const own = ownerPersonality(l, og.tid) === 'win-now' && pay > line ? CAP_FOR(l).spendLine : line;
-          const forced = forcedPayroll(l, og.tid);
-          // (rounded up, with PAYROLL_SLACK of room: a coach who adds nothing is never over it)
-          if (forced > own)
-            expect(goal(og, 'payroll')!, t.abbrev).toMatchObject({
-              target: Math.ceil((forced + PAYROLL_SLACK * line) / 100) * 100,
-              line: own,
-              title: 'Add nothing to the payroll you inherited',
-            });
-          else if (own > line) expect(goal(og, 'payroll')!.target, t.abbrev).toBe(own);
-          else expect(goal(og, 'payroll')!, t.abbrev).toMatchObject({ target: line, title: pay <= line ? 'Stay under the luxury tax' : 'Get under the luxury tax' });
+          const room = window ? WINDOW_ROOM * cap.salaryCap : PAYROLL_SLACK * line;
+          const kept = forced > own - (window ? room : 0);
+          const target = kept ? Math.max(own, Math.ceil((forced + room) / 100) * 100) : own;
+          const g = goal(og, 'payroll')!;
+          expect(g.target, t.abbrev).toBe(target);
+          expect(g.title, t.abbrev).toBe(target === line ? (pay <= line ? 'Stay under the luxury tax' : 'Get under the luxury tax') : `${pay > target ? 'Get' : 'Keep'} the payroll under ${money(target)}`);
+          // (a coach who adds nothing is never over it, and with the window open a mid-level signing fits)
+          if (forced > own) expect(g, t.abbrev).toMatchObject({ line: own, inherited: forced });
+          if (window) expect(target - forced, t.abbrev).toBeGreaterThanOrEqual(MLE_PCT * cap.salaryCap);
+          // a side goal never outweighs the floor's: a fifth of the season at most
+          expect(g.weight, t.abbrev).toBeLessThanOrEqual(SIDE_WEIGHT.payroll!);
         }
-        // the expectation (the season forecast's) and the target agree, but for the owner's nudge of a
-        // win or two and the floor (normal: a .300 pace, never closer than FLOOR_MARGIN wins under his
-        // read); a payroll the coach inherited doesn't raise it
+        if (goal(og, 'youth')) expect(goal(og, 'youth')!.weight, t.abbrev).toBeLessThanOrEqual(SIDE_WEIGHT.youth!);
+        // the target is the middle of the season forecast at most (never nudged over it), past
+        // WIN_ASK_TOP wins a third of the rest, and never under the floor (a .300 pace, never closer
+        // than FLOOR_MARGIN wins under his read)
         const wins = goal(og, 'wins')!;
         const exp = outlook[og.tid].pct * 82;
         expect(og.floor, t.abbrev).toBeCloseTo(Math.max(0.1, Math.min(0.3, outlook[og.tid].pct - FLOOR_MARGIN / 82)), 3);
         expect(wins.payRank, t.abbrev).toBeUndefined();
-        expect(Math.abs(wins.target - Math.max(exp, 82 * og.floor!)), t.abbrev).toBeLessThanOrEqual(2.5);
+        expect(wins.target, t.abbrev).toBeLessThanOrEqual(Math.max(Math.round(exp), Math.round(82 * og.floor!)));
+        expect(Math.abs(wins.target - Math.max(winAsk(exp), 82 * og.floor!)), t.abbrev).toBeLessThanOrEqual(1.5);
+        if (exp > WIN_ASK_TOP + 3) expect(wins.read, t.abbrev).toBe(Math.round(exp));
       }
-      // after his first season, a payroll of his own in the league's top half raises it, PAY_RAISE wins at most
+      // after his first season, a payroll of his own in the league's top half doesn't raise the win
+      // target over the forecast's middle (it had, by three wins), but it is no rebuild
       {
         const m = structuredClone(l);
         const mo = leagueOutlook(m);
@@ -400,9 +416,9 @@ describe('two seasons of the real league', () => {
         // (in charge long enough that the contracts are his, not inherited)
         m.tenureStart = m.season - 10;
         const plan = planOwnerGoals(m, tid, mo)!;
-        const raised = goal(plan, 'wins')!;
-        expect(raised.payRank).toBe(rankOf(tid));
-        expect(raised.target - mo[tid].pct * 82).toBeLessThanOrEqual(PAY_RAISE + 2.5);
+        const mine = goal(plan, 'wins')!;
+        expect(mine.payRank).toBeUndefined();
+        expect(mine.target).toBeLessThanOrEqual(Math.max(Math.round(mo[tid].pct * 82), Math.round(82 * plan.floor!)));
         // and a payroll of his own in the top half is no rebuild: the play-in at least, whatever the label
         expect(goal(plan, 'postseason')?.target ?? 0).toBeGreaterThanOrEqual(1);
       }
@@ -474,33 +490,47 @@ describe('two seasons of the real league', () => {
       }
     }
 
-    // outside a rebuild, the bar falls at most WIN_SLIDE a season under the same coach: a roster run down doesn't lower it
+    // the bar follows the forecast, unless the coach ran the roster down himself: after a season
+    // graded poor, or with rotation players he traded or let go, it falls at most WIN_SLIDE under
+    // last season's (aging and free agents who walked had held it too: a 44-win forecast asked for 50)
     {
       const l = structuredClone(pre);
       const outlook = leagueOutlook(l);
-      const tid = [...outlook].sort((a, b) => b.talent - a.talent)[0].tid;
+      // (a team asked for the postseason on a middling read: nothing here is compressed at the top)
+      // (and not the user's own, whose opening-night cuts are moves of his)
+      const tid = outlook
+        .filter((o) => o.tid !== l.userTid && goal(planOwnerGoals(l, o.tid, outlook)!, 'postseason'))
+        .sort((a, b) => Math.abs(a.pct - 0.55) - Math.abs(b.pct - 0.55))[0].tid;
       const base = goal(planOwnerGoals(l, tid, outlook)!, 'wins')!.target;
-      const last = (games?: number): OwnerReview => ({
+      const last = (games?: number, grade = 0): OwnerReview => ({
         season: l.season - 1,
         tid,
-        goals: [{ kind: 'wins', title: '', target: base + 12, weight: 1, result: 0, grade: 0 }],
-        grade: 0,
+        goals: [{ kind: 'wins', title: '', target: base + 12, weight: 1, result: 0, grade }],
+        grade,
         total: 0,
         ...(games ? { games } : {}),
       });
+      // a season that wasn't poor, nobody sent away: the forecast's middle, whatever last season asked
       l.ownerReviews = [last(82)];
+      expect(goal(planOwnerGoals(l, tid, outlook)!, 'wins')).toMatchObject({ target: base });
+      expect(goal(planOwnerGoals(l, tid, outlook)!, 'wins')!.held).toBeUndefined();
+      // after a poor one the bar holds, and the floor with it
+      l.ownerReviews = [last(82, POOR_GRADE)];
       const held = planOwnerGoals(l, tid, outlook)!;
       // (and never more than HOLD_OVER_READ over his read: a Wizards coach on Hard had been held to 30 on a 16-win read)
       const read = outlook[tid].pct * 82;
       const target = Math.min(base + 12 - WIN_SLIDE, Math.round(read + HOLD_OVER_READ), Math.round(82 * 0.88));
-      expect(goal(held, 'wins')).toMatchObject({ target, held: base + 12 });
+      expect(goal(held, 'wins')).toMatchObject({ target, held: base + 12, after: 'poor' });
       expect(target).toBeLessThan(base + 12 - WIN_SLIDE);
-      expect(goalsWhy(held)).toContain(`Last season I asked for ${base + 12} wins. I'm holding the bar at ${target}, over my read of this roster.`);
+      expect(held.floor).toBeGreaterThanOrEqual(planOwnerGoals({ ...l, ownerReviews: [] }, tid, outlook)!.floor!);
+      expect(goalsWhy(held)).toContain(
+        `Last season graded poor, and the bar does not come down with the roster after one of those. Last season I asked for ${base + 12} wins. I'm holding the bar at ${target}, over my read of this roster.`,
+      );
       // a smaller hold says the rule, and names what the coach himself traded or let go since, not what aged or walked
       {
         const m = structuredClone(l);
         m.ownerReviews = [{ ...last(82), goals: [{ kind: 'wins', title: '', target: base + 4, weight: 1, result: 0, grade: 0 }] }];
-        expect(goalsWhy(planOwnerGoals(m, tid, outlook)!)).toContain(`Last season I asked for ${base + 4} wins. I don't lower the bar by more than ${WIN_SLIDE} in a season.`);
+        expect(goalsWhy(planOwnerGoals(m, tid, outlook)!).some((x) => x.includes('asked for'))).toBe(false);
         const star = standardRoster(m, tid).sort((a, b) => b.ovr - a.ovr)[0];
         const other = (tid + 1) % 30;
         const name = `${star.firstName} ${star.lastName}`;
@@ -522,6 +552,7 @@ describe('two seasons of the real league', () => {
         ];
         const g = goal(planOwnerGoals(m, tid, outlook)!, 'wins')!;
         expect(g.gone).toEqual([name]);
+        expect(g.target).toBe(base + 4 - WIN_SLIDE);
         expect(goalsWhy(planOwnerGoals(m, tid, outlook)!)).toContain(
           `Last season I asked for ${base + 4} wins. Since then you've traded or let go ${name}, and that doesn't lower the bar by more than ${WIN_SLIDE}.`,
         );
@@ -739,12 +770,25 @@ describe('two seasons of the real league', () => {
       expect(b.l.ownerReviews!.at(-1)!.fired).toBe(true);
       expect(b.l.inbox[0].subject).toBe("You're fired");
       for (const g of b.og.goals) expect(b.l.inbox[0].body).toContain(`${g.title} — `);
-      // a payroll goal kept (no money lost to it) doesn't save him: in trouble after two, gone after a third
+      // a payroll goal kept (no money lost to it) doesn't save him, and nor does the standing he
+      // came with: two poor seasons in a row and he's out (a coach in good standing had tanked two
+      // on purpose and kept his job), the first one's review saying so
       const c = setup('payroll');
-      seasons(c.l, c.og, 2, true);
-      expect(c.l.ownerMood.total).toBeLessThan(-0.4);
+      c.l.ownerMood.total = 0.8;
+      seasons(c.l, c.og, 1, true);
+      expect(c.l.fired).toBeFalsy();
+      expect(c.l.inbox[0].body).toContain('A second one in a row and you are out');
       seasons(c.l, c.og, 1, true);
       expect(c.l.fired).toBe(true);
+      expect(c.l.ownerMood.total).toBeGreaterThan(FIRING_LINE);
+      expect(c.l.inbox[0].body).toContain('Two poor seasons in a row.');
+      // ...and a season that meets the goals between them clears the strike
+      const d = setup(null);
+      d.l.ownerMood.total = 0.8;
+      seasons(d.l, d.og, 1, true);
+      seasons(d.l, d.og, 1, false);
+      seasons(d.l, d.og, 1, true);
+      expect(d.l.fired).toBeFalsy();
 
       // he respects the grace period and job security
       for (const [tenure, security, fired] of [

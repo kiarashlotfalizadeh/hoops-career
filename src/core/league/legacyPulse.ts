@@ -229,6 +229,17 @@ const OPENERS: Record<OwnerPersonality, Record<Band, string[]>> = {
   },
 };
 
+/**
+ * His opener when the team is losing and he isn't unhappy: the record is the one his goals expected
+ * (a rebuild season). The good month's openers praise the winning: "Winning is good business. Keep
+ * it up." had gone to a 6-22 team on its rebuild's pace (the playtest, 2026-11-23).
+ */
+const ON_PLAN_LOSING: Record<OwnerPersonality, string[]> = {
+  'win-now': ["I don't enjoy the standings. I signed off on this season, so I'll live with them.", 'This is the record I expected. I want to see what it buys us.'],
+  builder: ['The record is what I expected. I am watching the young players, not the standings.', 'Losing was in the plan this year. The growth has to be in it too.'],
+  frugal: ['We are about what this roster costs. That was the plan for this year.', "No surprises in the standings. I can live with that this season."],
+};
+
 const CLOSERS: Record<OwnerPersonality, string[]> = {
   'win-now': ['Win the next one.', 'I want more.', "Don't make me write a longer note."],
   builder: ['Keep building.', 'Stay with the plan.', 'Keep the young guys growing.'],
@@ -288,9 +299,13 @@ function checkInMail(
   const t = league.teams[tid];
   const gp = ts.won + ts.lost;
   const pace = Math.round((ts.won / Math.max(1, gp)) * SEASON_GAMES);
-  const lines: string[] = [rng.pick(OPENERS[who][band])];
+  // (a month on plan with a losing record, a rebuild he signed off on: his openers for a good month are about winning)
+  const losing = band !== 'bad' && ts.won < ts.lost;
+  const lines: string[] = [rng.pick(losing ? ON_PLAN_LOSING[who] : OPENERS[who][band])];
   // (in his own manner: his quirk's line for a month like this, league/voices.ts)
-  lines.push(rng.pick(QUIRK_LINES[ownerQuirk(league, tid)][band]));
+  const quirk = rng.pick(QUIRK_LINES[ownerQuirk(league, tid)][band]);
+  // (his quirk's good and middling months are about a team that wins: "We are close. One more move and nobody can touch us.")
+  if (!losing) lines.push(quirk);
   // the month: the record since his last note (or since opening night), and how his mood moved
   const since = last ? [ts.won - last.won, ts.lost - last.lost] : [ts.won, ts.lost];
   const moved = last ? score - last.score : 0;

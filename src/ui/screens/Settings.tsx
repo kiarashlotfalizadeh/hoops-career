@@ -29,6 +29,12 @@ import { sfx } from '../sound';
 import './settings.css';
 
 const SPEEDS = LIVE_SPEEDS.map((s) => ({ id: String(s.id), label: s.label }));
+/** What a long sim stops for among AI teams' trade offers (Settings.offerStops). */
+const OFFER_STOPS: { id: NonNullable<GameSettings['offerStops']>; label: string }[] = [
+  { id: 'good', label: 'Good ones' },
+  { id: 'all', label: 'All' },
+  { id: 'never', label: 'Never' },
+];
 const LOOKS: { id: ThemePref; label: string }[] = [
   { id: 'auto', label: 'System' },
   { id: 'light', label: 'Hardwood' },
@@ -239,6 +245,18 @@ export default function Settings() {
                 label="Pause sims for what needs you"
                 help="Long sims stop only for a decision the league waits on, a trade offer or request, a starter hurt, the deadline and a playoff series. The staff handles the rest."
               />
+              {st.stopOnNews !== false && (
+                <div className="set-inline">
+                  <span className="set-label row">
+                    Trade offers
+                    <Help title="Stop for trade offers">
+                      Your staff rates every offer an AI team makes. Good ones: a sim stops only for an offer rated in your favor. All: it stops for each one. Never: none stops
+                      it. Offers a sim doesn&apos;t stop for wait under Needs you and in the summary after the sim, until they lapse.
+                    </Help>
+                  </span>
+                  <Segmented label="Stop sims for trade offers" value={st.offerStops ?? 'good'} onChange={(v) => set('offerStops', v)} options={OFFER_STOPS} />
+                </div>
+              )}
               <Toggle
                 on={loopSetting(league, 'digest')}
                 onChange={(v) => setLoop('digest', v)}

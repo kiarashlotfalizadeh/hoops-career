@@ -23,6 +23,7 @@ import { CAP, seasonLabel } from '../src/core/constants';
 import { arenaCapacity, aiTicketPrice, attendanceFor, MERCH_PER_GAME, LOCAL_TV_PER_GAME } from '../src/core/league/finances';
 import { pickProjection } from '../src/core/analysis/odds';
 import * as REC from '../src/core/league/records';
+import { askedOutReason } from '../src/core/league/pulse';
 import type { League, Player } from '../src/core/types';
 
 const [seasons, rngSeed, userTid, fictionalSeasons] = [5, 42, 19, 2].map((d, i) => Number(process.argv[i + 2] ?? d));
@@ -657,6 +658,8 @@ function resignTalks(p: Player): boolean {
   // (one who wants more than his Bird rights allow goes to the market: no talks)
   const limit = C.resignLimit(L, p, L.userTid);
   if (C.askingContract(L, p, L.userTid).amount > limit || N.askFor(L, p, 'resign', ask.years) > limit) return false;
+  // (nor one who has asked for a trade: he won't talk about a new deal until that's settled, pulse.ts)
+  if (askedOutReason(L, p)) return false;
   const offer = round50(N.askFor(L, p, 'resign', ask.years) * 0.87);
   const walk = N.walkAwayFor(L, p, 'resign', ask.years);
   const r = FA.userResign(L, p.pid, offer, ask.years);

@@ -646,6 +646,33 @@ export function deadlineFever(league: League, tid: number, inPids: number[], out
   return got >= FEVER.ovr && got > best(outPids) ? fever : 0;
 }
 
+/**
+ * What an AI team asks the user for an old star, at least: STAR_MARKET of what a contender would pay
+ * for him (its lens counts what he does now over his age), for a player rated STAR_FROM + STAR_RAMP
+ * or more, ramping in from STAR_FROM, and 30 or older (in full from 32). Its own lens or the league's neutral value alone priced an old
+ * star by his age and his expiring deal: a 33-year-old 90 in his last season went for 121 to a team
+ * that valued him at 190, three firsts' worth less than a 30-year-old 90, and his team "would jump
+ * at" a lesser, younger star for him (the playtest, 2026-11-23). There is one user and a league of
+ * contenders: the price of a star who helps now is what the best of them would pay, not what a
+ * seller with no use for him would take.
+ */
+export const STAR_MARKET = 0.85;
+const STAR_FROM = 84;
+const STAR_RAMP = 4;
+/** ...and from this age, in full STAR_OLD_RAMP years on: the age his value starts to be discounted for (contracts.ts valueScore). */
+const STAR_OLD = 29;
+const STAR_OLD_RAMP = 3;
+
+function starMarket(league: League, p: Player, neutral: number): number {
+  // (an old star's: a contender's lens and the league's agree on a player in his prime, give or take
+  // its small premium for anyone who helps now, and an even one-for-one of two of those stays one)
+  const old = Math.min(1, Math.max(0, (playerAge(p, league.season) - STAR_OLD) / STAR_OLD_RAMP));
+  const share = Math.min(1, Math.max(0, (p.ovr - STAR_FROM) / STAR_RAMP)) * old;
+  if (share <= 0) return -Infinity;
+  const market = STAR_MARKET * tradeValue(league, p, 'contend');
+  return market > neutral ? neutral + share * (market - neutral) : -Infinity;
+}
+
 /** A player as team `tid` sees him in a deal (with the user unless `aiDeal`). */
 function playerView(league: League, p: Player, tid: number, incoming: boolean, aiDeal: boolean): AssetView {
   const neutral = tradeValue(league, p, 'retool');
@@ -658,7 +685,9 @@ function playerView(league: League, p: Player, tid: number, incoming: boolean, a
   const base = strategy === 'retool' ? neutral : tradeValue(league, p, strategy);
   const own = base > 0 ? base * bias : base;
   const f = flipped(league, p);
-  const value = f ? neutral : lens(own, neutral, incoming, aiDeal);
+  let value = f ? neutral : lens(own, neutral, incoming, aiDeal);
+  // (a star it sends the user is priced at what a contender would pay for him: see STAR_MARKET)
+  if (!incoming && !aiDeal && !f && p.tid === tid) value = Math.max(value, starMarket(league, p, neutral));
   // (he asked out: it has to move him, see WANTS_OUT)
   if (!incoming && value > 0 && p.tid === tid && wantsOut(league, p)) return { kind: 'player', id: p.pid, value: value * WANTS_OUT, neutral, own, flipped: f, wantsOut: true };
   // (its cornerstone going out counts for more: see CORNERSTONE)
@@ -729,6 +758,17 @@ export function pickValueFor(league: League, dp: DraftPick, tid: number, incomin
 export const DEPTH = [1, 0.7, 0.5, 0.35, 0.25];
 /** A pile of incoming picks is worth less than the sum of its parts. */
 export const PICK_DEPTH = [1, 0.8, 0.65, 0.5, 0.4];
+/**
+ * ...but less so to a rebuilding team dealing with the user, whose currency picks are: it sells for
+ * the pile. With one discount for everyone, five of a 42-12 contender's own firsts were worth 38 to
+ * a 17-35 seller (11, 9, 8, 6, 4): no pile of picks bought more than a role player, and a contender
+ * could only pay with its rotation (the playtest, 2026-11-23). Now 44. Among AI teams the one
+ * discount stays: with the flatter one a rebuilder hoarded picks past its roster (23 players under
+ * contract on draft night, the invariants run found).
+ */
+const PICK_DEPTH_REBUILD = [1, 0.9, 0.8, 0.7, 0.6];
+/** The pile discount a team applies to the picks coming to it (see PICK_DEPTH). */
+export const pickDepth = (league: League, tid: number) => (league.teams[tid]?.strategy === 'rebuild' ? PICK_DEPTH_REBUILD : PICK_DEPTH);
 
 export function weighted(values: number[], weights: number[] | null): number {
   return [...values].sort((a, b) => b - a).reduce((a, v, i) => a + (weights && v > 0 ? v * weights[Math.min(i, weights.length - 1)] : v), 0);
@@ -915,7 +955,8 @@ function judgeLegs(league: League, tid: number, ins: TradeLeg[], outs: TradeLeg[
   const isCash = (a: AssetView) => a.kind === 'cash';
   const depthApplied = inPids.length > outPids.length;
   const playersIn = weighted(values(incoming, isPlayer), depthApplied ? DEPTH : null);
-  const picksIn = weighted(values(incoming, pickLike), PICK_DEPTH);
+  // (a rebuilder's flatter pile discount is the user's to buy with: among themselves AI teams keep the one their market was measured on)
+  const picksIn = weighted(values(incoming, pickLike), aiDeal ? PICK_DEPTH : pickDepth(league, tid));
   const playersOut = weighted(values(outgoing, isPlayer), outPids.length > inPids.length ? DEPTH : null);
   const picksOut = weighted(values(outgoing, pickLike), null);
   // cash isn't salary: it neither matches nor counts against the cap, and it adds up dollar for dollar

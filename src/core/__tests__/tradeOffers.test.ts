@@ -12,7 +12,10 @@ import {
   acceptProposal,
   aiProposals,
   cleanProposals,
+  DECLINED_REST,
   declineProposal,
+  offerRating,
+  stopsForOffer,
   draftProposals,
   freeAgencyProposals,
   isUntouchable,
@@ -25,7 +28,7 @@ import {
   setUntouchable,
 } from '../league/proposals';
 import { deadlineDay, seasonTrades } from '../league/deadline';
-import { agenda } from '../league/agenda';
+import { agenda, stopsSim } from '../league/agenda';
 import {
   MAX_FIRSTS_OUT,
   capSalary,
@@ -525,6 +528,20 @@ it("AI deals: offers to the user, AI-to-AI trades, the deadline's ramp, rumors a
         expect(l.inbox.find((m) => m.proposal === p.id)!.subject).toBe(subject);
         const item = agenda(l).find((i) => i.id === `tradeOffer:${p.id}`)!;
         expect(item.title).toBe(subject);
+        // the staff rates it, and a long sim stops for it only when the setting says: the good ones by default
+        const read = offerRating(l, p);
+        expect(item.detail).toBe(`Staff: ${read.label.toLowerCase()}. ${read.why}`);
+        expect(stopsSim(item)).toBe(read.rating === 'good');
+        expect(stopsForOffer({ ...l, settings: { ...l.settings, offerStops: 'all' } }, p)).toBe(true);
+        expect(stopsForOffer({ ...l, settings: { ...l.settings, offerStops: 'never' } }, p)).toBe(false);
+        // no offer takes one of his five best while he competes without a player near his level coming back
+        if (l.teams[U].strategy !== 'rebuild') {
+          const core = standardRoster(l, U)
+            .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
+            .slice(0, 5);
+          const back = Math.max(0, ...p.offer.b.pids.map((pid) => l.players[pid].ovr));
+          for (const c of core) if (p.offer.a.pids.includes(c.pid) && p.kind === 'buy') expect(back).toBeGreaterThanOrEqual(c.ovr - 4);
+        }
         expect(item.line.startsWith(`${l.teams[p.tid].abbrev} GM: `)).toBe(true);
       });
       n += made.length;
@@ -533,7 +550,8 @@ it("AI deals: offers to the user, AI-to-AI trades, the deadline's ramp, rumors a
     expect(n).toBeGreaterThan(4);
     // (now and then a team calls a third in: an offer the two of them couldn't make; rare, about one
     // season in ten since 2026-11-23, when a deal's seasons of a player came to count)
-    expect(three).toBeGreaterThan(0);
+    // (and rarer still since 2026-11-24: no team asks a competing user for one of his five best
+    // without a player near his level coming back, and a third team's deals were mostly for those)
     expect(three).toBeLessThan(n / 2);
   }
 
@@ -553,7 +571,12 @@ it("AI deals: offers to the user, AI-to-AI trades, the deadline's ramp, rumors a
         declineProposal(l, p.id);
       });
       expect(made.length).toBeGreaterThan(0);
-      for (const ds of days.values()) for (let i = 1; i < ds.length; i++) expect(ds[i] - ds[i - 1]).toBeGreaterThanOrEqual(21);
+      // (turned down, a pitch rests DECLINED_REST days: a cheap young player had been asked for five times a season)
+      for (const ds of days.values()) for (let i = 1; i < ds.length; i++) expect(ds[i] - ds[i - 1]).toBeGreaterThanOrEqual(DECLINED_REST);
+      // ...is remembered with who made it, and never comes back from the same team that season
+      expect(l.offerLog!.length).toBe(made.length);
+      const from = l.offerLog!.map((x) => `${x.pitch}|${x.tid}`);
+      expect(new Set(from).size).toBe(from.length);
       // each pitch has one mail, however often it was made
       const mail = l.inbox.filter((m) => m.proposal !== undefined).map((m) => `${m.from}|${m.pitch}`);
       expect(new Set(mail).size).toBe(mail.length);

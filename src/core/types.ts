@@ -5,7 +5,7 @@ import type { CoachRecord } from './league/coaches';
 import type { DevWatchState } from './league/devWatch';
 import type { LegacyState } from './league/legacy';
 import type { MediaState } from './league/media';
-import type { JobOffer } from './league/jobs';
+import type { JobOffer, JobOpening } from './league/jobs';
 import type { GuideStep } from './league/agenda';
 import type { OwnerGoals, OwnerReview } from './league/ownerGoals';
 import type { OwnerCameo } from './league/ownerCameos';
@@ -174,6 +174,8 @@ export interface RatingsSnapshot {
   r?: Ratings;
   /** The training focus the summer's development ran under (annualProgression), so a review grades the right one. */
   focus?: TrainingFocus;
+  /** OVR the staff's development priority added over the year to this snapshot (positive: he had it; negative: what the staff's time elsewhere cost him), in tenths. Absent when it did nothing. */
+  staff?: number;
 }
 
 export interface DraftInfo {
@@ -274,6 +276,8 @@ export interface Player {
   experience: number; // seasons completed in the league
   retiredSeason?: number;
   hof?: boolean;
+  /** Raw OVR points the staff's development priority has added (or its cost taken) since his last preseason snapshot (progression.ts): the next snapshot's `staff`. */
+  devStaff?: number;
   /** Accumulated season wear 0..100 (load management). */
   wear: number;
   /** Games rested via load management this season. */
@@ -720,6 +724,8 @@ export interface Team {
    */
   retired?: RetiredNumber[];
   practice: 'light' | 'normal' | 'intense';
+  /** The user's development priority: the players (two at most, 25 or under) his staff give their extra time (progression.ts devPriority). Absent: the staff pick, as every AI team's do. */
+  devPriority?: number[];
   timeoutsUsedThisGame?: number;
   /** Cash sent and received in trades in one contract season ($K), each held to CASH_PCT of the cap (see cashRoom). */
   cashTrades?: { season: number; sent: number; received: number };
@@ -1286,6 +1292,8 @@ export interface Proposal {
   kind: 'buy' | 'sell' | 'dump' | 'pick';
   /** The AI GM's pitch. */
   note: string;
+  /** What it's about ("buy:812", "sell:44", "dump:7"): turned down, the same pitch rests (see proposals.ts's turnedDown). Absent in offers from before it was kept. */
+  pitch?: string;
   season: number;
   day: number;
   expires: number;
@@ -1374,6 +1382,12 @@ export interface Settings {
   liveKeyPlays?: boolean;
   /** Pause long sims for what needs an answer (default on: see runSim). */
   stopOnNews?: boolean;
+  /**
+   * Which of the AI teams' trade offers stop a long sim: the ones the staff rates good for him
+   * ('good', the default when absent), every one ('all'), or none ('never'). The rest wait in the
+   * queue and the digest (see proposals.ts's stopsForOffer).
+   */
+  offerStops?: 'good' | 'all' | 'never';
   /** After a sim of more than a day, the "While you were away" digest opens first (default on; off: it waits on Today). */
   digest?: boolean;
   /** Watch & coach (the Continue bar on game day) opens the pre-game screen first (default on). */
@@ -1457,6 +1471,8 @@ export interface League {
   ratingAnchors?: Partial<Record<RatingKey, number>>;
   /** League-wide spread per attribute at creation (anchorRatings keeps it from widening). */
   ratingSpreads?: Partial<Record<RatingKey, number>>;
+  /** Raw-OVR quantiles of the opening-night league (progression.ts SHAPE_QS, set by setAnchors): the shape anchorRatings holds. Absent in a league from before it: the display scale's. */
+  ovrShape?: number[];
   /** Days of the regular season (last scheduled day). */
   regularSeasonDays: number;
   tradeDeadlineDay: number;
@@ -1573,7 +1589,11 @@ export interface League {
    */
   oddsTrail?: { season: number; tid: number; pts: [number, number, number][] };
   /** Teams that want the user as head coach this summer (see jobs.ts): from the carousel's openings after the playoffs until the draft. */
+  /** The AI teams' pitches the user turned down this season (see proposals.ts's turnedDown): what, who, when, and how far in his favor it was. */
+  offerLog?: { pitch: string; tid: number; season: number; day: number; net: number; out: number }[];
   jobOffers?: { season: number; offers: JobOffer[] };
+  /** The teams that changed coaches in the latest summer, each with how its owner rated the user against its hire (see jobs.ts): on file until the next carousel. */
+  jobMarket?: { season: number; openings: JobOpening[] };
   /** The guided first week (see agenda.ts): the steps done, or the guide put away. */
   onboarding?: { done: GuideStep[]; hidden?: boolean };
   /** Changes made in god mode (see godMode.ts), counted so the league says it has been edited. */

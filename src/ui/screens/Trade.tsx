@@ -11,7 +11,7 @@ import { POSITIONS } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { playerName } from '../../core/league/helpers';
 import { capSalary, evaluateTrade, pickLabel, swapSeasons, salaryMatchGap, validateTrade, type TradeOffer } from '../../core/league/trades';
-import { counterOffers, makeItWork, type CounterOffer } from '../../core/league/tradeHelp';
+import { counterOffers, makeItWork, noVersionWhy, type CounterOffer } from '../../core/league/tradeHelp';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { act } from '../../state/actions';
 import { makeTrade } from '../../state/actions/office';
@@ -272,7 +272,7 @@ export default function Trade() {
             ? `You need to send at least ${money(out + gap)} in salary. No one or two of your players make that work.`
             : why === 'theirSalary'
               ? `${pt.abbrev} can't take back that much salary, and has no contract to send along. Send less.`
-              : `${pt.abbrev} can't find a version of this they'd take. Ask for less.`,
+              : noVersionWhy(league, offer),
           'bad',
         );
       return;

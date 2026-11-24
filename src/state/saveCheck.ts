@@ -255,6 +255,10 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   // inbox then says the offer is closed), and so is an untouchable mark on a player who is gone
   if (x.proposals !== undefined) x.proposals = Array.isArray(x.proposals) ? x.proposals.filter((p) => proposalIntact(x, p)) : [];
   if (x.untouchable !== undefined) x.untouchable = Array.isArray(x.untouchable) ? x.untouchable.filter((pid) => num(pid) && !!x.players[pid]) : [];
+  // the pitches he turned down: a list of plain records, or none
+  if (x.offerLog !== undefined && !(Array.isArray(x.offerLog) && x.offerLog.every((o) => obj(o) && str(o.pitch) && num(o.tid) && num(o.season) && num(o.day) && num(o.net) && num(o.out))))
+    delete x.offerLog;
+  if (x.settings.offerStops !== undefined && !['good', 'all', 'never'].includes(x.settings.offerStops)) delete x.settings.offerStops;
   for (const m of x.inbox) if (m.proposal !== undefined && !num(m.proposal)) delete m.proposal;
   // a live game's journal that's damaged, or not for today's game any more, goes (the game starts over)
   if (x.live !== undefined && !liveIntact(x, x.live)) delete x.live;
@@ -290,6 +294,7 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   migrateCoaches(x);
   // the summer's job offers: a damaged list goes (the job market still lists every team)
   if (x.jobOffers !== undefined && !jobOffersIntact(x, x.jobOffers)) delete x.jobOffers;
+  if (x.jobMarket !== undefined && !jobMarketIntact(x, x.jobMarket)) delete x.jobMarket;
   // the user's weekly odds: a damaged trail goes (the next week starts it again)
   if (x.oddsTrail !== undefined && !trailIntact(x, x.oddsTrail)) delete x.oddsTrail;
   migrateOwner(x);
@@ -469,6 +474,18 @@ function jobOffersIntact(x: League, j: unknown): boolean {
     Array.isArray(j.offers) &&
     j.offers.length <= 30 &&
     j.offers.every((o) => obj(o) && int(o.tid) && !!x.teams[o.tid as number] && o.tid !== x.userTid && kinds.has(o.kind as string) && str(o.note))
+  );
+}
+
+/** The summer's openings in shape: a season, and teams in the league with a hire, both reads and a status. */
+function jobMarketIntact(x: League, j: unknown): boolean {
+  const statuses = new Set(['offer', 'listen', 'passed']);
+  return (
+    obj(j) &&
+    int(j.season) &&
+    Array.isArray(j.openings) &&
+    j.openings.length <= 30 &&
+    j.openings.every((o) => obj(o) && int(o.tid) && !!x.teams[o.tid as number] && int(o.hired) && num(o.you) && num(o.hire) && statuses.has(o.status as string))
   );
 }
 

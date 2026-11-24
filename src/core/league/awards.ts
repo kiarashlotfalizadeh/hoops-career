@@ -66,8 +66,17 @@ function awardPools(league: League, season = league.season) {
  * team won 53; now it's 55-57 and a top-two seed, as in the NBA.
  */
 export function mvpScore(c: Cand) {
-  return c.gmsc * Math.pow(Math.min(1, c.gp / 70), 0.3) + c.winPct * 16 + 20 * Math.min(0, c.winPct - 0.6) + c.pmPerGame * 0.15;
+  return c.gmsc * Math.pow(Math.min(1, c.gp / 70), 0.3) + c.winPct * 16 + 20 * Math.min(0, c.winPct - 0.6) + c.pmPerGame * 0.15 + MVP_SCORER * Math.max(0, c.s.pts / c.gp - MVP_SCORER_FROM);
 }
+
+/**
+ * What a scorer's points count for with the MVP's voters past the box score's own weight: this much
+ * a point a game over MVP_SCORER_FROM. Game score pays an assist or a rebound nearly what it pays a
+ * point, and the vote doesn't: between two stars on contenders it goes to the one who scores (the
+ * real league's last ten MVPs averaged 28.9, six of them top-three scorers).
+ */
+const MVP_SCORER = 0.2;
+const MVP_SCORER_FROM = 25;
 
 /**
  * All-League: the season's best players, voted on what they did more than where their team finished.
@@ -315,6 +324,10 @@ function awardsStory(league: League, aw: SeasonAwards, coyAbbrev?: string) {
     const what = awardLine(league, p, type, season);
     return `${label}: ${playerName(p)}${team(p) ? ` (${team(p)})` : ''}${what && what !== 'his first' ? `, ${what}` : ''}. ${seasonLine(p, season)}.`.replace(/\. \.$/, '.');
   };
+  // the season's best the 65-game rule kept off the ballot, said: a winner over a better season needs its reason
+  const out = ineligibleStars(league, season, 2)
+    .filter((x) => x.c.gp < gamesThreshold(league))
+    .map((x) => `${playerName(x.c.p)} (${(x.c.s.pts / x.c.gp).toFixed(1)} points a game) played ${x.c.gp} games, short of the ${gamesThreshold(league)} the votes ask for`);
   addNews(league, {
     kind: 'award',
     head,
@@ -325,6 +338,7 @@ function awardsStory(league: League, aw: SeasonAwards, coyAbbrev?: string) {
       line('Rookie of the Year', 'Rookie of the Year', aw.roy),
       line('Sixth Man of the Year', 'Sixth Man of the Year', aw.smoy),
       line('Most Improved Player', 'Most Improved Player', aw.mip),
+      out.length ? `Not on the ballot: ${out.join('; ')}.` : '',
     ]
       .filter(Boolean)
       .join('\n\n'),

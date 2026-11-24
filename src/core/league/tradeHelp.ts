@@ -22,6 +22,7 @@ import {
   matchInfoOf,
   neutralSplit,
   pickLabel,
+  pickDepth,
   pickValueFor,
   playerValueFor,
   salaryMatchGap,
@@ -205,9 +206,13 @@ function findWorkRaw(league: League, offer: TradeOffer, keep: readonly number[] 
       const near = [...sorted].sort((x, y) => Math.abs(x.v) - Math.abs(y.v)).find((o) => o !== fix && legal(withA(cur, o.pids)));
       const next = sorted.find((o) => o !== fix && o !== near && legal(withA(cur, o.pids)));
       const tries = [fix, near, next].filter((x): x is { pids: number[]; v: number } => !!x).slice(0, WORK_FILLERS);
+      // (each with picks alone first: a team that wants help now would rather pay with picks than
+      // with its rotation, and the cheapest of all the versions wins below)
       const done = tries.flatMap((t) => {
-        const r = topUp(league, withA(cur, t.pids), spare, legal, ai, opts);
-        return r.offer ? [r.offer] : [];
+        const start = withA(cur, t.pids);
+        const byPicks = topUp(league, start, spare, legal, ai, { ...opts, picksOnly: true });
+        const r = topUp(league, start, spare, legal, ai, opts);
+        return [byPicks.offer, r.offer].filter((o): o is TradeOffer => !!o);
       });
       if (!done.length) return { offer: null, why: 'value' };
       // (each trimmed to its smallest ask before they're compared)
@@ -218,14 +223,14 @@ function findWorkRaw(league: League, offer: TradeOffer, keep: readonly number[] 
   return topUp(league, cur, spare, legal, ai, opts);
 }
 
-/** The value top-up of findWork: each round adds the smallest pick or player that covers what's missing, else the biggest (see makeItWork). */
+/** The value top-up of findWork: each round adds the smallest pick or player that covers what's missing, else the biggest (see makeItWork); `picksOnly`: picks alone. */
 function topUp(
   league: League,
   start: TradeOffer,
   spare: (o: TradeOffer) => { p: Player; v: number; sal: number }[],
   legal: (o: TradeOffer) => boolean,
   ai: number,
-  opts: { cash?: boolean },
+  opts: { cash?: boolean; picksOnly?: boolean },
 ): WorkResult {
   let cur = start;
   for (let iter = 0; iter < 6; iter++) {
@@ -242,9 +247,11 @@ function topUp(
     const picks = league.draftPicks
       .filter((d) => d.tid === cur.a.tid && !cur.a.dpids.includes(d.dpid) && legal(withA(cur, [], [d.dpid])))
       .map((d) => ({ next: withA(cur, [], [d.dpid]), v: pickValueFor(league, d, ai, true) }));
-    const players = spare(cur)
-      .map(({ p }) => ({ next: withA(cur, [p.pid]), v: playerValueFor(league, p, ai, true) }))
-      .filter((c) => c.v > 0 && legal(c.next));
+    const players = opts.picksOnly
+      ? []
+      : spare(cur)
+          .map(({ p }) => ({ next: withA(cur, [p.pid]), v: playerValueFor(league, p, ai, true) }))
+          .filter((c) => c.v > 0 && legal(c.next));
     // picks and players together: a pile of picks alone often can't reach a good player's value
     const cands = [...picks, ...players];
     if (!cands.length) break;
@@ -255,6 +262,34 @@ function topUp(
     cur = (covering[0] && (covering[0].v <= need * 1.5 + 2 || !short.length) ? covering[0] : short[0]).next;
   }
   return evaluateTrade(league, cur).accept ? { offer: cur } : { offer: null, why: 'value' };
+}
+
+/**
+ * Why no version of a deal works for the other team, in its own numbers: how many first-round picks
+ * like the asker's best it sees its side as worth, what it sees his side as, and what all the picks
+ * he could add come to as a pile. "ATL can't find a version of this they'd take. Ask for less." had
+ * been the whole answer.
+ */
+export function noVersionWhy(league: League, offer: TradeOffer): string {
+  const ai = offer.b.tid;
+  const abbrev = league.teams[ai].abbrev;
+  const ev = evaluateTrade(league, offer);
+  const mine = league.draftPicks
+    .filter((d) => d.tid === offer.a.tid && d.round === 1)
+    .map((d) => pickValueFor(league, d, ai, true))
+    .sort((x, y) => y - x);
+  const first = mine[0] ?? 0;
+  if (!(first > 0) || !(ev.valueOut > 0)) return `${abbrev} can't find a version of this they'd take. Ask for less.`;
+  const depth = pickDepth(league, ai);
+  const pile = mine.slice(0, 5).reduce((a, v, i) => a + v * depth[Math.min(i, depth.length - 1)], 0);
+  const n = (v: number) => {
+    const x = v / first;
+    return x >= 10 ? String(Math.round(x)) : x.toFixed(1).replace(/\.0$/, '');
+  };
+  const side = Math.max(0, ev.valueIn);
+  return `${abbrev} rate what they'd send at about ${n(ev.valueOut)} first-round picks like your best one, and your side at ${n(side)}. ${
+    mine.length ? `All of your firsts in one pile come to ${n(pile)} for them (each extra pick counts for less)` : 'You have no first to add'
+  }. It needs a player they rate, or a smaller ask.`;
 }
 
 // ---------------------------------------------------------------- "what would make this work?", three teams

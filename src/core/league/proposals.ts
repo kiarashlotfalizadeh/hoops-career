@@ -9,6 +9,13 @@
 // When a team's two-team offer can't be made (the salary it would send back is what spoils it), it
 // may call a third team in to take that salary (aiTrades.ts's facilitatedDeal): a three-team offer,
 // kept as its legs beside the user's view of it (Proposal.legs).
+// The user's staff rates each one (offerRating: by neutral value and by what it does to his five
+// best), and a long sim stops only for the ones the setting says (Settings.offerStops: the good
+// ones by default, see stopsForOffer); the rest wait in the queue and the digest. A pitch he turned
+// down isn't made again (see turnedDown), and no team asks a competing user for one of his five
+// best without a player near his level coming back. Each GM's note gives his own team's reason:
+// its record and seat, the roster quality it ranks low in that the player lifts, the veteran's
+// age and contract, the tax bill.
 // Also here: the players the user marks untouchable, whom no AI team asks for.
 
 import type { DraftPick, League, Player, Proposal, Team } from '../types';
@@ -38,6 +45,11 @@ import { plural } from '../format';
 import { guideWeeks } from './agenda';
 import { tradeRequests } from './pulse';
 import { takesCalls } from './voices';
+import { rosterProfile, type ProfileKey } from '../ai/coachAI';
+import { confStandings } from './standings';
+import { money, ordinal } from '../format';
+import { contractExp, playerAge, salaryFor } from '../playerGen';
+import { teamTaxBill } from './finances';
 
 /** Offers open at once, at most (one per team). */
 export const MAX_OPEN = 4;
@@ -47,6 +59,16 @@ const USER_SLACK = 0.1;
 const STANDS = [5, 7] as const;
 /** Days before the same pitch (the same player bought or sold, the same team's salary dump) can come again. */
 const PITCH_REST = 21;
+/**
+ * ...and once the user has turned it down: the same team doesn't make it again that season, and
+ * another only after this many days, with an offer worth more to him than the one he turned down
+ * (BETTER_BY of what he'd send). On PITCH_REST alone a cheap young player was asked for five times
+ * in a season, each time by another team with the same kind of package (the playtest, 2026-11-23).
+ */
+export const DECLINED_REST = 60;
+const BETTER_BY = 0.1;
+/** Declined pitches kept (the season's). */
+const LOG_KEPT = 60;
 
 /** An offer found, before it's posted; `pitch` names what it's about, for the rest between pitches ("sell:812"); `legs` when a third team is in it. */
 type Pitch = { tid: number; offer: TradeOffer; kind: Proposal['kind']; note: string; pitch: string; legs?: TradeLeg[] };
@@ -70,6 +92,91 @@ function userView(league: League, legs: TradeLeg[], lead: number): TradeOffer {
 }
 
 export const openProposals = (league: League): Proposal[] => league.proposals ?? [];
+
+// ---------------------------------------------------------------- the staff's read of an offer
+
+export type OfferRating = 'good' | 'fair' | 'poor';
+
+/** An offer this share of what the user sends (or gets, when that is more) in his favor in neutral value is a good one; that far against him, a poor one. */
+export const GOOD_SHARE = 0.05;
+/** His best players by OVR that count as his core while he competes, and how close in OVR a player coming back must be for a deal that takes one to be a basketball trade. */
+const CORE = 5;
+const CORE_BACK = 4;
+
+/** The user's five best players (by OVR) while his team competes: nobody's for picks and filler. None for a rebuilding team. */
+function userCore(league: League): Player[] {
+  if (league.teams[league.userTid].strategy === 'rebuild') return [];
+  return standardRoster(league, league.userTid)
+    .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
+    .slice(0, CORE);
+}
+
+/** The core player a deal takes without a player near his level coming back, if any. */
+function coreCost(league: League, offer: TradeOffer): Player | null {
+  const back = Math.max(0, ...offer.b.pids.map((pid) => league.players[pid]?.ovr ?? 0));
+  return userCore(league).find((p) => offer.a.pids.includes(p.pid) && back < p.ovr - CORE_BACK) ?? null;
+}
+
+/**
+ * The staff's read of an AI team's offer: good, fair or poor for the user, with the reason in a
+ * line. By neutral value (the AI's own scale, see neutralBalance: GOOD_SHARE either way), and poor
+ * whatever the value when it takes one of his five best while he competes and nothing near his
+ * level comes back. The Offers tab's tag and what a long sim stops for read the same call.
+ */
+export function offerRating(league: League, p: Pick<Proposal, 'offer'>): { rating: OfferRating; label: string; why: string } {
+  const { net, out } = neutralBalance(league, p.offer);
+  const share = net / Math.max(1, out, out + net);
+  const core = coreCost(league, p.offer);
+  if (core)
+    return {
+      rating: 'poor',
+      label: 'Costs your core',
+      why: `It takes ${shortName(league, core)}, one of your five best, and no player near his level comes back.`,
+    };
+  if (share > GOOD_SHARE) return { rating: 'good', label: 'In your favor', why: 'Your staff has you ahead on value.' };
+  if (share < -GOOD_SHARE) return { rating: 'poor', label: 'A little short', why: 'Your staff has you a little short on value.' };
+  return { rating: 'fair', label: 'Fair value', why: 'Your staff calls it even on value.' };
+}
+
+/** What long sims stop for among AI teams' offers (Settings.offerStops): the ones the staff rates good, unless he chose all or none. */
+export const offerStops = (league: Pick<League, 'settings'>): 'good' | 'all' | 'never' => league.settings.offerStops ?? 'good';
+
+/** Whether this open offer stops a long sim the day it comes in. A draft-night offer for the pick on the clock always shows: the draft waits on him anyway. */
+export function stopsForOffer(league: League, p: Proposal): boolean {
+  const mode = offerStops(league);
+  if (p.kind === 'pick' || mode === 'all') return true;
+  return mode === 'good' && offerRating(league, p).rating === 'good';
+}
+
+/** The pitch a declined offer stood for, and how far in the user's favor it was (neutral value, and what he'd have sent). */
+function logDecline(league: League, p: Proposal) {
+  if (!p.pitch || p.kind === 'pick') return;
+  const { net, out } = neutralBalance(league, p.offer);
+  const log = (league.offerLog ?? []).filter((x) => x.season === league.season);
+  log.push({ pitch: p.pitch, tid: p.tid, season: league.season, day: league.day, net: Math.round(net), out: Math.round(out) });
+  league.offerLog = log.slice(-LOG_KEPT);
+}
+
+/** The latest time the user turned this pitch down this season, if he did. */
+const lastDecline = (league: League, pitch: string) => (league.offerLog ?? []).filter((x) => x.season === league.season && x.pitch === pitch).at(-1);
+
+/**
+ * A pitch the user turned down doesn't come again from that team this season, nor from any team
+ * for DECLINED_REST days; after that only as an offer worth more to him than the one he declined
+ * (see beatsDeclined).
+ */
+function turnedDown(league: League, pitch: string, tid?: number): boolean {
+  const log = (league.offerLog ?? []).filter((x) => x.season === league.season && x.pitch === pitch);
+  return log.some((x) => x.tid === tid || league.day - x.day < DECLINED_REST);
+}
+
+/** An offer for a pitch he once turned down must be worth more to him than that one was: by BETTER_BY of what he'd send. */
+function beatsDeclined(league: League, pitch: string, offer: TradeOffer): boolean {
+  const was = lastDecline(league, pitch);
+  if (!was) return true;
+  const { net, out } = neutralBalance(league, offer);
+  return net >= was.net + BETTER_BY * Math.max(out, was.out, 1);
+}
 
 /** A random stream of its own for one purpose on one day: the league's stream never moves for offers. */
 const offerRng = (league: League, purpose: string) => new Rng(hashString(`${league.id}:${league.season}:${league.day}:${purpose}`));
@@ -187,10 +294,13 @@ export function acceptProposal(league: League, id: number): { ok: boolean; reaso
   return { ok: true, reason: third !== null ? `Three-team trade done with ${C} and ${teamCity(league, third)}.` : `Trade done with ${C}.` };
 }
 
+/** Turn an offer down: it goes, and the pitch is remembered (see turnedDown): the same ask doesn't come back next week. */
 export function declineProposal(league: League, id: number): boolean {
-  const before = openProposals(league).length;
+  const p = openProposals(league).find((x) => x.id === id);
+  if (!p) return false;
+  logDecline(league, p);
   league.proposals = openProposals(league).filter((x) => x.id !== id);
-  return league.proposals.length < before;
+  return true;
 }
 
 // ---------------------------------------------------------------- making offers
@@ -257,13 +367,15 @@ function post(league: League, pitch: Pitch, rng: Rng, lastDay?: number): Proposa
     offer: structuredClone(pitch.offer),
     kind: pitch.kind,
     note: pitch.note,
+    pitch: pitch.pitch,
     season: league.season,
     day: league.day,
     expires: Math.max(league.day, Math.min(league.day + days, lastDay ?? Infinity)),
     ...(pitch.legs ? { legs: structuredClone(pitch.legs).map(({ tid, to, pids, dpids }) => ({ tid, to, pids, dpids })) } : {}),
   };
-  // every offer is one the team takes and the rules allow, the day it is made
-  if (proposalError(league, p)) return null;
+  // every offer is one the team takes and the rules allow, the day it is made, and one he hasn't
+  // turned down already unless it's worth more to him than that one was
+  if (proposalError(league, p) || !beatsDeclined(league, pitch.pitch, p.offer)) return null;
   league.nextProposalId = p.id + 1;
   league.proposals = [...open, p];
   const t = league.teams[p.tid];
@@ -308,46 +420,133 @@ const free = (league: League) => {
  * PITCH_REST days? Then it isn't made again: a player has one live pitch at a time, and a declined
  * or lapsed one rests a while before it comes back.
  */
-function pitchedLately(league: League, pid: number, pitch: string): boolean {
+function pitchedLately(league: League, pid: number, pitch: string, tid?: number): boolean {
   if (openProposals(league).some((p) => p.offer.a.pids.includes(pid) || p.offer.b.pids.includes(pid))) return true;
+  if (turnedDown(league, pitch, tid)) return true;
   return league.inbox.some((m) => m.season === league.season && m.pitch === pitch && league.day - m.day < PITCH_REST);
 }
 
 /** A player's spot on the floor, as a GM talks about it. */
 const spot = (p: Player) => (p.pos === 'PG' || p.pos === 'SG' ? 'guard' : p.pos === 'C' || p.pos === 'PF' ? 'big' : 'wing');
 
+/** Roster qualities a GM names as a need, in his words (the playbooks' roster profile: coachAI's rosterProfile). */
+const NEED_WORD: Partial<Record<ProfileKey, string>> = {
+  shooting: 'three-point shooting',
+  rimProtection: 'rim protection',
+  perimeterD: 'perimeter defense',
+  passing: 'passing',
+  starCreator: 'shot creation',
+  size: 'size',
+  athleticism: 'speed and athleticism',
+};
+/** A team ranks this low or lower in a quality for it to be a need a GM names, and the player must lift it this much (the profile's own scale). */
+const NEED_RANK = 20;
+const NEED_LIFT = 1.5;
+
 /**
- * Why a team wants the user's player, in its GM's words: its plan, its record once ten games are in,
- * and a thin spot he'd fill (fewer than two players at his spot within three points of him). One of
- * a few lines, picked by a hash of the day and the player, so the same pitch doesn't always read
- * the same and the league's stream never moves.
+ * The roster quality a team ranks lowest in the league in (NEED_RANK or worse, by its best eight)
+ * that this player would lift (NEED_LIFT or more): the reason a GM gives that is about his own
+ * team. Null when he fills no such hole.
+ */
+function needHeFills(league: League, t: Team, target: Player): { word: string; rank: number } | null {
+  const mine = standardRoster(league, t.tid);
+  const now = rosterProfile(mine);
+  const withHim = rosterProfile([...mine, target]);
+  const others = league.teams.filter((x) => x.tid !== t.tid).map((x) => rosterProfile(standardRoster(league, x.tid)));
+  let best: { word: string; rank: number } | null = null;
+  for (const k of Object.keys(NEED_WORD) as ProfileKey[]) {
+    if (withHim[k] - now[k] < NEED_LIFT) continue;
+    const rank = 1 + others.filter((o) => o[k] > now[k]).length;
+    if (rank >= NEED_RANK && (!best || rank > best.rank)) best = { word: NEED_WORD[k]!, rank };
+  }
+  return best;
+}
+
+/** A team's record and conference seat once ten games are in: "30-12, 3rd in the West". */
+function standing(league: League, t: Team): { rec: string; seat: string; rank: number; winning: boolean } | null {
+  const ts = curTeamSeason(league, t.tid);
+  if (ts.won + ts.lost < 10) return null;
+  const rank = confStandings(league, t.conf).find((r) => r.tid === t.tid)?.confRank ?? 15;
+  return { rec: `${ts.won}-${ts.lost}`, seat: `${ordinal(rank)} in the ${t.conf === 'E' ? 'East' : 'West'}`, rank, winning: ts.won > ts.lost };
+}
+
+/** One of the lines that apply, picked by a hash of the day and the player: the same pitch doesn't always read the same, and the league's stream never moves. */
+const pickLine = (league: League, pid: number, lines: (string | false | null | undefined)[]) => {
+  const ok = lines.filter((x): x is string => !!x);
+  return ok[hashString(`${league.id}:${league.season}:${league.day}:${pid}:note`) % ok.length];
+};
+
+/**
+ * Why a team wants the user's player, in its GM's words, from its own situation: the roster quality
+ * it ranks low in that he lifts (with the rank), its record and seat once ten games are in, a thin
+ * spot he'd fill (fewer than two players at his spot within three points of him), or for a
+ * rebuilder his age beside its young core's. A plan's stock line only when none of those applies.
  */
 function buyNote(league: League, t: Team, target: Player): string {
   const last = shortName(league, target);
-  const ts = curTeamSeason(league, t.tid);
-  const rec = ts.won + ts.lost >= 10 ? `${ts.won}-${ts.lost}` : null;
+  const st = standing(league, t);
   const where = spot(target);
   const thin = standardRoster(league, t.tid).filter((x) => spot(x) === where && x.ovr >= target.ovr - 3).length < 2;
-  const lines = (
-    t.strategy === 'contend'
-      ? [
-          `We're going for it this season, and ${last} is the piece we're missing.`,
-          rec && ts.won > ts.lost ? `At ${rec} we like our chances, and ${last} makes us better right now.` : `We're built to win now, and ${last} makes us better right away.`,
-          thin && `We need another ${where} for a playoff run, and ${last} is the one we want.`,
-        ]
-      : t.strategy === 'rebuild'
-        ? [
-            `${last} fits our timeline: we're building around young players.`,
-            `${last} is the kind of young player we want to grow with.`,
-            thin && `We're short on young ${where}s, and ${last} is one we'd build around.`,
-          ]
-        : [
-            `${last} would fit right in with what we're building.`,
-            `We're retooling on the fly, and ${last} is the kind of player we want.`,
-            thin && `We're thin at ${where}, and ${last} would fill it.`,
-          ]
-  ).filter((x): x is string => !!x);
-  return lines[hashString(`${league.id}:${league.season}:${league.day}:${target.pid}:note`) % lines.length];
+  const need = needHeFills(league, t, target);
+  const needLine = need && `We're ${ordinal(need.rank)} in the league in ${need.word}, and ${last} fixes that.`;
+  if (t.strategy === 'rebuild') {
+    const a = playerAge(target, league.season);
+    const core = standardRoster(league, t.tid)
+      .filter((x) => playerAge(x, league.season) <= 24)
+      .sort((x, y) => y.ovr - x.ovr)
+      .slice(0, 2);
+    return pickLine(league, target.pid, [
+      core.length === 2 &&
+        `${last} is ${a}. We're building around ${shortName(league, core[0])} (${playerAge(core[0], league.season)}) and ${shortName(league, core[1])} (${playerAge(core[1], league.season)}), and he grows with them.`,
+      st && `We're ${st.rec} and playing for next year. ${last} is ${a}: he'll still be getting better when we're ready.`,
+      needLine,
+      !core.length && !st && `${last} fits our timeline: we're building around young players.`,
+    ]);
+  }
+  if (t.strategy === 'contend')
+    return pickLine(league, target.pid, [
+      needLine,
+      st && st.winning && `We're ${st.rec}, ${st.seat}, and ${thin ? `short a ${where}` : 'one piece short'} for the playoffs. ${last} is that piece.`,
+      st && !st.winning && `We're built to win and we're ${st.rec}. Something has to change, and ${last} changes it.`,
+      !needLine && !st && (thin ? `We need another ${where} for a playoff run, and ${last} is the one we want.` : `We're going for it this season, and ${last} makes us better right away.`),
+    ]);
+  return pickLine(league, target.pid, [
+    needLine,
+    thin && `We're thin at ${where}${st ? ` and ${st.seat} at ${st.rec}` : ''}. ${last} would start for us.`,
+    st &&
+      !thin &&
+      (st.rank <= 6
+        ? `We're ${st.rec}, ${st.seat}, and we want to stay out of the play-in. ${last} keeps us there.`
+        : st.rank <= 10
+          ? `We're ${st.rec}, ${st.seat}, in the play-in as it stands. ${last} gets us out of it.`
+          : `We're ${st.rec}, ${st.seat}, and not done with this season. ${last} gets us back in the race.`),
+    !needLine && !thin && !st && `We're retooling on the fly, and ${last} is the kind of player we want.`,
+  ]);
+}
+
+/**
+ * Why a rebuilder sells a veteran, in its GM's words: its record, his age and what is left on his
+ * deal, and the young player at his spot who'd get his minutes. "We're rebuilding, and X doesn't fit
+ * our timeline. He can help a team like yours win now." had been every such offer's note.
+ */
+function sellNote(league: League, t: Team, vet: Player): string {
+  const last = shortName(league, vet);
+  const a = playerAge(vet, league.season);
+  const st = standing(league, t);
+  const cs = contractSeason(league);
+  const years = Math.max(1, contractExp(vet.contract) - cs + 1);
+  const sal = money(salaryFor(vet, cs));
+  const kid = standardRoster(league, t.tid)
+    .filter((x) => x.pid !== vet.pid && spot(x) === spot(vet) && playerAge(x, league.season) <= 23)
+    .sort((x, y) => y.pot - x.pot || y.ovr - x.ovr)[0];
+  const rec = st ? `We're ${st.rec}` : "We're rebuilding";
+  return pickLine(league, vet.pid, [
+    kid && `${rec}, and ${last} is ${a}. ${shortName(league, kid)} (${playerAge(kid, league.season)}) needs his minutes, so we'd rather have what you'd send.`,
+    years <= 1
+      ? `${rec}, and ${last}'s deal (${sal}) is up this summer. Better something from you now than nothing in July.`
+      : `${rec}. ${last} is ${a} with ${years} seasons left at ${sal}, and he'll be past it by the time we're good.`,
+    st && st.rank >= 11 && `We're ${st.seat} and going nowhere this year. ${last} (${a}) should be playing in May, and it won't be here.`,
+  ]);
 }
 
 /** Teams that try a three-team offer for one player once their two-team offer fails. */
@@ -367,14 +566,18 @@ function tryBuy(league: League, rng: Rng): Pitch | null {
   for (let k = 0; k < 2 && targets.length; k++) {
     // (any of them alike, on one draw of the stream)
     const target = targets.splice(rng.weighted(targets.map(() => 1)), 1)[0];
+    const pitch = `buy:${target.pid}`;
     let thirds = THIRD_TRIES;
-    for (const t of rng.shuffle(free(league).filter((x) => fits(league, x, target))).slice(0, 6)) {
+    for (const t of rng.shuffle(free(league).filter((x) => fits(league, x, target) && !turnedDown(league, pitch, x.tid))).slice(0, 6)) {
       const pkg = packageFor(league, t.tid, { pids: [target.pid], dpids: [] });
-      if (pkg && fair(league, pkg.offer)) return { tid: t.tid, offer: pkg.offer, kind: 'buy', note: buyNote(league, t, target), pitch: `buy:${target.pid}` };
+      // (one of his five best while he competes goes only for a player near his level: no picks and
+      // filler for a contender's starter, see coreCost; and nothing he has turned down unless it beats that)
+      const ok = (o: TradeOffer) => fair(league, o) && !coreCost(league, o) && beatsDeclined(league, pitch, o);
+      if (pkg && ok(pkg.offer)) return { tid: t.tid, offer: pkg.offer, kind: 'buy', note: buyNote(league, t, target), pitch };
       // the salary it would have to send back spoils the offer: a third team with room takes it instead
       if (thirds-- <= 0) continue;
       const legs = facilitatedDeal(league, t.tid, league.userTid, target, { agrees: userAgrees(league, t.tid) });
-      if (legs) return { tid: t.tid, offer: userView(league, legs, t.tid), legs, kind: 'buy', note: buyNote(league, t, target), pitch: `buy:${target.pid}` };
+      if (legs && ok(userView(league, legs, t.tid))) return { tid: t.tid, offer: userView(league, legs, t.tid), legs, kind: 'buy', note: buyNote(league, t, target), pitch };
     }
   }
   return null;
@@ -395,7 +598,7 @@ function trySell(league: League, rng: Rng): Pitch | null {
   // a star who has asked his team for a trade (pulse.ts): it calls around, the user included, whatever either team's plan
   const busy = new Set(openProposals(league).map((p) => p.tid));
   for (const star of tradeRequests(league).slice(0, 3)) {
-    if (busy.has(star.tid) || untradeable(league, star) || tradedAwayBy(league, star, user) || pitchedLately(league, star.pid, `sell:${star.pid}`)) continue;
+    if (busy.has(star.tid) || untradeable(league, star) || tradedAwayBy(league, star, user) || pitchedLately(league, star.pid, `sell:${star.pid}`, star.tid)) continue;
     const ask = makeItWork(league, { a: { tid: user, pids: [], dpids: [] }, b: { tid: star.tid, pids: [star.pid], dpids: [] } }, keep);
     const note = `${shortName(league, star)} has asked us for a trade. We'd rather make a deal now than lose him for nothing.`;
     if (ask.offer && fair(league, ask.offer)) return { tid: star.tid, offer: ask.offer, kind: 'sell', note, pitch: `sell:${star.pid}` };
@@ -407,7 +610,7 @@ function trySell(league: League, rng: Rng): Pitch | null {
   if (league.teams[user].strategy === 'rebuild') return null;
   for (const t of rng.shuffle(free(league).filter((x) => x.strategy === 'rebuild')).slice(0, 4)) {
     const vets = standardRoster(league, t.tid)
-      .filter((p) => p.ovr >= 74 && age(league, p) >= 27 && !untradeable(league, p) && !tradedAwayBy(league, p, user) && !pitchedLately(league, p.pid, `sell:${p.pid}`))
+      .filter((p) => p.ovr >= 74 && age(league, p) >= 27 && !untradeable(league, p) && !tradedAwayBy(league, p, user) && !pitchedLately(league, p.pid, `sell:${p.pid}`, t.tid))
       .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid);
     for (const vet of vets.slice(0, 3)) {
       const ask = makeItWork(league, { a: { tid: user, pids: [], dpids: [] }, b: { tid: t.tid, pids: [vet.pid], dpids: [] } }, keep);
@@ -416,12 +619,22 @@ function trySell(league: League, rng: Rng): Pitch | null {
         tid: t.tid,
         offer: ask.offer,
         kind: 'sell',
-        note: `We're rebuilding, and ${shortName(league, vet)} doesn't fit our timeline. He can help a team like yours win now.`,
+        note: sellNote(league, t, vet),
         pitch: `sell:${vet.pid}`,
       };
     }
   }
   return null;
+}
+
+/** Why a taxpayer dumps a contract, in its GM's words: how far over the line it is, the bill that comes with it, and the deal he'd take on. */
+function dumpNote(league: League, t: Team, p: Player, picks: number): string {
+  const cs = contractSeason(league);
+  const pay = payroll(league, t.tid, cs);
+  const over = pay - CAP_FOR(league, cs).luxuryTax;
+  const bill = teamTaxBill(league, t.tid, pay, cs);
+  const years = Math.max(1, contractExp(p.contract) - cs + 1);
+  return `We're ${money(over)} over the luxury tax, a bill of ${money(bill)}. Take ${shortName(league, p)}'s ${money(salaryFor(p, cs))}${years > 1 ? ` for ${years} seasons` : ', which is up this summer'} and the pick${picks > 1 ? 's are' : ' is'} yours.`;
 }
 
 /** Contracts a taxpayer tries to dump on the user, its worst first (see tryDump). */
@@ -444,14 +657,14 @@ function tryDump(league: League, rng: Rng): Pitch | null {
       .sort((a, b) => tradeValue(league, a) - tradeValue(league, b) || a.pid - b.pid)
       .slice(0, DUMP_TRIES);
     for (const p of bad) {
-      if (pitchedLately(league, p.pid, `dump:${t.tid}`)) break;
+      if (pitchedLately(league, p.pid, `dump:${t.tid}`, t.tid)) break;
       const deal = dumpPackage(league, t.tid, user, p, (o) => fair(league, o, 0));
       if (!deal || !evaluateTrade(league, deal).accept) continue;
       return {
         tid: t.tid,
         offer: deal,
         kind: 'dump',
-        note: `We need to get under the luxury tax. Take ${shortName(league, p)}'s contract and the pick${deal.b.dpids.length > 1 ? 's are' : ' is'} yours.`,
+        note: dumpNote(league, t, p, deal.b.dpids.length),
         pitch: `dump:${t.tid}`,
       };
     }

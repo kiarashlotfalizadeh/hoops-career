@@ -15,7 +15,7 @@ import { CAP } from '../constants';
 import { addInbox, fmtDate, freeAgents, playerName, standardRoster, teamPlayers } from './helpers';
 import { FIRED_REASON, askingContract, releaseDeadMoney, releasePlayer, releasedBy, valueScore } from './contracts';
 import { marqueeFA, offerBlockedReason, signingClosedReason, userOffer } from './freeAgency';
-import { acceptProposal, declineProposal, offerSubject, openProposals, proposalError, proposalThird } from './proposals';
+import { acceptProposal, declineProposal, offerRating, offerSubject, openProposals, proposalError, proposalThird, stopsForOffer } from './proposals';
 import { autoDraftUserPick, continueDraft } from './season';
 import { nextPick } from './draft';
 import { giveShare, noMinutes, userGameOnDay } from './games';
@@ -32,13 +32,16 @@ export const CALL_KINDS: ReadonlySet<AgendaKind> = new Set<CallKind>(['injury', 
 
 /**
  * What a long sim stops for, beyond a decision the league waits on (`required`): an AI team's trade
- * offer, a player's trade request, a starter's injury, the trade deadline, and a playoff series or
- * play-in game of his starting. Nothing else stops one: the rest waits in the action queue.
+ * offer his staff rates worth a look (or every offer, or none: Settings.offerStops, see
+ * proposals.ts's stopsForOffer; the others are `quiet`), a player's trade request, a starter's
+ * injury, the trade deadline, and a playoff series or play-in game of his starting. Nothing else
+ * stops one: the rest waits in the action queue and the digest. Every offer had stopped one: 15-20
+ * stops a season, most of them for offers at about even value (the playtest, 2026-11-23).
  */
 export const STOP_KINDS: ReadonlySet<AgendaKind> = new Set<AgendaKind>(['tradeOffer', 'tradeRequest', 'injury', 'deadline', 'series']);
 
 /** Whether an item of the queue stops a long sim the day it opens. */
-export const stopsSim = (i: Pick<AgendaItem, 'kind' | 'required'>) => i.required || STOP_KINDS.has(i.kind);
+export const stopsSim = (i: Pick<AgendaItem, 'kind' | 'required' | 'quiet'>) => i.required || (STOP_KINDS.has(i.kind) && !i.quiet);
 
 /** A step of the guided first week. */
 export type GuideStep = 'rotation' | 'playbook' | 'scout' | 'coach';
@@ -100,6 +103,8 @@ export interface AgendaItem {
   measure?: CallMeasure;
   /** Its choice waits on that measuring (the row says so, its buttons until the numbers are in). */
   measuring?: boolean;
+  /** One of STOP_KINDS that doesn't stop a sim (a trade offer the stop setting leaves in the queue). */
+  quiet?: boolean;
 }
 
 /** What releasing him leaves on the books: "$2.4M dead money", or "no dead money" (camp and minimum deals before opening night). */
@@ -405,6 +410,7 @@ export function agenda(league: League): AgendaItem[] {
     const err = proposalError(league, pr);
     if (err) continue;
     const want = pr.offer.a.pids.map((pid) => league.players[pid]).filter(Boolean);
+    const read = offerRating(league, pr);
     items.push({
       id: `tradeOffer:${pr.id}`,
       kind: 'tradeOffer',
@@ -412,7 +418,10 @@ export function agenda(league: League): AgendaItem[] {
       // the inbox's subject, and the other GM's pitch in his name (it isn't your staff talking)
       title: offerSubject(league, pr.offer, proposalThird(league, pr)),
       line: `${league.teams[pr.tid].abbrev} GM: “${pr.note}”`,
-      tone: 'info',
+      // the staff's read of it, a tap down (and what decides whether a sim stops for it)
+      detail: `Staff: ${read.label.toLowerCase()}. ${read.why}`,
+      tone: read.rating === 'good' ? 'good' : 'info',
+      ...(stopsForOffer(league, pr) ? {} : { quiet: true }),
       to: `/office/trade?offer=${pr.id}`,
       due: `Stands until ${short(league, pr.expires)}`,
       choices: [

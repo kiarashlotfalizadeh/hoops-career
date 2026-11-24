@@ -30,6 +30,7 @@ import {
   type SigningRoute,
   aiOption,
   aiRoute,
+  askLean,
   askingContract,
   birdTier,
   nonGuaranteed,
@@ -392,7 +393,7 @@ function aiMarquee(league: League, today: number) {
 }
 
 /** An AI team with money for a free agent beyond the minimum: the most it could pay one (cap space, or an exception), and the value a newcomer must have to take a spot (see swapBar). */
-type Buyer = { t: Team; room: number; bar: number };
+type Buyer = { t: Team; room: number; bar: number; size: number };
 
 /**
  * The AI teams that could pay a free agent more than the minimum now: a roster spot (or a player
@@ -404,10 +405,11 @@ function marketBuyers(league: League, season = contractSeason(league)): Buyer[] 
   return league.teams.flatMap((t) => {
     if (t.tid === league.userTid) return [];
     const cut = swapCandidate(league, t.tid, season);
-    if (regularRoster(league, t.tid).length >= CAP.rosterMax && !cut) return [];
+    const n = regularRoster(league, t.tid).length;
+    if (n >= CAP.rosterMax && !cut) return [];
     const ex = aiMleRoom(league, t.tid, season);
     const room = Math.max(capSpace(league, t.tid, season), t.strategy === 'contend' ? ex : Math.min(ex, cap.luxuryTax - payroll(league, t.tid, season)));
-    return room > 0 ? [{ t, room, bar: cut ? swapBar(league, cut) : -Infinity }] : [];
+    return room > 0 ? [{ t, room, bar: cut ? swapBar(league, cut) : -Infinity, size: n >= CAP.rosterMax ? n - 1 : n }] : [];
   });
 }
 
@@ -439,9 +441,11 @@ function marketMoneyMap(league: League): Map<number, number> {
     const bird = birdRoom(league, p, season);
     const own = bird ? bird.room * appeal(bird.tid, p) : 0;
     const need = askingContract(league, p).amount;
-    // (a rebuilder doesn't pay a veteran of 29 or older past the minimum, see aiSign)
-    const old = playerAge(p, season) >= 29;
-    const open = buyers.filter((b) => !used.has(b.t.tid) && v >= b.bar && !(old && b.t.strategy === 'rebuild'));
+    // (a rebuilder doesn't pay a veteran of 29 or older past the minimum, nor give one of its last
+    // spots to a player of 27 or older, see aiSign: counted as money for him, his price held all
+    // summer at what no team would spend)
+    const a = playerAge(p, season);
+    const open = buyers.filter((b) => !used.has(b.t.tid) && v >= b.bar && !(b.t.strategy === 'rebuild' && (a >= 29 || (a >= 27 && b.size >= 13))));
     const covers = open.filter((b) => b.room >= need).sort((a, b) => a.room - b.room)[0];
     const pick = covers ?? open.sort((a, b) => b.room - a.room)[0];
     const theirs = pick ? pick.room * appeal(pick.t.tid, p) : 0;
@@ -795,21 +799,39 @@ export interface FaOffer {
 }
 
 /**
- * How much a player likes an offer: the money against his price (of the market, not of that team:
- * to the power of how much money matters to him) × the team's appeal (weighted by his priorities) ×
- * how close the years are to what he wants of that team (3% a year, as asking prices count it) × a
- * small noise of his own (±2%, a hash). Equal money goes to the team he likes better, and an offer at
- * a team's own asking price (which its appeal already moved, see askingContract) scores about the
- * same as another team's at its own. Against that team's price, its appeal counted twice: a team he
- * liked 10% less needed 25-45% over its own ask to beat a contender's bid, and a bid at the ask led
- * a summer's top free agents' fields about 40% of the time (12% in a fictional league).
+ * How much a player likes an offer: the money against what he'd ask of that team (his market price
+ * moved by the team's appeal, up to 10% either way: contracts.ts's askLean, the same rate his asking
+ * price uses), to the power of how much money matters to him × how close the years are to what he
+ * wants of that team (3% a year, as asking prices count it) × a small noise of his own (±2%, a hash)
+ * and a tie-break by the team's appeal past what its price already says. So an offer at a team's own
+ * asking price scores about the same as another team's at its own, equal money goes to the team he
+ * likes better, and what a bad team must pay over a good one is bounded: about a fifth at the
+ * extremes. Until 2026-11-24 the appeal multiplied the utility on top of the money (0.75 to 1.25,
+ * against a price that moved 10%), and the money counted to the power of his priority for it (as low
+ * as 0.3): a 15-67 team's bid had to be 140% of a top free agent's market price to lead his field at
+ * the median, 170% for a quarter of them and 326% for one (measured over a summer's top 25; the
+ * playtest's rebuilder won his man at 40% over). Now 119% at the median and 123% at most, where
+ * its own asking price is 111%: the rest is a contender's bid over its own price (CONTENDER_BID).
  */
 export function offerUtility(league: League, p: Player, tid: number, amount: number, years: number, prefs: PlayerPrefs = playerPrefs(league, p)): number {
   const price = askingContract(league, p).amount;
   const fit = 1 / (1 + Math.abs(years - askingContract(league, p, tid).years) * 0.03);
   const noise = 0.98 + 0.04 * (hashString(`${league.id}:${league.season}:${p.pid}:${tid}:offer`) / 4294967296);
-  return Math.pow(amount / price, prefs.money) * teamAppeal(league, tid, p, prefs) * fit * noise;
+  const lean = askLean(league, p, tid);
+  // (what its appeal says past the 10% its price moves: a tie-break between equal offers, never a price)
+  const liked = Math.pow(teamAppeal(league, tid, p, prefs) * lean, APPEAL_TIE);
+  return Math.pow(amount / (price * lean), moneyPower(prefs)) * liked * fit * noise;
 }
+
+/**
+ * The power his money counts to in an offer's utility: his priority for it, never under 1. A player
+ * who cares little for money still takes the dollar-for-dollar better offer of two he likes alike:
+ * under 1, the tie-break and the noise (a few percent of utility) cost a team twice that in salary.
+ */
+export const moneyPower = (prefs: Pick<PlayerPrefs, 'money'>) => Math.max(1, prefs.money);
+
+/** How much of a team's appeal past its price's 10% still counts between offers (an exponent: a tie-break). */
+const APPEAL_TIE = 0.05;
 
 /** A team's roster as aiWants reads it, kept by aiMarquee while the team signs nobody: no spot to give (`shut`), the bar a newcomer must clear, and the roster's size with that spot. */
 type WantRead = { shut: boolean; bar: number; size: number };
@@ -978,7 +1000,7 @@ export function bidStanding(
   const mine = offerUtility(league, p, tid, amount, years, prefs);
   // the amount whose utility matches the best rival's (utility is a power of the amount), and
   // nothing he wouldn't consider (a rival's low offer once led to a figure under the floor)
-  const need = Math.max(floor, Math.ceil((amount * Math.pow(best.utility / mine, 1 / prefs.money)) / 50) * 50);
+  const need = Math.max(floor, Math.ceil((amount * Math.pow(best.utility / mine, 1 / moneyPower(prefs))) / 50) * 50);
   const max = CAP_FOR(league, contractSeason(league)).maxContract(p.experience);
   return { offers, leads: amount >= floor && mine >= best.utility, toLead: need <= max ? need : null };
 }

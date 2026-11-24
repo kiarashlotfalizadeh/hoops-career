@@ -19,13 +19,21 @@ import { rosterNames } from '../stats';
 
 /**
  * A package against what he's worth, in league-neutral value rather than your front office's lens on
- * it, as a word: the share stays the AI's. Worth less than nothing (a bad contract): any taker is a
- * salary dump, not a share of his value.
+ * it, as a word about the offer itself: the share stays the AI's. Worth less than nothing (a bad
+ * contract): any taker is a salary dump, not a share of his value. The words had named the other
+ * team's conduct ("Overpay", "Lowball"), and read as the user's own: a rebuilder misread three
+ * offers (the playtest, 2026-11-23).
  */
 export function packageWord(neutralGive: number, neutralGet: number): { l: string; c: string } {
   if (neutralGive <= 0) return { l: 'Salary dump', c: 'good' };
   const ratio = neutralGet / neutralGive;
-  return ratio >= 1.1 ? { l: 'Overpay', c: 'good' } : ratio >= 0.9 ? { l: 'Fair value', c: 'info' } : ratio >= 0.7 ? { l: 'Below value', c: 'warn' } : { l: 'Lowball', c: 'bad' };
+  return ratio >= 1.1
+    ? { l: 'Strong offer', c: 'good' }
+    : ratio >= 0.9
+      ? { l: 'Fair offer', c: 'info' }
+      : ratio >= 0.7
+        ? { l: 'Light offer', c: 'warn' }
+        : { l: 'Weak offer', c: 'bad' };
 }
 
 export function TradingBlock({

@@ -22,6 +22,7 @@ import {
   dealDelta,
   dealTeams,
   evaluateDeal,
+  STAR_MARKET,
   evaluateTrade,
   executeDeal,
   executeTrade,
@@ -212,8 +213,17 @@ it("valuation and the AI's verdict: talent over depth, strategy lenses within 15
     const neutral = tradeValue(l, vet);
     expect(tradeValue(l, vet, 'rebuild')).toBeLessThan(neutral * 0.85);
     expect(tradeValue(l, vet, 'contend')).toBeGreaterThan(neutral * 1.15);
-    // a rebuilder sells him to the user at neutral value, to another AI team down to 85%
-    expect(playerValueFor(l, vet, AI, false)).toBeCloseTo(neutral);
+    // a rebuilder sells him to another AI team down to 85% of neutral value; to the user never under
+    // it, and an old star (86 at 33: half the way) toward what a contender would pay for him
+    // (STAR_MARKET: one user, a league of contenders)
+    const market = STAR_MARKET * tradeValue(l, vet, 'contend');
+    expect(playerValueFor(l, vet, AI, false)).toBeCloseTo(neutral + 0.5 * (market - neutral));
+    // (a lesser veteran at neutral value)
+    {
+      const m = structuredClone(l);
+      const role = shape(m, m.players[vet.pid], 82, 33);
+      expect(playerValueFor(m, role, AI, false)).toBeCloseTo(tradeValue(m, role));
+    }
     expect(playerValueFor(l, vet, AI, false, true)).toBeCloseTo(neutral * 0.85);
     expect(playerValueFor(l, vet, 2, true)).toBeCloseTo(neutral * 1.15);
     // once he has changed hands this season he is worth neutral value to everyone

@@ -29,9 +29,10 @@ import { money } from '../../core/format';
 function reaction(ev: TradeEval): { pct: number; label: string; color: string; figure: string } {
   if (ev.accept) {
     const eager = ev.delta > Math.abs(ev.valueOut) * 0.25 ? "They'd jump at it" : "They'd take it";
-    // said from your side: their yes is no good news when you're the one overpaying
+    // said from your side first: their yes is no good news when you're the one giving more than you
+    // get ("They'd jump at it: you're overpaying" read as praise for the offer)
     return overpayNote(ev)
-      ? { pct: 100, label: `${eager}: you're overpaying`, color: 'var(--warn)', figure: 'Deal' }
+      ? { pct: 100, label: "You'd give more than you get. They'd say yes.", color: 'var(--warn)', figure: 'Deal' }
       : { pct: 100, label: eager, color: 'var(--good)', figure: 'Deal' };
   }
   // the AI's own verdict on how far the value is from enough

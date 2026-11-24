@@ -367,6 +367,12 @@
   vertical-align: -1px;
 }
 /* the report's staff read: the ranges, the scouts, the button */
+/* a figure at a row's end where a rank would be (Scouting accuracy's median miss) */
+.fo-rank.dn-miss {
+  width: auto;
+  min-width: 36px;
+  text-align: right;
+}
 .dn-scout {
   display: flex;
   flex-direction: column;

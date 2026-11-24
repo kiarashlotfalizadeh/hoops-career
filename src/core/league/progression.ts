@@ -1,12 +1,14 @@
-// Player development: age curves per attribute group, personal growth tendency,
-// training focus, coaching quality, practice intensity and playing time.
+// Player development: age curves per attribute group, a young player's summers, his growth tendency
+// and hidden arc, playing time, training focus, the head coach's development rating and the staff's
+// development priority (the user's one lever, PRIORITY); the league's anchors, and the bands a year's
+// change is held to (YEAR_BANDS). scripts/dev-check.ts measures all of it.
 
 import { keepPeak, peakSummer, scaleTop, volumeRoom } from './legends';
 import type { League, Player, RatingKey, TrainingFocus } from '../types';
 import { FREE_AGENT, RETIRED } from '../types';
 import { Rng, clamp, hashString } from '../random';
-import { OVR_ANCHORS, RATING_KEYS, ovrRaw, ovrWeights, shiftToOvr, toDisplay } from '../ratings';
-import { followTendencies, playerAge, refreshPlayerDerived } from '../playerGen';
+import { OVR_ANCHORS, RATING_KEYS, ovrRaw, ovrWeights, toDisplay } from '../ratings';
+import { REBOUND_SHARE, YOUNG_TO, followTendencies, playerAge, refreshPlayerDerived, yearShortfall } from '../playerGen';
 import { seasonTotals } from './helpers';
 
 type Group = 'athletic' | 'end' | 'str' | 'shooting' | 'skill' | 'iq' | 'perim' | 'interior' | 'reb' | 'hgt';
@@ -39,9 +41,10 @@ const GROUP_OF: Record<RatingKey, Group> = {
 // attribute's league mean, so a typical roster's changes (with training, coaching and playing time
 // added) average out to about zero and the anchor only corrects drift. A uniform cut there used to
 // shift the whole age curve down, so players peaked at 24-25 and fell 3-4 OVR a year after 30.
-// Young players climb about 2 OVR a year, skills and IQ hold into the late 20s and athleticism
-// fades first: players peak around 26-27, slip slowly to 30, then lose 1-2 OVR a year, and more
-// each year after 35.
+// Skills and IQ hold into the late 20s and athleticism fades first. What a player's OVR does with
+// them, the young player's summers (YOUTH) and the anchors together, a year (dev-check, six leagues'
+// later summers, everyone in the league both preseasons): +1.4 to +1.5 at 22 or under, +0.4 at 23-26,
+// -1.3 at 27-31, -2.5 at 32-35 and -4.4 from 36.
 const CURVES: Record<Group, number[]> = {
   athletic: [1.3, 0.9, 0.5, 0.4, 0.2, 0.1, 0.1, -0.1, -0.2, -0.4, -0.7, -1, -1.3, -1.7, -2.1, -2.6, -3],
   end: [0.7, 0.7, 0.5, 0.4, 0.2, -0.1, -0.3, -0.3, -0.2, -0.3, -0.4, -0.6, -0.9, -1.3, -1.7, -2, -2.4],
@@ -63,14 +66,65 @@ const SUMMER_SKILLS = 0.6;
 const SUMMER_BODY = 0.25;
 const OWN_NOISE = 1.6;
 /**
- * Spread of a summer (the shared part, see SUMMER_SKILLS) through 25 and after. A player's OVR moves
- * about ±3.5-4.5 a year at 20-24 and ±2.5-3 in his prime: some years a breakout, some a step back.
- * At ±2.3 and ±1.4 almost nobody's level changed but by age, so a team's talent was its roster's
- * ages: the contenders, the older teams, gave back about a fifth of their edge every summer, and over
- * twelve simulated seasons the spread of team wins fell from 11 to about 9.5. Holding the league's
- * spread against it (anchorRatings) costs the established a little each year.
+ * Spread of a summer (the shared part, see SUMMER_SKILLS) through 25 and after: some years a breakout,
+ * some a step back. At ±2.3 and ±1.4 almost nobody's level changed but by age, so a team's talent was
+ * its roster's ages: the contenders, the older teams, gave back about a fifth of their edge every
+ * summer, and over twelve simulated seasons the spread of team wins fell from 11 to about 9.5. Holding
+ * the league's spread against it (anchorRatings) costs the established a little each year. The young
+ * player's was 3.7 until 2026-11-23, with all of a bad summer taken (YOUNG_DOWN): a year of +5 or more
+ * came to one second-round pick in six (ten such years a class, the testers' "#60 pick up 7 a year"),
+ * now one in twenty (two or three a class); a late pick who hits does it on his arc, year after year
+ * (arcScale), not on one summer's draw. With it and the year's bands (YEAR_BANDS), a year moves a
+ * player of 22 or under -2 to +6 (the 5th and 95th percentiles), 23-26 -3 to +4, 27-31 -4 to +2.
  */
-const SUMMER_SD = { young: 3.7, prime: 2.6 };
+const SUMMER_SD = { young: 3.0, prime: 2.6 };
+/**
+ * The share of a bad summer a young player (through 25) takes: a developing player's poor summer is
+ * mostly a year he stands still, and a year he goes backwards is the rare one. With the whole of it,
+ * one player in six of 22 or under lost three OVR or more in a year (dev-check, six leagues: the 5th
+ * percentile -6, the worst -14 to -18), top-ten picks among them.
+ */
+const YOUNG_DOWN = 0.5;
+/**
+ * What a young player's summers add by age (19 to 25), on the summer's own scale (one point is about
+ * 0.75 OVR a year for a player in the middle of the display scale). The curves above are relative to
+ * a league whose anchors take about half an OVR off everyone a year (its arrivals are better than the
+ * players they push out): without this, players of 22 and under gained +0.1 to +0.3 OVR a year in
+ * dev-check's leagues where POT promised them 1.5, and top-ten picks +0.4 (a real league) to +1.2 a
+ * summer through 23, a third of them lower after three summers than on draft night. With it, the
+ * minutes' share of it (BENCH) and the staff's priority: +1.4 to +1.5 at 22 and under (POT holds: it
+ * drifts +0.1 a year), top-ten picks +2.0 to +2.5 a summer through 23 (one in fifteen lower after
+ * three summers), picks 11-30 +1.3 to +1.7 and second-rounders +0.4 to +0.5. The league pays for it
+ * where it always has, in what everyone gives the anchors: 27 to 31 lose 1.3 a year (1.2 before).
+ */
+const YOUTH = [1.6, 1.6, 1.4, 1.1, 0.6, 0.3, 0.1];
+/**
+ * The share of it a young player gets by his minutes a game: all of it from BENCH.plays, less on the
+ * bench, least under BENCH.sits (on top of develop()'s minutes term for his skills). A draftee's first
+ * summer (no season yet) gets all of it. Growth goes to the young players who play.
+ */
+const BENCH = { plays: 15, sits: 6, some: 0.75, none: 0.4 };
+
+/**
+ * Development priority, the one lever the user has on who grows: his staff's extra time goes to the
+ * players he names (PRIORITY.slots at most, PRIORITY.maxAge or under), and comes out of his other
+ * young players' (the rest of the roster of PRIORITY.maxAge or under). `gain`: rating points a year on
+ * each of a priority player's skills (about +1.2 OVR a year in the middle of the scale; priorityEffect
+ * gives a player's own figure); `cost`: what each priority player takes off every skill of each other
+ * young player on the roster (about -0.25 OVR a year each: with four other young players, two
+ * priorities cost about what they add). Every AI team's staff pick their own two (staffPriority), and
+ * the user's do until he chooses: nobody starts behind.
+ */
+export const PRIORITY = { slots: 2, maxAge: 25, gain: 1.05, cost: 0.2 };
+
+/**
+ * A young player (through 25) makes up part of a down year the next: a year that fell short of what
+ * his age has him add (playerGen's yearShortfall) adds REBOUND_SHARE of the shortfall to the next
+ * year's growth, and his POT counts on it (refreshPlayerDerived), so a bad year takes less off his
+ * POT than off his OVR. Without it a 20-year-old's -2 took 3.5 off his POT.
+ */
+/** OVR a point of a young player's summer is worth over a year, in the middle of the display scale (the summer's share of his skills and body, their OVR weights, the scale's middle slope): turns a rebound in OVR into the summer's units. */
+const SUMMER_OVR = 0.75;
 
 /**
  * Training: balanced adds a little to every attribute. A focus is OVR-neutral against it: the
@@ -112,11 +166,16 @@ export interface DevContext {
   coachDev: number; // 0..100
   coachingBudget: number; // 0..100
   practice: 'light' | 'normal' | 'intense';
-  mpg: number;
+  /** His minutes a game in the season that counts; null when he had no season to play in (a draftee's first summer): minutes then neither help nor hurt. */
+  mpg: number | null;
   /** League-wide mean of each attribute (ratingMeans): with it, a strong attribute fades faster with age than a weak one. */
   means?: Partial<Record<RatingKey, number>>;
   /** His hidden development arc through 25 (see trajectory): z-score, 0 without one. */
   trajectory?: number;
+  /** The staff's development priority, rating points a year on each skill: PRIORITY.gain for a priority player, minus PRIORITY.cost for each priority teammate for another young player, 0 past PRIORITY.maxAge. */
+  staff?: number;
+  /** OVR a young player makes up this year after a down one (REBOUND times last year's shortfall). */
+  rebound?: number;
 }
 
 /**
@@ -261,6 +320,20 @@ function usageVolume(p: Player, statsSeason: number, room = 0) {
 const CEILING_FROM = 80;
 const ceilingRoom = (r: number) => (r <= CEILING_FROM ? 1 : Math.max(0.2, (100 - r) / (100 - CEILING_FROM)));
 
+/**
+ * The most a player's OVR moves from one preseason to the next, by his age in the new season (the
+ * summer's development, the league's anchors and an aging star's drop together; an injury's lasting
+ * damage is its own, see injuries.ts).
+ */
+export const YEAR_BANDS: readonly { to: number; down: number; up: number }[] = [
+  { to: 22, down: -2, up: 8 },
+  { to: 26, down: -3, up: 6 },
+  { to: 31, down: -4, up: 4 },
+  { to: 35, down: -5, up: 2 },
+  { to: Infinity, down: -7, up: 1 },
+];
+export const yearBand = (age: number) => YEAR_BANDS.find((b) => age <= b.to)!;
+
 /** Apply `frac` of a year's development. Returns OVR change. */
 export function develop(p: Player, season: number, ctx: DevContext, rng: Rng, frac = 1, scale?: League['ovrScale']): number {
   const a = playerAge(p, season);
@@ -269,34 +342,44 @@ export function develop(p: Player, season: number, ctx: DevContext, rng: Rng, fr
   const fade = starFade(p.ovr, a);
   // a good or bad summer moves all skills together (an aging star's only down)
   const arc = young ? (ctx.trajectory ?? 0) * TRAJECTORY[clamp(a - 19, 0, 6)] : 0;
-  let summer = rng.normal(young ? p.growth * 1.1 + arc : p.growth * 0.4, young ? SUMMER_SD.young : SUMMER_SD.prime);
+  // (one draw, as before the young player's bad summers were halved: the league's stream runs as it did)
+  const swing = rng.normal(0, young ? SUMMER_SD.young : SUMMER_SD.prime);
+  const played = ctx.mpg === null || ctx.mpg >= BENCH.plays ? 1 : ctx.mpg > BENCH.sits ? BENCH.some : BENCH.none;
+  let summer = young
+    ? p.growth * 1.1 + arc + YOUTH[clamp(a - 19, 0, 6)] * played + (ctx.rebound ?? 0) / SUMMER_OVR + (swing < 0 ? swing * YOUNG_DOWN : swing)
+    : p.growth * 0.4 + swing;
   if (fade > 0) summer = Math.min(0, summer);
   const coaching = ((ctx.coachDev - 50) / 50) * 0.7 + ((ctx.coachingBudget - 50) / 50) * 0.5;
   const practice = ctx.practice === 'intense' ? 0.45 : ctx.practice === 'light' ? -0.35 : 0;
-  const minutes = young ? (ctx.mpg >= 25 ? 0.6 : ctx.mpg >= 15 ? 0.25 : ctx.mpg <= 6 ? -0.3 : 0) : 0;
+  const minutes = young && ctx.mpg !== null ? (ctx.mpg >= 25 ? 0.6 : ctx.mpg >= 15 ? 0.25 : ctx.mpg <= 6 ? -0.3 : 0) : 0;
+  const staff = ctx.staff ?? 0;
+  const w = ovrWeights(p.ratings);
   const focus = FOCUS_KEYS[p.training];
   let focusGain = BALANCED_GAIN;
   if (focus.length) {
-    const w = ovrWeights(p.ratings);
     const all = RATING_KEYS.reduce((t, k) => t + (k === 'hgt' ? 0 : w[k]), 0);
     const focused = focus.reduce((t, k) => t + w[k], 0);
     focusGain = (BALANCED_GAIN * all - OFF_FOCUS_GAIN * (all - focused)) / focused;
   }
+  // what the staff's priority did to his raw OVR this step (the year's total goes on his next snapshot)
+  let staffRaw = 0;
   for (const k of RATING_KEYS) {
     const g = GROUP_OF[k];
     let d = curve(g, a);
     if (d < 0) d *= SHOT_HOLDS[k] ?? fadeScale(p.ratings[k], ctx.means?.[k]) * (1 + fade);
+    const isSkill = g !== 'hgt' && g !== 'athletic' && g !== 'end' && g !== 'str';
     if (g !== 'hgt') {
-      const isSkill = g !== 'athletic' && g !== 'end' && g !== 'str';
       d += summer * (isSkill ? SUMMER_SKILLS : SUMMER_BODY) + rng.normal(0, OWN_NOISE);
-      if (isSkill) d += coaching + practice + minutes;
+      if (isSkill) d += coaching + practice + minutes + staff;
       d += !focus.length || focus.includes(k) ? focusGain : OFF_FOCUS_GAIN;
       if (p.training === 'conditioning' && g === 'athletic' && d < 0) d *= 0.75;
     }
     // the last points are the hardest: a gain slows as the attribute nears the top of the scale
-    if (d > 0 && g !== 'hgt') d *= ceilingRoom(p.ratings[k]);
-    p.ratings[k] = clamp(Math.round((p.ratings[k] + d * frac) * 10) / 10, 1, 100);
+    const room = d > 0 && g !== 'hgt' ? ceilingRoom(p.ratings[k]) : 1;
+    if (isSkill && staff) staffRaw += w[k] * staff * room * frac;
+    p.ratings[k] = clamp(Math.round((p.ratings[k] + d * room * frac) * 10) / 10, 1, 100);
   }
+  if (staffRaw) p.devStaff = Math.round(((p.devStaff ?? 0) + staffRaw) * 1000) / 1000;
   if (!scale) return 0;
   const after = toDisplay(ovrRaw(p.ratings), scale);
   return after - before;
@@ -308,19 +391,132 @@ export function refreshDerived(league: League, p: Player) {
 }
 
 /** `statsSeason` is the season whose minutes count: the one just finished in the offseason, the current one in season. */
-function devContext(league: League, p: Player, statsSeason: number, means: DevContext['means']): DevContext {
+function devContext(league: League, p: Player, statsSeason: number, means: DevContext['means'], priority: Map<number, number[]>): DevContext {
   const team = p.tid >= 0 ? league.teams[p.tid] : null;
   const st = seasonTotals(p, statsSeason);
-  const mpg = st && st.gp ? st.min / st.gp : 0;
+  // (a draftee's first summer: the season that would count was played before he was picked. Read as no
+  // minutes, it cost every rookie the benchwarmer's 0.3 a skill before he had a game to play in)
+  const mpg = st && st.gp ? st.min / st.gp : p.draft.year >= statsSeason ? null : 0;
+  const young = playerAge(p, league.season) <= YOUNG_TO;
+  const list = team ? (priority.get(team.tid) ?? []) : [];
   return {
     coachDev: team ? team.coach.development : 45,
     coachingBudget: team ? team.budget.coaching : 40,
     practice: team ? team.practice : 'normal',
     mpg,
     means,
-    trajectory: playerAge(p, league.season) <= 25 ? trajectory(league, p.pid) * arcScale(p) : 0,
+    trajectory: young ? trajectory(league, p.pid) * arcScale(p) : 0,
+    staff: list.includes(p.pid) ? PRIORITY.gain : young ? -PRIORITY.cost * list.length : 0,
+    // the year behind him: the one that ended at his latest preseason snapshot
+    rebound: young ? -REBOUND_SHARE * yearShortfall(p, p.ratingsHistory[p.ratingsHistory.length - 1]?.season ?? league.season) : 0,
   };
 }
+
+// ---------------------------------------------------------------- development priority
+
+const priorityAge = (league: Pick<League, 'season'>, p: Player) => playerAge(p, league.season) <= PRIORITY.maxAge;
+
+/** The staff's own pick for a team's development priority: its PRIORITY.slots players of PRIORITY.maxAge or under with the most ahead of them (POT, then OVR), those with room to grow. */
+export function staffPriority(league: League, tid: number): number[] {
+  const out: Player[] = [];
+  for (const p of Object.values(league.players)) if (p.tid === tid && priorityAge(league, p) && p.pot > p.ovr) out.push(p);
+  return out
+    .sort((a, b) => b.pot - a.pot || b.ovr - a.ovr || a.pid - b.pid)
+    .slice(0, PRIORITY.slots)
+    .map((p) => p.pid);
+}
+
+/** Whether the user has chosen his team's development priority himself (else his staff pick, as an AI team's do). */
+export const priorityChosen = (league: League) => league.teams[league.userTid]?.devPriority !== undefined;
+
+/** A team's development priority now: the user's choice where he made one (those still on his roster and young enough), the staff's pick else. */
+export function devPriority(league: League, tid: number): number[] {
+  const own = tid === league.userTid ? league.teams[tid]?.devPriority : undefined;
+  if (!own) return staffPriority(league, tid);
+  return own.filter((pid) => league.players[pid]?.tid === tid && priorityAge(league, league.players[pid])).slice(0, PRIORITY.slots);
+}
+
+const priorityMap = (league: League) => new Map(league.teams.map((t) => [t.tid, devPriority(league, t.tid)]));
+
+/**
+ * Give one of the user's players the staff's priority, or take it back. The first choice starts from
+ * the staff's pick, so naming one player doesn't drop the other. Null when done, else why not.
+ */
+export function toggleDevPriority(league: League, pid: number): string | null {
+  const p = league.players[pid];
+  const team = league.teams[league.userTid];
+  if (!p || !team || p.tid !== team.tid) return 'He is not on your roster.';
+  const list = devPriority(league, team.tid);
+  if (list.includes(pid)) {
+    team.devPriority = list.filter((x) => x !== pid);
+    return null;
+  }
+  if (!priorityAge(league, p)) return `Priority is for players ${PRIORITY.maxAge} or under.`;
+  if (list.length >= PRIORITY.slots) return `Both priority places are taken. Free one first.`;
+  team.devPriority = [...list, pid];
+  return null;
+}
+
+/** Hand the choice back to the staff (their pick, kept up to date as the roster changes). */
+export function staffPicksPriority(league: League) {
+  delete league.teams[league.userTid]?.devPriority;
+}
+
+/** The display scale without rounding or its 40 and 99 ends (toDisplay's own lines), and the raw OVR a display value stands for. */
+function dispExact(raw: number, scale: League['ovrScale']): number {
+  const { raw: xs, disp: ys } = scale;
+  const n = xs.length;
+  if (raw <= xs[0]) return ys[0] + ((raw - xs[0]) * (ys[1] - ys[0])) / (xs[1] - xs[0]);
+  if (raw >= xs[n - 1]) return ys[n - 1] + ((raw - xs[n - 1]) * (ys[n - 1] - ys[n - 2]) * 0.6) / (xs[n - 1] - xs[n - 2]);
+  let i = 1;
+  while (raw > xs[i]) i++;
+  return ys[i - 1] + ((raw - xs[i - 1]) * (ys[i] - ys[i - 1])) / (xs[i] - xs[i - 1]);
+}
+function rawAt(disp: number, scale: League['ovrScale']): number {
+  const { raw: xs, disp: ys } = scale;
+  const n = xs.length;
+  if (disp <= ys[0]) return xs[0] + ((disp - ys[0]) * (xs[1] - xs[0])) / (ys[1] - ys[0]);
+  if (disp >= ys[n - 1]) return xs[n - 1] + ((disp - ys[n - 1]) * (xs[n - 1] - xs[n - 2])) / ((ys[n - 1] - ys[n - 2]) * 0.6);
+  let i = 1;
+  while (disp > ys[i]) i++;
+  return xs[i - 1] + ((disp - ys[i - 1]) * (xs[i] - xs[i - 1])) / (ys[i] - ys[i - 1]);
+}
+/** OVR a raw point is worth in the middle of the display scale: between its 30th and 70th percentiles (70 and 78). */
+function midSlope(scale: League['ovrScale']): number {
+  const lo = OVR_ANCHORS.findIndex(([q]) => q === 0.3);
+  const hi = OVR_ANCHORS.findIndex(([q]) => q === 0.7);
+  return (scale.disp[hi] - scale.disp[lo]) / Math.max(1e-6, scale.raw[hi] - scale.raw[lo]);
+}
+
+/**
+ * What a year of the staff's priority is worth to a player in OVR, on average: PRIORITY.gain on each
+ * skill (less where a skill is near the top of the scale, see ceilingRoom) by its weight in his OVR,
+ * at his place on the display scale. The figure the screens show before the user commits; what it
+ * did is on his next snapshot (RatingsSnapshot.staff).
+ */
+export function priorityEffect(league: Pick<League, 'ovrScale' | 'season'>, p: Player, points = PRIORITY.gain): number {
+  const w = ovrWeights(p.ratings);
+  let raw = 0;
+  for (const k of RATING_KEYS) {
+    const g = GROUP_OF[k];
+    if (g === 'hgt' || g === 'athletic' || g === 'end' || g === 'str') continue;
+    raw += w[k] * points * (points > 0 ? ceilingRoom(p.ratings[k]) : 1);
+  }
+  // (a player past 26 develops in the summer alone: develop's 0.8 of a year; the younger at the check-ins too)
+  raw *= playerAge(p, league.season) > 26 ? 0.8 : 0.8 + 3 * 0.07;
+  return worth(league.ovrScale, ovrRaw(p.ratings), raw);
+}
+
+/** What a change of `raw` points from a raw OVR of `from` is worth in OVR: the display scale's own lines, a raw point worth at most what it is in the middle of the scale (as a year's change is counted: see heldYear). */
+function worth(scale: League['ovrScale'], from: number, raw: number): number {
+  const own = dispExact(from + raw, scale) - dispExact(from, scale);
+  const mid = raw * midSlope(scale);
+  return Math.abs(own) > Math.abs(mid) ? mid : own;
+}
+
+/** What `priorities` priority teammates cost another young player a year, in OVR (negative; 0 past PRIORITY.maxAge): PRIORITY.cost each on every skill. */
+export const priorityCost = (league: Pick<League, 'ovrScale' | 'season'>, p: Player, priorities: number) =>
+  priorities && priorityAge(league, p) ? priorityEffect(league, p, -PRIORITY.cost * priorities) : 0;
 
 /**
  * The players the league's anchors measure (see anchorRatings): each team's 15 best standard players
@@ -366,13 +562,43 @@ export function ratingSpreads(league: League, rostered = Object.values(league.pl
   return out;
 }
 
+/** The raw-OVR quantiles the league's shape is held by (SHAPE_QS), among `pop`: a player past the scale isn't part of the shape the others are held to. */
+function shapeOf(league: League, pop: Player[]): number[] | null {
+  const top = scaleTop(league);
+  const raws = pop
+    .map((p) => ovrRaw(p.ratings))
+    .filter((raw, i) => !pop[i].peak || raw <= top)
+    .sort((a, b) => a - b);
+  return raws.length < 40 ? null : SHAPE_QS.map((f) => raws[Math.round(f * (raws.length - 1))]);
+}
+
+/**
+ * Set what anchorRatings holds the league to, on the league as it stands: each attribute's mean and
+ * spread and the raw-OVR shape of the opening-night league (anchorPopulation). Call once the league
+ * is made and its rosters are cut to opening night's. Set on everyone under contract before the
+ * preseason cuts (as until 2026-11-23), a real league's anchors described a weaker and flatter league
+ * than the one its first summer measured (its camp deals pulled the 15th percentile from 46.1 raw to
+ * 45.2 and each attribute's mean 0.3 down), so the first summer moved every player to it: the anchor
+ * alone took 0.75 OVR off the average rostered player and the 85+ players went from 48 to 41, before
+ * anyone had developed (dev-check, three leagues: the first summer's mean change -1.60 against -0.68
+ * in later ones; a generated league, whose anchors and first summer measured the same 14 a team,
+ * -1.10 against -0.91).
+ */
+export function setAnchors(league: League) {
+  const pop = anchorPopulation(league);
+  league.ratingAnchors = ratingMeans(league, pop);
+  league.ratingSpreads = ratingSpreads(league, pop);
+  const shape = shapeOf(league, pop);
+  if (shape) league.ovrShape = shape.map((x) => Math.round(x * 1000) / 1000);
+}
+
 /**
  * Hold the league's talent distribution steady: after a year of development (young players rise,
  * veterans fade, rookies arrive, retirees leave), map every attribute back so its mean among the
- * opening-night league (anchorPopulation) matches the anchor set when the league was created, and pull its spread
- * halfway back toward the original each year (otherwise stars drift upward and 90+ OVR players
- * pile up). Individual arcs are kept relative to the league; scoring, OVR meaning and salaries
- * stay stable for decades.
+ * opening-night league (anchorPopulation) matches the anchor set when the league was created
+ * (setAnchors), and pull its spread halfway back toward the original each year (otherwise stars
+ * drift upward and 90+ OVR players pile up). Individual arcs are kept relative to the league;
+ * scoring, OVR meaning and salaries stay stable for decades.
  */
 export function anchorRatings(league: League) {
   const pop = anchorPopulation(league);
@@ -395,8 +621,8 @@ export function anchorRatings(league: League) {
 }
 
 /**
- * Quantiles of the raw-OVR distribution held to the league's creation (see anchorOverallSpread):
- * OVR_ANCHORS' but the bottom end. The 99.3rd (the league's 3rd or 4th best player) and the best
+ * Quantiles of the raw-OVR distribution held to the league's creation (see anchorOverallSpread,
+ * League.ovrShape): OVR_ANCHORS' but the bottom end. The 99.3rd (the league's 3rd or 4th best player) and the best
  * player hold the stars' band too: with the top held from the 97.5th alone, the ten or so players
  * past it could run up the scale together (some leagues had six rated 99 by their fifth season), and
  * with the 99.3rd alone the best one or two could still run away from everyone, their ratings far
@@ -408,8 +634,8 @@ const SHAPE_QS = [0.05, 0.15, 0.3, 0.5, 0.7, 0.85, 0.93, 0.975, 0.993, 1];
  * Good and bad summers move a player's skills together, so over the years good players become
  * good at everything and the OVR spread widens even with every attribute's own spread held (more
  * stars and more sub-60 players), while the top can thin out as stars age. Pull each stretch of the
- * raw-OVR distribution between neighbouring SHAPE_QS halfway back to its width when the display
- * scale was built at league creation, around the median: each player moves along all his
+ * raw-OVR distribution between neighbouring SHAPE_QS halfway back to its width on the league's
+ * opening night (League.ovrShape, see setAnchors), around the median: each player moves along all his
  * attributes at once, by where he stands. Held by its two halves alone (median to 97.5th, 5th to
  * median), the shape inside them drifted: the band of 80-84 players filled up while the 85+ stars
  * thinned out.
@@ -418,15 +644,10 @@ const SHAPE_QS = [0.05, 0.15, 0.3, 0.5, 0.7, 0.85, 0.93, 0.975, 0.993, 1];
 const TOP_OWN = 0.75;
 
 function anchorOverallSpread(league: League, pop: Player[]) {
-  // (a player past the scale isn't part of the shape the others are held to)
-  const top = scaleTop(league);
-  const raws = pop
-    .map((p) => ovrRaw(p.ratings))
-    .filter((raw, i) => !pop[i].peak || raw <= top)
-    .sort((a, b) => a - b);
-  if (raws.length < 40) return;
-  const now = SHAPE_QS.map((f) => raws[Math.round(f * (raws.length - 1))]);
-  const then = SHAPE_QS.map((f) => league.ovrScale.raw[OVR_ANCHORS.findIndex(([q]) => q === f)]);
+  const now = shapeOf(league, pop);
+  if (!now) return;
+  // (a league from before setAnchors keeps the shape it has been held to since its first summer: its display scale's quantiles)
+  const then = league.ovrShape?.length === SHAPE_QS.length ? league.ovrShape : SHAPE_QS.map((f) => league.ovrScale.raw[OVR_ANCHORS.findIndex(([q]) => q === f)]);
   // where each quantile goes: every stretch's width halfway back to its width at creation, out from the median
   const mid = SHAPE_QS.indexOf(0.5);
   const to = [...now];
@@ -454,23 +675,82 @@ function anchorOverallSpread(league: League, pop: Player[]) {
   }
 }
 
+/**
+ * Where the bands start to hold a year's change (a share of the way to the bound): up to here it
+ * stands as it came, past it less and less of it does, and none past the bound. A soft edge: the
+ * years near a band's end thin out rather than pile up on it.
+ */
+const BAND_KNEE = 0.5;
+const soften = (x: number, bound: number) => {
+  const knee = bound * BAND_KNEE;
+  return x <= knee ? x : knee + (bound - knee) * (1 - Math.exp(-(x - knee) / (bound - knee)));
+};
+
+/** Move a player's level (every attribute but his height, together) so his raw OVR is `to`. */
+function levelTo(p: Player, to: number) {
+  for (let pass = 0; pass < 2; pass++) {
+    const w = ovrWeights(p.ratings);
+    const weight = RATING_KEYS.reduce((t, k) => t + (k === 'hgt' ? 0 : w[k]), 0);
+    const step = (to - ovrRaw(p.ratings)) / weight;
+    if (Math.abs(step) < 0.02) return;
+    for (const k of RATING_KEYS) if (k !== 'hgt') p.ratings[k] = clamp(Math.round((p.ratings[k] + step) * 10) / 10, 1, 100);
+  }
+}
+
+/** A player's change in level since his raw OVR was `raw0`, in OVR on the display scale (unrounded), a raw point worth at most what it is in the middle of the scale (see heldYear). */
+const evenMove = (league: League, p: Player, raw0: number) => worth(league.ovrScale, raw0, ovrRaw(p.ratings) - raw0);
+
+/**
+ * What a summer leaves of a player's change in level (his development and the league's anchors
+ * together), as his OVR on the display scale, unrounded. Two things hold it:
+ * - The display scale's steep stretches don't multiply it: a raw point is worth at most what it is in
+ *   the middle of the scale (midSlope, about 2 OVR). A real league's 62 and 66 are 0.6 raw points
+ *   apart and its 52 and 62 are 2.6, so an ordinary summer moved a player at the end of a bench 6 to
+ *   10 OVR (a first-round pick from 68 to 54, a second-rounder up 7), and the anchors' half a raw point
+ *   a year took two or three OVR off the young players there and under one off a starter.
+ * - The year's band for his age (YEAR_BANDS), softly (BAND_KNEE): measured from his last preseason, so
+ *   what the season's check-ins added counts toward it, and what an injury took doesn't count against
+ *   his floor. A generational player's climb has no ceiling (legends.ts).
+ * Before both, over six leagues' five summers (dev-check): 256 of 1,577 years at 22 or under ran past
+ * -2..+8 (the worst -18), 334 of 2,877 at 23-26 past -3..+6, 159 of 2,715 at 27-31 past -4..+4, 112 of
+ * 1,153 at 32-35 past -5..+2 and 31 of 200 at 36 or more past -7..+1 (the worst -15); three of those
+ * 892 followed an injury.
+ */
+function heldYear(league: League, p: Player, raw0: number, was: number, age: number): number {
+  const d0 = dispExact(raw0, league.ovrScale);
+  const move = evenMove(league, p, raw0);
+  const band = yearBand(age);
+  // the season behind him: what the check-ins added (or an injury took) since his last preseason
+  const season = was - (p.ratingsHistory[p.ratingsHistory.length - 1]?.ovr ?? was);
+  const up = Math.max(1, band.up - season);
+  const down = Math.min(-1, band.down - Math.max(0, season));
+  return d0 + (move >= 0 ? (p.peak ? move : soften(move, up)) : -soften(-move, -down));
+}
+
 /** Offseason development for everyone (run at the start of a new season). */
 export function annualProgression(league: League, rng: Rng): { pid: number; delta: number }[] {
   const out: { pid: number; delta: number }[] = [];
   const before = new Map(Object.values(league.players).map((p) => [p.pid, p.ovr]));
+  const raw0 = new Map(Object.values(league.players).map((p) => [p.pid, ovrRaw(p.ratings)]));
   // (this summer's prospects are drafted or gone by now; next year's class arrives after this)
   const means = ratingMeans(league);
+  const priority = priorityMap(league);
   for (const p of Object.values(league.players)) {
     if (p.tid < 0 && p.tid !== FREE_AGENT) continue;
-    develop(p, league.season, devContext(league, p, league.season - 1, means), rng, 0.8);
+    develop(p, league.season, devContext(league, p, league.season - 1, means, priority), rng, 0.8);
   }
   anchorRatings(league);
   for (const p of Object.values(league.players)) {
     if (p.tid < 0 && p.tid !== FREE_AGENT) continue;
-    // an aging star's decline shows on his OVR, however far past the top of the scale his ratings ran
     const was = before.get(p.pid) ?? p.ovr;
-    const drop = starDrop(was, playerAge(p, league.season), rng);
-    if (drop > 0 && toDisplay(ovrRaw(p.ratings), league.ovrScale) > was - drop) p.ratings = shiftToOvr(p.ratings, Math.round(was - drop), league.ovrScale);
+    const age = playerAge(p, league.season);
+    // the year's change in level, held to what a summer may do (heldYear)
+    let to = heldYear(league, p, raw0.get(p.pid) ?? ovrRaw(p.ratings), was, age);
+    // an aging star's decline shows on his OVR, however far past the top of the scale his ratings ran
+    // (never past his age's band)
+    const drop = starDrop(was, age, rng);
+    if (drop > 0) to = Math.max(Math.min(to, was - drop), was + yearBand(age).down);
+    if (Math.abs(to - dispExact(ovrRaw(p.ratings), league.ovrScale)) > 0.05) levelTo(p, rawAt(to, league.ovrScale));
     // a generational player's climb past the scale, while he's young (legends.ts)
     peakSummer(league, p);
     refreshDerived(league, p);
@@ -478,11 +758,22 @@ export function annualProgression(league: League, rng: Rng): { pid: number; delt
     // were set for (in-season development and injuries since count too), or for a draftee without
     // one, from before this summer's development
     followTendencies(p, p.ratingsHistory[p.ratingsHistory.length - 1]?.ovr ?? before.get(p.pid) ?? p.ovr, rng);
-    lateVolume(p, playerAge(p, league.season));
+    lateVolume(p, age);
     const more = volumeRoom(league, p);
     threeVolume(p, league.season - 1, more.three);
     usageVolume(p, league.season - 1, more.use);
-    p.ratingsHistory.push({ season: league.season, ovr: p.ovr, pot: p.pot, r: { ...p.ratings }, ...(p.training !== 'balanced' ? { focus: p.training } : {}) });
+    // what the staff's priority did over the year (the check-ins and the summer), in OVR at his place on the scale
+    const at = ovrRaw(p.ratings);
+    const staff = p.devStaff ? Math.round(worth(league.ovrScale, at - p.devStaff, p.devStaff) * 10) / 10 : 0;
+    delete p.devStaff;
+    p.ratingsHistory.push({
+      season: league.season,
+      ovr: p.ovr,
+      pot: p.pot,
+      r: { ...p.ratings },
+      ...(p.training !== 'balanced' ? { focus: p.training } : {}),
+      ...(staff ? { staff } : {}),
+    });
     if (p.ratingsHistory.length > 25) p.ratingsHistory.shift();
     // older snapshots only chart OVR: full ratings on every one grew the save by a few hundred KB a season
     for (const h of p.ratingsHistory.slice(0, -2)) delete h.r;
@@ -494,12 +785,17 @@ export function annualProgression(league: League, rng: Rng): { pid: number; delt
 /** Small in-season development for young players (three checkpoints a season). */
 export function inSeasonProgression(league: League, rng: Rng): { pid: number; delta: number }[] {
   const out: { pid: number; delta: number }[] = [];
+  const priority = priorityMap(league);
   for (const p of Object.values(league.players)) {
     if (p.tid < 0) continue;
     const a = playerAge(p, league.season);
     if (a > 26) continue;
     const before = p.ovr;
-    develop(p, league.season, devContext(league, p, league.season, undefined), rng, 0.07);
+    const raw0 = ovrRaw(p.ratings);
+    develop(p, league.season, devContext(league, p, league.season, undefined, priority), rng, 0.07);
+    // (the scale's steep stretches don't multiply a check-in's step either: see heldYear)
+    const to = dispExact(raw0, league.ovrScale) + evenMove(league, p, raw0);
+    if (Math.abs(to - dispExact(ovrRaw(p.ratings), league.ovrScale)) > 0.05) levelTo(p, rawAt(to, league.ovrScale));
     refreshDerived(league, p);
     if (p.ovr !== before) out.push({ pid: p.pid, delta: p.ovr - before });
   }
