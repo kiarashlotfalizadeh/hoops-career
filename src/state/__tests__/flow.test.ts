@@ -38,7 +38,7 @@ const where = (l: League) => `${l.season} ${l.phase} d${l.day} fa${l.faDay} ${l.
 
 /** What Export writes, read back the way Import reads it. */
 async function roundTrip(l: League) {
-  const back = await importLeague(new File([JSON.stringify(l)], 'backup.json', { type: 'application/json' }));
+  const back = await importLeague(new File([JSON.stringify(l)], 'backup.json', { type: 'application/json' }), { existing: 'copy' });
   expect(back).toEqual(JSON.parse(JSON.stringify({ ...l, id: back.id, name: back.name })));
   return back;
 }

@@ -41,6 +41,16 @@ export function ResignPeriod() {
   // the ones signed before the screen opened: a deal made while it's up lands with a flash
   const signedBefore = useRef(new Set(resigned.map((p) => p.pid)));
   const options = useLeagueMemo(() => pendingTeamOptions(league, tid).sort((a, b) => b.ovr - a.ovr), [league, tid]);
+  // the expiring list in the order the screen opened with: a player re-signed since stays in his row
+  const opened = useRef<number[] | null>(null);
+  opened.current ??= expiring.map((p) => p.pid);
+  const rows = [
+    ...opened.current.flatMap((pid) => {
+      const p = league.players[pid];
+      return p && (asks.has(pid) || (p.tid === tid && !signedBefore.current.has(pid) && resigned.some((r) => r.pid === pid))) ? [p] : [];
+    }),
+    ...expiring.filter((p) => !opened.current!.includes(p.pid)),
+  ];
   // in the final season of their deals next season (a rookie whose option was just exercised among them)
   const extendable = useLeagueMemo(() => extendablePlayers(league), [league]);
   const [ext, setExt] = useState<number | null>(null);
@@ -173,7 +183,20 @@ export function ResignPeriod() {
           </div>
         ) : (
           <div className="card flush list">
-            {expiring.map((p) => {
+            {rows.map((p) => {
+              // one signed since the screen opened keeps his place, marked: the rows under him don't
+              // shift up under a finger on its way to the next Negotiate (the playtest's misdeal)
+              if (!asks.has(p.pid))
+                return (
+                  <div key={p.pid} className="fo-rs m-flash">
+                    <PlayerTop league={league} p={p} />
+                    <div className="fo-rs-act">
+                      <div className="grow small good">
+                        <CircleCheck size={14} /> Re-signed: {salaryText(league, salaryFor(p, next))}
+                      </div>
+                    </div>
+                  </div>
+                );
               const ask = asks.get(p.pid)!;
               return (
                 <div key={p.pid} className="fo-rs">

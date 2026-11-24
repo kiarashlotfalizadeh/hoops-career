@@ -28,6 +28,8 @@ import {
   teamAppeal,
   contractBurden,
   tradeValue,
+  controlFactor,
+  STAR_AGE_TRADE,
   userBuyout,
   valueScore,
   willExtend,
@@ -593,7 +595,9 @@ it('negotiation and extensions: the ask, the walk-away price, counters and patie
     expect(p.contract.option).toBeUndefined();
   }
 
-  // counts the extension in trade value: a fair one adds little, an overpay makes him a burden
+  // counts the extension in trade value: a fair one adds the seasons of him it secures (a prime-age
+  // player's expiring deal counts for less than four more years of him, see controlFactor) and
+  // nothing for the money, an overpay makes him a burden
   {
     const l = extLeague();
     l.phase = 'regular';
@@ -603,17 +607,21 @@ it('negotiation and extensions: the ask, the walk-away price, counters and patie
     const v0 = tradeValue(l, fair);
     expect(userExtend(l, fair.pid, agreed(l, fair, 4), 4).ok).toBe(true);
     expect(userExtend(l, over.pid, CAP_FOR(l, l.season + 1).maxContract(over.experience), 4).ok).toBe(true);
-    expect(Math.abs(tradeValue(l, fair) - v0)).toBeLessThan(Math.abs(v0) * 0.25 + 1);
+    const secured = controlFactor(27, 5, 'retool') / controlFactor(27, 1, 'retool');
+    expect(secured).toBeGreaterThan(1.3);
+    expect(Math.abs(tradeValue(l, fair) - v0 * secured)).toBeLessThan(Math.abs(v0) * 0.25 + 1);
     expect(tradeValue(l, over)).toBeLessThan(tradeValue(l, fair) - 3);
   }
 
   // values normal contracts as before, within about 2% (season by season now, so an extension's years
   // count); an overpay's burden at DUMP_PER_FIRST of the cap a first, not 0.1 a $1M (see contractBurden)
   {
-    // the old formula: this season's surplus times the seasons left (up to four)
+    // the old formula: this season's surplus times the seasons left (up to four), with the player's
+    // part as it is now (an old star's age discount given back in part, and the seasons of him a deal brings)
     const old = (l: League, p: Player, strategy: Strategy) => {
       let s = valueScore(l, p);
       const a = age(l, p);
+      if (a >= 30) s += (a - 29) * 1.1 * STAR_AGE_TRADE * Math.min(1, Math.max(0, (p.ovr - 84) / 6));
       if (strategy === 'rebuild') {
         if (a <= 24) s += 2;
         if (a >= 29) s -= 3 + (a - 29) * 0.8;
@@ -622,6 +630,7 @@ it('negotiation and extensions: the ask, the walk-away price, counters and patie
       if (s > 85) v *= 1 + (s - 85) * 0.05;
       v *= 1 - injuryShare(l, p) * (strategy === 'contend' ? 0.55 : strategy === 'retool' ? 0.3 : 0.1);
       const cs = contractSeason(l);
+      if (!p.contract.rookie) v *= controlFactor(a, contractExp(p.contract) - cs + 1, strategy);
       const yrs = Math.max(1, contractExp(p.contract) - cs + 1);
       const surplus = (marketSalary(l, p) - salaryFor(p, cs)) / 1000;
       const optionYear = p.contract.option === 'team' && contractExp(p.contract) > l.season && yrs <= 4;

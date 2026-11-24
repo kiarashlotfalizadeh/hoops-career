@@ -18,14 +18,14 @@ import { marqueeFA, offerBlockedReason, signingClosedReason, userOffer } from '.
 import { acceptProposal, declineProposal, offerSubject, openProposals, proposalError, proposalThird } from './proposals';
 import { autoDraftUserPick, continueDraft } from './season';
 import { nextPick } from './draft';
-import { userGameOnDay } from './games';
+import { giveShare, noMinutes, userGameOnDay } from './games';
 import { money, plural } from '../format';
 import { planByUser } from './gamePlans';
 import { ultimatumVerdict } from './jobSecurity';
 import { resolveCall, staffCalls, type CallAction, type CallChoice, type CallKind, type CallMeasure } from './calls';
 import { answerRequest, openRequests, roleRead } from './pulse';
 
-export type AgendaKind = 'fired' | 'cuts' | 'signings' | 'draftPick' | 'tradeOffer' | 'jobOffers' | 'ultimatum' | 'deploy' | 'tradeRequest' | 'guide' | CallKind;
+export type AgendaKind = 'fired' | 'cuts' | 'signings' | 'minutes' | 'draftPick' | 'tradeOffer' | 'jobOffers' | 'ultimatum' | 'deploy' | 'tradeRequest' | 'guide' | CallKind;
 
 /** The agenda's kinds that are the staff's calls (see calls.ts): Needs you puts them first, and the digest and the Play options show them. */
 export const CALL_KINDS: ReadonlySet<AgendaKind> = new Set<CallKind>(['injury', 'odds', 'floor', 'deadline', 'series']);
@@ -48,6 +48,8 @@ export type AgendaAction =
   /** `pids`: several at once (the staff's picks for the opening-night cuts), `pid` the first of them. */
   | { kind: 'release'; pid: number; pids?: number[] }
   | { kind: 'sign'; pid: number }
+  /** A manual rotation's regulars at 0 minutes: give them the staff's share (`keep`: leave them out, on purpose). */
+  | { kind: 'minutes'; pids: number[]; keep?: boolean }
   | { kind: 'autoPick' }
   | { kind: 'proposal'; id: number; accept: boolean }
   | { kind: 'guide'; step: GuideStep }
@@ -364,6 +366,24 @@ export function agenda(league: League): AgendaItem[] {
       });
   }
 
+  // a manual rotation that leaves a healthy regular at 0 minutes: said before the next game, not found in a box score
+  if (league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs') {
+    const zero = noMinutes(league);
+    if (zero.length)
+      items.push({
+        id: `minutes:${zero.map((p) => p.pid).join(',')}`,
+        kind: 'minutes',
+        required: true,
+        title: zero.length === 1 ? `${playerName(zero[0])} has no minutes` : `${plural(zero.length, 'regular')} with no minutes`,
+        line: `Your rotation gives ${zero.map((p) => `${playerName(p)} (${p.ovr})`).join(', ')} 0 minutes. Healthy and among your eight best.`,
+        tone: 'bad',
+        to: '/team/rotation',
+        suggestion: { label: "Give the staff's share", action: { kind: 'minutes', pids: zero.map((p) => p.pid) } },
+        choices: [{ label: zero.length === 1 ? 'Keep him out' : 'Keep them out', action: { kind: 'minutes', pids: zero.map((p) => p.pid), keep: true } }],
+        pids: zero.map((p) => p.pid),
+      });
+  }
+
   // the draft: his pick on the clock
   if (league.phase === 'draft') {
     const dp = nextPick(league);
@@ -514,6 +534,21 @@ export function resolveAgenda(league: League, a: AgendaAction): { ok: boolean; t
       if (league.fired) return { ok: false, text: FIRED_REASON };
       for (const p of ps) releasePlayer(league, p);
       return { ok: true, text: `${ps.map((p) => playerName(p)).join(' and ')} released.` };
+    }
+    case 'minutes': {
+      const rot = league.teams[league.userTid].rotation;
+      const ps = a.pids.map((pid) => league.players[pid]).filter((p) => p && p.tid === league.userTid);
+      if (!ps.length) return { ok: false, text: 'They are no longer on your roster.' };
+      if (a.keep) {
+        rot.benched = [...new Set([...(rot.benched ?? []), ...ps.map((p) => p.pid)])];
+        return { ok: true, text: `${ps.map((p) => playerName(p)).join(' and ')} stay${ps.length === 1 ? 's' : ''} out of the rotation.` };
+      }
+      giveShare(
+        league,
+        league.userTid,
+        ps.map((p) => p.pid),
+      );
+      return { ok: true, text: ps.map((p) => `${playerName(p)}: ${rot.minutes[p.pid]} minutes`).join(' · ') + '.' };
     }
     case 'sign': {
       const p = league.players[a.pid];

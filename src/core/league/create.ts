@@ -297,12 +297,33 @@ function assignJerseys(league: League, rng: Rng) {
 }
 
 /**
- * A fictional roster's heights by spot, each with some noise: the real league's mix of guards, wings
- * and bigs, in both halves of the roster. Drawn independently, a fifth of the teams had no 6'10"
- * player in their top eight (no real team is without one) and some had seven or eight players 6'4"
- * or shorter.
+ * A fictional roster by position: every team carries two point guards, three shooting guards, two
+ * wings each at small and power forward and two centers, and three more spots drawn so the league's
+ * mix is the real rosters' (about 17% PG, 24% SG, 18% SF, 21% PF, 20% C). Its starting five is one
+ * of each, so no team opens with three centers or without a ball handler. Each player is drawn at
+ * his position's real height (mean, SD in inches) until his ratings play that position (inferPos).
+ * Before (heights by roster spot, positions wherever the ratings fell), a league's top 400 had 54-65
+ * point guards against the real league's 71 and 107-118 shooting guards against 95, teams opened
+ * with two or three centers, and some had no point guard at all.
  */
-const SPOT_HEIGHTS = [74, 75, 76, 76.5, 77, 77.5, 78.5, 79, 80, 80.5, 81.5, 82, 83, 84];
+const POS_HEIGHT: Record<Pos, [number, number]> = { PG: [74.8, 1.5], SG: [77, 1.2], SF: [79, 1.2], PF: [80.8, 1.2], C: [83, 1.3] };
+const POS_CORE: Pos[] = ['PG', 'PG', 'SG', 'SG', 'SG', 'SF', 'SF', 'PF', 'PF', 'C', 'C'];
+const POS_EXTRA: [Pos, number][] = [
+  ['PG', 0.37],
+  ['SG', 0.4],
+  ['SF', 0.55],
+  ['PF', 0.87],
+  ['C', 0.8],
+];
+const STARTING_FIVE: Pos[] = ['PG', 'SG', 'SF', 'PF', 'C'];
+
+/** A fictional roster's positions in talent order: a starting five of one of each (in any order), then the rest shuffled. */
+function rosterPositions(rng: Rng): Pos[] {
+  const rest = [...POS_CORE];
+  for (let i = 0; i < 3; i++) rest.push(POS_EXTRA[rng.weighted(POS_EXTRA.map((x) => x[1]))][0]);
+  for (const pos of STARTING_FIVE) rest.splice(rest.indexOf(pos), 1);
+  return [...rng.shuffle([...STARTING_FIVE]), ...rng.shuffle(rest)];
+}
 
 export function createLeague(opts: CreateOpts): League {
   const rngSeed = opts.rngSeed ?? hashString(opts.name + Date.now()) >>> 0;
@@ -398,10 +419,8 @@ export function createLeague(opts: CreateOpts): League {
       // contenders and rebuilding teams: the whole roster is a little better or worse. Teams' top-8
       // OVR then spreads about 2 points, near real rosters' 1.75; a wider start (2.7) only drained
       // away over the first few offseasons
-      const quality = rng.normal(0, 0.2);
-      // each pair of neighbouring heights is split between the better and the weaker half of the roster
-      const pairs = Array.from({ length: SPOT_HEIGHTS.length / 2 }, (_, j) => rng.shuffle([SPOT_HEIGHTS[2 * j], SPOT_HEIGHTS[2 * j + 1]]));
-      const heights = [...rng.shuffle(pairs.map((x) => x[0])), ...rng.shuffle(pairs.map((x) => x[1]))];
+      const quality = rng.normal(0, 0.1);
+      const positions = rosterPositions(rng);
       for (let i = 0; i < 14; i++) {
         const talent = quality + rng.normal(i < 2 ? 1.6 : i < 5 ? 0.8 : i < 9 ? 0 : -0.8, 0.6);
         // the last three spots go to young players (some of them on rookie deals); with the rest, about
@@ -409,12 +428,16 @@ export function createLeague(opts: CreateOpts): League {
         // the league's attribute means pulled everyone back as the league grew older: players peaked at
         // 24-25 and lost OVR from 27
         const age = i >= 11 ? Math.round(clamp(rng.normal(21.5, 1.2), 19, 23)) : Math.round(clamp(rng.normal(28, 4), 20, 38));
-        // the last spot goes to a center if the roster has none yet
-        const big = i === 13 && !roster.some((p) => p.pos === 'C');
-        const heightIn = big ? rng.int(83, 85) : clamp(Math.round(heights[i] + rng.normal(0, 1.2)), 70, 88);
-        let p = generatePlayer(rng, { pid: league.nextPid, season, tid, age, talent, scale: DEFAULT_SCALE, heightIn, taken });
-        for (let tries = 0; big && p.pos !== 'C' && tries < 10; tries++)
-          p = generatePlayer(rng, { pid: league.nextPid, season, tid, age, talent, scale: DEFAULT_SCALE, heightIn: rng.int(84, 86), taken });
+        // drawn at his position's height until his game is that position's (a few tries; the last one stands)
+        const want = positions[i];
+        const [hMean, hSd] = POS_HEIGHT[want];
+        let p!: Player;
+        for (let tries = 0; tries < 16; tries++) {
+          if (p) taken.delete(playerName(p));
+          const heightIn = clamp(Math.round(rng.normal(hMean, hSd)), 70, 88);
+          p = generatePlayer(rng, { pid: league.nextPid, season, tid, age, talent, scale: DEFAULT_SCALE, heightIn, taken });
+          if (p.pos === want) break;
+        }
         league.nextPid++;
         p.experience = Math.max(0, age - 20);
         p.draft = { year: season - 1 - p.experience, round: rng.chance(0.7) ? 1 : 2, pick: rng.int(1, 30), tid: null };

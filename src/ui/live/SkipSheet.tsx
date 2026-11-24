@@ -6,23 +6,30 @@ import { FastForward } from 'lucide-react';
 import type { SkipChoice, SkipTo } from './skip';
 
 export function SkipSheet({ choices, onPick, manualSubs }: { choices: SkipChoice[]; onPick: (to: SkipTo) => void; manualSubs?: boolean }) {
+  // the final apart from the stops, under the note: a skip to a stop is never a slip away from the whole game simmed
+  const stops = choices.filter((o) => o.id !== 'end');
+  const end = choices.find((o) => o.id === 'end');
+  const row = (o: SkipChoice) => (
+    <button type="button" key={o.id} className="lv-sk-opt" onClick={() => onPick(o.id)}>
+      <span className="lv-sk-tx">
+        <span className="lv-sk-l">{o.label}</span>
+        <span className="lv-sk-s">{o.sub}</span>
+      </span>
+      <FastForward size={18} className="lv-sk-c" aria-hidden="true" />
+    </button>
+  );
   return (
     <div className="lv-sk">
-      <div className="lv-sk-list card flush list">
-        {choices.map((o) => (
-          <button type="button" key={o.id} className="lv-sk-opt" onClick={() => onPick(o.id)}>
-            <span className="lv-sk-tx">
-              <span className="lv-sk-l">{o.label}</span>
-              <span className="lv-sk-s">{o.sub}</span>
-            </span>
-            <FastForward size={18} className="lv-sk-c" aria-hidden="true" />
-          </button>
-        ))}
-      </div>
+      {stops.length > 0 && <div className="lv-sk-list card flush list">{stops.map(row)}</div>}
       <p className="lv-sk-note">
-        An injury to one of your starters stops the skip. Sim to final plays on.
+        An injury to one of your starters stops the skip.
         {manualSubs && ' The staff makes your subs until it stops.'}
       </p>
+      {end && (
+        <div className="lv-sk-list lv-sk-end card flush list" style={{ marginTop: 18 }}>
+          {row(end)}
+        </div>
+      )}
     </div>
   );
 }

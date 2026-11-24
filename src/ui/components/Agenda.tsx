@@ -15,8 +15,19 @@ import { leaveToStaff, useCallWorth } from '../today/staffPlan';
 import { More } from './ui';
 import './agenda.css';
 
-/** The choice waiting on its second tap, if one is (the Continue bar won't run past it: see App.tsx). */
-export const pendingConfirm: { label: string | null } = { label: null };
+/**
+ * The choice waiting on its second tap, if one is. Starting a sim lets it lapse (`cancel`): the
+ * Continue bar never runs a choice half made, and never refuses to run for one either (see App.tsx).
+ */
+export const pendingConfirm: { label: string | null; cancel?: () => void } = { label: null };
+
+/** How long a choice waits on its second tap. */
+const ARM_MS = 8000;
+/**
+ * The choices armed, by row, until when: a row that unmounts and comes back (another tab and back,
+ * the sheet closed and opened) still waits on its second tap.
+ */
+const armedRows = new Map<string, { label: string; until: number }>();
 
 /**
  * The checklist steps already seen done, by item: a step ticked since the list last showed (on its
@@ -58,12 +69,29 @@ export function AgendaRow({ item }: { item: AgendaItem }) {
   const measuring = useCallWorth(useLeague(), item);
   const nav = useNavigate();
   // a choice that can't be undone takes a second tap, its cost said in between
-  const [armed, setArmed] = useState<string | null>(null);
+  const [armed, setArmedState] = useState<string | null>(() => {
+    const a = armedRows.get(item.id);
+    return a && a.until > Date.now() ? a.label : null;
+  });
+  const setArmed = (label: string | null) => {
+    if (label) {
+      armedRows.set(item.id, { label, until: Date.now() + ARM_MS });
+      haptic();
+    } else armedRows.delete(item.id);
+    setArmedState(label);
+  };
   useEffect(() => {
     if (!armed) return;
-    const t = setTimeout(() => setArmed(null), 4000);
+    const left = (armedRows.get(item.id)?.until ?? Date.now() + ARM_MS) - Date.now();
+    const t = setTimeout(
+      () => {
+        armedRows.delete(item.id);
+        setArmedState(null);
+      },
+      Math.max(0, left),
+    );
     return () => clearTimeout(t);
-  }, [armed]);
+  }, [armed, item.id]);
   // a trade offer shown as a row has been seen: its date stands as it reads (see markOffersSeen)
   useEffect(() => {
     const l = useStore.getState().league;
@@ -74,10 +102,16 @@ export function AgendaRow({ item }: { item: AgendaItem }) {
   useEffect(() => {
     if (!armed) return;
     pendingConfirm.label = armed;
+    const cancel = () => {
+      armedRows.delete(item.id);
+      setArmedState(null);
+    };
+    pendingConfirm.cancel = cancel;
     return () => {
       if (pendingConfirm.label === armed) pendingConfirm.label = null;
+      if (pendingConfirm.cancel === cancel) pendingConfirm.cancel = undefined;
     };
-  }, [armed]);
+  }, [armed, item.id]);
   const head = (
     <>
       <div className="grow">

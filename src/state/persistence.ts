@@ -111,7 +111,11 @@ const tracked = (league: League, rev: number | undefined): Synced => ({ rev, gam
 export function adoptSync(from: League, to: League) {
   const s = synced.get(from);
   if (s) synced.set(to, s);
+  adoptedBy.set(from, to);
 }
+
+/** Which league object took over from which (adoptSync): a write of the old one that lands after hands its revision on. */
+const adoptedBy = new WeakMap<League, League>();
 
 /** Key range of one league's results. */
 const gamesOf = (id: string) => IDBKeyRange.bound([id], [id, []]);
@@ -257,6 +261,10 @@ async function write(d: IDBPDatabase, league: League): Promise<boolean> {
   }
   await Promise.all([...ops, tx.done]);
   synced.set(league, { rev, games: next });
+  // the copies that took over from this object while it was being written (a sim's checkpoint
+  // replaced it mid-save) hold the revision from before: they get this one, or their next save
+  // would read as another window's conflict (saves run one at a time, so none of them wrote since)
+  for (let t = adoptedBy.get(league); t; t = adoptedBy.get(t)) synced.set(t, { rev, games: new Map(next) });
   broadcast()?.postMessage(league.id);
   return cur?.snap?.season !== league.season;
 }
@@ -357,6 +365,16 @@ export async function loadLeague(id: string): Promise<League | undefined> {
   const league = migrate({ ...raw, games });
   synced.set(league, tracked(league, meta ? (meta.rev ?? 0) : undefined));
   return league;
+}
+
+/**
+ * Take over the stored league of the same id with `league` (a backup restored over it): the next save
+ * writes every result of `league` and drops the stored ones it hasn't, past the revision check.
+ */
+export async function adoptStored(league: League): Promise<void> {
+  const { meta, games } = await readAll(league.id);
+  // (each stored result marked as nothing this league has: all of them rewritten or dropped)
+  synced.set(league, { rev: meta ? (meta.rev ?? 0) : undefined, games: new Map(games.map((g) => [g.gid, -1])) });
 }
 
 /** The stored league as it is, unchecked: lets the player keep a save this version can't open. */

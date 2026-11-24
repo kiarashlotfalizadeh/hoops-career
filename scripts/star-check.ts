@@ -15,7 +15,8 @@
 // share of the titles, the threes leader and 10-three nights, overtime, foul-outs): see SHAPE_FAILS
 // for which of those fail it and which print as WATCH lines.
 // Usage: npx tsx scripts/star-check.ts [seasons] [rngSeed[:TEAM],...]   (env QUIET=1: leaders only,
-//   TEAM=<abbrev>: the user's team where a league names none, Orlando by default)
+//   TEAM=<abbrev>: the user's team where a league names none, Orlando by default, FICTIONAL=1: a
+//   generated league in place of the real one)
 import { readFileSync } from 'node:fs';
 import { fork } from 'node:child_process';
 import { availableParallelism } from 'node:os';
@@ -396,7 +397,8 @@ function seasonGames(league: League, season: number) {
 /** One league, start to finish: prints its seasons and returns what the thresholds look at. */
 function playLeague(spec: string): SeasonReport[] {
   const [rngSeed, team = process.env.TEAM] = [Number(spec.split(':')[0]), spec.split(':')[1]];
-  const seed: SeedData = JSON.parse(readFileSync('src/data/seed.json', 'utf8'));
+  // FICTIONAL=1: the store's default league, generated (no seed), on the same thresholds
+  const seed: SeedData | null = process.env.FICTIONAL ? null : JSON.parse(readFileSync('src/data/seed.json', 'utf8'));
   const t0 = performance.now();
   const userTid = team ? FRANCHISES.findIndex((f) => f.abbrev === team.toUpperCase()) : 19;
   if (userTid < 0) throw new Error(`${team} is no team in the seed`);

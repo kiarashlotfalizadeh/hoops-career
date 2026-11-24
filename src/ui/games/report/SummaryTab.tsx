@@ -92,6 +92,7 @@ function Summary({ res, league, report, highlights }: { res: GameResult; league:
           <SumFig k={staffOnly ? "Staff's moves" : 'Your moves'} v={res.movesWorth.pts} help="The night played back with your in-game moves and without them." />
         )}
       </dl>
+      {res.xShots && <MarginSum res={res} side={side} />}
 
       {d.hurt && (
         <p className="gd-hurt small">
@@ -300,6 +301,43 @@ function Summary({ res, league, report, highlights }: { res: GameResult; league:
 }
 
 /** One of the night's three figures: its name, its points with their sign, and what it counts a tap away. */
+/** One game's net shooting luck, as spread as it runs night to night (points, one standard deviation). */
+const LUCK_SD = 7.5;
+
+/** "about a 1-in-20 shooting night": how rare a night's luck was, from two standard deviations on (else nothing). */
+function luckRarity(luck: number): string | null {
+  const z = Math.abs(luck) / LUCK_SD;
+  if (z < 2) return null;
+  // two-sided normal tail (Abramowitz-Stegun's erfc)
+  const t = 1 / (1 + 0.3275911 * (z / Math.SQRT2));
+  const erfc = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429)))) * Math.exp(-(z * z) / 2);
+  const n = Math.round(1 / erfc / 5) * 5;
+  return `about a 1-in-${n.toLocaleString('en-US')} shooting night`;
+}
+
+/**
+ * How the final margin adds up, every point of it: what both sides' looks were worth, the shooting
+ * luck (shots falling above or below those looks) and the free throws. Tactics run through all three,
+ * so they stand apart above; this line is the arithmetic the luck figure is part of.
+ */
+function MarginSum({ res, side }: { res: GameResult; side: 0 | 1 }) {
+  const other = (1 - side) as 0 | 1;
+  const [me, them] = side === 0 ? [res.home, res.away] : [res.away, res.home];
+  const x = res.xShots!;
+  const looks = x[side].pts - x[other].pts;
+  const luck = luckPts(res, side) - luckPts(res, other);
+  const ft = me.t.ftm - them.t.ftm;
+  const margin = me.pts - them.pts;
+  const rare = luckRarity(luck);
+  const f = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(1).replace(/\.0$/, '')}`;
+  return (
+    <p className="gv-recon small dim2">
+      <b>How the margin adds up:</b> looks {f(looks)} · shooting luck {f(luck)} · free throws {f(ft)} = <b className="num">{f(margin)}</b>
+      {rare && <> · {rare}</>}
+    </p>
+  );
+}
+
 function SumFig({ k, v, help }: { k: string; v: number; help: string }) {
   return (
     <div className="gv-sum-c">

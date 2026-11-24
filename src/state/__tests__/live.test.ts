@@ -643,7 +643,8 @@ describe('live game', () => {
       fresh();
     }
 
-    // closed between saves: picked up from the last one, saying how many possessions it went back; a clean pick-up says nothing of the kind
+    // closed between saves: picked up exactly where this device had it (every move since is in the save);
+    // with a move the save never got, from the last save, saying how many possessions it went back
     {
       const kept = new Map<string, string>();
       vi.stubGlobal('localStorage', { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v) });
@@ -655,10 +656,28 @@ describe('live game', () => {
       await useStore.getState().flush();
       const at = lg.steps;
       for (let i = 0; i < 9; i++) lg.step();
+      const where = [lg.sim.q, lg.sim.clock, lg.sim.T[0].score, lg.sim.T[1].score];
       const back = (await loadLeague(l.id))!;
       useStore.getState().setLeague(back);
       const again = prepareLive(back)!;
-      expect([again.resumed, again.steps, again.sim.q, again.rewound]).toEqual(['journal', at, 1, 9]);
+      expect([again.resumed, again.steps, again.rewound]).toEqual(['journal', at + 9, undefined]);
+      expect([again.sim.q, again.sim.clock, again.sim.T[0].score, again.sim.T[1].score]).toEqual(where);
+      // a move made after the last save (never saved), then closed: from the save, the rewind said
+      {
+        const l2 = testLeague('rewind2');
+        toGameDay(l2);
+        const lg2 = goLive(l2);
+        lg2.simTo('quarter');
+        await useStore.getState().flush();
+        const at2 = lg2.steps;
+        for (let i = 0; i < 4; i++) lg2.step();
+        lg2.setTactics(lg2.sim.baseTactics(lg2.userSide));
+        for (let i = 0; i < 5; i++) lg2.step();
+        const back2 = (await loadLeague(l2.id))!;
+        useStore.getState().setLeague(back2);
+        const again2 = prepareLive(back2)!;
+        expect([again2.resumed, again2.steps, again2.sim.q, again2.rewound]).toEqual(['journal', at2, 1, 9]);
+      }
       // opened again with nothing played since: where it left off, nothing lost
       const third = (await loadLeague(l.id))!;
       useStore.getState().setLeague(third);

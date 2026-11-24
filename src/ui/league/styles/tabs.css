@@ -64,8 +64,15 @@
   gap: 6px;
   align-self: center;
 }
-.lg-ph-links .btn.on {
+.lg-ph-links .btn {
+  /* (no colour fade: mid-fade the lit pill's ink and fill were both dark at night) */
+  transition: transform 0.08s ease;
+}
+.lg-ph-links .btn.on,
+.lg-ph-links .btn.on:active,
+.lg-ph-links .btn[aria-current='page'] {
   background: var(--on);
+  border-color: var(--on);
   color: var(--on-ink);
   box-shadow: none;
 }

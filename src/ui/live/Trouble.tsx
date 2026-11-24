@@ -24,7 +24,7 @@ export function Trouble({
   tactics: Tactics;
   names: (pid: number) => string;
   /** The rested bench player the staff would send in for one of yours. */
-  subFor: (pid: number) => number | undefined;
+  subFor: (pid: number, exclude?: ReadonlySet<number>) => number | undefined;
   substitute: (out: number, inn: number) => boolean;
   /** Read going into the next period, at a break. */
   ahead?: boolean;
@@ -43,11 +43,19 @@ export function Trouble({
     .sort((a, b) => a.p.energy - b.p.energy)
     .slice(0, 4);
   if (!trouble.length) return null;
+  // one bench player a row: two in trouble never both offer the same man in
+  const taken = new Set<number>();
+  const subs = new Map<number, number | undefined>();
+  for (const { p } of trouble) {
+    const sub = subFor(p.pid, taken);
+    subs.set(p.pid, sub);
+    if (sub !== undefined) taken.add(sub);
+  }
   return (
     <Section title="Tired or in foul trouble">
       <div className="card flush list">
         {trouble.map(({ p, tired, fouls }) => {
-          const sub = subFor(p.pid);
+          const sub = subs.get(p.pid);
           return (
             <div key={p.pid} className="lv-bk-row">
               <div className="lv-bk-who">

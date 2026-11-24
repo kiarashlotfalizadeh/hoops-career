@@ -565,6 +565,10 @@ export interface Rotation {
   caps: Record<number, number>;
   /** User lock: if false, auto-coach maintains rotation every day. */
   manual: boolean;
+  /** A manual rotation's players at 0 minutes because they were out (hurt): they get a share back when they're fit (see ensureRotation). */
+  held?: number[];
+  /** A manual rotation's players the coach chose to keep at 0 minutes: nothing asks him about them again. */
+  benched?: number[];
 }
 
 export interface Tactics {

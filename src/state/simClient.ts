@@ -227,6 +227,21 @@ export function stopSimRun() {
   void remote?.stop();
 }
 
+/**
+ * A sim that didn't answer a stop: the worker is ended (whatever it was stuck on goes with it) and
+ * the calls in flight fail; the next run starts a fresh one, sending the results whole.
+ */
+export function abandonSimRun() {
+  localStop = true;
+  const w = worker;
+  if (!w) return;
+  w.terminate();
+  worker = null;
+  remote = null;
+  held = null;
+  for (const fail of [...failing]) fail(new Error('The sim was stopped.'));
+}
+
 /** Tests: run the sim in this thread whatever the environment. */
 export function simLocally(on = true) {
   local = on;

@@ -428,7 +428,16 @@ function EditPlayer({
       </Section>
       <Section title="Minutes">
         <div className="tm-ed-group">
-          <Slider label="Target minutes" value={m} min={0} max={MAX_MIN} disabled={busy} onChange={(x) => update((r) => void (r.minutes[p.pid] = x))} format={(x) => `${x} min`} />
+          <Slider
+            label="Target minutes"
+            value={m}
+            min={0}
+            max={MAX_MIN}
+            disabled={busy}
+            steppers
+            onChange={(x) => update((r) => void (r.minutes[p.pid] = x))}
+            format={(x) => `${x} min`}
+          />
           <Slider
             label="Hard minute cap"
             value={cap}

@@ -88,10 +88,11 @@ function TacticsScreen() {
         <TacticsHero manage={tab === 'system'} />
         {tab === 'system' && (
           <>
+            {/* the first-hour guide up top, under the playbook it asks about (below the board it sat under the fold) */}
+            <GuideStrip step="playbook" keep="Keep this playbook" />
             <TacticTab players={players} side={side} setSide={setSide}>
               <CoreLevers t={t} />
-              {/* the first-hour guide and the staff's advice (one home for both) */}
-              <GuideStrip step="playbook" keep="Keep this playbook" />
+              {/* the staff's advice */}
               <AssistantCards league={league} areas={['tactics']} max={2} />
               <StrengthsCard report={report} was={base} onAnalysis={() => nav(tacticsPath('analysis'), { replace: true })} />
             </TacticTab>

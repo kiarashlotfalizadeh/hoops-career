@@ -8,9 +8,12 @@ import { useStore } from './state/store';
 import { noteStorageKept } from './state/backup';
 import { watchInstall } from './ui/components/InstallRow';
 import { initTheme } from './ui/theme';
+import { startMotionSweeper } from './ui/motion';
 
 // the look (Hardwood or Night Court) is on the page before its first paint
 initTheme();
+// no section is left dim by an arrival animation the browser held back
+startMotionSweeper();
 
 // QA scripts drive the store directly in dev builds (save, inspect the league).
 if (import.meta.env.DEV || import.meta.env.VITE_QA === '1') (window as unknown as { __hc: unknown }).__hc = { store: useStore };

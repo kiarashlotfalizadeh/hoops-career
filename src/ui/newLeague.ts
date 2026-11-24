@@ -4,6 +4,9 @@
 import type { SeedData } from '../core/league/create';
 import type { League } from '../core/types';
 import { CAP } from '../core/constants';
+import { payroll } from '../core/league/helpers';
+import { capSpace } from '../core/league/contracts';
+import { money } from '../core/format';
 import { BBREF_TO_TID } from '../core/teams';
 import { buildOvrScale, ovrRaw, toDisplay } from '../core/ratings';
 import { leagueOutlook, ownerPersonality, planOwnerGoals, type OwnerPersonality } from '../core/league/ownerGoals';
@@ -96,6 +99,12 @@ export interface TeamPreview {
   who: OwnerPersonality;
   rank: number;
   top: { name: string; ovr: number }[];
+  /** This season's payroll and what's left under the cap (negative: over it), in $K. */
+  payroll: number;
+  space: number;
+  /** First-round picks it owns (its own and others'), and how many of its own it has traded away. */
+  firsts: number;
+  firstsOut: number;
 }
 
 /**
@@ -121,9 +130,19 @@ export function teamPreviews(league: League): Record<number, TeamPreview> {
       who: ownerPersonality(league, t.tid),
       rank: order.indexOf(t.tid) + 1,
       top: (by[t.tid] ?? []).slice(0, 3),
+      payroll: payroll(league, t.tid),
+      space: capSpace(league, t.tid),
+      firsts: league.draftPicks.filter((d) => d.round === 1 && d.tid === t.tid).length,
+      firstsOut: league.draftPicks.filter((d) => d.round === 1 && d.originalTid === t.tid && d.tid !== t.tid).length,
     };
   }
   return out;
+}
+
+/** The money and the picks in a line: "Payroll $171.2M · $6.2M under the cap · 7 firsts (1 traded)". */
+export function booksLine(p: Pick<TeamPreview, 'payroll' | 'space' | 'firsts' | 'firstsOut'>): string {
+  const room = p.space >= 0 ? `${money(p.space)} under the cap` : `${money(-p.space)} over the cap`;
+  return `Payroll ${money(p.payroll)} · ${room} · ${p.firsts} first${p.firsts === 1 ? '' : 's'}${p.firstsOut ? ` (${p.firstsOut} of its own traded)` : ''}`;
 }
 
 const ASK = ['rebuild', 'play-in', 'playoffs', 'win a round', 'conf. finals', 'Finals', 'title'];

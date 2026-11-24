@@ -10,6 +10,8 @@ import { PosterSlab, shortName, teamAbbrev } from '../shared';
 import { qualifier, type StatRow } from './rows';
 import { Foot } from '../Views';
 import { Term } from '../../components/Glossary';
+import { ineligibleStars } from '../../../core/league/awards';
+import { useLeagueMemo } from '../../../state/store';
 
 interface Cat {
   key: string;
@@ -141,6 +143,14 @@ function LeadSlab({ league, cat, top, all, playoffs }: { league: League; cat: Ca
 
 function LeaderBlock({ league, cat, top, all }: { league: League; cat: Cat; top: StatRow[]; all: string }) {
   const [first, ...rest] = top;
+  // the leaders the 65-game rule keeps off the awards ballot this season, badged (why a 30-point scorer isn't on the MVP ladder)
+  const out = useLeagueMemo(() => new Set(ineligibleStars(league, league.season, 40).map((x) => x.c.p.pid)), [league]);
+  const badge = (pid: number) =>
+    out.has(pid) ? (
+      <span className="tag" title="Under the 65 games the MVP, DPOY and All-League need">
+        &lt;65 GP
+      </span>
+    ) : null;
   return (
     <section className="lg-lead">
       <div className="lg-lead-h">
@@ -161,7 +171,7 @@ function LeaderBlock({ league, cat, top, all }: { league: League; cat: Cat; top:
               </span>
               <span className="lg-lead-meta">
                 {first.tid !== null && <TeamLogo tid={first.tid} size={16} decorative />}
-                {teamAbbrev(league, first.tid)} · {first.p.pos}
+                {teamAbbrev(league, first.tid)} · {first.p.pos} {badge(first.p.pid)}
               </span>
             </span>
             <span className="lg-lead-val">
@@ -173,7 +183,9 @@ function LeaderBlock({ league, cat, top, all }: { league: League; cat: Cat; top:
             <Link key={r.p.pid} to={`/player/${r.p.pid}`} className={`lg-lead-row ${r.tid === league.userTid ? 'me' : ''}`}>
               <span className="r">{i + 2}</span>
               {r.tid !== null ? <TeamLogo tid={r.tid} size={20} /> : <span />}
-              <span className="ellipsis nm">{shortName(r.p)}</span>
+              <span className="ellipsis nm">
+                {shortName(r.p)} {badge(r.p.pid)}
+              </span>
               <span className="v">{cat.fmt(cat.get(r))}</span>
             </Link>
           ))}

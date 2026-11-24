@@ -11,6 +11,17 @@ import { type SP, type ST, mix } from './state';
 import { FEEL } from './feel';
 import type { GameSim } from './game';
 
+/**
+ * In-game injury risk for heavy loads. Risk a check runs with the minutes on the floor, so the stars'
+ * 34-36 minutes made them the league's most often hurt: in two real-league seasons 4.75 of the ten
+ * best reached the 65 games awards ask for (the NBA's six to seven), while training staffs manage
+ * their stars' loads as closely as anyone's. A player planned for more than INJURY_LOAD minutes
+ * carries INJURY_LOAD's risk a game, and a tired one (energy under 0.6) INJURY_TIRED times the risk
+ * (1.6 before).
+ */
+const INJURY_LOAD = 26;
+const INJURY_TIRED = 1.25;
+
 export const rotationMethods = {
   planSlot(this: GameSim): number {
     const reg = Math.min(this.elapsed, 2880 - 0.001);
@@ -340,9 +351,11 @@ export const rotationMethods = {
       for (const p of t.on) {
         // one left on the floor hurt (nobody to replace him) can't get hurt again
         if (p.out === 2) continue;
-        const fatigue = p.energy < 0.6 ? 1.6 : 1;
+        const fatigue = p.energy < 0.6 ? INJURY_TIRED : 1;
+        // a minute load past INJURY_LOAD carries no more risk a game than INJURY_LOAD's
+        const load = p.planMin > INJURY_LOAD ? INJURY_LOAD / p.planMin : 1;
         // (risk is exactly 1 for everyone not playing through an injury: the draw is unchanged for them)
-        if (this.rng.chance(K.injuryRate * t.injMult * fatigue * p.risk)) {
+        if (this.rng.chance(K.injuryRate * t.injMult * fatigue * load * p.risk)) {
           p.out = 2;
           this.injuries.push({ pid: p.pid, tid: t.tid, q: this.q });
           this.addPbp(t.side, `${p.name} is injured and leaves the game.`, 'other');

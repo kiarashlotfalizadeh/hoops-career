@@ -259,6 +259,7 @@ export function Slider({
   help,
   format,
   disabled,
+  steppers,
 }: {
   label: ReactNode;
   name?: string;
@@ -272,13 +273,26 @@ export function Slider({
   help?: ReactNode;
   format?: (v: number) => string;
   disabled?: boolean;
+  /** − and + beside the value, a step each: a drag on a phone lands within a few of the mark, these on it. */
+  steppers?: boolean;
 }) {
   const fill = ((value - min) / (max - min)) * 100;
+  const nudge = (d: number) => onChange(Math.min(max, Math.max(min, value + d * step)));
   return (
     <div className="slider" style={{ opacity: disabled ? 0.5 : 1 }}>
       <div className="slider-top">
         <span className="slider-label">{label}</span>
+        {steppers && (
+          <button type="button" className="btn xs ghost" disabled={disabled || value <= min} onClick={() => nudge(-1)} aria-label="One less">
+            −
+          </button>
+        )}
         <span className="slider-val num">{format ? format(value) : value}</span>
+        {steppers && (
+          <button type="button" className="btn xs ghost" disabled={disabled || value >= max} onClick={() => nudge(1)} aria-label="One more">
+            +
+          </button>
+        )}
       </div>
       <input
         type="range"

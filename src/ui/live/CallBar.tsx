@@ -263,6 +263,12 @@ export function CallBar(p: CallBarProps) {
           </div>
           {banner.line && <div className="lv-cb-l">{banner.line}</div>}
         </div>
+        {/* (a skip that stopped for a starter hurt leaves the game paused: playing on is right here, not behind the bar) */}
+        {paused && (
+          <button type="button" className="lv-cb-btn sm on" onClick={p.onPause}>
+            <Play size={14} fill="currentColor" aria-hidden="true" /> Resume
+          </button>
+        )}
         <button type="button" className="lv-cb-x" onClick={p.onDropBanner} aria-label="Hide">
           <X size={17} aria-hidden="true" />
         </button>

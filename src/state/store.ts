@@ -4,7 +4,7 @@ import type { League } from '../core/types';
 import { adoptSync, isQuotaError, onDevice, SaveConflictError, saveLeague, setLastLeagueId } from './persistence';
 import { checkpointLive, dropLive, liveInProgress, resumeLive } from './live';
 import { estimateTotal, loopSetting, targetDone, type SimProgress, type SimStop, type SimTarget, type TaskOp, type TaskResult } from './simCore';
-import { checkpointSimRun, simLeague, stopSimRun, taskLeague } from './simClient';
+import { abandonSimRun, checkpointSimRun, simLeague, stopSimRun, taskLeague } from './simClient';
 import { buildDigest, digestMark, type Digest, type DigestMark } from '../ui/today/digest';
 import { agenda, simStopIds, stopsSim } from '../core/league/agenda';
 import { staffPicksSince } from '../core/league/weekCall';
@@ -293,6 +293,16 @@ export const useStore = create<AppState>((set, get) => ({
     // why it stopped: one screen says it. The digest when it opens (its first line), a toast otherwise
     const done = (toast?: [string, Toast['tone'], string?], stop?: SimStop, call?: true) => {
       if (runToken !== token) return;
+      try {
+        finish(toast, stop, call);
+      } catch (e) {
+        // whatever went wrong reading the end, the bar never stays stuck on the last day
+        console.error('ending the sim failed', e);
+        set({ sim: null, stopRequested: false, v: get().v + 1 });
+        void get().save();
+      }
+    };
+    const finish = (toast?: [string, Toast['tone'], string?], stop?: SimStop, call?: true) => {
       const d = digestFor(mark);
       if (stop && toast && d.digest && d.digestOpen) d.digest = { ...d.digest, stop: { text: toast[0], tone: toast[1], to: toast[2] ?? '/', ...(call ? { call } : {}) } };
       // a short sim has no digest: what the staff did on its own in it is said here (the newest of it)
@@ -329,11 +339,13 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       const out = await simLeague(l, target, {
         progress: (p) => void (runToken === token && set({ sim: p })),
-        checkpoint: async (x) => {
+        checkpoint: (x) => {
           if (runToken !== token) return;
           replaceLeague(shown, x);
           shown = x;
-          await get().save();
+          // (the save goes on its own: the worker waits for the checkpoint to be taken in, not written,
+          // so a slow write can't hold the sim's last day up)
+          void get().save();
         },
       });
       if (runToken !== token) return;
@@ -388,6 +400,16 @@ export const useStore = create<AppState>((set, get) => ({
   stopSim: () => {
     set({ stopRequested: true });
     stopSimRun();
+    // a run that doesn't answer the stop (stuck on its last day) is ended: the league stays at its last checkpoint
+    const token = runToken;
+    setTimeout(() => {
+      if (runToken !== token || !get().sim) return;
+      runToken++;
+      abandonSimRun();
+      set({ sim: null, stopRequested: false, v: get().v + 1 });
+      void get().save();
+      get().toast('Stopped. The league is where the sim last saved it.', 'neutral');
+    }, 4000);
   },
   toast: (text, tone = 'neutral', link) => {
     const t = { id: toastId++, text, tone, ...(link ? { link } : {}) };

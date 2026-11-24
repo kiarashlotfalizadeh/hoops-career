@@ -159,8 +159,48 @@ it("valuation and the AI's verdict: talent over depth, strategy lenses within 15
         ),
       ).accept,
     ).toBe(false);
-    const equal = shape(l, standardRoster(l, U)[4], 90, 27);
+    // (as long in the league as the star, so his max, and so his salary, is the star's)
+    const equal = shape(l, Object.assign(standardRoster(l, U)[4], { experience: star.experience }), 90, 27);
     expect(evaluateTrade(l, offer([equal.pid], [star.pid])).accept).toBe(true);
+  }
+
+  // the seasons of a player a deal brings: a 25-year-old 84 signed for four more seasons is worth
+  // clearly more than a 28-year-old 85 on an expiring deal, to every team (AI Orlando gave Franz Wagner
+  // and a first for Michael Porter Jr.'s last season); an old star is priced for his age but a 90 at
+  // 33 doesn't go for an 87 at 29; a rebuilder sells a 30-year-old 82 for two firsts
+  {
+    const l = txLeague();
+    l.phase = 'regular';
+    const young = shape(l, standardRoster(l, AI)[0], 84, 25, undefined, 4);
+    const rental = shape(l, standardRoster(l, THIRD)[0], 85, 28, undefined, 1);
+    for (const st of ['contend', 'retool', 'rebuild'] as const) expect(tradeValue(l, young, st)).toBeGreaterThan(tradeValue(l, rental, st) * 1.1);
+    l.teams[AI].strategy = 'contend';
+    l.teams[THIRD].strategy = 'rebuild';
+    const first = own(l, AI, l.season + 1);
+    const swap: TradeOffer = { a: { tid: AI, pids: [young.pid], dpids: [first.dpid] }, b: { tid: THIRD, pids: [rental.pid], dpids: [] } };
+    expect(teamAccepts(l, swap, AI)).toBe(false);
+    expect(teamAccepts(l, { ...swap, a: { ...swap.a, dpids: [] } }, AI)).toBe(false);
+    // the user's expiring 85 for their young 84: no
+    const mine = shape(l, standardRoster(l, U)[0], 85, 28, undefined, 1);
+    expect(teamAccepts(l, offer([mine.pid], [young.pid]), AI)).toBe(false);
+    // an old star
+    const star = shape(l, standardRoster(l, AI)[1], 90, 33, undefined, 1);
+    const lesser = shape(l, standardRoster(l, U)[1], 87, 29, undefined, 2);
+    for (const st of ['contend', 'retool'] as const) {
+      l.teams[AI].strategy = st;
+      expect(teamAccepts(l, offer([lesser.pid], [star.pid]), AI)).toBe(false);
+    }
+    expect(tradeValue(l, star)).toBeLessThan(tradeValue(l, shape(l, standardRoster(l, U)[2], 90, 27, undefined, 1)));
+    // a rebuilder's veteran for two firsts
+    l.teams[AI].strategy = 'rebuild';
+    const vet = shape(l, standardRoster(l, AI)[2], 82, 30);
+    const firsts = l.draftPicks
+      .filter((d) => d.tid === U && d.round === 1 && d.season > l.season)
+      .sort((a, b) => a.season - b.season)
+      .filter((_, i) => i % 2 === 0)
+      .slice(0, 2)
+      .map((d) => d.dpid);
+    expect(teamAccepts(l, offer([], [vet.pid], firsts), AI)).toBe(true);
   }
 
   // keeps every team within 15% of neutral value, so stars can't be bought low and sold high (T4)
@@ -568,6 +608,8 @@ it("valuation and the AI's verdict: talent over depth, strategy lenses within 15
     const l = negLeague();
     l.phase = 'regular';
     const p = shapeAt(l, standardRoster(l, U)[0], 74, 27, 20_000);
+    // (theirs to shed below, shaped before their payroll is set against the line)
+    const theirs = shapeAt(l, standardRoster(l, AI)[0], 70, 27, 15_000);
     const tax = CAP_FOR(l).luxuryTax;
     // $1M under the tax line before the deal
     l.teams[AI].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: tax - payroll(l, AI, l.season) - 1_000 });
@@ -580,7 +622,6 @@ it("valuation and the AI's verdict: talent over depth, strategy lenses within 15
     l.teams[AI].deadMoney.push({ pid: -2, name: 'y', season: l.season, amount: 5_000 });
     expect(texts(l, offer([p.pid], []))).toContain('Taking on $20.0M takes them to $24.0M over the tax line');
     // and shedding salary over the line saves them tax
-    const theirs = shapeAt(l, standardRoster(l, AI)[0], 70, 27, 15_000);
     expect(texts(l, offer([], [theirs.pid])).some((t) => /^Shedding \$15\.0M saves them \$[\d.]+M in luxury tax/.test(t))).toBe(true);
   }
 
@@ -934,12 +975,13 @@ it('the rules: back-to-back firsts, protections going home, no trading straight 
       const [B, S, F] = [3, 4, 5];
       g.teams[B].strategy = 'contend';
       g.teams[S].strategy = 'rebuild';
-      g.teams[F].strategy = 'rebuild';
+      // (a retooling third team: a rebuilder wants more than two late picks for two years of a 29-year-old's overpay)
+      g.teams[F].strategy = 'retool';
       const rb = standardRoster(g, B).sort((a, b) => b.ovr - a.ovr || a.pid - b.pid);
       const rs = standardRoster(g, S).sort((a, b) => b.ovr - a.ovr || a.pid - b.pid);
       // the buyer: three good players it keeps, a mid contract to send out, and youth the seller would want
       rb.slice(0, 3).forEach((p) => shape(g, p, 86, 27, 38000));
-      shape(g, rb[3], 72, 29, 24000);
+      shape(g, rb[3], 74, 29, 24000);
       shape(g, rb[4], 76, 21, 4000, 3);
       shape(g, rb[5], 74, 22, 3500, 3);
       rb.slice(6).forEach((p) => shape(g, p, 62, 27, 2500, 1));
@@ -1003,6 +1045,8 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
   {
     const l = termsLeague();
     const best = [...standardRoster(l, U)].sort((a, b) => b.ovr - a.ovr)[0];
+    // (done growing: a young one still growing is part of the future too)
+    best.pot = best.ovr;
     const dp = own(l, U, l.season + 1);
     const swapYear = l.season + 2;
     const im = tradeImpact(l, deal({ pids: [best.pid], dpids: [dp.dpid], swaps: [swapYear] }, { pids: [standardRoster(l, AI).sort((a, b) => a.ovr - b.ovr)[0].pid] }));

@@ -479,7 +479,7 @@ it("AI deals: offers to the user, AI-to-AI trades, the deadline's ramp, rumors a
   {
     let n = 0;
     let three = 0;
-    for (const seed of [5, 9, 13]) {
+    for (const seed of [5, 9, 29]) {
       const l = prSeason(seed);
       const made = offersThroughDeadline(l, (p) => {
         // (a deal is its legs: two teams' offer, or a three-team offer with a third team taking the salary)
@@ -531,7 +531,8 @@ it("AI deals: offers to the user, AI-to-AI trades, the deadline's ramp, rumors a
       expect(new Set(made.map((p) => p.kind)).has('buy')).toBe(true);
     }
     expect(n).toBeGreaterThan(4);
-    // (now and then a team calls a third in: an offer the two of them couldn't make)
+    // (now and then a team calls a third in: an offer the two of them couldn't make; rare, about one
+    // season in ten since 2026-11-23, when a deal's seasons of a player came to count)
     expect(three).toBeGreaterThan(0);
     expect(three).toBeLessThan(n / 2);
   }
@@ -589,9 +590,9 @@ it("AI deals: offers to the user, AI-to-AI trades, the deadline's ramp, rumors a
     expect(l.untouchable).not.toContain(pid);
   }
 
-  // expire after their last day, counted from when the user could see them
+  // expire after their last day, counted from when the user could see them (a league whose season brings four offers)
   {
-    const l = prSeason(5);
+    const l = prSeason(6);
     const p = waitForOffer(l)!;
     expect(p).toBeDefined();
     // unseen (its mail unread through a long sim), it keeps standing a few days more, three weeks at most

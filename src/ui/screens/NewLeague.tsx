@@ -17,7 +17,7 @@ import type { Settings } from '../../core/types';
 import { UnsavedSheet } from '../components/UnsavedSheet';
 import { canGoBack } from '../nav';
 import { GRACE } from '../../core/league/jobSecurity';
-import { defaultTeam, ownerLine, rosterLine, seedRosterSizes, teamPreviews, type TeamPreview } from '../newLeague';
+import { booksLine, defaultTeam, ownerLine, rosterLine, seedRosterSizes, teamPreviews, type TeamPreview } from '../newLeague';
 
 type Step = 'type' | 'team' | 'setup';
 
@@ -88,8 +88,13 @@ export default function NewLeague() {
   // first to preview each owner's day-one asks (and a fictional league's rosters) as you'll get them
   const [made] = useState(() => ({ id: `lg_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}`, rngSeed: Math.floor(Math.random() * 2 ** 32) >>> 0 }));
   const [preview, setPreview] = useState<{ key: string; teams: Record<number, TeamPreview> } | null>(null);
-  const previewKey = `${kind}:${settings.injuries}`;
-  const previewTeams = preview?.key === previewKey ? preview.teams : null;
+  // (built with the team you'd take over as the user's, so its owner's line is the one Start career gives:
+  // the user's team keeps its whole roster for him to cut, which moves its owner's read a little)
+  const previewBase = `${kind}:${settings.injuries}`;
+  const previewKey = `${previewBase}:${tidParam ?? ''}`;
+  // rosters and ranks don't depend on whose team it is: the last preview's stand while the next builds
+  const previewTeams = preview?.key.startsWith(`${previewBase}:`) ? preview.teams : null;
+  const previewExact = preview?.key === previewKey;
   // real rosters' top three from the seed at once; a fictional league's once its preview is built
   const teamInfo = kind === 'real' ? seedInfo : previewTeams;
 
@@ -120,6 +125,7 @@ export default function NewLeague() {
   // the preview: the league as Start career creates it, with the settings so far, built while the first step is read (in two tasks, the league then the owners' reads:
   // about 0.6 s of work on a slow phone), so the team step usually has it as it opens
   const needPreview = preview?.key !== previewKey && (kind === 'fictional' || !!seed);
+  const previewTid = tid ?? fallback;
   useEffect(() => {
     if (!needPreview) return;
     let t2: ReturnType<typeof setTimeout> | undefined;
@@ -127,7 +133,7 @@ export default function NewLeague() {
       try {
         const l = createLeague({
           name: 'Preview',
-          userTid: fallback ?? 0,
+          userTid: previewTid ?? 0,
           coachName: 'Coach',
           settings,
           seed: kind === 'real' ? seed : null,
@@ -142,10 +148,10 @@ export default function NewLeague() {
       clearTimeout(t1);
       clearTimeout(t2);
     };
-  }, [needPreview, previewKey, fallback, settings, kind, seed, made]);
+  }, [needPreview, previewKey, previewTid, settings, kind, seed, made]);
   // the owner line on a poster: the team step's preview, as Start career makes him
   const owner = (t: number) => {
-    const o = previewTeams?.[t];
+    const o = previewExact ? previewTeams?.[t] : null;
     return o ? ownerLine(o) : null;
   };
   const setStep = (st: Step) => choose({ step: st === 'type' ? null : st }, true);
@@ -266,6 +272,7 @@ export default function NewLeague() {
               </span>
               <span className="nl-pick-sub">{kind === 'fictional' ? 'Generated players' : rosterSize?.[tid] ? rosterLine(rosterSize[tid]) : null}</span>
               <span className={`nl-pick-owner ${owner(tid) ? '' : 'dim'}`}>{owner(tid) ?? 'Owner: reading the roster…'}</span>
+              {previewTeams?.[tid] && <span className="nl-pick-owner">{keepFigures(booksLine(previewTeams[tid]))}</span>}
               {(teamInfo?.[tid] || rank) && (
                 <span key={`f${tid}`} className="nl-pick-foot">
                   {teamInfo?.[tid] && (

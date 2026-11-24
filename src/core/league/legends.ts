@@ -29,8 +29,23 @@ export const GENERATIONAL = {
   growth: [0.7, 1] as [number, number],
   /** The share of them with a body nobody has: a wing's or a guard's game at 7'3" to 7'6". */
   unicorn: 0.5,
-  /** A fictional league starts with one already in his prime this often. */
-  founding: 0.5,
+  /**
+   * A fictional league starts with one already in his prime this often, and this far into his room
+   * (a range of his peak). Half the leagues, most of the way up (0.5-0.9), made the store's default
+   * league a one-man era from opening night: a 98 at 39-43 points and a PER of 40-48 in its first 20
+   * games, where the real league's best score 31 at 33. Now about one in seven, starting at the top
+   * of the scale with his climb ahead of him (at one in four, a fictional star-check still had one
+   * league in eight led by him at 35+ in six of eight seasons).
+   */
+  founding: 0.15,
+  foundingRoom: [0, 0.15] as [number, number],
+  /**
+   * A founding legend's peak (a range, raw points past the top of the scale): under a drafted one's.
+   * He climbs from the league's first summer, in his prime, against rosters made to the real league's
+   * shape; with a drafted one's peak he reached the whole room in two summers and led a fictional
+   * league at 49.8 points a game (the real league's tails top out near 40).
+   */
+  foundingPeak: [2.5, 4.5] as [number, number],
   /** From this display OVR a player with room keeps climbing in his summers, to this age, by this many raw points a year (a range). */
   climbFrom: 86,
   climbTo: 28,
@@ -108,8 +123,8 @@ export function seedFounding(league: League): Player | null {
     .filter((p) => p.tid >= 0 && season - p.bornYear >= 23 && season - p.bornYear <= 28)
     .sort((a, b) => ovrRaw(b.ratings) - ovrRaw(a.ratings) || a.pid - b.pid)[0];
   if (!best) return null;
-  best.peak = Math.round(rng.uniform(g.peak[0], g.peak[1]) * 10) / 10;
-  const to = scaleTop(league) + best.peak * rng.uniform(0.5, 0.9);
+  best.peak = Math.round(rng.uniform(g.foundingPeak[0], g.foundingPeak[1]) * 10) / 10;
+  const to = scaleTop(league) + best.peak * rng.uniform(g.foundingRoom[0], g.foundingRoom[1]);
   shiftRaw(best.ratings, to - ovrRaw(best.ratings));
   return best;
 }

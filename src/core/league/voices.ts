@@ -356,5 +356,8 @@ export const gmLine = (league: Pick<League, 'id' | 'gm'>, team: Pick<Team, 'tid'
 };
 
 /** What a front office says about a deal it took or turned down (the same words for the same deal). */
-export const gmSays = (league: Pick<League, 'id' | 'gm'>, tid: number, yes: boolean, key: string | number) =>
-  pickBy(`${league.id}:${tid}:gm-says:${key}`, yes ? gmStyle(league, tid).yes : gmStyle(league, tid).no);
+/** What a GM says about a deal a little short of yes: a door left open, never "that can't work" beside a "Close" verdict. */
+const CLOSE_LINES = ['We are not far apart. A little more and we talk.', 'Close. Sweeten it a touch.', 'Nearly there. Find me a bit more.'];
+
+export const gmSays = (league: Pick<League, 'id' | 'gm'>, tid: number, yes: boolean, key: string | number, close = false) =>
+  pickBy(`${league.id}:${tid}:gm-says:${key}`, yes ? gmStyle(league, tid).yes : close ? CLOSE_LINES : gmStyle(league, tid).no);

@@ -121,7 +121,57 @@ function cashToClose(league: League, o: TradeOffer, need: number): number | null
 /** Ways of matching the salary "what would make this work?" tries when asked for the best (see makeItWork). */
 const WORK_FILLERS = 3;
 
+/**
+ * The smallest ask: what the search added to A's side (beyond `base`), dropped again one at a time,
+ * the most valuable first, while the deal stays legal and B still takes it. The top-up adds the
+ * biggest asset when nothing small covers the gap, and a later round can then cover it alone: the
+ * playtest saw a starter and two prospects asked to take a $13M contract (a capologist's "greedy").
+ */
+function prune(league: League, found: TradeOffer, base: TradeOffer): TradeOffer {
+  const ai = found.b.tid;
+  const legal = (o: TradeOffer) => validateTrade(league, o).length === 0;
+  let cur = found;
+  const added = [
+    ...cur.a.pids.filter((pid) => !base.a.pids.includes(pid)).map((pid) => ({ kind: 'p' as const, id: pid, v: playerValueFor(league, league.players[pid], ai, true) })),
+    ...cur.a.dpids
+      .filter((d) => !base.a.dpids.includes(d))
+      .map((d) => ({
+        kind: 'd' as const,
+        id: d,
+        v: pickValueFor(
+          league,
+          league.draftPicks.find((x) => x.dpid === d)!,
+          ai,
+          true,
+        ),
+      })),
+  ].sort((x, y) => y.v - x.v);
+  for (const x of added) {
+    const next: TradeOffer = {
+      a: { ...cur.a, pids: x.kind === 'p' ? cur.a.pids.filter((p) => p !== x.id) : cur.a.pids, dpids: x.kind === 'd' ? cur.a.dpids.filter((d) => d !== x.id) : cur.a.dpids },
+      b: cur.b,
+    };
+    if (legal(next) && evaluateTrade(league, next).accept) cur = next;
+  }
+  // (and a cash top-up trimmed to what's still needed)
+  if ((cur.a.cash ?? 0) > (base.a.cash ?? 0)) {
+    for (let c = base.a.cash ?? 0; c < (cur.a.cash ?? 0); c += 100) {
+      const next: TradeOffer = { a: { ...cur.a, cash: c || undefined }, b: cur.b };
+      if (legal(next) && evaluateTrade(league, next).accept) {
+        cur = next;
+        break;
+      }
+    }
+  }
+  return cur;
+}
+
 function findWork(league: League, offer: TradeOffer, keep: readonly number[] = [], opts: { cash?: boolean; best?: boolean } = {}): WorkResult {
+  const r = findWorkRaw(league, offer, keep, opts);
+  return r.offer ? { offer: prune(league, r.offer, offer) } : r;
+}
+
+function findWorkRaw(league: League, offer: TradeOffer, keep: readonly number[] = [], opts: { cash?: boolean; best?: boolean } = {}): WorkResult {
   let cur = withA(offer, []);
   const ai = cur.b.tid;
   if (!canMakeWork(league, cur)) return { offer: null, why: 'value' };
@@ -160,7 +210,8 @@ function findWork(league: League, offer: TradeOffer, keep: readonly number[] = [
         return r.offer ? [r.offer] : [];
       });
       if (!done.length) return { offer: null, why: 'value' };
-      return { offer: done.sort((x, y) => neutralBalance(league, y).net - neutralBalance(league, x).net)[0] };
+      // (each trimmed to its smallest ask before they're compared)
+      return { offer: done.map((o) => prune(league, o, offer)).sort((x, y) => neutralBalance(league, y).net - neutralBalance(league, x).net)[0] };
     }
     cur = withA(cur, fix.pids);
   }
@@ -258,7 +309,26 @@ function fixable(league: League, legs: TradeLeg[], from: number): number {
  * already in the deal moves. A team left with no part in it is said so: that deal is for two teams.
  */
 export function makeDealWork(league: League, legs: TradeLeg[], from = league.userTid): DealWork {
-  return findDealWork(league, legs, from);
+  const r = findDealWork(league, legs, from);
+  if (!r.legs) return r;
+  // the smallest ask, as in a two-team deal: each thing added dropped again (the most valuable to its taker first) while every GM still says yes
+  const build = (adds: DealAdd[]) => adds.reduce((l, a) => withMove(l, a.from, a.to, a.kind === 'player' ? { pid: a.id } : { dpid: a.id }), legs);
+  let kept = [...r.added];
+  const worth = (a: DealAdd) =>
+    a.kind === 'player'
+      ? playerValueFor(league, league.players[a.id], a.to, true)
+      : pickValueFor(
+          league,
+          league.draftPicks.find((d) => d.dpid === a.id)!,
+          a.to,
+          true,
+        );
+  for (const a of [...r.added].sort((x, y) => worth(y) - worth(x))) {
+    const without = kept.filter((x) => x !== a);
+    const next = build(without);
+    if (validateDeal(league, next).length === 0 && evaluateDeal(league, next).accept) kept = without;
+  }
+  return { legs: build(kept), added: kept };
 }
 
 function findDealWork(league: League, start: TradeLeg[], from: number): DealWork {

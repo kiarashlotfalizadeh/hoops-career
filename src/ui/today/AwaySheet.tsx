@@ -7,7 +7,9 @@
 // needs him stays unread: a decision open, big news).
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Play } from 'lucide-react';
+import { flowActions } from '../flow';
+import { useFlowRunner } from '../useFlow';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { agenda, CALL_KINDS } from '../../core/league/agenda';
 import { keepFigures, ordinal } from '../../core/format';
@@ -102,6 +104,12 @@ function DigestBody({ d }: { d: Digest }) {
   const shown = shownResults(d.results);
   // the staff's calls open now, each with its one-tap answer: what a sim stops for is answered here
   const calls = useLeagueMemo(() => agenda(league).filter((i) => CALL_KINDS.has(i.kind)), [league]);
+  // the Continue bar's next sim, when it is one and nothing waits on him first
+  const run = useFlowRunner();
+  const next = useLeagueMemo(() => {
+    const p = flowActions(league).find((a) => a.primary);
+    return p?.sim && !p.disabled && !p.agenda ? p : undefined;
+  }, [league]);
   return (
     <div className="dg col">
       <div className="dg-span">{d.span}</div>
@@ -196,9 +204,28 @@ function DigestBody({ d }: { d: Digest }) {
         </DigestSection>
       )}
 
-      <button type="button" className="btn block primary dg-done" onClick={close}>
-        Done
-      </button>
+      {/* the next sim is right here, not behind the sheet: one tap closes it and plays on */}
+      {next ? (
+        <div className="row" style={{ gap: 8 }}>
+          <button type="button" className="btn dg-done" onClick={close}>
+            Done
+          </button>
+          <button
+            type="button"
+            className="btn primary grow dg-done"
+            onClick={() => {
+              close();
+              void run(next);
+            }}
+          >
+            <Play size={14} fill="currentColor" aria-hidden="true" /> {next.label}
+          </button>
+        </div>
+      ) : (
+        <button type="button" className="btn block primary dg-done" onClick={close}>
+          Done
+        </button>
+      )}
     </div>
   );
 }

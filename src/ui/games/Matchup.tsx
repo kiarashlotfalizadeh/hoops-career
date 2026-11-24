@@ -213,7 +213,10 @@ function Hero({ league, opp, onPlan, compact }: { league: League; opp: number; o
               {` · by ${Math.abs(proj.margin).toFixed(1)}`}
             </span>
             <Help title="Chance to win">
-              <p>From both teams&apos; net ratings, tonight&apos;s rotations and home court. Your game plan isn&apos;t in it: what a plan does is found out on the floor.</p>
+              <p>
+                From both teams&apos; net ratings, tonight&apos;s rotations and home court. Your game plan counts where it changes who plays (its minutes and starters move this
+                number); what its tactics and matchups do is found out on the floor.
+              </p>
             </Help>
           </div>
         )}

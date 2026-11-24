@@ -165,7 +165,7 @@ function StarPlanCard({ league, opp }: { league: League; opp: number }) {
       }
       // (named as the chips name him: "R. McBride" when two of them share the name)
       const who = tgt !== null ? names(tgt) || l.players[tgt]?.lastName : 'their top creator';
-      const label = plan === 'none' ? 'Play their stars straight' : `Double-team ${who}`;
+      const label = plan === 'none' ? 'Play their stars straight' : plan === 'show' ? `Show high on ${who}` : `Double-team ${who}`;
       setPlanItem(l, opp, { id: `star-${plan}`, label, group: 'star', patch: { defense: { starPlan: plan, starTarget: plan === 'none' ? null : tgt } } });
     });
   const who = target !== null ? names(target) || league.players[target]?.lastName : 'their top creator';

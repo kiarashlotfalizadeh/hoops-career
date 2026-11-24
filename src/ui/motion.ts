@@ -124,3 +124,33 @@ export function useIndicator(row: RefObject<HTMLElement | null>, selector: strin
   }, [box, ready]);
   return box ? { ...box, ready } : null;
 }
+
+/**
+ * A screen's arrival (blocks rising, a list's rows staggering in) starts each block from transparent.
+ * A browser that holds an animation back (a block under the fold, a page drawn while hidden, a busy
+ * main thread) could leave a section dim until something repainted it. Once a second, any one-shot
+ * animation that should have ended by now is finished: what it leaves is the block as it is at rest.
+ */
+export function startMotionSweeper(): () => void {
+  if (typeof document === 'undefined' || typeof document.getAnimations !== 'function') return () => {};
+  const firstSeen = new WeakMap<Animation, number>();
+  const sweep = () => {
+    const now = performance.now();
+    for (const a of document.getAnimations()) {
+      if (a.playState !== 'running') continue;
+      const t = a.effect?.getComputedTiming();
+      if (!t || t.iterations === Infinity || typeof t.endTime !== 'number') continue;
+      const seen = firstSeen.get(a) ?? (firstSeen.set(a, now), now);
+      // overdue: its whole run (delay included) plus a margin has passed since it was first seen
+      if (now - seen > t.endTime + 600) {
+        try {
+          a.finish();
+        } catch {
+          /* (one with no end to finish at) */
+        }
+      }
+    }
+  };
+  const id = window.setInterval(sweep, 1000);
+  return () => window.clearInterval(id);
+}

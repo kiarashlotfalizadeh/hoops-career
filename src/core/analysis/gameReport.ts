@@ -644,8 +644,10 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     const fell = efgSwing - looks;
     if (Math.abs(looks) >= 3) {
       const [hi, lo] = looks > 0 ? [xefg(xu, u.t.fga), xefg(xo, o.t.fga)] : [xefg(xo, o.t.fga), xefg(xu, u.t.fga)];
+      const [mHi, mLo] = looks > 0 ? [fu.efg, fo.efg] : [fo.efg, fu.efg];
+      // (what the looks were worth and what went in, named apart: the Four Factors table's eFG is the second)
       factors.push({
-        title: `${teamCity(league, looks > 0 ? ut : ot)} got the better looks: worth ${pct(hi)} eFG vs ${pct(lo)}.`,
+        title: `${teamCity(league, looks > 0 ? ut : ot)} got the better looks: shots worth ${pct(hi)} eFG to ${pct(lo)}, made ${pct(mHi)} to ${pct(mLo)}.`,
         detail: 'What the shots were worth as taken, before any fell. That counts the shooter, how open he was and the contest.',
         pts: looks,
         category: 'shooting',
@@ -656,9 +658,9 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
       // told by the side whose shooting strayed further from its looks: a cold night isn't the other team's hot one
       const du = fu.efg - xefg(xu, u.t.fga);
       const dv = fo.efg - xefg(xo, o.t.fga);
-      const [who, d] = Math.abs(du) >= Math.abs(dv) ? [teamCity(league, ut), du] : [teamCity(league, ot), dv];
+      const [who, d, made, worth] = Math.abs(du) >= Math.abs(dv) ? [teamCity(league, ut), du, fu.efg, xefg(xu, u.t.fga)] : [teamCity(league, ot), dv, fo.efg, xefg(xo, o.t.fga)];
       factors.push({
-        title: `${possessive(who)} shots fell ${d > 0 ? 'above' : 'below'} their looks.`,
+        title: `${possessive(who)} shots fell ${d > 0 ? 'above' : 'below'} their looks: made ${pct(made)} eFG on looks worth ${pct(worth)}.`,
         detail: 'That part is luck, with nothing to change.',
         pts: fell,
         category: 'shooting',

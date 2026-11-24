@@ -53,6 +53,8 @@
   font-size: clamp(96px, 30vw, 132px);
   line-height: 0.76;
   letter-spacing: -0.04em;
+  /* (the tight line box sits under the figures' tops: room above, or "#2" runs into "On the clock" at 375px) */
+  padding-top: 0.14em;
 }
 
 /* the team (or "You're up"): the slab's headline */

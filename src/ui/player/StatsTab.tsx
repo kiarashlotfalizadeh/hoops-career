@@ -108,8 +108,8 @@ export function StatsTab({ p, league }: { p: Player; league: League }) {
         <More label={real ? 'Real seasons and advanced stats' : 'Advanced stats'}>
           {real && (
             <p className="tm-more-p">
-              Real seasons come from NBA.com&apos;s box scores and play-by-play. Their PER, win shares and BPM are Basketball Reference&apos;s, regular seasons only. Only they have
-              BPM.
+              Real seasons come from NBA.com&apos;s box scores and play-by-play. Their PER, win shares and BPM are Basketball Reference&apos;s, regular seasons only. BPM is fitted
+              to Basketball Reference&apos;s own data, so only real seasons have it (the — in a season played here); PER, win shares and +/- cover every season.
             </p>
           )}
           <p className="tm-more-p">PER and win shares for seasons in this league come from each box score, as Basketball Reference works them. The playoffs have neither.</p>

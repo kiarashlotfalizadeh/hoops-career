@@ -5,14 +5,16 @@ import { gmSays } from '../../core/league/voices';
 import { useState } from 'react';
 import { ChevronDown, Handshake, Zap } from 'lucide-react';
 import type { League } from '../../core/types';
-import { CAP_FOR, inSeason, payroll, rosterMaxNow } from '../../core/league/helpers';
+import { CAP_FOR, inSeason, payroll, playerName, rosterMaxNow, standardRoster } from '../../core/league/helpers';
+import { cutOrder } from '../../core/league/agenda';
+import { Sheet } from '../components/ui';
 import { TRADE_WAIVE_MAX, capSalary, salaryMatchGap, tradeRoster, valueVerdict, type TradeEval, type TradeOffer } from '../../core/league/trades';
 import { canMakeWork } from '../../core/league/tradeHelp';
 import { useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Term } from '../components/Glossary';
 import { TradeNotes } from './common';
-import { taxLine, useDockHeight } from '../office/common';
+import { ReleaseConfirm, taxLine, useDockHeight } from '../office/common';
 import { Tick } from '../office/motion';
 import { TermsList } from './Terms';
 import { overpayNote } from './ConfirmSheet';
@@ -96,6 +98,7 @@ export function Dock({
   const maxSize = rosterMaxNow(league);
   const [fold, setFold] = useState(() => folded ?? true);
   const [ruleOpen, setRuleOpen] = useState(false);
+  const [cutOpen, setCutOpen] = useState(false);
   // the dock's height, for toasts to rise above it rather than cover its verdict
   const ref = useDockHeight<HTMLDivElement>(!empty && !!ev);
   const waives = inSeason(league) && theirAfter - maxSize <= TRADE_WAIVE_MAX;
@@ -103,6 +106,15 @@ export function Dock({
   if (empty || !ev) return null;
   const r = reaction(ev);
   const ruleErrors = ev.errors.filter((e) => !/empty/i.test(e));
+  // over the roster limit on your side: the least valuable player you're not sending, the staff's cut
+  const mineAbbrev = league.teams[league.userTid].abbrev;
+  const over = ruleErrors.some((e) => e.startsWith(`${mineAbbrev} would have `) || e.startsWith(`${mineAbbrev} would have to waive`));
+  const cut = over
+    ? cutOrder(
+        league,
+        standardRoster(league, league.userTid).filter((p) => !offer.a.pids.includes(p.pid) && !offer.b.pids.includes(p.pid)),
+      )[0]
+    : undefined;
   // the helper can fix either side's salary matching, a full roster and the value, nothing else
   const theyreOver = capView.theyreOver;
   const fixable = !ev.accept && capView.workable;
@@ -146,7 +158,15 @@ export function Dock({
           {/* their GM in his own words, once the value is the question (not a rule) */}
           {ev.ok && (
             <p className="fo-dock-quote">
-              “{gmSays(league, offer.b.tid, ev.accept, `${offer.a.pids.join(',')}|${offer.b.pids.join(',')}|${offer.a.dpids.join(',')}|${offer.b.dpids.join(',')}`)}”
+              “
+              {gmSays(
+                league,
+                offer.b.tid,
+                ev.accept,
+                `${offer.a.pids.join(',')}|${offer.b.pids.join(',')}|${offer.a.dpids.join(',')}|${offer.b.dpids.join(',')}`,
+                /^Close/.test(r.label),
+              )}
+              ”
             </p>
           )}
           {/* their two main reasons (one when a rule problem already needs the room) */}
@@ -205,6 +225,15 @@ export function Dock({
           )}
         </button>
       )}
+      {/* your roster would run over the limit: the staff's cut is offered right here (the playtest's "16 players, max 15" had no way out) */}
+      {cut && (
+        <button className="btn sm text" onClick={() => setCutOpen(true)}>
+          Release {playerName(cut)} to make room
+        </button>
+      )}
+      <Sheet open={cutOpen && !!cut} onClose={() => setCutOpen(false)} title={cut ? `Release ${cut.lastName}?` : 'Release'}>
+        {cut && <ReleaseConfirm league={league} p={cut} onKeep={() => setCutOpen(false)} onDone={() => setCutOpen(false)} />}
+      </Sheet>
       <div className="fo-dock-btns">
         <button className="btn sm grow" disabled={!fixable} onClick={onWork}>
           {theyreOver && !fixable ? "They can't absorb that salary" : 'What would make this work?'}

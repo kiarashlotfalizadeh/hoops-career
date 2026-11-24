@@ -166,7 +166,15 @@ export function ThreeTeam({ league, season, closed, partner, init }: { league: L
   const waiting = ev ? ev.teams.filter((t) => !t.accept) : [];
   // "Make it work": what you'd add for both GMs to say yes (asked on a tap: the search is not free)
   const whatWorks = () => {
-    const res = makeDealWork(league, legs);
+    let res: ReturnType<typeof makeDealWork>;
+    try {
+      res = makeDealWork(league, legs);
+    } catch (e) {
+      // (never a tap that does nothing: the search failing says so)
+      console.error('make it work failed', e);
+      toast("The staff couldn't work this one out. Try changing the deal.", 'bad');
+      return;
+    }
     if (!res.legs) {
       toast(
         res.why === 'salary'

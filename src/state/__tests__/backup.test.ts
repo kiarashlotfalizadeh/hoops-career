@@ -2,7 +2,7 @@
 // (A backup made mid-draft or in free agency is in flow.test.ts, on the season played there.)
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { backupDue, exportLeague, importLeague, UnsavedLeagueError } from '../backup';
+import { backupDue, ExistingLeagueError, exportLeague, importLeague, UnsavedLeagueError } from '../backup';
 import { loadLeague, SAVE_VERSION } from '../persistence';
 import { useStore } from '../store';
 import { simDay } from '../../core/league/season';
@@ -61,11 +61,18 @@ describe('backups', () => {
       const first = await importLeague(backup(l));
       expect(first.id).toBe(l.id);
       expect((await loadLeague(l.id))!.games).toEqual(JSON.parse(JSON.stringify(l.games)));
-      const copy = await importLeague(backup(l));
+      // the same league again: asked whether to restore over it or keep both
+      await expect(importLeague(backup(l))).rejects.toBeInstanceOf(ExistingLeagueError);
+      const copy = await importLeague(backup(l), { existing: 'copy' });
       expect(copy.id).not.toBe(l.id);
       expect(copy.name).toBe('import (imported)');
       expect((await loadLeague(copy.id))!.games).toHaveLength(l.games.length);
       expect((await loadLeague(l.id))!.name).toBe('import');
+      // a restore puts the backup in the stored league's place, results and all
+      const fewer = { ...l, games: l.games.slice(0, Math.max(1, l.games.length - 3)), name: 'import' };
+      const restored = await importLeague(backup(fewer as League), { existing: 'replace' });
+      expect(restored.id).toBe(l.id);
+      expect((await loadLeague(l.id))!.games).toHaveLength(fewer.games.length);
 
       // drops inbox links that are not in-app routes (crafted backups)
       const evil = played('evil');
@@ -90,7 +97,7 @@ describe('backups', () => {
       useStore.getState().mutate((x) => void prepareLive(x)!.simTo('quarter'));
       // (as Export does: the game in progress goes in as far as it has got)
       checkpointLive(states);
-      const live = await importLeague(backup(states));
+      const live = await importLeague(backup(states), { existing: 'copy' });
       expect(live).toEqual(JSON.parse(JSON.stringify({ ...states, id: live.id, name: live.name })));
       useStore.getState().setLeague(live);
       const lg = prepareLive(live)!;
@@ -178,8 +185,8 @@ describe('backups', () => {
         const plain = JSON.stringify({ ...l, version: SAVE_VERSION, lastBackup: l.lastBackup });
         expect([gz.name, gz.type, [...new Uint8Array(await gz.slice(0, 2).arrayBuffer())]]).toEqual([`hoops-career-gzip-${l.season}.json.gz`, 'application/gzip', [0x1f, 0x8b]]);
         expect(gz.size).toBeLessThan(plain.length / 4);
-        const back = await importLeague(gz);
-        expect(back).toEqual(await importLeague(backup(JSON.parse(plain))).then((x) => ({ ...x, id: back.id, name: back.name })));
+        const back = await importLeague(gz, { existing: 'copy' });
+        expect(back).toEqual(await importLeague(backup(JSON.parse(plain)), { existing: 'copy' }).then((x) => ({ ...x, id: back.id, name: back.name })));
         // a damaged one isn't a backup; one that unpacks to more than any league is too big
         await expect(importLeague(new File([(await gz.arrayBuffer()).slice(0, 200)], 'cut.json.gz'))).rejects.toThrow('not a Hoops Career backup');
         const bomb = new Response(new Blob([new Uint8Array(65 * 1024 * 1024)]).stream().pipeThrough(new CompressionStream('gzip')));

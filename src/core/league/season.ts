@@ -172,7 +172,9 @@ function playAllStarGame(league: League, rng: Rng) {
   const west = mk('W', 1);
   const sim = new GameSim(east, west, { rng, type: 'allstar', neutral: true, injuries: false });
   const res = sim.simToEnd();
-  const mvpPid = res.pog;
+  // the MVP comes from the winning side: its best game score (the night's best overall only if he won)
+  const won = res.home.pts > res.away.pts ? res.home : res.away;
+  const mvpPid = [...won.players].filter((b) => b.min > 0).sort((a, b) => gameScore(b) - gameScore(a))[0]?.pid ?? res.pog;
   aw.allStarMvp = mvpPid;
   // the game itself, for the awards page: the score, and the MVP's night rather than his season
   const line = [...res.home.players, ...res.away.players].find((b) => b.pid === mvpPid);
@@ -250,7 +252,8 @@ export function advanceDay(league: League) {
   // an assistant-run rotation follows today's injuries and recoveries now, not at the next game:
   // the Rotation screen and the assistant's advice read it in between (a star just cleared read
   // "only playing 0 minutes", with a starting five he wasn't in)
-  if (!league.teams[league.userTid].rotation.manual) ensureRotation(league, league.userTid);
+  // (a manual one too: a player back from an injury at 0 minutes gets his share back: see ensureRotation)
+  ensureRotation(league, league.userTid);
   league.day++;
   // game-time decisions for a game whose day has passed (or that is gone) are over
   const gt = league.gameTime;

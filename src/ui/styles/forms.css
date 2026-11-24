@@ -139,6 +139,17 @@
   font-weight: 660;
   font-size: 14px;
 }
+/* with steppers the label takes the room and −, the value and + sit together on the right */
+.slider-top:has(> .btn) {
+  align-items: center;
+}
+.slider-top:has(> .btn) > .slider-label {
+  flex: 1;
+}
+.slider-top > .btn {
+  min-width: 34px;
+  padding: 0 10px;
+}
 .slider-val {
   font-family: var(--mono);
   font-weight: 600;

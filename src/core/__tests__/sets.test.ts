@@ -367,15 +367,16 @@ describe('sets in the engine', () => {
       // the tactics rewrite, tactics v2: see engineDefense.test.ts; and all of them again 2026-11-22, when two-way deals were cut)
       const expected = {
         ai: [
-          [132, 134, 90, 51, 9, 29, 9, 0],
-          [98, 95, 93, 22, 9, 16, 8, 0],
-          [102, 95, 92, 25, 7, 25, 11, 0],
+          [125, 115, 86, 46, 11, 19, 10, 0],
+          [127, 123, 84, 28, 11, 31, 10, 0],
+          [110, 118, 81, 36, 9, 14, 16, 0],
         ],
+        // (all of them again 2026-11-23, a fictional league's rosters drawn by position: see engineDefense.test.ts)
         // (taken again when play calls from the bench were retired, and the first and third games when garbage time came for both benches from late in the third quarter, with the team up big easing off and calling off its press; all of them again 2026-11-09, the game-day realism round, and its second round the same day)
         coached: [
-          [127, 118, 95, 53, 14, 21, 16, 0],
-          [106, 110, 92, 36, 10, 36, 16, 0],
-          [115, 131, 77, 28, 9, 37, 15, 0],
+          [124, 111, 81, 37, 9, 23, 18, 0],
+          [138, 110, 89, 30, 7, 25, 19, 0],
+          [113, 124, 76, 26, 9, 34, 15, 0],
         ],
       };
       const fp = (res: ReturnType<GameSim['result']>) => [res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot];
@@ -392,8 +393,11 @@ describe('sets in the engine', () => {
         expect(fp(sim.result())).toEqual(expected.coached[g]);
       }
       // an AI coach on a team the user left with an after-timeout set plays its playbook without it
+      const without = new GameSim(buildSimInput(league, 1, 1, 'regular', 2), buildSimInput(league, 2, 1, 'regular', 1), opts(5)).simToEnd();
+      // (a set its own coach doesn't call in this game)
+      const left = SET_IDS.find((id) => !(without.sets ?? []).some((x) => x.id === id))!;
       const t = cloneTactics(league.teams[1].tactics);
-      t.manage.ato = 'floppy';
+      t.manage.ato = left;
       expect(hasCoachPlans(t)).toBe(true);
       expect(withoutCoachPlans(t).manage.ato).toBeUndefined();
       const l2 = structuredClone(league);
@@ -401,10 +405,9 @@ describe('sets in the engine', () => {
       const input = buildSimInput(l2, 1, 1, 'regular', 2);
       expect(input.team.tactics.manage.ato).toBeUndefined();
       const withAto = new GameSim(input, buildSimInput(l2, 2, 1, 'regular', 1), opts(5)).simToEnd();
-      const without = new GameSim(buildSimInput(league, 1, 1, 'regular', 2), buildSimInput(league, 2, 1, 'regular', 1), opts(5)).simToEnd();
       expect(JSON.stringify(withAto)).toBe(JSON.stringify(without));
       // (its coach calls his own after-timeout sets: never the one the user left)
-      expect((withAto.sets ?? []).some((x) => x.id === 'floppy')).toBe(false);
+      expect((withAto.sets ?? []).some((x) => x.id === left)).toBe(false);
     }
     {
       // runs an after-timeout set for the player it names (the best fit when he sits)

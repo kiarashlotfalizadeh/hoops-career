@@ -29,7 +29,7 @@ import { breakTitle } from './BreakBoard';
 import { Trouble } from './Trouble';
 import type { Drawn } from './drawn';
 import type { StaffAction, StaffNote } from './staff';
-import { fitPlayers, playBoard, playOptions, readStatus, type PlayOption } from './plays';
+import { allPlays, fitPlayers, playBoard, playOptions, readStatus, type PlayOption } from './plays';
 import { PlayBoard } from './PlayBoard';
 import { favoured, usePlayWorth, type PlayReading } from './usePlayWorth';
 
@@ -264,6 +264,7 @@ function PlayCall({
   readings,
   league,
   kits,
+  late = true,
 }: Pick<Common, 'view' | 'side' | 'tactics' | 'names' | 'busy' | 'league' | 'kits'> & {
   plays: PlayOption[];
   closer: number;
@@ -273,14 +274,17 @@ function PlayCall({
   foot: string;
   /** Each play's reading, in `plays` order (null while it's measured). */
   readings: PlayReading[] | null;
+  /** Late in a close game (else an ordinary timeout: no talk of closers). */
+  late?: boolean;
 }) {
   const goTo = tactics.manage.goTo;
   const pick = favoured(readings);
   const five = view.sides[side].on;
   const shown = plays.find((p) => called?.set === p.id && (called.pid === null || called.pid === p.pid)) ?? plays[pick ?? 0] ?? plays[0];
   const board = useMemo(() => (shown ? playBoard(shown.id, fitPlayers(league, five, tactics), shown.pid, names) : null), [shown, league, five, tactics, names]);
-  const who =
-    goTo === closer
+  const who = !late
+    ? `Out of the timeout: any set, or an iso for ${names(closer)}.`
+    : goTo === closer
       ? `${names(closer)} is your go-to.`
       : goTo != null
         ? `${names(goTo)} sits: ${names(closer)} is the best closer out there.`
@@ -348,9 +352,17 @@ export function Huddle(
   const ato = tactics.manage.ato;
   const atoText = ato ? atoLabel(ato, (a) => ACTION_META[a].label, tactics.manage.atoPid != null ? names(tactics.manage.atoPid) : undefined) : null;
   // late in a close game the play out of the timeout is yours to call (decided, there's none worth calling)
-  const late = kind === 'last' || (view.q >= 4 && view.clock <= CLUTCH_SEC && closeGame(view, pendingLive(props.league)?.edge ?? 0));
+  const clutch = view.q >= 4 && view.clock <= CLUTCH_SEC;
+  const close = closeGame(view, pendingLive(props.league)?.edge ?? 0);
+  const late = kind === 'last' || (clutch && close);
+  // any timeout calls the play out of it (a set or an iso: your after-timeout play otherwise); only a
+  // game decided late has none worth calling. The staff measures the options late in a close one
+  const callable = late || !clutch;
   const five = view.sides[side].on;
-  const plays = useMemo(() => (late && closer !== undefined ? playOptions(props.league, five, tactics, closer) : []), [late, props.league, five, tactics, closer]);
+  const plays = useMemo(
+    () => (callable && closer !== undefined ? (late ? playOptions : allPlays)(props.league, five, tactics, closer) : []),
+    [callable, late, props.league, five, tactics, closer],
+  );
   // (in a huddle the sim is where the court is: the options are measured from there)
   const readings = usePlayWorth(pendingLive(props.league), plays, late && closer !== undefined);
   const callName = called ? callLabel(called.set, called.pid != null ? names(called.pid) : undefined) : '';
@@ -362,7 +374,7 @@ export function Huddle(
       : called
         ? `Called: ${callName}, on your next trip up the floor.`
         : `Runs on your next trip up the floor${atoText ? `, in place of your after-timeout play, ${atoText}` : ''}.`;
-  const call = plays.length > 0 && closer !== undefined ? <PlayCall {...props} plays={plays} closer={closer} foot={foot} readings={readings} /> : null;
+  const call = plays.length > 0 && closer !== undefined ? <PlayCall {...props} plays={plays} closer={closer} foot={foot} readings={readings} late={late} /> : null;
   const trouble = <Trouble view={view} side={side} tactics={tactics} names={names} subFor={props.subFor} substitute={props.substitute} />;
   if (kind === 'last') {
     const me = view.sides[side];

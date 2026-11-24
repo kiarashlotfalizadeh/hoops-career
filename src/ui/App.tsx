@@ -22,7 +22,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { problemOf, useLeague, useStore } from '../state/store';
-import { lastLeagueId, loadLeague, onBlocked, onRemoteChange, SaveConflictError, setLastLeagueId } from '../state/persistence';
+import { lastLeagueId, listLeagues, loadLeague, openable, onBlocked, onRemoteChange, SaveConflictError, setLastLeagueId } from '../state/persistence';
 import { exportLeague, exportRawSave } from '../state/backup';
 import { SnapshotActions, snapshotText, useSnapshot } from './components/Backup';
 import { liveInProgress } from '../state/live';
@@ -86,7 +86,10 @@ function Boot({ children }: { children: ReactNode }) {
   const snap = useSnapshot(failed?.id);
   const nav = useNavigate();
   const open = useCallback(async () => {
-    const id = lastLeagueId();
+    // a deep link (a game, a player) opened cold with no league remembered (local storage cleared, a
+    // private window): the most recently played league opens under it, not the main menu
+    const deep = !/^#?\/?(start|new|privacy)?$/.test(window.location.hash.replace(/\?.*$/, ''));
+    const id = lastLeagueId() ?? (deep ? ((await listLeagues().catch(() => [])).filter(openable).sort((a, b) => b.updated - a.updated)[0]?.id ?? null) : null);
     if (id && !useStore.getState().league) {
       try {
         const l = await loadLeague(id);
@@ -345,6 +348,9 @@ function BottomNav() {
  * runs it, its arrow opens every option, and while a sim runs it turns into the progress bar with Stop.
  * The live screen's coaching dock and a screen's own dock (a deal, unsaved changes) take its place.
  */
+/** Screens you build on: the Continue bar stays its compact self there (its options button). */
+const BUILD_SCREENS = new Set(['/office/trade', '/team/tactics', '/team/rotation', '/team/lineups']);
+
 function ContinueBar() {
   const league = useLeague();
   const sim = useStore((s) => s.sim);
@@ -376,10 +382,10 @@ function ContinueBar() {
   const [agendaOpen, setAgendaOpen] = useState(false);
   const go = (a: FlowAction, fromBar = false) => {
     haptic();
-    // a choice waiting on its second tap isn't dropped by moving on: it's said, and nothing runs
+    // a choice waiting on its second tap lapses when the season moves on: nothing half made runs, and the sim isn't refused
     if (pendingConfirm.label && (a.sim || a.cmd)) {
-      useStore.getState().toast(`Tap "Confirm: ${pendingConfirm.label}" first, or let it lapse.`, 'neutral');
-      return;
+      pendingConfirm.cancel?.();
+      pendingConfirm.label = null;
     }
     // a decision the league waits on: settle it right here (its row links to the whole screen); one
     // with nothing to settle in a sheet (sign players, find a job) opens its screen straight away
@@ -405,9 +411,15 @@ function ContinueBar() {
   };
   const label = primary ? (primary.cmd === 'watchLive' && primary.label === 'Watch & coach live' ? 'Watch & coach' : primary.label) : '';
   // the next step is the screen you're on (the draft board, free agents, re-signing): only the options button stays, out of the way
-  const here = !!primary?.to && pathname === primary.to.split('?')[0];
+  // (or a screen you build something on, where the full bar would sit over its controls before you scroll:
+  // the trade builder's asset lists, the tactics board's fifth player)
+  const here = (!!primary?.to && pathname === primary.to.split('?')[0]) || BUILD_SCREENS.has(pathname);
   // game day: a quick sim of tonight's game is one tap too, beside Watch & coach
-  const quick = primary?.cmd === 'watchLive' && primary.id === 'live' && !liveInProgress(league) ? actions.find((a) => a.id === 'quick' && a.cmd === 'quickGame') : undefined;
+  // (not in the postseason: a playoff game, a decisive one above all, is never one stray tap from being simmed; it's in the menu)
+  const quick =
+    primary?.cmd === 'watchLive' && primary.id === 'live' && !liveInProgress(league) && league.phase === 'regular'
+      ? actions.find((a) => a.id === 'quick' && a.cmd === 'quickGame')
+      : undefined;
   // motion: the next step's name changes with a small rise, not a swap
   const step = useChanged(`${label}|${primary?.disabled ?? primary?.sub ?? ''}`);
   return (

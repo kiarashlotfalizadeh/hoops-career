@@ -795,16 +795,20 @@ export interface FaOffer {
 }
 
 /**
- * How much a player likes an offer: the money against what he asks that team (to the power of
- * how much money matters to him) × the team's appeal (weighted by his priorities) × how close
- * the years are to what he wants (3% a year, as asking prices count it) × a small noise of his
- * own (±2%, a hash). An offer at a team's asking price scores its appeal.
+ * How much a player likes an offer: the money against his price (of the market, not of that team:
+ * to the power of how much money matters to him) × the team's appeal (weighted by his priorities) ×
+ * how close the years are to what he wants of that team (3% a year, as asking prices count it) × a
+ * small noise of his own (±2%, a hash). Equal money goes to the team he likes better, and an offer at
+ * a team's own asking price (which its appeal already moved, see askingContract) scores about the
+ * same as another team's at its own. Against that team's price, its appeal counted twice: a team he
+ * liked 10% less needed 25-45% over its own ask to beat a contender's bid, and a bid at the ask led
+ * a summer's top free agents' fields about 40% of the time (12% in a fictional league).
  */
 export function offerUtility(league: League, p: Player, tid: number, amount: number, years: number, prefs: PlayerPrefs = playerPrefs(league, p)): number {
-  const ask = askingContract(league, p, tid);
-  const fit = 1 / (1 + Math.abs(years - ask.years) * 0.03);
+  const price = askingContract(league, p).amount;
+  const fit = 1 / (1 + Math.abs(years - askingContract(league, p, tid).years) * 0.03);
   const noise = 0.98 + 0.04 * (hashString(`${league.id}:${league.season}:${p.pid}:${tid}:offer`) / 4294967296);
-  return Math.pow(amount / ask.amount, prefs.money) * teamAppeal(league, tid, p, prefs) * fit * noise;
+  return Math.pow(amount / price, prefs.money) * teamAppeal(league, tid, p, prefs) * fit * noise;
 }
 
 /** A team's roster as aiWants reads it, kept by aiMarquee while the team signs nobody: no spot to give (`shut`), the bar a newcomer must clear, and the roster's size with that spot. */
@@ -864,13 +868,20 @@ export function aiLateReturns(league: League) {
 
 /**
  * The AI teams that would bid for a top free agent now, most attractive offer first: each one
- * that wants him and can pay his asking price for it offers that, a contender up to 10% more if
+ * that wants him and can pay his asking price for it offers that, a contender up to CONTENDER_BID more if
  * its space (net of what the summer market holds, see capSpace) or its exception covers it; one
  * that can't pay his price offers the most its space or best exception reaches when that's at
  * least 90% of his price and his summer floor (an 80+ player's: see SUMMER_FLOOR), so the
  * mid-levels and the room left bid on the good players as their price comes within reach. Every offer is one the team
  * can make: `route` pays for it as it stands.
  */
+/**
+ * How much over his price a contender with the room bids for a top free agent. At 10%, with the
+ * appeal a winning team already has, a bid at the user's asking price led a fictional league's top
+ * free agents' fields 1% of the time and one 10% over it 18%: a playtester won his man at 40% over.
+ */
+const CONTENDER_BID = 0.05;
+
 export function faInterest(league: League, p: Player, memo?: Map<number, WantRead>): FaOffer[] {
   const season = contractSeason(league);
   const prefs = playerPrefs(league, p);
@@ -908,7 +919,7 @@ export function faInterest(league: League, p: Player, memo?: Map<number, WantRea
     let paid: SigningRoute = route;
     if (t.strategy === 'contend' && route !== 'min' && amount === ask.amount) {
       const room = route === 'space' ? capSpace(league, t.tid, season) : aiMleRoom(league, t.tid, season);
-      const more = Math.max(ask.amount, Math.min(Math.round((ask.amount * 1.1) / 50) * 50, room, playerMax(league, p, season, t.tid)));
+      const more = Math.max(ask.amount, Math.min(Math.round((ask.amount * (1 + CONTENDER_BID)) / 50) * 50, room, playerMax(league, p, season, t.tid)));
       // (and only as much more as a route the rules allow for that length still pays)
       const r = more > ask.amount ? aiSigningRoute(league, t.tid, more, season, p, years) : route;
       if (r) {

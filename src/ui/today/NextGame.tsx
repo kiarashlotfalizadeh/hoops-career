@@ -18,7 +18,7 @@ import { seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
 import { flowActions, liveScoreText, stillAlive } from '../flow';
 import { rosterNames } from '../stats';
-import { picksText } from '../draft/common';
+import { lotterySeen, picksText } from '../draft/common';
 import { rosterLine } from '../office/basis';
 import { favoriteOf } from '../games/favorite';
 import { goalsWhy, planOwnerGoals, previewTitle } from '../../core/league/ownerGoals';
@@ -93,7 +93,7 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
   const kind = kindOf(league, g, pv?.playoff?.tag);
   const series = pv?.playoff;
   const tags: { text: string; stake?: boolean; to?: string }[] = [];
-  if (live?.gid === g.gid) tags.push({ text: `Live · ${liveScoreText(league, live)}` });
+  if (live?.gid === g.gid) tags.push({ text: `${live.over ? 'Final' : 'Live'} · ${liveScoreText(league, live)}` });
   // (the missing plan is a link to the Plan tab, the one tag here with something to do, in the first
   // week; after it a plain note, after the night's own tags: most nights go fine without one)
   const firstWeek = league.season === league.startSeason && (league.phase === 'preseason' || league.day < 7);
@@ -234,7 +234,10 @@ function phaseCard(league: League): { over: string; title: string; line: string;
       };
     }
     case 'draftLottery':
-      return { over: off, title: 'Draft lottery', line: `The lottery is in. ${pickText}`, link: { to: '/office/draft', label: 'Draft board' } };
+      // the offseason's best moment is pointed at, not left on a tab: until it's watched, Today leads to the reveal
+      return lotterySeen(league)
+        ? { over: off, title: 'Draft lottery', line: `The lottery is in. ${pickText}`, link: { to: '/office/draft', label: 'Draft board' } }
+        : { over: off, title: 'Draft lottery', line: 'The balls are drawn. Watch the reveal to see where you pick.', link: { to: '/office/draft', label: 'Reveal the lottery' } };
     case 'draft': {
       // (on the clock, To do says so)
       const ahead = picks.length ? draftOrder(league).findIndex((d) => d.tid === me) : -1;

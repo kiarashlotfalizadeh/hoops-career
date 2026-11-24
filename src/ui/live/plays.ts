@@ -39,6 +39,17 @@ export function playOptions(league: League, five: number[], t: Tactics, star: nu
   return [{ id: 'iso', pid: star }, ...[...mine, ...(other ? [other] : [])].map(({ id, pid }) => ({ id, pid }))];
 }
 
+/**
+ * Every play there is to call out of a timeout: the iso for `star`, then each named set run for the
+ * man on the floor it fits best (best fits first), whether or not it fits anyone well.
+ */
+export function allPlays(league: League, five: number[], t: Tactics, star: number): PlayOption[] {
+  const fp = fitPlayers(league, five, t);
+  if (fp.length < 5 || !fp.some((p) => p.pid === star)) return [];
+  const sets = SET_IDS.map((id) => fp.map((p) => ({ id, pid: p.pid, fit: setFit(id, p) })).sort((a, b) => b.fit - a.fit || a.pid - b.pid)[0]);
+  return [{ id: 'iso', pid: star }, ...sets.sort((a, b) => b.fit - a.fit).map(({ id, pid }) => ({ id, pid }))];
+}
+
 /** How far the defense has read a set tonight, from the court's drawn game: its runs, and a few words on it. */
 export function readStatus(side: Pick<DrawnSide, 'sets'>, id: SetId): { runs: number; read: number; onIt: boolean; text: string } {
   const r = side.sets.find((x) => x.id === id);

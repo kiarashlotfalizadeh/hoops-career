@@ -301,8 +301,17 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
 
   // the biggest tactical edge against us so far, while the tactics still give it to them and the
   // setting behind it hasn't won back what it cost (as the report judges it)
+  // (not when the setting behind it was changed in the last few trips: the evidence is from before the
+  // change, and "lower Help defense" just after Pack the paint reads as the staff contradicting itself)
+  const justChanged = (key: string) => {
+    const fix = impactCounter(key, tactics);
+    if (!fix || !a.recent) return false;
+    const x = cloneTactics(tactics);
+    fix.apply(x);
+    return tacticsDiff(tactics, x).some((k) => (a.recent?.[k] ?? Infinity) < LEVER_TRIPS);
+  };
   const worst = view.impacts
-    .filter((im) => im.t !== side && im.pts >= 2.5 && impactAdvice(im.key, tactics) && !leverPaid(view.impacts, im.key, side))
+    .filter((im) => im.t !== side && im.pts >= 2.5 && impactAdvice(im.key, tactics) && !leverPaid(view.impacts, im.key, side) && !justChanged(im.key))
     .sort((x, y) => y.pts - x.pts)[0];
   if (worst) {
     const fix = impactCounter(worst.key, tactics);

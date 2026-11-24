@@ -352,9 +352,8 @@ function CapSheet({ league }: { league: League }) {
       <div className="fo-pay">
         <div className="grow">
           <div className="over">Payroll{dead > 0 ? ` · incl. ${money(dead)} dead money` : ''}</div>
-          <div className="fo-pay-v num">
-            <CountUp value={money(pay)} />
-          </div>
+          {/* (the figure as it stands, no count-up: two payrolls caught mid-count read as two different payrolls) */}
+          <div className="fo-pay-v num">{money(pay)}</div>
         </div>
         <span className={`tag ${status.tone}`}>{status.label}</span>
       </div>

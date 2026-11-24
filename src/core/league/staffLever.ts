@@ -30,6 +30,7 @@ import { STAFF_LEVERS, leverCounter, seasonLevers, type Alert } from '../ai/advi
 import { gamesAhead } from '../ai/tacticEdits';
 import { leadAssistant } from '../ai/assistant';
 import { AHEAD, type Lean } from '../analysis/staffWords';
+import { plural } from '../format';
 import { STAFF_REPORT, notePick } from './weekCall';
 
 /**
@@ -240,7 +241,11 @@ async function measureLever(league: League, opts: WorthOpts & { onMeasure?: () =
   if (!leverClears(r)) {
     const from = keptWords(words);
     // (in the staff's third person, as the digest says it)
-    notePick(league, `${STAFF_REPORT} tried ${triedWords(words)}. ${AHEAD[leanOfReading(r)]}. Keeping ${from}.`);
+    // (it was played out on the staff's laptop over the next games, never on the floor: said so, or it reads as a change that lapsed unannounced)
+    notePick(
+      league,
+      `${STAFF_REPORT} test-simmed ${triedWords(words)} over the next ${plural(ahead.length, 'game')}, off the floor. ${AHEAD[leanOfReading(r)]}. Keeping ${from}, nothing changed.`,
+    );
   }
   return true;
 }

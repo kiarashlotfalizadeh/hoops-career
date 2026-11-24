@@ -26,7 +26,7 @@ import { drawnPlayer, snapshot, type Drawn } from './drawn';
 import { closeGame, crunchTime, lastPossession, liveAlerts, newEvents, recentLevers, type AlertInput, type LiveEvent } from './alerts';
 import { staffNotes } from './staff';
 import { useStaffCall } from './useStaffCall';
-import { benchFor, CALL_BANNER_LINE, callNote, callQuietLine, nextStop, noStops, stopAfter } from './calls';
+import { benchFor, CALL_BANNER_LINE, callNote, callQuietLine, decidingGaps, nextStop, noStops, stopAfter } from './calls';
 import { CALL_BREAK_MS, CALL_BUDGET_MS } from '../../state/liveWorth';
 import { isKey } from './keyPlays';
 import { createBeat, createTicker, type Beat, type Ticker } from './ticker';
@@ -202,10 +202,15 @@ export function useLiveGame() {
   const nameOf = useMemo(() => (game ? simNames(league, game.sim) : () => ''), [game, league]);
 
   /** Who the staff would send in for one of your players (calls.ts benchFor). */
+  // (what it named for each player last, so a suggestion holds while it's still about as good: see benchFor)
+  const lastSub = useRef(new Map<number, number>());
   const subFor = useCallback(
-    (pid: number) => {
+    (pid: number, exclude?: ReadonlySet<number>) => {
       const sim = liveRef.current?.sim;
-      return sim ? benchFor(sim, userSide, pid) : undefined;
+      if (!sim) return undefined;
+      const sub = benchFor(sim, userSide, pid, { exclude, prefer: lastSub.current.get(pid) });
+      if (sub !== undefined) lastSub.current.set(pid, sub);
+      return sub;
     },
     [userSide],
   );
@@ -995,7 +1000,7 @@ export function useLiveGame() {
     alerts,
     notes,
     /** The staff's line when it measured and found nothing to change (or while it measures). */
-    quiet: callQuietLine(staffCall),
+    quiet: callQuietLine(staffCall, view ? decidingGaps(view, userSide)[0] : undefined),
     /** The staff's live voice: its call, and taking or turning down a call. */
     staff,
     dismissed,

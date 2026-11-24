@@ -70,6 +70,16 @@ export function mvpScore(c: Cand) {
 }
 
 /**
+ * All-League: the season's best players, voted on what they did more than where their team finished.
+ * Production (game score, over enough of the season) and on-court impact lead; winning counts for a
+ * little (about 60% of the MVP's weight, and no contender cliff), so a 30-point scorer on a .450 team
+ * makes a team that a 20-point sidekick on the best one doesn't.
+ */
+export function allLeagueScore(c: Cand) {
+  return c.gmsc * Math.pow(Math.min(1, c.gp / 70), 0.3) + c.winPct * 10 + c.pmPerGame * 0.2;
+}
+
+/**
  * Defensive Player of the Year: defensive quality, rim protection and event production
  * (capped, so a gambler's steals or a backup's blocks can't carry it), how good his team's
  * defense was (within six points of the league's either way) and how much it held up with him on
@@ -165,6 +175,29 @@ export function awardRaces(league: League, n = 5) {
   return { mvp: rank(eligible, mvpScore), dpoy: rank(eligible, (c) => dpoyScore(c, dctx)), roy: rank(rookies, royScore), smoy: rank(bench, smoyScore) };
 }
 
+/**
+ * The season's best producers the 65-game (and 20-minute) rule keeps off the MVP, DPOY and All-League
+ * votes: anyone whose game score would put him among the top `n * 3`, who can no longer reach the line
+ * (mid-season) or didn't (once it's over), best first, with why.
+ */
+export function ineligibleStars(league: League, season = league.season, n = 5): { c: Cand; why: string }[] {
+  const all = candidates(league, season);
+  const current = season === league.season && league.phase === 'regular';
+  const { left, season: games } = gamesLeft(league);
+  const line = current ? Math.round(games * (65 / 82)) : gamesThreshold(league);
+  const top = [...all]
+    .filter((c) => c.mpg >= 15)
+    .sort((a, b) => b.gmsc - a.gmsc)
+    .slice(0, n * 3);
+  const out: { c: Cand; why: string }[] = [];
+  for (const c of top) {
+    const short = current && left.size ? !canStillQualify(c, line, left) : c.gp < line;
+    if (short) out.push({ c, why: current ? `${c.gp} games, can't reach ${line}` : `${c.gp} games of the ${line} needed` });
+    else if (c.mpg < 20) out.push({ c, why: `${c.mpg.toFixed(1)} minutes a game, under 20` });
+  }
+  return out.slice(0, n);
+}
+
 /** Top of the MVP / DPOY ladders with the award's own eligibility and context. */
 export function awardLadder(league: League, award: 'mvp' | 'dpoy', n = 5): { pid: number; score: number }[] {
   return awardRaces(league, n)[award].map(({ c, score }) => ({ pid: c.p.pid, score }));
@@ -202,7 +235,10 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
     };
     return imp(b.tid) - imp(a.tid);
   })[0];
-  const allNba = [mvp.slice(0, 5), mvp.slice(5, 10), mvp.slice(10, 15)].map((t) => t.map((c) => c.p.pid));
+  // (the MVP is on the 1st team whatever the rest of the vote says, as he always is)
+  const league15 = rank(eligible, allLeagueScore);
+  if (mvp[0] && !league15.slice(0, 5).includes(mvp[0])) league15.splice(4, 0, ...league15.splice(league15.indexOf(mvp[0]), 1));
+  const allNba = [league15.slice(0, 5), league15.slice(5, 10), league15.slice(10, 15)].map((t) => t.map((c) => c.p.pid));
   const allDef = [dpoy.slice(0, 5), dpoy.slice(5, 10)].map((t) => t.map((c) => c.p.pid));
   // 1st team then 2nd team, flat: the first five are the 1st team
   const allRookie = roy.slice(0, 10).map((c) => c.p.pid);

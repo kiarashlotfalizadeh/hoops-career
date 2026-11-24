@@ -226,6 +226,10 @@ describe('batch sims & reports', () => {
       const r = { ...big.ratings };
       big.ratings.hgt = 70;
       big.ratings.spd = 30;
+      // (everyone else quick enough to switch: he is the one slow big)
+      const others = team.rotation.order.slice(1).map((pid) => league.players[pid]);
+      const speeds = others.map((p) => p.ratings.spd);
+      for (const p of others) p.ratings.spd = Math.max(p.ratings.spd, 70);
       team.tactics = { ...applyPatch(tactics, { defense: { scheme: 'man', pnr: 'switch' } }), manual: true };
       // a custom rotation whose targets add up to 240, the slow big starting
       const minutes = Object.fromEntries(rotation.order.map((pid, i) => [pid, [36, 34, 33, 31, 29, 24, 20, 16, 12, 5][i] ?? 0]));
@@ -239,6 +243,7 @@ describe('batch sims & reports', () => {
       expect(ids()).not.toContain('min-total');
       big.injury = null;
       big.ratings = r;
+      others.forEach((p, i) => (p.ratings.spd = speeds[i]));
       [team.tactics, team.rotation] = [tactics, rotation];
     }
     // only tells you to rest a worn-down player on back-to-backs when he does not already

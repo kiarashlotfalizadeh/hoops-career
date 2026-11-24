@@ -108,7 +108,11 @@ export function StaffView({
           on={autonomy === 'auto'}
           onChange={(on) => setAutonomy(on ? 'auto' : 'ask')}
           label="Staff makes tactics calls"
-          help={`${assistant.name.split(' ').slice(-1)[0]} makes each call himself, and it shows in your moves. Subs and timeouts stay yours.`}
+          help={
+            autonomy === 'auto'
+              ? `On: ${assistant.name.split(' ').slice(-1)[0]} makes each tactics call himself, and it shows in your moves. Subs and timeouts stay yours.`
+              : `Off: ${assistant.name.split(' ').slice(-1)[0]} brings you his calls and you make them. Turn it on and he makes the tactics calls himself; subs and timeouts stay yours.`
+          }
         />
       </div>
     </div>

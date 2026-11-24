@@ -87,6 +87,8 @@ export class LiveGame {
   private quiet = false;
   /** Periods with possessions played as they came, and with any skipped through or played back: one watched whole coaches the game for the first-week guide. */
   private periods = { seen: new Set<number>(), skipped: new Set<number>() };
+  /** Possessions played as they came (not skipped through or played back). */
+  private watched = 0;
 
   /** A new game from tip-off, or (with `from`) the game a journal describes, at tip-off: replay() plays it back. */
   constructor(league: League, game: ScheduledGame, from?: LiveJournal) {
@@ -181,6 +183,7 @@ export class LiveGame {
   step(): PossLog[] {
     if (this.sim.over) return [];
     (this.quiet ? this.periods.skipped : this.periods.seen).add(this.sim.q);
+    if (!this.quiet) this.watched++;
     this.sim.step();
     this.steps++;
     if (!this.quiet) reach(this);
@@ -402,10 +405,9 @@ export class LiveGame {
     else delete league.reel;
     postGame(league, g, res.home.pts > res.away.pts);
     // the first-week guide: a period watched whole coaches the game (as a move of his own does, from the report's moves)
-    guideAfterLive(
-      league,
-      [...this.periods.seen].some((q) => !this.periods.skipped.has(q)),
-    );
+    // (or a few minutes of it watched, or a move of his: the opener watched a while and skipped to the final
+    // is a game coached live as the guide means it; the playtest saw the step stay open after one)
+    guideAfterLive(league, [...this.periods.seen].some((q) => !this.periods.skipped.has(q)) || this.watched >= 12 || this.marks.length > 0);
     advanceDay(league);
     this.committed = res;
     return res;
@@ -425,7 +427,24 @@ export class LiveGame {
       delete league.live;
       return null;
     }
-    // how far this device had seen the game get: further than the save means the last few possessions are lost
+    // how far this device had seen the game get: further than the save, with no move since it missing
+    // from the save, the game picks up right there (the same seed and moves play the same possessions)
+    const at = reachedAt(league, j.gid);
+    if (at.steps > j.steps && at.ops === j.ops.length && at.q !== undefined && at.clock !== undefined && at.score) {
+      const ahead: LiveJournal = { ...j, steps: at.steps, q: at.q, clock: at.clock, score: at.score };
+      try {
+        const lg = new LiveGame(league, g, ahead);
+        lg.replay();
+        // (the save's copy catches up: it's where the game is now)
+        Object.assign(j, { steps: ahead.steps, q: ahead.q, clock: ahead.clock, score: ahead.score });
+        league.live = lg.journal;
+        lg.resumed = 'journal';
+        reach(lg);
+        return lg;
+      } catch (e) {
+        console.warn('The live game could not be picked up where this device had it, so from the last save:', e);
+      }
+    }
     const seen = reached(league, j.gid);
     try {
       const lg = new LiveGame(league, g, j);
@@ -447,27 +466,48 @@ let current: LiveGame | null = null;
 
 /**
  * Where the live game has got to on this device, noted with every possession (outside the save:
- * saving the league that often would be too heavy, and a few bytes in local storage aren't). A
- * reload that picks the game up from an earlier checkpoint compares the two, to say it went back.
+ * saving the league that often would be too heavy, and a few bytes in local storage aren't): the
+ * possessions played, where that left the game (period, clock, score) and how many moves the journal
+ * had by then. A reload picks the game up exactly there when the save's journal has every one of
+ * those moves (each move is saved as it's made); else from the save's checkpoint, saying it went back.
  */
 const REACHED_KEY = 'hc:live-reached';
 
+interface Reached {
+  steps: number;
+  q?: number;
+  clock?: number;
+  score?: [number, number];
+  ops?: number;
+}
+
 function reach(lg: LiveGame) {
   try {
-    globalThis.localStorage?.setItem(REACHED_KEY, JSON.stringify([lg.league.id, lg.game.gid, lg.steps]));
+    const s = lg.sim;
+    globalThis.localStorage?.setItem(REACHED_KEY, JSON.stringify([lg.league.id, lg.game.gid, lg.steps, s.q, s.clock, [s.T[0].score, s.T[1].score], lg.journal.ops.length]));
   } catch {
     /* (private mode, storage full: a rewind just goes unsaid) */
   }
 }
 
+/** Where this device had seen the league's game `gid` reach (steps 0 if none noted). */
+function reachedAt(league: League, gid: number): Reached {
+  try {
+    const [id, g, steps, q, clock, score, ops] = JSON.parse(globalThis.localStorage?.getItem(REACHED_KEY) ?? '[]') as unknown[];
+    if (id !== league.id || g !== gid || !Number.isInteger(steps)) return { steps: 0 };
+    const sc = Array.isArray(score) && score.length === 2 && score.every(Number.isFinite) ? (score as [number, number]) : undefined;
+    return {
+      steps: steps as number,
+      ...(Number.isInteger(q) && typeof clock === 'number' && sc && Number.isInteger(ops) ? { q: q as number, clock, score: sc, ops: ops as number } : {}),
+    };
+  } catch {
+    return { steps: 0 };
+  }
+}
+
 /** How many possessions this device had seen the league's game `gid` reach (0 if none noted). */
 function reached(league: League, gid: number): number {
-  try {
-    const [id, g, steps] = JSON.parse(globalThis.localStorage?.getItem(REACHED_KEY) ?? '[]') as unknown[];
-    return id === league.id && g === gid && Number.isInteger(steps) ? (steps as number) : 0;
-  } catch {
-    return 0;
-  }
+  return reachedAt(league, gid).steps;
 }
 
 /** Today's game of the user's team, if the league's journal is for it (it may be unplayable still: see fromJournal). */
@@ -491,6 +531,8 @@ export interface LiveStatus {
   q: number;
   clock: number;
   score: [number, number];
+  /** Played to the final, not recorded yet (the Live screen's final is still up). */
+  over?: boolean;
 }
 
 /**
@@ -502,7 +544,7 @@ export function liveInProgress(league: League): LiveStatus | null {
   const lg = pendingLive(league);
   if (lg) {
     const s = lg.sim;
-    return { gid: lg.game.gid, q: s.q, clock: s.clock, score: [s.T[lg.userSide].score, s.T[1 - lg.userSide].score] };
+    return { gid: lg.game.gid, q: s.q, clock: s.clock, score: [s.T[lg.userSide].score, s.T[1 - lg.userSide].score], ...(s.over ? { over: true } : {}) };
   }
   const j = league.live;
   const g = journaledGame(league);

@@ -84,6 +84,18 @@ export function Lineup({
 }) {
   const t = sim.T[side];
   const other = (1 - side) as 0 | 1;
+  // who's on the floor is the game's own list (a sub made while paused or in a timeout shows at once,
+  // as the bench does), in the court's order where it still holds: the newcomer takes the place of the man he replaced
+  const fivesNow = ([0, 1] as const).map((s) => {
+    const on = sim.T[s].players.filter((p) => p.on).map((p) => p.pid);
+    const kept = fives[s].filter((pid) => on.includes(pid));
+    const fresh = on.filter((pid) => !kept.includes(pid));
+    return fives[s]
+      .map((pid) => (on.includes(pid) ? pid : fresh.shift()))
+      .filter((pid): pid is number => pid !== undefined)
+      .concat(fresh);
+  }) as [number[], number[]];
+  fives = fivesNow;
   // who just checked in (either five): his row is marked for a moment, so a sub is seen being made
   const floor = useRef<{ on: Set<number>; at: Map<number, number> } | null>(null);
   const onNow = new Set([...fives[0], ...fives[1]]);

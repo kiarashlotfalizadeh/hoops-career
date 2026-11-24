@@ -803,7 +803,8 @@ function checkEconomyOpening() {
  * after the day's prices can raise that, so the tally checks the outcome, see 'stalled' below.)
  * The summer floors hold (see SUMMER_FLOOR): no 80+ free agent signs for under 55% of his value,
  * nor a 72-79 under 35% (the floors' late shares, 60% and 40%, less a little for rounding and a
- * keen team's terms). Before them, a waiting market brought an 86 down to $4.3M on a $45.5M value,
+ * keen team's terms), through the floor's day; past it, under the floor's share that day as it comes
+ * down to its end share (25% and 20%) on the market's last day, less the same. Before them, a waiting market brought an 86 down to $4.3M on a $45.5M value,
  * and half the 72-79s to about the minimum by day 13.
  */
 function checkFaPrices(pool: Map<number, { m: number; ovr: number; tid: number | null }>, top: Map<number, number>) {
@@ -814,7 +815,10 @@ function checkFaPrices(pool: Map<number, { m: number; ovr: number; tid: number |
     pool.delete(pid);
     const sal = salaryFor(p, L.season + 1);
     faTally.push({ ratio: sal / x.m, name: H.playerName(p), back: p.tid === x.tid, ovr: x.ovr });
-    const least = x.ovr >= C.SUMMER_FLOOR.ovr ? 0.55 : 0.35;
+    // (the floor's share that day: its late share to the floor's day, then down to its end share on the last)
+    const f = x.ovr >= C.SUMMER_FLOOR.ovr ? C.SUMMER_FLOOR : C.ROTATION_FLOOR;
+    const t = Math.min(1, Math.max(0, (L.faDay - C.SUMMER_FLOOR.day) / (S.FA_DAYS - 1 - C.SUMMER_FLOOR.day)));
+    const least = f.late + (f.end - f.late) * t - 0.05;
     // (a two-way deal is off the cap: a player who'd sign for the minimum takes one, see wantsTwoWay)
     if (sal < x.m * least)
       bad('free agent signed under his summer floor', `${H.playerName(p)} (${x.ovr}) $${(sal / 1000).toFixed(1)}M on a $${(x.m / 1000).toFixed(1)}M value, day ${L.faDay + 1}`);

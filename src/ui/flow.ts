@@ -177,8 +177,8 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
       const when = (day: number) => fmtDate(league.season, day, { weekday: 'short', month: 'short', day: 'numeric' });
       const out = league.phase !== 'regular' && !stillAlive(league);
       if (live) {
-        const q = live.clock <= 0.05 ? `End of ${periodLabel(live.q)}` : periodLabel(live.q);
-        a.push({ id: 'live', label: 'Resume live game', sub: `${q} · ${liveScoreText(league, live)}`, primary: true, cmd: 'watchLive' });
+        const q = live.over ? 'Final' : live.clock <= 0.05 ? `End of ${periodLabel(live.q)}` : periodLabel(live.q);
+        a.push({ id: 'live', label: live.over ? 'Back to the final' : 'Resume live game', sub: `${q} · ${liveScoreText(league, live)}`, primary: true, cmd: 'watchLive' });
         a.push({ id: 'quick', label: 'Finish this game', sub: 'Sim the rest from the current score.', cmd: 'quickGame' });
       } else if (g) {
         // what's on the line tonight, when it's more than a date: "Rivalry · @ BOS 12-8"

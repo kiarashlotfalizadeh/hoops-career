@@ -63,6 +63,35 @@ const PHYS_KEYS: (keyof Ratings)[] = ['spd', 'ath', 'str', 'end'];
  */
 export const GEN_TAILS = { height: 0.008, unicorn: 0.014, unicornSize: 26 };
 
+/**
+ * How much of a generated player's talent goes into each skill (times the common 7.5 a talent SD)
+ * and into his physical tools. The real league's 30 best stand above its average mostly as creators
+ * (handle +29, passing and foul drawing +20, defense +3 to +8, rebounding 0 to +5, speed and
+ * athleticism no higher); generated ones with talent spread evenly stood +9 to +13 everywhere,
+ * athleticism +6 and IQ +18, and played like it: a center at 42 points, 13 boards and 3.6 blocks a
+ * game with a PER of 50, two to four 40-point scorers in six fictional leagues' first 20 games
+ * (the real league's best 31).
+ */
+const TALENT_SKILL: Partial<Record<keyof Ratings, number>> = {
+  ins: 1,
+  mid: 1.1,
+  tp: 1,
+  ft: 1.2,
+  hnd: 1.5,
+  pas: 1.4,
+  oiq: 0.9,
+  drw: 1.5,
+  post: 0.9,
+  perD: 0.8,
+  intD: 0.65,
+  stl: 0.6,
+  blk: 0.5,
+  diq: 0.7,
+  oreb: 0.45,
+  dreb: 0.65,
+};
+const TALENT_PHYS = 1.2;
+
 export interface GenOpts {
   heightIn?: number;
   /** Talent z-score: 0 = average NBA rotation player, +2.5 = star, -1.5 = fringe. */
@@ -98,9 +127,14 @@ export function genRatings(rng: Rng, o: GenOpts): { r: Ratings; heightIn: number
       r[key] += (mods[key] ?? 0) * w;
     }
   }
-  // talent shifts skills strongly, physical tools mildly
-  for (const k of SKILL_KEYS) r[k] += o.talent * 7.5 + rng.normal(0, 7);
-  for (const k of PHYS_KEYS) r[k] += o.talent * 3 + rng.normal(0, 8);
+  // talent shifts skills strongly (most into creating, least into defending and rebounding, as real
+  // stars' ratings stand above the league's: TALENT_SKILL), physical tools mildly; a big's talent
+  // goes less into his three (generated whole, a fictional league's centers shot threes like wings:
+  // 8-12 of its ~100 centers in the league's top 30% from three, the real league 2)
+  const bigShot = 1 - 0.55 * clamp((h - 50) / 18, 0, 1);
+  for (const k of SKILL_KEYS) r[k] += o.talent * 7.5 * (TALENT_SKILL[k] ?? 1) * (k === 'tp' ? bigShot : 1) + rng.normal(0, 7);
+  r.tp -= 0.25 * Math.max(0, h - 55);
+  for (const k of PHYS_KEYS) r[k] += o.talent * TALENT_PHYS + rng.normal(0, 8);
   // age: young players are raw, especially in IQ; athleticism peaks mid-20s
   const youth = clamp(25 - o.age, 0, 7);
   for (const k of SKILL_KEYS) r[k] -= youth * 1.4;

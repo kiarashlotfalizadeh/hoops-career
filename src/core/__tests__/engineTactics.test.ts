@@ -375,6 +375,7 @@ describe('engine tactics', () => {
       // And again that day, its third round (see engineDefense.test.ts).
       // All of them again 2026-11-10, the tactics rewrite (tactics v2: the table above, see engineDefense.test.ts).
       // All of them again 2026-11-22, when two-way deals were cut (see engineDefense.test.ts).
+      // All of them again 2026-11-23, when a fictional league's rosters came to be drawn by position (see engineDefense.test.ts).
       const zone = (tid: number): SimTeamInput => ({ team: { ...league.teams[tid], tactics: defaultTactics('balanced', 'zone') }, players: teamPlayers(league, tid) });
       const out: number[][] = [];
       for (let g = 0; g < 4; g++) {
@@ -382,10 +383,10 @@ describe('engine tactics', () => {
         out.push([res.home.pts, res.away.pts, res.home.t.fga, res.away.t.fga, res.home.t.tpa, res.away.t.tpa, res.home.t.orb, res.away.t.orb]);
       }
       expect(out).toEqual([
-        [63, 96, 81, 91, 45, 47, 11, 18],
-        [122, 118, 100, 92, 59, 46, 19, 19],
-        [128, 117, 101, 99, 55, 54, 26, 16],
-        [107, 112, 96, 89, 55, 32, 12, 16],
+        [100, 102, 91, 98, 42, 38, 19, 19],
+        [117, 121, 91, 97, 47, 36, 15, 22],
+        [103, 81, 93, 102, 43, 36, 12, 27],
+        [137, 120, 100, 98, 48, 43, 12, 9],
       ]);
     }
 

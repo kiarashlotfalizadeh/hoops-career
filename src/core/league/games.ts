@@ -29,14 +29,31 @@ export function wearPerf(p: Player) {
   return 1 - clamp(p.wear - 40, 0, 60) / 1200; // up to -5% when badly worn down
 }
 
-/** Extra injury risk from worn-down legs, on top of the engine's in-game risk: up to +60% at full wear. */
+/**
+ * Extra injury risk from worn-down legs, on top of the engine's in-game risk: up to +30% at full
+ * wear. (At +60% the heaviest minute loads, the stars', broke down most: in two real-league seasons
+ * 4.75 of the ten best reached the 65 games awards ask for, where the NBA's six to seven do.)
+ */
 export function wearInjuryRisk(p: Player) {
-  return (clamp(p.wear - 40, 0, 60) / 60) * 0.6;
+  return (clamp(p.wear - 40, 0, 60) / 60) * 0.3;
 }
 
-/** Practice intensity and the medical budget scale a team's injury risk. */
-export function teamInjuryMult(team: Team) {
-  return (team.practice === 'intense' ? 1.18 : team.practice === 'light' ? 0.88 : 1) * (1.1 - 0.2 * (team.budget.health / 100));
+/**
+ * A team's injury risk with this many players already out: a training staff that is already
+ * treating three or four players manages the rest's loads more carefully, and past CROWD_OUT.length
+ * nobody new goes down (a few players' knocks take them out a game or two, but the team never has
+ * seven to eleven players out at once, as it did with every risk independent).
+ */
+const CROWD_OUT = [1, 1, 1, 0.75, 0.5, 0.25];
+
+/** Players out injured on a team now. */
+export function injuredCount(league: League, tid: number) {
+  return teamPlayers(league, tid).filter((p) => p.injury && p.injury.gamesRemaining > 0).length;
+}
+
+/** Practice intensity and the medical budget scale a team's injury risk, and the players already out (`out`) damp it. */
+export function teamInjuryMult(team: Team, out = 0) {
+  return (team.practice === 'intense' ? 1.18 : team.practice === 'light' ? 0.88 : 1) * (1.1 - 0.2 * (team.budget.health / 100)) * (CROWD_OUT[out] ?? 0);
 }
 
 function playedYesterday(league: League, tid: number, day: number): boolean {
@@ -313,6 +330,47 @@ export function keepManualRotation(rot: Rotation, players: Player[]) {
   for (const k of Object.keys(rot.caps)) if (!pids.has(+k)) delete rot.caps[+k];
 }
 
+/** Whether a player is out hurt (not cleared for the next game). */
+const hurt = (p: Player) => (p.injury?.gamesRemaining ?? 0) > 0;
+
+/**
+ * Give `pids` the minutes the staff would give them (between 10 and 30), taken from the rest of a
+ * manual rotation in proportion to theirs: the total stays where it was.
+ */
+export function giveShare(league: League, tid: number, pids: number[]) {
+  const team = league.teams[tid];
+  const rot = team.rotation;
+  const players = teamPlayers(league, tid);
+  const staff = autoRotation(
+    players.filter((p) => !hurt(p)),
+    rot,
+  ).minutes;
+  for (const pid of pids) {
+    const want = clamp(Math.round(staff[pid] ?? 16), 10, 30);
+    const others = Object.entries(rot.minutes).filter(([k, m]) => +k !== pid && m > 0);
+    const pool = others.reduce((a, [, m]) => a + m, 0);
+    if (pool > 0) for (const [k, m] of others) rot.minutes[+k] = Math.max(0, Math.round(m - (want * m) / pool));
+    rot.minutes[pid] = want;
+    rot.held = rot.held?.filter((x) => x !== pid);
+    rot.benched = rot.benched?.filter((x) => x !== pid);
+  }
+}
+
+/**
+ * A manual rotation's healthy regulars left at 0 minutes (by OVR, his eight best): a player who came
+ * back from an injury, signed, re-signed or traded for and never given any. The coach's own choice to
+ * keep one out (`benched`) isn't asked about.
+ */
+export function noMinutes(league: League, tid = league.userTid): Player[] {
+  const rot = league.teams[tid].rotation;
+  if (!rot.manual) return [];
+  const healthy = teamPlayers(league, tid)
+    .filter((p) => !hurt(p))
+    .sort((a, b) => b.ovr - a.ovr)
+    .slice(0, 8);
+  return healthy.filter((p) => !(rot.minutes[p.pid] > 0) && !rot.benched?.includes(p.pid));
+}
+
 /** Keep AI rotations/tactics fresh (injuries, trades) and validate the user's. */
 export function ensureRotation(league: League, tid: number) {
   const team = league.teams[tid];
@@ -326,7 +384,28 @@ export function ensureRotation(league: League, tid: number) {
     const youth = youthMovement(league, tid);
     // (a youth movement also spreads the minutes: nobody past 30, the end of the bench plays)
     team.rotation = autoRotation(players, rot, youth ? { lean: (p) => youth * youthLean(playerAge(p, league.season)), maxMinutes: 38 - 8 * youth } : {});
-  } else if (stale) keepManualRotation(rot, players);
+  } else {
+    // a manual rotation: who's new to the roster, and who was out at 0 and is fit again, gets the
+    // staff's share of minutes (the coach changes it from there), not a silent 0 (the playtest's trap)
+    const arrived = players.filter((p) => !rot.order.includes(p.pid) && !hurt(p) && !(rot.minutes[p.pid] > 0)).map((p) => p.pid);
+    if (stale) keepManualRotation(rot, players);
+    for (const p of players) if (hurt(p) && !(rot.minutes[p.pid] > 0) && !rot.held?.includes(p.pid)) rot.held = [...(rot.held ?? []), p.pid];
+    const back = (rot.held ?? []).filter((pid) => pids.has(pid) && !hurt(league.players[pid]) && !(rot.minutes[pid] > 0));
+    rot.held = rot.held?.filter((pid) => pids.has(pid) && !(rot.minutes[pid] > 0) && !back.includes(pid));
+    if (!rot.held?.length) delete rot.held;
+    rot.benched = rot.benched?.filter((pid) => pids.has(pid) && !(rot.minutes[pid] > 0));
+    if (!rot.benched?.length) delete rot.benched;
+    // (only the ones good enough for the rotation: a fifteenth man signed for depth stays at 0)
+    const top = new Set(
+      players
+        .filter((p) => !hurt(p))
+        .sort((a, b) => b.ovr - a.ovr)
+        .slice(0, 9)
+        .map((p) => p.pid),
+    );
+    const due = [...arrived, ...back].filter((pid) => top.has(pid));
+    if (due.length) giveShare(league, tid, due);
+  }
   const missingRoles = players.some((p) => team.tactics.offense.roles[p.pid] === undefined);
   // an assistant-run playbook follows the healthy roster: a long injury starting or ending can change
   // the best fit (the Tactics screen's fit scores count the same players)
@@ -404,7 +483,7 @@ function teamSimInput(
   const perf: Record<number, number> = {};
   for (const p of players) perf[p.pid] = wearPerf(p);
   // practice intensity: intense camps build skills but add wear and injury risk
-  const injuryMult = teamInjuryMult(team);
+  const injuryMult = teamInjuryMult(team, injuredCount(league, tid));
   if (tid === league.userTid) {
     // game-time decisions: questionable players the user cleared to play tonight dress, a step slow
     // (the engine raises their injury risk), and an assistant-run rotation plans their minutes as if
@@ -637,7 +716,7 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
         const p = league.players[rb.pid];
         const team = league.teams[rb.tid];
         if (!p || !team || p.injury || !rb.played || !wearInjuryRisk(p)) continue;
-        if (rng.chance(K.injuryRate * 2 * rb.b.onPoss * teamInjuryMult(team) * wearInjuryRisk(p))) applyInjury(league, p, rng);
+        if (rng.chance(K.injuryRate * 2 * rb.b.onPoss * teamInjuryMult(team, injuredCount(league, team.tid)) * wearInjuryRisk(p))) applyInjury(league, p, rng);
       }
     }
     // finances & hype: play-in games are postseason gate-only games, like the playoffs; the Cup

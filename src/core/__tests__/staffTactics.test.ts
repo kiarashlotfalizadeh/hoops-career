@@ -167,13 +167,15 @@ describe('the staff acts on the season', () => {
       expect(rs.map((r) => r.what)).toEqual(['soft ball pressure', 'crashing']);
       expect(leverReport(l)!.title).toBe(rs[1].label);
       if (!leverClears(rs[1])) {
-        expect(l.staffPicks!.at(-1)!.text).toMatch(/^Staff report: tried .+\. (No clear edge|Could hurt)\. Keeping .+\.$/);
+        expect(l.staffPicks!.at(-1)!.text).toMatch(
+          /^Staff report: test-simmed .+ over the next \d+ games?, off the floor\. (No clear edge|Could hurt)\. Keeping .+, nothing changed\.$/,
+        );
         // (the digest says the latest, as one row)
         const latest = l.staffPicks!.at(-1)!.text;
         l.staffPicks!.splice(-1, 0, { season: l.season, day: l.day, text: 'Staff report: an earlier one.' });
         // (on screen without its mark)
         const said = `${latest.slice('Staff report: '.length).replace(/^t/, 'T')} The latest of 2 reports.`;
-        expect(staffPicksSince(l, l.season, -1).filter((x) => x.startsWith('Tried') || x.startsWith('An earlier'))).toEqual([said]);
+        expect(staffPicksSince(l, l.season, -1).filter((x) => x.startsWith('Test-simmed') || x.startsWith('An earlier'))).toEqual([said]);
         // nothing left to look at on these tactics: no reading
         l.staffLever!.last = l.day - LEVER_EVERY;
         await leverMorning(l);

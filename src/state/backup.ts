@@ -5,7 +5,7 @@
 // season (backupDue).
 import { Capacitor } from '@capacitor/core';
 import type { League } from '../core/types';
-import { isQuotaError, listLeagues, loadRawLeague, loadRawSnapshot, migrate, onDevice, SAVE_VERSION, saveLeague } from './persistence';
+import { adoptStored, isQuotaError, listLeagues, loadRawLeague, loadRawSnapshot, migrate, onDevice, SAVE_VERSION, saveLeague } from './persistence';
 import { useStore } from './store';
 import { checkpointLive } from './live';
 
@@ -126,8 +126,13 @@ function noteBackup(league: League, stamp: NonNullable<League['lastBackup']>) {
   const st = useStore.getState();
   // the open league: a change like any other, saved with it (during a sim the worker's copy replaces
   // this one without it: the backup is made all the same, only not noted)
-  if (st.league === league) {
-    st.mutate((l) => void (l.lastBackup = stamp));
+  // (the open league by id: a sim's checkpoint or a reload since the tap replaced the object, and
+  // writing the stale one back would undo what was played since; the playtest saw "never" after one)
+  if (st.league && st.league.id === league.id) {
+    if (!st.mutate((l) => void (l.lastBackup = stamp))) {
+      st.league.lastBackup = stamp;
+      useStore.setState({ dirty: true, v: st.v + 1 });
+    }
     return;
   }
   // one that isn't open (exported from the main menu, before a delete): saved as it is, if it came from the device
@@ -178,7 +183,14 @@ export class UnsavedLeagueError extends Error {}
  * becomes a copy. `force`: go ahead even if the open league can't be saved first (after the user
  * was offered an export of it).
  */
-export async function importLeague(file: File, { force = false } = {}): Promise<League> {
+/** The backup is of a league already on the device: restore over it, or keep both (the import a copy)? */
+export class ExistingLeagueError extends Error {
+  constructor(readonly name_: string) {
+    super(`"${name_}" is already on this device.`);
+  }
+}
+
+export async function importLeague(file: File, { force = false, existing: onExisting }: { force?: boolean; existing?: 'replace' | 'copy' } = {}): Promise<League> {
   if (useStore.getState().sim) throw new Error('Wait for the simulation to finish, then import.');
   if (file.size > MAX_IMPORT_BYTES) throw new Error(TOO_BIG);
   const json = await unpack(file);
@@ -193,10 +205,14 @@ export async function importLeague(file: File, { force = false } = {}): Promise<
   const st = useStore.getState();
   if (st.league && !force && !(await st.saveBeforeLeaving())) throw new UnsavedLeagueError('Your current league could not be saved. Export a backup of it first.');
   const existing = await listLeagues();
-  if (existing.some((m) => m.id === league.id)) {
+  const same = existing.find((m) => m.id === league.id);
+  // the same league: a restore puts the backup in its place (the way back after a season gone wrong);
+  // asked first, since what was played since the backup goes
+  if (same && !onExisting) throw new ExistingLeagueError(same.name);
+  if (same && onExisting === 'copy') {
     league.id = `${league.id}-${Date.now().toString(36)}`;
     league.name = `${league.name} (imported)`;
-  }
+  } else if (same) await adoptStored(league);
   try {
     await saveLeague(league);
   } catch (e) {

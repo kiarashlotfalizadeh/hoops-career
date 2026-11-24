@@ -265,6 +265,7 @@ describe('the live assistant and the bench', () => {
       // momentum (the engine's FEEL: from 6 unanswered, the side on it shoots better until a basket or
       // a timeout ends it): the alert comes when it starts, before the staff's own 8-0, and says so
       const hot = structuredClone(view);
+      hot.sides[0].mo = 0;
       hot.sides[1].run = FEEL.momentum.from;
       hot.sides[1].mo = 1;
       expect(momentum(FEEL.momentum.from, false)).toBeGreaterThan(0);
@@ -927,7 +928,7 @@ describe('broadcast graphics', () => {
     // a list with nothing on it has no record to break, and the record is tonight's best
     {
       // (a game whose top two scorers aren't level)
-      const { views, logs } = playThrough(26);
+      const { views, logs } = playThrough(27);
       const end = views[views.length - 1];
       const [top, second] = [...end.box.home.players].sort((a, b) => b.pts - a.pts);
       expect(second.pts).toBeGreaterThan(0);

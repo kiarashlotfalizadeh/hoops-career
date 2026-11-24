@@ -2,7 +2,7 @@ import { Fragment, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { League, Player, SeasonAwards } from '../../core/types';
 import { curTeamSeason, fmtDate, playerName, teamCity } from '../../core/league/helpers';
-import { awardRaces, type Cand as AwardCand } from '../../core/league/awards';
+import { awardRaces, ineligibleStars, type Cand as AwardCand } from '../../core/league/awards';
 import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
@@ -81,6 +81,7 @@ export function AwardsTab({ league }: { league: League }) {
           {!decided && isCurrent && <AwardRace league={league} />}
           {!decided && !isCurrent && <div className="card empty">No awards recorded for {seasonLabel(season)}.</div>}
           {decided && aw && <MajorAwards league={league} aw={aw} />}
+          {(decided || (isCurrent && started)) && <Ineligible league={league} season={season} />}
           {(decided || (isCurrent && started)) && (
             // (the All-Star MVP's row reads as his night: "East won 150-141 · 31 PTS")
             <div className="lg-note">
@@ -122,6 +123,39 @@ export function AwardsTab({ league }: { league: League }) {
 }
 
 type AwardsView = 'awards' | 'honors' | 'teams' | 'allstar';
+
+/** The stars the 65-game rule keeps off the ballot, each with an "Ineligible" badge and why: why a 30-point scorer isn't on the ladder. */
+function Ineligible({ league, season }: { league: League; season: number }) {
+  const list = useLeagueMemo(() => ineligibleStars(league, season, 5), [league, season]);
+  if (!list.length) return null;
+  return (
+    <Section
+      title="Not eligible"
+      right={
+        <Help title="The 65-game rule">
+          <p className="lg-p">The MVP, Defensive Player of the Year and All-League teams need 65 games of 82 and 20 minutes a game. Rookie and Sixth Man of the Year don&apos;t.</p>
+        </Help>
+      }
+    >
+      <div className="card flush list">
+        {list.map(({ c, why }) => (
+          <Link key={c.p.pid} to={`/player/${c.p.pid}`} className="lg-race-row">
+            <Avatar p={{ ...c.p, tid: statTid(league, c.s) ?? -1 }} />
+            <span className="lg-race-t">
+              <span className="nm ellipsis">
+                {c.p.firstName} {c.p.lastName}
+              </span>
+              <span className="sub ellipsis">
+                {teamAbbrev(league, statTid(league, c.s))} · {raceLine(c.p, season, 'off')} · {why}
+              </span>
+            </span>
+            <span className="tag">Ineligible (&lt;65 GP)</span>
+          </Link>
+        ))}
+      </div>
+    </Section>
+  );
+}
 
 // ---------------------------------------------------------------- winners
 

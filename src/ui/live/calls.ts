@@ -21,6 +21,7 @@ import { tacticsDiff, crunchTime, foulLimit, DECIDED_WIN, LEVER_TRIPS } from './
 import { crunchTime as coreCrunch, winProb } from '../../core/analysis/winProb';
 import { GAME } from '../../core/constants';
 import { staffNotes, type StaffInput, type StaffNote } from './staff';
+import type { Drawn } from './drawn';
 
 /** Most changes measured at a stop (the brief's three to five: what the game suggests, the likeliest first). */
 export const CALL_DRAFTS = 5;
@@ -116,12 +117,51 @@ export function nextStop(sim: GameSim, side: 0 | 1, seen: StopSeen, ahead: numbe
  * possible, and never one in foul trouble (at the staff's limit for the period, the next one's at a
  * break): sending him in only brings the next sub, or a foul-out.
  */
-export function benchFor(sim: GameSim, side: 0 | 1, pid: number): number | undefined {
+export function benchFor(sim: GameSim, side: 0 | 1, pid: number, opts: { exclude?: ReadonlySet<number>; prefer?: number } = {}): number | undefined {
   const t = sim.T[side];
   const out = t.byId.get(pid);
   const limit = foulLimit(sim.atBuzzer() ? sim.q + 1 : sim.q, t.t.manage.foulTrouble);
-  const score = (p: (typeof t.players)[number]) => (p.big === out?.big ? 100 : 0) + p.c.create + p.c.helpD + p.energy * 40;
-  return t.players.filter((p) => !p.on && p.out === 0 && p.energy > 0.75 && p.fouls < limit).sort((a, b) => score(b) - score(a))[0]?.pid;
+  // the man who plays his spot: same position first, then the same kind (guard, wing, big), then
+  // the rotation's own minutes for him tonight (a man the plan gives none is the last resort), then quality
+  const kind = (p: { guard: boolean; big: boolean }) => (p.guard ? 'g' : p.big ? 'b' : 'w');
+  const score = (p: (typeof t.players)[number]) =>
+    (out && p.pos === out.pos ? 60 : 0) +
+    (out && kind(p) === kind(out) ? 100 : 0) +
+    (p.planMin > 0 ? 80 + Math.min(30, p.planMin) : 0) +
+    p.c.create * 0.5 +
+    p.c.helpD * 0.5 +
+    p.energy * 30;
+  const ranked = t.players.filter((p) => !p.on && p.out === 0 && p.energy > 0.75 && p.fouls < limit && !opts.exclude?.has(p.pid)).sort((a, b) => score(b) - score(a));
+  // (the man it named last time stays named while he's nearly as good a fit: no flip-flopping from one possession to the next)
+  const kept = opts.prefer !== undefined ? ranked.find((p) => p.pid === opts.prefer) : undefined;
+  if (kept && ranked[0] && score(kept) >= score(ranked[0]) - 45) return kept.pid;
+  return ranked[0]?.pid;
+}
+
+/** One of the night's deciding stats, far against you: what it is, the two figures, and how far off. */
+export interface DecidingGap {
+  id: 'tov' | 'glass' | 'paint';
+  /** "Turnovers 21 to 8". */
+  text: string;
+  /** How far it's against you (in that stat's own points: possessions or points). */
+  size: number;
+}
+
+/**
+ * The night's deciding stats where you're far behind, the biggest first: your turnovers against
+ * theirs, their offensive rebounds against yours, their points in the paint against yours. Each only
+ * once it's big enough to be the story (6+ turnovers or offensive boards, 14+ paint points).
+ */
+export function decidingGaps(view: Pick<Drawn, 'box'>, side: 0 | 1): DecidingGap[] {
+  const [me, them] = side === 0 ? [view.box.home, view.box.away] : [view.box.away, view.box.home];
+  const out: DecidingGap[] = [];
+  const tov = me.t.tov - them.t.tov;
+  if (tov >= 6) out.push({ id: 'tov', text: `Turnovers ${me.t.tov} to ${them.t.tov}`, size: tov * 1.1 });
+  const orb = them.t.orb - me.t.orb;
+  if (orb >= 6) out.push({ id: 'glass', text: `Their offensive boards ${them.t.orb} to your ${me.t.orb}`, size: orb * 1.1 });
+  const paint = (them.extra?.paint ?? 0) - (me.extra?.paint ?? 0);
+  if (paint >= 14) out.push({ id: 'paint', text: `Points in the paint ${them.extra.paint} to ${me.extra.paint}`, size: paint / 2 });
+  return out.sort((a, b) => b.size - a.size);
 }
 
 /** Why the staff measures nothing now, if it doesn't: the game is decided, or the period's last seconds. */
@@ -176,6 +216,23 @@ export function callDrafts(input: StaffInput, sim: GameSim, skip: Set<string> = 
   const them = view.sides[1 - side];
   const margin = me.score - them.score;
   const crunch = crunchTime(view);
+
+  // the night's deciding stats far against you come first: each gets its lever measured, so the staff
+  // never sits quiet at 21 turnovers to 8 without having tried the fix (the playtest's 01 and 06)
+  for (const g of decidingGaps(view, side)) {
+    if (g.id === 'tov')
+      addTactics('secure', 'Take care of the ball', g.text, (x) => {
+        x.offense.pace = Math.max(0, x.offense.pace - 20);
+        x.offense.transition = Math.max(0, x.offense.transition - 20);
+      });
+    else if (g.id === 'glass') {
+      addTactics('boxout', 'Everyone to the glass', g.text, (x) => void (x.defense.getBack = Math.max(0, x.defense.getBack - 30)));
+      addTactics('crash', 'Crash the offensive glass', g.text, (x) => void (x.offense.crashBoards = Math.min(100, x.offense.crashBoards + 25)));
+    } else if (g.id === 'paint') {
+      if (t.defense.help <= 60) addTactics('pack-gap', 'Pack the paint', g.text, (x) => void (x.defense.help = 75));
+      else if (t.defense.scheme !== 'zone23') addTactics('zone-gap', SCHEME_META.zone23.label, g.text, (x) => void (x.defense.scheme = 'zone23'));
+    }
+  }
 
   // crunch time: a timeout (legs back, their run stopped, the play after it), and fresh legs for your
   // most tired player, the staff's own line under which it would sit him anywhere else (it plays through
@@ -336,9 +393,10 @@ export function callNote(c: Extract<StaffCall, { state: 'call' }>): StaffNote {
 export const CALL_BANNER_LINE = 'The staff thinks this helps.';
 
 /** The staff's line when it found nothing to change, or while it looks. */
-export function callQuietLine(c: StaffCall | null): string | null {
+export function callQuietLine(c: StaffCall | null, gap?: DecidingGap): string | null {
   if (!c) return null;
-  if (c.state === 'measuring') return 'The staff is talking it over…';
-  if (c.state === 'none') return 'Nothing the staff would change right now.';
+  if (c.state === 'measuring') return gap ? `${gap.text}: the staff is measuring the fix…` : 'The staff is talking it over…';
+  // a deciding stat far off is named even when nothing measured fixes it: silence at 21 turnovers to 8 reads as not watching
+  if (c.state === 'none') return gap ? `${gap.text}: that's what's deciding it, but nothing the staff measured helps from here.` : 'Nothing the staff would change right now.';
   return null;
 }

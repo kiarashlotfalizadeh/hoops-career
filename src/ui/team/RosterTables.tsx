@@ -128,9 +128,10 @@ export function RosterStats({ league, roster }: { league: League; roster: Player
     {
       key: 'on',
       label: 'ON NET',
-      get: (p) => (current ? stat(p, 'onOff') : -Infinity),
-      fmt: (v) => signed(v as number),
-      help: 'Net rating with him on the floor, per 100 possessions',
+      // (under 100 minutes on the floor a net rating is noise: −100.0 after a garbage-time cameo)
+      get: (p) => (current && stat(p, 'min') * stat(p, 'gp') >= 100 ? stat(p, 'onOff') : -Infinity),
+      fmt: (v) => (Number.isFinite(v as number) ? signed(v as number) : '—'),
+      help: 'Net rating with him on the floor, per 100 possessions (from 100 minutes)',
     },
   ];
   return (

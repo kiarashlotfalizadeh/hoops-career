@@ -10,7 +10,7 @@ import { CAP_FOR, curTeamSeason, freeAgents, standardRoster, statsLine, teamPlay
 import { askingContract, releasePlayer, signPlayer, valueScore } from '../league/contracts';
 import { signingClosedReason, userOffer } from '../league/freeAgency';
 import { tradingClosedReason, validateTrade } from '../league/trades';
-import { ensureRotation, wearInjuryRisk } from '../league/games';
+import { ensureRotation, teamInjuryMult, wearInjuryRisk } from '../league/games';
 import { fitRoster, styleChanged } from '../ai/coachAI';
 import { coachStyle, coverageFor } from '../ai/style';
 import { finalsHomeCourt, standings } from '../league/standings';
@@ -777,9 +777,14 @@ describe('injuries, wear and development', () => {
       p.wear = 30;
       expect(wearInjuryRisk(p)).toBe(0);
       p.wear = 70;
-      expect(wearInjuryRisk(p)).toBeCloseTo(0.3);
+      expect(wearInjuryRisk(p)).toBeCloseTo(0.15);
       p.wear = 100;
-      expect(wearInjuryRisk(p)).toBeCloseTo(0.6);
+      expect(wearInjuryRisk(p)).toBeCloseTo(0.3);
+      // and a team already treating several players manages the rest more carefully: past five out, nobody new goes down
+      const t = league().teams[U];
+      expect(teamInjuryMult(t, 3)).toBeLessThan(teamInjuryMult(t, 0));
+      expect(teamInjuryMult(t, 5)).toBeLessThan(teamInjuryMult(t, 3));
+      expect(teamInjuryMult(t, 6)).toBe(0);
     }
   }, 180_000);
 });

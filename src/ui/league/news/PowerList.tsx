@@ -1,5 +1,6 @@
 // The press's power rankings: rank, the week's move, the team and its record, and the press's line
 // on it. In full on Standings → Power; the News front page shows the top five and your team.
+import { keepFigures } from '../../../core/format';
 import { Link } from 'react-router-dom';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import type { League } from '../../../core/types';
@@ -35,7 +36,10 @@ export function PowerList({ league, rows, blurbs = true }: { league: League; row
       {rows.map((r, i) => {
         const t = league.teams[r.tid];
         // the record the line was written on (older rankings: today's, read, never created in a render)
-        const ts = r.w !== undefined && r.l !== undefined ? { won: r.w, lost: r.l } : (t.seasons.find((x) => x.season === league.season) ?? { won: 0, lost: 0 });
+        const now = t.seasons.find((x) => x.season === league.season) ?? { won: 0, lost: 0 };
+        const ts = r.w !== undefined && r.l !== undefined ? { won: r.w, lost: r.l } : now;
+        // (the record today beside it when games were played since: never a stale record read as the final)
+        const since = r.w !== undefined && now.won + now.lost > ts.won + ts.lost ? now : null;
         const gap = i > 0 && rows[i - 1].rank !== r.rank - 1;
         return (
           <Link key={r.tid} to={teamPath(r.tid)} className={`lg-pw-row ${r.tid === league.userTid ? 'me' : ''} ${gap ? 'gap' : ''}`}>
@@ -47,7 +51,8 @@ export function PowerList({ league, rows, blurbs = true }: { league: League; row
               <span className="lg-pw-name">
                 <span className="ellipsis">{teamCity(league, t)}</span>
                 <span className="lg-pw-rec num">
-                  {ts.won}-{ts.lost}
+                  {since ? keepFigures(`${since.won}-${since.lost}`) : keepFigures(`${ts.won}-${ts.lost}`)}
+                  {since && <span className="dim"> · {keepFigures(`${ts.won}-${ts.lost}`)} when ranked</span>}
                 </span>
               </span>
               {(typeof blurbs === 'function' ? blurbs(r) : blurbs) && <span className="lg-pw-blurb">{keep(r.blurb)}</span>}

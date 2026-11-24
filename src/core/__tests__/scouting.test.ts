@@ -532,7 +532,8 @@ describe('scouting and the staff', () => {
       let rep = buildGameReport(league, res)!;
       const ff = rep.fourFactors;
       const efgSwing = (ff.user.efg - ff.opp.efg) * (us.t.fga + them.t.fga);
-      expect(rep.factors.some((f) => f.category === 'shooting' && !f.luck)).toBe(false);
+      // (a hot hand the defense let run is the engine's edge, told as one: not the looks)
+      expect(rep.factors.some((f) => f.category === 'shooting' && !f.luck && !f.key?.startsWith('hot_hand'))).toBe(false);
       const luck = rep.factors.find((f) => f.luck);
       expect(!!luck).toBe(Math.abs(efgSwing) >= 3);
       if (luck) {
@@ -546,7 +547,7 @@ describe('scouting and the staff', () => {
       expect(rep.factors.some((f) => f.luck)).toBe(false);
       const looks = rep.factors.find((f) => f.category === 'shooting');
       expect(!!looks).toBe(Math.abs(efgSwing) >= 3);
-      if (looks) expect(looks.title).toMatch(/got the better looks: worth/);
+      if (looks) expect(looks.title).toMatch(/got the better looks: shots worth .+ eFG to .+, made .+ to .+\./);
       // the luck in points, each side's own: made points less what its looks were worth
       res.xShots = side({ pts: fgPts(us) - 6, tpm: us.t.tpm }, { pts: fgPts(them) - 20, tpm: them.t.tpm });
       expect(luckPts(res, me)).toBeCloseTo(6, 6);

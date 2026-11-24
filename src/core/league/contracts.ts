@@ -104,6 +104,9 @@ export function tradeValue(league: League, p: Player, strategy: Strategy = 'reto
 export function valueParts(league: League, p: Player, strategy: Strategy = 'retool'): { player: number; burden: number } {
   let s = valueScore(league, p);
   const a = age(league, p);
+  // a star past 29 is priced for what he still does in the seasons he is signed for, as the market
+  // pays him (STAR_AGE_TRADE)
+  if (a >= 30) s += (a - 29) * 1.1 * STAR_AGE_TRADE * clamp((p.ovr - 84) / 6, 0, 1);
   if (strategy === 'rebuild') {
     if (a <= 24) s += 2;
     if (a >= 29) s -= 3 + (a - 29) * 0.8;
@@ -120,6 +123,8 @@ export function valueParts(league: League, p: Player, strategy: Strategy = 'reto
   // money: the cap, and what he'd earn on the market, grow every season.
   const cs = contractSeason(league);
   const exp = contractExp(p.contract);
+  // the seasons of him the deal brings (see controlFactor; a rookie-scale deal's cheap seasons are its surplus below)
+  if (!p.contract.rookie) v *= controlFactor(a, exp - cs + 1, strategy);
   const market = marketSalary(league, p);
   // an undecided team option (the last year) can be declined, so it never counts as a burden
   const optionSeason = teamOptionOpen(league, p) ? exp : null;
@@ -131,6 +136,38 @@ export function valueParts(league: League, p: Player, strategy: Strategy = 'reto
     else if (s !== optionSeason) burden -= x;
   }
   return { player: v + surplus * SURPLUS_VALUE[strategy], burden: contractBurden(league, burden, strategy) };
+}
+
+/**
+ * Of the yearly age discount past 29 in his value (valueScore), the share a trade gives back to a
+ * star (90+; part of it from 85): his team trades what he still does in the seasons he is signed
+ * for, as the market pays him for it (STAR_AGE_PAY). Discounted in full, a 33-year-old 90 counted
+ * as an 85.6: his AI team took a 29-year-old 87 for him and "would jump at it".
+ */
+export const STAR_AGE_TRADE = 0.5;
+
+/**
+ * The seasons of a player a deal brings: each season he is signed for counts by CONTROL_WEIGHTS (the
+ * first, this one, in full; later ones less, a contender's least), and each after his deal at
+ * RESIGN_SHARE (his Bird rights: he may re-sign, at his market price). Seasons past 28 fade out by
+ * 32 (his decline is valueScore's), so control counts for prime-age players, not old ones. Relative
+ * to two seasons of him, so most deals are where they were. Without it an expiring 28-year-old 85
+ * was worth more than a 25-year-old 84 signed for four more seasons, to every team: AI Orlando gave
+ * Franz Wagner and a first for Michael Porter Jr.'s last season (Wagner then rose to 88). Now a
+ * prime-age player's expiring deal counts about 80% of two seasons, and a young one's four seasons
+ * about 125% (with later seasons counting a little more, two of star-check's eight leagues gave one
+ * franchise five or six of their eight titles).
+ */
+const CONTROL_WEIGHTS: Record<Strategy, number[]> = { contend: [1, 0.5, 0.3, 0.2], retool: [1, 0.55, 0.4, 0.3], rebuild: [1, 0.65, 0.5, 0.4] };
+const RESIGN_SHARE = 0.35;
+
+/** How much the seasons of him a deal brings count (1 for two seasons), at age `a` with `left` seasons signed (this one included). */
+export function controlFactor(a: number, left: number, strategy: Strategy): number {
+  const w = CONTROL_WEIGHTS[strategy];
+  const n = clamp(left, 1, w.length);
+  const fade = (x: number) => clamp((32 - x) / 4, 0, 1);
+  const seasons = (k: number) => w.reduce((acc, wt, t) => acc + (t === 0 ? 1 : wt * fade(a + t) * (t < k ? 1 : RESIGN_SHARE)), 0);
+  return seasons(n) / seasons(2);
 }
 
 /** Trade value of `overpay` ($K, this season's money) of salary over a player's worth, to a team of this strategy (see DUMP_PER_FIRST). */
@@ -466,23 +503,35 @@ export function askingContract(league: League, p: Player, tid?: number): Ask {
  * those rated 72-79 for about the minimum by days 9-13, so a team with room that waited signed
  * starters for nothing. With the floors: no 80+ under 55%, in a summer or after, and no 72-79 under
  * 35% in a summer (in season his price comes down 15% a week, see faDay).
+ * Held at `late` to the market's close, though, the 80+ players nobody could pay that much by day 20
+ * sat out the summer: Ty Jerome (85) at $24.4M and Jimmy Butler (86) at $17.1M were unsigned on day
+ * 30 and into the preseason, with the mid-levels and the room left a few million short. So past the
+ * floor's day it comes down a little every day, to `end` on the last (a quarter of his value, under
+ * the mid-level for all but the max players; a fifth for a rotation player), and stays there through
+ * the preseason and, for an 80+ player, the season (`hold`): the top of the market signs within the
+ * window, the last of it for what the money left can pay.
  */
-export const SUMMER_FLOOR = { ovr: 80, early: 0.75, day: 20, late: 0.6, mle: 0.55, hold: 0.55 };
+export const SUMMER_FLOOR = { ovr: 80, early: 0.75, day: 20, late: 0.6, end: 0.25, mle: 0.55, hold: 0.25 };
 /** A rotation player's summer floor (72-79 OVR): see SUMMER_FLOOR. */
-export const ROTATION_FLOOR = { ovr: 72, early: 0.5, late: 0.4 };
+export const ROTATION_FLOOR = { ovr: 72, early: 0.5, late: 0.4, end: 0.2 };
 
 /** His summer floor's shares of his market value (see SUMMER_FLOOR), or null under 72 OVR. */
-export const floorTier = (p: Player): { early: number; late: number } | null => (p.ovr >= SUMMER_FLOOR.ovr ? SUMMER_FLOOR : p.ovr >= ROTATION_FLOOR.ovr ? ROTATION_FLOOR : null);
+export const floorTier = (p: Player): { early: number; late: number; end: number } | null =>
+  p.ovr >= SUMMER_FLOOR.ovr ? SUMMER_FLOOR : p.ovr >= ROTATION_FLOOR.ovr ? ROTATION_FLOOR : null;
 
-/** His summer floor through SUMMER_FLOOR.day (`early`), after it (`late`) and an 80+ player's in season (`hold`, 0 under 80), $K, or null under 72 OVR (see SUMMER_FLOOR). */
-export function floorAmounts(league: League, p: Player): { early: number; late: number; hold: number } | null {
+/**
+ * His summer floor through SUMMER_FLOOR.day (`early`), on that day (`late`, from which it comes down a
+ * little every day to `end` on the market's last day, see summerFloor) and an 80+ player's in season
+ * (`hold`, 0 under 80), $K, or null under 72 OVR (see SUMMER_FLOOR).
+ */
+export function floorAmounts(league: League, p: Player): { early: number; late: number; end: number; hold: number } | null {
   const f = floorTier(p);
   if (!f) return null;
   const m = marketSalary(league, p);
   const star = p.ovr >= SUMMER_FLOOR.ovr;
   const mle = exceptionAmount(league, 'mle');
   const most = star && mle >= m * SUMMER_FLOOR.mle ? mle : Infinity;
-  return { early: Math.min(m * f.early, most), late: Math.min(m * f.late, most), hold: star ? Math.min(m * SUMMER_FLOOR.hold, most) : 0 };
+  return { early: Math.min(m * f.early, most), late: Math.min(m * f.late, most), end: Math.min(m * f.end, most), hold: star ? Math.min(m * SUMMER_FLOOR.hold, most) : 0 };
 }
 
 /**
@@ -495,7 +544,11 @@ export function summerFloor(league: League, p: Player): number {
   const a = league.phase === 'freeAgency' || league.phase === 'preseason' || league.phase === 'regular' ? floorAmounts(league, p) : null;
   if (!a) return 0;
   if (league.phase === 'regular') return p.released?.season === league.season ? 0 : a.hold;
-  return league.phase === 'freeAgency' && league.faDay < SUMMER_FLOOR.day ? a.early : a.late;
+  if (league.phase !== 'freeAgency') return a.end;
+  if (league.faDay < SUMMER_FLOOR.day) return a.early;
+  // past the floor's day it comes down a little every day, to `end` on the market's last day
+  const t = clamp((league.faDay - SUMMER_FLOOR.day) / Math.max(1, FA_DAYS - 1 - SUMMER_FLOOR.day), 0, 1);
+  return a.late + (a.end - a.late) * t;
 }
 
 export function willSign(league: League, p: Player, tid: number, amount: number, years: number): { ok: boolean; reason: string } {

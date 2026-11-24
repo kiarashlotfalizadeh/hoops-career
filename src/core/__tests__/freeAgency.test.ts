@@ -43,6 +43,7 @@ import {
   marketMoney,
   marqueeFA,
   mostPayable,
+  offerUtility,
   offerBlockedReason,
   offerRoute,
   pendingBid,
@@ -267,9 +268,10 @@ it('the market: the mid-level, minimums, roster limits, prices over the summer, 
 
   // a top free agent holds his price through the market's first days; then, no team able to pay it,
   // it comes down toward the most a team could pay him but never below his summer floor (75% of his
-  // value through day 20, 60% after on a one-year deal, see SUMMER_FLOOR), straight to it when that
-  // money is less: with only mid-levels left he goes unsigned rather than sign one at a fraction of
-  // his value
+  // value through day 20, 60% on it on a one-year deal, see SUMMER_FLOOR), straight to it when that
+  // money is less; past day 20 the floor comes down a little every day, to a quarter of his value on
+  // the last, so with only mid-levels left he signs one in the market's last days instead of sitting
+  // out the summer (an 85 at $24.4M and an 86 at $17.1M were unsigned on day 30)
   {
     const l = txLeague();
     l.phase = 'freeAgency';
@@ -298,18 +300,33 @@ it('the market: the mid-level, minimums, roster limits, prices over the summer, 
     expect(star.tid).toBe(FREE_AGENT);
     const m = marketSalary(l, star);
     expect(Math.abs(star.asking!.amount - m * SUMMER_FLOOR.early)).toBeLessThan(20);
-    for (let d = MARKET_HOLD_DAYS + 1; d < 25 && star.tid === FREE_AGENT; d++) {
+    const floors: number[] = [];
+    for (let d = MARKET_HOLD_DAYS + 1; d < FA_DAYS && star.tid === FREE_AGENT; d++) {
       const most = marketMoney(l, star);
       l.faDay = d;
+      const floor = summerFloor(l, star);
+      floors.push(floor);
+      if (d === SUMMER_FLOOR.day) expect(Math.abs(floor - m * SUMMER_FLOOR.late)).toBeLessThan(1);
+      if (d === FA_DAYS - 1) expect(Math.abs(floor - m * SUMMER_FLOOR.end)).toBeLessThan(1);
       faDay(l, rng, 0, d + 1);
-      if (star.tid === FREE_AGENT) expect(star.asking!.amount).toBeGreaterThanOrEqual(Math.min(most, m * SUMMER_FLOOR.late) - 20);
-      expect(star.asking!.amount).toBeGreaterThanOrEqual(m * (d < SUMMER_FLOOR.day ? SUMMER_FLOOR.early : SUMMER_FLOOR.late) - 20);
+      if (star.tid === FREE_AGENT) {
+        expect(star.asking!.amount).toBeGreaterThanOrEqual(Math.min(most, floor) - 20);
+        expect(star.asking!.amount).toBeGreaterThanOrEqual(floor - 20);
+      }
+      // (on the floor's day, held at it, he asks a one-year deal, and no offer under it is considered)
+      if (d === SUMMER_FLOOR.day && star.tid === FREE_AGENT) {
+        expect(Math.abs(star.asking!.amount - m * SUMMER_FLOOR.late)).toBeLessThan(20);
+        expect(star.asking!.years).toBe(1);
+        expect(bidFloor(l, star, 1)).toBeGreaterThanOrEqual(m * SUMMER_FLOOR.late - 50);
+      }
     }
-    expect(star.tid).toBe(FREE_AGENT);
-    expect(Math.abs(star.asking!.amount - m * SUMMER_FLOOR.late)).toBeLessThan(20);
-    // (past the floor's day, held at it, he asks a one-year deal, and no offer under it is considered)
-    expect(star.asking!.years).toBe(1);
-    expect(bidFloor(l, star, 1)).toBeGreaterThanOrEqual(m * SUMMER_FLOOR.late - 50);
+    // the floor came down a little every day past the floor's day, never back up
+    for (let i = 1; i < floors.length; i++) expect(floors[i]).toBeLessThanOrEqual(floors[i - 1] + 1);
+    expect(floors.length).toBeGreaterThan(SUMMER_FLOOR.day - MARKET_HOLD_DAYS);
+    // and a mid-level signed him before the market closed, for no less than the last day's floor
+    expect(star.tid).not.toBe(FREE_AGENT);
+    expect(star.contract.salaries[0]).toBeGreaterThanOrEqual(m * SUMMER_FLOOR.end - 50);
+    expect(star.contract.salaries[0]).toBeLessThan(m * SUMMER_FLOOR.late);
   }
 
   // an 80+ free agent's summer floor (75% of his value) holds a keen team's or a ring chaser's ask,
@@ -556,6 +573,34 @@ it('the market: the mid-level, minimums, roster limits, prices over the summer, 
 }, 120_000);
 
 it('competing offers for top free agents (W5, B2), and the player priorities they weigh', () => {
+  // a bid at or a little over his asking price, from a team about as appealing as the field, wins:
+  // the money counts against his price (of the market), not each team's own (which its appeal already
+  // moved), so an offer at a team's own ask scores about the same as any other team's at its own. With
+  // the appeal counted twice, a team he liked 10% less needed 25-45% over its ask to win him
+  {
+    const { l, open } = bidsSummer(6);
+    open(U, 45, 0.5);
+    open(2, 47, 0.5);
+    l.teams[2].strategy = 'contend';
+    open(3, 44, 0.5);
+    const ps = stars(l, 6, 84);
+    let leads = 0;
+    for (const p of ps) {
+      const ask = askingContract(l, p, U);
+      const st = bidStanding(l, p, Math.round((ask.amount * 1.1) / 50) * 50, ask.years);
+      if (st.leads) leads++;
+      expect(st.offers.length).toBeGreaterThan(0);
+      expect(st.toLead!).toBeLessThan(ask.amount * 1.2);
+      for (const tid of [U, 2, 3]) {
+        const own = askingContract(l, p, tid);
+        const u = offerUtility(l, p, tid, own.amount, own.years, EVEN_PREFS);
+        expect(u).toBeGreaterThan(0.9);
+        expect(u).toBeLessThan(1.12);
+      }
+    }
+    expect(leads).toBeGreaterThanOrEqual(4);
+  }
+
   // only top free agents weigh offers, and only in the summer
   {
     const { l, open } = bidsSummer();
