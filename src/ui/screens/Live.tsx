@@ -33,7 +33,7 @@ import { flowActions } from '../flow';
 import { canGoBack } from '../nav';
 import { sealedGame, simDecided, skipChoices } from '../live/skip';
 import { courtFloor, type Woe } from '../live/Court';
-import { CourtView } from '../live/CourtView';
+import { CourtView, courtLookOf } from '../live/CourtView';
 import { occasionOf, postOf } from '../live/occasion';
 import { bodyOf } from '../live/court3d/puppet';
 import { coldHand, drawnPlayer, hotHand } from '../live/drawn';
@@ -704,7 +704,7 @@ export default function Live() {
       {/* (sideways, a tap on the court with the drawer out puts the drawer away) */}
       <div className="lv-stage" onClick={side && drawer && !frozen ? () => setDrawer(false) : stop || frozen || s.intro ? undefined : () => setCourtTap((n) => n + 1)}>
         <CourtView
-          look={league.settings.courtLook ?? '3d'}
+          look={courtLookOf(league.settings.courtLook)}
           onLook={(v) => edit((l) => void (l.settings.courtLook = v))}
           cam={league.settings.courtCam}
           onCam={(v) => edit((l) => void (l.settings.courtCam = v))}
@@ -836,7 +836,7 @@ export default function Live() {
             score={[view.sides[0].score, view.sides[1].score]}
             label={view.q > 4 ? `Final · ${view.q === 5 ? 'OT' : `${view.q - 4}OT`}` : 'Final'}
             won={view.sides[userSide].score > view.sides[1 - userSide].score}
-            hold={occasion && (league.settings.courtLook ?? '3d') === '3d' ? FINAL_HOLD[occasion] : undefined}
+            hold={occasion && courtLookOf(league.settings.courtLook) === '3d' ? FINAL_HOLD[occasion] : undefined}
             onDone={s.endBuzzer}
           />
         )}

@@ -8,6 +8,7 @@ import seedJson from '../../data/seed.json';
 import { testLeague } from '../../state/__tests__/fixtures';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { anchorRatings, ratingMeans } from '../league/progression';
+import { ordinal } from '../format';
 import { RATING_KEYS } from '../ratings';
 import {
   autoDraftUserPick,
@@ -23,7 +24,7 @@ import {
   startRegularSeason,
   userDraftPick,
 } from '../league/season';
-import { aiChoose, draftNeed, draftOrder, draftPlayer, draftScore, draftUntilUser, generateDraftClass, lotteryOdds, nextPick, runLottery } from '../league/draft';
+import { aiChoose, draftNeed, draftOrder, draftPlayer, draftScore, draftUntilUser, generateDraftClass, lotteryOdds, nextPick, revealLottery, runLottery } from '../league/draft';
 import {
   consensusRead,
   draftRecord,
@@ -41,7 +42,7 @@ import {
 import { mockAvailable, mockDraft } from '../league/mockDraft';
 import { FIRED_REASON, askingContract, decideTeamOption, marketSalary, pendingOption, releasePlayer, valueScore } from '../league/contracts';
 import { expiringPlayers, faDay, userResign, walkRisks } from '../league/freeAgency';
-import { CAP_FOR, contractSeason, curTeamSeason, dayToDate, freeAgents, prospects, standardRoster, statsLine, teamPlayers, winPct, withRng } from '../league/helpers';
+import { CAP_FOR, contractSeason, curTeamSeason, dayToDate, freeAgents, prospects, standardRoster, statsLine, teamCity, teamPlayers, winPct, withRng } from '../league/helpers';
 import { ensureRotation } from '../league/games';
 import { takeOverTeam } from '../league/owner';
 import { contractExp } from '../playerGen';
@@ -85,6 +86,22 @@ describe('the draft', () => {
       // the user's second-round pick must still be waiting
       expect(draftOrder(league).filter((d) => d.tid === 5).length).toBe(1);
       expect(nextPick(league)?.tid).toBe(5);
+    }
+
+    // the lottery's news names the team holding the No. 1 pick, and the team whose spot in the odds it won from
+    {
+      const league = createLeague({ name: 't', userTid: 5, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 3 });
+      league.phase = 'draftLottery';
+      // every first has changed hands, so whoever wins the drawing holds another team's pick
+      for (const d of league.draftPicks.filter((d) => d.season === league.season && d.round === 1)) d.tid = (d.originalTid + 1) % league.teams.length;
+      const top = runLottery(league, new Rng(1)).order[0];
+      revealLottery(league);
+      const holder = draftOrder(league).find((d) => d.round === 1 && d.pick === 1)!;
+      expect(holder.originalTid).toBe(top.tid);
+      const news = league.news.find((n) => n.text.startsWith('Draft lottery:'))!;
+      expect(news.text).toBe(
+        `Draft lottery: ${teamCity(league, holder.tid)} wins the No. 1 pick. It came from ${teamCity(league, top.tid)}, ${ordinal(top.pre)} in the odds.`,
+      );
     }
 
     // a pick of a player who is off the board (a double tap on consecutive picks) is refused instead of throwing

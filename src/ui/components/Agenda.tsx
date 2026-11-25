@@ -21,12 +21,14 @@ import './agenda.css';
  */
 export const pendingConfirm: { label: string | null; cancel?: () => void } = { label: null };
 
-/** How long a choice waits on its second tap. */
-const ARM_MS = 8000;
 /**
- * The choices armed, by row, until when: a row that unmounts and comes back (another tab and back,
- * the sheet closed and opened) still waits on its second tap.
+ * How long a choice waits on its second tap once its row is gone (another tab and back, the sheet
+ * closed and opened). While the row shows, it waits until it's answered: it used to lapse after these
+ * eight seconds on screen too, while its cost (a deal's three lines) was still being read, and the
+ * Confirm tap then only armed it again: a tap that "didn't register" (the playtest, 2026-11-25).
  */
+const ARM_MS = 8000;
+/** The choices armed, by row, and until when (Infinity while the row shows). */
 const armedRows = new Map<string, { label: string; until: number }>();
 
 /**
@@ -75,22 +77,20 @@ export function AgendaRow({ item }: { item: AgendaItem }) {
   });
   const setArmed = (label: string | null) => {
     if (label) {
-      armedRows.set(item.id, { label, until: Date.now() + ARM_MS });
+      armedRows.set(item.id, { label, until: Infinity });
       haptic();
     } else armedRows.delete(item.id);
     setArmedState(label);
   };
+  // shown, it waits; the row gone, its second tap is kept for ARM_MS
   useEffect(() => {
     if (!armed) return;
-    const left = (armedRows.get(item.id)?.until ?? Date.now() + ARM_MS) - Date.now();
-    const t = setTimeout(
-      () => {
-        armedRows.delete(item.id);
-        setArmedState(null);
-      },
-      Math.max(0, left),
-    );
-    return () => clearTimeout(t);
+    const a = armedRows.get(item.id);
+    if (a) a.until = Infinity;
+    return () => {
+      const b = armedRows.get(item.id);
+      if (b && b.label === armed) b.until = Date.now() + ARM_MS;
+    };
   }, [armed, item.id]);
   // a trade offer shown as a row has been seen: its date stands as it reads (see markOffersSeen)
   useEffect(() => {

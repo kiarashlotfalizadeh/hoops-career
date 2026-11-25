@@ -1,5 +1,5 @@
 import type { League, TeamSeason } from '../types';
-import { curTeamSeason, winPct } from './helpers';
+import { curTeamSeason, unscheduledGames, winPct } from './helpers';
 
 export interface StandingRow {
   tid: number;
@@ -233,6 +233,7 @@ export function standings(league: League, season = league.season): StandingRow[]
       left.set(g.home, (left.get(g.home) ?? 0) + 1);
       left.set(g.away, (left.get(g.away) ?? 0) + 1);
     }
+    for (const t of league.teams) left.set(t.tid, (left.get(t.tid) ?? 0) + unscheduledGames(league, t.tid));
   }
   const maxWins = (r: StandingRow) => r.won + (left.get(r.tid) ?? 0);
   // with every game played the tiebreakers have settled the seeds, ties at a cut included

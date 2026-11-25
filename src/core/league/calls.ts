@@ -29,7 +29,7 @@
 // INJURY_AGE of his games is ridden out. Nothing here draws from the league's random stream.
 import type { GamePlanItem, GameResult, League, PlayInGame, PlayoffSeries, Player, Pos, ScheduledGame } from '../types';
 import { FREE_AGENT } from '../types';
-import { fmtDate, payroll, playerName, standardRoster, teamCity } from './helpers';
+import { fmtDate, payroll, playerName, standardRoster, teamCity, teamGamesLeft } from './helpers';
 import { confStandings } from './standings';
 import { money, plural } from '../format';
 import {
@@ -350,7 +350,7 @@ function hurtStars(league: League): { p: Player; id: string }[] {
   const hurt = roster.slice(0, STARTER_RANK).filter((p) => p.injury && p.injury.gamesTotal >= STAR_OUT && p.injury.gamesRemaining > 2);
   if (!hurt.length || league.phase !== 'regular' || league.day <= league.tradeDeadlineDay) return hurt.map((p) => ({ p, id: `injury:${p.pid}:${p.injuryCount}` }));
   const me = league.teams[league.userTid];
-  const left = league.schedule.filter((g) => g.type === 'regular' && !g.played && (g.home === me.tid || g.away === me.tid)).length;
+  const left = teamGamesLeft(league, me.tid);
   const settledPlace = !!confStandings(league, me.conf).find((r) => r.tid === me.tid)?.clinched;
   return hurt.filter((p) => !(settledPlace && p.injury!.gamesRemaining >= left)).map((p) => ({ p, id: `injury:${p.pid}:${p.injuryCount}` }));
 }
@@ -795,7 +795,7 @@ export interface DealGoal {
 }
 
 /** His regular-season games left. */
-const gamesLeft = (league: League) => league.schedule.filter((g) => !g.played && g.type === 'regular' && (g.home === league.userTid || g.away === league.userTid)).length;
+const gamesLeft = (league: League) => teamGamesLeft(league, league.userTid);
 
 /**
  * What a deal does to the owner's payroll and youth goals this season: the payroll against his line,

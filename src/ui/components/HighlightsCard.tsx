@@ -7,7 +7,7 @@ import type { GameResult, League } from '../../core/types';
 import { composites } from '../../core/ratings';
 import { buildScript, captionAt, type Script } from '../live/choreo';
 import { courtFloor } from '../live/Court';
-import { CourtView } from '../live/CourtView';
+import { CourtView, courtLookOf } from '../live/CourtView';
 import { bodyOf } from '../live/court3d/puppet';
 import { edit } from '../../state/actions';
 import { matchKits } from '../teamColors';
@@ -77,7 +77,7 @@ export function HighlightsCard({ league, res }: { league: League; res: GameResul
         <div className="gd-hl">
           <div className="gd-hl-court">
             <CourtView
-              look={league.settings.courtLook ?? '3d'}
+              look={courtLookOf(league.settings.courtLook)}
               onLook={(v) => edit((l) => void (l.settings.courtLook = v))}
               cam={league.settings.courtCam}
               onCam={(v) => edit((l) => void (l.settings.courtCam = v))}

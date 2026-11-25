@@ -302,6 +302,28 @@ export function pickName(rng: Rng, intlBias = 1): { first: string; last: string;
   return { first, last, country: pool.country, college };
 }
 
+/**
+ * Players seen together (a draft class on the board) given first names of their own: one whose first
+ * name an earlier one has takes the next in his country's pool that nobody has and that makes no name
+ * already `taken` (two of a class's top three were both Daiki, from a pool of six). No draw is made,
+ * so the league's stream runs as it did. `used`: first names already on the board.
+ */
+export function ownFirstNames(players: Player[], used: Set<string>, taken: Set<string>) {
+  for (const p of players) {
+    if (used.has(p.firstName)) {
+      const pool = NAME_POOLS.find((x) => x.country === p.country)?.first ?? [];
+      const at = Math.max(0, pool.indexOf(p.firstName));
+      const free = pool.map((_, k) => pool[(at + k) % pool.length]).find((f) => !used.has(f) && !taken.has(`${f} ${p.lastName}`));
+      if (free) {
+        taken.delete(`${p.firstName} ${p.lastName}`);
+        p.firstName = free;
+        taken.add(`${free} ${p.lastName}`);
+      }
+    }
+    used.add(p.firstName);
+  }
+}
+
 export function playerAge(p: Pick<Player, 'bornYear'>, season: number) {
   // season 2027 = 2026-27; age as of Feb 1 of the season, like Basketball Reference
   return season - p.bornYear;

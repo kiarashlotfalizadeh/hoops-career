@@ -60,7 +60,7 @@ import {
 import { counterOffers, dealAddsText, makeDealWork, makeItWork } from '../league/tradeHelp';
 import { facilitatedDeal } from '../league/aiTrades';
 import { neutralBalance } from '../league/tradePackages';
-import { aiChoose, draftPlayer, ensureFuturePicks, nextPick, runLottery } from '../league/draft';
+import { aiChoose, draftPlayer, ensureFuturePicks, lotteryRevealed, nextPick, revealLottery, runLottery } from '../league/draft';
 import { shareRevenue } from '../league/finances';
 import { txnLine, txnText } from '../league/transactions';
 import { CAP } from '../constants';
@@ -1402,6 +1402,11 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
       expect([right.tid, subject.tid]).toEqual(used ? [AI, U] : [U, AI]);
       const swaps = (l.transactions ?? []).slice(logged).filter((t) => t.kind === 'swap');
       expect(swaps.length).toBe(used ? 1 : 0);
+      // what the drawing made news of waits for the user's reveal of it, so nothing tells his slot first
+      expect(l.inbox.some((m) => m.subject.startsWith('Pick swap')) || l.news.some((n) => n.text.startsWith('Pick swap:'))).toBe(false);
+      expect(lotteryRevealed(l)).toBe(false);
+      revealLottery(l);
+      expect(lotteryRevealed(l)).toBe(true);
       if (used) {
         expect(txnText(l, txnLine(swaps[0], { tid: U }))).toBe(`Swapped firsts with ${l.teams[AI].abbrev}: took the ${y} 1st #${subject.pick} for the ${y} 1st #${right.pick}`);
         expect(l.news.some((n) => n.text.startsWith('Pick swap:') && n.text.includes(`picks #${subject.pick} instead of #${right.pick}`))).toBe(true);

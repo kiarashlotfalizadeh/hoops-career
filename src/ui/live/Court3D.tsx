@@ -16,6 +16,7 @@ import type { Body } from './court3d/puppet';
 import { loadModels, type Models } from './court3d/models';
 import type { CourtScene, Disc, Labels, Lite } from './court3d/scene';
 import { localPoint } from './turn';
+import { softwareGL } from './gl';
 import type { Occasion } from './occasion';
 
 /** Where CourtView reaches the broadcast: an instant replay at a possession's end, and its end. */
@@ -182,8 +183,8 @@ export default function Court3D(props: Court3DProps) {
     let fontsIn = 0;
     document.fonts?.ready.then(() => void (fontsIn = 1));
     const floorCv = document.createElement('canvas');
-    // how sharp it's drawn: full, or less on a device that can't keep up
-    let level = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? TOUCH_START : 0;
+    // how sharp it's drawn: full, or less on a device that can't keep up (all it can give up drawn in software)
+    let level = softwareGL() ? STEPS.length - 1 : typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? TOUCH_START : 0;
     let sized = '';
     let camWas = live.current.cam;
     let frames = 0;

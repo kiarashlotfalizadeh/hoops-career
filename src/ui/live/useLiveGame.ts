@@ -785,13 +785,13 @@ export function useLiveGame() {
     // the sim runs a possession ahead of the court: already at the buzzer, "End of quarter" stops at this break, not the next one
     if (!(to === 'quarter' && !atBreak && lg.sim.clock <= 0.05)) lg.simTo(to, to === 'end' ? undefined : hurtNow);
     const hurt = to === 'end' ? [] : hurtStarters(lg.sim, side, from);
-    // clutch time in a game decided by then has no finish to watch: on to the final
-    const decided = to === 'clutch' && !hurt.length && !lg.over && simDecided(lg.sim, lg.edge);
-    if (decided) {
+    // clutch time stops at 5:00 whatever the score, as asked: a game that read as decided there went on
+    // to the final unasked, and was lost by six (the playtest, 2026-11-25). One that isn't close says so;
+    // one that's sealed has the final offered over the court (FinalOffer), a tap away
+    if (to === 'clutch' && !hurt.length && !lg.over && simDecided(lg.sim, lg.edge)) {
       const [h, a] = lg.sim.T;
       const lead = h.score >= a.score ? h : a;
-      useStore.getState().toast(`No clutch time tonight: ${lead.team.abbrev} up ${Math.abs(h.score - a.score)} with ${fmtClock(lg.sim.clock)} left. On to the final.`);
-      lg.simTo('end');
+      useStore.getState().toast(`Not close: ${lead.team.abbrev} up ${Math.abs(h.score - a.score)} with ${fmtClock(lg.sim.clock)} left.`);
     }
     // a decided game ends at the buzzer: no break before an overtime that won't be played
     const s = lg.sim;
@@ -833,7 +833,8 @@ export function useLiveGame() {
       ff.current.waiting = true;
       return;
     }
-    if (lateMark) setAnnounce(`${to === 'clutch' ? 'Clutch time: ' : ''}${fmtClock(s.clock)} left in ${periodLabel(s.q)}. ${a.team.abbrev} ${a.score}, ${h.team.abbrev} ${h.score}.`);
+    if (lateMark)
+      setAnnounce(`${to === 'clutch' ? 'Clutch time: ' : ''}${fmtClock(s.clock)} left in ${periodLabel(s.q)}. ${a.team.abbrev} ${a.score}, ${h.team.abbrev} ${h.score}.`);
     setPaused(false);
     nextPossession();
   };

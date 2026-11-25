@@ -1550,6 +1550,11 @@ export interface League {
   callWorth?: Record<string, CallWorth>;
   /** What the staff did on its own with calls a sim ran past, newest last (see weekCall.ts): the digest says it. */
   staffPicks?: StaffPick[];
+  /**
+   * The draft lottery's news and mail, held back until the user has watched its reveal (draft.ts's
+   * revealLottery, or the draft starting): told first, they gave his slot away before the balls did.
+   */
+  lotteryHeld?: { season: number; news: NewsItem[]; inbox: InboxMessage[] };
   /** The staff's measured changes to the user's playbook in season, and its readings of them (see staffLever.ts). */
   staffLever?: StaffLever;
   /** The user's young players' turn, or the stretch the staff doesn't ask about it again (see youthLean.ts, weekCall.ts). */

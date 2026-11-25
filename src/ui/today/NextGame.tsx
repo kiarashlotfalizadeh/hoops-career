@@ -8,7 +8,7 @@ import { ChevronRight } from 'lucide-react';
 import type { League, ScheduledGame } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
 import { liveInProgress } from '../../state/live';
-import { curTeamSeason, fmtDate, teamCity, teamPlayers } from '../../core/league/helpers';
+import { SEASON_GAMES, curTeamSeason, fmtDate, teamCity, teamPlayers } from '../../core/league/helpers';
 import { keepFigures, ordinal, outFor } from '../../core/format';
 import { cupLabel } from '../../core/league/cup';
 import { matchupPreview, type SidePreview } from '../../core/analysis/preview';
@@ -32,12 +32,6 @@ export function nextGame(league: League): ScheduledGame | undefined {
     .filter((g) => !g.played && g.day >= league.day && g.type !== 'allstar' && (g.home === me || g.away === me))
     .sort((a, b) => a.day - b.day || a.gid - b.gid)[0];
 }
-
-/**
- * A team's regular season (schedule.ts plays 82; the last two of the In-Season Cup's are set once its
- * groups are done): a game says of how many, since "Game 7" alone reads like a series' seventh.
- */
-const SEASON_GAMES = 82;
 
 /** "Today", "Tomorrow", "Sat, Nov 2". */
 const whenLabel = (league: League, day: number) =>

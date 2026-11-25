@@ -466,6 +466,8 @@ function migrateReadings(x: League) {
   if (x.skidCall !== undefined && !(obj(x.skidCall) && int(x.skidCall.season) && int(x.skidCall.tid) && int(x.skidCall.gid) && int(x.skidCall.opp))) delete x.skidCall;
   if (x.callWorth !== undefined && !(record(x.callWorth) && Object.values(x.callWorth).every((c) => obj(c) && int(c.gid) && num(c.sig)))) delete x.callWorth;
   if (x.staffPicks !== undefined) x.staffPicks = Array.isArray(x.staffPicks) ? x.staffPicks.filter((p) => obj(p) && int(p.season) && int(p.day) && str(p.text)) : [];
+  if (x.lotteryHeld !== undefined && !(obj(x.lotteryHeld) && int(x.lotteryHeld.season) && Array.isArray(x.lotteryHeld.news) && Array.isArray(x.lotteryHeld.inbox)))
+    delete x.lotteryHeld;
   if (x.chronicle !== undefined)
     x.chronicle = Array.isArray(x.chronicle)
       ? x.chronicle.filter((c) => obj(c) && int(c.season) && Array.isArray(c.stories) && c.stories.every(storyIntact) && Array.isArray(c.series) && c.series.every(nums))

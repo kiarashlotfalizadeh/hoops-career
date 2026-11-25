@@ -30,7 +30,7 @@
 // (Gilgeous-Alexander, 2027). A call whose honest answer is always "play him" isn't a choice.
 import type { League, Rotation, ScheduledGame } from '../types';
 import type { YouthLean } from './youthLean';
-import { fmtDate, shortName, teamPlayers } from './helpers';
+import { fmtDate, shortName, teamGamesLeft, teamPlayers } from './helpers';
 import { guideOpen } from './agenda';
 import { worthSig, type CallMeasure, type CallWorth } from './calls';
 import { WORTH_MIN } from '../ai/counterWorth';
@@ -190,7 +190,7 @@ function youngPerGame(league: League, rot: Pick<Rotation, 'minutes'>): number {
 }
 
 /** His regular-season games left. */
-const gamesLeft = (league: League) => league.schedule.filter((g) => !g.played && g.type === 'regular' && (g.home === league.userTid || g.away === league.userTid)).length;
+const gamesLeft = (league: League) => teamGamesLeft(league, league.userTid);
 
 /**
  * The owner's youth goal as the young players' lean would move it: his minutes so far, where they're
@@ -545,14 +545,19 @@ export function weekDaily(league: League) {
 /**
  * What the staff did on its own in a sim that started on `day` of `season` (a digest's stretch), as
  * lines, one a pick. A pick is made in a sim's mornings, so the one on the morning it started was the
- * sim before's.
+ * sim before's. `dated`: each line led by the day it was made ("Oct 30 · 1-4. Outscored by…"), as a
+ * stretch's digest lists them: what a note says (a record, who's hurt) was so that morning, and a
+ * digest's own figures are the stretch's end (a "1-4" under "now 1-5" read as a mismatch).
  */
-export function staffPicksSince(league: League, season: number, day: number): string[] {
+export function staffPicksSince(league: League, season: number, day: number, dated = false): string[] {
   const all = (league.staffPicks ?? []).filter((p) => p.season > season || (p.season === season && p.day > day));
   // (the staff's monthly readings (staffLever.ts) as one row: the latest, Analysis lists it too)
   const reports = all.filter((p) => p.text.startsWith(STAFF_REPORT));
   const picks = all.filter((p) => !reports.includes(p) || p === reports[reports.length - 1]);
-  return picks.map((p) => (p.text.startsWith(STAFF_REPORT) ? `${reportText(p.text)}${reports.length > 1 ? ` The latest of ${reports.length} reports.` : ''}` : p.text));
+  return picks.map((p) => {
+    const text = p.text.startsWith(STAFF_REPORT) ? `${reportText(p.text)}${reports.length > 1 ? ` The latest of ${reports.length} reports.` : ''}` : p.text;
+    return dated ? `${fmtDate(p.season, p.day)} · ${text}` : text;
+  });
 }
 
 /** A staff report as a screen says it: without its mark. */

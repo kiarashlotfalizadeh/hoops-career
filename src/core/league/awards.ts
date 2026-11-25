@@ -2,7 +2,7 @@ import type { League, Player, PlayerStats, SeasonAwards } from '../types';
 import { composites, defRead } from '../ratings';
 import { playerAge } from '../playerGen';
 import { clamp } from '../random';
-import { addInbox, addNews, andList, curTeamSeason, playerName, seasonTotals, teamCity, winPct } from './helpers';
+import { addInbox, addNews, andList, curTeamSeason, playerName, seasonTotals, teamCity, unscheduledGames, winPct } from './helpers';
 import { gmOnly } from './coaches';
 import { seasonLabel } from '../constants';
 import { awardLine, awardPhrase } from './media/history';
@@ -168,6 +168,13 @@ function gamesLeft(league: League): { left: Map<number, number>; season: number 
       all.set(tid, (all.get(tid) ?? 0) + 1);
       if (!g.played) left.set(tid, (left.get(tid) ?? 0) + 1);
     }
+  }
+  // (with the Cup's last two not on the calendar yet: unscheduledGames)
+  for (const t of league.teams) {
+    const owed = unscheduledGames(league, t.tid);
+    if (!owed) continue;
+    left.set(t.tid, (left.get(t.tid) ?? 0) + owed);
+    all.set(t.tid, (all.get(t.tid) ?? 0) + owed);
   }
   return { left, season: Math.max(0, ...all.values()) };
 }

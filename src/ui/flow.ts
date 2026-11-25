@@ -4,9 +4,9 @@
 import type { League, Phase, ScheduledGame } from '../core/types';
 import { allStarStop, MONTH_DAYS, type SimTarget } from '../state/store';
 import { liveInProgress, type LiveStatus } from '../state/live';
-import { canStartRegularSeason, FA_DAYS, faDayNumber, faOver, regularGamesLeft } from '../core/league/season';
+import { canStartRegularSeason, FA_DAYS, faDayNumber, faOver, seasonGamesLeft } from '../core/league/season';
 import { userGameOnDay } from '../core/league/games';
-import { curTeamSeason, fmtDate, standardRoster } from '../core/league/helpers';
+import { curTeamSeason, fmtDate, standardRoster, unscheduledGames } from '../core/league/helpers';
 import { CAP, seasonLabel } from '../core/constants';
 import { plural } from '../core/format';
 import { agendaBlocker } from '../core/league/agenda';
@@ -122,7 +122,11 @@ export function simSummary(before: SimStart, l: League): { text: string; tone: '
 
 /** The user's games still to play from today up to (not including) `end`. */
 function yourGames(league: League, end: number): number {
-  return league.schedule.filter((g) => !g.played && g.type !== 'playoffs' && g.day >= league.day && g.day < end && (g.home === league.userTid || g.away === league.userTid)).length;
+  const me = league.userTid;
+  const on = league.schedule.filter((g) => !g.played && g.type !== 'playoffs' && g.day >= league.day && g.day < end && (g.home === me || g.away === me)).length;
+  // the Cup's last two aren't on the calendar until its groups are decided: they fall in its knockout window
+  const cup = league.cup;
+  return on + (cup && end >= cup.finalDay ? unscheduledGames(league, me) : 0);
 }
 
 /** `onLive`: the Live screen is open, so a game in progress is all the menu offers. */
@@ -206,7 +210,7 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
       // (any sim plays out a game left in progress first: said where it would happen, so a final never arrives unexplained)
       a.push({ id: 'day', label: 'Sim 1 day', ...(live && !live.over ? { sub: 'Plays out your game in progress first.' } : {}), sim: { kind: 'days', n: 1 } });
       if (league.phase === 'regular') {
-        const left = regularGamesLeft(league);
+        const left = seasonGamesLeft(league);
         // how far each sim goes, in your games: a sim of n days plays today and the n - 1 after it
         const span = (end: number, lead?: string) => [lead, `${yourGames(league, end)} of your games`].filter(Boolean).join(' · ');
         a.push({ id: 'week', label: 'Sim 1 week', sub: span(league.day + 7, `Through ${when(league.day + 6)}`), sim: { kind: 'week' } });

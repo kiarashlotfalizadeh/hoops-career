@@ -1,7 +1,7 @@
 import type { DraftPick, League, Player } from '../types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../types';
 import { Rng, clamp, hashString } from '../random';
-import { genTendencies, generatePlayer, refreshPlayerDerived } from '../playerGen';
+import { genTendencies, generatePlayer, ownFirstNames, refreshPlayerDerived } from '../playerGen';
 import { fmtHeight, shiftToOvr } from '../ratings';
 import { addInbox, addNews, andList, curTeamSeason, playerName, prospects, teamCity, teamPlayers, winPct } from './helpers';
 import { FA_PRICE_CUT_DAYS, askingContract, rookieContract, valueScore } from './contracts';
@@ -24,6 +24,8 @@ export function generateDraftClass(league: League, year: number, rng: Rng, size 
   const created: Player[] = [];
   // nobody arrives sharing a name with a player still in the league
   const taken = new Set(Object.values(league.players).flatMap((p) => (p.tid === RETIRED ? [] : [playerName(p)])));
+  // (and no two of a class share a first name: see ownFirstNames, below)
+  const firsts = new Set(Object.values(league.players).flatMap((p) => (p.tid === DRAFT_PROSPECT && p.draft.year === year ? [p.firstName] : [])));
   for (let i = 0; i < size; i++) {
     const t = i / size;
     const talent = 0.85 - 2.4 * Math.pow(t, 0.75) + rng.normal(0, 0.45);
@@ -49,6 +51,7 @@ export function generateDraftClass(league: League, year: number, rng: Rng, size 
     league.players[p.pid] = p;
     created.push(p);
   }
+  ownFirstNames(created, firsts, taken);
   // some classes have a generational prospect: room past the league's best, now and then a body nobody has (legends.ts)
   const gen = seedGenerational(league, year, created);
   if (gen) {
@@ -132,6 +135,8 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
   const season = league.season;
   // the combine is in by now, even after a short postseason (on a stream of its own)
   holdCombine(league);
+  // (news and mail from here on are the drawing's: held for its reveal, below)
+  const from = league.nextMsgId;
   const recs = draftStandings(league);
   const playoff = recs.filter((r) => r.playoff);
   const pool = lotteryOdds(league);
@@ -174,13 +179,20 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
   };
   // (every team in the playoffs would leave nobody to draw)
   const top = result.order[0];
-  if (top)
+  if (top) {
+    // the drawing is of the team whose record earned the pick; the pick may belong to another by now
+    // (traded, or taken in a swap above), and that team is the one that wins it
+    const holder = league.draftPicks.find((d) => d.season === season && d.round === 1 && d.originalTid === top.tid)?.tid ?? top.tid;
     addNews(league, {
       kind: 'draft',
-      text: `Draft lottery: ${teamCity(league, top.tid)} wins the No. 1 pick from the ${ordinal(top.pre)} spot.`,
-      tids: [top.tid],
+      text:
+        holder === top.tid
+          ? `Draft lottery: ${teamCity(league, top.tid)} wins the No. 1 pick from the ${ordinal(top.pre)} spot.`
+          : `Draft lottery: ${teamCity(league, holder)} wins the No. 1 pick. It came from ${teamCity(league, top.tid)}, ${ordinal(top.pre)} in the odds.`,
+      tids: holder === top.tid ? [top.tid] : [holder, top.tid],
       pids: [],
     });
+  }
   const mine = league.draftPicks
     .filter((d) => d.season === season && d.tid === league.userTid && d.pick)
     .map((d) => (d.round - 1) * 30 + d.pick!)
@@ -194,7 +206,39 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
       link: '/office/draft',
     });
   }
+  // what the drawing made news of (the No. 1 pick, a protection kept, a swap, his slots) waits for its reveal
+  league.lotteryHeld = {
+    season: league.season,
+    news: league.news.filter((n) => n.id >= from),
+    inbox: league.inbox.filter((m) => m.id >= from),
+  };
+  league.news = league.news.filter((n) => n.id < from);
+  league.inbox = league.inbox.filter((m) => m.id < from);
   return result;
+}
+
+/** `o` without `keys`. */
+function omit<T extends object, K extends keyof T>(o: T, keys: K[]): Omit<T, K> {
+  const out = { ...o };
+  for (const k of keys) delete out[k];
+  return out;
+}
+
+/** Whether this season's lottery has been revealed to the user (its news and mail are out: see runLottery). */
+export const lotteryRevealed = (league: League) => league.lotteryHeld?.season !== league.season;
+
+/**
+ * The user has watched the lottery's reveal (or the draft has started): what it made news of is told
+ * now, as of today.
+ */
+export function revealLottery(league: League) {
+  const held = league.lotteryHeld;
+  if (!held) return;
+  delete league.lotteryHeld;
+  if (held.season !== league.season) return;
+  // (as new: today's date and id; the inbox is newest first, so its oldest is told first and stays under the newer)
+  for (const n of held.news) addNews(league, omit(n, ['id', 'season', 'day']));
+  for (const m of [...held.inbox].reverse()) addInbox(league, omit(m, ['id', 'season', 'day', 'read']));
 }
 
 /**

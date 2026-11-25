@@ -58,7 +58,8 @@ export async function leaveToStaff(title: string, a: Extract<CallAction, { kind:
   busy = true;
   st.toast(`The staff is measuring its counters against ${league.teams[a.opp].abbrev}…`, 'neutral');
   try {
-    const out = await measureCounters(league, a.opp, g?.gid, () => {});
+    // (in the lane, in turn: a measurement running beside it would stop it, or be stopped)
+    const out = await inLane(() => measureCounters(league, a.opp, g?.gid, () => {}));
     const now = useStore.getState().league;
     // (the day moved on, or the measuring was stopped: the call is answered from its card again)
     if (!out || !now || now.id !== league.id || now.day !== day) return;
@@ -133,17 +134,20 @@ function pump() {
     tell();
   };
   const { league, m } = next;
-  // (in the worker's lane: the staff's background measuring of his changes waits for it, rather than stopping it)
-  const run = inLane(() =>
-    m.kind === 'counters'
-      ? measureCounters(league, m.opp, m.gid, progress).then((out) => (out ? countersWorth(league, m, out) : null))
-      : measureChanges(m.base ? withChange(league, m.base) : league, m.opp, m.gid, [m.change], progress).then((out) => (out?.[0] ? changeWorth(league, m, out[0]) : null)),
+  // (in the worker's lane, in turn with the matchup page's counters: the staff's background measuring of
+  // his changes waits for it, rather than stopping it; skipped if its row is gone by its turn)
+  const run = inLane(
+    () =>
+      m.kind === 'counters'
+        ? measureCounters(league, m.opp, m.gid, progress).then((out) => (out ? countersWorth(league, m, out) : null))
+        : measureChanges(m.base ? withChange(league, m.base) : league, m.opp, m.gid, [m.change], progress).then((out) => (out?.[0] ? changeWorth(league, m, out[0]) : null)),
+    () => rows.has(next.tag),
   );
   let again = 0;
   run
     .then(
       (w) => {
-        // stopped by a newer measurement (the matchup page's) or a sim: measured again shortly while
+        // stopped by a sim (or skipped, its row gone by its turn): measured again shortly while
         // its row still shows (before, it waited for the row to show again, and a card sat "Measuring")
         if (!w) {
           if (rows.has(next.tag)) again = RETRY_MS;

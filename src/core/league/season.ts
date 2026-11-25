@@ -8,7 +8,7 @@ import { GameSim } from '../sim/engine';
 import { autoRotation, autoTactics } from '../ai/coachAI';
 import { makeTeam } from '../teamFactory';
 import { contractExp, playerAge } from '../playerGen';
-import { OFFSEASON_ROSTER_MAX, addInbox, addNews, dateToDay, playerName, prospects, standardRoster, teamCity, teamPlayers, teamSeason, withRng } from './helpers';
+import { OFFSEASON_ROSTER_MAX, addInbox, addNews, dateToDay, playerName, prospects, standardRoster, teamCity, teamPlayers, teamSeason, unscheduledGames, withRng } from './helpers';
 import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
 import { applyStaffTactics, ensureRotation, gamesOnDay, makeWhole, playGame, youthNews } from './games';
@@ -19,7 +19,7 @@ import { computeRegularSeasonAwards, finalsMvp, gameScore, missesAllStarGame, se
 import { allStarSaturday } from './allStarSaturday';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from './playoffs';
 import { confStandings } from './standings';
-import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, runLottery, draftPlayer } from './draft';
+import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, revealLottery, runLottery, draftPlayer } from './draft';
 import { prospectsDay } from './prospects';
 import {
   FA_DAYS,
@@ -68,8 +68,14 @@ const DRAFT_DEALS = 2;
 const SUMMER_DEALS = 0.2;
 const PRESEASON_DEALS = 2;
 
+/** The league's regular-season games still on the calendar: the regular season ends when none are. */
 export function regularGamesLeft(league: League) {
   return league.schedule.filter((g) => g.type === 'regular' && !g.played).length;
+}
+
+/** The league's regular-season games still to play: those on the calendar and those the Cup has still to put there (unscheduledGames). */
+export function seasonGamesLeft(league: League) {
+  return regularGamesLeft(league) + league.teams.reduce((n, t) => n + unscheduledGames(league, t.tid), 0) / 2;
 }
 
 export function canStartRegularSeason(league: League): string[] {
@@ -471,6 +477,8 @@ export function continueDraft(league: League) {
 
 export function startDraft(league: League): boolean {
   if (league.phase !== 'draftLottery' || league.fired) return false;
+  // a lottery not watched is told now: draft night shows the order anyway
+  revealLottery(league);
   league.phase = 'draft';
   // the summer's job offers go with the draft
   delete league.jobOffers;

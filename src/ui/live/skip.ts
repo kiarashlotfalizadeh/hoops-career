@@ -55,7 +55,7 @@ export function sealedGame(v: { q: number; clock: number; ball: 0 | 1 | null; si
  * skip "to the end" of that one would play through the period being drawn.) `sim` is where the game
  * itself is: clutch time is offered while the game hasn't reached it, and not in a fourth quarter
  * already decided (`decided`: closeGame says it isn't close), where there's no finish to skip to.
- * (A skip to clutch time that lands in a decided game goes on to the final: useLiveGame.skip.)
+ * (A skip to clutch time stops at 5:00 whatever the score there: useLiveGame.skip.)
  */
 export function skipChoices(playing: number, atBreak: boolean, sim: { q: number; clock: number }, decided = false): SkipChoice[] {
   const inClutch = playing >= 4 && (atBreak ? playing >= 5 : sim.q >= 4 && sim.clock <= CLUTCH_SEC);
@@ -70,9 +70,7 @@ export function skipChoices(playing: number, atBreak: boolean, sim: { q: number;
     { id: 'quarter', label: `End of ${periodLabel(playing)}`, sub: 'Stops at the break, with its report.' },
     // (from the first quarter's break, the end of the next quarter is halftime)
     ...(playing === 1 && !atBreak ? [{ id: 'half' as SkipTo, label: 'Halftime', sub: 'Plays through the second quarter too.' }] : []),
-    ...(playing <= 4 && !decided && !(sim.q >= 4 && sim.clock <= CLUTCH_SEC)
-      ? [{ id: 'clutch' as SkipTo, label: 'Clutch time', sub: '5:00 left in the fourth. A decided game goes on to the final.' }]
-      : []),
+    ...(playing <= 4 && !decided && !(sim.q >= 4 && sim.clock <= CLUTCH_SEC) ? [{ id: 'clutch' as SkipTo, label: 'Clutch time', sub: 'Stops with 5:00 left in the fourth.' }] : []),
     ...clutchStops,
     {
       id: 'end',
