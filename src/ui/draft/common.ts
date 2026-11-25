@@ -6,6 +6,8 @@ import { andList } from '../../core/league/helpers';
 import { keepFigures, ordinal, rankOf } from '../../core/format';
 import { overallPick } from '../league/shared';
 import { pickLabel, pickRange } from '../../core/league/trades';
+import { lotteryRevealed, revealLottery } from '../../core/league/draft';
+import { edit } from '../../state/actions';
 
 export function fmtIn(x: number | undefined) {
   if (x === undefined || !isFinite(x)) return '—';
@@ -113,25 +115,15 @@ export const pickWords = (n: number) => `${ordinal(n)} pick`;
 
 /**
  * Whether the user has watched this season's lottery reveal (LotteryView), so nothing else gives his
- * slot away first. Kept on the device only: a new device plays the reveal again.
+ * slot away first. Kept in the league, with the lottery's news and mail held until then (runLottery).
  */
-const lotteryKey = (league: League) => `hc-lottery:${league.id}:${league.season}`;
-export function lotterySeen(league: League): boolean {
-  try {
-    return localStorage.getItem(lotteryKey(league)) === '1';
-  } catch {
-    return false;
-  }
-}
+export const lotterySeen = (league: League): boolean => lotteryRevealed(league);
 /** The lottery is in but its reveal hasn't been watched: the draft's other tabs keep the order (slots, "via") to themselves until then. */
 export const lotteryHidden = (league: League) => league.phase === 'draftLottery' && !lotterySeen(league);
 
+/** The reveal has been watched: the lottery's news and mail are told now (revealLottery). */
 export function markLotterySeen(league: League) {
-  try {
-    localStorage.setItem(lotteryKey(league), '1');
-  } catch {
-    // (private windows and blocked storage: the reveal just plays again next time)
-  }
+  if (!lotteryRevealed(league)) edit((l) => revealLottery(l));
 }
 
 /** A pick's name with where it projects, for lines that carry one name: "2028 1st (UTA) · proj. #6-12" (see pickProjText). */

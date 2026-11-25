@@ -26,7 +26,7 @@ import { fmtClock, periodLabel } from '../stats';
 import type { MatchKit } from '../teamColors';
 import { closeGame } from './alerts';
 import { breakTitle } from './BreakBoard';
-import { Trouble } from './Trouble';
+import { Trouble, type SubFor } from './Trouble';
 import type { Drawn } from './drawn';
 import type { StaffAction, StaffNote } from './staff';
 import { allPlays, fitPlayers, playBoard, playOptions, readStatus, type PlayOption } from './plays';
@@ -50,7 +50,7 @@ interface Common {
   onAct: (n: StaffNote, a: StaffAction) => void;
   onDismiss: (n: StaffNote) => void;
   /** The rested bench player the staff would send in for one of yours. */
-  subFor: (pid: number) => number | undefined;
+  subFor: SubFor;
   substitute: (out: number, inn: number) => boolean;
   moves: CoachMove[];
   busy?: boolean;
@@ -295,6 +295,12 @@ function PlayCall({
       <div className="card flush list" role="group" aria-label="Call the play">
         {plays.map((p, i) => {
           const on = called?.set === p.id && (called.pid === null || called.pid === p.pid);
+          const r = readings?.[i];
+          const val = r?.clear
+            ? late
+              ? `${r.win >= 0 ? '+' : '−'}${Math.max(1, Math.round(Math.abs(r.win) * 100))}% win`
+              : `${r.pts >= 0 ? '+' : '−'}${Math.max(0.1, Math.abs(r.pts)).toFixed(1)} pts`
+            : null;
           return (
             <button type="button" key={`${p.id}-${p.pid}`} className={`lv-br-pc${on ? ' on' : ''}`} aria-pressed={on} disabled={busy} onClick={() => onCall(p.id, p.pid)}>
               <span className="lv-br-pc-mark" aria-hidden="true">
@@ -304,10 +310,12 @@ function PlayCall({
                 <span className="lr-name">{callLabel(p.id, names(p.pid))}</span>
                 <span className="lr-meta ellipsis">{playLook(p, view, side, names, defenderOf)}</span>
               </span>
-              {pick === i && (
+              {pick === i ? (
                 <span className="lv-br-pc-pick">
-                  <Lightbulb size={13} aria-hidden="true" /> Staff&apos;s pick
+                  <Lightbulb size={13} aria-hidden="true" /> Staff&apos;s pick{val ? ` · ${val}` : ''}
                 </span>
+              ) : (
+                val && <span className={`tiny num ${r && (late ? r.win : r.pts) > 0 ? 'good' : 'dim'}`}>{val}</span>
               )}
             </button>
           );

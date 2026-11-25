@@ -6,13 +6,14 @@ import { OFF_SHAPES } from '../types';
 import type { FinishType } from '../sim/log';
 import { attrDisplay, composites, ROLE_META } from '../ratings';
 import { ACTION_META, COVERAGE_META, DEF_ROLE_META, SCHEME_META, SHAPE_META, cloneTactics, defRoleOf, isJunk, shapeOf, stopHacking } from '../sim/tactics';
-import { CRAMPED_SPACING, autoDefRoles, autoTactics, evaluateLineup, rosterProfile, shapeFits, sustainableMinutes } from './coachAI';
+import { CRAMPED_SPACING, autoDefRoles, autoTactics, evaluateLineup, rosterProfile, shapeFits } from './coachAI';
 import { defRoleFits, roleScale, roleStars } from '../analysis/system';
 import { leverCard, withStaffMoves } from '../league/staffLever';
 import { applyPatch } from '../sim/tactics';
 import { effectiveTactics, itemGroup, planFor } from '../league/gamePlans';
 import { scoutData } from '../analysis/scouting';
 import { andList, inSeason, playerName, rosterSorted, shortName, teamCity, teamPlayers } from '../league/helpers';
+import { lowStarMinutes } from '../league/games';
 import { IMPACT_TEXT, LEVER_KEYS, leverNet } from '../analysis/gameReport';
 import { castThrees, leagueThreePct } from './opponentPlan';
 import { huntPick, ratingText } from '../analysis/guarding';
@@ -792,20 +793,32 @@ export function teamAlerts(league: League, tid: number): Alert[] {
       body: `${healthy.length < players.length ? "Injured players' targets count too. " : ''}Games scale the targets to 240, so the split may differ from yours.`,
       link: '/team/rotation',
     });
-  const best = [...healthy].sort((a, b) => b.ovr - a.ovr)[0];
-  // (only the user's own minutes: an assistant-run rotation plans them itself)
-  if (games && best && rot.manual) {
-    // stamina sets a ceiling; only flag minutes well below what he can carry
-    const sustain = Math.round(sustainableMinutes(best));
-    const m = rot.minutes[best.pid] ?? 0;
-    if (m < Math.min(28, sustain - 3))
-      alerts.push({
-        id: 'star-min',
-        tone: 'alert',
-        title: m ? `${best.lastName} is only playing ${m} minute${m === 1 ? '' : 's'}` : `${best.lastName} isn't getting any minutes`,
-        body: sustain < 32 ? `His stamina supports about ${sustain} minutes. Give him most of them.` : 'Your best player should play 32-36 minutes.',
-        link: '/team/rotation',
-      });
+  // (only the user's own minutes: an assistant-run rotation plans them itself; checks top two healthy stars using actual planned minutes)
+  if (games && rot.manual) {
+    const topTwo = [...healthy].sort((a, b) => b.ovr - a.ovr || a.pid - b.pid).slice(0, 2);
+    const lowByPid = new Map(lowStarMinutes(league, tid, { includeDismissed: true }).map((x) => [x.player.pid, x]));
+    for (let i = 0; i < topTwo.length; i++) {
+      const star = topTwo[i];
+      const raw = rot.minutes[star.pid] ?? 0;
+      const low = lowByPid.get(star.pid);
+      if (raw <= 0 && !rot.benched?.includes(star.pid)) {
+        alerts.push({
+          id: i === 0 ? 'star-min' : `star-min-${star.pid}`,
+          tone: 'alert',
+          title: `${star.lastName} isn't getting any minutes`,
+          body: i === 0 ? 'Your best player should play 32-36 minutes.' : 'One of your top two players has no minutes set.',
+          link: '/team/rotation',
+        });
+      } else if (low) {
+        alerts.push({
+          id: i === 0 ? 'star-min' : `star-min-${star.pid}`,
+          tone: 'alert',
+          title: `${star.lastName} is only playing ${low.planned} minute${low.planned === 1 ? '' : 's'}`,
+          body: low.sustain < 32 ? `His stamina supports about ${low.sustain} minutes. Give him most of them.` : 'Your top two players should play 32-36 minutes.',
+          link: '/team/rotation',
+        });
+      }
+    }
   }
   // wear builds over the season and the postseason (the next season starts it again): only a team
   // with games left has a load to manage, and only the regular season has back-to-backs to rest on

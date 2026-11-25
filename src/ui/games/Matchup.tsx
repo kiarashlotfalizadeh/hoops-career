@@ -132,7 +132,8 @@ function TipOff({ league, gid, opp, name }: { league: League; gid: number; opp: 
   };
   const live = liveInProgress(league);
   const resume = live?.gid === gid;
-  // the staff still looking at tonight's counters: said on the button, so a quick tap doesn't skip the plan unseen
+  // the staff still looking at tonight's counters: said on the button, so a quick tap doesn't skip the plan
+  // unseen (not while it rechecks a reading after a change: the counters have been seen)
   const measuring = useCounterWorth(league, opp);
   const pending = !resume && !!measuring && !measuring.worth;
   return (
@@ -258,7 +259,12 @@ function Hero({ league, opp, onPlan, compact }: { league: League; opp: number; o
         {proj && (
           // what of the coach's own work is in the number, so a forecast that doesn't move says why
           <div className="mu-hero-in small dim2">
-            {forecastIn(g?.home === me ? proj.plan : -proj.plan, g?.home === me ? proj.edits : -proj.edits, whole, !!made && !whole && !!measuring && !measuring.worth)}
+            {forecastIn(
+              g?.home === me ? proj.plan : -proj.plan,
+              g?.home === me ? proj.edits : -proj.edits,
+              whole,
+              !!made && !whole && !!measuring && (!measuring.worth || !!measuring.stale),
+            )}
           </div>
         )}
       </GameBoard>

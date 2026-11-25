@@ -246,6 +246,11 @@ export interface ST {
   toWait: string | null;
   /** One of the team's timeouts was called: its next trip runs the after-timeout play. */
   atoNext: boolean;
+  /** Remaining offensive and defensive possessions with huddle composure lift from a deliberate timeout (FEEL.ato). */
+  huddleOff: number;
+  huddleDef: number;
+  /** Game seconds elapsed when this team last earned a huddle composure lift (prevents back-to-back timeout spam). */
+  lastHuddleTO: number;
   /** Times each set has been run tonight: what the other defense has read of it. */
   setRuns: Map<SetId, number>;
   /**

@@ -2,7 +2,7 @@
 // opinion of it tonight (see useCounterWorth: the ones it likes first, the costs behind "more") and
 // Add. A row opens on the rest: exactly what it changes in the Tactics screen's words, why, the
 // scouting behind it, and Always (confirmed: in your tactics for every game).
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { applyPatch } from '../../../core/sim/tactics';
 import { counterCandidates, tacticsWithCounter, type Candidate } from '../../../core/ai/advisor';
@@ -32,13 +32,9 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
   const had = useRef<Set<string> | null>(null);
   had.current ??= new Set(inPlan);
   const [all, setAll] = useState(false);
-  // Always writes into your tactics for every game: a second tap confirms it
+  // Always writes into your tactics for every game: a second tap confirms it (it waits while it shows:
+  // one that lapsed on a timer read as a Confirm tap that did nothing)
   const [armed, setArmed] = useState<string | null>(null);
-  useEffect(() => {
-    if (!armed) return;
-    const t = setTimeout(() => setArmed(null), 4000);
-    return () => clearTimeout(t);
-  }, [armed]);
   const them = league.teams[opp];
 
   const apply = (c: Candidate, scope: 'game' | 'always') => {
@@ -76,6 +72,12 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
       }
     >
       <div className="card flush list">
+        {/* (the opinions below are the last reading while it measures your change: said once, not on every row) */}
+        {measuring?.stale && measuring.progress < 1 && (
+          <div className="mu-empty" role="status">
+            Rechecking with your change…
+          </div>
+        )}
         {!cands.length && <div className="mu-empty">Your plan already covers what the staff sees.</div>}
         {cands.length > 0 && shown === 0 && !all && <div className="mu-empty">The staff doesn&apos;t see a counter that beats how you play them now.</div>}
         {visible.map((c) => {

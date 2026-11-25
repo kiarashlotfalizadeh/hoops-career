@@ -229,6 +229,9 @@ export class GameSim {
   /** Openness this trip's first half-court action starts with out of a timeout (FEEL.ato), and whether that action is being run now (its turnovers are fewer). */
   atoOpen = 0;
   atoAct = false;
+  /** Whether the offense or defense carries a post-timeout huddle composure lift on this possession (FEEL.ato). */
+  offHuddle = false;
+  defHuddle = false;
   /** A set handed to the action about to run (it takes it: see takePlay). */
   play: SetPlay | null = null;
   /** The tally of the set (or clear-out isolation) this possession runs: its points go to it. */
@@ -412,6 +415,9 @@ export class GameSim {
       nextSet: null,
       toWait: null,
       atoNext: false,
+      huddleOff: 0,
+      huddleDef: 0,
+      lastHuddleTO: -999,
       setRuns: new Map(),
       habit: coachHabits(input),
       advance: false,
@@ -565,9 +571,21 @@ export class GameSim {
     // NBA: in the last two minutes of the fourth quarter or overtime a timeout by the team with the
     // ball advances it to the frontcourt
     t.advance = this.q >= 4 && this.clock <= 120 && this.poss === side;
-    for (const tm of this.T) for (const p of tm.players) p.energy = Math.min(1, p.energy + (p.on ? 0.05 : 0.02));
+    const opp = this.T[1 - side];
+    const oppRun = opp.run;
+    // The calling side gets slightly more recovery on the floor and a brief huddle composure lift
+    // when calling a deliberate (non-routine) timeout spaced from its last one or to stop a run / late.
+    for (const tm of this.T) {
+      const restOn = !routine && FEEL.ato.huddle > 0 && tm.side === side ? 0.065 : 0.045;
+      for (const p of tm.players) p.energy = Math.min(1, p.energy + (p.on ? restOn : 0.02));
+    }
     this.T[0].run = 0;
     this.T[1].run = 0;
+    if (!routine && FEEL.ato.huddle > 0 && FEEL.ato.huddlePoss > 0 && (this.elapsed - t.lastHuddleTO >= 120 || oppRun >= 4 || (this.q >= 4 && this.clock <= 180))) {
+      t.huddleOff = FEEL.ato.huddlePoss;
+      t.huddleDef = FEEL.ato.huddlePoss;
+      t.lastHuddleTO = this.elapsed;
+    }
     this.addPbp(side, `Timeout ${t.team.abbrev}${reason ? ` (${reason})` : ''}.`, 'timeout');
     this.timeoutStep = true;
     this.timeoutSide = side;

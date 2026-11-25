@@ -1,11 +1,11 @@
 // The lottery's result: the top 14 in order, each team's odds for #1 and how far it moved. The
 // first time it's opened the order is revealed from the 14th pick up, the four drawn picks slower,
-// and the user's slot gets its moment; a tap skips to the whole order. (Whether it has been seen is
-// remembered in this browser only: the league is the same either way.)
+// and the user's slot gets its moment; a tap skips to the whole order. (Once it has been seen, the
+// lottery's news and mail are told: until then the league holds them, so nothing gives the slot away.)
 import { useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, FastForward } from 'lucide-react';
 import type { DraftPick, League } from '../../core/types';
-import { curTeamSeason } from '../../core/league/helpers';
+import { curTeamSeason, teamCity } from '../../core/league/helpers';
 import { draftOrder, lotteryOdds } from '../../core/league/draft';
 import { ordinal, plural } from '../../core/format';
 import { TeamLogo } from '../components/TeamLogo';
@@ -88,7 +88,12 @@ export function LotteryView({ league, onTrade }: { league: League; onTrade?: (dp
           <b>
             {league.teams[top.tid].region} {league.teams[top.tid].name}
           </b>{' '}
-          {topFrom > 1 ? `jump from ${ordinal(topFrom)} to win the No. 1 pick.` : 'keep the No. 1 pick the odds gave them.'}
+          {/* (the spot in the odds is the team's whose record earned the pick, which may not be the holder's) */}
+          {top.originalTid !== top.tid
+            ? `win the No. 1 pick. It ${top.originalTid === league.userTid ? 'was your pick' : `came from ${teamCity(league, top.originalTid)}`}, ${ordinal(topFrom)} in the odds.`
+            : topFrom > 1
+              ? `jump from ${ordinal(topFrom)} to win the No. 1 pick.`
+              : 'keep the No. 1 pick the odds gave them.'}
         </p>
       )}
       {/* (the rows' percentages need their caption while trading is open too) */}

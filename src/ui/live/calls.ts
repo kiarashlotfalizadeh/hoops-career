@@ -17,14 +17,14 @@ import type { GameSim } from '../../core/sim/engine';
 import { cloneTactics, COVERAGE_META, MENTALITY_META, SCHEME_META } from '../../core/sim/tactics';
 import { CALL_CONFIRM, CALL_CONFIRM_CRUNCH, CALL_CONFIRM_LATE, forkSim, type CallsMeasured, type LiveChoice } from '../../state/liveWorth';
 import type { PossLog } from '../../core/sim/log';
-import { tacticsDiff, crunchTime, foulLimit, DECIDED_WIN, LEVER_TRIPS } from './alerts';
+import { tacticsDiff, crunchTime, troubleThresholds, DECIDED_WIN, LEVER_TRIPS } from './alerts';
 import { crunchTime as coreCrunch, winProb } from '../../core/analysis/winProb';
 import { GAME } from '../../core/constants';
 import { staffNotes, type StaffInput, type StaffNote } from './staff';
 import type { Drawn } from './drawn';
 
-/** Most changes measured at a stop (the brief's three to five: what the game suggests, the likeliest first). */
-export const CALL_DRAFTS = 5;
+/** Most changes measured at a stop (the brief's top timely levers: what the game suggests, the likeliest first). */
+export const CALL_DRAFTS = 6;
 /** In crunch time, with a timeout and a sub among them: a few minutes left cost little to play out. */
 export const CALL_DRAFTS_CRUNCH = 7;
 /** The middle of a period: its first trip under this many seconds is a stop the staff measures from (the broadcast's timeout). */
@@ -114,13 +114,23 @@ export function nextStop(sim: GameSim, side: 0 | 1, seen: StopSeen, ahead: numbe
 
 /**
  * Who the staff would send in for player `pid` of `side`: a rested bench player, the same size if
- * possible, and never one in foul trouble (at the staff's limit for the period, the next one's at a
- * break): sending him in only brings the next sub, or a foul-out.
+ * possible, and never one who would immediately trip Trouble's foul or fatigue lines (or have as
+ * many fouls / as little energy as the man coming off).
  */
-export function benchFor(sim: GameSim, side: 0 | 1, pid: number, opts: { exclude?: ReadonlySet<number>; prefer?: number } = {}): number | undefined {
+export function benchFor(
+  sim: GameSim,
+  side: 0 | 1,
+  pid: number,
+  opts: { exclude?: ReadonlySet<number>; prefer?: number; ahead?: boolean; q?: number } = {},
+): number | undefined {
   const t = sim.T[side];
   const out = t.byId.get(pid);
-  const limit = foulLimit(sim.atBuzzer() ? sim.q + 1 : sim.q, t.t.manage.foulTrouble);
+  const ahead = opts.ahead ?? sim.atBuzzer();
+  const q = opts.q ?? sim.q;
+  const { limit, rest, tiredAt, freshAt } = troubleThresholds(q, t.t.manage, ahead);
+  const outEnergy = out ? Math.min(1, out.energy + rest) : 1;
+  const outFoul = !!out && out.fouls >= limit;
+  const outTired = !!out && outEnergy < tiredAt;
   // the man who plays his spot: same position first, then the same kind (guard, wing, big), then
   // the rotation's own minutes for him tonight (a man the plan gives none is the last resort), then quality
   const kind = (p: { guard: boolean; big: boolean }) => (p.guard ? 'g' : p.big ? 'b' : 'w');
@@ -131,7 +141,16 @@ export function benchFor(sim: GameSim, side: 0 | 1, pid: number, opts: { exclude
     p.c.create * 0.5 +
     p.c.helpD * 0.5 +
     p.energy * 30;
-  const ranked = t.players.filter((p) => !p.on && p.out === 0 && p.energy > 0.75 && p.fouls < limit && !opts.exclude?.has(p.pid)).sort((a, b) => score(b) - score(a));
+  const ranked = t.players
+    .filter((p) => {
+      if (p.on || p.out !== 0 || opts.exclude?.has(p.pid)) return false;
+      if (p.fouls >= limit || (outFoul && p.fouls >= out!.fouls)) return false;
+      const energy = Math.min(1, p.energy + rest);
+      if (energy < freshAt) return false;
+      if (outTired && energy <= outEnergy + 0.05) return false;
+      return true;
+    })
+    .sort((a, b) => score(b) - score(a));
   // (the man it named last time stays named while he's nearly as good a fit: no flip-flopping from one possession to the next)
   const kept = opts.prefer !== undefined ? ranked.find((p) => p.pid === opts.prefer) : undefined;
   if (kept && ranked[0] && score(kept) >= score(ranked[0]) - 45) return kept.pid;
@@ -372,19 +391,32 @@ export type StaffCall =
   | { state: 'call'; draft: CallDraft; m: CallsMeasured; at: string; base: string; steps: number; shownAt?: number }
   | { state: 'none'; tried: number; at: string; m?: CallsMeasured; steps?: number };
 
+/** Concise value string for a confirmed live staff call (e.g. "+1.2 pts", "+6% win"). */
+export function callWorthText(m: CallsMeasured): string {
+  const r = m.reading;
+  if (!r) return 'Helps from here';
+  if (m.by === 'win' && r.win > 0) {
+    const pct = Math.max(1, Math.round(r.win * 100));
+    return `+${pct}% win`;
+  }
+  const pts = Math.max(0.1, r.pts);
+  return `+${pts.toFixed(1)} pts`;
+}
+
 /**
- * The call as a bench note: why the staff looked (the evidence, its headline), its opinion and the change
- * on its button. A call is only made once its reading clears its noise, but what it measured stays the
- * staff's own: the player gets the opinion, never the figure (core/analysis/staffWords.ts).
+ * The call as a bench note: why the staff looked (the evidence, its headline), its measured value,
+ * and the one-tap change on its button.
  */
 export function callNote(c: Extract<StaffCall, { state: 'call' }>): StaffNote {
   const a = c.draft;
+  const val = callWorthText(c.m);
   return {
     id: `call-${a.id}`,
     kind: 'decision',
     tone: 'good',
     title: a.why,
-    text: c.m.by === 'win' ? 'The staff thinks this helps you close.' : 'The staff thinks this helps from here.',
+    text: c.m.by === 'win' ? `Est. ${val} to close.` : `Est. ${val} from here.`,
+    worth: val,
     actions: [
       a.choice.kind === 'timeout'
         ? { kind: 'timeout', label: a.label }
@@ -397,8 +429,12 @@ export function callNote(c: Extract<StaffCall, { state: 'call' }>): StaffNote {
   };
 }
 
-/** The staff's call over the court, in a line. */
+/** The staff's call over the court, in a line with its measured value. */
 export const CALL_BANNER_LINE = 'The staff thinks this helps.';
+export function callBannerLine(c: Extract<StaffCall, { state: 'call' }>): string {
+  const val = callWorthText(c.m);
+  return c.m.by === 'win' ? `Est. ${val} · one-tap apply` : `Est. ${val} from here`;
+}
 
 /** The staff's line when it found nothing to change, or while it looks. */
 export function callQuietLine(c: StaffCall | null, gap?: DecidingGap): string | null {

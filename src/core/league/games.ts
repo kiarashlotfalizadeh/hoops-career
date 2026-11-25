@@ -4,7 +4,8 @@ import { formOf, legendRooms } from './legends';
 import type { GameResult, League, Player, Rotation, ScheduledGame, StandingLine, Team, TeamSeason, TeamTotals } from '../types';
 import { GameSim, K, type SimTeamInput } from '../sim/engine';
 import { Rng, clamp } from '../random';
-import { autoRotation, autoTactics, presetScores, staffPick, styleChanged } from '../ai/coachAI';
+import { autoRotation, autoTactics, presetScores, staffPick, styleChanged, sustainableMinutes } from '../ai/coachAI';
+import { normalizeMinutes, planInputs, planRoles } from '../sim/rotationPlan';
 import { addNews, andList, inSeason, playerName, statsLine, teamCity, teamPlayers, teamSeason } from './helpers';
 import { cohesionOf } from './pulse';
 import { applyInjury, clearedToPlay, GAME_TIME_PERF, healOneGame } from './injuries';
@@ -362,6 +363,10 @@ export function keepManualRotation(rot: Rotation, players: Player[]) {
     rot.set = rot.set.filter((pid) => pids.has(pid));
     if (!rot.set.length) delete rot.set;
   }
+  if (rot.shortOk) {
+    rot.shortOk = rot.shortOk.filter((pid) => pids.has(pid));
+    if (!rot.shortOk.length) delete rot.shortOk;
+  }
 }
 
 /** Whether a player is out hurt (not cleared for the next game). */
@@ -379,32 +384,162 @@ export function giveShare(league: League, tid: number, pids: number[], spare = 0
   const team = league.teams[tid];
   const rot = team.rotation;
   const players = teamPlayers(league, tid);
+  const byId = new Map(players.map((p) => [p.pid, p]));
+  const stars = new Set(
+    players
+      .filter((p) => !hurt(p))
+      .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
+      .slice(0, 2)
+      .map((p) => p.pid),
+  );
+  const starFloor = (pid: number) => {
+    const p = byId.get(pid);
+    if (!p || !stars.has(pid)) return 0;
+    return Math.min(rot.minutes[pid] ?? 0, Math.min(32, Math.round(sustainableMinutes(p))));
+  };
   const staff = autoRotation(
     players.filter((p) => !hurt(p)),
     rot,
   ).minutes;
-  const take = (from: [string, number][], amount: number) => {
-    const pool = from.reduce((a, [, m]) => a + m, 0);
-    if (pool > 0 && amount > 0) for (const [k, m] of from) rot.minutes[+k] = Math.max(0, Math.round(m - (amount * m) / pool));
+  const take = (from: [string, number][], amount: number, floorOf: (pid: number) => number = () => 0): number => {
+    const avail = from.map(([k, m]) => ({ k, m, slack: Math.max(0, m - floorOf(+k)) }));
+    const pool = avail.reduce((a, x) => a + x.slack, 0);
+    if (pool <= 0 || amount <= 0) return 0;
+    const takeAmt = Math.min(amount, pool);
+    let took = 0;
+    for (const x of avail) {
+      if (x.slack <= 0) continue;
+      const cut = Math.min(x.slack, Math.round((takeAmt * x.slack) / pool));
+      rot.minutes[+x.k] = Math.max(0, x.m - cut);
+      took += cut;
+    }
+    return took;
   };
   for (const pid of pids) {
     const want = clamp(Math.round(staff[pid] ?? 16), 10, 30);
     const free = Math.min(want, Math.max(0, Math.round(spare)));
     spare -= free;
-    const need = want - free;
+    let need = want - free;
     const others = Object.entries(rot.minutes).filter(([k, m]) => +k !== pid && m > 0);
-    const own = others.filter(([k]) => rot.set?.includes(+k));
-    const rest = others.filter(([k]) => !rot.set?.includes(+k));
-    const fromRest = own.length ? Math.min(need, Math.floor(rest.reduce((a, [, m]) => a + m, 0) / 2)) : need;
-    take(rest, fromRest);
-    take(own, need - fromRest);
+    const benchRest = others.filter(([k]) => !rot.set?.includes(+k) && !stars.has(+k));
+    const ownRest = others.filter(([k]) => rot.set?.includes(+k) && !stars.has(+k));
+    const starRest = others.filter(([k]) => stars.has(+k));
+    // Protect top-two stars from being drained by newcomers/returnees: carve from non-star depth first,
+    // then pinned non-stars, then only star minutes above their floor (32 / stamina), never below unless forced.
+    const capBench = ownRest.length || starRest.length ? Math.floor(benchRest.reduce((a, [, m]) => a + m, 0) * 0.6) : need;
+    need -= take(benchRest, Math.min(need, capBench));
+    if (need > 0) need -= take(ownRest, need);
+    if (need > 0) need -= take(starRest, need, starFloor);
+    if (need > 0) need -= take(benchRest.map(([k]) => [k, rot.minutes[+k] ?? 0] as [string, number]), need);
+    if (need > 0) take(starRest.map(([k]) => [k, rot.minutes[+k] ?? 0] as [string, number]), need);
     rot.minutes[pid] = want;
     rot.held = rot.held?.filter((x) => x !== pid);
     rot.benched = rot.benched?.filter((x) => x !== pid);
+    rot.shortOk = rot.shortOk?.filter((x) => x !== pid);
     rot.set = rot.set?.filter((x) => x !== pid);
     if (rot.set && !rot.set.length) delete rot.set;
+    if (rot.shortOk && !rot.shortOk.length) delete rot.shortOk;
   }
   return spare;
+}
+
+/** A top-two healthy player planned under this many minutes in a manual rotation triggers a warning. */
+export const STAR_MIN_WARN = 28;
+
+export interface LowStarMinutes {
+  player: Player;
+  /** Actual minutes the rotation plan will play him after scaling to 240. */
+  planned: number;
+  /** Raw target stored in Rotation.minutes. */
+  target: number;
+  sustain: number;
+}
+
+/**
+ * Top-two healthy players (by OVR) whose actual planned minutes in a manual rotation fall under
+ * STAR_MIN_WARN (or under what their stamina supports), catching stale targets AND targets silently
+ * squeezed down when raw minutes add up well past 240. Excludes 0-minute regulars (caught by noMinutes),
+ * explicit hard caps under STAR_MIN_WARN, benched players, and players the coach chose to keep as set.
+ */
+export function lowStarMinutes(league: League, tid = league.userTid, opts: { includeDismissed?: boolean } = {}): LowStarMinutes[] {
+  const rot = league.teams[tid].rotation;
+  if (!rot.manual) return [];
+  const players = teamPlayers(league, tid);
+  const byId = new Map(players.map((p) => [p.pid, p]));
+  const order = rot.order.filter((pid) => byId.has(pid));
+  for (const p of players) if (!order.includes(p.pid)) order.push(p.pid);
+  const pp = planInputs(
+    order.map((pid) => {
+      const p = byId.get(pid)!;
+      return { pid, available: !hurt(p), ...planRoles(p.ratings, p.pos), endurance: p.ratings.end };
+    }),
+    rot,
+    { playoffs: league.phase === 'playoffs' },
+  );
+  const norm = normalizeMinutes(pp);
+  const plannedByPid = new Map(pp.map((x, i) => [x.pid, norm[i]]));
+  const topTwo = players
+    .filter((p) => !hurt(p))
+    .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
+    .slice(0, 2);
+  const out: LowStarMinutes[] = [];
+  for (const p of topTwo) {
+    const target = rot.minutes[p.pid] ?? 0;
+    if (target <= 0) continue; // caught by noMinutes
+    if (rot.benched?.includes(p.pid)) continue;
+    if ((rot.caps[p.pid] ?? 48) < STAR_MIN_WARN) continue;
+    if (!opts.includeDismissed && rot.shortOk?.includes(p.pid)) continue;
+    const sustain = Math.round(sustainableMinutes(p));
+    const planned = Math.round(plannedByPid.get(p.pid) ?? target);
+    if (planned < Math.min(STAR_MIN_WARN, sustain - 3)) out.push({ player: p, planned, target, sustain });
+  }
+  return out;
+}
+
+/** Restore full starter minutes to top stars whose manual targets drifted low, taking proportionally from non-stars. */
+export function giveStarMinutes(league: League, tid: number, pids: number[]) {
+  const rot = league.teams[tid].rotation;
+  const players = teamPlayers(league, tid);
+  const staff = autoRotation(
+    players.filter((p) => !hurt(p)),
+    { ...rot, manual: false },
+  ).minutes;
+  const starSet = new Set(pids);
+  for (const pid of pids) {
+    const p = league.players[pid];
+    if (!p || p.tid !== tid) continue;
+    const sustain = Math.round(sustainableMinutes(p));
+    const want = clamp(Math.max(staff[pid] ?? 34, Math.min(34, sustain)), 28, Math.min(38, sustain));
+    const cur = rot.minutes[pid] ?? 0;
+    const add = Math.max(0, want - cur);
+    if (add > 0) {
+      const others = Object.entries(rot.minutes).filter(([k, m]) => !starSet.has(+k) && m > 0);
+      const pool = others.reduce((a, [, m]) => a + m, 0);
+      if (pool > 0) for (const [k, m] of others) rot.minutes[+k] = Math.max(0, Math.round(m - (add * m) / pool));
+    }
+    rot.minutes[pid] = want;
+    // Move star into the starting five if pushed down the depth chart
+    const idx = rot.order.indexOf(pid);
+    if (idx >= 5) {
+      rot.order.splice(idx, 1);
+      rot.order.unshift(pid);
+    }
+    rot.shortOk = rot.shortOk?.filter((x) => x !== pid);
+    rot.benched = rot.benched?.filter((x) => x !== pid);
+    rot.held = rot.held?.filter((x) => x !== pid);
+  }
+  if (rot.shortOk && !rot.shortOk.length) delete rot.shortOk;
+  if (rot.benched && !rot.benched.length) delete rot.benched;
+  if (rot.held && !rot.held.length) delete rot.held;
+  // Re-scale total near 240 if over-allocated so stars actually receive their planned minutes
+  const total = players.reduce((a, p) => a + (rot.minutes[p.pid] ?? 0), 0);
+  if (total > PLAN_TOTAL + 12) {
+    const over = total - PLAN_TOTAL;
+    const others = players.filter((p) => !starSet.has(p.pid) && (rot.minutes[p.pid] ?? 0) > 0);
+    const pool = others.reduce((a, p) => a + (rot.minutes[p.pid] ?? 0), 0);
+    if (pool > 0) for (const p of others) rot.minutes[p.pid] = Math.max(0, Math.round((rot.minutes[p.pid] ?? 0) - (over * (rot.minutes[p.pid] ?? 0)) / pool));
+  }
+  rot.whole = players.reduce((a, p) => a + (rot.minutes[p.pid] ?? 0), 0);
 }
 
 /** What a rotation's minutes add up to before the plan scales them (rotationPlan.ts). */

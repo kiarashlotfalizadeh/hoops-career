@@ -24,6 +24,7 @@ import { BrandMark } from '../components/BrandMark';
 import { GLOSSARY } from '../glossary';
 import { LIVE_BREAKS, LIVE_SPEEDS, TEACHING_HELP, rememberTeaching } from '../settingsOptions';
 import { clutchSlowAlways, setClutchSlowAlways } from '../live/Atmos';
+import { courtLookOf } from '../live/gl';
 import { setDevicePref, useDevice, type ThemePref } from '../device';
 import { sfx } from '../sound';
 import './settings.css';
@@ -310,7 +311,7 @@ export default function Settings() {
           <Section title="During the game">
             <fieldset className="card flush set-list" disabled={simming}>
               <Toggle
-                on={st.courtLook !== 'flat'}
+                on={courtLookOf(st.courtLook) === '3d'}
                 onChange={(v) => set('courtLook', v ? '3d' : 'flat')}
                 label="3D court"
                 help="Players as figures, seen from a broadcast camera. Off: the 2D floor from above. The camera button on the court switches too."

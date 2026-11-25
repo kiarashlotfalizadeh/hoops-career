@@ -323,7 +323,7 @@ export function buildDigest(mark: DigestMark, l: League, opts: { long?: boolean;
     back,
     mail,
     around,
-    picks: staffPicksSince(l, mark.season, mark.day),
+    picks: staffPicksSince(l, mark.season, mark.day, true),
     ...(offers.length ? { offers } : {}),
   };
 }

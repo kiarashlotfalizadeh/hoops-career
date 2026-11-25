@@ -17,6 +17,7 @@ import { expectedCohesion } from '../league/pulse';
 import { cohesionLift } from '../sim/engine/constants';
 import { LOTTERY_ODDS } from '../league/draft';
 import { drawLot, finalsHomeCourt, standings } from '../league/standings';
+import { SEASON_GAMES } from '../league/helpers';
 
 // (what a roster is worth lives in worth.ts)
 export { ROSTER_NET, rosterWorth };
@@ -126,7 +127,7 @@ function setup(league: League, fixed: { gid: number; homeWon: boolean } | undefi
     games.push([g.home, g.away]);
   }
   // with an In-Season Cup, everyone plays 82: two of them aren't on the calendar until the groups are decided
-  const target = league.cup?.season === league.season ? 82 : Math.max(0, ...sched);
+  const target = league.cup?.season === league.season ? SEASON_GAMES : Math.max(0, ...sched);
   const extra = sched.map((s) => Math.max(0, target - s));
   const players = new Map<number, Player[]>();
   for (const p of Object.values(league.players)) if (p.tid >= 0 && p.tid < n) (players.get(p.tid) ?? players.set(p.tid, []).get(p.tid)!).push(p);

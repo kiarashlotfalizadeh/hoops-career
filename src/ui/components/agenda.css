@@ -239,7 +239,12 @@ a.ag-head:active > svg:last-child {
 .ag-why {
   animation: drop var(--dur) var(--ease-out) backwards;
 }
+/* (solid, the row's strongest button: an 11% tint read as the choice gone dim, a tap that did nothing) */
 .ag-acts .btn.danger {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: var(--paper-ink);
+  font-weight: 720;
   animation: pop var(--dur) var(--ease-spring);
 }
 /* the guide's strip on its step's screen */

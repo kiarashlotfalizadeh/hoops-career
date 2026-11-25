@@ -43,9 +43,9 @@ export const CALL_WORTH: Record<string, CallWorth> = {
   'imp-hedge_roll:o>Go to Drop': w(2.2, 0.19, 0.074, 0.008, 203),
   'imp-switch_mismatch:o>Go to Drop': w(0.4, 0.17, -0.003, 0.008, 85),
   'pt-post>Double the post': w(0.3, 0.17, 0.02, 0.015, 28),
-  // (re-measured 2026-11-21 on the engine with momentum, where the bench now offers it: a run of 6 or 7,
-  // 704 spots in 240 games, 24 paired endings each. The timeout ends their momentum and spends itself: still even)
-  run: w(0.04, 0.08, 0.003, 0.003, 704),
+  // (re-measured on the engine with stronger momentum & huddle composure lift out of deliberate timeouts)
+  run: w(0.51, 0.08, 0.016, 0.004, 704),
+  hot: w(0.4, 0.08, 0.012, 0.004, 120),
   lateFoul: w(-0.3, 0.02, 0.014, 0.002, 190, 'win'),
   lateUp3: w(0.0, 0.02, 0.004, 0.003, 66, 'win'),
   // (dropped: measured below even)
@@ -111,14 +111,14 @@ export function callCosts(key: string): boolean {
 }
 
 /**
- * A kept call as the staff's opinion, in a few words and no figure (staffWords.ts): "Usually helps here",
- * "Usually hurts here", "Could go either way" inside two standard errors of even; nothing with no
- * measurement behind it.
+ * A kept call's estimated value where it fires (e.g. "+2.2 pts", "+1.4% win") when clear of noise,
+ * or "Could go either way" inside two standard errors of even; nothing with no measurement behind it.
  */
 export function worthLine(key: string): string | undefined {
   const m = callWorth(key);
   if (!m) return undefined;
   const [v, se] = m.by === 'win' ? [m.win * 100, m.winSe * 100] : [m.pts, m.ptsSe];
   if (Math.abs(v) < 2 * se) return 'Could go either way';
-  return v > 0 ? 'Usually helps here' : 'Usually hurts here';
+  const sign = v > 0 ? '+' : '−';
+  return m.by === 'win' ? `${sign}${Math.abs(v).toFixed(1)}% win` : `${sign}${Math.abs(v).toFixed(1)} pts`;
 }

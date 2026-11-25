@@ -11,7 +11,7 @@ import { Section, Toggle } from '../components/ui';
 import type { Drawn } from './drawn';
 import { AssistantHead, MovesList, NoteCard } from '../components/StaffCards';
 import type { StaffAction, StaffNote } from './staff';
-import { Trouble } from './Trouble';
+import { Trouble, type SubFor } from './Trouble';
 
 /** Moves listed before "All". */
 const MOVES_SHOWN = 2;
@@ -56,7 +56,7 @@ export function StaffView({
   watch?: { pid: number; defender?: number };
   onPlayer: (pid: number) => void;
   tactics: Tactics;
-  subFor: (pid: number) => number | undefined;
+  subFor: SubFor;
   substitute: (out: number, inn: number) => boolean;
 }) {
   const [allMoves, setAllMoves] = useState(false);

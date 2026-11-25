@@ -40,6 +40,8 @@ export const clockMethods = {
       // waiting timeout was for
       t.nextSet = null;
       t.atoNext = false;
+      t.huddleOff = 0;
+      t.huddleDef = 0;
       t.toWait = null;
       t.hacked.clear();
     }

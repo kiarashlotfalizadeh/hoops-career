@@ -106,13 +106,17 @@ export function MyPlayer({
           {options.length ? (
             <>
               <div className="chips" role="group" aria-label={subs.on ? `Who comes in for ${name}` : `Who ${name} comes in for`}>
-                {options.map((o) => (
-                  <button key={o.pid} className={`chip lv-ps-sub${o.staff ? ' staff' : ''}`} onClick={() => onSub(o.pid)}>
-                    {o.staff && <Lightbulb size={13} className="accent-text" aria-hidden="true" />}
-                    {nameOf(o.pid)} <span className="lv-ps-sub-l num">{o.line}</span>
-                    {o.staff && <span className="sr-only">, the staff&apos;s pick</span>}
-                  </button>
-                ))}
+                {options.map((o, i) => {
+                  const r = measured ? readings?.[i] : undefined;
+                  const val = r?.clear ? `${r.win >= 0 ? '+' : '−'}${Math.max(1, Math.round(Math.abs(r.win) * 100))}%` : null;
+                  return (
+                    <button key={o.pid} className={`chip lv-ps-sub${o.staff ? ' staff' : ''}`} onClick={() => onSub(o.pid)}>
+                      {o.staff && <Lightbulb size={13} className="accent-text" aria-hidden="true" />}
+                      {nameOf(o.pid)} <span className="lv-ps-sub-l num">{o.line}{val ? ` · ${val}` : ''}</span>
+                      {o.staff && <span className="sr-only">, the staff&apos;s pick</span>}
+                    </button>
+                  );
+                })}
               </div>
               <div className="tiny dim lv-ps-key">
                 <span aria-hidden="true">

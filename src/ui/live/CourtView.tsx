@@ -19,10 +19,11 @@ import { ShotClock } from './shotClock';
 import { beatSound, hushMoves } from './gameSound';
 import type { Occasion } from './occasion';
 import './styles/court3d.css';
+import { canDraw3D, softwareGL, type CourtLook } from './gl';
+
+export { canDraw3D, courtLookOf, softwareGL, type CourtLook } from './gl';
 
 const Court3D = lazy(() => import('./Court3D'));
-
-export type CourtLook = '3d' | 'flat';
 
 /**
  * How fast the 3D court plays a possession, of the 2D court's pace. Discs can cross the floor in a
@@ -33,19 +34,6 @@ export type CourtLook = '3d' | 'flat';
 export const COURT3D_PACE = 0.5;
 /** A replay never holds the court longer than this (ms), whatever happens to the picture. */
 const REPLAY_MOST = 10000;
-
-let probed: boolean | null = null;
-/** This device draws WebGL 2 (asked once). */
-export function canDraw3D(): boolean {
-  if (probed === null) {
-    try {
-      probed = typeof document !== 'undefined' && !!document.createElement('canvas').getContext('webgl2');
-    } catch {
-      probed = false;
-    }
-  }
-  return probed;
-}
 
 export interface CourtViewProps extends CourtProps {
   look: CourtLook;
@@ -264,7 +252,7 @@ export function CourtView({ look, onLook, cam, onCam, bench, body, game, replays
       )}
       {on && slow && !hide && (
         <div className="court-slow m-drop" role="status" onClick={(e) => e.stopPropagation()}>
-          <span>3D is running slowly on this device.</span>
+          <span>{softwareGL() ? 'This browser draws 3D without the graphics chip, so it runs slowly.' : '3D is running slowly on this device.'}</span>
           <button className="btn xs" onClick={flat}>
             Use 2D
           </button>

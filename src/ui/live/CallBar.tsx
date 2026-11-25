@@ -45,6 +45,10 @@ export interface FinalOfferActions {
   onClose: () => void;
   /** What a sim to the end skips, as the confirm says it: "4:59", "4:59 of overtime". */
   left: string;
+  /** Custom bar prompt (defaults to "Game decided"). */
+  label?: string;
+  /** Keep the offer up while paused (e.g. a skip to clutch time that stopped at 5:00 in a non-close game). */
+  sticky?: boolean;
 }
 
 /** How long playback stays up after a tap while the game plays. */
@@ -135,36 +139,38 @@ export function CallBar(p: CallBarProps) {
     ? banner
       ? 'banner'
       : 'title'
-    : paused || up
-      ? 'transport'
-      : clutchOffer
-        ? 'clutch'
-        : finalOffer
-          ? 'final'
-          : banner
-            ? 'banner'
-            : call
-              ? 'call'
-              : graphic
-                ? 'graphic'
-                : crowdLine
-                  ? 'crowd'
-                  : script
-                    ? 'play'
-                    : ffing
-                      ? 'ff'
-                      : 'idle';
+    : finalOffer?.sticky
+      ? 'final'
+      : paused || up
+        ? 'transport'
+        : clutchOffer
+          ? 'clutch'
+          : finalOffer
+            ? 'final'
+            : banner
+              ? 'banner'
+              : call
+                ? 'call'
+                : graphic
+                  ? 'graphic'
+                  : crowdLine
+                    ? 'crowd'
+                    : script
+                      ? 'play'
+                      : ffing
+                        ? 'ff'
+                        : 'idle';
 
-  // "Sim to the end" asks before it runs (its second tap): the ask lapses with the offer
+  // "Sim to final" asks before it runs (its second tap): the ask lapses with the offer
   const [simArmed, setSimArmed] = useState(false);
   const finalUp = state === 'final';
   useEffect(() => {
     if (!finalUp) setSimArmed(false);
   }, [finalUp]);
-  // an offer left alone goes away (the time it's on the bar: playback over it starts it again)
+  // an offer left alone goes away (the time it's on the bar: playback over it starts it again); sticky stops wait for the coach
   const closeOffer = useRef<() => void>(() => {});
   closeOffer.current = state === 'clutch' ? clutchOffer!.onClose : state === 'final' ? finalOffer!.onClose : () => {};
-  const offerUp = state === 'clutch' || state === 'final' ? state : null;
+  const offerUp = state === 'clutch' || (state === 'final' && !finalOffer?.sticky) ? state : null;
   useEffect(() => {
     if (!offerUp) return;
     const t = setTimeout(() => closeOffer.current(), OFFER_MS);
@@ -277,14 +283,20 @@ export function CallBar(p: CallBarProps) {
   } else if (state === 'final') {
     body = (
       <div className="lv-cb-row lv-cb-offer" role="group" aria-label="The game is decided">
-        <span className="lv-cb-t one grow">{simArmed ? `Skip the last ${finalOffer!.left}?` : 'Game decided'}</span>
+        <span className="lv-cb-t one grow">{simArmed ? `Skip the last ${finalOffer!.left}?` : (finalOffer!.label ?? 'Game decided')}</span>
         {/* two taps: the first asks, with what would be skipped (one stray tap had ended a game five minutes early) */}
         <button type="button" className={`lv-cb-btn sm on${simArmed ? ' armed' : ''}`} onClick={simArmed ? finalOffer!.onSim : () => setSimArmed(true)}>
-          <FastForward size={15} aria-hidden="true" /> {simArmed ? 'Yes, sim it' : 'Sim to the end'}
+          <FastForward size={15} aria-hidden="true" /> {simArmed ? 'Yes, sim it' : 'Sim to final'}
         </button>
-        <button type="button" className="lv-cb-x" onClick={finalOffer!.onClose} aria-label="Keep watching">
-          <X size={17} aria-hidden="true" />
-        </button>
+        {finalOffer!.sticky ? (
+          <button type="button" className="lv-cb-btn sm" onClick={finalOffer!.onClose}>
+            <Play size={14} fill="currentColor" aria-hidden="true" /> Play on
+          </button>
+        ) : (
+          <button type="button" className="lv-cb-x" onClick={finalOffer!.onClose} aria-label="Keep watching">
+            <X size={17} aria-hidden="true" />
+          </button>
+        )}
       </div>
     );
   } else if (state === 'banner' && banner) {

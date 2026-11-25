@@ -2,7 +2,9 @@
 // core/ai/counterWorth.ts) for the user's next game against them: a few seconds of games, once for
 // each state of the plan, the tactics and who's fit to play on either side (a counter added changes
 // what the others are worth), not again each day. Kept for the session, so the matchup page's tabs
-// and a return to it say the same. The player gets the staff's opinion (worthText), never the figure.
+// and a return to it say the same. While a change is measured again, the reading from before it is
+// shown (`stale`): a counter added used to send every opinion back to "Staff still looking…". The
+// player gets the staff's opinion (worthText), never the figure.
 import { useEffect, useState } from 'react';
 import type { GamePlanItem, League } from '../../../core/types';
 import type { Candidate } from '../../../core/ai/advisor';
@@ -11,7 +13,7 @@ import { AHEAD, leanTone } from '../../../core/analysis/staffWords';
 import { effectiveTactics, planFor, planSig } from '../../../core/league/gamePlans';
 import { touch } from '../../../state/actions';
 import { hashString } from '../../../core/random';
-import { measureCounters } from '../../../state/simClient';
+import { cancelWorth, measureCounters } from '../../../state/simClient';
 import { useStore } from '../../../state/store';
 import { inLane } from '../../tactics/worthLane';
 
@@ -20,13 +22,19 @@ export interface WorthState {
   worth?: Map<string, CounterWorth>;
   /** Share of the games played (0 until it starts). */
   progress: number;
+  /** `worth` is the last reading for this game, from before the plan, tactics or who's fit changed: being measured again. */
+  stale?: true;
 }
 
 /** Measurements kept, newest last (a season's matchup pages visited). */
 const KEEP = 24;
 const measured = new Map<string, WorthState>();
+/** The newest finished reading for each meeting (meetingOf), shown while a change is measured again. */
+const lastRead = new Map<string, Map<string, CounterWorth>>();
 const listeners = new Set<() => void>();
+/** The measurement wanted now (the newest started), and the one in the worker, if it's ours. */
 let running: string | null = null;
+let active: string | null = null;
 /** Times a key's measurement has been started (a stopped one is started again, RETRIES times at most). */
 const retries = new Map<string, number>();
 const RETRIES = 4;
@@ -44,6 +52,9 @@ function keyOf(league: League, opp: number, gid: number): string {
   return `${league.id}:${league.season}:${league.phase === 'preseason' ? 'pre:' : ''}${gid}:${opp}:${hashString(JSON.stringify(effectiveTactics(league, opp)) + JSON.stringify(me.rotation) + out.join(','))}`;
 }
 
+/** A key's meeting (the league, the game, the opponent): the key without what the user decides or who's hurt. */
+const meetingOf = (key: string) => key.slice(0, key.lastIndexOf(':'));
+
 /** The user's next game against `opp` this season, if any. */
 function nextMeeting(league: League, opp: number) {
   const me = league.userTid;
@@ -55,28 +66,41 @@ function nextMeeting(league: League, opp: number) {
 function start(league: League, opp: number, key: string) {
   running = key;
   measured.set(key, { progress: 0 });
+  // its own measurement of things as they were is no longer wanted: stopped, so this one goes next (one
+  // still waiting for its turn is skipped when it comes: see inLane)
+  if (active && active !== key) cancelWorth();
   tell();
   const g = nextMeeting(league, opp);
   // the plan as it's measured: its reading is kept on it only while it's still this one
   const plan = planFor(league, opp, g);
   const sig = plan ? planSig(plan) : null;
-  // (it holds the lane: the staff's measurements of the user's changes wait for it, worthLane.ts)
-  inLane(() =>
-    measureCounters(league, opp, g?.gid, (done, total) => {
-      const cur = measured.get(key);
-      if (cur && !cur.worth) {
-        measured.set(key, { progress: done / total });
-        tell();
-      }
-    }),
+  // (in the lane, in turn: the staff's measurements of the user's changes wait for it, worthLane.ts)
+  inLane(
+    () => {
+      active = key;
+      return measureCounters(league, opp, g?.gid, (done, total) => {
+        const cur = measured.get(key);
+        if (cur && !cur.worth) {
+          measured.set(key, { progress: done / total });
+          tell();
+        }
+      }).finally(() => {
+        if (active === key) active = null;
+      });
+    },
+    () => running === key,
   ).then(
     (out) => {
       if (running === key) running = null;
-      // (stopped by a newer one: measured again when it's asked for again)
+      // (stopped by a newer one, or skipped: measured again when it's asked for again)
       if (!out) measured.delete(key);
       else {
         measured.delete(key);
-        measured.set(key, { worth: new Map(out.map((w) => [w.id, w])), progress: 1 });
+        const worth = new Map(out.map((w) => [w.id, w]));
+        measured.set(key, { worth, progress: 1 });
+        lastRead.delete(meetingOf(key));
+        lastRead.set(meetingOf(key), worth);
+        while (lastRead.size > KEEP) lastRead.delete(lastRead.keys().next().value!);
         retries.delete(key);
         keepPlanWorth(
           league.id,
@@ -147,7 +171,13 @@ export function useCounterWorth(league: League, opp: number): WorthState | null 
     const t = setTimeout(go, 400 * tries);
     return () => clearTimeout(t);
   }, [key, simming, league, opp, n]);
-  return key ? (measured.get(key) ?? { progress: 0 }) : null;
+  if (!key) return null;
+  const cur = measured.get(key);
+  if (cur?.worth) return cur;
+  const last = lastRead.get(meetingOf(key));
+  // given up (stopped too many times): nobody is looking, so it doesn't say so
+  if (!cur && (retries.get(key) ?? 0) > RETRIES) return last ? { worth: last, progress: 1, stale: true } : null;
+  return last ? { worth: last, progress: cur?.progress ?? 0, stale: true } : (cur ?? { progress: 0 });
 }
 
 /** "Should help", "Could hurt", "No clear edge": a measured counter as the staff's opinion, with its tone. `short`: the same inside a sentence. */

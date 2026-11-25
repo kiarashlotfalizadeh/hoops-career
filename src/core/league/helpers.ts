@@ -61,6 +61,31 @@ export function curTeamSeason(league: League, tid: number): TeamSeason {
   return teamSeason(league.teams[tid], league.season);
 }
 
+/** Regular-season games a team plays in all. */
+export const SEASON_GAMES = 82;
+
+/**
+ * A team's regular-season games that aren't on the calendar yet. With an In-Season Cup the base
+ * schedule holds 80 a team, and the last two come as the Cup plays out (cup.ts), so until then the
+ * schedule alone counts short: two for everyone until the knockouts are seeded (a quarterfinal, or
+ * the two in its window for the rest), then one for each quarterfinalist until the semifinals are set
+ * (a semifinal, or a quarterfinal loser's last game).
+ */
+export function unscheduledGames(league: League, tid: number): number {
+  const cup = league.cup;
+  if (!cup || cup.season !== league.season || cup.champion !== undefined) return 0;
+  if (!cup.seeds) return 2;
+  const inQf = cup.bracket.some((t) => t.round === 'qf' && (t.high === tid || t.low === tid));
+  return inQf && !cup.bracket.some((t) => t.round === 'sf') ? 1 : 0;
+}
+
+/** A team's regular-season games still to play, the Cup's unscheduled ones included (unscheduledGames). */
+export function teamGamesLeft(league: League, tid: number): number {
+  let n = 0;
+  for (const g of league.schedule) if (g.type === 'regular' && !g.played && (g.home === tid || g.away === tid)) n++;
+  return n + unscheduledGames(league, tid);
+}
+
 /** A team's payroll for a season: its contracts and its dead money. It counts against the cap and the tax. */
 export function payroll(league: League, tid: number, season = league.season): number {
   let total = 0;

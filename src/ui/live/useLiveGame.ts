@@ -26,7 +26,7 @@ import { drawnPlayer, snapshot, type Drawn } from './drawn';
 import { closeGame, crunchTime, lastPossession, liveAlerts, newEvents, recentLevers, type AlertInput, type LiveEvent } from './alerts';
 import { staffNotes } from './staff';
 import { useStaffCall } from './useStaffCall';
-import { benchFor, CALL_BANNER_LINE, callNote, callQuietLine, decidingGaps, nextStop, noStops, stopAfter } from './calls';
+import { benchFor, callBannerLine, callNote, callQuietLine, decidingGaps, nextStop, noStops, stopAfter } from './calls';
 import { CALL_BREAK_MS, CALL_BUDGET_MS } from '../../state/liveWorth';
 import { isKey } from './keyPlays';
 import { createBeat, createTicker, type Beat, type Ticker } from './ticker';
@@ -132,6 +132,9 @@ export function useLiveGame() {
   const endBuzzer = useCallback(() => setBuzzer(false), []);
   const [speed, setSpeed] = useState<number>(() => league.settings.liveSpeed || 1);
   const [paused, setPaused] = useState(false);
+  // stopped at 5:00 after a "Clutch time" skip when the game already looks decided: offer "Sim to final" or "Play on"
+  const [clutchDecided, setClutchDecided] = useState(false);
+  const clearClutchDecided = useCallback(() => setClutchDecided(false), []);
   // stopped at a period's buzzer (a natural break or a skip): the next period starts when the user resumes
   const [atBreak, setAtBreak] = useState(false);
   // the banners and the broadcast graphics over the court
@@ -205,10 +208,10 @@ export function useLiveGame() {
   // (what it named for each player last, so a suggestion holds while it's still about as good: see benchFor)
   const lastSub = useRef(new Map<number, number>());
   const subFor = useCallback(
-    (pid: number, exclude?: ReadonlySet<number>) => {
+    (pid: number, exclude?: ReadonlySet<number>, subOpts?: { ahead?: boolean; q?: number }) => {
       const sim = liveRef.current?.sim;
       if (!sim) return undefined;
-      const sub = benchFor(sim, userSide, pid, { exclude, prefer: lastSub.current.get(pid) });
+      const sub = benchFor(sim, userSide, pid, { exclude, prefer: lastSub.current.get(pid), ...subOpts });
       if (sub !== undefined) lastSub.current.set(pid, sub);
       return sub;
     },
@@ -772,6 +775,7 @@ export function useLiveGame() {
     if (!lg || status !== 'live') return;
     clearFF();
     setIntro(false);
+    setClutchDecided(false);
     // a timeout called just before the skip is taken along the way: no huddle at the other end
     huddleNext.current = false;
     // one of your starters hurt along the way stops it there (not the final: that's the rest at once)
@@ -785,14 +789,9 @@ export function useLiveGame() {
     // the sim runs a possession ahead of the court: already at the buzzer, "End of quarter" stops at this break, not the next one
     if (!(to === 'quarter' && !atBreak && lg.sim.clock <= 0.05)) lg.simTo(to, to === 'end' ? undefined : hurtNow);
     const hurt = to === 'end' ? [] : hurtStarters(lg.sim, side, from);
-    // clutch time in a game decided by then has no finish to watch: on to the final
-    const decided = to === 'clutch' && !hurt.length && !lg.over && simDecided(lg.sim, lg.edge);
-    if (decided) {
-      const [h, a] = lg.sim.T;
-      const lead = h.score >= a.score ? h : a;
-      useStore.getState().toast(`No clutch time tonight: ${lead.team.abbrev} up ${Math.abs(h.score - a.score)} with ${fmtClock(lg.sim.clock)} left. On to the final.`);
-      lg.simTo('end');
-    }
+    // clutch time stops at 5:00 whatever the score, as asked: when it already reads decided (95%+),
+    // pause right at 5:00 and offer "Sim to final" or "Play on" so a coach never loses a comeback attempt
+    const decidedAtClutch = to === 'clutch' && !hurt.length && !lg.over && lg.sim.clock > 0.05 && simDecided(lg.sim, lg.edge);
     // a decided game ends at the buzzer: no break before an overtime that won't be played
     const s = lg.sim;
     if (!lg.over && s.clock <= 0.05 && s.q >= 4 && s.T[0].score !== s.T[1].score) lg.step();
@@ -833,11 +832,22 @@ export function useLiveGame() {
       ff.current.waiting = true;
       return;
     }
-    if (lateMark) setAnnounce(`${to === 'clutch' ? 'Clutch time: ' : ''}${fmtClock(s.clock)} left in ${periodLabel(s.q)}. ${a.team.abbrev} ${a.score}, ${h.team.abbrev} ${h.score}.`);
+    if (decidedAtClutch) {
+      const lead = h.score >= a.score ? h : a;
+      setClutchDecided(true);
+      setAnnounce(`Clutch time: ${fmtClock(s.clock)} left in ${periodLabel(s.q)}. ${lead.team.abbrev} up ${Math.abs(h.score - a.score)}. Sim to final or play on.`);
+      cut();
+      setPaused(true);
+      ff.current.waiting = true;
+      return;
+    }
+    if (lateMark)
+      setAnnounce(`${to === 'clutch' ? 'Clutch time: ' : ''}${fmtClock(s.clock)} left in ${periodLabel(s.q)}. ${a.team.abbrev} ${a.score}, ${h.team.abbrev} ${h.score}.`);
     setPaused(false);
     nextPossession();
   };
   const togglePause = () => {
+    setClutchDecided(false);
     if (atBreak) {
       setPanel('none');
       setAtBreak(false);
@@ -898,6 +908,7 @@ export function useLiveGame() {
 
   const over = status !== 'live';
   const resume = () => {
+    setClutchDecided(false);
     setPanel('none');
     setHuddle(null);
     setPaused(false);
@@ -931,7 +942,16 @@ export function useLiveGame() {
     const own = staffNotes({ ...input, logs: lg.logs.slice(0, view.logs) })
       .filter((n) => !dismissed.includes(n.id))
       .map((n) =>
-        n.kind === 'decision' && n.actions[0]?.kind === 'tactics' && !n.id.startsWith('late-') ? { ...n, kind: 'read' as const, actions: [], worth: undefined, auto: false } : n,
+        // Keep one-tap apply + value on proven positive calls (late fouls, feeding a hot hand, and
+        // counters backed by a clear positive callWorth reading); speculative unmeasured reads wait
+        // for the live staff measurement.
+        n.kind === 'decision' &&
+        n.actions[0]?.kind === 'tactics' &&
+        !n.id.startsWith('late-') &&
+        !n.id.startsWith('hot-') &&
+        !(typeof n.worth === 'string' && n.worth.startsWith('+'))
+          ? { ...n, kind: 'read' as const, actions: [], worth: undefined, auto: false }
+          : n,
       );
     const c = staffCall?.state === 'call' && staffCall.base === JSON.stringify(lg.sim.baseTactics(lg.userSide)) ? callNote(staffCall) : null;
     return c && !dismissed.includes(c.id) ? [c, ...own.filter((n) => n.id !== (staffCall?.state === 'call' ? staffCall.draft.id : ''))] : own;
@@ -942,7 +962,7 @@ export function useLiveGame() {
   // the calls about 3 to 1, 11 to 2 in one double-overtime game (round-4 game-day review)
   useEffect(() => {
     if (over || staffCall?.state !== 'call') return;
-    queueBanner([{ id: `call-${staffCall.draft.id}${staffCall.steps}`, tone: 'info', kicker: 'Staff call', title: staffCall.draft.label, line: CALL_BANNER_LINE, ms: 14_000 }]);
+    queueBanner([{ id: `call-${staffCall.draft.id}${staffCall.steps}`, tone: 'info', kicker: 'Staff call', title: staffCall.draft.label, line: callBannerLine(staffCall), ms: 14_000 }]);
   }, [staffCall, over, queueBanner]);
 
   return {
@@ -974,6 +994,8 @@ export function useLiveGame() {
     tipOff,
     speed,
     paused,
+    clutchDecided,
+    clearClutchDecided,
     atBreak,
     feed,
     graphic: oc.graphic,

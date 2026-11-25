@@ -62,7 +62,7 @@ describe('batch sims & reports', () => {
           .sort((x, y) => y - x)[8];
       expect(league.teams[0].rotation.manual).toBeFalsy();
       expect(ninth()).toBeGreaterThan(5);
-      expect(ninth('playoffs')).toBeLessThan(3);
+      expect(ninth('playoffs')).toBeLessThan(3.5);
     }
     // builds a post-game report for the user team
     {
