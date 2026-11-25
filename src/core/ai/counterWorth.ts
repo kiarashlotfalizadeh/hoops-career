@@ -21,8 +21,8 @@
 // Pure: reads the league.
 
 import type { GamePlan, League, Player, ScheduledGame, Team } from '../types';
-import { GameSim } from '../sim/engine';
-import { Rng, hashString } from '../random';
+import { hashString } from '../random';
+import { playHere, type Runner } from '../sim/rollouts';
 import { buildSimInput, neutralSite } from '../league/games';
 import { itemGroup, planFor, planMade } from '../league/gamePlans';
 import { counterCandidates, type Candidate } from './advisor';
@@ -70,19 +70,11 @@ export function poolWorth(id: string, parts: { w: number; raw: number; se: numbe
 /** What a measured counter reads as: a gain, a cost, or too close to even to say (its shrunk worth against WORTH_MIN). */
 export const worthCall = (w: Pick<CounterWorth, 'pts'>): 'gain' | 'cost' | 'even' => (w.pts >= WORTH_MIN ? 'gain' : w.pts <= -WORTH_MIN ? 'cost' : 'even');
 
-/**
- * A game's margin for the user's side by its shot value: expected points from the field (every shot
- * the defense fouled included, made or not: an and-one's chance counts whether it fell) plus free
- * throws made. Without the fouled misses, a change that draws fouls read as a cost: the assistant's
- * adjustments at the breaks measured −0.6 a game that way and −0.1 ± 0.1 in points (round/gameday).
- */
-function xMargin(sim: GameSim, side: 0 | 1): number {
-  const r = sim.simToEnd();
-  const x = r.xShots;
-  const f = sim.xFouledMiss;
-  const v = x ? [x[0].pts + f[0] + r.home.t.ftm, x[1].pts + f[1] + r.away.t.ftm] : [r.home.pts, r.away.pts];
-  return side === 0 ? v[0] - v[1] : v[1] - v[0];
-}
+// Each game's margin for the user's side is by its shot value (rollouts.ts xMargin): expected points from
+// the field (every shot the defense fouled included, made or not: an and-one's chance counts whether
+// it fell) plus free throws made. Without the fouled misses, a change that draws fouls read as a cost:
+// the assistant's adjustments at the breaks measured −0.6 a game that way and −0.1 ± 0.1 in points
+// (round/gameday).
 
 /** How a measurement runs: its games, progress, a pause between configurations (for a sim to get in) and a way to give up. */
 export interface WorthOpts {
@@ -96,6 +88,8 @@ export interface WorthOpts {
   counters?: number;
   /** counterWorth: false leaves the whole plan's own reading out (a sim's morning budget: PLAN_WORTH is for the matchup page). */
   plan?: boolean;
+  /** Where the games are played (in this thread by default; a worker pool: state/simPool.ts). */
+  runner?: Runner;
 }
 
 /**
@@ -147,13 +141,13 @@ export async function measureChanges(league: League, opp: number, changes: Leagu
   const play = async (a: typeof mine, batch = 0) => {
     if (done) await opts.between?.();
     if (opts.cancelled?.()) return null;
-    const out = Array.from({ length: games }, (_, i) => {
-      const rng = new Rng((seed + Math.imul(batch * games + i + 1, 2654435761)) >>> 0);
-      const sides = side === 0 ? [a, theirs] : [theirs, a];
-      return xMargin(new GameSim(sides[0], sides[1], { rng, type: g.type, injuries: false, neutral: neutralSite(g) }), side);
-    });
+    const sides: [typeof mine, typeof mine] = side === 0 ? [a, theirs] : [theirs, a];
+    const r = { kind: 'games' as const, sides, type: g.type, neutral: neutralSite(g), side, seed, batch, games };
+    // (a configuration's games in one go here, as before; a pool checks for a stop between its chunks)
+    const got = await (opts.runner ?? playHere)(r, games, { chunk: games, cancelled: opts.cancelled });
+    if (!got) return null;
     opts.onProgress?.(++done, total);
-    return out;
+    return Array.from(got.rows);
   };
   const base = await play(mine);
   if (!base) return null;

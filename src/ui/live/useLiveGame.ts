@@ -28,6 +28,7 @@ import { staffNotes } from './staff';
 import { useStaffCall } from './useStaffCall';
 import { benchFor, callBannerLine, callNote, callQuietLine, decidingGaps, nextStop, noStops, stopAfter } from './calls';
 import { CALL_BREAK_MS, CALL_BUDGET_MS } from '../../state/liveWorth';
+import { warmPool } from '../../state/simPool';
 import { isKey } from './keyPlays';
 import { createBeat, createTicker, type Beat, type Ticker } from './ticker';
 import { graphicCandidates, nextGraphic, playersBefore, type Graphic, type GraphicInput } from './graphics';
@@ -168,6 +169,8 @@ export function useLiveGame() {
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
+    // (the staff's measurements are played over the rollout pool: its workers load now, not at the first stop)
+    warmPool();
     return () => {
       mounted.current = false;
       clearTimeout(ff.current.timer);

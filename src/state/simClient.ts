@@ -1,5 +1,8 @@
 // The main thread's side of the sim worker: runs a sim or a phase change on the open league in the
-// worker and hands back the league it became. The league passed in is never changed: until a run
+// worker and hands back the league it became. The measurements that play games over and over (the
+// counters, the live game's calls and choices, the night's moves) are run from this thread over the
+// rollout pool's workers (simPool.ts), each playing a share of the games; without the pool, in the sim
+// worker as before. The league passed in is never changed: until a run
 // finishes (or sends a checkpoint) the screens keep showing it, and a run that throws leaves it as
 // it was. Where no worker can start (tests in Node, a browser that refuses one), the same code runs
 // on a copy of the league in this thread.
@@ -9,6 +12,7 @@ import { counterWorth, measureChanges as measureLocally, type CounterWorth, type
 import type { GameSim } from '../core/sim/engine';
 import { forkSim, measureChoices, nightWorth, simState, type ChoiceWorth, type LiveChoice, type NightWorth } from './liveWorth';
 import { measureCalls, type CallsMeasured } from './liveWorth';
+import { playPooled, pooled } from './simPool';
 import type { SimWorkerApi } from '../workers/sim.worker';
 import {
   applyGames,
@@ -37,6 +41,9 @@ let held: { id: string; sig: GamesSig } | null = null;
 /** Tests (and a browser that can't start a worker) run the sim here instead. */
 let local = typeof Worker === 'undefined';
 let localStop = false;
+/** Season sims running: the night's moves, measured after a final over the pool, wait for them (the sim is what the user is waiting on). */
+let simming = 0;
+const simRunning = () => simming > 0;
 /** The counter measurement running in this thread (no worker): a newer one stops it. */
 let localWorth = 0;
 
@@ -143,6 +150,15 @@ export interface SimOutcome {
 }
 
 export async function simLeague(l: League, target: SimTarget, hooks: SimRunHooks): Promise<SimOutcome> {
+  simming++;
+  try {
+    return await simIn(l, target, hooks);
+  } finally {
+    simming--;
+  }
+}
+
+async function simIn(l: League, target: SimTarget, hooks: SimRunHooks): Promise<SimOutcome> {
   const r = ensure();
   if (!r) {
     localStop = false;
@@ -188,7 +204,7 @@ export async function simLeague(l: League, target: SimTarget, hooks: SimRunHooks
     return { league: { ...out.core, games }, days: out.days, stop: out.stop };
   } catch (e) {
     held = null;
-    if (e instanceof WorkerUnavailable) return simLeague(l, target, hooks);
+    if (e instanceof WorkerUnavailable) return simIn(l, target, hooks);
     throw e;
   }
 }
@@ -253,11 +269,16 @@ export function simLocally(on = true) {
  * stops this one, which then comes back null, as it does after cancelWorth.
  */
 export async function measureCounters(l: League, opp: number, gid: number | undefined, progress: (done: number, total: number) => void): Promise<CounterWorth[] | null> {
-  const r = ensure();
+  const r = pooled() ? null : ensure();
   if (!r) {
     const run = ++localWorth;
     const game = gid !== undefined ? l.schedule.find((g) => g.gid === gid) : undefined;
-    return counterWorth(l, opp, game, { onProgress: progress, between: () => new Promise<void>((res) => setTimeout(res, 0)), cancelled: () => run !== localWorth });
+    return counterWorth(l, opp, game, {
+      onProgress: progress,
+      between: () => new Promise<void>((res) => setTimeout(res, 0)),
+      cancelled: () => run !== localWorth,
+      runner: playPooled,
+    });
   }
   try {
     const { out, sent } = await withGames(l, (core, delta) => r.counterWorth(core, delta, opp, gid, Comlink.proxy(progress)));
@@ -285,7 +306,7 @@ export async function measureChanges(
   /** Games each configuration is played (WORTH_GAMES by default): fewer for one of several games pooled. */
   games?: number,
 ): Promise<CounterWorth[] | null> {
-  const r = ensure();
+  const r = pooled() ? null : ensure();
   if (!r) {
     const run = ++localWorth;
     const game = gid !== undefined ? l.schedule.find((g) => g.gid === gid) : undefined;
@@ -294,6 +315,7 @@ export async function measureChanges(
       onProgress: progress,
       between: () => new Promise<void>((res) => setTimeout(res, 0)),
       cancelled: () => run !== localWorth,
+      runner: playPooled,
     });
   }
   try {
@@ -331,13 +353,14 @@ export async function measureLive(
   progress: (done: number, total: number) => void = () => {},
   games?: number,
 ): Promise<ChoiceWorth[] | null> {
-  const r = ensure();
+  const r = pooled() ? null : ensure();
   if (!r) {
     const out = await measureChoices(forkSim(sim), side, choices, {
       games,
       onProgress: progress,
       between: () => new Promise<void>((res) => setTimeout(res, 0)),
       cancelled: () => localGone.has(id),
+      runner: playPooled,
     });
     localGone.delete(id);
     return out;
@@ -367,7 +390,7 @@ export async function measureCallsLive(
   budgetMs?: number,
   ahead = false,
 ): Promise<CallsMeasured | null> {
-  const r = ensure();
+  const r = pooled() ? null : ensure();
   const local = (s: GameSim) => {
     if (ahead) localDue.set(id, Infinity);
     return measureCalls(s, side, changes, {
@@ -378,6 +401,7 @@ export async function measureCallsLive(
       onProgress: progress,
       between: () => new Promise<void>((res) => setTimeout(res, 0)),
       cancelled: () => localGone.has(id),
+      runner: playPooled,
     }).finally(() => {
       localGone.delete(id);
       localDue.delete(id);
@@ -413,8 +437,8 @@ export function reachLive(id: number, budgetMs: number) {
  * the worker after the final, behind any sim (here, without one, a chunk at a time).
  */
 export async function measureNight(tip: GameSim, side: 0 | 1, ops: LiveOp[]): Promise<NightWorth | null> {
-  const r = ensure();
-  if (!r) return nightWorth(forkSim(tip), side, ops, { between: () => new Promise<void>((res) => setTimeout(res, 0)) });
+  const r = pooled() ? null : ensure();
+  if (!r) return nightWorth(forkSim(tip), side, ops, { between: () => new Promise<void>((res) => setTimeout(res, 0)), runner: playPooled, hold: simRunning });
   try {
     return await guarded(() => r.nightWorth(simState(tip), side, ops));
   } catch (e) {

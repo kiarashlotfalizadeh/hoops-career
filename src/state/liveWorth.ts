@@ -12,62 +12,19 @@
 // fouled make at its fouled chance), and a change of coverage moves the and-ones: measured over 7,200
 // paired games, the assistant's breaks read −0.6 a game by shot value and −0.1 ± 0.1 in points.
 
-import { GameSim } from '../core/sim/engine';
-import { Rng, mix32 } from '../core/random';
-import type { CallId, LiveOp, Tactics, Team } from '../core/types';
-import { cloneTactics } from '../core/sim/tactics';
+import type { GameSim } from '../core/sim/engine';
+import { mix32 } from '../core/random';
+import type { LiveOp } from '../core/types';
 import { shrinkWorth } from '../core/ai/counterWorth';
+import { applyOp, column, endOf, forkSim, playHere, rowWidth, type Ending, type LiveChoice, type Played, type RolloutOpts, type Runner } from '../core/sim/rollouts';
 
-/**
- * A copy of the game as it stands, to play on without touching it: everything the engine reads and
- * writes from here on, deep-copied (the players on the floor are the same objects as in the roster and
- * the matchups, in the copy as in the game), with no play-by-play kept and none of what's been logged
- * so far (a continuation only needs the score at the end). The teams' records (Team) are shared: the
- * engine only reads them. With `seed`, the rest of the game draws from a new stream: copies with the
- * same seed play the same rest of the game.
- */
-export function forkSim(sim: GameSim, seed?: number): GameSim {
-  const teams: Team[] = sim.T.map((t) => t.team);
-  const plain = { ...simState(sim), T: sim.T.map((t) => ({ ...t, team: null })) };
-  const copy = simFromState(structuredClone(plain) as unknown as SimState);
-  copy.T.forEach((t, i) => (t.team = teams[i]));
-  if (seed !== undefined) copy.seed = seed >>> 0;
-  return copy;
-}
-
-/** A game as plain data (see simState): what crosses to the worker. */
-export type SimState = Record<string, unknown> & { readonly __sim: unique symbol };
-
-/**
- * The game as plain data, without its logs and play-by-play: what the worker is sent to measure from
- * (the message copies it). It shares its parts with the game: copy it before changing anything.
- */
-export function simState(sim: GameSim): SimState {
-  return { ...(sim as unknown as Record<string, unknown>), logs: [], pbp: [], shots: [], cur: null } as unknown as SimState;
-}
-
-/** A game again from its plain data (simState, copied), unrecorded: it plays on from where it was. */
-export function simFromState(state: SimState): GameSim {
-  const sim = state as unknown as GameSim;
-  Object.setPrototypeOf(sim, GameSim.prototype);
-  for (const r of [sim.rng, sim.fx, sim.opts.rng]) Object.setPrototypeOf(r, Rng.prototype);
-  sim.record = false;
-  sim.opts = { ...sim.opts, record: false, keepShots: false };
-  return sim;
-}
-
-/** How one continuation ended for the side it's measured for: the margin in points and the result (1 a win). */
-export interface Ending {
-  pts: number;
-  win: number;
-}
+// (the copies a continuation is played on, and what it does, are core/sim/rollouts.ts's)
+export { applyChoice, applyOp, branchSeed, forkSim, simFromState, simState, type Ending, type LiveChoice, type SimState } from '../core/sim/rollouts';
 
 /** Play `sim` (a copy) to the final buzzer and read how it ended for `side`. */
 export function playOut(sim: GameSim, side: 0 | 1): Ending {
-  let guard = 0;
-  while (sim.step() && guard++ < 2000);
-  const pts = sim.T[side].score - sim.T[1 - side].score;
-  return { pts, win: pts > 0 ? 1 : 0 };
+  const { pts, win } = endOf(sim, side);
+  return { pts, win };
 }
 
 /** A paired reading: the mean difference a choice made over the games, and its standard error. */
@@ -85,41 +42,8 @@ export function paired(d: number[]): Paired {
   return { mean, se: sd / Math.sqrt(n), n };
 }
 
-/** The seed of continuation `i` from a spot: the same `base` and `i` give the same rest of the game. */
-export const branchSeed = (base: number, i: number) => mix32((base ^ Math.imul(i + 1, 2654435761)) >>> 0);
-
 /** A spot's seeds: the same spot (the game's seed, the possessions played) reads the same every time it's measured. */
 export const spotSeed = (sim: GameSim) => mix32((sim.seed ^ Math.imul(sim.T[0].poss * 4096 + sim.T[1].poss + 1, 0x9e3779b1)) >>> 0);
-
-/** A choice in a live game, as plain data (it crosses to the worker): a play called, a sub, new tactics, a timeout, or none. */
-export type LiveChoice =
-  | { kind: 'none' }
-  /** No play called (one called already is taken back): the offense runs, or the after-timeout play. */
-  | { kind: 'noPlay' }
-  | { kind: 'play'; set: CallId; pid: number }
-  | { kind: 'sub'; out: number; in: number }
-  | { kind: 'tactics'; tactics: Tactics }
-  | { kind: 'timeout' };
-
-/** Make `c` in `sim` for `side`, as the live game would: false when it can't be made now. */
-export function applyChoice(sim: GameSim, side: 0 | 1, c: LiveChoice): boolean {
-  switch (c.kind) {
-    case 'none':
-      return true;
-    case 'noPlay':
-      sim.T[side].nextSet = null;
-      return true;
-    case 'play':
-      return sim.runSet(side, c.set, c.pid);
-    case 'sub':
-      return sim.substitute(side, c.out, c.in);
-    case 'tactics':
-      sim.setTactics(side, cloneTactics(c.tactics));
-      return true;
-    case 'timeout':
-      return sim.callTimeout(side);
-  }
-}
 
 /** A choice's reading against the first one (the game as it stands): its win chance (0-1) and margin, each with its standard error. */
 export interface ChoiceWorth {
@@ -140,7 +64,14 @@ export interface BranchOpts {
   onProgress?: (done: number, total: number) => void;
   /** Mixed into the spot's seeds: another `salt` plays other versions of the rest of the game (a fresh batch to check a reading on). */
   salt?: number;
+  /** Where the continuations are played (in this thread a chunk at a time by default; a worker pool: state/simPool.ts). */
+  runner?: Runner;
+  /** True while a sim runs that a pool's continuations wait for (see RolloutOpts.hold). */
+  hold?: () => boolean;
 }
+
+/** The runner's options from a measurement's. */
+const rolloutOpts = (opts: BranchOpts, chunk: number): RolloutOpts => ({ chunk, between: opts.between, cancelled: opts.cancelled, hold: opts.hold });
 
 /** Continuations each late play-call option is played from the huddle: the last minutes only, so a second or two in all. */
 export const CHOICE_GAMES = 400;
@@ -154,28 +85,15 @@ export async function measureChoices(sim: GameSim, side: 0 | 1, choices: LiveCho
   const games = opts.games ?? CHOICE_GAMES;
   const chunk = opts.chunk ?? 40;
   const base = opts.salt ? mix32((spotSeed(sim) ^ opts.salt) >>> 0) : spotSeed(sim);
-  const d = choices.map(() => ({ pts: [] as number[], win: [] as number[] }));
-  for (let i = 0; i < games; i++) {
-    if (i && i % chunk === 0) {
-      opts.onProgress?.(i, games);
-      await opts.between?.();
-      if (opts.cancelled?.()) return null;
-    }
-    const seed = branchSeed(base, i);
-    let first: Ending | null = null;
-    choices.forEach((c, k) => {
-      const s = forkSim(sim, seed);
-      const e = applyChoice(s, side, c) ? playOut(s, side) : first;
-      first ??= e;
-      d[k].pts.push((e?.pts ?? 0) - first!.pts);
-      d[k].win.push((e?.win ?? 0) - first!.win);
-    });
-  }
+  const r = { kind: 'spot' as const, sim, side, choices, base };
+  const got = await (opts.runner ?? playHere)(r, games, { ...rolloutOpts(opts, chunk), onPlayed: (n) => opts.onProgress?.(n, games) });
+  if (!got) return null;
   opts.onProgress?.(games, games);
-  return d.map((x) => {
-    const p = paired(x.pts);
-    const w = paired(x.win);
-    return { pts: p.mean, ptsSe: p.se, win: w.mean, winSe: w.se, n: p.n };
+  const w = rowWidth(r);
+  return choices.map((_, k) => {
+    const p = paired(column(got, w, 3 * k + 1));
+    const x = paired(column(got, w, 3 * k + 2));
+    return { pts: p.mean, ptsSe: p.se, win: x.mean, winSe: x.se, n: p.n };
   });
 }
 
@@ -206,9 +124,12 @@ export const CALL_CONFIRM = 320;
  * The most a stop's measurement takes on the device once the game is there, in ms (the screen gets the
  * first two fifths): on a slow phone a stop early in the game would take longer than this, and it stops
  * at the time (never below CALL_SCREEN_MIN / CALL_CONFIRM_MIN), its reading as wide as the games it
- * played. A desktop plays all of them well inside it (about 8 s at the end of the first quarter, 2.5 s
- * at the end of the third). A stop the screen sees coming is measured from before the game gets there
- * (useStaffCall's look ahead), and that time comes free: the budget only starts at the spot.
+ * played. The continuations are played over the rollout pool's workers (state/simPool.ts): five changes
+ * at the end of the first quarter take a 14-core desktop 0.3 s on six of them (1.1 s in one thread,
+ * 1.7 s before forkSim stopped deep-copying the game; scripts/mc-pool-bench.ts, 2026-11-25); a phone,
+ * with fewer and slower cores, gains less (not yet measured on one). A stop the screen sees coming is
+ * measured from before the game gets there (useStaffCall's look ahead), and that time comes free: the
+ * budget only starts at the spot.
  */
 export const CALL_BUDGET_MS = 12_000;
 /** A stop where play waits (a break, your timeout's huddle): the coach is reading the report, so the measurement has longer. */
@@ -272,15 +193,6 @@ export const SUB_SPREAD = 0.03;
 /** A choice's win-chance reading shrunk toward even by its noise (`spread`: PLAY_SPREAD, SUB_SPREAD), and how uncertain it still is. */
 export const shrinkChoice = (raw: number, se: number, spread: number) => ({ win: shrinkTo(spread)(raw, se), band: bandOf(spread)(se) });
 
-/** How a continuation ended for `side`: the margin in points and by shot value, and the result. */
-function endOf(sim: GameSim, side: 0 | 1): Ending & { x: number } {
-  let guard = 0;
-  while (sim.step() && guard++ < 2000);
-  const val = (i: 0 | 1) => sim.xShots[i].pts + sim.xFouledMiss[i] + sim.T[i].tot.ftm;
-  const pts = sim.T[side].score - sim.T[1 - side].score;
-  return { pts, x: val(side) - val((1 - side) as 0 | 1), win: pts > 0 ? 1 : 0 };
-}
-
 /** Each choice's continuations against the first's, game for game: the margin by shot value, in points and the result. */
 async function spotDiffs(
   sim: GameSim,
@@ -295,31 +207,24 @@ async function spotDiffs(
   min = games,
 ) {
   const base = salt ? mix32((spotSeed(sim) ^ salt) >>> 0) : spotSeed(sim);
-  const d = choices.map(() => ({ x: [] as number[], pts: [] as number[], win: [] as number[] }));
-  const chunk = opts.chunk ?? 16;
-  for (let i = 0; i < games; i++) {
-    if (i && i % chunk === 0) {
+  const r = { kind: 'spot' as const, sim, side, choices, base };
+  const from = done.n;
+  const got = await (opts.runner ?? playHere)(r, games, {
+    ...rolloutOpts(opts, opts.chunk ?? 16),
+    until: typeof until === 'number' ? () => until : until,
+    min,
+    onPlayed: (n) => {
+      done.n = from + n * choices.length;
       opts.onProgress?.(done.n, done.total);
-      await opts.between?.();
-      if (opts.cancelled?.()) return null;
-      // (out of time on a slow device: the reading stands on the games played, its noise wider for it;
-      // a stop decided by the clock, never by the readings, keeps them honest)
-      if (i >= min && Date.now() > (typeof until === 'number' ? until : until())) break;
-    }
-    const seed = branchSeed(base, i);
-    let first: (Ending & { x: number }) | null = null;
-    choices.forEach((c, k) => {
-      const s = forkSim(sim, seed);
-      const e = applyChoice(s, side, c) ? endOf(s, side) : first;
-      first ??= e;
-      d[k].x.push((e?.x ?? 0) - (first?.x ?? 0));
-      d[k].pts.push((e?.pts ?? 0) - (first?.pts ?? 0));
-      d[k].win.push((e?.win ?? 0) - (first?.win ?? 0));
-      done.n++;
-    });
-  }
-  return d;
+    },
+  });
+  if (!got) return null;
+  done.n = from + got.n * choices.length;
+  return choices.map((_, k) => diffsOf(got, rowWidth(r), k));
 }
+
+/** Choice `k`'s columns of a spot's rollouts: the margin by shot value, in points and the result, against the first's. */
+const diffsOf = (p: Played, w: number, k: number) => ({ x: column(p, w, 3 * k), pts: column(p, w, 3 * k + 1), win: column(p, w, 3 * k + 2) });
 
 /** The confirmed reading of the staff's best change: the margin by shot value (shrunk toward even, and as measured) and the win chance, each with its standard error. */
 export interface CallReading {
@@ -480,39 +385,6 @@ export const NIGHT_MOVES_MAX = 8;
  */
 const counted = (o: LiveOp) => o.op !== 'manualSubs' && !(o.op === 'tactics' && o.args.plan);
 
-/** Make journaled op `o` in `sim` for `side`, as the live game made it (LiveGame.apply). */
-export function applyOp(sim: GameSim, side: 0 | 1, o: LiveOp): boolean {
-  switch (o.op) {
-    case 'sub':
-      return sim.substitute(side, o.args.out, o.args.in);
-    case 'tactics':
-      sim.setTactics(side, cloneTactics(o.args.tactics));
-      return true;
-    case 'timeout':
-      return sim.callTimeout(side, o.args.reason);
-    case 'manualSubs':
-      sim.T[side].manualSubs = !!o.args.on;
-      return true;
-    case 'play':
-      return sim.runSet(side, o.args.set, o.args.pid);
-  }
-}
-
-/** Play `sim` on from possession `steps` (it has played that many) to the end, making `ops` after as many possessions as each says. */
-function playWith(sim: GameSim, side: 0 | 1, steps: number, ops: LiveOp[]): Ending & { x: number } {
-  let at = steps;
-  let k = 0;
-  let guard = 0;
-  while (!sim.over && guard++ < 2000) {
-    while (k < ops.length && ops[k].at <= at) applyOp(sim, side, ops[k++]);
-    sim.step();
-    at++;
-  }
-  const val = (i: 0 | 1) => sim.xShots[i].pts + sim.xFouledMiss[i] + sim.T[i].tot.ftm;
-  const pts = sim.T[side].score - sim.T[1 - side].score;
-  return { pts, x: val(side) - val((1 - side) as 0 | 1), win: pts > 0 ? 1 : 0 };
-}
-
 /**
  * The night's moves (`ops`, the journal's), measured from the game at tip-off (`tip`, unplayed): the
  * game is played to the first move as it was (the same seed: the same possessions), and from there
@@ -562,40 +434,32 @@ export async function nightWorth(tip: GameSim, side: 0 | 1, ops: LiveOp[], opts:
   const weights = shapleyWeights(kinds.length);
   const byKind: number[][] = kinds.map(() => []);
   const total = games * (2 + sets.length) + (one.length > 1 ? Math.min(games, NIGHT_MOVE_GAMES) * singles.length : 0);
-  let played = 0;
   // (a night of four kinds replays fourteen more versions of each game: the pauses come sooner)
   const every = Math.max(1, Math.round(chunk / (1 + sets.length / 2)));
-  for (let i = 0; i < games; i++) {
-    if (i && i % every === 0) {
-      opts.onProgress?.(played, total);
-      await opts.between?.();
-      if (opts.cancelled?.()) return null;
-    }
-    const seed = branchSeed(base, i);
-    const w = playWith(forkSim(s0, seed), side, steps, rest);
-    const wo = playWith(forkSim(s0, seed), side, steps, without);
-    played += 2;
+  // each version of the rest of the night a continuation plays: with every move, without any, without
+  // each of the last moves on its own (on the first NIGHT_MOVE_GAMES), with each set of kinds between
+  const each = one.length > 1 ? singles : [];
+  const variants = [rest, without, ...each.map((x) => rest.filter((_, m) => m !== x.i)), ...setRest];
+  const upTo = variants.map((_, v) => (v >= 2 && v < 2 + each.length ? NIGHT_MOVE_GAMES : games));
+  const job = { kind: 'night' as const, sim: s0, side, steps, variants, upTo, base };
+  const playedBy = (n: number) => n * (2 + sets.length) + Math.min(n, NIGHT_MOVE_GAMES) * each.length;
+  const got = await (opts.runner ?? playHere)(job, games, { ...rolloutOpts(opts, every), onPlayed: (n) => opts.onProgress?.(playedBy(n), total) });
+  if (!got) return null;
+  const width = rowWidth(job);
+  for (let i = 0; i < got.n; i++) {
+    const row = got.rows.subarray(i * width, (i + 1) * width);
+    const x = (v: number) => row[2 * v];
+    const w = { x: x(0), win: row[1] };
+    const wo = { x: x(1), win: row[3] };
     all.push(w.x - wo.x);
     allWin.push(w.win - wo.win);
-    if (one.length > 1 && i < NIGHT_MOVE_GAMES) {
-      singles.forEach((x, j) => {
-        const less = playWith(
-          forkSim(s0, seed),
-          side,
-          steps,
-          rest.filter((_, m) => m !== x.i),
-        );
-        by[j].push(w.x - less.x);
-      });
-      played += singles.length;
-    }
+    if (i < NIGHT_MOVE_GAMES) each.forEach((_, j) => by[j].push(w.x - x(2 + j)));
     if (kinds.length) {
       // the night's margin (by shot value) with each set of kinds left in (none, the sets between, all)
       const v = new Float64Array(full + 1);
       v[0] = wo.x;
       v[full] = w.x;
-      for (let m = 0; m < sets.length; m++) v[sets[m]] = playWith(forkSim(s0, seed), side, steps, setRest[m]).x;
-      played += sets.length;
+      for (let m = 0; m < sets.length; m++) v[sets[m]] = x(2 + each.length + m);
       kinds.forEach((_, j) => {
         const bit = 1 << j;
         let share = 0;

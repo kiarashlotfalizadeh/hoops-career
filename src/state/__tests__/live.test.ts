@@ -23,7 +23,10 @@ import type { PossLog } from '../../core/sim/log';
 import { oppPlanIn, preparesPlan } from '../../core/ai/opponentPlan';
 import { userGameOnDay } from '../../core/league/games';
 import { testLeague, toGameDay, userGames } from './fixtures';
-import { applyOp, forkSim, measureChoices, nightWorth, playOut, type LiveChoice } from '../liveWorth';
+import { applyOp, forkSim, measureChoices, nightWorth, playOut, simFromState, simState, type LiveChoice } from '../liveWorth';
+
+/** Everything in a game, as text (its maps and sets as lists): two games that read the same are in the same state. */
+const plain = (x: unknown) => JSON.stringify(x, (_k, v: unknown) => (v instanceof Map ? [...v] : v instanceof Set ? [...v] : v));
 
 /** Open the league and start today's game the way the Live screen does. */
 function goLive(l: League): LiveGame {
@@ -590,7 +593,19 @@ describe('live game', () => {
       // a copy of the game (state/liveWorth.ts) plays on as the game itself does; a choice measured from
       // here reads the same every time, and the game as it stands reads even against itself
       const side = again.userSide;
+      const before = plain(again.sim);
       const end = playOut(forkSim(again.sim), side);
+      // (the copy shares nothing the engine writes: the game is as it was; and it plays on exactly as a
+      // deep copy does, the one the worker gets)
+      expect(plain(again.sim)).toBe(before);
+      for (const seed of [1, 2, 3]) {
+        const deep = simFromState(structuredClone(simState(again.sim)));
+        deep.seed = seed;
+        playOut(deep, side);
+        const copy = forkSim(again.sim, seed);
+        playOut(copy, side);
+        expect(plain(copy)).toBe(plain(deep));
+      }
       const choices: LiveChoice[] = [
         { kind: 'none' },
         { kind: 'noPlay' },
