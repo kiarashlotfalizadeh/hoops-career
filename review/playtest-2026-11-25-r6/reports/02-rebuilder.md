@@ -1,0 +1,63 @@
+# 02 — The Rebuilder
+## Who I am and what I played
+Chicago Stampede (30th of 30 on the New League roster rank), real league, GM + Head Coach, job security on. Phone viewport 390x844. I played five full seasons (2026-27 through 2030-31) with every offseason: lottery, draft, re-sign, free agency. Finishes: 20-62, 31-51, 34-48, 44-38 (6th seed, lost R1 2-4), 45-37 (lost the 8-seed game in the play-in). I coached 3 games live (a mid-November game vs a 1-18 team, a playoff game 1 at ORL, the play-in at WAS) and used Skip ahead to Clutch time each time. Everything else was simmed. About 4 hours of play. A season sims in 15-40 s on a shared box. Career creation took 6 s. No page errors were logged in `page.errors`.
+
+## Play log
+1. **Preseason 2026.** The "worst" roster was not bad. Giddey 83, Smith 77, Wilson 77/84, Buzelis 76, Essengue 75/83. Chicago is 30th on the rank screen, yet this roster is the 21st-ranked Washington's equal. The owner's goals (win 26, give 6,700 minutes to players 23 or under) arrived on day 1. That told me the "young players" plan is a game mechanic, not only my idea.
+2. **First trades (Oct).** Tre Jones (77, $8M) to DET for Holland (72/21yo) + a 2nd. The trade sheet read "It adds a clear first option... Into the starting five: Smith". I liked it. Veterans fetch seconds, not firsts. Powell (79, 33yo) drew "Light offer" from 14 teams, and the rest of that market was seconds. In-season, HOU gave a "Strong offer" (Whitmore 74/22 + a 2nd for Powell). That was my best trade.
+3. **Tank math (Nov-Feb 2027).** Started 2-12, 11-39 at the deadline, finished 20-62. Owner "Steady", job security 49-52. The staff said "Whatever the plan, under 16 wins is a failed season". I had a floor to tank to. The staff's call "About 42 more minutes a game for the young players, the postseason out of reach" was a nice touch. Smith (expiring) fetched Bailey (63/20) + a far-future 1st. I sold at the deadline.
+4. **Lottery (Jun 2027).** 14% odds, I slipped from the 1st-best record to #5. The reveal ("You slip to No. 5. Down 4 places: the balls didn't bounce your way") hurt in a good way. I drafted Rocco Green 74/POT 77-91 ("Big reach, ranked 12th"). He turned into 71/77, nothing special. That is a scouting-uncertainty lesson, and it is the right lesson.
+5. **The mistake that taught me the cap (Jul 2027).** I spent my $18.5M of cap space on Bird-rights re-signs (Whitmore, Okoro, Miller) before opening FA, with no warning that re-signing eats the space. I then used the mid-level on Javon Small (77/78, $13.4M). A real GM would sign FAs first. The game has no cap holds the other way round, so it's the order the screen forces.
+6. **Season 2 (31-51).** Roster 84/78/78... and still 31 wins. Owner verdict "Good" (+17, 25 over the 26-win goal, since the goal was lowered). Pick #9: Tristan Jackson (SG 72/82-90, age 18, "ranked 4th"). He became 78/87 by 21. Best pick of the run.
+7. **Summer 2028: the best moment of the game.** $54M of cap space. FA opened with Clingan (C, 23, 84/POT 88) asking $46.3M, "more than your space". I dumped Okoro to IND for nothing (salary matching and an "I'd take it" verdict), which cleared $47.2M, offered the max, waited two days ("decides on day 3", "No rival bids: at this price he's yours"), and signed him. A rebuilder fantasy, delivered by a full bidding system (interest levels, what matters to him, rival bids).
+8. **Season 3 (34-48), the cliff.** The roster on paper was Clingan 85, Giddey 81, Wilson 82, Whitmore 80, Small 78, and I was 20-35 at the deadline with a negative-net starting five (net -8.1, DRtg 120.5). Owner verdict "Poor" (-40, "no grace left"). Job security 44, "second poor season and he fires you". Real tension. Patience was not rewarded yet.
+9. **Season 4 (44-38, 6th seed).** Same core plus Watanabe (pick #8, 77/82-86) and Jackson. I started 5-11, the staff's lineups tab showed what was wrong, the injuries cleared and we went 19-9 to finish. Owner verdict "Good" (+33). Lost R1 2-4 to ORL after winning G1 109-107 live (coached through foul trouble with the "Swain in" chips).
+10. **Season 5 (45-37).** Payroll $252M, under the $264M tax window. Lost the play-in at WAS 121-124 after leading 116-115 with 3:52 left. I used the "Last possession" call-the-play screen (Iso Wilson, Spain, Hammer: Tyson) and lost. Then lost the 8-seed game to BOS 109-121. Verdict "Short of it" (-11, security 52). End state: Wilson 87/88 at 24, Clingan 83, Whitmore 82, Watanabe 81/87 at 22, Jackson 78/87 at 21, Swain 80. The world champion was OKC in 2027, 2030 and 2031 and SGA won MVP all five years, including at age 32.
+
+## Scores
+| Area | Score /10 | Why (one line) |
+|---|---|---|
+| A First hour (hook + learnability) | 8 | Team pick screen with roster rank, owner goals on day 1, "Hide the guide" action queue; sheet-based trade and play flows are clear |
+| B Coaching depth (tactics, rotation, game plans) vs FM | 7 | Real lineup net ratings, role/shape/instructions, assistant that explains itself; I did not find a per-player training plan beyond the staff priority |
+| C Game day (live coaching: feel, and does it matter) | 8 | Clutch time skip, foul-trouble chips, call-the-play on the last possession, win probability, "how the margin adds up" postgame; 2D court is fine |
+| D Front office (trades, free agency, draft, cap/CBA) | 8 | Bidding and decide-day, buyouts, two-tap confirms, pick protection; veteran market is thin and far-future 1sts are cheap |
+| E Rebuild & development (youth growth, draft, patience) | 7 | Progression is believable and the draft board uncertainty works, but five years of patience gave a play-in team |
+| F Analytics (depth, usefulness, correctness) | 8 | On/off, 5-man, Season Analysis with "cost you / helped" are exactly what an analytics fan wants; some tabs hide the real cause of a bad record |
+| G Sim honesty & realism (stats, outcomes, no rubber-banding, long-run world) | 6 | Roster OVR and results diverge a lot (see below); OKC/SGA dynasty never breaks; aging is soft |
+| H Stakes & story (owner, job, playoffs, history, moments) | 9 | Owner grades per season, "no grace left", verdict card, play-in, lottery reveal, side-bets |
+| I UX & feel on my device | 8 | Phone-first and tactile; a few bugs below |
+| J Overall for this audience | 8 | Better than BBGM on narrative and decisions, short of FM on coaching depth |
+
+## What hooked me (top 5, each with evidence)
+1. **The Clingan FA.** Dumping Okoro to IND to clear $4M, seeing "No rival bids", and waiting for "decides on day 3" gave me one real heartbeat. The result was a 24-year-old C at 84/88 that turned the franchise.
+2. **The owner is a real opponent.** "Warm seat", "no grace left", "-40 or worse twice and he fires you", and goals that move with the roster (win 26, then 27, then 37, then 41, then 47). My tank was legal and then it wasn't.
+3. **The postgame and the coach's mouth.** "How the margin adds up: looks +7, shooting luck -3, free throws -8 = -4". "Your moves: Mentality Balanced to Aggressive at Q4 3:34, CHI 7-8 since". It judged my own move honestly.
+4. **Draft night.** Odds shown per team, lottery reveal from the 14th pick up, mock with percentages, "Big reach · ranked 12th", ranges that collapse (74/POT 77-91 became 71/77). A rebuilder reads this screen like a stock ticker.
+5. **Clutch-time live play.** "Clingan 5 fouls, Claxton in" chips, "Last possession: down 3, 10.1 left, call the play" with a drawn play. I wanted more of this.
+
+## What pushed me away (top 5, each marked dealbreaker / major / minor, with evidence)
+1. **Rating vs result disconnect — major.** 2028-29 roster: Clingan 85, Wilson 82, Giddey 81, Whitmore 80, Essengue 78, Small 78, Tyson 77, Swain 76 and a 34-48 record (starting five net -8.1 over 280 min, DRtg 120.5, lineups with three bigs at -14 to -44). The game does explain it (spacing D, ball security C), which I respect, but I was a GM who bought OVR and was told, after two seasons, that OVR was not the point. The first-hour screen and trade/FA lists never warn about fit. It cost me a "Poor" and nearly the job.
+2. **Rebuild payoff is thin — major.** After five years I have a 87/88 star, an 81/87 and a 78/87 prospect, and I am a play-in team that can't beat the 6th-ranked ORL. OKC has won three of five titles. That is "realistic" but a Trust-the-Process fan needs a visible path to a title. The AI's 2033 firsts (proj. #7-24) keep appearing as throw-ins, so picks feel cheap and I never got a 1st worth hoarding.
+3. **Veteran market is weak — minor-major.** Powell 79 / Collins 76 / Claxton / Hield fetched seconds and salary dumps ("Salary dump", "Light offer") all season. After free agency every team is capped and nobody pays. Selling is also the only lever to dump salary for cap space, and it cost no asset in practice (IND took Okoro for nothing).
+4. **Re-sign order trap — major.** Bird-rights re-signs spend cap space before FA opens (I burned $18M in 2027 without knowing). The sheet says "Leaves $5.6M of cap space" but never says "this kills your FA plan". Later extension asks balloon ($37.8M Wilson, $25.7M Whitmore): a rebuild's cheap rookie deals end together, and I hit $254M payroll in year 5.
+5. **UI inconsistencies — minor.** Re-sign "Make offer" is two-tap with a Confirm, but an extension is one tap and signs silently. Draft/release/decline are all different sheets. See bugs.
+
+## Bugs (repro steps, screenshot path)
+- **Extension signs on one tap, no confirm.** Office, Re-sign, Extend a player, tap "Make offer": the sheet closes and the deal is done, while an expiring re-sign needs "Confirm: sign him" and says "a signing can't be undone". Wilson (5 yr, $221.8M) and Whitmore were signed without a second tap. Screenshot: `/tmp/claude-0/-home-user-hoops-career/ab24f4d7-2083-5558-9c59-0f226efc62e3/scratchpad/playtest/players/02-rebuilder/shots/extend.png`.
+- **Team name regex in the kit.** `newCareer(... team:/CHI/)` times out on the team grid (the grid button text uses the city "Chicago"). Minor, test-only, but a screen reader label of "CHI" might be missing there.
+- **Rotation page, injured players.** If you tap "Move up" on a hurt player (Small, Watanabe) the starter slot shows "0 minutes, his target", with no warning that he is injured until you read the badge. The assistant had rightly benched them. Screenshot: `.../shots/rot_after.png`.
+- **Draft board rank vs pick.** The mock said Rocco Green was 93% to go at #5, the confirm sheet says "rank 12th of 72" and the after-pick card says "Big reach". Three different numbers for one player; the first-hour player won't know which to trust. Screenshot: `.../shots/drafted.png`.
+- **"Open free agency" with nothing to negotiate** shows no confirm (no unsigned rotation player), but with one it shows "Let him go and open". Fine, but there is no feedback that the phase changed when scripted; a human sees the topbar change. Minor.
+- **Block / Offers parsing.** "Shop a player" lists last names only, so two players with the same last name (Williams) are ambiguous and Patrick Williams returned nothing. Minor.
+
+## Against the genre (FM / BBGM / MyNBA / Hoop Land: where it wins and loses for me)
+- **vs BBGM:** wins on story, owner, coach voice, postgame analysis and a real FA bidding model. Loses on raw transparency (BBGM shows you the formula; here the explanation is a sentence, which is better UX but less checkable) and on free trades (BBGM's AI pays picks for vets more freely).
+- **vs FM:** wins on pace (a season in 30 s) and "the staff tells me why". Loses on training and individual development control (staff priority only, "Development coaching 17th of 30"), scouting depth (one "Scouted" icon, no scout assignment), and press/media.
+- **vs MyNBA/MyGM:** wins on honesty and on not feeling scripted. Loses on 3D presentation and licensed polish, which I did not judge.
+- **vs Draft Day / Pro Basketball Manager:** the draft and cap tools are stronger than both.
+
+## Would I pay and keep playing
+$7.99 phone unlock: yes, immediately. $14.99 on Steam: yes if the late game and AI trade market are deepened; I'd hesitate at launch because the five-year loop ends on a play-in. Hours: 40-60 for a first career, more if a title is possible. Recommend to a friend: 8/10.
+
+## The one change that would most raise my score
+Make fit visible before the damage: show a "spacing / ball security / perimeter D" roster check (the Season Analysis grades) on the Team page and in the FA/trade sheets the day I'm shopping, and warn on the re-sign screen that Bird-rights deals consume cap space before FA. A rebuilder's patience should be punished by luck and the lottery, not by an invisible mismatch he learns about in year three.
