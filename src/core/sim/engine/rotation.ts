@@ -20,6 +20,9 @@ import type { GameSim } from './game';
  * (1.6 before).
  */
 const INJURY_LOAD = 26;
+
+/** The scratch list checkSubs builds the lineup signature into (see subSignature). */
+const SIG_SCRATCH: number[] = [];
 const INJURY_TIRED = 1.25;
 
 export const rotationMethods = {
@@ -208,10 +211,11 @@ export const rotationMethods = {
       if (!desired.includes(p)) desired.push(p);
     }
     // last resort: allow players over the foul limit, then players past their minute cap
-    for (const p of [...ordered, ...t.players.filter((x) => x.out === 0)]) {
-      if (desired.length >= 5) break;
-      if (!desired.includes(p)) desired.push(p);
-    }
+    if (desired.length < 5)
+      for (const p of [...ordered, ...t.players.filter((x) => x.out === 0)]) {
+        if (desired.length >= 5) break;
+        if (!desired.includes(p)) desired.push(p);
+      }
     desired = desired.slice(0, 5);
     // the last seconds of a close game with the other side's ball: a stopper in for the weakest defender
     if (this.odWindow(t)) desired = this.odSwap(t, desired, ordered);
@@ -242,11 +246,13 @@ export const rotationMethods = {
    * blowout, and each player's availability, fatigue, fouls, minute cap and hack count): checkSubs
    * looks at the lineup again only when it changes. Numbers, not a string: it's built twice a trip.
    */
-  subSignature(this: GameSim, t: ST): number[] {
+  subSignature(this: GameSim, t: ST, into: number[] = []): number[] {
     const fl = t.t.manage.fatigueSub;
     // (a blowout, or one getting back within reach, changes the lineup now, not at the next minute mark)
     // (a coach who sat a player for his fouls may bring him back for the end of the quarter)
-    const sig = [
+    const sig = into;
+    sig.length = 0;
+    sig.push(
       this.q <= 4 ? this.planSlot() : 100 + this.q,
       this.foulLimit(t),
       this.crunch() ? 1 : 0,
@@ -254,7 +260,7 @@ export const rotationMethods = {
       this.lopsided(t) ? 1 : 0,
       this.q < 4 && this.clock <= K.foulRide.back ? 1 : 0,
       this.odWindow(t) ? 1 : 0,
-    ];
+    );
     for (const p of t.players) {
       const state = p.on ? (p.energy < fl ? 0 : 1) : p.energy > 0.82 ? 2 : 3;
       sig.push(p.out + 4 * state + 16 * p.fouls + (this.capped(p) ? 1024 : 0) + (t.hacked.size && (t.hacked.get(p.pid) ?? 0) >= 2 ? 2048 : 0));
@@ -271,10 +277,13 @@ export const rotationMethods = {
       expired = true;
     }
     if (!force) {
-      const sig = this.subSignature(t);
+      // (built into a scratch list, kept only when it changed: checked twice a trip)
+      const sig = this.subSignature(t, SIG_SCRATCH);
       const prev = t.subSig;
-      if (!t.subLock.size && !expired && sig.length === prev.length && sig.every((x, i) => x === prev[i])) return;
-      t.subSig = sig;
+      let same = sig.length === prev.length;
+      for (let i = 0; same && i < sig.length; i++) same = sig[i] === prev[i];
+      if (!t.subLock.size && !expired && same) return;
+      t.subSig = sig.slice();
     }
     if (t.manualSubs && !force) {
       // still replace players who can't continue

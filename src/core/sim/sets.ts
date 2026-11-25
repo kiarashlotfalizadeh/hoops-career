@@ -246,9 +246,19 @@ const by =
   (a: T, b: T) =>
     score(b) - score(a) || a.pid - b.pid;
 
+/** The first of `list` in `cmp`'s order: what sorting a copy and taking its head gives, without the copy and the sort (`cmp` breaks every tie by pid). */
+function firstBy<T>(list: T[], cmp: (a: T, b: T) => number): T | undefined {
+  let best = list[0];
+  for (let i = 1; i < list.length; i++) if (cmp(list[i], best) < 0) best = list[i];
+  return best;
+}
+
 /** The player of `five` who fits set `id` best (the first of the best). */
 export function bestFor<T extends FitPlayer>(id: SetId, five: T[]): T | undefined {
-  return [...five].sort(by((p) => setFit(id, p)))[0];
+  return firstBy(
+    five,
+    by((p) => setFit(id, p)),
+  );
 }
 
 /** The cast of set `id` for `star` (the best fit when he isn't one of the five): null without five players. */
@@ -256,8 +266,12 @@ export function castFor<T extends FitPlayer>(id: SetId, five: T[], star?: T): Ca
   if (five.length < 5) return null;
   const s = star && five.includes(star) ? star : bestFor(id, five)!;
   const rest = five.filter((p) => p !== s);
-  const top = (list: T[], score: (p: T) => number) => [...list].sort(by(score))[0];
-  const tallest = (list: T[]) => [...list].sort(by((p) => p.r.hgt))[0];
+  const top = (list: T[], score: (p: T) => number) => firstBy(list, by(score))!;
+  const tallest = (list: T[]) =>
+    firstBy(
+      list,
+      by((p) => p.r.hgt),
+    )!;
   const without = (...x: T[]) => rest.filter((p) => !x.includes(p));
   switch (id) {
     case 'spain': {

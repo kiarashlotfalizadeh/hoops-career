@@ -7,7 +7,7 @@
 import type { DraftPick, League, Player } from '../types';
 import { CAP } from '../constants';
 import { Rng, clamp } from '../random';
-import { CAP_FOR, OFFSEASON_ROSTER_MAX, age, contractSeason, curTeamSeason, dateToDay, inSeason, standardRoster, winPct, payroll } from './helpers';
+import { CAP_FOR, OFFSEASON_ROSTER_MAX, age, contractSeason, curTeamSeason, dateToDay, inSeason, readsOnly, standardRoster, winPct, payroll } from './helpers';
 import { DEC_15, extensionRefusal, tradeValue, valueScore } from './contracts';
 import { contractExp } from '../playerGen';
 import {
@@ -145,8 +145,9 @@ function aiTradeOnce(league: League, rng: Rng): boolean {
   };
   const kinds = rng.chance(late ? 0.5 : 0.7) ? [sale, dump] : [dump, sale];
   for (const find of kinds) {
-    // (a deal is its legs: two teams, or three when a sale needed a third to take the salary)
-    const deal = find(league, rng);
+    // (a deal is its legs: two teams, or three when a sale needed a third to take the salary; the
+    // search only reads the league, so its rosters and values are worked out once: see readsOnly)
+    const deal = readsOnly(league, () => find(league, rng));
     if (deal && draftNightRoom(league, deal)) {
       executeDeal(league, deal);
       return true;

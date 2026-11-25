@@ -145,28 +145,89 @@ function userProfile(league: League, userTid: number, day: number): Profile | nu
   return out;
 }
 
+/** The sums of the games read so far for one team and season, and where in the stored games the reading stopped. */
+interface Tally {
+  off: SideAgg;
+  def: SideAgg;
+  lg: SideAgg;
+  /** The team's games among them. */
+  n: number;
+  /** The first stored game not read yet, and the one before it (to notice the list changing under it). */
+  next: number;
+  prev: League['games'][number] | undefined;
+  /** Games from this day on were left for later. */
+  day: number;
+}
+
+const blankTally = (): Tally => ({ off: blank(), def: blank(), lg: blank(), n: 0, next: 0, prev: undefined, day: -Infinity });
+
+function addGame(t: Tally, g: League['games'][number], userTid: number) {
+  for (const [box, opp] of [
+    [g.home, g.away],
+    [g.away, g.home],
+  ]) {
+    if (box.tid === userTid) {
+      t.n++;
+      add(t.off, box, opp);
+    } else {
+      add(t.lg, box, opp);
+      if (opp.tid === userTid) add(t.def, box, opp);
+    }
+  }
+}
+
+/**
+ * Games are stored in the order they're played, so a team's tally for a later day carries on from
+ * the one for an earlier day instead of reading the season again (a season asks for about 2,500 of
+ * them). The sums are added in the same order as one full read, so they come out the same to the
+ * last bit; a list changed in place, an earlier day asked for, or games stored out of day order
+ * start a full read instead.
+ */
+const tallies = new WeakMap<League['games'], Map<string, Tally>>();
+function tally(league: League, userTid: number, season: number, before: number): Tally {
+  const games = league.games;
+  let bySide = tallies.get(games);
+  if (!bySide) tallies.set(games, (bySide = new Map()));
+  const k = `${season}:${userTid}`;
+  let t = bySide.get(k);
+  if (!t || t.day > before || t.next > games.length || (t.next > 0 && games[t.next - 1] !== t.prev)) bySide.set(k, (t = blankTally()));
+  let i = t.next;
+  for (; i < games.length; i++) {
+    const g = games[i];
+    if (g.season !== season || g.type === 'allstar') continue;
+    if (g.day >= before) break;
+    addGame(t, g, userTid);
+  }
+  t.next = i;
+  t.prev = i > 0 ? games[i - 1] : undefined;
+  t.day = before;
+  for (let j = i; j < games.length; j++) {
+    const g = games[j];
+    if (g.season === season && g.type !== 'allstar' && g.day < before) {
+      // stored out of day order: read every game of the season in stored order
+      bySide.delete(k);
+      const full = blankTally();
+      for (const x of games) if (x.season === season && x.type !== 'allstar' && x.day < before) addGame(full, x, userTid);
+      return full;
+    }
+  }
+  return t;
+}
+
+const copySide = (a: SideAgg): SideAgg => {
+  const pt: Record<string, Sum> = {};
+  for (const [k, v] of Object.entries(a.pt)) pt[k] = { poss: v.poss, pts: v.pts };
+  return { ...a, pt };
+};
+
 function readProfile(league: League, userTid: number, day: number): Profile | null {
   const read = (season: number, lastSeason: boolean): Profile | null => {
-    const off = blank();
-    const def = blank();
-    const lg = blank();
-    let n = 0;
-    for (const g of league.games) {
-      if (g.season !== season || g.type === 'allstar' || (!lastSeason && g.day >= day)) continue;
-      for (const [box, opp] of [
-        [g.home, g.away],
-        [g.away, g.home],
-      ]) {
-        if (box.tid === userTid) {
-          n++;
-          add(off, box, opp);
-        } else {
-          add(lg, box, opp);
-          if (opp.tid === userTid) add(def, box, opp);
-        }
-      }
-    }
-    if (n < SCOUT_MIN_GAMES) return null;
+    const t = tally(league, userTid, season, lastSeason ? Infinity : day);
+    if (t.n < SCOUT_MIN_GAMES) return null;
+    // copies: the tally carries on with later days
+    const off = copySide(t.off);
+    const def = copySide(t.def);
+    const lg = copySide(t.lg);
     const base = { ...DEFAULT_PPP };
     if (!lastSeason) for (const [k, v] of Object.entries(lg.pt)) if (v.poss >= 300) base[k] = v.pts / v.poss;
     return { off, def, lg, base };

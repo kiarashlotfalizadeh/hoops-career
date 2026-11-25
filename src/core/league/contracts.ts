@@ -21,6 +21,7 @@ import {
   payroll,
   playerName,
   revenueScale,
+  scoped,
   standardRoster,
   teamCity,
   teamPlayers,
@@ -102,6 +103,12 @@ export function tradeValue(league: League, p: Player, strategy: Strategy = 'reto
  * loses the first and keeps the second: his dead money is owed either way.
  */
 export function valueParts(league: League, p: Player, strategy: Strategy = 'retool'): { player: number; burden: number } {
+  // (kept through a read-only stretch, see readsOnly; a copy, as callers get a fresh one)
+  const v = scoped(league, `value:${p.pid}:${strategy}`, () => valuePartsRaw(league, p, strategy));
+  return { player: v.player, burden: v.burden };
+}
+
+function valuePartsRaw(league: League, p: Player, strategy: Strategy): { player: number; burden: number } {
   let s = valueScore(league, p);
   const a = age(league, p);
   // a star past 29 is priced for what he still does in the seasons he is signed for, as the market

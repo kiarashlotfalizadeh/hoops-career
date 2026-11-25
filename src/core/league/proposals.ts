@@ -20,7 +20,7 @@
 
 import type { DraftPick, League, Player, Proposal, Team } from '../types';
 import { Rng, hashString } from '../random';
-import { CAP_FOR, addInbox, andList, contractSeason, curTeamSeason, fmtDate, playerName, sentence, shortName, standardRoster, teamCity, payroll } from './helpers';
+import { CAP_FOR, addInbox, andList, contractSeason, curTeamSeason, fmtDate, playerName, readsOnly, sentence, shortName, standardRoster, teamCity, payroll } from './helpers';
 import { tradeValue } from './contracts';
 import { nextPick } from './draft';
 import {
@@ -677,14 +677,14 @@ const TRIES: Record<Proposal['kind'], ((league: League, rng: Rng) => Pitch | nul
 /** One offer, of the first of `kinds` that finds one; `lastDay` caps how long it stands. */
 function makeOffer(league: League, rng: Rng, kinds: Proposal['kind'][], lastDay?: number): Proposal | null {
   if (openProposals(league).length >= MAX_OPEN) return null;
-  // (the searches only read the league)
-  const pitch = (() => {
+  // (the searches only read the league, so its rosters and values are worked out once: see readsOnly)
+  const pitch = readsOnly(league, () => {
     for (const k of kinds) {
       const x = TRIES[k]?.(league, rng);
       if (x) return x;
     }
     return null;
-  })();
+  });
   return pitch ? post(league, pitch, rng, lastDay) : null;
 }
 

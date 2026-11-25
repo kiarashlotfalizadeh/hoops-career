@@ -12,10 +12,45 @@ export function withRng<T>(league: League, fn: (rng: Rng) => T): T {
   return out;
 }
 
-export function teamPlayers(league: League, tid: number): Player[] {
+// ---------------------------------------------------------------- read-only stretches
+
+/**
+ * A stretch of work that only reads the league (an AI trade search tries thousands of deals against
+ * rosters that don't change until one is made): inside it, rosters, payrolls and player values are
+ * worked out once and kept (see scoped). Nothing in it may move a player, sign, waive or trade; the
+ * deal it finds is made after it ends.
+ */
+let readScope: { league: League; memo: Map<string, unknown> } | null = null;
+
+export function readsOnly<T>(league: League, fn: () => T): T {
+  if (readScope) return fn();
+  readScope = { league, memo: new Map() };
+  try {
+    return fn();
+  } finally {
+    readScope = null;
+  }
+}
+
+/** `make()` worked out once per key inside a read-only stretch of `league` (see readsOnly); every time outside one. */
+export function scoped<T>(league: League, key: string, make: () => T): T {
+  if (readScope?.league !== league) return make();
+  const memo = readScope.memo;
+  if (memo.has(key)) return memo.get(key) as T;
+  const v = make();
+  memo.set(key, v);
+  return v;
+}
+
+function teamPlayersRaw(league: League, tid: number): Player[] {
   const out: Player[] = [];
   for (const p of Object.values(league.players)) if (p.tid === tid) out.push(p);
   return out;
+}
+
+export function teamPlayers(league: League, tid: number): Player[] {
+  // (a copy of the kept list: callers sort and splice what they get)
+  return readScope?.league === league ? scoped(league, `roster:${tid}`, () => teamPlayersRaw(league, tid)).slice() : teamPlayersRaw(league, tid);
 }
 
 /** A team's roster: every player holds one of its spots (15 from opening night). */
@@ -88,6 +123,10 @@ export function teamGamesLeft(league: League, tid: number): number {
 
 /** A team's payroll for a season: its contracts and its dead money. It counts against the cap and the tax. */
 export function payroll(league: League, tid: number, season = league.season): number {
+  return readScope?.league === league ? scoped(league, `payroll:${tid}:${season}`, () => payrollRaw(league, tid, season)) : payrollRaw(league, tid, season);
+}
+
+function payrollRaw(league: League, tid: number, season: number): number {
   let total = 0;
   for (const p of Object.values(league.players)) if (p.tid === tid) total += salaryFor(p, season);
   for (const d of league.teams[tid].deadMoney) if (d.season === season) total += d.amount;
@@ -108,7 +147,17 @@ export function revenueScale(league: League, season = league.season) {
 }
 
 /** Cap figures grow each season from the 2026-27 baseline. */
+/** Cap figures by league start and season: they never change, and deal searches ask for them thousands of times a day. */
+const capFor = new Map<string, Readonly<ReturnType<typeof capFigures>>>();
+
 export function CAP_FOR(league: League, season = league.season) {
+  const key = `${league.startSeason}:${season}`;
+  let c = capFor.get(key);
+  if (!c) capFor.set(key, (c = Object.freeze(capFigures(league, season))));
+  return c;
+}
+
+function capFigures(league: League, season: number) {
   const g = revenueScale(league, season);
   return {
     salaryCap: Math.round(CAP.salaryCap * g),

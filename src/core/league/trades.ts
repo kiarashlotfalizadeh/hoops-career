@@ -24,6 +24,7 @@ import {
   prospects,
   revenueScale,
   rosterMaxNow,
+  scoped,
   standardRoster,
   teamCity,
 } from './helpers';
@@ -382,6 +383,11 @@ export function swapOutlook(league: League, own: DraftPick, other: DraftPick): {
  * is worth the two picks).
  */
 export function pickValue(league: League, dp: DraftPick): number {
+  // (kept through a read-only stretch, see readsOnly: by everything about the pick its value reads, as a deal's copy can carry a different protection)
+  return scoped(league, `pick:${dp.dpid}:${dp.season}:${dp.round}:${dp.originalTid}:${dp.tid}:${dp.pick}:${dp.protection}:${dp.swap}`, () => pickValueRaw(league, dp));
+}
+
+function pickValueRaw(league: League, dp: DraftPick): number {
   const base = ownValue(league, dp);
   if (dp.round !== 1) return base;
   const other = dp.swap !== undefined ? findPick(league, dp.swap) : undefined;
