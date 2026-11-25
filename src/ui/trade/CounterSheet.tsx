@@ -22,25 +22,29 @@ export function CounterSheet({
   league,
   base,
   counters,
+  title,
+  lede,
   onClose,
   onAccept,
   onEdit,
 }: {
   league: League;
-  /** The deal they turned down. */
+  /** The deal they turned down (or the draft deal being previewed). */
   base: TradeOffer | null;
   counters: CounterOffer[];
+  title?: string;
+  lede?: string;
   onClose: () => void;
   onAccept: (o: TradeOffer) => void;
   onEdit: (o: TradeOffer) => void;
 }) {
   const open = !!base && counters.length > 0;
   return (
-    <Sheet open={open} onClose={onClose} title={base ? `${teamCity(league, base.b.tid)} says no` : undefined}>
+    <Sheet open={open} onClose={onClose} title={title ?? (base ? `${teamCity(league, base.b.tid)} says no` : undefined)}>
       {open && base && (
         <div className="col fo-sheet">
           <p className="fo-lede">
-            {counters.length === 1 ? "But they'd take this version now." : `But they'd take any of these ${counters.length} versions now. The best for you comes first.`}
+            {lede ?? (counters.length === 1 ? "But they'd take this version now." : `But they'd take any of these ${counters.length} versions now. The best for you comes first.`)}
           </p>
           <div className="card flush list">
             {counters.map((c, i) => (

@@ -216,6 +216,17 @@ export function callDrafts(input: StaffInput, sim: GameSim, skip: Set<string> = 
   const them = view.sides[1 - side];
   const margin = me.score - them.score;
   const crunch = crunchTime(view);
+  const myBox = side === 0 ? view.box.home : view.box.away;
+  const tb = side === 0 ? view.box.away : view.box.home;
+  const oppSim = sim.T[1 - side];
+  const oppFive = oppSim.players.filter((p) => p.out === 0 && (input.atBreak ? p.starter : p.on));
+  const oppAvgOreb = oppFive.length ? oppFive.reduce((a, p) => a + p.r.oreb, 0) / oppFive.length : 47;
+  const oppAvgThree = oppFive.length ? oppFive.reduce((a, p) => a + p.c.c3, 0) / oppFive.length : 50;
+  // Never recommend zone against a strong rebounding team (matches the post-game report's rule)
+  const strongRebounders = oppAvgOreb >= 52 || tb.t.orb - myBox.t.orb >= 3 || (tb.t.orb >= 6 && tb.t.orb >= myBox.t.orb + 2);
+  const hotThrees = tb.t.tpa >= 8 && tb.t.tpm / tb.t.tpa >= 0.39;
+  const canZone23 = !strongRebounders && oppAvgThree < 54 && !hotThrees;
+  const canZone32 = !strongRebounders && (hotThrees || oppAvgThree >= 58);
 
   // the night's deciding stats far against you come first: each gets its lever measured, so the staff
   // never sits quiet at 21 turnovers to 8 without having tried the fix (the playtest's 01 and 06)
@@ -226,11 +237,12 @@ export function callDrafts(input: StaffInput, sim: GameSim, skip: Set<string> = 
         x.offense.transition = Math.max(0, x.offense.transition - 20);
       });
     else if (g.id === 'glass') {
+      if (t.defense.scheme !== 'man') addTactics('man-glass', 'Man-to-man', g.text, (x) => void (x.defense.scheme = 'man'));
       addTactics('boxout', 'Everyone to the glass', g.text, (x) => void (x.defense.getBack = Math.max(0, x.defense.getBack - 30)));
       addTactics('crash', 'Crash the offensive glass', g.text, (x) => void (x.offense.crashBoards = Math.min(100, x.offense.crashBoards + 25)));
     } else if (g.id === 'paint') {
       if (t.defense.help <= 60) addTactics('pack-gap', 'Pack the paint', g.text, (x) => void (x.defense.help = 75));
-      else if (t.defense.scheme !== 'zone23') addTactics('zone-gap', SCHEME_META.zone23.label, g.text, (x) => void (x.defense.scheme = 'zone23'));
+      else if (t.defense.scheme !== 'zone23' && canZone23) addTactics('zone-gap', SCHEME_META.zone23.label, g.text, (x) => void (x.defense.scheme = 'zone23'));
     }
   }
 
@@ -267,23 +279,19 @@ export function callDrafts(input: StaffInput, sim: GameSim, skip: Set<string> = 
   // the pressure, a double on their scorer: true worth spread ±0.7 to ±1.3 points), the mentality and the
   // pace hardly at all (±0 to ±0.4). Each is drafted the way the game in front of it points.
   const trips = Object.values(them.pt).reduce((a, v) => a + v.poss, 0);
-  const tb = side === 0 ? view.box.away : view.box.home;
   const threesLine = `Their threes: ${tb.t.tpm} of ${tb.t.tpa}`;
   const scoring = `${them.score} points on ${trips} trips`;
   const paint = Object.entries(them.pt)
     .filter(([k]) => k === 'post' || k === 'cut' || k === 'pnrRoll')
     .reduce((a, [, v]) => ({ poss: a.poss + v.poss, pts: a.pts + v.pts }), { poss: 0, pts: 0 });
+  const paintHurting = paint.poss >= 5 && paint.pts / paint.poss >= 1.1;
 
-  // the scheme: out of a zone to man-to-man; out of man-to-man to the 2-3 zone (the 3-2 from the 2-3)
+  // the scheme: out of a zone to man-to-man; into a zone only when their rebounding and shooting profile actually fit
   if (!man) addTactics('man', 'Man-to-man', scoring, (x) => void (x.defense.scheme = 'man'));
-  const zone = (['zone23', 'zone32'] as const).find((z) => z !== d.scheme);
-  if (zone)
-    addTactics(
-      zone,
-      SCHEME_META[zone].label,
-      zone === 'zone32' ? threesLine : paint.poss ? `${paint.pts} points inside on ${paint.poss} trips` : scoring,
-      (x) => void (x.defense.scheme = zone),
-    );
+  if (d.scheme !== 'zone23' && canZone23 && paintHurting)
+    addTactics('zone23', SCHEME_META.zone23.label, `${paint.pts} points inside on ${paint.poss} trips`, (x) => void (x.defense.scheme = 'zone23'));
+  else if (d.scheme !== 'zone32' && canZone32 && hotThrees)
+    addTactics('zone32', SCHEME_META.zone32.label, threesLine, (x) => void (x.defense.scheme = 'zone32'));
 
   // their ball screens: the first of drop, hedge, switch, ice and blitz besides this one
   const pnr = (them.pt.pnrBH?.poss ?? 0) + (them.pt.pnrRoll?.poss ?? 0);
@@ -361,7 +369,7 @@ export function spotLabel(q: number, clock: number): string {
 /** What the staff found at the last stop: measuring, a call, or none that clears. */
 export type StaffCall =
   | { state: 'measuring'; tried: number; at: string; done?: number }
-  | { state: 'call'; draft: CallDraft; m: CallsMeasured; at: string; base: string; steps: number }
+  | { state: 'call'; draft: CallDraft; m: CallsMeasured; at: string; base: string; steps: number; shownAt?: number }
   | { state: 'none'; tried: number; at: string; m?: CallsMeasured; steps?: number };
 
 /**

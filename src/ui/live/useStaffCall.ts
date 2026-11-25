@@ -14,8 +14,12 @@ import type { StaffInput } from './staff';
 
 /** Possessions a stop's measurement is left to finish before a later stop of the same weight takes its place. */
 const MEASURE_HOLD = 8;
-/** Possessions a call stays up before a stop (not a period's end) measures again, and takes it as turned down. */
-export const CALL_HOLD = 4;
+/** Possessions a call stays up before a non-break stop measures again and takes it as turned down. */
+export const CALL_HOLD = 12;
+/** Minimum wall-clock time (ms) a call stays up before a non-break stop can expire or replace it. */
+export const CALL_HOLD_MS = 18_000;
+/** Minimum wall-clock time (ms) before passing over a call marks it declined. */
+const PASSOVER_MIN_MS = 10_000;
 
 /** A stop the game will come to, measured before it gets there: the game played on to it (a copy) and the possessions it'll have played by then. */
 export interface StopAhead {
@@ -47,11 +51,18 @@ export function useStaffCall() {
   /** Changes the coach turned down (with ×, or by leaving the call up to the next stop), by draft id, with the possession he did. */
   const declined = useRef(new Map<string, number>());
 
-  /** A call still up when the game gets to the next stop went untaken: it's turned down as × would (no banner for it stop after stop). */
+  /** A call still up when the game gets to the next stop went untaken: it's turned down as × would (unless it barely landed). */
   const passOver = useCallback((steps: number) => {
     const up = callRef.current;
-    if (up?.state === 'call') declined.current.set(up.draft.id, steps);
+    if (up?.state === 'call' && Date.now() - (up.shownAt ?? 0) >= PASSOVER_MIN_MS) declined.current.set(up.draft.id, steps);
   }, []);
+
+  /** Whether an active call is still within its hold window (both possessions and real time) so a non-break stop won't wipe it out. */
+  const holdingCall = (prio: number, steps: number) => {
+    const up = callRef.current;
+    if (prio >= 2 || up?.state !== 'call') return false;
+    return steps - up.steps < CALL_HOLD || Date.now() - (up.shownAt ?? 0) < CALL_HOLD_MS;
+  };
 
   /** The game got to the spot measured ahead: the budget starts now, and a reading already in is said. */
   const reach = useCallback(
@@ -79,6 +90,8 @@ export function useStaffCall() {
       const sim = ahead?.sim ?? lg.sim;
       const steps = ahead?.steps ?? lg.steps;
       const ops = lg.journal.ops.length;
+      // a fresh call stays up long enough for the coach to reach and read it (including before an ahead-measured stop replaces it)
+      if (!ahead && holdingCall(prio, steps)) return;
       const cur = run.current;
       if (!ahead && cur?.ahead && !cur.ahead.reached) {
         // measured ahead for this very spot, with no move made since: the game is there
@@ -86,9 +99,8 @@ export function useStaffCall() {
         cancelLive(cur.id);
         run.current = null;
       }
-      // a call up only a few possessions stays up (a period's end measures again all the same)
       const up = callRef.current;
-      if (prio < 2 && up?.state === 'call' && steps - up.steps < CALL_HOLD) return;
+      if (holdingCall(prio, steps)) return;
       const now = run.current;
       if (now && (ahead || now.prio > prio || (now.prio === prio && steps - now.steps < MEASURE_HOLD))) return;
       if (now) cancelLive(now.id);
@@ -114,7 +126,7 @@ export function useStaffCall() {
         budget,
         ahead: ahead && { ops, reached: false },
         publish: (m) => {
-          if (m) setCall(m.pick !== null ? { state: 'call', draft: drafts[m.pick], m, at, base, steps } : { state: 'none', tried: drafts.length, at, m, steps });
+          if (m) setCall(m.pick !== null ? { state: 'call', draft: drafts[m.pick], m, at, base, steps, shownAt: Date.now() } : { state: 'none', tried: drafts.length, at, m, steps });
         },
       };
       run.current = r;

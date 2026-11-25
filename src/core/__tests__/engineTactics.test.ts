@@ -347,20 +347,20 @@ describe('engine tactics', () => {
         expect(TK.key.per).toBe(TK_LIFE.key.per);
       }
       expect(TK_LIFE.zone.zone23).toEqual({
-        roll: 1.0,
-        pnr: 1.2,
-        iso: 1.3,
-        post: 1.8,
-        drive: 1.2,
-        kick: 0.7,
-        pop: 0.52,
-        handoff: 0.34,
-        swing: 0.9,
-        swingW: 1.8,
-        corner: 0.45,
-        cutW: 0.5,
+        roll: 0.85,
+        pnr: 1.0,
+        iso: 1.1,
+        post: 1.5,
+        drive: 1.0,
+        kick: 0.85,
+        pop: 0.62,
+        handoff: 0.4,
+        swing: 0.95,
+        swingW: 1.85,
+        corner: 0.5,
+        cutW: 0.45,
         cut: 0.4,
-        glass: 1.16,
+        glass: 1.2,
       });
       // box-score fingerprint of four 2-3 vs 2-3 games, taken from the engine before the table (and again when
       // side-out fouls started restarting the shot clock at 14, and when tactics were made to matter twice as
@@ -383,11 +383,12 @@ describe('engine tactics', () => {
         const res = new GameSim(zone(6), zone(7 + g), opts(500 + g, false)).simToEnd();
         out.push([res.home.pts, res.away.pts, res.home.t.fga, res.away.t.fga, res.home.t.tpa, res.away.t.tpa, res.home.t.orb, res.away.t.orb]);
       }
+      // All of them again 2026-11-25 (see engineDefense.test.ts).
       expect(out).toEqual([
-        [96, 120, 88, 93, 44, 44, 14, 16],
-        [126, 133, 97, 98, 49, 43, 12, 14],
-        [107, 108, 94, 100, 43, 40, 15, 27],
-        [127, 125, 99, 96, 45, 44, 11, 9],
+        [120, 128, 97, 95, 50, 39, 16, 18],
+        [137, 125, 99, 101, 52, 44, 17, 20],
+        [115, 110, 90, 99, 50, 40, 12, 21],
+        [125, 115, 91, 95, 44, 45, 10, 7],
       ]);
     }
 

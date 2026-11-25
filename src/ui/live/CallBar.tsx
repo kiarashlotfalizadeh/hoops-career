@@ -25,6 +25,10 @@ export interface BannerItem {
   kicker: string;
   title: string;
   line?: string;
+  /** Optional one-tap action right on the bar (e.g. applying an active staff call without scrolling). */
+  action?: { label: string; run: () => void };
+  /** Custom hold duration in ms before auto-dismissing (defaults to 9000 for bad, 6500 otherwise). */
+  ms?: number;
 }
 
 /** Clutch time at speed: watch the finish at 1× (now, or every close finish from here on). */
@@ -173,7 +177,7 @@ export function CallBar(p: CallBarProps) {
   const dropBanner = useRef(p.onDropBanner);
   dropBanner.current = p.onDropBanner;
   const bannerUp = state === 'banner' && (!paused || !!title) ? banner!.id : null;
-  const bannerMs = banner?.tone === 'bad' ? 9000 : 6500;
+  const bannerMs = banner?.ms ?? (banner?.tone === 'bad' ? 9000 : 6500);
   useEffect(() => {
     if (!bannerUp) return;
     const t = setTimeout(() => dropBanner.current(), bannerMs);
@@ -193,11 +197,14 @@ export function CallBar(p: CallBarProps) {
     primary.current?.focus();
   }, [state]);
 
-  // the bar's end while the game plays: the speed it's playing at (a tap brings playback up, where 1×, 2×, 4× and Skip are) and the pause button
+  // the bar's end while the game plays: speed (taps into playback controls), Skip ahead always visible, and pause
   const pauseBtn = (
     <>
       <button type="button" className="lv-cb-spd" onClick={show} aria-label={`Speed ${speed}×: playback controls`}>
         {speed}×
+      </button>
+      <button type="button" className="lv-cb-skip" onClick={p.onSkip} aria-label="Skip ahead" aria-haspopup="dialog" title="Skip ahead">
+        <FastForward size={15} aria-hidden="true" />
       </button>
       <button type="button" className="lv-cb-pause" onClick={pauseFromBar} aria-label="Pause: playback controls">
         <Pause size={16} fill="currentColor" aria-hidden="true" />
@@ -293,8 +300,14 @@ export function CallBar(p: CallBarProps) {
           </div>
           {banner.line && <div className="lv-cb-l">{banner.line}</div>}
         </div>
+        {/* one-tap action (e.g. applying an active staff call directly from the top bar) */}
+        {banner.action && (
+          <button type="button" className="lv-cb-btn sm on" onClick={banner.action.run}>
+            {banner.action.label}
+          </button>
+        )}
         {/* (a skip that stopped for a starter hurt leaves the game paused: playing on is right here, not behind the bar) */}
-        {paused && (
+        {paused && !banner.action && (
           <button type="button" className="lv-cb-btn sm on" onClick={p.onPause}>
             <Play size={14} fill="currentColor" aria-hidden="true" /> Resume
           </button>

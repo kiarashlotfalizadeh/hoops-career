@@ -167,8 +167,40 @@ function prune(league: League, found: TradeOffer, base: TradeOffer): TradeOffer 
   return cur;
 }
 
+/**
+ * Core players on the user's roster that "Make it work" should protect by default so it doesn't
+ * casually throw in your franchise star for a role-player trade.
+ * - `soft`: top 2 core pieces (80+ OVR, or #1 player if 78+ OVR) not already placed in the deal.
+ * - `hard`: core stars (82+ OVR) who clearly outclass every player the user is acquiring; never
+ *   added even on fallback.
+ */
+function userCoreGuards(league: League, tid: number, alreadySent: readonly number[], targetPids: readonly number[]): { soft: number[]; hard: number[] } {
+  if (tid !== league.userTid) return { soft: [], hard: [] };
+  const sent = new Set(alreadySent);
+  const ranked = standardRoster(league, tid)
+    .map((p) => ({ p, v: tradeValue(league, p, 'retool') }))
+    .sort((a, b) => b.v - a.v || b.p.ovr - a.p.ovr);
+  const targets = targetPids.map((pid) => league.players[pid]).filter((p): p is Player => !!p);
+  const maxTargetOvr = targets.reduce((m, p) => Math.max(m, p.ovr), 0);
+  const maxTargetVal = targets.reduce((m, p) => Math.max(m, tradeValue(league, p, 'retool')), 0);
+  const soft: number[] = [];
+  const hard: number[] = [];
+  for (let i = 0; i < Math.min(2, ranked.length); i++) {
+    const { p, v } = ranked[i];
+    if (sent.has(p.pid)) continue;
+    if (p.ovr >= 80 || (i === 0 && p.ovr >= 78)) soft.push(p.pid);
+    if (p.ovr >= 82 && p.ovr > maxTargetOvr + 2 && v > maxTargetVal * 1.15) hard.push(p.pid);
+  }
+  return { soft, hard };
+}
+
 function findWork(league: League, offer: TradeOffer, keep: readonly number[] = [], opts: { cash?: boolean; best?: boolean } = {}): WorkResult {
-  const r = findWorkRaw(league, offer, keep, opts);
+  const { soft, hard } = userCoreGuards(league, offer.a.tid, offer.a.pids, offer.b.pids);
+  if (soft.length) {
+    const protectedRun = findWorkRaw(league, offer, [...keep, ...soft], opts);
+    if (protectedRun.offer) return { offer: prune(league, protectedRun.offer, offer) };
+  }
+  const r = findWorkRaw(league, offer, hard.length ? [...keep, ...hard] : keep, opts);
   return r.offer ? { offer: prune(league, r.offer, offer) } : r;
 }
 
@@ -367,6 +399,17 @@ export function makeDealWork(league: League, legs: TradeLeg[], from = league.use
 }
 
 function findDealWork(league: League, start: TradeLeg[], from: number): DealWork {
+  const sentPids = start.filter((l) => l.tid === from).flatMap((l) => l.pids);
+  const gotPids = start.filter((l) => l.to === from).flatMap((l) => l.pids);
+  const { soft, hard } = userCoreGuards(league, from, sentPids, gotPids);
+  if (soft.length) {
+    const protectedRun = findDealWorkWith(league, start, from, soft);
+    if (protectedRun.legs) return protectedRun;
+  }
+  return findDealWorkWith(league, start, from, hard);
+}
+
+function findDealWorkWith(league: League, start: TradeLeg[], from: number, extraKeep: readonly number[]): DealWork {
   let cur = start;
   const added: DealAdd[] = [];
   const others = dealTeams(cur).filter((t) => t !== from);
@@ -374,7 +417,7 @@ function findDealWork(league: League, start: TradeLeg[], from: number): DealWork
   const broken = (legs: TradeLeg[]) => validateDeal(league, legs).length;
   if (broken(cur) > fixable(league, cur, from)) return { legs: null, why: 'rules' };
   const inDeal = (legs: TradeLeg[]) => ({ pids: new Set(legs.flatMap((l) => l.pids)), dpids: new Set(legs.flatMap((l) => l.dpids)) });
-  const off = new Set(from === league.userTid ? (league.untouchable ?? []) : []);
+  const off = new Set([...(from === league.userTid ? (league.untouchable ?? []) : []), ...extraKeep]);
   const gapOf = (legs: TradeLeg[], tid: number) =>
     matchGap(
       league,

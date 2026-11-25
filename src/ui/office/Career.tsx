@@ -23,7 +23,7 @@ import { useLeague, useLeagueMemo } from '../../state/store';
 import { askAboutJob, takeTeam, turnDownJob, useBusy } from '../../state/actions/office';
 import { AgendaRow } from '../components/Agenda';
 import { TeamLogo } from '../components/TeamLogo';
-import { CountUp, More, PageHeader, Section, Segmented, Statline } from '../components/ui';
+import { CountUp, More, PageHeader, Section, Segmented, Sheet, Statline } from '../components/ui';
 import { TabBar, useQueryParam } from '../league/shared';
 import { slabVars } from '../teamColors';
 import { STRATEGY_META, capSeason, fmtGrade, shortSeason } from './common';
@@ -65,6 +65,12 @@ function Profile({ league }: { league: League }) {
   const seasonsIn = seasonsInCharge(league);
   const done = (ok: boolean) => ok && nav('/');
   const ranks = useLeagueMemo(() => coachRanks(league), [league]);
+  const [confirmTid, setConfirmTid] = useState<number | null>(null);
+  const confirmTeam = confirmTid !== null ? league.teams[confirmTid] : undefined;
+  const confirmBusy = useBusy();
+  const confirmBooks = capSeason(league);
+  const mySeason = curTeamSeason(league, team.tid);
+  const targetSeason = confirmTeam ? curTeamSeason(league, confirmTeam.tid) : null;
 
   return (
     <main className="page fo-page fo-career">
@@ -117,7 +123,7 @@ function Profile({ league }: { league: League }) {
         <Section title={league.fired ? 'Teams that want you' : 'Teams calling'} right={<span className="tiny dim">Until the draft</span>}>
           <div className="card flush list">
             {offers.map((o) => (
-              <OfferRow key={o.tid} league={league} o={o} onTake={() => done(takeTeam(league, o.tid))} onTurnDown={() => turnDownJob(league, o.tid)} />
+              <OfferRow key={o.tid} league={league} o={o} onTake={() => setConfirmTid(o.tid)} onTurnDown={() => turnDownJob(league, o.tid)} />
             ))}
           </div>
         </Section>
@@ -130,9 +136,51 @@ function Profile({ league }: { league: League }) {
       {tab === 'jobs' && (
         <>
           <JobsTab league={league} />
-          {(league.settings.godMode || (league.fired && !offers.length)) && <TakeOver league={league} onTaken={() => nav('/')} />}
+          {(league.settings.godMode || (league.fired && !offers.length)) && <TakeOver league={league} onTake={(tid) => setConfirmTid(tid)} />}
         </>
       )}
+
+      <Sheet open={!!confirmTeam} onClose={() => setConfirmTid(null)} title={confirmTeam ? `Take the ${confirmTeam.name} job?` : undefined}>
+        {confirmTeam && targetSeason && (
+          <div className="col fo-sheet">
+            <div className="row" style={{ gap: 12 }}>
+              <TeamLogo tid={confirmTeam.tid} size={40} decorative />
+              <div className="grow">
+                <div className="bold">
+                  {confirmTeam.region} {confirmTeam.name}
+                </div>
+                <div className="small dim num">
+                  <span className={`tag ${STRATEGY_META[confirmTeam.strategy].tone}`}>{STRATEGY_META[confirmTeam.strategy].label}</span>{' '}
+                  {keepFigures(`${targetSeason.won}-${targetSeason.lost}`)} · {money(payroll(league, confirmTeam.tid, confirmBooks))} payroll
+                  {confirmBooks > league.season ? ` ${shortSeason(confirmBooks)}` : ''}
+                </div>
+              </div>
+            </div>
+            <p className="fo-lede">
+              {league.fired
+                ? `You'll take over ${teamCity(league, confirmTeam)} right away. This can't be undone.`
+                : `You'll leave ${teamCity(league, team)} (${keepFigures(`${mySeason.won}-${mySeason.lost}`)}) and take over ${teamCity(league, confirmTeam)} right away. This can't be undone.`}
+            </p>
+            <div className="row">
+              <button type="button" className="btn grow" onClick={() => setConfirmTid(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn primary grow"
+                disabled={confirmBusy}
+                onClick={() => {
+                  const tid = confirmTeam.tid;
+                  setConfirmTid(null);
+                  done(takeTeam(league, tid));
+                }}
+              >
+                {league.fired ? 'Take the job' : `Leave ${team.abbrev} & take job`}
+              </button>
+            </div>
+          </div>
+        )}
+      </Sheet>
     </main>
   );
 }
@@ -652,7 +700,7 @@ function OpeningRow({ league, o, open, busy }: { league: League; o: JobOpening; 
 const surname = (name: string) => name.split(/ (.+)/)[1] ?? name;
 
 /** Any team in the league: by conference, each with its record; the pick's strategy and books, and the move. */
-function TakeOver({ league, onTaken }: { league: League; onTaken: () => void }) {
+function TakeOver({ league, onTake }: { league: League; onTake: (tid: number) => void }) {
   const cur = league.teams[league.userTid];
   const [conf, setConf] = useState<'E' | 'W'>(cur.conf);
   const [pick, setPick] = useState<number | null>(null);
@@ -719,7 +767,7 @@ function TakeOver({ league, onTaken }: { league: League; onTaken: () => void }) 
               </span>
             </div>
           </div>
-          <button className="btn primary" disabled={busy} onClick={() => takeTeam(league, t.tid) && onTaken()}>
+          <button className="btn primary" disabled={busy} onClick={() => onTake(t.tid)}>
             Take over {t.abbrev}
           </button>
         </div>

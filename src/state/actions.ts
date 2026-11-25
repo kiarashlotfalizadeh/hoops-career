@@ -47,10 +47,10 @@ export function act(label: string, fn: (l: League) => void): boolean {
   return useStore.getState().attempt(label, withRotation(fn));
 }
 
-/** A light change (a setting, a tactics level, a read mark). Returns whether it went through. */
-export function edit(fn: (l: League) => void): boolean {
+/** A light change (a setting, a tactics level, a read mark). Pass `now` to persist immediately without waiting on the burst timer. */
+export function edit(fn: (l: League) => void, now = false): boolean {
   if (busy()) return false;
-  return useStore.getState().mutate(withRotation(fn));
+  return useStore.getState().mutate(withRotation(fn), now ? 'now' : true);
 }
 
 /** A change that isn't worth saving on its own (a read mark as a screen opens): saved with the next one. */

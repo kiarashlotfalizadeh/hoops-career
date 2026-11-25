@@ -10,7 +10,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  padding: 0 0 12px;
+  padding: 0 0 calc(28px + var(--safe-b, 0px));
   scroll-padding-top: 8px;
 }
 .lv-con > * + * {

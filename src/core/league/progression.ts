@@ -334,8 +334,8 @@ function threeVolume(p: Player, statsSeason: number, room = 0) {
  * real lines, is untouched.
  */
 // (0.35 and cubed until 2026-11-21: the tails were opened on purpose, see legends.ts)
-const USE_SHARE = 0.37;
-const USE_EXP = 2;
+const USE_SHARE = 0.345;
+const USE_EXP = 3;
 function usageVolume(p: Player, statsSeason: number, room = 0) {
   const st = seasonTotals(p, statsSeason);
   const team = st ? st.teamFga + 0.44 * st.teamFta + st.teamTov : 0;
@@ -679,7 +679,7 @@ const SHAPE_QS = [0.05, 0.15, 0.3, 0.5, 0.7, 0.85, 0.93, 0.975, 0.993, 1];
  * thinned out.
  */
 /** The share of its own width the top stretch of the overall distribution keeps each summer (the others: half). */
-const TOP_OWN = 0.75;
+const TOP_OWN = 0.55;
 
 function anchorOverallSpread(league: League, pop: Player[]) {
   const now = shapeOf(league, pop);

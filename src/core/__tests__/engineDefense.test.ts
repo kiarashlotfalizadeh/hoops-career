@@ -332,31 +332,32 @@ describe('engine defense', () => {
       // All of them again 2026-11-24, when the engine came to read perimeter defense and defensive IQ at two
       // thirds weight (ratings.ts DEF_READ: the composites and the five's team defense). The new games are
       // ordinary ones: 83 to 133 points, 77 to 103 shots, 13 to 49 threes, 13 to 32 free throws, one overtime.
+      // All of them again 2026-11-25, when 2-3 zone was balanced against shooters/glass, user timeouts stopped giving the AI a free adjustment, ATO openness increased, and game-to-game team variance was nudged to 0.0235.
       const expected: Record<string, number[][]> = {
         default: [
-          [122, 114, 80, 42, 8, 20, 10, 0],
-          [108, 120, 85, 29, 7, 30, 10, 0],
-          [102, 120, 86, 31, 5, 15, 15, 0],
+          [125, 115, 86, 46, 11, 19, 10, 0],
+          [113, 121, 91, 31, 10, 25, 8, 0],
+          [110, 121, 88, 30, 6, 32, 17, 0],
         ],
         zone23: [
           [125, 122, 86, 39, 9, 17, 10, 0],
-          [112, 119, 95, 22, 11, 22, 8, 0],
-          [95, 108, 89, 30, 11, 25, 18, 0],
+          [117, 112, 94, 22, 8, 18, 9, 0],
+          [94, 114, 85, 34, 7, 13, 21, 0],
         ],
         zone32: [
-          [118, 123, 84, 38, 10, 21, 11, 0],
-          [108, 128, 91, 19, 8, 26, 9, 0],
-          [97, 119, 99, 29, 12, 15, 14, 0],
+          [113, 123, 82, 39, 14, 29, 10, 0],
+          [108, 125, 96, 19, 10, 18, 7, 0],
+          [106, 123, 87, 30, 9, 22, 18, 0],
         ],
         double: [
-          [133, 122, 82, 39, 10, 18, 11, 0],
-          [124, 131, 103, 29, 16, 13, 8, 0],
+          [132, 120, 80, 30, 13, 30, 12, 0],
+          [135, 131, 95, 27, 9, 18, 7, 0],
           [83, 115, 86, 28, 11, 13, 18, 0],
         ],
         hunt: [
-          [124, 119, 82, 44, 11, 19, 9, 0],
+          [125, 119, 82, 43, 11, 19, 9, 0],
           [117, 127, 96, 13, 10, 28, 8, 0],
-          [118, 123, 100, 33, 14, 20, 16, 1],
+          [94, 104, 90, 34, 11, 11, 17, 0],
         ],
       };
       const patches: Record<string, TacticsPatch | undefined> = {

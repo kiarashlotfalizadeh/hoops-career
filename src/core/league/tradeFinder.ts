@@ -5,7 +5,7 @@ import { playerAge } from '../playerGen';
 import { CAP_FOR, contractSeason, standardRoster, payroll } from './helpers';
 import { tradeValue } from './contracts';
 import { capSalary, tradeMatchLimit, untradeable } from './trades';
-import { sellable } from './aiTrades';
+import { isFranchiseIcon, sellable } from './aiTrades';
 import { wantsOut } from './pulse';
 
 // ---------------------------------------------------------------- trade finder
@@ -92,7 +92,7 @@ function availabilityAt(league: League, p: Player, value: number): Availability 
   if (value < 0 || shopped(league, p)) return 'block';
   const a = playerAge(p, league.season);
   const tier = tierOf(league, value);
-  if ((tier === 'Franchise' && a <= 27) || (tier === 'All-Star' && a <= 25)) return 'franchise';
+  if ((tier === 'Franchise' && a <= 27) || (tier === 'All-Star' && a <= 25) || isFranchiseIcon(league, p.tid, p, 0)) return 'franchise';
   return null;
 }
 

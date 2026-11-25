@@ -162,7 +162,7 @@ const LIFE = {
    * defense in the game (+2.2 per 100, +3 to +6 against star-led teams).
    */
   zone: {
-    zone23: { roll: 1.0, pnr: 1.2, iso: 1.3, post: 1.8, drive: 1.2, kick: 0.7, pop: 0.52, handoff: 0.34, swing: 0.9, swingW: 1.8, corner: 0.45, cutW: 0.5, cut: 0.4, glass: 1.16 },
+    zone23: { roll: 0.85, pnr: 1.0, iso: 1.1, post: 1.5, drive: 1.0, kick: 0.85, pop: 0.62, handoff: 0.4, swing: 0.95, swingW: 1.85, corner: 0.5, cutW: 0.45, cut: 0.4, glass: 1.2 },
     zone32: {
       roll: -0.15,
       pnr: 0,
@@ -207,7 +207,7 @@ const LIFE = {
    * ran it for 13 of the 30 real rosters (second review). A coach's answer to one (attackZone, the
    * high-post flash) reads it `answer` trips sooner; before, it was worth nothing.
    */
-  zoneRead: { trips: 40, max: 0.3, wall: 0.5, step: 4, answer: 16 },
+  zoneRead: { trips: 30, max: 0.3, wall: 0.5, step: 4, answer: 14 },
   zonePlanned: 0.2,
   /**
    * A junk defense's chasers: the chased player's share of the half court's touches (`touch`, a box's

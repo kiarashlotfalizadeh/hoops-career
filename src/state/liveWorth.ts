@@ -499,7 +499,7 @@ export function applyOp(sim: GameSim, side: 0 | 1, o: LiveOp): boolean {
 }
 
 /** Play `sim` on from possession `steps` (it has played that many) to the end, making `ops` after as many possessions as each says. */
-function playWith(sim: GameSim, side: 0 | 1, steps: number, ops: LiveOp[]): Ending {
+function playWith(sim: GameSim, side: 0 | 1, steps: number, ops: LiveOp[]): Ending & { x: number } {
   let at = steps;
   let k = 0;
   let guard = 0;
@@ -508,8 +508,9 @@ function playWith(sim: GameSim, side: 0 | 1, steps: number, ops: LiveOp[]): Endi
     sim.step();
     at++;
   }
+  const val = (i: 0 | 1) => sim.xShots[i].pts + sim.xFouledMiss[i] + sim.T[i].tot.ftm;
   const pts = sim.T[side].score - sim.T[1 - side].score;
-  return { pts, win: pts > 0 ? 1 : 0 };
+  return { pts, x: val(side) - val((1 - side) as 0 | 1), win: pts > 0 ? 1 : 0 };
 }
 
 /**
@@ -574,7 +575,7 @@ export async function nightWorth(tip: GameSim, side: 0 | 1, ops: LiveOp[], opts:
     const w = playWith(forkSim(s0, seed), side, steps, rest);
     const wo = playWith(forkSim(s0, seed), side, steps, without);
     played += 2;
-    all.push(w.pts - wo.pts);
+    all.push(w.x - wo.x);
     allWin.push(w.win - wo.win);
     if (one.length > 1 && i < NIGHT_MOVE_GAMES) {
       singles.forEach((x, j) => {
@@ -584,16 +585,16 @@ export async function nightWorth(tip: GameSim, side: 0 | 1, ops: LiveOp[], opts:
           steps,
           rest.filter((_, m) => m !== x.i),
         );
-        by[j].push(w.pts - less.pts);
+        by[j].push(w.x - less.x);
       });
       played += singles.length;
     }
     if (kinds.length) {
-      // the night's margin with each set of kinds left in (none, the sets between, all)
+      // the night's margin (by shot value) with each set of kinds left in (none, the sets between, all)
       const v = new Float64Array(full + 1);
-      v[0] = wo.pts;
-      v[full] = w.pts;
-      for (let m = 0; m < sets.length; m++) v[sets[m]] = playWith(forkSim(s0, seed), side, steps, setRest[m]).pts;
+      v[0] = wo.x;
+      v[full] = w.x;
+      for (let m = 0; m < sets.length; m++) v[sets[m]] = playWith(forkSim(s0, seed), side, steps, setRest[m]).x;
       played += sets.length;
       kinds.forEach((_, j) => {
         const bit = 1 << j;

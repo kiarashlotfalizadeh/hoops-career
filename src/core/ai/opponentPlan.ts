@@ -14,7 +14,7 @@ import { applyPatch } from '../sim/tactics';
 import { DEFAULT_PPP, zScore } from '../analysis/playTypes';
 import { SCOUT_MIN_GAMES, projectedRotation } from '../analysis/scouting';
 import { huntPick } from '../analysis/guarding';
-import { playerName, seasonLine, seasonTotals, shortName, teamPlayers } from '../league/helpers';
+import { curTeamSeason, playerName, seasonLine, seasonTotals, shortName, teamPlayers } from '../league/helpers';
 import { CRAMPED_SPACING, defPresetFit, rosterProfile } from './coachAI';
 import { composites } from '../ratings';
 
@@ -47,7 +47,12 @@ const MIN_PT_POSS = 40;
  * better he is at tactics.
  */
 export function oppPlanChance(league: League, aiTid: number): number {
-  return clamp(0.5 + (league.teams[aiTid].coach.tactics - 60) / 100, 0.15, 0.85);
+  const base = 0.5 + (league.teams[aiTid].coach.tactics - 60) / 100;
+  // Opposing coaches circle top contenders on the calendar (60%+ win pace after 15 games)
+  const uts = league.teams[league.userTid] ? curTeamSeason(league, league.userTid) : null;
+  const gp = uts ? uts.won + uts.lost : 0;
+  const contender = gp >= 15 && uts!.won / gp >= 0.6;
+  return clamp(base + (contender ? 0.25 : 0), 0.15, contender ? 0.95 : 0.85);
 }
 
 /**

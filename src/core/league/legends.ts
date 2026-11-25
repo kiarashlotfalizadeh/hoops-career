@@ -15,7 +15,7 @@
 // - Form: every player runs a little hot or cold for a couple of weeks at a time (formOf), now and
 //   then a lot. A tear is nobody's rating; it shows in his games and the press finds it there.
 
-import type { League, Player, Ratings } from '../types';
+import { RETIRED, type League, type Player, type Ratings } from '../types';
 import { Rng, clamp, hashString, mix32 } from '../random';
 import { RATING_KEYS, heightToRating, ovrRaw, ovrWeights, toDisplay } from '../ratings';
 import { FEEL, legendRoom } from '../sim/engine/feel';
@@ -43,7 +43,7 @@ export const GENERATIONAL = {
    * and the engine's room is sized to it (FEEL.tails): the best player in the league, not a
    * different sport.
    */
-  peak: [1, 3.5] as [number, number],
+  peak: [0.6, 2.5] as [number, number],
   /** His hidden growth (a range): he develops like the best of any class. */
   growth: [0.7, 1] as [number, number],
   /** The share of them with a body nobody has: a wing's or a guard's game at 7'3" to 7'6". */
@@ -71,7 +71,7 @@ export const GENERATIONAL = {
   /** From this display OVR a player with room keeps climbing in his summers, to this age, by this many raw points a year (a range). */
   climbFrom: 86,
   climbTo: 28,
-  climb: [1.3, 2.8] as [number, number],
+  climb: [0.8, 1.8] as [number, number],
 };
 
 /** The top of the league's scale in raw overall: the best player it had when it was made. */
@@ -116,6 +116,9 @@ export function seedGenerational(league: League, year: number, klass: Player[]):
   const g = GENERATIONAL;
   const rng = new Rng(mix32(hashString(`${league.id}:generational:${year}`)));
   if (!rng.chance(g.odds) || klass.length < 5) return null;
+  // Cap concurrent generational talents so long saves don't stack three 98s in the same era
+  const activeGen = Object.values(league.players).filter((x) => x.tid !== RETIRED && !!x.peak).length;
+  if (activeGen >= 2) return null;
   const p = [...klass].sort((a, b) => b.ovr + b.pot - (a.ovr + a.pot) || a.pid - b.pid)[rng.int(0, 2)];
   p.peak = Math.round(rng.uniform(g.peak[0], g.peak[1]) * 10) / 10;
   p.growth = Math.round(rng.uniform(g.growth[0], g.growth[1]) * 100) / 100;

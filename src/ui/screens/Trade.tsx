@@ -108,8 +108,8 @@ export default function Trade() {
   const [shop, setShop] = useState<number | null>(init.shop);
   const [focus, setFocus] = useState<number | null>(init.focus);
   const [side, setSide] = useState<'theirs' | 'mine'>('theirs');
-  // a turned-down deal and what they'd do instead; the finder's filters and the ask it last loaded
-  const [counters, setCounters] = useState<{ base: TradeOffer; list: CounterOffer[] } | null>(null);
+  // a turned-down deal and what they'd do instead (or a "Make it work" preview); the finder's filters and the ask it last loaded
+  const [counters, setCounters] = useState<{ base: TradeOffer; list: CounterOffer[]; title?: string; lede?: string } | null>(null);
   const [finder, setFinder] = useState<FinderState>(() => ({ ...FINDER_DEFAULT, minOvr: init.minOvr, pos: init.pos }));
   const [ask, setAsk] = useState<Ask | null>(null);
   // a deal they'd take that you overpay for, or that moves a first, waits for a second tap
@@ -292,19 +292,18 @@ export default function Trade() {
       ),
       ...(addC > 0 ? [`${moneyExact(addC)} in cash`] : []),
     ];
-    setGive(selOf(r.a));
-    setGet(selOf(r.b));
+    if (!names.length && !theirs.length) {
+      useStore.getState().toast(`${pt.abbrev} would accept this as is.`, 'good');
+      return;
+    }
     const match = theirs.length ? `${theirs.join(' + ')} to match salary` : '';
-    useStore
-      .getState()
-      .toast(
-        names.length
-          ? `${pt.abbrev} would do it if you add ${names.join(' + ')}${match ? `, sending ${match}` : ''}.`
-          : match
-            ? `${pt.abbrev} would do it sending ${match}.`
-            : `${pt.abbrev} would accept this as is.`,
-        'good',
-      );
+    const label = names.length ? `Add ${names.join(' + ')}${match ? ` (they send ${match})` : ''}` : `They send ${match}`;
+    setCounters({
+      base: offer,
+      list: [{ kind: 'add', label, offer: r }],
+      title: `Make it work with ${pt.abbrev}`,
+      lede: 'Your current deal is unchanged. Review the additions below to edit in the builder or accept now.',
+    });
   };
 
   return (
@@ -424,6 +423,8 @@ export default function Trade() {
         league={league}
         base={counters?.base ?? null}
         counters={counters?.list ?? []}
+        title={counters?.title}
+        lede={counters?.lede}
         onClose={() => setCounters(null)}
         onAccept={(o) => {
           setCounters(null);

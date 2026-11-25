@@ -142,8 +142,10 @@ export async function runSim(l: League, target: SimTarget, hooks: SimHooks = {})
   const ultimatum = () => (l.ownerGoals?.ultimatum ? l.ownerGoals.season : undefined);
   const [firedBefore, ultimatumBefore] = [!!l.fired, ultimatum()];
   const stops = l.settings.stopOnNews !== false && target.kind !== 'days';
+  // "Sim to end of playoffs" explicitly asked to sim through the postseason: skip playoff confirm stops
+  const postStops = stops && target.kind !== 'endPostseason' && target.kind !== 'endPlayoffs';
   // (what was open when it started doesn't stop it again)
-  const before = new Set(stops ? [...simStopIds(l), ...postseasonStops(l).map((x) => x.id)] : []);
+  const before = new Set(stops ? [...simStopIds(l), ...(postStops ? postseasonStops(l).map((x) => x.id) : [])] : []);
   const every = hooks.checkpointDays ?? 20;
   let days = 0;
   /** The staff's morning: its measuring said on the progress bar, a stop asked for meanwhile honoured. */
@@ -160,6 +162,14 @@ export async function runSim(l: League, target: SimTarget, hooks: SimHooks = {})
       l.stopCall = { id, season: l.season, day: l.day };
       return true;
     }
+    // Trade deadline day: always stop when crossing onto it from an earlier day unless already settled,
+    // even if the deadline card opened days earlier (already in `before`) or had no buy/sell card.
+    const deadlineKey = `deadline:${l.season}`;
+    if (l.phase === 'regular' && startDay < l.tradeDeadlineDay && l.day === l.tradeDeadlineDay && !l.callsDone?.includes(deadlineKey)) {
+      l.stopCall = { id: deadlineKey, season: l.season, day: l.day, text: 'Trade deadline today — last day to make deals.', to: '/office/trade' };
+      return true;
+    }
+    if (!postStops) return false;
     // the postseason's own stops, cards or not: a series of his starting, an elimination game, a starter out for a playoff game
     const post = postseasonStops(l).find((x) => !before.has(x.id));
     if (!post) return false;

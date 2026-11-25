@@ -61,6 +61,8 @@ import type { League, Player } from '../src/core/types';
 const MAX_PPG = 42;
 const FORTY_ALLOWANCE = 64;
 const MADE_99_ALLOWANCE = 64;
+/** Maximum active players rated 98+ simultaneously in any single season (catches long-save star creep). */
+const MAX_SIMULTANEOUS_98 = 2;
 /**
  * Past 73 the real league has only Chamberlain's 100 and 78, Kobe Bryant's 81 and Bam Adebayo's 83
  * (March 2026), so a 74-80 night is past nearly all of history. What justifies the cap at 80 (73
@@ -189,7 +191,8 @@ const SHAPE_FAILS = { streak: true, streakEver: true, seventy: true, titles: tru
  * before it failed the 70-win limit on the next eight, where the retune passed every shape).
  */
 const DEFAULT_SEEDS = ['42', '7', '2026', '1234:OKC', '11', '23', '99', '314'];
-const DEFAULT_SEASONS = 8;
+/** Twelve seasons so long-save star creep (years 9-12) is caught directly. */
+const DEFAULT_SEASONS = 12;
 
 /** What a league reports back for each season. */
 interface SeasonReport {
@@ -223,6 +226,8 @@ interface SeasonReport {
   /** The worst record (with that team's payroll over the cap), and the best of the players the league made itself (drafted since it began): his OVR, and how many of them show 96 or more. */
   worst: { team: string; won: number; lost: number; payroll: number };
   made: { name: string; ovr: number; n96: number; n99: number };
+  /** Total active players in the league rated 98+ this season (all players, real or drafted). */
+  n98: number;
 }
 
 const quiet = !!process.env.QUIET;
@@ -268,6 +273,7 @@ function verdict(all: (SeasonReport & { seed: string })[]): boolean {
     if (r.stl.pg > MAX_STL) failures.push(`${at(r)}: ${r.stl.name} had ${r.stl.pg.toFixed(2)} steals a game (max ${MAX_STL})`);
     if (r.margin.pts > MAX_MARGIN) failures.push(`${at(r)}: ${r.margin.text} was decided by ${r.margin.pts} (max ${MAX_MARGIN})`);
     if (r.score.pts > MAX_TEAM_PTS) failures.push(`${at(r)}: ${r.score.text} had a team score ${r.score.pts} in regulation (max ${MAX_TEAM_PTS})`);
+    if (r.n98 > MAX_SIMULTANEOUS_98) failures.push(`${at(r)}: ${r.n98} players rated 98+ at once (max ${MAX_SIMULTANEOUS_98})`);
   }
   for (const seed of new Set(all.map((r) => r.seed))) {
     const by = new Map<string, number>();
@@ -579,11 +585,13 @@ function playLeague(spec: string): SeasonReport[] {
       ppg: top?.ppg ?? 0,
       giants: Object.values(league.players).filter((p) => p.tid >= 0 && !p.real && p.heightIn >= 88).length,
     };
+    const n98 = Object.values(league.players).filter((p) => p.tid >= 0 && p.ovr >= 98).length;
     reports.push({
       season,
       tails,
       worst,
       made,
+      n98,
       leader: { name: lead ? playerName(lead.p) : '-', ppg: lead?.ppg ?? 0 },
       game,
       best,

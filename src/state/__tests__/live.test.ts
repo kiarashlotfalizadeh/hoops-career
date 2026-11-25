@@ -1042,5 +1042,45 @@ describe('live game', () => {
       Object.assign(g.sets![0], { id: 'flex' });
       expect(migrate(w).games.find((r) => r.gid === res.gid)!.sets).toBeUndefined();
     }
+
+    // gameReport free-throw factor agrees 1:1 with MarginSum (u.t.ftm - o.t.ftm)
+    {
+      const l = testLeague('ft-report');
+      toGameDay(l);
+      const lg = goLive(l);
+      lg.simTo('end');
+      const res = lg.commit(l);
+      const u = res.home.tid === l.userTid ? res.home : res.away;
+      const o = res.home.tid === l.userTid ? res.away : res.home;
+      u.t.ftm = 28;
+      u.t.fta = 32;
+      o.t.ftm = 15;
+      o.t.fta = 18;
+      const rep = buildGameReport(l, res, l.userTid);
+      expect(rep).not.toBeNull();
+      const ft = rep!.factors.find((f) => f.category === 'fouls');
+      expect(ft).toBeDefined();
+      expect(ft!.pts).toBe(13);
+    }
+
+    // clutch-stretch simTo stops at 2:00, 1:00 and 0:24 inside Q4
+    {
+      const l = testLeague('clutch-skip');
+      toGameDay(l);
+      const lg = goLive(l);
+      lg.simTo('clutch');
+      if (!lg.over && lg.sim.clock > 125) {
+        lg.simTo('min2');
+        if (!lg.over) expect(lg.sim.clock).toBeLessThanOrEqual(120);
+      }
+      if (!lg.over && lg.sim.clock > 65) {
+        lg.simTo('min1');
+        if (!lg.over) expect(lg.sim.clock).toBeLessThanOrEqual(60);
+      }
+      if (!lg.over && lg.sim.clock > 26) {
+        lg.simTo('sec24');
+        if (!lg.over) expect(lg.sim.clock).toBeLessThanOrEqual(24);
+      }
+    }
   });
 });

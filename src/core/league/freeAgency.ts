@@ -704,6 +704,13 @@ export function offerBlockedReason(league: League, p: Player, amount: number, ye
   const mleBid = bidOnException(league, 'mle', p.pid);
   if (mleBid && years <= MLE_YEARS && amount <= exceptionRoom(league, tid, 'mle', season))
     return `Your pending offer to ${playerName(league.players[mleBid.pid])} uses your mid-level exception. Withdraw that offer first.`;
+  // the mid-level would pay him, but signing with it would spend the cap space held by a pending offer
+  const held = spaceBids(league, p.pid);
+  if (held.length > 0 && years <= MLE_YEARS && amount <= exceptionRoom(league, tid, 'mle', season)) {
+    const names = held.map((b) => playerName(league.players[b.pid]));
+    const who = names.length === 1 ? names[0] : names.length === 2 ? `${names[0]} and ${names[1]}` : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+    return `Your pending cap-space offer to ${who} holds your cap room: using your mid-level exception now would take away the space for it. Withdraw ${held.length === 1 ? 'that offer' : 'those offers'} or wait for ${held.length === 1 ? 'his' : 'their'} decision first.`;
+  }
   const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
   return `${space >= 50 ? `Not enough cap space, ${money(space)}` : 'No cap space'}${offers > 0 ? ' after your pending offers' : ''}. Over the cap, offer his minimum, ${moneyExact(min)}${mle > 0 ? `, or up to ${money(mle)} with your mid-level exception` : ''}.`;
 }
@@ -731,9 +738,14 @@ export function marqueeFA(league: League, p: Player): boolean {
 export const pendingBid = (league: League, pid: number): FaBid | undefined => league.faBids?.find((b) => b.pid === pid);
 const otherBids = (league: League, pid: number) => (league.faBids ?? []).filter((b) => b.pid !== pid);
 
+/** The user's pending offers on cap space (all but `exceptPid`'s): using the mid-level would wipe out their cap room. */
+export function spaceBids(league: League, exceptPid = -1): FaBid[] {
+  return otherBids(league, exceptPid).filter((b) => b.route === 'space');
+}
+
 /** Cap room the user's pending offers on cap space hold (all but `exceptPid`'s). */
 export function bidHolds(league: League, exceptPid = -1): number {
-  return otherBids(league, exceptPid).reduce((a, b) => a + (b.route === 'space' ? b.amount : 0), 0);
+  return spaceBids(league, exceptPid).reduce((a, b) => a + b.amount, 0);
 }
 
 /** The user's pending offer (but `exceptPid`'s) made on the mid-level: it keeps the exception from another signing. */
@@ -741,9 +753,11 @@ export function bidOnException(league: League, kind: Exception, exceptPid = -1):
   return otherBids(league, exceptPid).find((b) => b.route === kind);
 }
 
-/** The user's room on his mid-level for an offer to `exceptPid`: none while another pending offer has it (see bidOnException). */
+/** The user's room on his mid-level for an offer to `exceptPid`: none while another pending offer uses the mid-level or holds cap space. */
 export function userExceptionRoom(league: League, kind: Exception = 'mle', season = contractSeason(league), exceptPid = -1): number {
-  return bidOnException(league, kind, exceptPid) ? 0 : exceptionRoom(league, league.userTid, kind, season);
+  if (bidOnException(league, kind, exceptPid)) return 0;
+  if (kind === 'mle' && spaceBids(league, exceptPid).length > 0) return 0;
+  return exceptionRoom(league, league.userTid, kind, season);
 }
 
 /** The user's mid-level room for an offer to `exceptPid` (see userExceptionRoom). */

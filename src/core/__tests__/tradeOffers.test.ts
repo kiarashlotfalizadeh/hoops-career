@@ -251,6 +251,10 @@ it('help and the finder: "what would make this work?", counter-offers, value tie
     expect(r.offer).not.toBeNull();
     expect(r.offer!.a.pids).not.toContain(star.pid);
     expect(evaluateTrade(l, r.offer!).accept).toBe(true);
+    // even with no first-round picks left, it refuses to dump a 94-OVR franchise star for an 80-OVR player
+    l.draftPicks = l.draftPicks.filter((d) => d.tid !== U || d.round === 2);
+    const noStarDump = makeItWork(l, offer([], [target.pid]));
+    if (noStarDump.offer) expect(noStarDump.offer.a.pids).not.toContain(star.pid);
   }
 
   // are always deals the AI takes, with only assets each side owns, best for you first

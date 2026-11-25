@@ -5,7 +5,7 @@ import { closeGame } from './alerts';
 import { winProb } from '../../core/analysis/winProb';
 import { GAME } from '../../core/constants';
 
-export type SkipTo = 'quarter' | 'half' | 'clutch' | 'end';
+export type SkipTo = 'quarter' | 'half' | 'clutch' | 'min2' | 'min1' | 'sec24' | 'end';
 
 export interface SkipChoice {
   id: SkipTo;
@@ -58,6 +58,14 @@ export function sealedGame(v: { q: number; clock: number; ball: 0 | 1 | null; si
  * (A skip to clutch time that lands in a decided game goes on to the final: useLiveGame.skip.)
  */
 export function skipChoices(playing: number, atBreak: boolean, sim: { q: number; clock: number }, decided = false): SkipChoice[] {
+  const inClutch = playing >= 4 && (atBreak ? playing >= 5 : sim.q >= 4 && sim.clock <= CLUTCH_SEC);
+  const rem = atBreak ? (playing >= 5 ? GAME.otSec : GAME.quarterSec) : sim.clock;
+  const clutchStops: SkipChoice[] = [];
+  if (inClutch && !decided) {
+    if (rem > 125) clutchStops.push({ id: 'min2', label: 'Last 2 minutes', sub: `Stops with 2:00 left in ${periodLabel(playing)}.` });
+    if (rem > 65) clutchStops.push({ id: 'min1', label: 'Final minute', sub: `Stops with 1:00 left in ${periodLabel(playing)}.` });
+    if (rem > 26 && rem <= 125) clutchStops.push({ id: 'sec24', label: 'Final 24 seconds', sub: `Stops with one shot clock left in ${periodLabel(playing)}.` });
+  }
   return [
     { id: 'quarter', label: `End of ${periodLabel(playing)}`, sub: 'Stops at the break, with its report.' },
     // (from the first quarter's break, the end of the next quarter is halftime)
@@ -65,6 +73,7 @@ export function skipChoices(playing: number, atBreak: boolean, sim: { q: number;
     ...(playing <= 4 && !decided && !(sim.q >= 4 && sim.clock <= CLUTCH_SEC)
       ? [{ id: 'clutch' as SkipTo, label: 'Clutch time', sub: '5:00 left in the fourth. A decided game goes on to the final.' }]
       : []),
+    ...clutchStops,
     {
       id: 'end',
       label: 'Sim to final',

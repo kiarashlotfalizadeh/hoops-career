@@ -194,15 +194,31 @@ export class LiveGame {
 
   /**
    * Fast-forward to the end of the period ('quarter': from a break, the next one), halftime, clutch
-   * time (5:00 left in the fourth quarter) or the end of the game. Already past halftime or clutch
-   * time, nothing is played. `until`: stop sooner, after the first possession it's true for.
+   * time (5:00 left in the fourth quarter), a late-period mark ('min2' 2:00, 'min1' 1:00, 'sec24' 0:24)
+   * or the end of the game. Already past that mark, nothing is played. `until`: stop sooner, after the
+   * first possession it's true for.
    */
-  simTo(cond: 'quarter' | 'half' | 'clutch' | 'end', until?: () => boolean): PossLog[] {
+  simTo(cond: 'quarter' | 'half' | 'clutch' | 'min2' | 'min1' | 'sec24' | 'end', until?: () => boolean): PossLog[] {
     const out: PossLog[] = [];
     const s = this.sim;
-    if ((cond === 'half' && (s.q > 2 || (s.q === 2 && s.clock <= 0.05))) || (cond === 'clutch' && s.q >= 4 && s.clock <= CLUTCH_SEC)) return out;
+    const stopSec = cond === 'min2' ? 120 : cond === 'min1' ? 60 : cond === 'sec24' ? 24 : null;
+    if (
+      (cond === 'half' && (s.q > 2 || (s.q === 2 && s.clock <= 0.05))) ||
+      (cond === 'clutch' && s.q >= 4 && s.clock <= CLUTCH_SEC) ||
+      (stopSec !== null && s.q >= 4 && s.clock > 0.05 && s.clock <= stopSec)
+    )
+      return out;
     // stop at the buzzer: the next step() rolls straight into the next period and skips the break
-    const done = () => (cond === 'quarter' ? s.clock <= 0.05 : cond === 'half' ? s.q === 2 && s.clock <= 0.05 : cond === 'clutch' ? s.q >= 4 && s.clock <= CLUTCH_SEC : false);
+    const done = () =>
+      cond === 'quarter'
+        ? s.clock <= 0.05
+        : cond === 'half'
+          ? s.q === 2 && s.clock <= 0.05
+          : cond === 'clutch'
+            ? s.q >= 4 && s.clock <= CLUTCH_SEC
+            : stopSec !== null
+              ? s.q >= 4 && s.clock <= stopSec
+              : false;
     let guard = 0;
     this.quiet = true;
     // from a break, the skip covers the next period

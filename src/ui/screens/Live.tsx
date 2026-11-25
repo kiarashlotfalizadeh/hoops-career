@@ -632,7 +632,28 @@ export default function Live() {
                     : undefined
           }
           graphic={s.graphic}
-          banner={s.intro || frozen ? undefined : s.banner}
+          banner={
+            s.intro || frozen || !s.banner
+              ? undefined
+              : s.banner.id.startsWith('call-') && !simBusy
+                ? (() => {
+                    const n = notes.find((x) => x.id.startsWith('call-'));
+                    const a = n?.actions[0];
+                    return n && a
+                      ? {
+                          ...s.banner,
+                          action: {
+                            label: 'Apply',
+                            run: () => {
+                              act(n, a);
+                              s.dropBanner();
+                            },
+                          },
+                        }
+                      : s.banner;
+                  })()
+                : s.banner
+          }
           onDropBanner={s.dropBanner}
           call={s.call}
           crowdLine={s.crowdLine}

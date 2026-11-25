@@ -577,11 +577,8 @@ export class GameSim {
       const pick = this.atoSet(t);
       if (pick) t.nextSet = { id: pick, pid: null, ai: true };
     }
-    // (the TV's timeouts and the late ones are no new look at what is being exploited)
-    if (!routine) {
-      this.adjust(this.T[0]);
-      this.adjust(this.T[1]);
-    }
+    // Only the team that called the timeout gets a timeout-triggered adjustment (so a user's timeout doesn't hand the AI a free counter-adjustment)
+    if (!routine) this.adjust(t);
     this.checkSubs(this.T[0], true);
     this.checkSubs(this.T[1], true);
     return true;

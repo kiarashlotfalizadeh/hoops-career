@@ -16,15 +16,17 @@ export function useFlowRunner() {
     }
     // a sim or a phase change is already running: ignore double taps
     if (st.sim) return;
+    // "Sim to end of playoffs" explicitly asked to sim through the postseason: don't stall it on playoff confirm sheets
+    const skipConfirm = a.sim?.kind === 'endPostseason' || a.sim?.kind === 'endPlayoffs';
     // a decisive playoff game tonight: asked first whether he's coaching it (once a game: bigGame.ts)
-    if ((a.sim || a.cmd === 'quickGame') && st.league && askBigGame(st.league, a)) return;
+    if (!skipConfirm && (a.sim || a.cmd === 'quickGame') && st.league && askBigGame(st.league, a)) return;
     if (a.sim) {
       // what the sim did for the user, once it stops (after any "Stopped for news")
       const before = simStart(st.league!);
       await st.simulate(a.sim);
       const l = useStore.getState().league;
       // stopped on the morning of a decisive game: the question is the one thing on screen (the digest stays a tap away on Today)
-      if (l && askBigGame(l)) {
+      if (!skipConfirm && l && askBigGame(l)) {
         useStore.getState().showDigest(false);
         return;
       }

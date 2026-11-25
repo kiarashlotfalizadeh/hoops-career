@@ -204,6 +204,30 @@ const FADING = { games: 20, pct: 0.45 };
  * teams their 28- and 29-year-olds, the teams at the bottom stayed nearly as deep as the middle:
  * over twelve simulated seasons the spread of team talent at the deadline fell a tenth further.
  */
+/** Seasons a player has spent with his current franchise (from joinedSeason, birdSince, draft team, or real stats). */
+function franchiseTenure(league: League, p: Player): number {
+  let since = Math.min(p.joinedSeason, p.birdSince ?? p.joinedSeason);
+  if (p.draft.tid === p.tid && p.draft.year > 0) since = Math.min(since, p.draft.year);
+  for (const s of p.stats) if (s.tid === p.tid && !s.playoffs && s.season < since) since = s.season;
+  return Math.max(0, league.season - since);
+}
+
+/**
+ * A franchise cornerstone an AI team won't casually dump at the first dip or soft rebuild:
+ * its #1 player (or 88+ superstar) who is an All-Star+ (86+ OVR) with multi-year franchise tenure
+ * (or a real-league franchise star in season 1). Still movable if he asks out or is expiring and
+ * refuses to extend.
+ */
+export function isFranchiseIcon(league: League, tid: number, p: Player, rank = 0): boolean {
+  if (p.tid !== tid || p.ovr < 87) return false;
+  if (rank > 0 && p.ovr < 88) return false;
+  const tenure = franchiseTenure(league, p);
+  if (tenure >= 4) return true;
+  if (p.draft.tid === tid && p.draft.year > 0 && league.season - p.draft.year >= 3) return true;
+  if (p.real && p.ovr >= 87 && rank === 0 && (league.teams[tid]?.seasons.length ?? 0) <= 1) return true;
+  return false;
+}
+
 export function sellable(league: League, tid: number): Player[] {
   const t = league.teams[tid];
   const roster = tradeRoster(league, tid).sort((a, b) => valueScore(league, b) - valueScore(league, a));
@@ -222,6 +246,7 @@ export function sellable(league: League, tid: number): Player[] {
     const r = rank.get(p.pid)!;
     const leaving = p.ovr >= 80 && a >= 26 && contractExp(p.contract) === cs && !p.contract.next && !!extensionRefusal(league, p);
     if (leaving) return true;
+    if (isFranchiseIcon(league, tid, p, r)) return false;
     if (t.strategy === 'rebuild') return a >= 28 || (a >= 26 && r >= 1);
     return (a >= 30 && r >= 3) || (fading && a >= 28);
   });

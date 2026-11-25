@@ -257,7 +257,7 @@ export const useStore = create<AppState>((set, get) => ({
     if (save === 'now') void get().save();
     else if (save) {
       if (saveTimer) clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => void get().save(), 800);
+      saveTimer = setTimeout(() => void get().save(), 150);
     }
     return true;
   },

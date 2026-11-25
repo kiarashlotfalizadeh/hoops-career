@@ -24,6 +24,8 @@ import { finisher, gameDecided, matchups, staffNotes, staffRead, sumBy, type Sta
 import { stopCalls, takeStop, type StopCall } from '../live/useLiveGame';
 import { callCosts, callKey, worthLine } from '../../core/analysis/callWorth';
 import { CALL_DRAFTS, CALL_DRAFTS_CRUNCH, benchFor, callDrafts, callQuietLine, deadBall, nextStop, noStops, stopAfter } from '../live/calls';
+import { skipChoices } from '../live/skip';
+import { counterCandidates } from '../../core/ai/advisor';
 import { CALL_CONFIRM_MIN, PLAY_SPREAD, clearOf, measureCalls, measureChange, type LiveChoice } from '../../state/liveWorth';
 import { favoured, playReading } from '../live/usePlayWorth';
 import { fitPlayers, playBoard, playOptions } from '../live/plays';
@@ -939,6 +941,34 @@ describe('broadcast graphics', () => {
       expect(recs({ teamName: 'Hawks', playoffs: true })).toEqual([]);
       // both past the old franchise best: only the one with more tonight holds it
       expect(recs({ team: second.pts - 1, teamName: 'Hawks', league: 200, playoffs: false }).map((g) => g.id)).toEqual([`rec-t-${top.pid}`]);
+    }
+
+    // never recommends 2-3 or 3-2 zone against a strong rebounding team (aligned with post-game report)
+    {
+      const g = game(7);
+      play(g, 20);
+      for (const p of g.sim.T[1].players) p.r.oreb = 85;
+      const inp = staffInput(g);
+      const drafts = callDrafts(inp, g.sim);
+      expect(drafts.some((d) => d.id === 'zone23' || d.id === 'zone32' || d.id === 'zone-gap')).toBe(false);
+      // pre-game advisor also refuses zone against strong offensive rebounders, even if they can't shoot
+      for (const p of teamPlayers(g.league, 1)) {
+        p.ratings.oreb = 85;
+        p.ratings.tp = 20;
+      }
+      const cands = counterCandidates(g.league, 0, 1);
+      expect(cands.some((c) => c.id === 'zone23' || c.id === 'zone32')).toBe(false);
+    }
+
+    // clutch-stretch skip options remain available inside the final 5:00 of Q4/OT
+    {
+      const at4 = skipChoices(4, false, { q: 4, clock: 260 }, false).map((c) => c.id);
+      expect(at4).toContain('min2');
+      expect(at4).toContain('min1');
+      const at90 = skipChoices(4, false, { q: 4, clock: 90 }, false).map((c) => c.id);
+      expect(at90).toContain('min1');
+      expect(at90).toContain('sec24');
+      expect(at90).not.toContain('min2');
     }
   });
 });
