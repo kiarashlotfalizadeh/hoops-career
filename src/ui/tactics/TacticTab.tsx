@@ -13,13 +13,27 @@ import { Section, Sheet, Tag } from '../components/ui';
 import { RoleEditor } from '../components/RoleEditor';
 import { rosterNames } from '../stats';
 import { Board, type BoardSide } from './Board';
+import type { Phase } from './instructions/TeamInstructions';
 import { startersOf } from './formation';
 import './bench.css';
 import { Star } from './Star';
 
 const NO_ORDER: number[] = [];
 
-export function TacticTab({ players, side, setSide, children }: { players: Player[]; side: BoardSide; setSide: (s: BoardSide) => void; children?: ReactNode }) {
+export function TacticTab({
+  players,
+  side,
+  setSide,
+  onInstructions,
+  children,
+}: {
+  players: Player[];
+  side: BoardSide;
+  setSide: (s: BoardSide) => void;
+  /** Opens Team Instructions on a phase. */
+  onInstructions: (p: Phase) => void;
+  children?: ReactNode;
+}) {
   const league = useLeague();
   const team = league.teams[league.userTid];
   const t = team.tactics;
@@ -30,7 +44,7 @@ export function TacticTab({ players, side, setSide, children }: { players: Playe
   return (
     <div className="tx-tactic">
       <div className="tx-tactic-main">
-        <Board t={t} players={players} five={five} side={side} setSide={setSide} onPick={setPick} />
+        <Board t={t} players={players} five={five} side={side} setSide={setSide} onPick={setPick} onInstructions={onInstructions} />
       </div>
       <div className="tx-tactic-side">
         {children}
@@ -60,7 +74,7 @@ function Bench({ players, bench, side, onPick }: { players: Player[]; bench: Pla
   if (!bench.length) return null;
   const inPoss = side === 'in';
   return (
-    <Section title="Bench" right={<span className="tiny dim">{inPoss ? 'In possession' : 'Out of possession'}</span>}>
+    <Section title="Bench" right={<span className="tiny dim">{inPoss ? 'With ball' : 'Without ball'}</span>}>
       <div className="card flush list tx-bench">
         {bench.map((p) => {
           const off = t.offense.roles[p.pid] ?? archetype(p.ratings).role;

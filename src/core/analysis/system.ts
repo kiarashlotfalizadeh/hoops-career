@@ -138,7 +138,7 @@ function qualities(league: League, tid: number, tactics: Tactics, name: (p: Play
   ]);
   const shooters = rows.filter((x) => x.c.c3 >= 66).reduce((a, x) => a + x.w, 0);
   set('spacing', 0.75 * wavg(rows, (x) => x.c.spacing) + 30 * shooters, `Shooters: ${leaders(rows, (x) => x.c.c3, name)}`, [
-    [`Shot profile: ${lvl('threePoint', o.threePoint)}`, step(o.threePoint) * 6],
+    [`Three-pointers: ${lvl('threePoint', o.threePoint)}`, step(o.threePoint) * 6],
     [`Post-up: ${lvl('action', o.actions.post)}`, -step(o.actions.post) * 3],
     [`Motion & cuts: ${lvl('action', o.actions.motion)}`, step(o.actions.motion) * 2],
   ]);

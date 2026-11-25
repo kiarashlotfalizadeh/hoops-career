@@ -1,31 +1,27 @@
 // The tactics board, Football Manager's way with a basketball court: the starting five (the rotation's
-// first five) where the formation puts them, in possession by the offensive shape, out of possession
-// by the defensive scheme. Each plate is a player with his role at that end and how well he suits it
+// first five) where the formation puts them, with the ball by the offensive shape, without it by the
+// defensive scheme. Each plate is a player with his role at that end and how well he suits it
 // (one figure: his stars of five, as his sheet shows them); a tap opens his player sheet. The board's
-// heading is its end, the switch between them. Over the court, the formation's picker: the shape, with
-// each shape's fit for this roster, or the scheme (its one home; the coverage is in the core settings).
+// heading is its end, the switch between them. Over the court, the way into Team Instructions on that
+// end's phase (tactics/instructions): the formation's name, a tap to set it and how the team plays.
 import { useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { useLeague, useLeagueMemo } from '../../state/store';
-import type { DefScheme, OffShape, Player, Tactics } from '../../core/types';
-import { DEF_ROLES, OFF_SHAPES } from '../../core/types';
+import { SlidersHorizontal } from 'lucide-react';
+import type { Player, Tactics } from '../../core/types';
+import { DEF_ROLES } from '../../core/types';
 import { ROLE_META, archetype } from '../../core/ratings';
-import { ALL_SCHEMES, DEF_ROLE_META, SCHEME_META, SHAPE_META, defRoleOf, shapeOf } from '../../core/sim/tactics';
+import { DEF_ROLE_META, SCHEME_META, SHAPE_META, defRoleOf, shapeOf } from '../../core/sim/tactics';
 import { betterFit, defRoleFits, roleFits, roleScale, roleStars, type RoleScale } from '../../core/analysis/system';
-import { fitRoster, shapeFits } from '../../core/ai/coachAI';
 import { composites } from '../../core/ratings';
-import { fitWord, leanOf, leanTone, type Lean } from '../../core/analysis/staffWords';
 import { rosterNames } from '../stats';
 import { Help, Section } from '../components/ui';
 import { Term } from '../components/Glossary';
-import { PickRow } from './Pick';
 import { HeadSwitch } from './HeadSwitch';
-import { tweak } from './edit';
+import type { Phase } from './instructions/TeamInstructions';
 import { Star } from './Star';
 import { BOARD_H, DEF_SPOTS, OFF_SPOTS, place, type BoardPlayer } from './formation';
 
 export type BoardSide = 'in' | 'out';
-
-const NO_ORDER: number[] = [];
 
 /** A player's place on the board: his roles at both ends, and how well he suits each. */
 interface Row {
@@ -56,18 +52,10 @@ function rowOf(t: Tactics, p: Player, scale: RoleScale): Row {
   };
 }
 
-/** A shape's fit against 4-Out, 1-In as a lean (shapeFits reads in tenths of a point a game). */
-const shapeLean = (v: number): Lean => leanOf(Math.round(v) / 10);
-
-const TIER: Record<Lean, number> = { gain: 0, even: 1, cost: 2 };
-
 /** The apron around the court on the board, in court units (the lines sit inside the card's edges). */
 const APRON = 4;
 const VB_W = 100 + APRON * 2;
 const VB_H = BOARD_H + APRON * 2;
-
-/** First sentence of a line of help. */
-const first = (s: string) => s.split(/(?<=\.)\s/)[0];
 
 export function Board({
   t,
@@ -76,20 +64,21 @@ export function Board({
   side,
   setSide,
   onPick,
+  onInstructions,
 }: {
   t: Tactics;
-  /** The whole roster (the shapes' fits), and the five on the board. */
+  /** The whole roster (names told apart across it), and the five on the board. */
   players: Player[];
   five: Player[];
   side: BoardSide;
   setSide: (s: BoardSide) => void;
   /** Opens a player's sheet. */
   onPick: (pid: number) => void;
+  /** Opens Team Instructions on a phase. */
+  onInstructions: (p: Phase) => void;
 }) {
   const league = useLeague();
-  const team = league.teams[league.userTid];
   const nameOf = useMemo(() => rosterNames(players), [players]);
-  const order = team.rotation?.order ?? NO_ORDER;
   const scale = useLeagueMemo(() => roleScale(league), [league]);
   const rows = five.map((p) => rowOf(t, p, scale));
   const inPoss = side === 'in';
@@ -102,7 +91,6 @@ export function Board({
       return { pid: r.p.pid, hgt: r.p.ratings.hgt, role: inPoss ? r.off : r.def, handle: c.pnrHandle, shoot: c.c3 };
     }),
   );
-  const fits = useLeagueMemo(() => shapeFits(fitRoster(players), t, order), [players, t, order]);
   // the five arrive one after another as the board opens; a plate that joins later (a swap) pops in alone
   const opened = useRef(false);
   useEffect(() => {
@@ -120,8 +108,8 @@ export function Board({
             onChange={setSide}
             label="Phase on the board"
             options={[
-              { id: 'in', label: 'In possession' },
-              { id: 'out', label: 'Out of possession' },
+              { id: 'in', label: 'With ball' },
+              { id: 'out', label: 'Without ball' },
             ]}
           />
         </div>
@@ -129,75 +117,33 @@ export function Board({
       right={
         <Help title="Tactics board">
           <p>
-            Your starting five, where your tactic puts them. In possession by your <Term id="shape">shape</Term>, out of it by your scheme.
+            Your starting five, where your tactic puts them. With the ball by your <Term id="shape">shape</Term>, without it by your scheme.
           </p>
           <p>
             Each plays a <Term id="roles">role</Term> at each end. The ★ figure rates his fit out of five, against others in that role.
           </p>
           <p>An amber edge means another role suits him two stars better. Tap a player to set his roles.</p>
+          <p>Team instructions sets the shape, the scheme and how you play each phase.</p>
         </Help>
       }
     >
       {/* the board as one printed object: the formation's picker over the floor */}
       <div className="card flush tx-boardcard">
-        <div className="tx-formation">
-          {inPoss ? (
-            <PickRow<OffShape>
-              label="Shape"
-              value={shape}
-              onChange={(s) =>
-                tweak((tt) => {
-                  if (s === 'fourOut') delete tt.offense.shape;
-                  else tt.offense.shape = s;
-                })
-              }
-              help={<>Where your five stand in the half court, with any playbook. Each read is the staff&apos;s, for this roster against 4-Out, 1-In.</>}
-              // (better fits first, the list's own order inside each: the order says no more than the words)
-              options={[...OFF_SHAPES]
-                .sort((a, b) => TIER[shapeLean(fits[a])] - TIER[shapeLean(fits[b])])
-                .map((s) => ({
-                  id: s,
-                  label: SHAPE_META[s].label,
-                  sub: (
-                    <>
-                      {s !== 'fourOut' && (
-                        <>
-                          <b className={leanTone(shapeLean(fits[s]))}>{fitWord(Math.round(fits[s]) / 10)}</b> ·{' '}
-                        </>
-                      )}
-                      {first(SHAPE_META[s].help)}
-                      <span className="tx-shape-gb">
-                        <span>
-                          <b className="good">+</b> {SHAPE_META[s].good}
-                        </span>
-                        <span>
-                          <b className="bad">−</b> {SHAPE_META[s].bad}
-                        </span>
-                      </span>
-                    </>
-                  ),
-                }))}
-              note={
-                shape === 'fourOut' ? undefined : (
-                  <>
-                    Staff&apos;s read: <b className={leanTone(shapeLean(fits[shape]))}>{fitWord(Math.round(fits[shape]) / 10).toLowerCase()}</b>
-                    {fitWord(Math.round(fits[shape]) / 10) === 'Similar fit' ? ' to' : ' than'} 4-Out, 1-In
-                  </>
-                )
-              }
-            />
-          ) : (
-            <PickRow<DefScheme>
-              label="Scheme"
-              value={t.defense.scheme}
-              onChange={(x) => tweak((tt) => void (tt.defense.scheme = x))}
-              help={<>Your base defense, and where your five stand. A game plan&apos;s junk defense picks who the chasers guard.</>}
-              options={ALL_SCHEMES.map((k) => ({ id: k, label: SCHEME_META[k].label, sub: SCHEME_META[k].help }))}
-            />
-          )}
-        </div>
+        {/* the way into Team Instructions, on this end's phase: what the formation is, and how it plays */}
+        <button
+          className="tx-formation tx-pickrow ti-launch"
+          aria-haspopup="dialog"
+          aria-label={`${inPoss ? 'Shape' : 'Scheme'}: ${inPoss ? SHAPE_META[shape].label : SCHEME_META[t.defense.scheme].label}. Open team instructions`}
+          onClick={() => onInstructions(inPoss ? 'ball' : 'off')}
+        >
+          <span className="tx-pickrow-l">{inPoss ? 'Shape' : 'Scheme'}</span>
+          <span key={inPoss ? shape : t.defense.scheme} className="tx-pickrow-v ellipsis">
+            {inPoss ? SHAPE_META[shape].label : SCHEME_META[t.defense.scheme].label}
+          </span>
+          <SlidersHorizontal size={16} className="dim" aria-hidden="true" />
+        </button>
 
-        <div className={`tx-floor tx-board ${inPoss ? 'in' : 'out'}`} role="list" aria-label={inPoss ? 'Your five in possession' : 'Your five out of possession'}>
+        <div className={`tx-floor tx-board ${inPoss ? 'in' : 'out'}`} role="list" aria-label={inPoss ? 'Your five with the ball' : 'Your five without the ball'}>
           {/* a maple half court: the boards running baseline to half court, your colour in the key and
             the centre circle, the lines in white */}
           <svg className="tx-floor-court" viewBox={`${-APRON} ${-APRON} ${VB_W} ${VB_H}`} preserveAspectRatio="none" aria-hidden="true">

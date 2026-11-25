@@ -1,0 +1,825 @@
+/* Team Instructions (`ti-`): the three-phase surface over the tactics board, in Hardwood by day and
+   Night Court by night. Paper and card stock, ink type, mono figures; the team's colour marks what
+   is chosen. Two colour families, kept apart: the five actions (`a-`) in the playbook's hues, the
+   three shot zones (`z-`) in the floor's (rim orange, wood, ink). */
+
+.ti {
+  /* what is chosen wears the team's colour: the stepped scales' thumb, a thumbnail's frame */
+  --on: var(--accent);
+  --on-ink: var(--accent-ink);
+  /* the playbook's five */
+  --a-pnr: #0e7c72;
+  --a-handoff: #2a63b8;
+  --a-motion: #6a4bb4;
+  --a-iso: #a8386f;
+  --a-post: #53761f;
+  /* the floor's three */
+  --z-rim: #d1481a;
+  --z-mid: #a2733a;
+  --z-three: #2a2826;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+:root[data-theme='dark'] .ti {
+  --a-pnr: #3cc4b4;
+  --a-handoff: #6fa5f2;
+  --a-motion: #a98cf0;
+  --a-iso: #ee7fb1;
+  --a-post: #a3c964;
+  --z-rim: #ff7a45;
+  --z-mid: #d2a468;
+  --z-three: #efe8da;
+}
+.ti .a-pnr {
+  --hue: var(--a-pnr);
+}
+.ti .a-handoff {
+  --hue: var(--a-handoff);
+}
+.ti .a-motion {
+  --hue: var(--a-motion);
+}
+.ti .a-iso {
+  --hue: var(--a-iso);
+}
+.ti .a-post {
+  --hue: var(--a-post);
+}
+.ti .z-rim {
+  --hue: var(--z-rim);
+}
+.ti .z-mid {
+  --hue: var(--z-mid);
+}
+.ti .z-three {
+  --hue: var(--z-three);
+}
+
+/* ------------------------------------------------------------ the wide sheet it lives in */
+.sheet.wide {
+  max-height: 96dvh;
+  padding-bottom: 0;
+  /* (the foot bleeds to the sheet's edges: it never widens what scrolls) */
+  overflow-x: clip;
+}
+@media (min-width: 768px) {
+  .sheet.wide {
+    max-width: min(1240px, calc(100vw - 48px));
+    /* (one height for the three phases: the head and its switch stay put from one to the next) */
+    height: min(92dvh, 860px);
+    max-height: 92dvh;
+    padding: 14px 22px 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .sheet.wide > .ti {
+    flex: 1;
+  }
+  .sheet.wide .ti-foot {
+    margin-top: auto;
+  }
+}
+/* the title: the surface's name over the phase */
+.ti-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ti-title .over {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-dim);
+}
+/* the phases: under the title on a phone, in the head's row on a desk */
+.ti-phases .seg button.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: none;
+}
+.ti-phases .seg.has-ind > button.on {
+  background: none;
+}
+.ti-phases .seg-ind,
+:root[data-theme='dark'] .ti-phases .seg:not(.tabs) > .seg-ind {
+  background: var(--accent);
+  box-shadow: none;
+}
+/* a phone: the phase is on the switch under it, so the head is the surface's name alone, one line */
+@media (max-width: 899.98px) {
+  .ti-title-p {
+    display: none;
+  }
+  .ti-title .over {
+    font-family: var(--head);
+    font-size: 18px;
+    font-weight: 860;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  .sheet.wide > .sheet-head {
+    margin-bottom: 8px;
+  }
+  .sheet.wide > .sheet-grip {
+    margin-bottom: 6px;
+  }
+  .ti {
+    gap: 10px;
+  }
+  /* this visit's changes take the foot: the steps over the column still move between its parts */
+  .ti-foot:has(.ti-dock) .ti-nav {
+    display: none;
+  }
+}
+@media (min-width: 900px) {
+  .ti-phases {
+    position: absolute;
+    top: 20px;
+    right: 72px;
+    width: 400px;
+  }
+}
+
+/* ------------------------------------------------------------ the columns */
+.ti-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.ti-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px var(--pad-card) 18px;
+}
+.ti-col-h {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.ti-col-h h3 {
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-size: 17px;
+  font-weight: 860;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.ti-col-h p {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.ti-col > .over {
+  margin-bottom: -6px;
+}
+@media (min-width: 900px) {
+  .ti-cols {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr) minmax(0, 1fr);
+  }
+  .ti-steps,
+  .ti-nav {
+    display: none !important;
+  }
+  .ti-col {
+    gap: 10px;
+    padding: 14px 16px 16px;
+  }
+  .ti-thumbs {
+    gap: 6px;
+  }
+  .ti-thumb {
+    gap: 1px;
+    padding: 5px 5px 6px;
+  }
+  .ti-col .tx-toggles {
+    gap: 4px;
+    padding-top: 6px;
+  }
+  .ti {
+    gap: 10px;
+  }
+}
+/* a phone: one column at a time, the steps over it */
+@media (max-width: 899.98px) {
+  .ti[data-step='0'] .ti-col:not([data-i='0']),
+  .ti[data-step='1'] .ti-col:not([data-i='1']),
+  .ti[data-step='2'] .ti-col:not([data-i='2']) {
+    display: none;
+  }
+  .ti-col {
+    animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+  }
+}
+.ti-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.ti-steps button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 4px 6px;
+  border-bottom: 3px solid var(--line-2);
+  font-size: 13.5px;
+  font-weight: 640;
+  color: var(--text-dim);
+  text-align: left;
+}
+.ti-steps button .num {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.ti-steps button.done {
+  border-bottom-color: color-mix(in srgb, var(--accent) 45%, var(--line-2));
+}
+.ti-steps button.on {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+  font-weight: 780;
+}
+
+/* ------------------------------------------------------------ formation thumbnails */
+.ti-thumbs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+@media (min-width: 420px) and (max-width: 899.98px) {
+  .ti-thumbs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.ti-thumbs.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.ti-thumb {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  min-width: 0;
+  padding: 6px 6px 8px;
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--radius-md);
+  background: var(--raised);
+  color: inherit;
+  text-align: center;
+  transition:
+    border-color var(--dur-fast) ease,
+    background var(--dur-fast) ease;
+}
+.ti-thumb:active {
+  transform: scale(0.98);
+}
+.ti-thumb.on {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, var(--raised));
+}
+.ti-thumb:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+.ti-thumb-court {
+  width: 100%;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--maple) 34%, var(--raised));
+}
+:root[data-theme='dark'] .ti-thumb-court {
+  background: color-mix(in srgb, var(--maple) 14%, var(--surface));
+}
+.ti-thumb-n {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.ti-thumb.on .ti-thumb-n {
+  color: var(--accent-text);
+}
+.ti-thumb-tag {
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text-dim);
+  text-wrap: balance;
+}
+.ti-thumb-tag.good {
+  color: var(--good);
+}
+.ti-thumb-tag.warn {
+  color: var(--warn);
+}
+.ti-thumb-o {
+  fill: var(--text-dim);
+}
+.ti-thumb.on .ti-thumb-o {
+  fill: var(--accent);
+}
+.ti-thumb-x {
+  fill: none;
+  stroke: var(--text-dim);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+.ti-thumb.on .ti-thumb-x {
+  stroke: var(--accent);
+}
+/* the court's lines, wherever one is drawn here */
+.ti-court path,
+.ti-court circle {
+  stroke: color-mix(in srgb, var(--text) 34%, transparent);
+  stroke-width: 0.9;
+  vector-effect: non-scaling-stroke;
+}
+.ti-court .ti-court-rim {
+  stroke: var(--court-rim);
+  stroke-width: 1.4;
+}
+.ti-court .ti-court-board {
+  stroke: color-mix(in srgb, var(--text) 60%, transparent);
+  stroke-width: 1.4;
+}
+/* the chosen shape's two sides, and the staff's read */
+.ti-read {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--text-2);
+}
+.ti-read b {
+  font-weight: 720;
+}
+
+/* ------------------------------------------------------------ a control with its measured figure */
+.ti-measured {
+  position: relative;
+}
+.ti-fig {
+  position: absolute;
+  top: 0;
+  right: 0;
+  max-width: 62%;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--accent-text);
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity var(--dur) ease;
+}
+.ti-fig.stale,
+.ti-hex.stale,
+.ti-mix.stale {
+  opacity: 0.45;
+}
+.ti-hex,
+.ti-mix {
+  transition: opacity var(--dur) ease;
+}
+/* the two axes of the shot chart: each scale carries its zone's colour beside its name */
+.ti-axis .slider-label::before {
+  content: '';
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 7px;
+  border-radius: 2px;
+  background: var(--hue);
+}
+
+/* ------------------------------------------------------------ the playbook's mix */
+.ti-bar {
+  display: flex;
+  gap: 2px;
+  height: 30px;
+  border-radius: 9px;
+  overflow: hidden;
+}
+.ti-bar span {
+  flex: 0 0 0;
+  min-width: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--hue);
+  transition: flex-grow var(--dur-slow) var(--ease-move);
+}
+.ti-bar b {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+}
+:root[data-theme='dark'] .ti-bar b {
+  color: #14120f;
+}
+/* an action the shape works against: hatched in the bar, dimmed in the list */
+.ti-bar .clash {
+  background: repeating-linear-gradient(135deg, var(--hue) 0 5px, color-mix(in srgb, var(--hue) 55%, var(--raised)) 5px 9px);
+}
+.ti-acts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ti-act {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--radius-sm);
+}
+.ti-act.on {
+  background: var(--surface);
+}
+.ti-act-pick {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 3px 4px 3px 8px;
+  color: inherit;
+  text-align: left;
+}
+.ti-sw {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  background: var(--hue);
+}
+.ti-act-n {
+  display: block;
+  font-size: 14px;
+  font-weight: 680;
+  line-height: 1.2;
+}
+.ti-act-l {
+  display: block;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.ti-act-l b {
+  font-weight: 620;
+}
+.ti-act-u {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  transition: opacity var(--dur) ease;
+}
+.ti-act-u.stale {
+  opacity: 0.45;
+}
+.ti-act.clash .ti-act-n,
+.ti-act.clash .ti-sw {
+  opacity: 0.55;
+}
+.ti-stepper {
+  flex: none;
+  display: flex;
+  gap: 4px;
+  padding-right: 4px;
+}
+.ti-stepper button {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  background: var(--raised);
+  color: var(--text);
+}
+.ti-stepper button:disabled {
+  opacity: 0.3;
+}
+.ti-stepper button:not(:disabled):active {
+  background: var(--surface-2);
+}
+
+/* ------------------------------------------------------------ X's and O's */
+.ti-play {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ti-play svg {
+  width: 100%;
+  /* (never taller than its column can spare: the court keeps its shape inside the frame) */
+  max-height: 210px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--maple) 34%, var(--raised));
+}
+:root[data-theme='dark'] .ti-play svg {
+  background: color-mix(in srgb, var(--maple) 14%, var(--surface));
+}
+.ti-play figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  text-align: center;
+}
+.ti-play-o {
+  fill: var(--raised);
+  stroke: var(--text);
+  stroke-width: 1.1;
+}
+.ti-play-n {
+  font-family: var(--mono);
+  font-size: 6.6px;
+  font-weight: 600;
+  fill: var(--text);
+}
+.ti-play-ball {
+  fill: var(--court-ball);
+}
+.ti-play-cut,
+.ti-play-dribble,
+.ti-play-pass {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.1;
+  stroke-linecap: round;
+}
+.ti-play-dribble {
+  stroke: var(--hue);
+  stroke-width: 1.4;
+  stroke-dasharray: 3 2.2;
+}
+.ti-play-pass {
+  stroke-dasharray: 0.3 2.4;
+  stroke-width: 1.3;
+}
+.ti-play-set {
+  fill: none;
+  stroke: color-mix(in srgb, var(--text) 45%, transparent);
+  stroke-width: 0.9;
+  stroke-linecap: round;
+}
+.ti-play-x {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.ti-play-x.big {
+  stroke-width: 2.6;
+}
+.ti-play-cut.ours {
+  stroke: var(--accent);
+  stroke-width: 1.4;
+}
+.ti-play-dribble.them {
+  stroke: var(--text-2);
+}
+.ti-play-key b {
+  margin-left: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+.ti-play-key .k-x {
+  color: var(--accent-text);
+}
+.ti-play-key .k-dribble.them {
+  border-top-color: var(--text-2);
+}
+/* a transition on the whole floor: who goes (the team's colour) and who doesn't */
+.ti-trans {
+  width: 100%;
+  max-height: 170px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--maple) 34%, var(--raised));
+}
+:root[data-theme='dark'] .ti-trans {
+  background: color-mix(in srgb, var(--maple) 14%, var(--surface));
+}
+.ti-trans-o {
+  fill: var(--text-dim);
+}
+.ti-trans .on .ti-trans-o {
+  fill: var(--accent);
+}
+.ti-trans-x {
+  fill: none;
+  stroke: var(--text-dim);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.ti-trans .on .ti-trans-x {
+  stroke: var(--accent);
+}
+.ti-trans-go {
+  fill: none;
+  stroke: var(--text-dim);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+}
+.ti-trans .on .ti-trans-go {
+  stroke: var(--accent);
+  stroke-width: 1.4;
+  stroke-dasharray: none;
+}
+.ti-play-head {
+  fill: context-stroke;
+}
+.ti-play-screen {
+  stroke: var(--hue);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+.ti-play-key {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.ti-play-key i {
+  display: inline-block;
+  width: 16px;
+  margin-left: 6px;
+  border-top: 1.5px solid var(--text-2);
+}
+.ti-play-key .k-dribble {
+  border-top: 2px dashed var(--hue);
+}
+.ti-play-key .k-pass {
+  border-top-style: dotted;
+}
+
+/* ------------------------------------------------------------ the shot chart and the mix */
+.ti-hex {
+  width: 100%;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.ti-hex path {
+  fill: var(--hue);
+}
+.ti-hex path.off {
+  opacity: 0.3;
+}
+.ti-court.over path {
+  stroke: color-mix(in srgb, var(--text) 30%, transparent);
+  fill: none;
+}
+.ti-mix {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.ti-mix-t {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 9px 8px 9px 11px;
+  border-left: 4px solid var(--hue);
+  border-radius: 6px var(--radius-sm) var(--radius-sm) 6px;
+  background: var(--surface);
+}
+.ti-mix-t b {
+  font-family: var(--mono);
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.ti-mix-t span {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------ the foot: steps, changes, method */
+.ti-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l));
+  padding: 10px var(--gut-r) calc(12px + var(--safe-b)) var(--gut-l);
+  border-top: 1px solid var(--line-2);
+  background: var(--bg);
+}
+@media (min-width: 768px) {
+  .ti-foot {
+    margin: 0 -22px;
+    padding: 10px 22px 14px;
+  }
+}
+.ti-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ti-foot-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.ti-wide {
+  display: contents;
+}
+.ti-tail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+@media (max-width: 899.98px) {
+  .ti-wide {
+    display: none;
+  }
+  .ti-foot-row:not(:has(.ti-dock)) {
+    display: none;
+  }
+}
+@media (min-width: 900px) {
+  .ti-narrow {
+    display: none;
+  }
+}
+.ti-foot-row .ti-method {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+.ti-foot-row .tx-pbline {
+  flex: 0 0 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+}
+.ti-dock {
+  /* a broadcast plate, as the page's own dock: ink in both looks, its controls' ink pinned to white */
+  --text: #ffffff;
+  --text-2: rgba(255, 255, 255, 0.8);
+  --text-dim: rgba(255, 255, 255, 0.6);
+  --surface: rgba(255, 255, 255, 0.08);
+  --surface-2: rgba(255, 255, 255, 0.14);
+  --line: rgba(255, 255, 255, 0.12);
+  --line-2: rgba(255, 255, 255, 0.3);
+  --ink: #ffffff;
+  --ink-2: #e9e5dc;
+  --paper-ink: #121212;
+  --good: #6fdc9c;
+  --bad: #ff8f80;
+  flex: 1 1 300px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 5px 5px 5px 14px;
+  border-radius: var(--radius-pill);
+  background: #1d1c1a;
+  color: var(--text);
+}
+.ti-dock .btn {
+  flex: none;
+}
+.ti-dock .tx-dock-m + .tx-dock-m {
+  margin-left: 10px;
+}
+.ti-method {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------ on the System page */
+.ti-launch {
+  color: inherit;
+}
+.ti-card-r {
+  width: 100%;
+  text-align: left;
+}
+.ti-card-r > .grow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ti-card-r .lr-meta {
+  white-space: normal;
+}

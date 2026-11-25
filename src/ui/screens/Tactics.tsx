@@ -1,7 +1,7 @@
 // Team → Tactics, two sections with their own paths under the hub's tabs, one boxed switch: System
-// (/team/tactics: the style card, the board with your five, shape, scheme and roles, the core
-// settings, the staff's word, the grades, the bench, and one Advanced drawer with every niche
-// setting) and Season Analysis (/team/tactics/analysis: what your changes measured, the season's
+// (/team/tactics: the style card, the board with your five and their roles, Team Instructions (the
+// one surface for how the team plays, in three phases, opened from the board), the staff's word, the
+// grades, the bench, and one Advanced drawer with the game's management) and Season Analysis (/team/tactics/analysis: what your changes measured, the season's
 // tally, how teams see you, every grade), each built from modules in src/ui/tactics. Nothing here
 // names an opponent: that is the matchup page's Game Plan. Advice in core links here by the old
 // ?tab= ids and section paths, which open the section that now holds them. The plan's strengths and
@@ -22,7 +22,8 @@ import { useQueryParam } from '../league/shared';
 import { tacticsSig, undoTo, visitStart } from '../tactics/edit';
 import { StrengthsCard, TacticsHero } from '../tactics/Hero';
 import { TacticTab } from '../tactics/TacticTab';
-import { CoreLevers } from '../tactics/CoreLevers';
+import { InstructionsCard } from '../tactics/instructions/InstructionsCard';
+import { TeamInstructions, type Phase } from '../tactics/instructions/TeamInstructions';
 import { Advanced } from '../tactics/Advanced';
 import { AnalysisTab } from '../tactics/AnalysisTab';
 import { settleEdits } from '../tactics/editWatch';
@@ -78,6 +79,39 @@ function TacticsScreen() {
   const sig = tacticsSig(t);
   const report = useMemo(() => (changed ? systemReport(league, league.userTid, t, base.others) : base), [changed, sig, base, league]); // eslint-disable-line react-hooks/exhaustive-deps
   const moved = changed ? gradeChanges(base, report) : [];
+  // Team Instructions, open on a phase (over the board)
+  const [phase, setPhase] = useState<Phase | null>(null);
+  // this visit's changes: what they did to the grades, Undo, and Done (the staff measures the change over the next games: editWatch)
+  const changes = (
+    <>
+      <span className="grow tx-dock-l">
+        {moved.length ? (
+          moved.slice(0, 2).map((m) => (
+            <span key={`${m.id}${m.to}`} className={`tx-dock-m m-tick-up ${m.up ? 'good' : 'bad'}`}>
+              {QUALITY_META[m.id].label} {m.from}→{m.to}
+            </span>
+          ))
+        ) : (
+          <span>Edited · grades unchanged</span>
+        )}
+        {moved.length > 2 && <span className="dim"> +{moved.length - 2}</span>}
+      </span>
+      <button className="btn sm ghost" aria-label="Undo your changes" onClick={() => undoTo(start)}>
+        <Undo2 size={16} />
+      </button>
+      <button
+        className="btn sm primary"
+        aria-label="Done: keep the changes"
+        onClick={() => {
+          settleEdits();
+          setStart(visitStart(league));
+          setPhase(null);
+        }}
+      >
+        <Check size={16} /> Done
+      </button>
+    </>
+  );
 
   return (
     <>
@@ -90,8 +124,8 @@ function TacticsScreen() {
           <>
             {/* the first-hour guide up top, under the playbook it asks about (below the board it sat under the fold) */}
             <GuideStrip step="playbook" keep="Keep this playbook" />
-            <TacticTab players={players} side={side} setSide={setSide}>
-              <CoreLevers t={t} />
+            <TacticTab players={players} side={side} setSide={setSide} onInstructions={setPhase}>
+              <InstructionsCard t={t} onOpen={setPhase} />
               {/* the staff's advice */}
               <AssistantCards league={league} areas={['tactics']} max={2} />
               <StrengthsCard report={report} was={base} onAnalysis={() => nav(tacticsPath('analysis'), { replace: true })} />
@@ -102,34 +136,23 @@ function TacticsScreen() {
         {tab === 'analysis' && <AnalysisTab report={report} was={changed ? base : undefined} />}
       </fieldset>
 
+      <TeamInstructions
+        phase={simming ? null : phase}
+        setPhase={setPhase}
+        onClose={() => setPhase(null)}
+        t={t}
+        players={players}
+        dock={
+          changed && (
+            <div className="ti-dock" role="region" aria-label="Your changes">
+              {changes}
+            </div>
+          )
+        }
+      />
       {changed && !simming && (
         <div className="dockbar tx-dock" role="region" aria-label="Your changes">
-          <span className="grow tx-dock-l">
-            {moved.length ? (
-              moved.slice(0, 2).map((m) => (
-                <span key={`${m.id}${m.to}`} className={`tx-dock-m m-tick-up ${m.up ? 'good' : 'bad'}`}>
-                  {QUALITY_META[m.id].label} {m.from}→{m.to}
-                </span>
-              ))
-            ) : (
-              <span>Edited · grades unchanged</span>
-            )}
-            {moved.length > 2 && <span className="dim"> +{moved.length - 2}</span>}
-          </span>
-          <button className="btn sm ghost" aria-label="Undo your changes" onClick={() => undoTo(start)}>
-            <Undo2 size={16} />
-          </button>
-          {/* Done: the staff measures the change over the next games (editWatch) */}
-          <button
-            className="btn sm primary"
-            aria-label="Done: keep the changes"
-            onClick={() => {
-              settleEdits();
-              setStart(visitStart(league));
-            }}
-          >
-            <Check size={16} /> Done
-          </button>
+          {changes}
         </div>
       )}
       {!changed && !simming && <EditMeasureBar />}

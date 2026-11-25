@@ -67,6 +67,7 @@ export const clockMethods = {
     if (dt > this.clock) dt = this.clock;
     this.clock -= dt;
     this.elapsed += dt;
+    this.possSec[this.poss] += dt;
     for (const t of this.T) {
       const press = this.T[1 - t.side].t.defense.press !== 'none' || t.t.defense.press !== 'none';
       // (0.9 to 1.1 until 2026-11-09: an early look is worth more now, see K.tempo, and pushing for it costs more legs)

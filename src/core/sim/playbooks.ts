@@ -133,7 +133,7 @@ type Field<K> = [K, string, ((v: unknown) => string)?];
 const OFFENSE_FIELDS: Field<string>[] = [
   ['pace', 'Tempo', level('pace')],
   ['transition', 'After a stop', level('transition')],
-  ['threePoint', 'Shot profile', level('threePoint')],
+  ['threePoint', 'Three-pointers', level('threePoint')],
   ['rimAttack', 'Attack the rim', level('rimAttack')],
   ['crashBoards', 'Crash the offensive glass', level('crashBoards')],
   ['huntMismatch', 'Hunt mismatches', onOff],

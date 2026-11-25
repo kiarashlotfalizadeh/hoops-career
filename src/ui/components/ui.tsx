@@ -482,11 +482,14 @@ export function Sheet({
   title,
   label,
   holds = true,
+  wide = false,
 }: {
   open: boolean;
   onClose: () => void;
   children: ReactNode;
   title?: ReactNode;
+  /** A work surface, not a note: nearly the whole window on a desk, the whole screen's height on a phone. */
+  wide?: boolean;
   /** What screen readers call a sheet without a title. */
   label?: string;
   /**
@@ -603,7 +606,7 @@ export function Sheet({
       <div className={`sheet-backdrop ${closing ? 'closing' : ''}`} onClick={closing ? undefined : onClose} />
       <div
         ref={ref}
-        className={`sheet ${closing ? 'closing' : ''}`}
+        className={`sheet ${wide ? 'wide ' : ''}${closing ? 'closing' : ''}`}
         role="dialog"
         aria-modal={closing ? undefined : true}
         aria-hidden={closing || undefined}

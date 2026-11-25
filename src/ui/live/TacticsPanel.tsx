@@ -32,9 +32,9 @@ const CHANGES_SHOWN = 3;
 
 type Phase = 'inPoss' | 'inTrans' | 'outPoss';
 const PHASES: { id: Phase; label: string }[] = [
-  { id: 'inPoss', label: 'In possession' },
-  { id: 'inTrans', label: 'Transition' },
-  { id: 'outPoss', label: 'Out of possession' },
+  { id: 'inPoss', label: 'With ball' },
+  { id: 'inTrans', label: 'Transitions' },
+  { id: 'outPoss', label: 'Without ball' },
 ];
 const GLASS_NAMES = GLASS_LEVELS.map((l) => l.label) as unknown as readonly [string, string, string, string, string];
 
@@ -184,7 +184,7 @@ export function TacticsPanel({
                 ]}
               />
             </Field>
-            <Levels label="Shot profile" value={t.offense.threePoint} names={TACTIC_LEVELS.threePoint} onChange={(x) => set((tt) => void (tt.offense.threePoint = x))} />
+            <Levels label="Three-pointers" value={t.offense.threePoint} names={TACTIC_LEVELS.threePoint} onChange={(x) => set((tt) => void (tt.offense.threePoint = x))} />
             <Levels label="Tempo" value={t.offense.pace} names={TACTIC_LEVELS.pace} onChange={(x) => set((tt) => void (tt.offense.pace = x))} />
           </div>
           <Fold label="Fine-tune" meta="Action weights, attack the rim, mismatches, hot hand">

@@ -90,7 +90,7 @@ export const GLOSSARY: GlossaryEntry[] = [
     id: 'defroles',
     term: 'Defensive roles',
     group: 'Defense',
-    text: "A player's job out of possession, set on the tactics board. Each role has its own entry here.",
+    text: "A player's job without the ball, set on the tactics board. Each role has its own entry here.",
   },
   { id: 'help', term: 'Help defense', group: 'Defense', text: 'How far defenders leave their man to stop drives. More help protects the rim and opens up kick-out threes.' },
   {
@@ -353,7 +353,7 @@ export const GLOSSARY: GlossaryEntry[] = [
     id: 'roles',
     term: 'Roles (offense)',
     group: 'Offense',
-    text: "A player's job in possession, set on the tactics board. Each role has its own entry here. The board's stars show how well he suits his.",
+    text: "A player's job with the ball, set on the tactics board. Each role has its own entry here. The board's stars show how well he suits his.",
   },
   ...playbookTerms(),
   ...roleTerms(),

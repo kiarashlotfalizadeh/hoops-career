@@ -64,8 +64,8 @@ export function RoleEditor({ p, onDone, side: initial = 'off' }: { p: Player; on
       <div className="tm-ed-sum" role="group" aria-label="Which end's role">
         {(
           [
-            ['off', 'In possession', ROLE_META[offRole].label, stars('off', offRole, offFits[offRole])],
-            ['def', 'Out of possession', DEF_ROLE_META[defRole].label, stars('def', defRole, defFits[defRole])],
+            ['off', 'With ball', ROLE_META[offRole].label, stars('off', offRole, offFits[offRole])],
+            ['def', 'Without ball', DEF_ROLE_META[defRole].label, stars('def', defRole, defFits[defRole])],
           ] as const
         ).map(([id, end, role, n]) => (
           <button key={id} className={`tm-ed-pair${side === id ? ' on' : ''}`} aria-pressed={side === id} onClick={() => setSide(id)}>
@@ -77,7 +77,7 @@ export function RoleEditor({ p, onDone, side: initial = 'off' }: { p: Player; on
         ))}
       </div>
       <Section
-        title={side === 'off' ? 'Roles in possession' : 'Roles out of possession'}
+        title={side === 'off' ? 'Roles with the ball' : 'Roles without the ball'}
         right={
           <Help title="Roles">
             <p>★ is how well he suits a role. One star either way is within what the ratings can tell.</p>

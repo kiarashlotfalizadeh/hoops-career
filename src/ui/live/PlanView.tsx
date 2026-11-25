@@ -65,7 +65,7 @@ const action = (k: 'pnr' | 'iso' | 'post' | 'handoff' | 'motion', label: string)
   write: (t, v) => void (t.offense.actions[k] = v),
 });
 const THREES: Three = {
-  label: 'Shot profile',
+  label: 'Three-pointers',
   names: ['Fewer threes', 'Balanced', 'More threes'],
   values: [25, 50, 78],
   read: (t) => t.offense.threePoint,

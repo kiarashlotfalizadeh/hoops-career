@@ -70,7 +70,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   },
   'drop_rim:d': {
     text: (X) => `${possessive(X)} drop coverage walled off the rim on pick-and-rolls.`,
-    advice: 'Against drop, lean on pull-up shooters, popping bigs and handoffs. In possession → Play through.',
+    advice: 'Against drop, lean on pull-up shooters, popping bigs and handoffs. Team instructions → With ball.',
   },
   'drop_pop:o': {
     text: (X, _Y, w) => `${possessive(X)} popping big punished the drop with open threes${w}.`,
@@ -79,7 +79,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   },
   'drop_handoff:o': {
     text: (X, _Y, w) => `${X} ran handoffs into the drop for clean looks${w}.`,
-    advice: 'Switching off-ball screens takes handoffs away. Out of possession → Fine-tune.',
+    advice: 'Switching off-ball screens takes handoffs away. Team instructions → Without ball.',
     uses: (t) => dropping(t) && !t.defense.switchOffBall,
   },
   'switch_mismatch:o': {
@@ -90,11 +90,11 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'switch_mismatch:d': { text: (X) => `${X} switched screens without giving up real mismatches.` },
   'switch_deny:d': {
     text: (X) => `${possessive(X)} switching blew up off-ball screens and handoffs.`,
-    advice: 'Against a switching defense, isolate mismatches and post up smaller defenders. In possession → Fine-tune.',
+    advice: 'Against a switching defense, isolate mismatches and post up smaller defenders. Team instructions → With ball.',
   },
   'switch_screen:d': {
     text: (X) => `${possessive(X)} switches took away the screen on pick-and-rolls: no roll man, no pull-up space.`,
-    advice: 'Against a switching defense, hunt the weakest defender and post up smaller players. In possession → Fine-tune.',
+    advice: 'Against a switching defense, hunt the weakest defender and post up smaller players. Team instructions → With ball.',
   },
   'hedge_stall:d': { text: (X) => `${possessive(X)} hedges stalled ball handlers on the pick-and-roll.` },
   'hedge_roll:o': {
@@ -132,7 +132,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'switch_slip:d': { text: (X) => `${X} switched without getting caught by the slip.` },
   'zone_paint:d': {
     text: (X) => `${possessive(X)} zone clogged driving lanes and post-ups.`,
-    advice: 'Beat zones with Motion & cuts, shooters in the corners and a high-post passer. In possession → Play through.',
+    advice: 'Beat zones with Motion & cuts, shooters in the corners and a high-post passer. Team instructions → With ball.',
   },
   'zone_3pt:o': {
     text: (X, _Y, w) => `${X} found open threes against the zone${w}.`,
@@ -147,7 +147,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   },
   'help_paint:d': {
     text: (X) => `${X} packed the paint and contested drives at the rim.`,
-    advice: 'Play more shooters, and move Shot profile toward threes to punish help.',
+    advice: 'Play more shooters, and move Three-pointers toward threes to punish help.',
   },
   'help_paint:o': {
     text: (X, Y) => `${Y} stayed home on shooters, and ${X} drove into the open lanes.`,
@@ -275,7 +275,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   // (the defense keying on what an offense runs past the league's mix: TK.key)
   'keyed:d': {
     text: (X, Y, w) => `${X} keyed on what ${Y} ran most${w}.`,
-    advice: 'Run a wider mix of actions, so the defense can’t key on one. In possession → Play through.',
+    advice: 'Run a wider mix of actions, so the defense can’t key on one. Team instructions → With ball.',
   },
   'hunt:d': {
     text: (_X, Y) => `${possessive(Y)} hunt for one defender cost them ball movement and good looks.`,

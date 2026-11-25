@@ -132,6 +132,8 @@ export class GameSim {
   q = 1;
   clock: number = GAME.quarterSec;
   elapsed = 0; // game seconds elapsed
+  /** Game seconds each side has had the ball (home first): a trip's length is this over its possessions. */
+  possSec: [number, number] = [0, 0];
   poss: 0 | 1 = 0;
   ctx: Ctx = 'start';
   tipWinner: 0 | 1 = 0;

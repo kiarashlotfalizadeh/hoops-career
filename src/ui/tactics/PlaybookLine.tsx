@@ -1,4 +1,4 @@
-// The style the system's settings start from, over the core settings: how many settings you've moved
+// The style the system's settings start from, over Team Instructions' rows and at the surface's foot: how many settings you've moved
 // from it across the whole system (with Put back), which also keys the dot that marks the style's own
 // setting on each control.
 import { useLeague, useLeagueMemo } from '../../state/store';
@@ -26,6 +26,8 @@ function putBack(tt: Tactics) {
   const def = tt.defense as unknown as Record<string, unknown>;
   for (const k of STYLE_KEYS.off) off[k] = k === 'actions' ? { ...(o.actions as OffenseTactics['actions']) } : o[k];
   for (const k of STYLE_KEYS.def) def[k] = d[k] as DefenseTactics[keyof DefenseTactics];
+  // (a style lines up four-out, one-in: another shape is a setting moved from it)
+  delete tt.offense.shape;
 }
 
 /** The tactics as the style has them. */

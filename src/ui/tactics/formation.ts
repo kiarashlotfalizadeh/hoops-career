@@ -22,7 +22,7 @@ export interface Spot {
 
 const s = (x: number, y: number, kind: SpotKind, name: string): Spot => ({ x, y, kind, name });
 
-/** In possession: each shape's five spots. */
+/** With the ball: each shape's five spots. */
 export const OFF_SPOTS: Record<OffShape, Spot[]> = {
   fourOut: [
     s(50, 71, 'ball', 'top of the key'),
@@ -48,7 +48,7 @@ export const OFF_SPOTS: Record<OffShape, Spot[]> = {
   twoIn: [s(50, 71, 'ball', 'top of the key'), s(15, 45, 'wing', 'left wing'), s(85, 45, 'wing', 'right wing'), s(30, 14, 'big', 'left block'), s(70, 14, 'big', 'right block')],
 };
 
-/** Out of possession: each scheme's five spots. */
+/** Without it: each scheme's five spots. */
 export const DEF_SPOTS: Record<DefScheme, Spot[]> = {
   man: [s(50, 63, 'ball', 'on the ball'), s(15, 38, 'wing', 'left wing'), s(85, 38, 'wing', 'right wing'), s(50, 14, 'anchor', 'in the paint'), s(14, 9, 'back', 'help side')],
   zone23: [s(30, 50, 'top', 'top left'), s(70, 50, 'top', 'top right'), s(15, 14, 'back', 'left low'), s(50, 12, 'anchor', 'middle'), s(85, 14, 'back', 'right low')],

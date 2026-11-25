@@ -24,7 +24,7 @@ Five tabs, one per role. Every screen belongs to exactly one (`tabFor` in `nav.t
 | Tab        | What it's for         | Lives here (and nowhere else)                                                                                                                                                                                                                                                                                                                    |
 | ---------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Today**  | What needs you now    | The next game (or the offseason phase's card), one action queue (blocking decisions, trade offers and requests, a starter hurt, the owner's warnings), the season's numbers in a strip, the inbox (`/inbox`), settings (`/settings`), god mode (`/god`), the glossary                                                                            |
-| **Team**   | Who plays and how     | Your roster with its views (players, ratings, stats, contracts) at `/team`; rotation `/team/rotation`; tactics in two tabs, System (the core levers on the surface, everything else in one Advanced drawer) and Season Analysis (`/team/tactics/analysis`); lineups `/team/lineups`; your players' pages; compare                                |
+| **Team**   | Who plays and how     | Your roster with its views (players, ratings, stats, contracts) at `/team`; rotation `/team/rotation`; tactics in two tabs, System (the board, Team Instructions in three phases, game management in one Advanced drawer) and Season Analysis (`/team/tactics/analysis`); lineups `/team/lineups`; your players' pages; compare                  |
 | **Games**  | When and against whom | Your schedule and results (`/games`); one **Matchup** page per opponent (`/games/:tid`) in two tabs, Brief (win %, the teams' stat ranks side by side, the starting fives and who's out, their threats) and Game Plan (counters, matchups, special plans); the live game (`/live`); game reports (`/game/:gid`: Summary, Box, Shots, Flow)       |
 | **League** | Everyone else         | Five tabs: Standings (the odds, the lottery inside Odds), Playoffs (the Cup a row in it while it's on), Stats (ratings too), Scores (the schedule around the league) and News; Awards and History (`/league/history`: seasons, records, Hall of Fame, coaches) are links in its header; other teams' pages (`/teams/:tid`), other players' pages |
 | **Office** | The GM's desk         | The cap sheet and the mid-level, trade (`/office/trade`), free agents, re-signing, the draft, picks, the owner and job security (`/office/owner`), your career and job offers (`/office/career`). No finances desk: tickets and budgets run themselves                                                                                           |
@@ -662,13 +662,28 @@ package (ink plates, white type); the console is paper and card stock like every
   contradict.
 - Keep explanations that teach the game, but behind `Help`/`More`/`Term`.
 - Names of controls in advice must match the controls on screen (Team → Tactics: System and Season
-  Analysis; on System, the core levers and the Advanced drawer; a player's roles are on his sheet
-  from the board).
-- **Tactics: the core levers on the surface, the rest in one drawer.** System shows the style and
-  playbook, mentality, the shape and scheme, ball-screen coverage, tempo, the shot profile, help and
-  pressure, and the players' roles (`tactics/CoreLevers.tsx`); every niche knob sits in one collapsed
-  Advanced drawer (`tactics/Advanced.tsx`), never nested deeper. Opponent-only plans (a star plan,
-  hack-a-player) live on the Matchup's Game Plan, not in the base tactics.
+  Analysis; on System, Team instructions' three phases and the Advanced drawer; a player's roles are
+  on his sheet from the board).
+- **Tactics: one surface for how the team plays, in the trip's three phases.** Team Instructions
+  (`tactics/instructions/`) opens over the tactics board (a wide dialog on a desk; on a phone one
+  column at a time, stepped): With ball, Transitions, Without ball, each read left to right as the
+  trip goes (the shape, how the advantage is built, how it ends). The same three names wherever a
+  phase is named (the board's ends, the live console, a player's roles). Its rules:
+  - **The drawings know the roster.** The shot chart, the shot mix, the seconds a trip lasts and the
+    other figures beside a control are measured (`core/analysis/outlook.ts`: the rotation as it
+    would dress, one game against every other team, the same seeds for every setting). They say how
+    the team plays, never what a choice is worth. A shape's thumbnail carries what the five make of
+    it ("2 non-shooters"); an action the shape works against is dimmed and says why.
+  - **One stepped scale** (`Levels`) for every 0-100 setting, the style's own level under a dot.
+    Steppers (− / +) only for the playbook's mix, which is shares of one whole.
+  - **Two colour families, never shared**: the five actions in the playbook's hues (`--a-*`), the
+    three shot zones in the floor's (`--z-*`: rim orange, wood, ink). What is chosen wears the
+    team's colour.
+  - System keeps the style card, the board (roles on a player's sheet), the three phases as rows
+    that open the surface, the grades and the changes dock (also at the surface's foot). The game's
+    management (crunch time, late game, timeouts, simmed games) sits in one collapsed Advanced
+    drawer (`tactics/Advanced.tsx`). Opponent-only plans (a star plan, hack-a-player) live on the
+    Matchup's Game Plan, not in the base tactics.
 - Inbox mail: a subject that says what happened and a one-line summary; detail below it. **Mail is
   for what changes a plan**: what a screen already shows (a short injury, "the season starts")
   doesn't get mail. One mail per pitch or event: a repeat replaces its earlier mail.

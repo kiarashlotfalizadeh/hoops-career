@@ -1,4 +1,4 @@
-// A block's heading that is also its switch: the board's end (In possession / Out of possession).
+// A block's heading that is also its switch: the board's end (With ball / Without ball).
 // The one that's on reads as the heading, the others beside it
 // in a quieter ink, so the screen keeps one row of tabs and one boxed switch above what it's for
 // (DESIGN: the board's heading is its in/out-of-possession switch).

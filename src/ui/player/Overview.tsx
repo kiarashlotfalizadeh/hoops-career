@@ -125,7 +125,7 @@ export function Overview({
             <div className="row between top">
               <div className="grow">
                 <div className="tm-role-name">{ROLE_META[role].label}</div>
-                {team && <div className="small dim">Out of possession: {DEF_ROLE_META[defRoleOf(team.tactics.defense, p.pid)].label}</div>}
+                {team && <div className="small dim">Without ball: {DEF_ROLE_META[defRoleOf(team.tactics.defense, p.pid)].label}</div>}
                 {arch.role !== role && <div className="small warn">Natural role: {ROLE_META[arch.role].label}</div>}
               </div>
               {freedom && freedom !== 'Normal' && <Tag tone={freedom === 'Green light' ? 'good' : 'warn'}>{freedom}</Tag>}

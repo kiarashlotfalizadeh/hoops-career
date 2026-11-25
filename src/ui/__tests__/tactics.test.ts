@@ -18,6 +18,8 @@ import { OFF_PRESETS, applyPatch, cloneTactics, defaultTactics, tacticsDiff } fr
 import { createLeague, defaultSettings } from '../../core/league/create';
 import { simDay, startRegularSeason } from '../../core/league/season';
 import type { Tactics } from '../../core/types';
+import { outlook, outlookKey } from '../../core/analysis/outlook';
+import { phaseLine } from '../tactics/instructions/InstructionsCard';
 
 const P = (pid: number, role: string, hgt: number, handle = 50, shoot = 50): BoardPlayer => ({ pid, role: role as BoardPlayer['role'], hgt, handle, shoot });
 
@@ -338,5 +340,30 @@ describe('tactics in the UI', () => {
         expect(keptTactics(saved, planned, cloneTactics(planned))).toEqual(saved);
       }
     }
+  });
+});
+
+describe('Team Instructions', () => {
+  it("measures how the instructions play with the roster: the shot mix and a trip's length follow the settings, over the same games", () => {
+    const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 3 });
+    const base = league.teams[0].tactics;
+    const withOff = (o: Partial<Tactics['offense']>): Tactics => ({ ...cloneTactics(base), offense: { ...cloneTactics(base).offense, ...o } });
+    const read = (t: Tactics) => outlook(league, t, 16);
+    const mid = read(withOff({ threePoint: 50, rimAttack: 50, pace: 50 }));
+    // shares of one whole, a trip of an NBA length, and the same reading when asked again
+    expect(mid.own.mix.three + mid.own.mix.mid + mid.own.mix.rim).toBeCloseTo(1, 6);
+    expect(mid.secPerPoss).toBeGreaterThan(11);
+    expect(mid.secPerPoss).toBeLessThan(18);
+    expect(read(withOff({ threePoint: 50, rimAttack: 50, pace: 50 }))).toEqual(mid);
+    expect(outlookKey(league, base)).toBe(outlookKey(league, cloneTactics(base)));
+    // both axes of the shot chart, and the tempo
+    expect(read(withOff({ threePoint: 100, rimAttack: 50, pace: 50 })).own.mix.three).toBeGreaterThan(
+      read(withOff({ threePoint: 0, rimAttack: 50, pace: 50 })).own.mix.three + 0.05,
+    );
+    expect(read(withOff({ threePoint: 50, rimAttack: 100, pace: 50 })).own.mix.rim).toBeGreaterThan(read(withOff({ threePoint: 50, rimAttack: 0, pace: 50 })).own.mix.rim + 0.02);
+    expect(read(withOff({ threePoint: 50, rimAttack: 50, pace: 100 })).secPerPoss).toBeLessThan(read(withOff({ threePoint: 50, rimAttack: 50, pace: 0 })).secPerPoss - 0.5);
+    // each phase's row says how the team plays it, in its controls' words
+    expect(phaseLine(defaultTactics(), 'ball')).toBe('4-Out, 1-In · Balanced tempo · Balanced shots');
+    expect(phaseLine(defaultTactics(), 'off')).toBe('Man-to-man · Drop coverage · Balanced pressure');
   });
 });
