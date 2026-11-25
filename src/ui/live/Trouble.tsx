@@ -1,8 +1,10 @@
 import { plural } from '../../core/format';
 import type { Tactics } from '../../core/types';
 import { Section } from '../components/ui';
-import { foulLimit } from './alerts';
+import { troubleThresholds } from './alerts';
 import type { Drawn } from './drawn';
+
+export type SubFor = (pid: number, exclude?: ReadonlySet<number>, opts?: { ahead?: boolean; q?: number }) => number | undefined;
 
 /**
  * Your five who are tired or in foul trouble, each with the staff's sub a tap away: on the Now view as
@@ -24,7 +26,7 @@ export function Trouble({
   tactics: Tactics;
   names: (pid: number) => string;
   /** The rested bench player the staff would send in for one of yours. */
-  subFor: (pid: number, exclude?: ReadonlySet<number>) => number | undefined;
+  subFor: SubFor;
   substitute: (out: number, inn: number) => boolean;
   /** Read going into the next period, at a break. */
   ahead?: boolean;
@@ -32,13 +34,11 @@ export function Trouble({
 }) {
   const q = view.q;
   const me = view.sides[side];
-  const limit = foulLimit(ahead ? q + 1 : q, tactics.manage.foulTrouble);
-  const rest = !ahead ? 0 : q === 2 ? 0.3 : 0.1;
-  const fat = tactics.manage.fatigueSub;
+  const { limit, rest, tiredAt } = troubleThresholds(q, tactics.manage, !!ahead);
   const trouble = me.players
     .filter((p) => me.on.includes(p.pid) && !skip?.has(p.pid))
-    // (one foul from where the staff sits him, and never a single foul: one in the first quarter isn't trouble)
-    .map((p) => ({ p, tired: Math.min(1, p.energy + rest) < fat + 0.1, fouls: p.fouls >= Math.max(2, limit - 1) }))
+    // Use the exact foul limit and tired line shared with benchFor so swaps never ping-pong
+    .map((p) => ({ p, tired: Math.min(1, p.energy + rest) < tiredAt, fouls: p.fouls >= limit }))
     .filter((x) => x.p.out === 0 && (x.tired || x.fouls))
     .sort((a, b) => a.p.energy - b.p.energy)
     .slice(0, 4);
@@ -47,7 +47,7 @@ export function Trouble({
   const taken = new Set<number>();
   const subs = new Map<number, number | undefined>();
   for (const { p } of trouble) {
-    const sub = subFor(p.pid, taken);
+    const sub = subFor(p.pid, taken, { ahead: !!ahead, q });
     subs.set(p.pid, sub);
     if (sub !== undefined) taken.add(sub);
   }
@@ -67,7 +67,7 @@ export function Trouble({
                   {names(sub)} in
                 </button>
               ) : (
-                <span className="tiny dim">No rested sub</span>
+                <span className="tiny dim">{fouls && !tired ? 'No clean sub' : 'No rested sub'}</span>
               )}
             </div>
           );

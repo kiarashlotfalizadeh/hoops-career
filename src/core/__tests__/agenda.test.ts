@@ -53,6 +53,7 @@ import {
   DEADLINE_DAYS,
   FLOOR_AGO,
   ODDS_FIRST_GAMES,
+  assessDeadlineDeal,
   callsDaily,
   callsDecide,
   changeWorth,
@@ -65,6 +66,9 @@ import {
   quietSeriesStart,
   storeWorth,
 } from '../league/calls';
+import { makeItWork } from '../league/tradeHelp';
+import { lowStarMinutes } from '../league/games';
+import { stopsSim } from '../league/agenda';
 import { staffPicksSince } from '../league/weekCall';
 import { simStopIds } from '../league/agenda';
 import { schedulePlayoffDay, seriesLabel } from '../league/playoffs';
@@ -1190,6 +1194,82 @@ describe('the agenda', () => {
         [b, outB],
       ] as const)
         if (out.stop === 'call') expect(x.stopCall && !x.stopCall.id.startsWith('week:')).toBe(true);
+    }
+
+    // P0 #4: deadline trade cards reject bad value, aging-vet pick mortgages, and core-star downgrades,
+    // and explicitly label bad deals as bad with Stand pat on the primary button
+    {
+      const l = camp(9); // Golden State (aging supermax star Curry) or any contender with stars
+      while (standardRoster(l, 9).length > CAP.rosterMax) releasePlayer(l, cutOrder(l, standardRoster(l, 9))[0], { news: false });
+      startRegularSeason(l);
+      setOwnerGoals(l, true);
+      l.day = l.tradeDeadlineDay - DEADLINE_DAYS;
+      l.oddsTrail = { season: l.season, tid: 9, pts: [[l.day - 1, 700, 0]] };
+      const myRoster = standardRoster(l, 9).sort((a, b) => b.ovr - a.ovr);
+      const star = myRoster[0];
+      const otherTid = 10;
+      const otherRoster = standardRoster(l, otherTid).sort((a, b) => b.ovr - a.ovr);
+      const agingVet = otherRoster[0];
+      // Force aging vet (35yo) and construct a destructive overpay: franchise star + 2 firsts for aging vet
+      agingVet.bornYear = l.season - 35;
+      agingVet.ovr = Math.min(agingVet.ovr, star.ovr);
+      const myFirsts = l.draftPicks.filter((d) => d.tid === 9 && d.round === 1).slice(0, 2);
+      const badOffer = {
+        a: { tid: 9, pids: [star.pid], dpids: myFirsts.map((d) => d.dpid) },
+        b: { tid: otherTid, pids: [agingVet.pid], dpids: [] },
+      };
+      const ev = assessDeadlineDeal(l, badOffer, 'buy');
+      expect(ev.bad).toBe(true);
+      expect(ev.reason).toMatch(/^Bad /);
+      // Even if a saved deadlineCall holds this bad offer (and even if single-game pts measured positive!),
+      // the deadline card MUST label it bad, put Stand pat on the primary suggestion button, and NEVER say "should help"
+      l.deadlineCall = { season: l.season, mode: 'buy', odds: 700, offer: badOffer };
+      const id = `deadline:${l.season}`;
+      storeWorth(l, id, { day: l.day, gid: l.schedule[0].gid, sig: 1, pts: 1.5, raw: 1.6, se: 0.4 });
+      const card = agenda(l).find((i) => i.kind === 'deadline')!;
+      expect(card.tone).toBe('bad');
+      expect(card.line).toMatch(/The staff's call: stand pat\. Bad /);
+      expect(card.line).not.toMatch(/should help/i);
+      expect(card.suggestion!.label).toBe('Stand pat');
+      expect(card.choices![0].tone).toBe('bad');
+      expect(card.choices![0].confirm).toMatch(/^Warning: Bad /);
+      // makeItWork must never dump an 84+ OVR aging franchise star as salary filler for a worse/equal target
+      star.ovr = 89;
+      star.bornYear = l.season - 37;
+      agingVet.ovr = 84;
+      const ask = makeItWork(l, { a: { tid: 9, pids: [], dpids: [] }, b: { tid: otherTid, pids: [agingVet.pid], dpids: [] } });
+      if (ask.offer) expect(ask.offer.a.pids).not.toContain(star.pid);
+    }
+
+    // P0 #5: stale manual minutes warn loudly when a top-two healthy star is planned under 28 min, stop sims, and fix in one tap
+    {
+      const l = camp(6);
+      while (standardRoster(l, 6).length > CAP.rosterMax) releasePlayer(l, cutOrder(l, standardRoster(l, 6))[0], { news: false });
+      startRegularSeason(l);
+      const rot = l.teams[6].rotation;
+      rot.manual = true;
+      const stars = standardRoster(l, 6)
+        .filter((p) => !p.injury)
+        .sort((a, b) => b.ovr - a.ovr)
+        .slice(0, 2);
+      rot.minutes[stars[0].pid] = 21;
+      rot.minutes[stars[1].pid] = 20;
+      const low = lowStarMinutes(l, 6);
+      expect(low.map((x) => x.player.pid)).toEqual([stars[0].pid, stars[1].pid]);
+      const warn = agenda(l).find((i) => i.id.startsWith('lowMinutes:'))!;
+      expect(warn).toBeDefined();
+      expect(warn.title).toBe('Top stars short on minutes');
+      expect(stopsSim(warn)).toBe(true);
+      // One-tap "Keep as set" silences it
+      const kept = structuredClone(l);
+      expect(resolveAgenda(kept, warn.choices![0].action).ok).toBe(true);
+      expect(agenda(kept).some((i) => i.id.startsWith('lowMinutes:'))).toBe(false);
+      // One-tap "Give star minutes" restores both stars above 28 minutes and clears the warning
+      expect(resolveAgenda(l, warn.suggestion!.action).ok).toBe(true);
+      expect(rot.minutes[stars[0].pid]).toBeGreaterThanOrEqual(30);
+      expect(rot.minutes[stars[1].pid]).toBeGreaterThanOrEqual(30);
+      expect(lowStarMinutes(l, 6)).toEqual([]);
+      expect(agenda(l).some((i) => i.id.startsWith('lowMinutes:'))).toBe(false);
     }
   }, 120_000);
 });

@@ -8,7 +8,8 @@ import { teamPlayers } from '../league/helpers';
 import { buildMinutePlan, normalizeMinutes, planInputs, planRoles, starterTargets, type PlanPlayer, type PlanSource } from '../sim/rotationPlan';
 import { autoRotation, roleMemory, rosterSeason, sortByPosition, veteranCeiling } from '../ai/coachAI';
 import { blankStats, generatePlayer, DEFAULT_SCALE } from '../playerGen';
-import { ensureRotation, giveShare, makeWhole, youthLean } from '../league/games';
+import { ensureRotation, giveShare, lowStarMinutes, makeWhole, youthLean } from '../league/games';
+import { newSeason } from '../league/season';
 import { Rng } from '../random';
 import { FREE_AGENT, type Player, type Rotation } from '../types';
 
@@ -511,6 +512,48 @@ describe('rotations', () => {
       const ps = roster(9);
       for (const p of ps.slice(4)) p.injury = { type: 'Sprained ankle', gamesRemaining: 10, gamesTotal: 10, severity: 'minor' };
       expect(total(autoRotation(ps).minutes)).toBe(192);
+    }
+
+    // P0 #5: giveShare protects top-two stars from being drained by repeated newcomer arrivals,
+    // and newSeason refreshes stale manual targets when the roster turns over or leaves a star short
+    {
+      const l = createLeague({ name: 'stars', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 12 });
+      const rot = l.teams[0].rotation;
+      rot.manual = true;
+      const ps = teamPlayers(l, 0).sort((a, b) => b.ovr - a.ovr);
+      const [s1, s2] = ps;
+      // Set both stars to 35 min (not pinned in rot.set) and pin a role player (reproducing a year-1 edit)
+      rot.minutes[s1.pid] = 35;
+      rot.minutes[s2.pid] = 35;
+      rot.set = [ps[5].pid];
+      // Repeatedly bring in 4 depth players with giveShare (0 spare minutes): top-two stars must stay >= 30 min
+      giveShare(
+        l,
+        0,
+        ps.slice(8, 12).map((p) => p.pid),
+        0,
+      );
+      expect(rot.minutes[s1.pid]).toBeGreaterThanOrEqual(30);
+      expect(rot.minutes[s2.pid]).toBeGreaterThanOrEqual(30);
+      // Even if raw targets sum well over 240 and silently squeeze a star under 28 planned minutes, lowStarMinutes catches it
+      rot.minutes[s1.pid] = 28;
+      rot.minutes[s2.pid] = 28;
+      for (const p of ps.slice(2, 11)) rot.minutes[p.pid] = 32;
+      const squeezed = lowStarMinutes(l, 0);
+      expect(squeezed.map((x) => x.player.pid)).toContain(s1.pid);
+      expect(squeezed.map((x) => x.player.pid)).toContain(s2.pid);
+      // Entering a new season with stale manual targets that leave unpinned stars under 28 min auto-refreshes them
+      l.phase = 'freeAgency';
+      l.faDay = 20;
+      rot.minutes[s1.pid] = 20;
+      rot.minutes[s2.pid] = 20;
+      delete rot.set;
+      expect(newSeason(l)).toBe(true);
+      const nextRot = l.teams[0].rotation;
+      expect(nextRot.manual).toBe(false);
+      expect(nextRot.minutes[s1.pid]).toBeGreaterThanOrEqual(30);
+      expect(nextRot.minutes[s2.pid]).toBeGreaterThanOrEqual(30);
+      expect(l.inbox.some((m) => m.subject === 'Rotation refreshed for the new roster')).toBe(true);
     }
   });
 });

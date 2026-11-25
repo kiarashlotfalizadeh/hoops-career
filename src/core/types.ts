@@ -590,6 +590,8 @@ export interface Rotation {
    * ensureRotation, makeWhole).
    */
   whole?: number;
+  /** Top-two healthy stars the coach deliberately chose to keep under 28 minutes: silences the low-star-minutes warning for this season unless dropped further. */
+  shortOk?: number[];
 }
 
 export interface Tactics {

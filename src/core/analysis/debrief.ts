@@ -614,7 +614,7 @@ export function seasonCoachingRead(
           : 'Costing you.'
         : k.moves >= KIND_SAY_MOVES
           ? k.kind === 'timeout'
-            ? 'Nothing in them so far: a timeout rests legs and sets a play, it has not turned games.'
+            ? 'Nothing in them so far: save timeouts to break opponent runs and draw up plays.'
             : 'Nothing clear in them so far.'
           : 'Too few to say.';
       return {

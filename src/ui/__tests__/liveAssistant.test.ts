@@ -19,12 +19,12 @@ import type { PossLog } from '../../core/sim/log';
 import { coldHand, hotHand, momentumOf, snapshot, streaks, type Drawn } from '../live/drawn';
 import { FEEL, heat, momentum } from '../../core/sim/engine/feel';
 import { tacticsDiff } from '../live/alerts';
-import { foulLimit, liveAlerts, newEvents, recentLevers, staffCallsTimeout, type AlertInput } from '../live/alerts';
+import { foulLimit, liveAlerts, newEvents, recentLevers, staffCallsTimeout, troubleThresholds, type AlertInput } from '../live/alerts';
 import { finisher, gameDecided, matchups, staffNotes, staffRead, sumBy, type StaffInput } from '../live/staff';
 import { stopCalls, takeStop, type StopCall } from '../live/useLiveGame';
 import { callCosts, callKey, worthLine } from '../../core/analysis/callWorth';
-import { CALL_DRAFTS, CALL_DRAFTS_CRUNCH, benchFor, callDrafts, callQuietLine, deadBall, nextStop, noStops, stopAfter } from '../live/calls';
-import { skipChoices } from '../live/skip';
+import { CALL_DRAFTS, CALL_DRAFTS_CRUNCH, benchFor, callBannerLine, callDrafts, callNote, callQuietLine, deadBall, nextStop, noStops, stopAfter } from '../live/calls';
+import { simDecided, skipChoices } from '../live/skip';
 import { counterCandidates } from '../../core/ai/advisor';
 import { CALL_CONFIRM_MIN, PLAY_SPREAD, clearOf, measureCalls, measureChange, type LiveChoice } from '../../state/liveWorth';
 import { favoured, playReading } from '../live/usePlayWorth';
@@ -349,7 +349,9 @@ describe('the live assistant and the bench', () => {
       const a = liveAlerts(alertInput(g, view, { tactics: t })).find((x) => x.id === 'imp-hedge_roll:o')!;
       expect(a.action).toMatchObject({ kind: 'tactics', label: 'Go to Drop' });
       const note = staffNotes({ ...staffInput(g), view, tactics: t }).find((n) => n.id === 'imp-hedge_roll:o')!;
-      expect(note.worth).toBe('Usually helps here');
+      expect(note.worth).toBe('+2.2 pts');
+      expect(worthLine('run')).toBe('+0.5 pts');
+      expect(worthLine('lateFoul')).toBe('+1.4% win');
       if (a.action?.kind === 'tactics') {
         a.action.apply(t);
         expect(t.defense.pnr).toBe('drop');
@@ -960,7 +962,7 @@ describe('broadcast graphics', () => {
       expect(cands.some((c) => c.id === 'zone23' || c.id === 'zone32')).toBe(false);
     }
 
-    // clutch-stretch skip options remain available inside the final 5:00 of Q4/OT
+    // clutch-stretch skip options remain available inside the final 5:00 of Q4/OT, and Clutch time stays selectable before 5:00 even when decided
     {
       const at4 = skipChoices(4, false, { q: 4, clock: 260 }, false).map((c) => c.id);
       expect(at4).toContain('min2');
@@ -969,6 +971,81 @@ describe('broadcast graphics', () => {
       expect(at90).toContain('min1');
       expect(at90).toContain('sec24');
       expect(at90).not.toContain('min2');
+      // P0 #3: Clutch time stays offered before 5:00 even when the score reads decided, so the coach stops at 5:00 and chooses Sim to final or Play on
+      const decidedQ3Break = skipChoices(4, true, { q: 3, clock: 0 }, true).map((c) => c.id);
+      expect(decidedQ3Break).toContain('clutch');
+      const decidedQ4Early = skipChoices(4, false, { q: 4, clock: 540 }, true).map((c) => c.id);
+      expect(decidedQ4Early).toContain('clutch');
+      expect(simDecided({ q: 4, clock: 300, T: [{ score: 112 }, { score: 94 }] }, 0)).toBe(true);
+      expect(simDecided({ q: 4, clock: 300, T: [{ score: 100 }, { score: 96 }] }, 0)).toBe(false);
+    }
+
+    // P0 #2: Trouble and benchFor share exact foul & fatigue thresholds so two bigs with 2 fouls in Q2 never ping-pong
+    {
+      const g = game(11);
+      play(g, 60);
+      const s = g.sim;
+      s.q = 2;
+      s.clock = 400;
+      const t = s.T[0];
+      const onBig = t.on.find((p) => p.big) ?? t.on[0];
+      const benchBig = t.players.find((p) => !p.on && p.out === 0 && p.big) ?? t.players.find((p) => !p.on && p.out === 0)!;
+      // Standard Q2 (limit = 3): 2 fouls is not flagged by Trouble, and if a 3-foul big is subbed for a 2-foul big, the 2-foul big is NOT flagged back
+      t.t.manage.foulTrouble = 'standard';
+      expect(troubleThresholds(2, t.t.manage, false).limit).toBe(3);
+      // Strict Q2 (limit = 2): both bigs have 2 fouls; benchFor MUST NOT suggest the 2-foul bench big
+      t.t.manage.foulTrouble = 'strict';
+      const th = troubleThresholds(2, t.t.manage, false);
+      expect(th.limit).toBe(2);
+      for (const p of t.players) {
+        p.fouls = 2;
+        p.energy = 0.95;
+      }
+      expect(benchFor(s, 0, onBig.pid, { q: 2, ahead: false })).toBeUndefined();
+      // Give one bench player 1 foul: he can come in, and once on floor he has 1 < 2 fouls so Trouble won't flag him back
+      benchBig.fouls = 1;
+      expect(benchFor(s, 0, onBig.pid, { q: 2, ahead: false })).toBe(benchBig.pid);
+      // Fatigue ping-pong check: benchFor strictly clears Trouble's tiredAt line
+      for (const p of t.players) {
+        p.fouls = 0;
+        p.energy = th.tiredAt - 0.01;
+      }
+      expect(benchFor(s, 0, onBig.pid, { q: 2, ahead: false })).toBeUndefined();
+    }
+
+    // P0 #1: Staff calls show concrete measured values, and deliberate timeouts earn huddle composure without rewarding back-to-back spam
+    {
+      const fakeCall = {
+        state: 'call' as const,
+        draft: { id: 'pack', label: 'Pack the paint', why: 'Points in the paint 44 to 26', choice: { kind: 'tactics' as const, tactics: game().sim.baseTactics(0) } },
+        m: { pick: 0, best: 0, tried: 5, by: 'pts' as const, reading: { pts: 1.4, raw: 1.7, se: 0.5, band: 0.4, win: 0.04, winSe: 0.015, n: 320 } },
+        at: 'Q2 6:00',
+        base: '',
+        steps: 40,
+      };
+      const cn = callNote(fakeCall);
+      expect(cn.worth).toBe('+1.4 pts');
+      expect(cn.text).toContain('+1.4 pts');
+      expect(cn.actions[0].label).toBe('Pack the paint');
+      expect(callBannerLine(fakeCall)).toContain('+1.4 pts');
+      const g = game(14);
+      play(g, 30);
+      const s = g.sim;
+      s.T[0].timeouts = 5;
+      s.T[0].huddleOff = 0;
+      s.T[0].huddleDef = 0;
+      s.T[0].lastHuddleTO = -999;
+      s.T[1].run = 0;
+      s.poss = 0;
+      expect(s.callTimeout(0, 'stop run')).toBe(true);
+      expect(s.T[0].huddleOff).toBe(FEEL.ato.huddlePoss);
+      expect(s.T[0].huddleDef).toBe(FEEL.ato.huddlePoss);
+      // Consume 1 possession and spam another timeout immediately (elapsed gap < 120s, no run, not late): does NOT refresh huddle lift
+      s.T[0].huddleOff = 1;
+      s.T[0].huddleDef = 1;
+      s.poss = 0;
+      expect(s.callTimeout(0, 'spam')).toBe(true);
+      expect(s.T[0].huddleOff).toBe(1);
     }
   });
 });

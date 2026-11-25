@@ -2,7 +2,7 @@
 // over the line) and the counter-offers an AI team would take instead of the one on the table.
 import type { League, Player } from '../types';
 import { seasonLabel } from '../constants';
-import { contractExp, salaryFor } from '../playerGen';
+import { contractExp, playerAge, salaryFor } from '../playerGen';
 import { contractSeason, playerName, rosterMaxNow, standardRoster } from './helpers';
 import { summerRoster, tradeValue } from './contracts';
 import { neutralBalance } from './tradePackages';
@@ -169,29 +169,38 @@ function prune(league: League, found: TradeOffer, base: TradeOffer): TradeOffer 
 
 /**
  * Core players on the user's roster that "Make it work" should protect by default so it doesn't
- * casually throw in your franchise star for a role-player trade.
- * - `soft`: top 2 core pieces (80+ OVR, or #1 player if 78+ OVR) not already placed in the deal.
- * - `hard`: core stars (82+ OVR) who clearly outclass every player the user is acquiring; never
- *   added even on fallback.
+ * casually throw in a franchise star (including aging supermax stars whose raw tradeValue is
+ * depressed by contract burden) as salary filler.
+ * - `soft`: top 2 players by trade value AND top 2 players by OVR (80+ OVR, or #1 if 78+ OVR).
+ * - `hard`: core stars (82+ OVR) who are at least as good on court as every target acquired, or
+ *   clearly outclass the return on value/age; never added even on fallback.
  */
 function userCoreGuards(league: League, tid: number, alreadySent: readonly number[], targetPids: readonly number[]): { soft: number[]; hard: number[] } {
   if (tid !== league.userTid) return { soft: [], hard: [] };
   const sent = new Set(alreadySent);
-  const ranked = standardRoster(league, tid)
-    .map((p) => ({ p, v: tradeValue(league, p, 'retool') }))
-    .sort((a, b) => b.v - a.v || b.p.ovr - a.p.ovr);
+  const roster = standardRoster(league, tid).map((p) => ({ p, v: tradeValue(league, p, 'retool') }));
+  const byVal = [...roster].sort((a, b) => b.v - a.v || b.p.ovr - a.p.ovr);
+  const byOvr = [...roster].sort((a, b) => b.p.ovr - a.p.ovr || b.v - a.v);
   const targets = targetPids.map((pid) => league.players[pid]).filter((p): p is Player => !!p);
   const maxTargetOvr = targets.reduce((m, p) => Math.max(m, p.ovr), 0);
   const maxTargetVal = targets.reduce((m, p) => Math.max(m, tradeValue(league, p, 'retool')), 0);
-  const soft: number[] = [];
-  const hard: number[] = [];
-  for (let i = 0; i < Math.min(2, ranked.length); i++) {
-    const { p, v } = ranked[i];
-    if (sent.has(p.pid)) continue;
-    if (p.ovr >= 80 || (i === 0 && p.ovr >= 78)) soft.push(p.pid);
-    if (p.ovr >= 82 && p.ovr > maxTargetOvr + 2 && v > maxTargetVal * 1.15) hard.push(p.pid);
+  const maxTargetAge = targets.reduce((m, p) => Math.max(m, playerAge(p, league.season)), 0);
+  const softSet = new Set<number>();
+  const hardSet = new Set<number>();
+  for (const list of [byVal, byOvr]) {
+    for (let i = 0; i < Math.min(2, list.length); i++) {
+      const { p, v } = list[i];
+      if (sent.has(p.pid)) continue;
+      if (p.ovr >= 80 || (i === 0 && p.ovr >= 78)) softSet.add(p.pid);
+      if (
+        p.ovr >= 82 &&
+        (p.ovr >= maxTargetOvr ||
+          (p.ovr >= maxTargetOvr - 2 && (v > maxTargetVal * 1.15 || (maxTargetAge >= 32 && playerAge(p, league.season) <= maxTargetAge - 2))))
+      )
+        hardSet.add(p.pid);
+    }
   }
-  return { soft, hard };
+  return { soft: [...softSet], hard: [...hardSet] };
 }
 
 function findWork(league: League, offer: TradeOffer, keep: readonly number[] = [], opts: { cash?: boolean; best?: boolean } = {}): WorkResult {

@@ -40,9 +40,11 @@ export interface Feel {
    * when it just got organised; as much as the coach's tactics rating makes of it (`at` of it at 50,
    * `per` more a point), less `set` when it was the defense that called time and is set for it. Its
    * turnovers come at `to` of the usual rate. An AI coach's own set keeps `aiSet` more of its edge
-   * than at life size (TK.aiSet).
+   * than at life size (TK.aiSet). A deliberate (non-routine) timeout also settles the calling team
+   * for `huddlePoss` trips on each end, adding `huddle` to its make probability and tightening its
+   * defense & ball security out of the huddle.
    */
-  ato: { open: number; plain: number; at: number; per: number; set: number; to: number; aiSet: number };
+  ato: { open: number; plain: number; at: number; per: number; set: number; to: number; aiSet: number; huddle: number; huddlePoss: number };
   /**
    * Room at the top. A player whose ratings are past the best the league had when it was made (see
    * legendRoom: his raw overall over the top of the league's scale, all of the room `span` raw points
@@ -69,9 +71,9 @@ export interface Feel {
 
 const LOUD: Feel = {
   tactics: { edge: 2, mult: 1.5, fit: 1.5 },
-  hot: { from: 3, per: 0.025, max: 0.075, miss: 2, sit: 2, coldFrom: 4, coldPer: 0.012, coldMax: 0.036, feed: 1.2, feedCall: 1.7 },
-  momentum: { from: 6, per: 0.015, max: 0.06, home: 1.3, to: 0.15 },
-  ato: { open: 0.9, plain: 0.35, at: 0.85, per: 0.01, set: 0.25, to: 0.5, aiSet: 1.5 },
+  hot: { from: 3, per: 0.032, max: 0.095, miss: 2, sit: 2, coldFrom: 4, coldPer: 0.015, coldMax: 0.045, feed: 1.2, feedCall: 2.1 },
+  momentum: { from: 6, per: 0.022, max: 0.085, home: 1.3, to: 0.25 },
+  ato: { open: 1.45, plain: 0.65, at: 0.85, per: 0.01, set: 0.25, to: 0.45, aiSet: 1.5, huddle: 0.032, huddlePoss: 3 },
   tails: { span: 3.5, use: 0.015, ceil: 0.015, contest: 0.1, three: 0.012, feature: 0.1 },
 };
 
@@ -79,7 +81,7 @@ const PURIST: Feel = {
   tactics: { edge: 1, mult: 1, fit: 1 },
   hot: { from: 3, per: 0, max: 0, miss: 2, sit: 2, coldFrom: 4, coldPer: 0, coldMax: 0, feed: 1, feedCall: 1.25 },
   momentum: { from: 6, per: 0, max: 0, home: 1, to: 0 },
-  ato: { open: 0, plain: 0, at: 1, per: 0, set: 0, to: 1, aiSet: 1 },
+  ato: { open: 0, plain: 0, at: 1, per: 0, set: 0, to: 1, aiSet: 1, huddle: 0, huddlePoss: 0 },
   tails: { span: 3.5, use: 0, ceil: 0, contest: 0, three: 0, feature: 0 },
 };
 

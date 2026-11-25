@@ -635,22 +635,25 @@ export default function Live() {
           banner={
             s.intro || frozen || !s.banner
               ? undefined
-              : s.banner.id.startsWith('call-') && !simBusy
+              : !simBusy && (s.banner.id.startsWith('call-') || s.banner.kicker === 'Staff')
                 ? (() => {
-                    const n = notes.find((x) => x.id.startsWith('call-'));
+                    const n = s.banner.id.startsWith('call-') ? notes.find((x) => x.id.startsWith('call-')) : notes.find((x) => x.id === s.banner!.id && x.actions.length > 0);
                     const a = n?.actions[0];
-                    return n && a
-                      ? {
-                          ...s.banner,
-                          action: {
-                            label: 'Apply',
-                            run: () => {
-                              act(n, a);
-                              s.dropBanner();
-                            },
-                          },
-                        }
-                      : s.banner;
+                    if (!n || !a) return s.banner;
+                    const worth = typeof n.worth === 'string' && n.worth.startsWith('+') ? n.worth : '';
+                    const line = worth && !s.banner.line?.includes(worth) ? (s.banner.line ? `${worth} · ${s.banner.line}` : `Est. ${worth}`) : s.banner.line;
+                    const label = a.kind === 'timeout' ? 'Timeout' : a.label.length <= 14 ? a.label : 'Apply';
+                    return {
+                      ...s.banner,
+                      line,
+                      action: {
+                        label,
+                        run: () => {
+                          act(n, a);
+                          s.dropBanner();
+                        },
+                      },
+                    };
                   })()
                 : s.banner
           }
@@ -675,15 +678,24 @@ export default function Live() {
               : undefined
           }
           finalOffer={
-            // (only while it's still decided: a lead that came back takes the offer with it)
-            finalOffer && !offer && sealed
+            // (at a 5:00 clutch stop in a decided game, offer "Sim to final" right there; otherwise when sealed)
+            (s.clutchDecided || (finalOffer && sealed)) && !offer
               ? {
                   onSim: () => {
+                    s.clearClutchDecided();
                     setFinalOffer(false);
                     s.skip('end');
                   },
-                  onClose: closeFinalOffer,
+                  onClose: () => {
+                    const wasClutchStop = s.clutchDecided;
+                    s.clearClutchDecided();
+                    closeFinalOffer();
+                    if (game) finalOffered.current = game.game.gid;
+                    if (wasClutchStop && paused) s.togglePause();
+                  },
                   left: `${Math.floor(Math.max(0, view.clock) / 60)}:${String(Math.floor(Math.max(0, view.clock) % 60)).padStart(2, '0')}${view.q > 4 ? ' of overtime' : ''}`,
+                  label: s.clutchDecided ? `Not close · ${Math.floor(Math.max(0, view.clock) / 60)}:${String(Math.floor(Math.max(0, view.clock) % 60)).padStart(2, '0')} left` : undefined,
+                  sticky: s.clutchDecided,
                 }
               : undefined
           }

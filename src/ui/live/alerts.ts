@@ -93,6 +93,18 @@ export function foulLimit(q: number, mode: GameManagement['foulTrouble']): numbe
   return mode === 'strict' ? base - (qq === 1 ? 0 : 1) : mode === 'loose' ? base + 1 : base;
 }
 
+/**
+ * Foul and fatigue trouble lines shared by the Trouble panel and benchFor so a suggested sub
+ * can never immediately trigger Trouble again and ping-pong back and forth.
+ */
+export function troubleThresholds(q: number, manage: Pick<GameManagement, 'foulTrouble' | 'fatigueSub'>, ahead = false) {
+  const limit = foulLimit(ahead ? q + 1 : q, manage.foulTrouble);
+  const rest = !ahead ? 0 : q === 2 ? 0.3 : 0.1;
+  const tiredAt = manage.fatigueSub + 0.05;
+  const freshAt = Math.max(0.75, tiredAt + 0.02);
+  return { limit, rest, tiredAt, freshAt };
+}
+
 /** Whether the staff will call a timeout itself at the next dead ball to stop the run (the engine's auto-timeout rule). */
 export function staffCallsTimeout(view: Drawn, side: 0 | 1, manage: GameManagement, manualSubs: boolean): boolean {
   if (!manage.autoTimeouts || manualSubs) return false;

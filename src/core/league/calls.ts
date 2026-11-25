@@ -53,9 +53,9 @@ import { seasonWeight } from './jobSecurity';
 import { marqueeFA, offerBlockedReason, signingClosedReason, userOffer } from './freeAgency';
 import { filterTargets, maxTakeBack, onBlock, tradeTargets } from './tradeFinder';
 import { makeItWork } from './tradeHelp';
-import { packageFor } from './tradePackages';
-import { executeTrade, teamAccepts, tradingClosedReason, validateTrade, type TradeOffer } from './trades';
-import { askingContract, tradeValue, releasedBy } from './contracts';
+import { neutralBalance, packageFor } from './tradePackages';
+import { executeTrade, findPick, teamAccepts, tradingClosedReason, validateTrade, type TradeOffer } from './trades';
+import { askingContract, FIRST_VALUE, tradeValue, releasedBy } from './contracts';
 import { assetText, cleanProposals } from './proposals';
 import { ensureRotation, userGameOnDay } from './games';
 import { seriesLabel } from './playoffs';
@@ -847,14 +847,115 @@ function contractText(league: League, p: Player): string {
   return `${playerName(p)}: ${playerAge(p, s)}, ${years === 1 ? `${money(total)}, expiring` : `${money(total)} over ${years} seasons${option}`}`;
 }
 
+/** The staff's asset, age, core, and title-window check on a deadline trade. */
+export interface DeadlineAssessment {
+  bad: boolean;
+  reason: string;
+  score: number;
+  window: 'contender' | 'playoff' | 'outside';
+  netValue: number;
+}
+
+/** Where the user's team stands relative to a real title window. */
+function titleWindow(league: League, tid = league.userTid): 'contender' | 'playoff' | 'outside' {
+  const team = league.teams[tid];
+  if (team.strategy === 'rebuild') return 'outside';
+  const fc = leagueForecast(league)?.teams[tid];
+  const playoffOdds = fc ? fc.reach[0] : (oddsNow(league)?.now ?? 500) / 1000;
+  if (playoffOdds < 0.5) return 'outside';
+  const titleOdds = fc?.reach[4] ?? 0;
+  const confOdds = fc?.reach[2] ?? 0;
+  if (titleOdds >= 0.04 || confOdds >= 0.18 || (team.strategy === 'contend' && playoffOdds >= 0.75)) return 'contender';
+  return 'playoff';
+}
+
+/**
+ * Evaluate a deadline trade on neutral value, core protection, age curve, draft-pick cost, and
+ * title window so the staff neither proposes destructive overpays nor labels bad deals as helpful.
+ */
+export function assessDeadlineDeal(league: League, offer: TradeOffer, mode: 'buy' | 'sell'): DeadlineAssessment {
+  const me = league.userTid;
+  const s = league.season;
+  const window = titleWindow(league, me);
+  const roster = standardRoster(league, me);
+  const outPlayers = offer.a.pids.map((pid) => league.players[pid]).filter((p): p is Player => !!p);
+  const inPlayers = offer.b.pids.map((pid) => league.players[pid]).filter((p): p is Player => !!p);
+  const outFirsts = offer.a.dpids.filter((d) => findPick(league, d)?.round === 1).length;
+  const bal = neutralBalance(league, offer, 'a');
+  const scale = Math.max(FIRST_VALUE, bal.out, bal.out + bal.net);
+  const share = bal.net / scale;
+  const bestIn = [...inPlayers].sort((a, b) => b.ovr - a.ovr)[0];
+  const bestOut = [...outPlayers].sort((a, b) => b.ovr - a.ovr)[0];
+  const bestInAge = bestIn ? playerAge(bestIn, s) : 0;
+
+  let bad = false;
+  let reason = '';
+
+  if (mode === 'buy') {
+    const top2Ovr = new Set(
+      [...roster]
+        .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
+        .slice(0, 2)
+        .filter((p) => p.ovr >= 80)
+        .map((p) => p.pid),
+    );
+    const top2Val = new Set(
+      [...roster]
+        .sort((a, b) => tradeValue(league, b) - tradeValue(league, a) || a.pid - b.pid)
+        .slice(0, 2)
+        .filter((p) => p.ovr >= 80)
+        .map((p) => p.pid),
+    );
+    const coreOut = outPlayers.filter((p) => top2Ovr.has(p.pid) || top2Val.has(p.pid)).sort((a, b) => b.ovr - a.ovr)[0];
+    if (coreOut && (!bestIn || bestIn.ovr <= coreOut.ovr + 2 || (outFirsts > 0 && bestIn.ovr <= coreOut.ovr + 4))) {
+      bad = true;
+      reason =
+        outFirsts > 0
+          ? `Bad deal — gives up ${playerName(coreOut)} and ${plural(outFirsts, 'first')} without a clear upgrade.`
+          : `Bad deal — gives up ${playerName(coreOut)} without a clear upgrade.`;
+    } else if ((bal.net < -FIRST_VALUE * 0.85 && share < -0.16) || bal.net < -FIRST_VALUE * 1.4) {
+      bad = true;
+      reason = 'Bad value — you give up far more than you get back.';
+    } else if (bestIn && bestInAge >= 32 && outFirsts >= 2) {
+      bad = true;
+      reason = `Bad deal — mortgages ${plural(outFirsts, 'first')} for ${bestInAge}-year-old ${playerName(bestIn)}.`;
+    } else if (bestIn && bestInAge >= 30 && outFirsts >= 3) {
+      bad = true;
+      reason = `Bad deal — gives up ${plural(outFirsts, 'first')} for ${bestInAge}-year-old ${playerName(bestIn)}.`;
+    } else if (bestIn && bestInAge >= 32 && outPlayers.some((p) => p.ovr >= 76 && playerAge(p, s) <= bestInAge - 5 && p.ovr >= bestIn.ovr - 4)) {
+      bad = true;
+      reason = `Bad deal — trades younger talent for ${bestInAge}-year-old ${playerName(bestIn)}.`;
+    } else if (bestIn && window !== 'contender' && outFirsts >= 1 && (bestInAge >= 31 || contractExp(bestIn.contract) <= s)) {
+      bad = true;
+      reason = `Bad fit for your window — don't spend future picks on ${bestInAge >= 31 ? `a ${bestInAge}-year-old` : 'an expiring rental'} outside a title run.`;
+    } else if (bestIn && window !== 'contender' && outFirsts >= 2 && bestInAge >= 29) {
+      bad = true;
+      reason = 'Bad fit for your window — too much draft capital outside a title run.';
+    } else if (bestIn && outFirsts >= 2 && (bestInAge >= 34 || contractExp(bestIn.contract) <= s)) {
+      bad = true;
+      reason = 'Bad deal — too many future picks for a short-term addition.';
+    }
+  } else {
+    if ((bal.net < -FIRST_VALUE * 0.5 && share < -0.12) || bal.net < -FIRST_VALUE) {
+      bad = true;
+      reason = 'Bad value — the return falls short of what you are sending out.';
+    }
+  }
+
+  const ovrGain = (bestIn?.ovr ?? 0) - (bestOut?.ovr ?? 65);
+  const agePenalty = bestIn && bestInAge >= 32 ? (bestInAge - 31) * 2.5 : 0;
+  const pickPenalty = outFirsts * (window === 'contender' ? 2.5 : 5);
+  const score = bal.net * 0.8 + ovrGain * 2.2 - agePenalty - pickPenalty;
+  return { bad, reason, score, window, netValue: bal.net };
+}
+
 /**
  * The staff's deadline call (once a season, the day its card opens): buy with the playoffs likely
- * (the best player better than the team's fifth best that his team would move for what "make it
- * work" says, the team's two most valuable players kept, and with an owner's youth goal its young
- * players too; none that costs one of the owner's money or youth goals, see dealGoals), sell with them
- * unlikely or for a rebuilder (the best package a contender sends for one of the veterans, 28 or
- * older), hold otherwise or when nothing works. The deal's postseason odds are the forecast's read of
- * the rosters with it and without it (the same simulated seasons), its worth a game measured as the card opens.
+ * (the best value-and-window-fit player better than the team's fifth best that his team would move
+ * for what "make it work" says, protecting top players by BOTH trade value and OVR, and with an
+ * owner's youth goal its young players too; rejecting bad overpays, age/window mismatches, or deals
+ * costing owner goals), sell with them unlikely or for a rebuilder (the best fair package a
+ * contender sends for one of the veterans, 28 or older), hold otherwise or when nothing works.
  */
 export function planDeadlineCall(league: League): DeadlineCall {
   const me = league.userTid;
@@ -867,24 +968,43 @@ export function planDeadlineCall(league: League): DeadlineCall {
   if (mode === 'buy') {
     const youth = !!currentGoals(league)?.goals.some((g) => g.kind === 'youth');
     const keep = [
-      ...[...roster]
-        .sort((a, b) => tradeValue(league, b) - tradeValue(league, a))
-        .slice(0, 2)
-        .map((p) => p.pid),
-      ...(youth ? roster.filter((p) => playerAge(p, league.season) <= YOUNG_AGE).map((p) => p.pid) : []),
+      ...new Set([
+        ...[...roster]
+          .sort((a, b) => tradeValue(league, b) - tradeValue(league, a))
+          .slice(0, 2)
+          .map((p) => p.pid),
+        ...[...roster]
+          .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
+          .slice(0, 2)
+          .filter((p) => p.ovr >= 78)
+          .map((p) => p.pid),
+        ...(youth ? roster.filter((p) => playerAge(p, league.season) <= YOUNG_AGE).map((p) => p.pid) : []),
+      ]),
     ];
     const bar = [...roster].sort((a, b) => b.ovr - a.ovr)[4]?.ovr ?? 0;
+    const win = titleWindow(league, me);
+    const targetRank = (t: ReturnType<typeof tradeTargets>[number]) => {
+      const a = playerAge(t.p, league.season);
+      const ageAdj = win === 'contender' ? (a >= 34 ? -3 : 0) : a >= 32 ? -6 : a >= 30 ? -3 : 0;
+      return (onBlock(t.avail) ? 6 : 0) + t.p.ovr + ageAdj;
+    };
     const targets = tradeTargets(league)
       .filter((t) => t.p.ovr > bar && t.avail !== 'franchise' && !t.p.injury)
-      .sort((a, b) => Number(onBlock(b.avail)) - Number(onBlock(a.avail)) || b.p.ovr - a.p.ovr || a.p.pid - b.p.pid)
-      .slice(0, 6);
+      .sort((a, b) => targetRank(b) - targetRank(a) || a.p.pid - b.p.pid)
+      .slice(0, 12);
+    let bestOffer: TradeOffer | null = null;
+    let bestScore = -Infinity;
     for (const t of targets) {
-      const ask = makeItWork(league, { a: { tid: me, pids: [], dpids: [] }, b: { tid: t.p.tid, pids: [t.p.pid], dpids: [] } }, keep);
-      if (works(ask.offer) && !dealGoals(league, ask.offer!).some(costsGoal)) {
-        call.offer = ask.offer!;
-        break;
+      const ask = makeItWork(league, { a: { tid: me, pids: [], dpids: [] }, b: { tid: t.p.tid, pids: [t.p.pid], dpids: [] } }, keep, { best: true });
+      if (!works(ask.offer) || dealGoals(league, ask.offer!).some(costsGoal)) continue;
+      const ev = assessDeadlineDeal(league, ask.offer!, 'buy');
+      if (ev.bad) continue;
+      if (ev.score > bestScore) {
+        bestScore = ev.score;
+        bestOffer = ask.offer!;
       }
     }
+    if (bestOffer) call.offer = bestOffer;
   } else if (mode === 'sell') {
     const vets = roster
       .filter((p) => playerAge(p, league.season) >= 28 && p.ovr >= 70)
@@ -895,7 +1015,7 @@ export function planDeadlineCall(league: League): DeadlineCall {
     for (const v of vets)
       for (const t of buyers) {
         const pkg = packageFor(league, t.tid, { pids: [v.pid], dpids: [] });
-        if (pkg && pkg.myValue - pkg.giveValue > best && works(pkg.offer)) {
+        if (pkg && pkg.myValue - pkg.giveValue > best && works(pkg.offer) && !assessDeadlineDeal(league, pkg.offer, 'sell').bad) {
           best = pkg.myValue - pkg.giveValue;
           call.offer = pkg.offer;
         }
@@ -1497,20 +1617,28 @@ export function staffCalls(league: League): CallCard[] {
         : undefined;
     const on = worth && league.schedule.find((x) => x.gid === worth.gid);
     const pts = worth?.pts;
-    // a buy is the call only once it measures as a gain: one too close to say, or a cost, is his to take, not the staff's
-    const flat = call?.mode === 'buy' && pts !== undefined && pts < WORTH_MIN;
+    // Check asset value, core protection, age curve, and title window on any deadline deal (including saved ones)
+    const check = offer ? assessDeadlineDeal(league, offer, call?.mode === 'sell' ? 'sell' : 'buy') : null;
+    const hurts = call?.mode === 'buy' && pts !== undefined && pts <= -WORTH_MIN;
+    const badDeal = !!check?.bad || hurts;
+    // a buy is the call only once it clears the value/age/window check and measures as a gain
+    const flat = !badDeal && call?.mode === 'buy' && pts !== undefined && pts < WORTH_MIN;
+    const standPrimary = badDeal || flat;
+    const badLine = check?.bad ? check.reason : 'Bad deal — projected to hurt the team on the court.';
     // the staff's opinion of the deal on the row; the odds in words, its contracts and the owner's goals a tap down
     // (measured with the staff's rotation: with his own set by hand, say so, the deal plays as he places them)
-    const measured =
-      pts !== undefined && on
+    const measured = badDeal
+      ? badLine
+      : pts !== undefined && on
         ? `${dealWords(pts)}${league.teams[me].rotation.manual ? " Read with the staff's minutes: yours, set by hand, will differ." : ''}`
         : offer
           ? 'The staff is measuring the deal.'
           : '';
     const detail = offer
       ? [
-          `${flat ? 'The best buy it found: ' : ''}${assetText(league, offer.b)} from ${teamCity(league, offer.b.tid)} for ${assetText(league, offer.a)}.`,
-          ...(pts !== undefined && on && now && call?.oddsGain !== undefined && !now.clinched ? [oddsMoveText(call.oddsGain)] : []),
+          ...(badDeal ? [`Warning: ${badLine}`] : []),
+          `${standPrimary ? 'The best buy it found: ' : ''}${assetText(league, offer.b)} from ${teamCity(league, offer.b.tid)} for ${assetText(league, offer.a)}.`,
+          ...(pts !== undefined && on && now && call?.oddsGain !== undefined && !now.clinched && !badDeal ? [oddsMoveText(call.oddsGain)] : []),
           ...offer.b.pids.map((pid) => `${contractText(league, league.players[pid])}.`),
           ...dealGoals(league, offer)
             .filter((d) => Math.abs(d.with - d.now) >= (d.kind === 'youth' ? 50 : 100))
@@ -1522,7 +1650,10 @@ export function staffCalls(league: League): CallCard[] {
         ? {
             label: call!.mode === 'buy' ? `Trade for ${playerName(league.players[offer.b.pids[0]])}` : `Sell to ${other.abbrev}`,
             action: { kind: 'trade', id, offer },
-            confirm: `You send ${assetText(league, offer.a)}. ${teamCity(league, other)} sends ${assetText(league, offer.b)}. ${measured}`.trim(),
+            ...(badDeal ? { tone: 'bad' as const } : {}),
+            confirm: badDeal
+              ? `Warning: ${badLine} You send ${assetText(league, offer.a)}. ${teamCity(league, other)} sends ${assetText(league, offer.b)}.`
+              : `You send ${assetText(league, offer.a)}. ${teamCity(league, other)} sends ${assetText(league, offer.b)}. ${measured}`.trim(),
           }
         : null;
     cards.push({
@@ -1531,21 +1662,21 @@ export function staffCalls(league: League): CallCard[] {
       title: left === 0 ? 'Trade deadline: today' : `Trade deadline in ${plural(left, 'day')}`,
       line:
         deal && other
-          ? `${odds}The staff's call: ${flat ? 'stand pat' : call!.mode === 'buy' ? `buy ${playerName(league.players[offer!.b.pids[0]])}` : `sell to ${teamCity(league, other)}`}. ${measured}`.trim()
+          ? `${odds}The staff's call: ${standPrimary ? 'stand pat' : call!.mode === 'buy' ? `buy ${playerName(league.players[offer!.b.pids[0]])}` : `sell to ${teamCity(league, other)}`}. ${measured}`.trim()
           : `${odds}The staff's call: ${none}`,
       ...(detail ? { detail } : {}),
-      tone: 'warn',
+      tone: badDeal ? 'bad' : 'warn',
       to: '/office/trade',
       due: left === 0 ? 'Deals by the end of the day' : undefined,
-      // (the staff's call is the solid button: the deal, or the look for one, or standing pat)
+      // (the staff's call is the solid button: bad or flat deals default to Stand pat so one stray tap never takes a bad trade)
       ...(deal
-        ? flat
+        ? standPrimary
           ? { suggestion: stand, choices: [deal] }
           : { suggestion: deal, choices: [stand] }
         : look
           ? { suggestion: look, choices: [stand] }
           : { suggestion: stand, choices: [] }),
-      ...(measure ? { measure } : {}),
+      ...(measure && !badDeal ? { measure } : {}),
     });
   }
 

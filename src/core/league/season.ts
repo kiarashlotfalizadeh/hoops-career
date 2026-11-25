@@ -11,7 +11,7 @@ import { contractExp, playerAge } from '../playerGen';
 import { OFFSEASON_ROSTER_MAX, addInbox, addNews, dateToDay, playerName, prospects, standardRoster, teamCity, teamPlayers, teamSeason, unscheduledGames, withRng } from './helpers';
 import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
-import { applyStaffTactics, ensureRotation, gamesOnDay, makeWhole, playGame, youthNews } from './games';
+import { applyStaffTactics, ensureRotation, gamesOnDay, lowStarMinutes, makeWhole, playGame, youthNews } from './games';
 import { freezeRecordNames, holdsSeasonRecord } from './records';
 import { TAX_SHARE_TO_NON_TAXPAYERS, aiTicketPrice, assessLuxuryTax, shareRevenue } from './finances';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
@@ -691,7 +691,13 @@ export function newSeason(league: League): boolean {
     league.tradeDeadlineDay = sched.tradeDeadlineDay;
     league.cup = sched.cup ? cupState(sched.cup, league.season) : null;
   });
+  // Snapshot the user's prior manual rotation before offseason turnover is applied, so we can
+  // refresh stale targets when the roster turns over substantially or leaves top stars short.
+  const uRot = league.teams[league.userTid]?.rotation;
+  const prevManual = !!uRot?.manual;
+  const prevPlaying = prevManual ? uRot.order.filter((pid) => (uRot.minutes[pid] ?? 0) > 0) : [];
   for (const t of league.teams) {
+    if (t.rotation.shortOk) delete t.rotation.shortOk;
     t.rotation.order = t.rotation.order.filter((pid) => league.players[pid]?.tid === t.tid);
     ensureRotation(league, t.tid);
   }
@@ -703,6 +709,37 @@ export function newSeason(league: League): boolean {
     fillRosters(league, rng);
   });
   for (const t of league.teams) ensureRotation(league, t.tid);
+  // If a manual rotation suffered significant offseason turnover or left a top-two healthy star
+  // under 28 planned minutes without an explicit cap or pin, refresh minute targets for the new roster.
+  if (prevManual && league.teams[league.userTid]?.rotation.manual) {
+    const userTeam = league.teams[league.userTid];
+    const rot = userTeam.rotation;
+    const roster = teamPlayers(league, league.userTid);
+    const curPids = new Set(roster.map((p) => p.pid));
+    const prevSet = new Set(prevPlaying);
+    const top8 = roster
+      .filter((p) => !p.injury)
+      .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
+      .slice(0, 8);
+    const startersLeft = prevPlaying.slice(0, 5).filter((pid) => !curPids.has(pid)).length;
+    const newInTop8 = prevPlaying.length >= 5 ? top8.filter((p) => !prevSet.has(p.pid)).length : 0;
+    const low = lowStarMinutes(league, league.userTid, { includeDismissed: true });
+    const unpinnedLow = low.filter((x) => !rot.set?.includes(x.player.pid));
+    if (startersLeft >= 2 || newInTop8 >= 3 || unpinnedLow.length > 0) {
+      userTeam.rotation = autoRotation(roster, { ...rot, manual: false });
+      const reason =
+        unpinnedLow.length > 0
+          ? `Last season's minute targets left ${unpinnedLow.map((x) => `${playerName(x.player)} (${x.planned} min)`).join(' and ')} short on minutes.`
+          : 'Your roster turned over significantly over the summer.';
+      addInbox(league, {
+        from: 'Assistant Coach',
+        subject: 'Rotation refreshed for the new roster',
+        body: `${reason} We reset your minute targets to fit this season's roster so your stars get full minutes. Adjust them anytime on Rotation.`,
+        tone: 'neutral',
+        link: '/team/rotation',
+      });
+    }
+  }
   // remaining unsigned prospects from older classes are cleaned up
   for (const p of prospects(league)) if (p.draft.year < league.season) delete league.players[p.pid];
   compactRetired(league);

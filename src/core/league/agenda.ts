@@ -18,7 +18,7 @@ import { marqueeFA, offerBlockedReason, signingClosedReason, userOffer, walkRisk
 import { acceptProposal, declineProposal, offerRating, offerSubject, openProposals, proposalError, proposalThird, stopsForOffer } from './proposals';
 import { autoDraftUserPick, continueDraft } from './season';
 import { nextPick } from './draft';
-import { giveShare, noMinutes, userGameOnDay } from './games';
+import { giveShare, giveStarMinutes, lowStarMinutes, noMinutes, userGameOnDay } from './games';
 import { money, plural } from '../format';
 import { planByUser } from './gamePlans';
 import { ultimatumVerdict } from './jobSecurity';
@@ -39,7 +39,7 @@ export const CALL_KINDS: ReadonlySet<AgendaKind> = new Set<CallKind>(['injury', 
  * stops one: the rest waits in the action queue and the digest. Every offer had stopped one: 15-20
  * stops a season, most of them for offers at about even value (the playtest, 2026-11-23).
  */
-export const STOP_KINDS: ReadonlySet<AgendaKind> = new Set<AgendaKind>(['tradeOffer', 'tradeRequest', 'injury', 'deadline', 'series']);
+export const STOP_KINDS: ReadonlySet<AgendaKind> = new Set<AgendaKind>(['minutes', 'tradeOffer', 'tradeRequest', 'injury', 'deadline', 'series']);
 
 /** Whether an item of the queue stops a long sim the day it opens. */
 export const stopsSim = (i: Pick<AgendaItem, 'kind' | 'required' | 'quiet'>) => i.required || (STOP_KINDS.has(i.kind) && !i.quiet);
@@ -52,8 +52,8 @@ export type AgendaAction =
   /** `pids`: several at once (the staff's picks for the opening-night cuts), `pid` the first of them. */
   | { kind: 'release'; pid: number; pids?: number[] }
   | { kind: 'sign'; pid: number }
-  /** A manual rotation's regulars at 0 minutes: give them the staff's share (`keep`: leave them out, on purpose). */
-  | { kind: 'minutes'; pids: number[]; keep?: boolean }
+  /** A manual rotation's regulars at 0 minutes (or top-two stars under 28 min when `low`): fix or keep as set. */
+  | { kind: 'minutes'; pids: number[]; keep?: boolean; low?: boolean }
   | { kind: 'autoPick' }
   | { kind: 'proposal'; id: number; accept: boolean }
   | { kind: 'guide'; step: GuideStep }
@@ -411,6 +411,23 @@ export function agenda(league: League): AgendaItem[] {
         choices: [{ label: zero.length === 1 ? 'Keep him out' : 'Keep them out', action: { kind: 'minutes', pids: zero.map((p) => p.pid), keep: true } }],
         pids: zero.map((p) => p.pid),
       });
+    const lowStars = lowStarMinutes(league);
+    if (lowStars.length)
+      items.push({
+        id: `lowMinutes:${lowStars.map((x) => `${x.player.pid}:${x.planned}`).join(',')}`,
+        kind: 'minutes',
+        required: false,
+        title:
+          lowStars.length === 1
+            ? `${playerName(lowStars[0].player)} is only set for ${lowStars[0].planned} minutes`
+            : 'Top stars short on minutes',
+        line: `${lowStars.map((x) => `${playerName(x.player)} (${x.player.ovr}): ${x.planned} min`).join(' · ')}. Your top two players should play around 32–36 minutes.`,
+        tone: 'warn',
+        to: '/team/rotation',
+        suggestion: { label: 'Give star minutes', action: { kind: 'minutes', pids: lowStars.map((x) => x.player.pid), low: true } },
+        choices: [{ label: 'Keep as set', action: { kind: 'minutes', pids: lowStars.map((x) => x.player.pid), keep: true, low: true } }],
+        pids: lowStars.map((x) => x.player.pid),
+      });
   }
 
   // the draft: his pick on the clock
@@ -448,11 +465,22 @@ export function agenda(league: League): AgendaItem[] {
       ...(stopsForOffer(league, pr) ? {} : { quiet: true }),
       to: `/office/trade?offer=${pr.id}`,
       due: `Stands until ${short(league, pr.expires)}`,
-      choices: [
-        // (a trade from a row on Today: the second tap is the handshake)
-        { label: 'Accept', action: { kind: 'proposal', id: pr.id, accept: true }, tone: 'good', confirm: 'The trade goes through at once.' },
-        { label: 'Turn down', action: { kind: 'proposal', id: pr.id, accept: false } },
-      ],
+      choices:
+        read.rating === 'poor'
+          ? [
+              { label: 'Turn down', action: { kind: 'proposal', id: pr.id, accept: false } },
+              {
+                label: 'Accept',
+                action: { kind: 'proposal', id: pr.id, accept: true },
+                tone: 'bad',
+                confirm: `${read.label}. ${read.why} The trade goes through at once.`,
+              },
+            ]
+          : [
+              // (a trade from a row on Today: the second tap is the handshake)
+              { label: 'Accept', action: { kind: 'proposal', id: pr.id, accept: true }, tone: 'good', confirm: 'The trade goes through at once.' },
+              { label: 'Turn down', action: { kind: 'proposal', id: pr.id, accept: false } },
+            ],
       pids: want.map((p) => p.pid),
     });
   }
@@ -572,6 +600,18 @@ export function resolveAgenda(league: League, a: AgendaAction): { ok: boolean; t
       const rot = league.teams[league.userTid].rotation;
       const ps = a.pids.map((pid) => league.players[pid]).filter((p) => p && p.tid === league.userTid);
       if (!ps.length) return { ok: false, text: 'They are no longer on your roster.' };
+      if (a.low) {
+        if (a.keep) {
+          rot.shortOk = [...new Set([...(rot.shortOk ?? []), ...ps.map((p) => p.pid)])];
+          return { ok: true, text: 'Kept your minute targets as set.' };
+        }
+        giveStarMinutes(
+          league,
+          league.userTid,
+          ps.map((p) => p.pid),
+        );
+        return { ok: true, text: ps.map((p) => `${playerName(p)}: ${rot.minutes[p.pid]} minutes`).join(' · ') + '.' };
+      }
       if (a.keep) {
         rot.benched = [...new Set([...(rot.benched ?? []), ...ps.map((p) => p.pid)])];
         return { ok: true, text: `${ps.map((p) => playerName(p)).join(' and ')} stay${ps.length === 1 ? 's' : ''} out of the rotation.` };

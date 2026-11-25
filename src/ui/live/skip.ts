@@ -53,9 +53,8 @@ export function sealedGame(v: { q: number; clock: number; ball: 0 | 1 | null; si
  * the court is drawing, or at a break the one about to start. (The drawn view can't say: it's taken
  * before the sim steps on, so on a period's first possession it still reads the period before, and a
  * skip "to the end" of that one would play through the period being drawn.) `sim` is where the game
- * itself is: clutch time is offered while the game hasn't reached it, and not in a fourth quarter
- * already decided (`decided`: closeGame says it isn't close), where there's no finish to skip to.
- * (A skip to clutch time stops at 5:00 whatever the score there: useLiveGame.skip.)
+ * itself is: clutch time stays offered until the game reaches 5:00 in the fourth even when the score
+ * looks decided, so a coach always gets the choice to attempt a comeback or sim to final there.
  */
 export function skipChoices(playing: number, atBreak: boolean, sim: { q: number; clock: number }, decided = false): SkipChoice[] {
   const inClutch = playing >= 4 && (atBreak ? playing >= 5 : sim.q >= 4 && sim.clock <= CLUTCH_SEC);
@@ -70,7 +69,7 @@ export function skipChoices(playing: number, atBreak: boolean, sim: { q: number;
     { id: 'quarter', label: `End of ${periodLabel(playing)}`, sub: 'Stops at the break, with its report.' },
     // (from the first quarter's break, the end of the next quarter is halftime)
     ...(playing === 1 && !atBreak ? [{ id: 'half' as SkipTo, label: 'Halftime', sub: 'Plays through the second quarter too.' }] : []),
-    ...(playing <= 4 && !decided && !(sim.q >= 4 && sim.clock <= CLUTCH_SEC) ? [{ id: 'clutch' as SkipTo, label: 'Clutch time', sub: 'Stops with 5:00 left in the fourth.' }] : []),
+    ...(playing <= 4 && !(sim.q >= 4 && sim.clock <= CLUTCH_SEC) ? [{ id: 'clutch' as SkipTo, label: 'Clutch time', sub: 'Stops with 5:00 left in the fourth.' }] : []),
     ...clutchStops,
     {
       id: 'end',

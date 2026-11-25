@@ -206,10 +206,12 @@ export const shotsMethods = {
     if (this.opts.type === 'playoffs') p -= K.playoffD;
     // a core that has played and won together (K.cohesion)
     p += off.coh;
-    // the hot hand and the cold one, and a side on a run (FEEL.hot, FEEL.momentum)
+    // the hot hand and the cold one, a side on a run, and post-timeout huddle composure (FEEL)
     const hand = heat(sh.hot, sh.cold);
     const mo = momentum(off.run, off.side === 0 && !this.opts.neutral);
-    p += hand + mo;
+    const hudOff = this.offHuddle ? FEEL.ato.huddle : 0;
+    const hudDef = this.defHuddle ? FEEL.ato.huddle * 0.85 : 0;
+    p += hand + mo + hudOff - hudDef;
     p += this.env.shoot + this.env.team[off.side] + this.scoreEffect(off, def, three);
     if (s.finish !== 'putback') p += this.tempoOpen() * K.zoneOpen[zone];
     // late-game nerves: close and late, a player short on feel (offensive IQ) shoots a little worse, one with plenty a little better
@@ -239,6 +241,8 @@ export const shotsMethods = {
     if (sh.energy < 0.7) this.impact('fatigue', def.side, (1 - sh.energy) * 0.12 * value * 0.5, sh.pid);
     if (hand > 0) this.impact('hot_hand', off.side, hand * value, sh.pid);
     if (mo > 0) this.impact('momentum', off.side, mo * value, sh.pid);
+    if (hudOff > 0) this.impact('ato', off.side, hudOff * value, sh.pid);
+    if (hudDef > 0) this.impact('ato', def.side, hudDef * value);
 
     // block?
     let blocker: SP | null = null;

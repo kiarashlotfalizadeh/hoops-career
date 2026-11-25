@@ -405,10 +405,11 @@ export const defenseMethods = {
     // (and late in a close game the side ahead is the one that gives it away: K.clutchD)
     const c = K.clutchD;
     const tight = this.q >= 4 && this.clock < c.sec && m !== 0 && Math.abs(m) <= c.within ? (m > 0 ? c.leadTO : c.trailTO) : 1;
-    // (a side being run on gives it away more, and a play drawn up in a timeout is run with care: FEEL)
+    // (a side being run on gives it away more, and a play drawn up / huddle out of a timeout is run with care: FEEL)
     const mo = FEEL.momentum;
     const rattled = mo.to && def.run >= mo.from ? 1 + mo.to * Math.min(1, (def.run - mo.from + 2) / 8) : 1;
-    return clamp(p * last * tight * rattled * (this.atoAct ? FEEL.ato.to : 1), 0.01, 0.4);
+    const hud = this.offHuddle && FEEL.ato.huddle > 0 ? 0.85 : 1;
+    return clamp(p * last * tight * rattled * (this.atoAct ? FEEL.ato.to : hud), 0.01, 0.4);
   },
 
   /** The handler's edge against ball pressure: an overplaying defender gets beaten off the dribble (more the harder he presses), a containing one stays in front. */

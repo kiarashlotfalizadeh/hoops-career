@@ -252,6 +252,7 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
     // tactics out of shape are rebuilt (see repairTactics), so one damaged team doesn't stop every game it's in
     if (!isTactics(t.tactics)) t.tactics = repairTactics(t.tactics);
     cleanTactics(t.tactics);
+    if (t.rotation.shortOk !== undefined && !nums(t.rotation.shortOk)) delete t.rotation.shortOk;
   }
   cleanGamePlans(x);
   // AI trade offers: a damaged one, or one whose players or picks are gone, is dropped (the

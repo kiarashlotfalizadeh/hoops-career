@@ -39,6 +39,10 @@ export const possessionMethods = {
     this.scramble = 1;
     this.atoOpen = 0;
     this.atoAct = false;
+    this.offHuddle = off.huddleOff > 0;
+    this.defHuddle = def.huddleDef > 0;
+    if (off.huddleOff > 0) off.huddleOff--;
+    if (def.huddleDef > 0) def.huddleDef--;
     // a timeout stops play: the trip out of it starts with an inbound, whatever the ball was doing
     // before (a steal or a defensive board still counts as what the trip came from)
     const outOfTimeout = this.timeoutStep;
