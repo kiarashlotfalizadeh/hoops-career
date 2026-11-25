@@ -355,9 +355,16 @@ it('the market: the mid-level, minimums, roster limits, prices over the summer, 
     expect(Math.abs(summerFloor(l, p) - m2 * ROTATION_FLOOR.early)).toBeLessThan(1);
     l.faDay = SUMMER_FLOOR.day;
     expect(Math.abs(summerFloor(l, p) - m2 * ROTATION_FLOOR.late)).toBeLessThan(1);
-    // (and none in season)
+    l.faDay = FA_DAYS - 1;
+    expect(Math.abs(summerFloor(l, p) - m2 * ROTATION_FLOOR.end)).toBeLessThan(1);
+    // rotation players keep a real hold floor in the regular season too (so a 77 OVR doesn't collapse to the minimum)
     l.phase = 'regular';
+    const mReg = marketSalary(l, p);
+    expect(Math.abs(summerFloor(l, p) - mReg * ROTATION_FLOOR.hold)).toBeLessThan(1);
+    // a player released mid-season still clears for the minimum
+    p.released = { tid: 2, season: l.season };
     expect(summerFloor(l, p)).toBe(0);
+    delete p.released;
   }
 
   // a rotation player's summer price holds through the market's first days, then comes down a step a
@@ -721,7 +728,7 @@ it('competing offers for top free agents (W5, B2), and the player priorities the
     expect(roleAsk.amount).toBeGreaterThan(5_000);
     expect(offerBlockedReason(l, role, roleAsk.amount, roleAsk.years)).toMatch(/after your pending offers/);
     expect(userOffer(l, role.pid, roleAsk.amount, roleAsk.years).ok).toBe(false);
-    // the mid-level is still there beside a's offer on space: a third top player can lean on it, and then nothing else can
+    // while a cap-space offer is pending, the mid-level is blocked so it cannot silently wipe out the cap room
     l.teams[U].mleSeason = undefined;
     const c = freeAgent(
       l,
@@ -730,17 +737,14 @@ it('competing offers for top free agents (W5, B2), and the player priorities the
     );
     const cAsk = askingContract(l, c, U);
     expect(marqueeFA(l, c)).toBe(true);
-    const mle = userMleRoom(l, s, c.pid);
-    expect(mle).toBe(exceptionAmount(l, 'mle', s));
-    expect(mle).toBeGreaterThanOrEqual(bidFloor(l, c, cAsk.years));
-    expect(userBid(l, c.pid, Math.min(mle, cAsk.amount), cAsk.years).ok).toBe(true);
-    expect(pendingBid(l, c.pid)!.route).toBe('mle');
-    expect(userMleRoom(l, s)).toBe(0);
-    expect(offerBlockedReason(l, role, roleAsk.amount, roleAsk.years)).toMatch(/uses your mid-level exception|after your pending offers/);
-    withdrawBid(l, c.pid);
-    l.teams[U].mleSeason = s;
-    // with a's offer withdrawn, its room is free again
+    expect(userMleRoom(l, s, c.pid)).toBe(0);
+    expect(offerRoute(l, c, Math.min(exceptionAmount(l, 'mle', s), cAsk.amount), s, cAsk.years)).toBeNull();
+    expect(offerBlockedReason(l, c, Math.min(exceptionAmount(l, 'mle', s), cAsk.amount), cAsk.years)).toMatch(/pending cap-space offer/);
+    expect(userBid(l, c.pid, Math.min(exceptionAmount(l, 'mle', s), cAsk.amount), cAsk.years).ok).toBe(false);
+    // once a's cap-space offer is withdrawn, both the cap space and the mid-level are free again
     expect(withdrawBid(l, a.pid).ok).toBe(true);
+    expect(userMleRoom(l, s, c.pid)).toBe(exceptionAmount(l, 'mle', s));
+    l.teams[U].mleSeason = s;
     expect(userOffer(l, role.pid, roleAsk.amount, roleAsk.years).ok).toBe(true);
     // roster spots: 20 signed and one pending offer fill the 21
     l.teams[U].deadMoney = [];
@@ -782,7 +786,7 @@ it('competing offers for top free agents (W5, B2), and the player priorities the
     expect(star.tid).toBe(U);
   }
 
-  // a mid-level signing counts against a pending offer on cap space; only a minimum signing could have come after it
+  // a mid-level signing is blocked while a cap-space offer is pending so it can't silently cancel it; minimum signings still go through with slack
   {
     const { l, s, cap, open } = bidsSummer();
     const [star] = stars(l, 1);
@@ -802,13 +806,17 @@ it('competing offers for top free agents (W5, B2), and the player priorities the
     const roleAsk = askingContract(l, role, U);
     expect(roleAsk.amount).toBeGreaterThan(1_000);
     expect(roleAsk.amount).toBeLessThanOrEqual(exceptionAmount(l, 'mle', s));
-    expect(offerRoute(l, role, roleAsk.amount, s, roleAsk.years)).toBe('mle');
-    expect(userOffer(l, role.pid, roleAsk.amount, roleAsk.years).ok).toBe(true);
-    expect(l.teams[U].mleSeason).toBe(s);
-    expect(pendingBid(l, star.pid)!.slack).toBeUndefined();
+    expect(offerRoute(l, role, roleAsk.amount, s, roleAsk.years)).toBeNull();
+    const blocked = userOffer(l, role.pid, roleAsk.amount, roleAsk.years);
+    expect(blocked.ok).toBe(false);
+    expect(blocked.reason).toMatch(/pending cap-space offer/);
+    expect(l.teams[U].mleSeason).toBeUndefined();
     const min = askingContract(l, cheap, U);
     expect(userOffer(l, cheap.pid, min.amount, min.years).ok).toBe(true);
     expect(pendingBid(l, star.pid)!.slack).toBe(cheap.contract.salaries[0]);
+    // and the pending cap-space offer still completes cleanly on decision day
+    resolveBids(l);
+    expect(star.tid).toBe(U);
   }
 
   // a contender's offer stays within its cap space, and wins only on a route it can pay with

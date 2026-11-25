@@ -3,7 +3,7 @@
 // his row's meta line), and the stint plan the targets make. A player's sheet sets his spot,
 // minutes, cap, closing and rest on back-to-backs.
 import { attrDisplay } from '../../core/ratings';
-import { Fragment, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ArrowUp, BedDouble, Undo2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { edit } from '../../state/actions';
@@ -50,29 +50,40 @@ export default function Rotation() {
   // the rotation the assistant replaced, until the next edit
   const [undo, setUndo] = useState<RotationT | null>(null);
   const simming = useStore((s) => !!s.sim);
+  useEffect(() => () => void useStore.getState().flush(), []);
 
-  const update = (fn: (r: RotationT) => void) => {
+  const update = (fn: (r: RotationT) => void, now = true) => {
     setUndo(null);
-    edit((l) => {
-      const r = l.teams[l.userTid].rotation;
-      fn(r);
-      r.manual = true;
-      // what his targets add up to as he leaves them: minutes that go missing later left with a player
-      r.whole = players.reduce((a, p) => a + (r.minutes[p.pid] ?? 0), 0);
-    });
+    edit(
+      (l) => {
+        const r = l.teams[l.userTid].rotation;
+        fn(r);
+        r.manual = true;
+        // what his targets add up to as he leaves them: minutes that go missing later left with a player
+        r.whole = players.reduce((a, p) => a + (r.minutes[p.pid] ?? 0), 0);
+      },
+      now,
+    );
+  };
+  const closeEdit = () => {
+    setEditing(null);
+    void useStore.getState().flush();
   };
   const setAssistant = (on: boolean) => {
     if (on) {
       const before = structuredClone(rot);
       // the assistant's rotation as the next game would have it
       if (
-        edit((l) => {
-          l.teams[l.userTid].rotation.manual = false;
-          ensureRotation(l, l.userTid);
-        })
+        edit(
+          (l) => {
+            l.teams[l.userTid].rotation.manual = false;
+            ensureRotation(l, l.userTid);
+          },
+          true,
+        )
       )
         setUndo(before);
-    } else if (edit((l) => void (l.teams[l.userTid].rotation.manual = true))) setUndo(null);
+    } else if (edit((l) => void (l.teams[l.userTid].rotation.manual = true), true)) setUndo(null);
   };
 
   const healthyOrder = order.filter((pid) => !byId.get(pid)?.injury);
@@ -173,7 +184,7 @@ export default function Rotation() {
               <button
                 className="btn xs"
                 onClick={() => {
-                  if (edit((l) => void (l.teams[l.userTid].rotation = undo))) setUndo(null);
+                  if (edit((l) => void (l.teams[l.userTid].rotation = undo), true)) setUndo(null);
                 }}
               >
                 <Undo2 size={14} /> Undo
@@ -311,13 +322,13 @@ export default function Rotation() {
         </div>
       </Section>
 
-      <Sheet open={!!ep} onClose={() => setEditing(null)} title={ep ? `${ep.firstName} ${ep.lastName}` : ''}>
+      <Sheet open={!!ep} onClose={closeEdit} title={ep ? `${ep.firstName} ${ep.lastName}` : ''}>
         {ep && (
           <EditPlayer
             p={ep}
             rot={rot}
             update={update}
-            close={() => setEditing(null)}
+            close={closeEdit}
             order={order}
             names={nameOf}
             starters={startSet}
@@ -397,7 +408,7 @@ function EditPlayer({
 }: {
   p: Player;
   rot: RotationT;
-  update: (fn: (r: RotationT) => void) => void;
+  update: (fn: (r: RotationT) => void, now?: boolean) => void;
   close: () => void;
   order: number[];
   names: (pid: number) => string;
@@ -456,11 +467,14 @@ function EditPlayer({
             disabled={busy}
             steppers
             onChange={(x) =>
-              update((r) => {
-                r.minutes[p.pid] = x;
-                // his target is the coach's own now: the plan plays him this and scales the others around it
-                r.set = [...(r.set ?? []).filter((pid) => pid !== p.pid), ...(x > 0 ? [p.pid] : [])];
-              })
+              update(
+                (r) => {
+                  r.minutes[p.pid] = x;
+                  // his target is the coach's own now: the plan plays him this and scales the others around it
+                  r.set = [...(r.set ?? []).filter((pid) => pid !== p.pid), ...(x > 0 ? [p.pid] : [])];
+                },
+                false,
+              )
             }
             format={(x) => `${x} min`}
             help={

@@ -724,6 +724,18 @@ it('negotiation and extensions: the ask, the walk-away price, counters and patie
     expect(marketSalary(l, p)).toBeLessThan(0.05 * CAP_FOR(l, l.season).salaryCap);
     p.stats[p.stats.length - 1] = { ...blankStats(l.season, AI, false), gp: 60, min: 60 * 32 };
     expect(marketSalary(l, p)).toBe(full);
+    // benching a proven starter for one season can't erase last season's 32 mpg
+    p.stats = [
+      { ...blankStats(l.season - 1, AI, false), gp: 70, min: 70 * 32 },
+      { ...blankStats(l.season, AI, false), gp: 30, min: 30 * 5 },
+    ];
+    expect(roleMpg(l, p)).toBeCloseTo(32, 1);
+    expect(marketSalary(l, p)).toBe(full);
+    // benching an established star (89 OVR) never slashes his price, even without prior seasons
+    const star = freeAgent(l, 89, 27);
+    const starFull = marketSalary(l, star);
+    star.stats = [{ ...blankStats(l.season, U, false), gp: 40, min: 40 * 5 }];
+    expect(marketSalary(l, star)).toBe(starFull);
   }
 }, 120_000);
 

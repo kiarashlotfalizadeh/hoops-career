@@ -210,11 +210,13 @@ export function marketSalary(league: League, p: Player): number {
   let s = valueScore(league, p);
   const a = age(league, p);
   if (a >= 30) s += (a - 29) * 1.1 * STAR_AGE_PAY * clamp((p.ovr - 75) / 10, 0, 1);
-  // the market pays for the role he has shown: past what his minutes say, a quarter of his value counts
+  // the market pays for the role he has shown: past what his minutes say, a quarter of his value counts,
+  // ramping out for established stars (benching an 85+ star can't tank his market price)
   const mpg = roleMpg(league, p);
   if (mpg !== null) {
     const shown = ROLE_PAY.base + ROLE_PAY.perMin * mpg;
-    if (s > shown) s = shown + (s - shown) * ROLE_PAY.keep;
+    const keep = ROLE_PAY.keep + (1 - ROLE_PAY.keep) * clamp((p.ovr - ROLE_PAY.starFrom) / (ROLE_PAY.starFull - ROLE_PAY.starFrom), 0, 1);
+    if (s > shown) s = shown + (s - shown) * keep;
   }
   return salaryForScore(league, s, p.experience);
 }
@@ -224,11 +226,13 @@ export function marketSalary(league: League, p: Player): number {
  * plus ROLE_PAY.perMin a minute a game, so 20 minutes say 80 and 30 say 89, and only what his value
  * has past that is discounted (to ROLE_PAY.keep). A deep reserve the staff played 3.7 minutes a game in 21
  * games asked $23.1M a season on his 80 OVR; the NBA pays a player who hasn't played like a prospect.
+ * Stars (ramping from starFrom to starFull OVR) keep their full value even if benched.
  */
-export const ROLE_PAY = { base: 62, perMin: 0.9, keep: 0.25 };
+export const ROLE_PAY = { base: 62, perMin: 0.9, keep: 0.25, starFrom: 85, starFull: 88 };
 
-/** Minutes a game he played in his latest regular season of 15+ games (this one or the last), or null without one. */
+/** Best minutes a game he played in a qualifying regular season (15+ games) over this season or last, or null without one. */
 export function roleMpg(league: League, p: Player): number | null {
+  let best: number | null = null;
   for (const season of [league.season, league.season - 1]) {
     let gp = 0;
     let min = 0;
@@ -237,9 +241,9 @@ export function roleMpg(league: League, p: Player): number | null {
         gp += s.gp;
         min += s.min;
       }
-    if (gp >= 15) return min / gp;
+    if (gp >= 15) best = best === null ? min / gp : Math.max(best, min / gp);
   }
-  return null;
+  return best;
 }
 
 /** Fair annual salary ($K) for a value score, within the minimum and max for his years in the league. */
@@ -525,18 +529,18 @@ export function askingContract(league: League, p: Player, tid?: number): Ask {
  * the preseason and, for an 80+ player, the season (`hold`): the top of the market signs within the
  * window, the last of it for what the money left can pay.
  */
-export const SUMMER_FLOOR = { ovr: 80, early: 0.75, day: 20, late: 0.6, end: 0.25, mle: 0.55, hold: 0.25 };
-/** A rotation player's summer floor (72-79 OVR): see SUMMER_FLOOR. */
-export const ROTATION_FLOOR = { ovr: 72, early: 0.5, late: 0.4, end: 0.2 };
+export const SUMMER_FLOOR = { ovr: 80, early: 0.75, day: 20, late: 0.6, end: 0.28, mle: 0.55, hold: 0.28 };
+/** A rotation player's summer and regular-season floor (72-79 OVR): see SUMMER_FLOOR. */
+export const ROTATION_FLOOR = { ovr: 72, early: 0.6, late: 0.5, end: 0.4, hold: 0.35 };
 
 /** His summer floor's shares of his market value (see SUMMER_FLOOR), or null under 72 OVR. */
-export const floorTier = (p: Player): { early: number; late: number; end: number } | null =>
+export const floorTier = (p: Player): { early: number; late: number; end: number; hold: number } | null =>
   p.ovr >= SUMMER_FLOOR.ovr ? SUMMER_FLOOR : p.ovr >= ROTATION_FLOOR.ovr ? ROTATION_FLOOR : null;
 
 /**
  * His summer floor through SUMMER_FLOOR.day (`early`), on that day (`late`, from which it comes down a
- * little every day to `end` on the market's last day, see summerFloor) and an 80+ player's in season
- * (`hold`, 0 under 80), $K, or null under 72 OVR (see SUMMER_FLOOR).
+ * little every day to `end` on the market's last day, see summerFloor) and in season (`hold`), $K,
+ * or null under 72 OVR (see SUMMER_FLOOR).
  */
 export function floorAmounts(league: League, p: Player): { early: number; late: number; end: number; hold: number } | null {
   const f = floorTier(p);
@@ -545,7 +549,7 @@ export function floorAmounts(league: League, p: Player): { early: number; late: 
   const star = p.ovr >= SUMMER_FLOOR.ovr;
   const mle = exceptionAmount(league, 'mle');
   const most = star && mle >= m * SUMMER_FLOOR.mle ? mle : Infinity;
-  return { early: Math.min(m * f.early, most), late: Math.min(m * f.late, most), end: Math.min(m * f.end, most), hold: star ? Math.min(m * SUMMER_FLOOR.hold, most) : 0 };
+  return { early: Math.min(m * f.early, most), late: Math.min(m * f.late, most), end: Math.min(m * f.end, most), hold: Math.min(m * f.hold, most) };
 }
 
 /**

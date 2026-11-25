@@ -95,6 +95,7 @@ describe('the Continue loop', () => {
     // here; with none a gain it's no call: agenda.test), once: the next sim plays the series on
     {
       const l = stopping('series');
+      l.settings.injuries = false;
       const me = l.userTid;
       const conf = l.teams[me].conf;
       const [opp, a, b] = l.teams.filter((t) => t.tid !== me && t.conf === conf).map((t) => t.tid);
@@ -165,6 +166,44 @@ describe('the Continue loop', () => {
         expect(at(3, 2)!.title).toBe('You can win the title tonight');
         expect(bigGameTonight({ ...l, phase: 'regular' })).toBeNull();
       }
+      // "Sim to end of playoffs" doesn't stall on playoff confirm stops (elim/close/Game 7)
+      {
+        const s = l.playoffs[0];
+        delete s.winner;
+        s.round = 2;
+        [s.highWins, s.lowWins] = [3, 2];
+        l.schedule = l.schedule.filter((g) => g.played);
+        schedulePlayoffDay(l);
+        const g = l.schedule.find((x) => x.seriesId === s.id && !x.played)!;
+        g.day = l.day + 1;
+        l.callsDone = [...(l.callsDone ?? []), `series:${l.season}:${s.id}`, `series:${l.season}:${s.id}:3-2`];
+        const r = await runSim(l, { kind: 'endPostseason' }, { progress: quiet(l) });
+        expect(l.stopCall?.id?.startsWith('stop:close:')).toBeFalsy();
+        expect(l.stopCall?.id?.startsWith('stop:elim:')).toBeFalsy();
+        expect(r.days).toBeGreaterThanOrEqual(1);
+      }
+    }
+
+    // trade deadline: starting a sim before deadline day always stops ON deadline day even if the deadline card opened days earlier
+    {
+      const l = stopping('deadline-stop');
+      l.settings.injuries = false;
+      l.phase = 'regular';
+      l.day = l.tradeDeadlineDay - 3;
+      // First sim may stop early when the deadline card first opens, or reach deadline day directly
+      let out = await runSim(l, { kind: 'week' }, { progress: quiet(l) });
+      expect(out.stop).toBe('call');
+      if (l.day < l.tradeDeadlineDay) {
+        // Now the deadline card is ALREADY open (in `before`): simming a week MUST still stop on deadline day itself
+        out = await runSim(l, { kind: 'week' }, { progress: quiet(l) });
+        expect(out.stop).toBe('call');
+      }
+      expect(l.day).toBe(l.tradeDeadlineDay);
+      expect(l.stopCall?.id).toBe(`deadline:${l.season}`);
+      // once ON deadline day, simming a week moves past it cleanly without re-stopping
+      const after = await runSim(l, { kind: 'week' }, { progress: quiet(l) });
+      expect(l.day).toBeGreaterThan(l.tradeDeadlineDay);
+      expect(after.days).toBeGreaterThan(0);
     }
 
     // a call that was open when the sim started, or that he settled, or a short absence, or no stops at all, plays on

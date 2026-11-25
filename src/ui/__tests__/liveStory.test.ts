@@ -397,8 +397,8 @@ describe('the story of a live game', () => {
       // halftime offered only in the first quarter, and clutch time only before the game reaches it
       // (the court draws the first quarter's last possession, the game at its buzzer)
       expect(choiceIds(skipChoices(1, false, { q: 1, clock: 0 }))).toEqual(['quarter', 'half', 'clutch', 'end']);
-      expect(choiceIds(skipChoices(4, false, { q: 4, clock: 280 }))).toEqual(['quarter', 'end']);
-      expect(choiceIds(skipChoices(5, false, { q: 5, clock: 290 }))).toEqual(['quarter', 'end']);
+      expect(choiceIds(skipChoices(4, false, { q: 4, clock: 280 }))).toEqual(['quarter', 'min2', 'min1', 'end']);
+      expect(choiceIds(skipChoices(5, false, { q: 5, clock: 290 }))).toEqual(['quarter', 'min2', 'min1', 'end']);
       // a fourth quarter already decided has no clutch time to skip to (closeGame), and the final says so;
       // a lead that big early in the fourth is decided, the same lead in the third isn't yet
       const T = (h: number, a: number) => [{ score: h }, { score: a }];

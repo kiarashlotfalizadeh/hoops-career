@@ -212,6 +212,11 @@ describe('AI front offices', () => {
       expect(sellable(fading.l, R).map((p) => p.pid)).toContain(fading.best.pid);
       const racing = shop('retool', 20, 10, { ovr: 86, age: 31 });
       expect(sellable(racing.l, R).map((p) => p.pid)).not.toContain(racing.best.pid);
+      // a franchise icon (88+ with long tenure under multi-year contract) isn't casually dumped in season 1
+      const icon = shop('retool', 10, 20, { ovr: 88, age: 30 });
+      icon.best.joinedSeason = icon.l.season - 6;
+      icon.best.contract = { start: icon.l.season, salaries: [40_000, 42_000, 44_000] };
+      expect(sellable(icon.l, R).map((p) => p.pid)).not.toContain(icon.best.pid);
     }
 
     // a rebuilder sells its best player once he's 28, and keeps a 27-year-old franchise player
@@ -279,11 +284,11 @@ describe('AI front offices', () => {
     {
       const early = youthLeague(20);
       expect(early.teams.every((t) => youthMovement(early, t.tid) === 0)).toBe(true);
-      const L = youthLeague(50);
+      const L = youthLeague(80);
       for (const conf of ['E', 'W'] as const) {
-        // the bottom four rebuild from about 20 games in; the next one up waits for the deadline
-        for (const t of bottom(L, conf, 4)) expect(youthMovement(L, t.tid)).toBe(1);
-        expect(youthMovement(L, bottom(L, conf, 5)[0].tid)).toBe(0);
+        // before the deadline, the bottom three rebuilders give youth extra minutes (0.5) without full veteran shutdowns
+        for (const t of bottom(L, conf, 3)) expect(youthMovement(L, t.tid)).toBe(0.5);
+        expect(youthMovement(L, bottom(L, conf, 4)[0].tid)).toBe(0);
       }
       expect(youthMovement(L, L.userTid)).toBe(0);
       // after the deadline, every rebuilder out of the race; a contender never

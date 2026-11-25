@@ -67,9 +67,8 @@ export function StaffView({
   const offered = useMemo(() => new Set(decisions.flatMap((n) => n.actions.flatMap((a) => (a.kind === 'sub' ? [a.out] : [])))), [decisions]);
   return (
     <div className="lv-staff">
-      {/* (keyed by his words: a new read ticks in) */}
-      <AssistantHead key={read} name={assistant.name} initials={assistant.initials} read={read} />
-      {decisions.length > 0 ? (
+      {/* Put an active staff call first so its action buttons are always immediately reachable above the bottom nav. */}
+      {decisions.length > 0 && (
         <div className="lv-notes">
           {/* one call at a time, the most urgent: the rest wait a tap away, so the console never stacks cards */}
           {decisions.slice(0, allCalls ? 3 : 1).map((n) => (
@@ -81,7 +80,10 @@ export function StaffView({
             </button>
           )}
         </div>
-      ) : (
+      )}
+      {/* (keyed by his words: a new read ticks in) */}
+      <AssistantHead key={read} name={assistant.name} initials={assistant.initials} read={read} />
+      {decisions.length === 0 && (
         <div key={quiet ?? ''} className="lv-calm small dim" role="status">
           {quiet ?? 'Nothing the staff would change right now.'}
         </div>

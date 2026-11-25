@@ -175,11 +175,11 @@ function clearLeaders({ record }: DayStart, league: League): Set<number> {
 }
 
 /** Games ahead of its conference's second, and games played, before a leader rests its best player on back-to-backs (clearLeader). */
-const CLEAR_LEAD = 6;
-const CLEAR_FROM = 30;
+const CLEAR_LEAD = 5;
+const CLEAR_FROM = 28;
 
-/** The day of the season a rebuilding team at the bottom of its conference starts to play its young players (about 20 games in). */
-const YOUTH_FROM = 40;
+/** The day of the season a rebuilding team at the bottom of its conference starts leaning toward its young players (~35 games in). */
+const YOUTH_FROM = 70;
 
 interface DayStart {
   /** Regular-season games each team has left from today on. */
@@ -230,7 +230,8 @@ function youthLevels(league: League, { left, record }: DayStart): Map<number, nu
     rows.forEach(({ t }, i) => {
       if (t.tid === league.userTid) return;
       if (!after) {
-        if (t.strategy === 'rebuild' && i >= rows.length - 4) out.set(t.tid, 1);
+        // Before the deadline, bottom rebuilders give youth extra minutes without shutting veterans down completely
+        if (t.strategy === 'rebuild' && i >= rows.length - 3) out.set(t.tid, 0.5);
       } else if (t.strategy === 'rebuild' && i >= 10) out.set(t.tid, 1);
       else if (t.strategy !== 'contend' && i >= 11 && (left.get(t.tid) ?? 0) <= 15) out.set(t.tid, 0.5);
     });

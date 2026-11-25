@@ -707,8 +707,8 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
       advice: orbSwing < 0 ? 'Play better defensive rebounders, and no zone against strong rebounding teams. To win the glass yourself, crash harder.' : undefined,
     });
   }
-  const ftSwing = (u.t.ftm - o.t.ftm) * 0.6;
-  if (Math.abs(ftSwing) >= 3) {
+  const ftSwing = u.t.ftm - o.t.ftm;
+  if (Math.abs(ftSwing) >= 5) {
     factors.push({
       title: `Free throws: ${ut.abbrev} ${madeAtt(u.t.ftm, u.t.fta)}, ${ot.abbrev} ${madeAtt(o.t.ftm, o.t.fta)}.`,
       // (every personal foul, offensive ones too: the scorebug's team fouls count the ones toward the penalty)

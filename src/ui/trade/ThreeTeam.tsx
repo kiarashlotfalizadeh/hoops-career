@@ -13,7 +13,7 @@ import { capSalary, evaluateDeal, pickLabel, untradeable, type TradeLeg } from '
 import { useLeagueMemo, useStore } from '../../state/store';
 import { makeDeal } from '../../state/actions/office';
 import { act } from '../../state/actions';
-import { dealAddsText, makeDealWork } from '../../core/league/tradeHelp';
+import { dealAddsText, makeDealWork, type DealAdd } from '../../core/league/tradeHelp';
 import { checkForceDeal, forceDeal } from '../../core/league/godMode';
 import { money } from '../../core/format';
 import { TeamLogo } from '../components/TeamLogo';
@@ -70,6 +70,7 @@ export function ThreeTeam({ league, season, closed, partner, init }: { league: L
   const [moves, setMoves] = useState<Move[]>(init?.moves ?? []);
   const [adding, setAdding] = useState<number | null>(null);
   const [picking, setPicking] = useState<'b' | 'c' | null>(null);
+  const [work, setWork] = useState<{ legs: TradeLeg[]; added: DealAdd[] } | null>(null);
   const teams = [user, b, c];
   // drop anything that is no longer where it was (a trade, a release, a pick used), or that a team no longer in the deal held
   const live = moves.filter(
@@ -190,8 +191,11 @@ export function ThreeTeam({ league, season, closed, partner, init }: { league: L
       );
       return;
     }
-    setMoves(movesOf(res.legs));
-    toast(res.added.length ? `Added ${dealAddsText(league, res.added)}.` : 'They take it as it is.', 'good');
+    if (!res.added.length) {
+      toast('They take it as it is.', 'good');
+      return;
+    }
+    setWork({ legs: res.legs, added: res.added });
   };
   // god mode: only the deal's shape and five players to dress stop a forced deal
   const god = !!league.settings.godMode;
@@ -306,6 +310,30 @@ export function ThreeTeam({ league, season, closed, partner, init }: { league: L
         <button className="btn primary block" style={{ marginTop: 12 }} onClick={() => setAdding(null)}>
           Done
         </button>
+      </Sheet>
+      <Sheet open={!!work} onClose={() => setWork(null)} title="What makes this work">
+        {work && (
+          <div className="col fo-sheet">
+            <p className="fo-lede">Your current deal is unchanged. Both teams would accept if you add {dealAddsText(league, work.added)}.</p>
+            <div className="row">
+              <button type="button" className="btn grow" onClick={() => setWork(null)}>
+                Keep my deal
+              </button>
+              <button
+                type="button"
+                className="btn primary grow"
+                onClick={() => {
+                  const next = work;
+                  setWork(null);
+                  setMoves(movesOf(next.legs));
+                  toast(`Added ${dealAddsText(league, next.added)}.`, 'good');
+                }}
+              >
+                Apply to builder
+              </button>
+            </div>
+          </div>
+        )}
       </Sheet>
       <TeamSheet
         league={league}

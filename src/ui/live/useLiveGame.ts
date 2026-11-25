@@ -818,10 +818,11 @@ export function useLiveGame() {
       for (const b of hurtLines) useStore.getState().toast(`${b.title} is hurt and out for the game.`, 'bad');
       return enterBreak(lg);
     }
-    // clutch time: the court picks up from here (saved there, like a break)
+    // clutch time or a late-period skip: the court picks up from here (saved there, like a break)
     edit(() => void lg.checkpoint());
+    const lateMark = to === 'clutch' || to === 'min2' || to === 'min1' || to === 'sec24';
     // (and the staff measures from it, as at a break)
-    if (to === 'clutch' || hurt.length) staffStop(lg, 2);
+    if (lateMark || hurt.length) staffStop(lg, 2);
     const [h, a] = s.T;
     setAtBreak(false);
     if (hurt.length) {
@@ -832,7 +833,7 @@ export function useLiveGame() {
       ff.current.waiting = true;
       return;
     }
-    if (to === 'clutch') setAnnounce(`Clutch time: ${fmtClock(s.clock)} left in ${periodLabel(s.q)}. ${a.team.abbrev} ${a.score}, ${h.team.abbrev} ${h.score}.`);
+    if (lateMark) setAnnounce(`${to === 'clutch' ? 'Clutch time: ' : ''}${fmtClock(s.clock)} left in ${periodLabel(s.q)}. ${a.team.abbrev} ${a.score}, ${h.team.abbrev} ${h.score}.`);
     setPaused(false);
     nextPossession();
   };
@@ -941,7 +942,7 @@ export function useLiveGame() {
   // the calls about 3 to 1, 11 to 2 in one double-overtime game (round-4 game-day review)
   useEffect(() => {
     if (over || staffCall?.state !== 'call') return;
-    queueBanner([{ id: `call-${staffCall.draft.id}${staffCall.steps}`, tone: 'info', kicker: 'Staff call', title: staffCall.draft.label, line: CALL_BANNER_LINE }]);
+    queueBanner([{ id: `call-${staffCall.draft.id}${staffCall.steps}`, tone: 'info', kicker: 'Staff call', title: staffCall.draft.label, line: CALL_BANNER_LINE, ms: 14_000 }]);
   }, [staffCall, over, queueBanner]);
 
   return {

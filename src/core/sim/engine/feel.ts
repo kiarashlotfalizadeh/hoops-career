@@ -71,8 +71,8 @@ const LOUD: Feel = {
   tactics: { edge: 2, mult: 1.5, fit: 1.5 },
   hot: { from: 3, per: 0.025, max: 0.075, miss: 2, sit: 2, coldFrom: 4, coldPer: 0.012, coldMax: 0.036, feed: 1.2, feedCall: 1.7 },
   momentum: { from: 6, per: 0.015, max: 0.06, home: 1.3, to: 0.15 },
-  ato: { open: 0.55, plain: 0.2, at: 0.75, per: 0.01, set: 0.15, to: 0.6, aiSet: 1.5 },
-  tails: { span: 3.5, use: 0.02, ceil: 0.02, contest: 0.15, three: 0.015, feature: 0.15 },
+  ato: { open: 0.9, plain: 0.35, at: 0.85, per: 0.01, set: 0.25, to: 0.5, aiSet: 1.5 },
+  tails: { span: 3.5, use: 0.015, ceil: 0.015, contest: 0.1, three: 0.012, feature: 0.1 },
 };
 
 const PURIST: Feel = {

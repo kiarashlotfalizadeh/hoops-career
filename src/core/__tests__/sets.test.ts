@@ -368,16 +368,15 @@ describe('sets in the engine', () => {
       // and all of them again 2026-11-24, when the engine came to read perimeter defense and defensive IQ at two thirds weight: see engineDefense.test.ts)
       const expected = {
         ai: [
-          [122, 114, 80, 42, 8, 20, 10, 0],
-          [108, 120, 85, 29, 7, 30, 10, 0],
-          [102, 120, 86, 31, 5, 15, 15, 0],
+          [125, 115, 86, 46, 11, 19, 10, 0],
+          [113, 121, 91, 31, 10, 25, 8, 0],
+          [110, 121, 88, 30, 6, 32, 17, 0],
         ],
-        // (all of them again 2026-11-23, a fictional league's rosters drawn by position: see engineDefense.test.ts)
-        // (taken again when play calls from the bench were retired, and the first and third games when garbage time came for both benches from late in the third quarter, with the team up big easing off and calling off its press; all of them again 2026-11-09, the game-day realism round, and its second round the same day)
+        // (all of them again 2026-11-25: see engineDefense.test.ts)
         coached: [
-          [122, 107, 79, 30, 9, 19, 21, 0],
-          [126, 100, 95, 32, 6, 25, 16, 0],
-          [115, 111, 77, 29, 6, 32, 12, 0],
+          [121, 112, 84, 37, 9, 17, 19, 0],
+          [123, 92, 93, 33, 4, 20, 16, 0],
+          [126, 130, 81, 30, 7, 41, 10, 0],
         ],
       };
       const fp = (res: ReturnType<GameSim['result']>) => [res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot];

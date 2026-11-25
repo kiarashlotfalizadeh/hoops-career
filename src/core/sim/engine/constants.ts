@@ -395,7 +395,7 @@ export const K = {
    * came to win more surely than the NBA's does (streaks of 36 and 39 games in star-check's 64
    * seasons, where the record is 33) and the final margin's SD ran 15.3-15.5 (16.1).
    */
-  envTeam: 0.021,
+  envTeam: 0.0235,
   /**
    * The score effect, from the tip: the side ahead gives back `per` of field-goal percentage for each
    * ten points of its lead and the side behind gains it, up to a lead of `cap`. NBA 2024-26: a quarter's

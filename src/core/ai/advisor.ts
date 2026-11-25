@@ -254,8 +254,12 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
       });
   }
   // the zones: the 2-3 walls off the paint and dares a five that can't shoot to fire; the 3-2 closes
-  // out on the arc and dares one that lives on threes to win inside (a zone and a coverage share a group)
-  if (cur.defense.scheme !== 'zone23' && (spacing <= CRAMPED_SPACING + 6 || backed('zone23')))
+  // out on the arc and dares one that lives on threes to win inside (a zone and a coverage share a group).
+  // Never recommend any zone against a strong rebounding team (aligned with the post-game report's rule).
+  const topFive = cs.slice(0, 5);
+  const oppOreb = topFive.reduce((a, x) => a + x.p.ratings.oreb, 0) / Math.max(1, topFive.length);
+  const strongRebounders = oppOreb >= 52 || data.counters['glass-boxout'] !== undefined;
+  if (!strongRebounders && cur.defense.scheme !== 'zone23' && (spacing <= CRAMPED_SPACING + 2 || (backed('zone23') && spacing <= CRAMPED_SPACING + 6)))
     add({
       id: 'zone23',
       label: '2-3 zone',
@@ -263,7 +267,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
       group: 'coverage',
       patch: { defense: { scheme: 'zone23' } },
     });
-  if (cur.defense.scheme !== 'zone32' && (spacing >= ZONE32_SPACING || backed('zone32')))
+  if (!strongRebounders && cur.defense.scheme !== 'zone32' && (spacing >= ZONE32_SPACING || backed('zone32')))
     add({
       id: 'zone32',
       label: '3-2 zone',

@@ -43,8 +43,9 @@ export const setPlaysMethods = {
     };
     const open: SetPlay['open'] = {};
     const tags: SetPlay['tags'] = {};
-    // (an AI coach's own set comes with as much of its edge as his tactics rating draws up: TK.aiSet)
-    const k = ai ? clamp(TK.aiSet.at + TK.aiSet.per * ((off.team.coach?.tactics ?? 50) - 50), TK.aiSet.min, TK.aiSet.max) : 1;
+    // (an AI coach's own set comes with as much of its edge as his tactics rating draws up: TK.aiSet;
+    // a human coach's called set gets a sharp execution edge on fresh runs before the defense reads it)
+    const k = ai ? clamp(TK.aiSet.at + TK.aiSet.per * ((off.team.coach?.tactics ?? 50) - 50), TK.aiSet.min, TK.aiSet.max) : 1.25;
     for (const [slot, e] of Object.entries(setEdges(cast, d)) as [Slot, number][]) {
       if (!e) continue;
       open[slot] = gain * e * k;

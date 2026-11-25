@@ -47,7 +47,7 @@ export function rememberRole(role: Role) {
 }
 
 /** Live game playback speeds (1 = normal). */
-export const LIVE_SPEEDS: { id: number; label: string }[] = [1, 2, 4].map((id) => ({ id, label: `${id}×` }));
+export const LIVE_SPEEDS: { id: number; label: string }[] = [1, 2, 4, 8].map((id) => ({ id, label: `${id}×` }));
 
 /** Where a live game stops for a break with a period report. */
 export const LIVE_BREAKS: { id: NonNullable<Settings['liveBreaks']>; label: string }[] = [
