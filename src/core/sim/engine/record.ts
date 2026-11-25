@@ -245,7 +245,12 @@ export const recordMethods = {
       away: box(this.T[1]),
       ot: Math.max(0, this.q - 4),
       shots: this.shots,
-      xShots: this.xShots.map((x) => ({ pts: Math.round(x.pts * 10) / 10, tpm: Math.round(x.tpm * 10) / 10 })) as [XShots, XShots],
+      xShots: this.xShots.map((x, i) => ({
+        pts: Math.round(x.pts * 10) / 10,
+        tpm: Math.round(x.tpm * 10) / 10,
+        fouled: Math.round(this.xFouledMiss[i] * 10) / 10,
+        sd: Math.round(Math.sqrt(this.xVar[i]) * 10) / 10,
+      })) as [XShots, XShots],
       impacts: [...this.impacts.values()].filter((i) => i.pts >= 0.05).map((i) => ({ ...i, pts: Math.round(i.pts * 100) / 100 })),
       // every unit, however short its stints (the lineup lab's pairs and trios add them all up)
       lineups: [...this.lineups.values()],

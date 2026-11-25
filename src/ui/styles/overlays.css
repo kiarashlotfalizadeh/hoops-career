@@ -288,3 +288,22 @@ body:has(.dockbar, .fo-dock) .continue:not(.is-busy) {
   min-height: 72vh;
   min-height: 72dvh;
 }
+
+/* ------------------------------------------------------------------ the sim's digest keeps the dock
+   "While you were away" opens by itself after a sim: the Play row and the tabs stay on top of it and
+   it stands on them, so the next step is one tap away without closing anything first. */
+body.digest-up .continue,
+body.digest-up .bottomnav {
+  z-index: 83;
+}
+body.digest-up .sheet {
+  bottom: calc(var(--nav-h) + var(--safe-b));
+  max-height: calc(88vh - var(--nav-h) - var(--safe-b));
+  max-height: calc(88dvh - var(--nav-h) - var(--safe-b));
+}
+body.digest-up:has(.continue:not(.is-compact)) .sheet {
+  bottom: calc(var(--nav-h) + var(--safe-b) + var(--cont-h) + 6px);
+  max-height: calc(88vh - var(--nav-h) - var(--safe-b) - var(--cont-h) - 6px);
+  max-height: calc(88dvh - var(--nav-h) - var(--safe-b) - var(--cont-h) - 6px);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}

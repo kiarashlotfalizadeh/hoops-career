@@ -5,7 +5,7 @@
 
 import type { League } from '../types';
 import type { GameSim } from '../sim/engine';
-import { planFor } from '../league/gamePlans';
+import { planFor, planWorth } from '../league/gamePlans';
 
 /**
  * Net rating per point of a rotation's minutes-weighted OVR above the league's (fitted over simulated
@@ -102,20 +102,26 @@ export function projectGame(league: League, sim: GameSim, neutral: boolean, rati
   return { margin: projectMargin(netHome, netAway, pace, edge) + plan + edits, netHome, netAway, edge, plan, edits };
 }
 
-/** Most points a game a plan's measured counters add to a projection: each was measured alone, and together they overlap. */
+/** Most points a game a plan adds to a projection (a guard: a plan measured whole has no overlap to cap, and none has measured near it). */
 export const PLAN_MAX_PTS = 4;
 
 /**
  * Points a game the user's plan against the other team adds to the home side's projected margin
- * (under 0 for the user away): its counters' measured worth (GamePlanItem.pts), at most PLAN_MAX_PTS
- * either way. Nothing in a game the user isn't in.
+ * (under 0 for the user away): the whole plan as the staff measured it against going in without one
+ * (GamePlan.worth: its counters and matchups together, on the next meeting's rosters), whatever its
+ * size. Until 2026-11-24 only a counter that read a clear gain or cost on its own counted (half a
+ * point or more), and a matchup or a double never did: the playtest's coach made three changes to a
+ * plan and the chance to win read 75% before and after. A plan not measured yet (or changed since)
+ * counts its counters' own readings (GamePlanItem.pts), at most PLAN_MAX_PTS either way. Nothing in
+ * a game the user isn't in.
  */
 export function planPoints(league: League, home: number, away: number): number {
   const me = league.userTid;
   if (home !== me && away !== me) return 0;
   const opp = home === me ? away : home;
-  const items = planFor(league, opp)?.items ?? [];
-  const pts = items.reduce((a, it) => a + (it.pts ?? 0), 0);
+  const plan = planFor(league, opp);
+  const whole = planWorth(plan);
+  const pts = whole ? whole.pts : (plan?.items ?? []).reduce((a, it) => a + (it.pts ?? 0), 0);
   const capped = Math.max(-PLAN_MAX_PTS, Math.min(PLAN_MAX_PTS, pts));
   return home === me ? capped : -capped;
 }

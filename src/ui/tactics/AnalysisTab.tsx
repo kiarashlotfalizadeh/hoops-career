@@ -41,6 +41,10 @@ function LiveCoaching() {
             After each game you coach live, the staff replays the night many times with your timeouts, subs, tactical changes and play calls, and without them, on the same luck.
             The difference is what your moves were worth. One night is mostly noise; a season adds up.
           </p>
+          <p>
+            Each kind of move gets its share of that difference: the night is also replayed with only some kinds left in, and a kind&apos;s figure is what adding it was worth,
+            averaged over every order the kinds could be added in. So the rows add up to the total.
+          </p>
         </Help>
       }
     >
@@ -65,6 +69,11 @@ function LiveCoaching() {
           </div>
         ))}
       </div>
+      {c.sums && (
+        <p className="tiny dim" style={{ margin: '6px 2px 0' }}>
+          {c.sums}
+        </p>
+      )}
     </Section>
   );
 }

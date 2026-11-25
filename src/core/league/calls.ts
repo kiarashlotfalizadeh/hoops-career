@@ -655,7 +655,7 @@ const skidTitle = (s: SkidCall) => (s.lost === s.of ? `${s.of} straight losses` 
 /**
  * What stops a long sim in the postseason besides the queue's calls, on the morning of one of the
  * user's games: a series (or play-in game) of his starting tonight, a game that ends his season if he
- * loses it, and one of his best five (STARTER_RANK, by OVR) out for it. Each once (its id). A series
+ * loses it or wins him the series if he wins it, and one of his best five (STARTER_RANK, by OVR) out for it. Each once (its id). A series
  * with nothing for the staff to change has no card (quietStart: both answers would be the same), but
  * it is still the night a coach wants the game in front of him: simmed past unseen, the ten-persona
  * playtest's phone player lost a conference final without a single input (2026-11-24).
@@ -678,6 +678,9 @@ export function postseasonStops(league: League): { id: string; text: string; to:
     // (a best-of-seven: three losses and the next one ends it; the wins a series takes are the engine's, read off who has won)
     if (l === 3 && need === 4)
       out.push({ id: `stop:elim:${league.season}:${series.id}:${w}-${l}`, text: `Elimination game tonight: down ${l}-${w} to ${abbrev} in the ${seriesLabel(series)}.`, to });
+    // (and the night he can win the series: a closeout simmed past unseen is a round, or a title, won off screen)
+    else if (w === 3 && need === 4)
+      out.push({ id: `stop:close:${league.season}:${series.id}:${w}-${l}`, text: `You can close out ${abbrev} tonight: up ${w}-${l} in the ${seriesLabel(series)}.`, to });
   }
   const best = standardRoster(league, me)
     .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
@@ -690,6 +693,54 @@ export function postseasonStops(league: League): { id: string; text: string; to:
         to: '/team/rotation',
       });
   return out;
+}
+
+/**
+ * The user's playoff game tonight when it decides something: lose and his season is over ('elim'),
+ * win and the series is his ('close'), or both (a Game 7, 'seven'). The night he is asked whether
+ * he's coaching it (ui: BigGameSheet), when a sim reaches it and when he starts one on its morning:
+ * a stop with a toast let the playtest's contender sim a conference final's Game 6 and Game 7 without
+ * ever being asked (round 3, 2026-11-24).
+ */
+export interface BigGame {
+  gid: number;
+  opp: number;
+  kind: 'elim' | 'close' | 'seven';
+  /** "Game 7 tonight", "Elimination game tonight", "You can close it out tonight". */
+  title: string;
+  /** "West Finals, tied 3-3 with Denver. The winner goes on." */
+  line: string;
+}
+
+export function bigGameTonight(league: League): BigGame | null {
+  if (league.fired || league.phase !== 'playoffs') return null;
+  const me = league.userTid;
+  const g = userGameOnDay(league, league.day);
+  if (!g?.seriesId || g.played || g.type !== 'playoffs') return null;
+  const series = league.playoffs.find((x) => x.id === g.seriesId);
+  if (!series || series.winner !== undefined) return null;
+  const opp = g.home === me ? g.away : g.home;
+  const [w, l] = series.high === me ? [series.highWins, series.lowWins] : [series.lowWins, series.highWins];
+  if (w < 3 && l < 3) return null;
+  const city = teamCity(league, opp);
+  const round = seriesLabel(series);
+  const finals = series.round === 4;
+  if (w === 3 && l === 3)
+    return {
+      gid: g.gid,
+      opp,
+      kind: 'seven',
+      title: 'Game 7 tonight',
+      line: `${round}, tied 3-3 with ${city}. ${finals ? 'The winner takes the title.' : 'The winner goes on, the loser goes home.'}`,
+    };
+  if (l === 3) return { gid: g.gid, opp, kind: 'elim', title: 'Elimination game tonight', line: `${round}: down ${l}-${w} to ${city}. Lose and the season is over.` };
+  return {
+    gid: g.gid,
+    opp,
+    kind: 'close',
+    title: finals ? 'You can win the title tonight' : 'You can close it out tonight',
+    line: `${round}: up ${w}-${l} on ${city}. ${finals ? 'One win from the championship.' : 'A win takes the series.'}`,
+  };
 }
 
 const skidMax = (s: SkidCall) => ((s.rung ?? 1) > 1 ? 2 : 1);

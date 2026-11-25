@@ -6,9 +6,10 @@
 import { useEffect, useState } from 'react';
 import type { GamePlanItem, League } from '../../../core/types';
 import type { Candidate } from '../../../core/ai/advisor';
-import { worthCall, type CounterWorth } from '../../../core/ai/counterWorth';
+import { PLAN_WORTH, worthCall, type CounterWorth } from '../../../core/ai/counterWorth';
 import { AHEAD, leanTone } from '../../../core/analysis/staffWords';
-import { effectiveTactics } from '../../../core/league/gamePlans';
+import { effectiveTactics, planFor, planSig } from '../../../core/league/gamePlans';
+import { touch } from '../../../state/actions';
 import { hashString } from '../../../core/random';
 import { measureCounters } from '../../../state/simClient';
 import { useStore } from '../../../state/store';
@@ -56,6 +57,9 @@ function start(league: League, opp: number, key: string) {
   measured.set(key, { progress: 0 });
   tell();
   const g = nextMeeting(league, opp);
+  // the plan as it's measured: its reading is kept on it only while it's still this one
+  const plan = planFor(league, opp, g);
+  const sig = plan ? planSig(plan) : null;
   // (it holds the lane: the staff's measurements of the user's changes wait for it, worthLane.ts)
   inLane(() =>
     measureCounters(league, opp, g?.gid, (done, total) => {
@@ -74,6 +78,12 @@ function start(league: League, opp: number, key: string) {
         measured.delete(key);
         measured.set(key, { worth: new Map(out.map((w) => [w.id, w])), progress: 1 });
         retries.delete(key);
+        keepPlanWorth(
+          league.id,
+          opp,
+          sig,
+          out.find((w) => w.id === PLAN_WORTH),
+        );
         while (measured.size > KEEP) measured.delete(measured.keys().next().value!);
       }
       tell();
@@ -85,6 +95,23 @@ function start(league: League, opp: number, key: string) {
       tell();
     },
   );
+}
+
+/**
+ * The whole plan's reading goes on the plan (GamePlan.worth), where the forecast reads it: if the
+ * league is still the open one and the plan still the one measured. Saved with the next change.
+ */
+function keepPlanWorth(leagueId: string, opp: number, sig: string | null, w: CounterWorth | undefined) {
+  if (!w || !sig) return;
+  const open = useStore.getState().league;
+  if (open?.id !== leagueId) return;
+  const cur = open.gamePlans?.[opp];
+  if (!cur || planSig(cur) !== sig) return;
+  if (cur.worth?.sig === sig && cur.worth.pts === w.pts && cur.worth.se === w.se) return;
+  touch((l) => {
+    const p = l.gamePlans?.[opp];
+    if (p && planSig(p) === sig) p.worth = { pts: w.pts, raw: w.raw, se: w.se, sig };
+  });
 }
 
 /**

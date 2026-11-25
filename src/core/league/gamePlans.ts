@@ -3,6 +3,7 @@
 
 import type { GamePlan, GamePlanItem, League, PlanScope, ScheduledGame, Tactics } from '../types';
 import { applyPatch, cloneTactics, withoutGameSpecific } from '../sim/tactics';
+import { hashString } from '../random';
 
 /** The playoff series the user is playing against `opp` right now, if any. */
 function liveSeries(league: League, opp: number) {
@@ -15,6 +16,16 @@ export const planMade = (p: GamePlan) => p.items.length > 0 || Object.keys(p.mat
 
 /** Whether the user made a plan himself: a counter he put in (the staff's own silent picks aren't his), or a matchup. */
 export const planByUser = (p: GamePlan) => p.items.some((x) => !x.staff) || Object.keys(p.matchups ?? {}).length > 0;
+
+/** What a plan asks for on the floor, as a key: its counters' changes in order and its matchups (a measurement of the plan is of this). */
+export const planSig = (p: Pick<GamePlan, 'items' | 'matchups'>) =>
+  String(hashString(JSON.stringify([p.items.map((x) => [x.id, x.patch]), Object.entries(p.matchups ?? {}).sort(([a], [b]) => Number(a) - Number(b))])));
+
+/**
+ * The whole plan's measured worth in points a game (GamePlan.worth), while the plan is still the one
+ * that was measured; undefined for a plan not measured, or changed since.
+ */
+export const planWorth = (p: GamePlan | null | undefined) => (p?.worth && p.worth.sig === planSig(p) ? p.worth : undefined);
 
 /** A plan still has something in it. */
 const hasContent = planMade;

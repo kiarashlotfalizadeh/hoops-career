@@ -12,7 +12,7 @@
 // staff's call says what it would do from this spot (calls.ts), or that it would change nothing. The
 // next period, or the game, goes on from the bench bar.
 import { useMemo, type ReactNode } from 'react';
-import { Check, FastForward, Lightbulb, Timer } from 'lucide-react';
+import { Check, FastForward, Lightbulb, Play, Timer } from 'lucide-react';
 import type { CallId, CoachMove, GameAdjustment, League, Tactics, Team } from '../../core/types';
 import { buildGameReport, decidingFactors } from '../../core/analysis/gameReport';
 import { ACTION_META } from '../../core/sim/tactics';
@@ -345,9 +345,11 @@ export function Huddle(
     defenderOf: (pid: number) => number | undefined;
     /** At the last possession, with a timeout left: take it (the huddle opens, the call kept). */
     onTimeout?: () => void;
+    /** Play goes on (the bench bar's Resume, here too: the huddle is left from the huddle, with a play called or without). */
+    onResume?: () => void;
   },
 ) {
-  const { kind, view, side, teams, kits, tactics, names, called, closer, onTimeout } = props;
+  const { kind, view, side, teams, kits, tactics, names, called, closer, onTimeout, onResume } = props;
   const deciding = useDeciding(props.league, view, tactics, side).slice(0, 1);
   const ato = tactics.manage.ato;
   const atoText = ato ? atoLabel(ato, (a) => ACTION_META[a].label, tactics.manage.atoPid != null ? names(tactics.manage.atoPid) : undefined) : null;
@@ -404,7 +406,13 @@ export function Huddle(
     <div className="lv-br huddle">
       <div className="lv-br-top">
         <h2 className="lv-br-title">Your timeout</h2>
+        {onResume && (
+          <button type="button" className="lv-br-btn" onClick={onResume}>
+            <Play size={13} fill="currentColor" aria-hidden="true" /> Resume
+          </button>
+        )}
       </div>
+      {onResume && <div className="lv-br-note">Call a play, make a sub, or just resume: nothing here has to be picked.</div>}
       {call}
       <Staff {...props} max={2} />
       <Deciding edges={deciding} teams={teams} kits={kits} />

@@ -39,6 +39,8 @@ export interface ClutchOfferActions {
 export interface FinalOfferActions {
   onSim: () => void;
   onClose: () => void;
+  /** What a sim to the end skips, as the confirm says it: "4:59", "4:59 of overtime". */
+  left: string;
 }
 
 /** How long playback stays up after a tap while the game plays. */
@@ -149,6 +151,12 @@ export function CallBar(p: CallBarProps) {
                       ? 'ff'
                       : 'idle';
 
+  // "Sim to the end" asks before it runs (its second tap): the ask lapses with the offer
+  const [simArmed, setSimArmed] = useState(false);
+  const finalUp = state === 'final';
+  useEffect(() => {
+    if (!finalUp) setSimArmed(false);
+  }, [finalUp]);
   // an offer left alone goes away (the time it's on the bar: playback over it starts it again)
   const closeOffer = useRef<() => void>(() => {});
   closeOffer.current = state === 'clutch' ? clutchOffer!.onClose : state === 'final' ? finalOffer!.onClose : () => {};
@@ -262,9 +270,10 @@ export function CallBar(p: CallBarProps) {
   } else if (state === 'final') {
     body = (
       <div className="lv-cb-row lv-cb-offer" role="group" aria-label="The game is decided">
-        <span className="lv-cb-t one grow">Game decided</span>
-        <button type="button" className="lv-cb-btn sm on" onClick={finalOffer!.onSim}>
-          <FastForward size={15} aria-hidden="true" /> Sim to the end
+        <span className="lv-cb-t one grow">{simArmed ? `Skip the last ${finalOffer!.left}?` : 'Game decided'}</span>
+        {/* two taps: the first asks, with what would be skipped (one stray tap had ended a game five minutes early) */}
+        <button type="button" className={`lv-cb-btn sm on${simArmed ? ' armed' : ''}`} onClick={simArmed ? finalOffer!.onSim : () => setSimArmed(true)}>
+          <FastForward size={15} aria-hidden="true" /> {simArmed ? 'Yes, sim it' : 'Sim to the end'}
         </button>
         <button type="button" className="lv-cb-x" onClick={finalOffer!.onClose} aria-label="Keep watching">
           <X size={17} aria-hidden="true" />

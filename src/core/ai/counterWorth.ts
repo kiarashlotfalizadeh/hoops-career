@@ -24,7 +24,7 @@ import type { GamePlan, League, Player, ScheduledGame, Team } from '../types';
 import { GameSim } from '../sim/engine';
 import { Rng, hashString } from '../random';
 import { buildSimInput, neutralSite } from '../league/games';
-import { itemGroup, planFor } from '../league/gamePlans';
+import { itemGroup, planFor, planMade } from '../league/gamePlans';
 import { counterCandidates, type Candidate } from './advisor';
 
 /** Games each configuration is played (the plan as it stands, and each counter). */
@@ -94,6 +94,8 @@ export interface WorthOpts {
   cancelled?: () => boolean;
   /** Counters measured at most (counterWorth: WORTH_MAX by default), the first the rules draft: fewer for a sim's budget. */
   counters?: number;
+  /** counterWorth: false leaves the whole plan's own reading out (a sim's morning budget: PLAN_WORTH is for the matchup page). */
+  plan?: boolean;
 }
 
 /**
@@ -184,10 +186,14 @@ export async function measureChanges(league: League, opp: number, changes: Leagu
   return out;
 }
 
+/** The id of the reading of the user's whole plan against going in without one (counterWorth's last, when there's a plan). */
+export const PLAN_WORTH = '__plan';
+
 /**
  * The staff's counters against `opp` (the first WORTH_MAX the rules draft), each measured over paired
  * games of the user's next game against them (`game`, else a home game on today's date): its points
- * a game over the plan as it stands.
+ * a game over the plan as it stands. With a plan in place, the plan itself is measured too, whole,
+ * against the same games without it (PLAN_WORTH): what the forecast counts for it.
  */
 export async function counterWorth(league: League, opp: number, game?: WorthGame, opts: WorthOpts = {}): Promise<CounterWorth[] | null> {
   const user = league.userTid;
@@ -199,5 +205,9 @@ export async function counterWorth(league: League, opp: number, game?: WorthGame
     const items = [...(plan?.items ?? []).filter((x) => itemGroup(x) !== itemGroup(c)), { id: c.id, label: c.label, group: c.group, patch: c.patch }];
     return { id: c.id, gamePlans: { [opp]: { ...plan, oppTid: opp, items, scope: plan?.scope ?? 'next' } } };
   });
-  return measureChanges(league, opp, changes, g, opts);
+  // the plan taken out: what the games lose without it is what it's worth
+  if (plan && planMade(plan) && opts.plan !== false) changes.push({ id: PLAN_WORTH, gamePlans: { [opp]: { oppTid: opp, items: [], scope: plan.scope ?? 'next' } } });
+  const out = await measureChanges(league, opp, changes, g, opts);
+  // (measured as the plan's absence against the plan: its worth is the other way round; "0" not "−0")
+  return out && out.map((w) => (w.id === PLAN_WORTH ? { ...w, pts: -w.pts || 0, raw: -w.raw || 0 } : w));
 }

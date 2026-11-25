@@ -354,6 +354,12 @@
   background: var(--paper-ink);
   color: var(--ink);
 }
+/* a choice waiting on its second tap ("Sim to the end") */
+.lv-cb-btn.on.armed {
+  background: var(--warn);
+  border-color: var(--warn);
+  color: #1a1408;
+}
 /* pause and resume: your team's colour, as the dock's play button */
 .lv-cb-btn.go {
   background: var(--team-night);

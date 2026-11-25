@@ -455,11 +455,20 @@ export interface NightWorth {
   top?: { op: number; pts: number; se: number };
   /** Every move measured on its own (the night without just it, against with all): its op's index, the reading and its standard error. */
   each?: { op: number; raw: number; se: number }[];
-  /** Each kind of move left out of the night together (the timeouts, the subs...), the others kept: the reading, its standard error and the moves of the kind. */
+  /**
+   * Each kind of move's share of the night's reading (the timeouts, the subs...): what adding the kind
+   * to the night is worth, averaged over every order the kinds could be added in. The shares add up to
+   * `raw`. With its standard error and the moves of the kind.
+   */
   kinds?: { kind: LiveOp['op']; raw: number; se: number; moves: number }[];
+  /** `kinds` are shares that add up to `raw` (readings from before 2026-11-24 left each kind alone out, and didn't). */
+  shared?: true;
 }
 
-/** Continuations the night's moves are measured over (with them and without), and the leave-one-out readings of each move. */
+/**
+ * Continuations the night's moves are measured over (with them and without; and with each set of its
+ * kinds of move, for the kinds' shares), and the leave-one-out readings of each move.
+ */
 export const NIGHT_GAMES = 200;
 export const NIGHT_MOVE_GAMES = 100;
 /** Moves measured one by one for "the one that mattered most" (the night's last ones, if it had more). */
@@ -531,26 +540,43 @@ export async function nightWorth(tip: GameSim, side: 0 | 1, ops: LiveOp[], opts:
   const one = rest.map((o, i) => ({ o, i })).filter((x) => counted(x.o));
   const singles = one.slice(-NIGHT_MOVES_MAX);
   const base = mix32((tip.seed ^ 0x6e696768) >>> 0);
-  const total = games + (one.length > 1 ? Math.min(games, NIGHT_MOVE_GAMES) : 0);
   const all: number[] = [];
   const allWin: number[] = [];
   const by: number[][] = singles.map(() => []);
-  // the kinds of move the night had (two or more: a night of one kind is that kind's reading already)
+  // the kinds of move the night had (two or more: a night of one kind is that kind's reading already).
+  // Each kind's share of the night's reading is its Shapley value: the night is replayed with every
+  // set of kinds left in (`sets`, as bit masks over `kinds`; all of them and none are the night's own
+  // two replays), and a kind's share is what adding it is worth, averaged over every order the kinds
+  // could be added in. The shares add up to the night's reading, game for game. (Until 2026-11-24 each
+  // kind was read by leaving it alone out, on half the games: a season of those read 82 subs −5.6, 63
+  // timeouts −3.1, 62 play calls −10.1 and 10 changes +0.7 under a total of +4.3, playtest round 3.)
   const kindSet = [...new Set(one.map((x) => x.o.op))];
   const kinds = kindSet.length > 1 ? kindSet : [];
+  const full = (1 << kinds.length) - 1;
+  const sets: number[] = [];
+  for (let m = 1; m < full; m++) sets.push(m);
+  const kindBit = new Map(kinds.map((k, j) => [k, 1 << j]));
+  const restOf = (mask: number) => rest.filter((o) => !counted(o) || (mask & kindBit.get(o.op)!) !== 0);
+  const setRest = sets.map(restOf);
+  const weights = shapleyWeights(kinds.length);
   const byKind: number[][] = kinds.map(() => []);
+  const total = games * (2 + sets.length) + (one.length > 1 ? Math.min(games, NIGHT_MOVE_GAMES) * singles.length : 0);
+  let played = 0;
+  // (a night of four kinds replays fourteen more versions of each game: the pauses come sooner)
+  const every = Math.max(1, Math.round(chunk / (1 + sets.length / 2)));
   for (let i = 0; i < games; i++) {
-    if (i && i % chunk === 0) {
-      opts.onProgress?.(i, total);
+    if (i && i % every === 0) {
+      opts.onProgress?.(played, total);
       await opts.between?.();
       if (opts.cancelled?.()) return null;
     }
     const seed = branchSeed(base, i);
     const w = playWith(forkSim(s0, seed), side, steps, rest);
     const wo = playWith(forkSim(s0, seed), side, steps, without);
+    played += 2;
     all.push(w.pts - wo.pts);
     allWin.push(w.win - wo.win);
-    if (one.length > 1 && i < NIGHT_MOVE_GAMES)
+    if (one.length > 1 && i < NIGHT_MOVE_GAMES) {
       singles.forEach((x, j) => {
         const less = playWith(
           forkSim(s0, seed),
@@ -560,16 +586,22 @@ export async function nightWorth(tip: GameSim, side: 0 | 1, ops: LiveOp[], opts:
         );
         by[j].push(w.pts - less.pts);
       });
-    if (i < NIGHT_MOVE_GAMES)
-      kinds.forEach((kind, j) => {
-        const less = playWith(
-          forkSim(s0, seed),
-          side,
-          steps,
-          rest.filter((o) => !(counted(o) && o.op === kind)),
-        );
-        byKind[j].push(w.pts - less.pts);
+      played += singles.length;
+    }
+    if (kinds.length) {
+      // the night's margin with each set of kinds left in (none, the sets between, all)
+      const v = new Float64Array(full + 1);
+      v[0] = wo.pts;
+      v[full] = w.pts;
+      for (let m = 0; m < sets.length; m++) v[sets[m]] = playWith(forkSim(s0, seed), side, steps, setRest[m]).pts;
+      played += sets.length;
+      kinds.forEach((_, j) => {
+        const bit = 1 << j;
+        let share = 0;
+        for (let m = 0; m <= full; m++) if (!(m & bit)) share += weights[bits(m)] * (v[m | bit] - v[m]);
+        byKind[j].push(share);
       });
+    }
   }
   opts.onProgress?.(total, total);
   const r = paired(all);
@@ -601,7 +633,22 @@ export async function nightWorth(tip: GameSim, side: 0 | 1, ops: LiveOp[], opts:
         return { kind, raw: round2(x.mean), se: round2(x.se), moves: count(kind) };
       })
     : [{ kind: kindSet[0], raw: round2(r.mean), se: round2(r.se), moves: one.length }];
+  out.shared = true;
   return out;
+}
+
+/** Bits set in a mask. */
+const bits = (m: number) => {
+  let n = 0;
+  for (; m; m &= m - 1) n++;
+  return n;
+};
+
+/** Shapley's weight of a set of `s` members among `k` players, by s: s!(k−s−1)!/k!. */
+function shapleyWeights(k: number): number[] {
+  const f = [1];
+  for (let i = 1; i <= k; i++) f.push(f[i - 1] * i);
+  return Array.from({ length: k }, (_, s) => (f[s] * f[k - s - 1]) / f[k]);
 }
 
 const round1 = (x: number) => Math.round(x * 10) / 10;

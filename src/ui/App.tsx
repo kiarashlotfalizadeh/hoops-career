@@ -9,6 +9,7 @@ import {
   Info,
   Briefcase,
   CalendarDays,
+  Check,
   ChevronRight,
   ChevronUp,
   Play,
@@ -42,6 +43,7 @@ import { lazyRetry } from './lazyRetry';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Moments } from './components/Moments';
 import { DigestHost } from './today/AwaySheet';
+import { BigGameHost } from './today/BigGameSheet';
 import { QuickSearch } from './components/QuickSearch';
 import { applyAccent } from './teamColors';
 import { useToastHost } from './toastHost';
@@ -120,11 +122,15 @@ function Boot({ children }: { children: ReactNode }) {
     const onHide = () => {
       if (document.visibilityState === 'hidden') void useStore.getState().flush();
     };
+    // (pagehide as well: a tab or a home-screen app closed outright may never report "hidden")
+    const onLeave = () => void useStore.getState().flush();
     document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('pagehide', onLeave);
     return () => {
       onBlocked(null);
       off();
       document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('pagehide', onLeave);
     };
   }, []);
   // the user's team colours: a new team, or god mode recolouring this one (a new array), restyles the app
@@ -279,6 +285,7 @@ function TopBar() {
           </span>
         </button>
         <div className="grow" />
+        <SaveTick />
         {/* god mode on: the editor is a tap away, and the wand says it's on */}
         {league.settings.godMode && (
           <button
@@ -311,6 +318,32 @@ function TopBar() {
       <QuickSearch open={searching} onClose={() => setSearching(false)} />
       <NeedsSheet open={needsAt === loc.key} onClose={() => setNeedsAt(null)} />
     </header>
+  );
+}
+
+/** How long the top bar's "Saved" tick stays up after a write lands (ms). */
+const TICK_MS = 1800;
+
+/**
+ * "Saved", for a moment, each time the league's changes land on the device: what you just did is
+ * safe, and the app can be closed. Quiet during a sim (its checkpoints save on their own) and while
+ * a save has failed (the banner says that).
+ */
+function SaveTick() {
+  const savedAt = useStore((s) => s.savedAt);
+  const quiet = useStore((s) => !!s.sim || !!s.saveProblem);
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    if (!savedAt || Date.now() - savedAt > TICK_MS) return;
+    setShown(savedAt);
+    const t = setTimeout(() => setShown(0), TICK_MS);
+    return () => clearTimeout(t);
+  }, [savedAt]);
+  if (!shown || quiet) return null;
+  return (
+    <span key={shown} className="tb-saved" role="status">
+      <Check size={14} aria-hidden="true" /> Saved
+    </span>
   );
 }
 
@@ -382,6 +415,8 @@ function ContinueBar() {
   const [agendaOpen, setAgendaOpen] = useState(false);
   const go = (a: FlowAction, fromBar = false) => {
     haptic();
+    // (the sim's digest stays under the bar: the next step taken from here closes it on the way)
+    if (useStore.getState().digestOpen && !a.agenda) useStore.getState().showDigest(false);
     // a choice waiting on its second tap lapses when the season moves on: nothing half made runs, and the sim isn't refused
     if (pendingConfirm.label && (a.sim || a.cmd)) {
       pendingConfirm.cancel?.();
@@ -698,6 +733,7 @@ function GameShell() {
       <BottomNav />
       <Moments />
       <DigestHost />
+      <BigGameHost />
     </div>
   );
 }

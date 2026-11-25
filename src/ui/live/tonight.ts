@@ -57,6 +57,7 @@ export function measureTonight(lg: LiveGame) {
         ...(w.top && move && { top: { text: move.text, pts: w.top.pts, se: w.top.se } }),
         ...(each.size && { each: [...each].map(([i, x]) => ({ move: i, raw: r2(x.raw), se: r2(Math.sqrt(x.v)) })) }),
         ...(w.kinds?.length && { kinds: w.kinds.flatMap((k) => (k.kind === 'manualSubs' ? [] : [{ ...k, kind: k.kind }])) }),
+        ...(w.shared && { shared: true as const }),
       };
       keepWorth(league, res, worth);
     })

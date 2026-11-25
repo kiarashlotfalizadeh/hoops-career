@@ -40,7 +40,7 @@ import {
 } from '../league/prospects';
 import { mockAvailable, mockDraft } from '../league/mockDraft';
 import { FIRED_REASON, askingContract, decideTeamOption, marketSalary, pendingOption, releasePlayer, valueScore } from '../league/contracts';
-import { expiringPlayers, faDay } from '../league/freeAgency';
+import { expiringPlayers, faDay, userResign, walkRisks } from '../league/freeAgency';
 import { CAP_FOR, contractSeason, curTeamSeason, dayToDate, freeAgents, prospects, standardRoster, statsLine, teamPlayers, winPct, withRng } from '../league/helpers';
 import { ensureRotation } from '../league/games';
 import { takeOverTeam } from '../league/owner';
@@ -458,6 +458,12 @@ describe('the summer', () => {
       expect(pendingOption(l, u1)).toBe('team');
       expect(decideTeamOption(l, u2.pid, false).ok).toBe(true);
       expect(expiringPlayers(l, U)).toContain(u2);
+      // a declined option sends him to the market: no re-signing him cheaper in the window before it
+      // opens (the playtest's $22.6M option declined and the same player re-signed at $10.7M), and
+      // the list of who walks says so
+      expect(userResign(l, u2.pid, cap.maxContract(10), 2)).toMatchObject({ ok: false, reason: expect.stringMatching(/^You declined .* option, so he hears every team's offer/) });
+      expect(walkRisks(l).find((r) => r.pid === u2.pid)).toMatchObject({ declined: true });
+      expect(walkRisks({ ...l, phase: 'regular' })).toEqual([]);
       // left open: the staff exercises the bargain when free agency opens
       expect(startFreeAgency(l)).toBe(true);
       expect(pendingOption(l, u1)).toBeNull();

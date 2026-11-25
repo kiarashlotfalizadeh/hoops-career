@@ -1,13 +1,13 @@
 // The re-sign period (between the draft and free agency): next season's payroll if you keep
 // everyone, the team options to decide, the expiring contracts to re-sign, and Open free agency.
-import { useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { CircleCheck, DoorOpen, PenLine } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { AlertTriangle, CircleCheck, DoorOpen, PenLine } from 'lucide-react';
 import type { Player } from '../../core/types';
 import { CAP } from '../../core/constants';
 import { CAP_FOR, payroll, playerName, shortName } from '../../core/league/helpers';
-import { askingContract, birdTier, decideTeamOption, pendingTeamOptions, resignLimit, rookieScaleDeal, teamOptionWorth } from '../../core/league/contracts';
-import { expiringPlayers, signedThisSummer } from '../../core/league/freeAgency';
+import { birdTier, decideTeamOption, optionDeclined, pendingTeamOptions, resignLimit, rookieScaleDeal, teamOptionWorth } from '../../core/league/contracts';
+import { expiringPlayers, signedThisSummer, walkRisks } from '../../core/league/freeAgency';
 import { playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
@@ -29,14 +29,22 @@ export function ResignPeriod() {
   const cap = CAP_FOR(league, next);
   const [sel, setSel] = useState<number | null>(null);
   const [confirm, setConfirm] = useState(false);
+  // (the Play menu's "Open free agency" lands here with the confirm up when players would walk: flow.ts)
+  const [params, setParams] = useSearchParams();
+  const asked = params.get('open') === 'fa';
+  useEffect(() => {
+    if (!asked) return;
+    setConfirm(true);
+    setParams({}, { replace: true });
+  }, [asked, setParams]);
   const [decline, setDecline] = useState<Player | null>(null);
   const expiring = useLeagueMemo(() => expiringPlayers(league, tid).sort((a, b) => b.ovr - a.ovr), [league, tid]);
   // (his ask in your talks: up after they broke down)
   const asks = useMemo(() => new Map(expiring.map((p) => [p.pid, talkAsk(league, p, 'resign')])), [expiring, league]);
   const committed = payroll(league, tid, next);
   // what keeping every expiring player at his ask would add
-  const asked = expiring.reduce((a, p) => a + asks.get(p.pid)!.amount, 0);
-  const ifAll = committed + asked;
+  const askedPay = expiring.reduce((a, p) => a + asks.get(p.pid)!.amount, 0);
+  const ifAll = committed + askedPay;
   const resigned = signedThisSummer(league).sort((a, b) => b.ovr - a.ovr);
   // the ones signed before the screen opened: a deal made while it's up lands with a flash
   const signedBefore = useRef(new Set(resigned.map((p) => p.pid)));
@@ -55,6 +63,10 @@ export function ResignPeriod() {
   const extendable = useLeagueMemo(() => extendablePlayers(league), [league]);
   const [ext, setExt] = useState<number | null>(null);
   const space = cap.salaryCap - committed;
+  // who walks if the market opens now, and why re-signing can't keep some of them
+  const risks = useLeagueMemo(() => walkRisks(league), [league]);
+  const riskOf = new Map(risks.map((r) => [r.pid, r]));
+  const keyRisks = risks.filter((r) => r.key);
 
   const decide = (p: Player, exercise: boolean) => settle(exercise ? 'Exercising the option' : 'Declining the option', (l) => decideTeamOption(l, p.pid, exercise));
 
@@ -132,10 +144,43 @@ export function ResignPeriod() {
               {ifAll > cap.luxuryTax && <div className="tiny bad num">tax ≈ {money(teamTaxBill(league, tid, ifAll, next))}</div>}
             </div>
           </div>
-          <CapBar pay={committed} cap={cap.salaryCap} tax={cap.luxuryTax} add={asked} addLabel="Their asks" legend="lines" />
+          <CapBar pay={committed} cap={cap.salaryCap} tax={cap.luxuryTax} add={askedPay} addLabel="Their asks" legend="lines" />
           <Statline items={[capRoomFig(space), taxFig(committed, cap.luxuryTax, teamTaxBill(league, tid, committed, next)), rosterFig(league)]} />
         </div>
       </Section>
+
+      {keyRisks.length > 0 && (
+        // the rotation players who leave when the market opens, said before it does
+        <div className="card tight fo-walk" role="status">
+          <div className="row" style={{ gap: 8, alignItems: 'flex-start' }}>
+            <AlertTriangle size={18} className="warn" style={{ flex: 'none', marginTop: 2 }} aria-hidden="true" />
+            <div className="grow small">
+              <b>
+                {keyRisks.length === 1 ? 'A rotation player walks' : `${keyRisks.length} rotation players walk`} when free agency opens, unless you re-sign{' '}
+                {keyRisks.length === 1 ? 'him' : 'them'} first.
+              </b>
+              <ul className="fo-walk-l">
+                {keyRisks.map((r) => {
+                  const p = league.players[r.pid];
+                  return (
+                    <li key={r.pid}>
+                      <b>
+                        {shortName(league, p)} ({p.ovr})
+                      </b>
+                      {': '}
+                      {r.declined
+                        ? 'you declined his option, so he goes to the market. Bid there with cap room or an exception.'
+                        : r.over
+                          ? `asks ${money(r.ask)}, and ${birdTier(league, p) === 'early' ? 'Early Bird rights' : 'his rights'} let you pay ${money(r.limit)} at most. Re-signing can't keep him: you'd need ${money(Math.max(0, r.ask - space))} more cap room to bid on the market.`
+                          : `unsigned. His ask is ${money(r.ask)}.`}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       {options.length > 0 && (
         <Section title={`Team options · ${options.length}`}>
@@ -171,7 +216,9 @@ export function ResignPeriod() {
               );
             })}
           </div>
-          <div className="tiny dim">Declined players join the expiring list with Bird rights. Open options get the staff's call when free agency opens.</div>
+          <div className="tiny dim">
+            A player whose option you decline goes to the market: he can&apos;t be re-signed before it opens. Open options get the staff&apos;s call when free agency opens.
+          </div>
         </Section>
       )}
 
@@ -198,6 +245,18 @@ export function ResignPeriod() {
                   </div>
                 );
               const ask = asks.get(p.pid)!;
+              // (his option declined: he hears the league's offers, not yours alone)
+              if (optionDeclined(league, p))
+                return (
+                  <div key={p.pid} className="fo-rs">
+                    <PlayerTop league={league} p={p} />
+                    <div className="fo-rs-act">
+                      <div className="grow small dim2">
+                        Option declined: he goes to the market when free agency opens. His ask there is about <b className="num">{salaryText(league, ask.amount)}</b>.
+                      </div>
+                    </div>
+                  </div>
+                );
               return (
                 <div key={p.pid} className="fo-rs">
                   <PlayerTop league={league} p={p} />
@@ -276,8 +335,8 @@ export function ResignPeriod() {
         {decline && (
           <div className="col fo-sheet">
             <p className="fo-lede">
-              His {shortSeason(next)} season at {salaryText(league, salaryFor(decline, next))} comes off his contract, and he joins the expiring list. Re-sign him before free
-              agency, at about {money(askingContract(league, decline, tid).amount)}, or he becomes a free agent. This can&apos;t be undone.
+              His {shortSeason(next)} season at {salaryText(league, salaryFor(decline, next))} comes off his contract and he goes to the market when free agency opens. You
+              can&apos;t re-sign him before then. To bring him back you bid against the league, with cap room or an exception. This can&apos;t be undone.
             </p>
             <div className="row">
               <button className="btn grow" onClick={() => setDecline(null)}>
@@ -293,6 +352,14 @@ export function ResignPeriod() {
 
       <Sheet open={confirm} onClose={() => setConfirm(false)} title="Open free agency?">
         <div className="col fo-sheet">
+          {keyRisks.length > 0 && (
+            <p className="fo-lede bad" role="alert">
+              <b>
+                {keyRisks.length === 1 ? 'A rotation player is' : `${keyRisks.length} rotation players are`} unsigned:{' '}
+                {keyRisks.map((r) => `${shortName(league, league.players[r.pid])} (${league.players[r.pid].ovr})`).join(', ')}.
+              </b>
+            </p>
+          )}
           {expiring.length > 0 && (
             <p className="fo-lede">
               {expiring.length} player{expiring.length > 1 ? 's' : ''} become{expiring.length > 1 ? '' : 's'} free agent{expiring.length > 1 ? 's' : ''}. Other teams can sign{' '}
@@ -311,6 +378,11 @@ export function ResignPeriod() {
                 <div key={p.pid} className="fo-confirm-row">
                   <OvrPot p={p} showPot={false} />
                   <span className="grow ellipsis bold">{playerName(p)}</span>
+                  {riskOf.get(p.pid)?.declined ? (
+                    <span className="tiny dim">option declined</span>
+                  ) : riskOf.get(p.pid)?.over ? (
+                    <span className="tiny warn">over your limit</span>
+                  ) : null}
                   <span className="dim num">{salaryText(league, asks.get(p.pid)!.amount)}</span>
                 </div>
               ))}
@@ -320,8 +392,9 @@ export function ResignPeriod() {
             <button className="btn grow" onClick={() => setConfirm(false)}>
               Keep negotiating
             </button>
-            <button className="btn primary grow" disabled={busy} onClick={() => (setConfirm(false), void openFA())}>
-              Open free agency
+            {/* (its own words: the page's button reads "Open free agency" too, and a second tap on the same label read as nothing happening) */}
+            <button className={`btn grow ${keyRisks.length ? 'danger' : 'primary'}`} disabled={busy} onClick={() => (setConfirm(false), void openFA())}>
+              {expiring.length ? (expiring.length === 1 ? 'Let him go and open' : 'Let them go and open') : 'Open the market'}
             </button>
           </div>
         </div>

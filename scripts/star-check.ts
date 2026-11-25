@@ -4,7 +4,8 @@
 // best record and the longest winning streak, how the best players age, and in the first season how
 // the real league's top scorers' lines hold up, the leaders in made threes and steals, the season's
 // biggest margin and team score, and the injuries that end seasons. Fails (exit 1) when any league
-// has a season whose scoring leader averages more than MAX_PPG, a game over MAX_GAME_PTS, a threes
+// has a season whose scoring leader averages more than MAX_PPG (or more than one season in
+// FORTY_ALLOWANCE led at 40, or in MADE_99_ALLOWANCE with a drafted player showing 99), a game over MAX_GAME_PTS, a threes
 // or steals leader past MAX_TPM or MAX_STL, more than MAX_TPM10 nights of 10 made threes, a margin
 // past MAX_MARGIN or a team score past MAX_TEAM_PTS, or one scorer at 35 points a game in more than
 // MAX_35_SEASONS of its seasons (or more than one such season in SEASONS_PER_35 over all the leagues); when more seasons than BEST_RECORD_ALLOWANCE allows end with a record better than
@@ -16,14 +17,14 @@
 // for which of those fail it and which print as WATCH lines.
 // Usage: npx tsx scripts/star-check.ts [seasons] [rngSeed[:TEAM],...]   (env QUIET=1: leaders only,
 //   TEAM=<abbrev>: the user's team where a league names none, Orlando by default, FICTIONAL=1: a
-//   generated league in place of the real one)
+//   generated league in place of the real one, HC_SEED=<path>: another seed file)
 import { readFileSync } from 'node:fs';
 import { fork } from 'node:child_process';
 import { availableParallelism } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createLeague, defaultSettings, type SeedData } from '../src/core/league/create';
 import { startRegularSeason, simDay, startDraft, finishDraftPhase, startFreeAgency, newSeason, autoDraftUserPick } from '../src/core/league/season';
-import { playerName, standardRoster, freeAgents } from '../src/core/league/helpers';
+import { playerName, standardRoster, freeAgents, payroll, CAP_FOR } from '../src/core/league/helpers';
 import { CAP, GAME, TARGETS } from '../src/core/constants';
 import { standings } from '../src/core/league/standings';
 import { nextPick } from '../src/core/league/draft';
@@ -45,8 +46,21 @@ import type { League, Player } from '../src/core/types';
  * at most one season in SEASONS_PER_35. A night may pass 81; none past MAX_GAME_PTS. A team may win 74,
  * in at most one season in BEST_RECORD_ALLOWANCE over MAX_WINS. Each line below was a record guard
  * (39, 80, 73 wins, one 35-point season in eight) until then.
+ *
+ * Narrowed again on 2026-11-24 (the round-3 playtest read the top end as broken, not as legends: two
+ * draftees at 99 and a 44.8-point scorer in one ten-season save). A generational prospect now comes
+ * one class in five with a ceiling that shows 97 or 98, and the engine's room is sized to it
+ * (legends.ts, feel.ts). Measured on 16 real leagues of eight seasons (the default eight and rng 1, 2,
+ * 3, 4, 5:OKC, 6, 8, 9) and eight generated ones, before and after: the leader at most 41.8 and 49.1
+ * points a game, now 38.2 and 39.7; seasons
+ * led at 40 or more 3 of 128 and 7 of 64, now none; a drafted player showing 99 in 9 of the 16 real
+ * leagues (19 of 128 seasons), now in none, the best a 98. So MAX_PPG is 42 (46 until then), a season
+ * led at 40 or more may come once in FORTY_ALLOWANCE, and a 99 among the players a league made
+ * itself once in MADE_99_ALLOWANCE (see the verdict's TOP END line for the rest of the spread).
  */
-const MAX_PPG = 46;
+const MAX_PPG = 42;
+const FORTY_ALLOWANCE = 64;
+const MADE_99_ALLOWANCE = 64;
 /**
  * Past 73 the real league has only Chamberlain's 100 and 78, Kobe Bryant's 81 and Bam Adebayo's 83
  * (March 2026), so a 74-80 night is past nearly all of history. What justifies the cap at 80 (73
@@ -114,7 +128,7 @@ const BEST_RECORD_ALLOWANCE = 16;
  * The league's shape (round-3 review, sim F1, F4, F7, F8). The NBA record streak is 33 and a
  * season's longest usually runs 12-16: at most 28 in nine seasons of ten, and none past
  * MAX_STREAK_EVER. 70 wins came three times in 78 seasons: a 70-win team in at most one season in
- * eight. One franchise winning most titles: the review saw the Thunder win 9 of 12; no franchise
+ * SEVENTY_ALLOWANCE. One franchise winning most titles: the review saw the Thunder win 9 of 12; no franchise
  * may win more than MAX_TITLE_POOL of every title the check gives out, nor more than half of a
  * league's in more than one league (5 of 8 is a lottery even for the real league's best team: a
  * 40% favourite all eight years gets there about one league in six, as the Bulls' 6 of 8 did; two
@@ -134,6 +148,11 @@ const BEST_RECORD_ALLOWANCE = 16;
 const MAX_STREAK = 28;
 const MAX_STREAK_EVER = 40;
 const STREAK_SHARE = 0.9;
+// (One in 5 since the tails were opened. The engine runs at about one season in 20, and cutting the legends back on
+// 2026-11-24 didn't move it: 6 of 128 seasons before (16 leagues), 7 of 128 and 2 of 56 after. Most are Oklahoma
+// City's second season, its staff carrying a payroll of 1.42 to 1.47 of the cap, or a league where the user runs it.
+// They come in clusters by league, so a limit near the rate fails on which league a dynasty fell in: one in 10 was
+// tried and failed the default leagues with 8 of 64 on a rebuilt seed while the next eight had 3.)
 const SEVENTY_ALLOWANCE = 5;
 const MAX_TITLE_POOL = 1 / 3;
 const TPM_LEADER = 5.2;
@@ -148,7 +167,19 @@ const OT_TOLERANCE = 0.008;
  * 170-256 it saw was twice the NBA's: it never was, and the engine's 254-257 was a miss only here.
  */
 const FOUL_OUTS: [number, number] = [200, 290];
-const SHAPE_FAILS = { streak: true, streakEver: true, seventy: true, titles: true, tpm: true, tpm10: true, ot: false, foulOuts: false };
+/**
+ * The bottom of the table, a WATCH line: the real league's worst team wins 17 in a usual year and
+ * under 14 about one year in five (four of its last 21 seasons, the 10-72 76ers the lowest of them).
+ * The engine's first season on real rosters is there (16 leagues: 12 to 23, the middle 16-17), and
+ * the leagues sink from it: by their sixth to eighth seasons the worst team's middle is 13-14, one
+ * season in four over the eight has a team under 14 (four in ten in generated leagues) and a 4-78
+ * and a 6-76 came up in 128 seasons (2026-11-24, before and after the legends were cut back). What
+ * sinks them is the staffs' teardowns, not the engine; the line prints the worst team's payroll
+ * with each season so a fix to those can be measured here.
+ */
+const WORST_UNDER = 14;
+const WORST_SHARE = 0.25;
+const SHAPE_FAILS = { streak: true, streakEver: true, seventy: true, titles: true, tpm: true, tpm10: true, ot: false, foulOuts: false, worst: false };
 /**
  * The leagues CI plays: eight different runs from the same opening night, one of them with the user
  * running the Thunder, the opening night's best team (a user keeps his core together, as AI front
@@ -189,6 +220,9 @@ interface SeasonReport {
   foulOuts: number;
   /** The tails (league/legends.ts): generational players in the league, those past the top of its scale, and the best of them (his room at the top, his points a game). */
   tails: { gen: number; past: number; best: string; ppg: number; giants: number };
+  /** The worst record (with that team's payroll over the cap), and the best of the players the league made itself (drafted since it began): his OVR, and how many of them show 96 or more. */
+  worst: { team: string; won: number; lost: number; payroll: number };
+  made: { name: string; ovr: number; n96: number; n99: number };
 }
 
 const quiet = !!process.env.QUIET;
@@ -240,6 +274,16 @@ function verdict(all: (SeasonReport & { seed: string })[]): boolean {
     for (const r of all) if (r.seed === seed && r.leader.ppg >= 35) by.set(r.leader.name, (by.get(r.leader.name) ?? 0) + 1);
     for (const [name, n] of by) if (n > MAX_35_SEASONS) failures.push(`rng ${seed}: ${name} led the league at 35+ PPG in ${n} seasons (max ${MAX_35_SEASONS})`);
   }
+  const all40 = all.filter((r) => r.leader.ppg >= 40);
+  const max40 = Math.max(1, Math.floor(all.length / FORTY_ALLOWANCE));
+  if (all40.length > max40)
+    failures.push(`${all40.length} of ${all.length} seasons led at 40+ PPG (max ${max40}): ${all40.map((r) => `${at(r)} ${r.leader.name} ${r.leader.ppg.toFixed(1)}`).join(', ')}`);
+  const made99 = all.filter((r) => r.made.n99 > 0);
+  const max99 = Math.max(1, Math.floor(all.length / MADE_99_ALLOWANCE));
+  if (made99.length > max99)
+    failures.push(
+      `${made99.length} of ${all.length} seasons with a 99 among the players the league made (max ${max99}): ${made99.map((r) => `${at(r)} ${r.made.name}`).join(', ')}`,
+    );
   const all35 = all.filter((r) => r.over35 > 0).length;
   const max35 = Math.max(1, Math.floor(all.length / SEASONS_PER_35));
   if (all35 > max35) failures.push(`${all35} of ${all.length} seasons with a 35-PPG scorer (max ${max35})`);
@@ -265,6 +309,23 @@ function verdict(all: (SeasonReport & { seed: string })[]): boolean {
   const mid = (xs: number[]) => xs[Math.floor(xs.length / 2)];
   console.log(
     `Over ${all.length} seasons: scoring leader max ${Math.max(...all.map((r) => r.leader.ppg)).toFixed(1)} PPG, game high max ${Math.max(...all.map((r) => r.game.pts))}; best record median ${mid(wins)} wins (max ${wins[wins.length - 1]}), ${over.length} over ${MAX_WINS}; longest streak median ${mid(streaks)} (max ${streaks[streaks.length - 1]})`,
+  );
+  // the top end (2026-11-24): how the leaders, the best and worst teams and the league's own players spread
+  const leaders = sorted(all.map((r) => r.leader.ppg));
+  const worsts = sorted(all.map((r) => r.worst.won));
+  const firsts = all.filter((r) => r.season === Math.min(...all.map((x) => x.season)));
+  const lowest = [...all].sort((a, b) => a.worst.won - b.worst.won)[0];
+  const bestMade = [...all].sort((a, b) => b.made.ovr - a.made.ovr)[0];
+  console.log(
+    `  TOP END: scoring leader median ${mid(leaders).toFixed(1)} (${all.filter((r) => r.leader.ppg >= 36).length} of ${all.length} seasons at 36+, ${all.filter((r) => r.leader.ppg >= 40).length} at 40+); best record in a first season ${sorted(
+      firsts.map((r) => r.best.won),
+    ).join(
+      ', ',
+    )}, ${all.filter((r) => r.best.won >= 70).length} of ${all.length} seasons at 70+ wins, ${all.filter((r) => r.best.won >= 67).length} at 67+; worst record median ${mid(worsts)} wins (${all.filter((r) => r.worst.won < 14).length} seasons under 14, the lowest ${lowest?.worst.team} ${lowest?.worst.won}-${lowest?.worst.lost}); the league's own players at 96+ in a league's last season ${seeds
+      .map((sd) => all.filter((r) => r.seed === sd).at(-1)?.made.n96 ?? 0)
+      .join(
+        ', ',
+      )}, a 99 among them in ${all.filter((r) => r.made.n99 > 0).length} of ${all.length} seasons (${new Set(all.filter((r) => r.made.n99 > 0).map((r) => r.seed)).size} of ${seeds.length} leagues), the best ${bestMade?.made.name ?? '-'}`,
   );
   const max = (f: (r: SeasonReport) => number) => Math.max(...all.map(f));
   const mean = (f: (r: SeasonReport) => number) => all.reduce((a, r) => a + f(r), 0) / Math.max(1, all.length);
@@ -331,6 +392,11 @@ function verdict(all: (SeasonReport & { seed: string })[]): boolean {
       text: `OT in ${(100 * ot).toFixed(1)}% of games (target ${(100 * TARGETS.otRate).toFixed(1)}% ± ${(100 * OT_TOLERANCE).toFixed(1)})`,
     },
     {
+      fail: SHAPE_FAILS.worst,
+      ok: all.filter((r) => r.worst.won < WORST_UNDER).length <= WORST_SHARE * all.length,
+      text: `the worst team under ${WORST_UNDER} wins in ${pct(all.filter((r) => r.worst.won < WORST_UNDER).length / all.length)} of seasons (target ${pct(WORST_SHARE)} or less, the NBA's one in five; median ${mid(worsts)}, the lowest ${lowest?.worst.team} ${lowest?.worst.won}-${lowest?.worst.lost} on ${lowest?.worst.payroll.toFixed(2)} of the cap)`,
+    },
+    {
       fail: SHAPE_FAILS.foulOuts,
       ok: mean((r) => r.foulOuts) >= FOUL_OUTS[0] && mean((r) => r.foulOuts) <= FOUL_OUTS[1],
       text: `${mean((r) => r.foulOuts).toFixed(0)} foul-outs a season (target ${FOUL_OUTS[0]}-${FOUL_OUTS[1]}, the NBA's 217-283; max ${max((r) => r.foulOuts)})`,
@@ -345,7 +411,7 @@ function verdict(all: (SeasonReport & { seed: string })[]): boolean {
     return false;
   }
   console.log(
-    `OK: no scoring leader above ${MAX_PPG} PPG, no game above ${MAX_GAME_PTS} points, at most ${allowed} season(s) above ${MAX_WINS} wins, leaders within ${MAX_TPM} threes and ${MAX_STL} steals, at most ${MAX_TPM10} 10-three nights a season, at most ${oldAllowed} season(s) led by a player 36 or older, margins within ${MAX_MARGIN}, team scores within ${MAX_TEAM_PTS}, no scorer at 35+ PPG in more than ${MAX_35_SEASONS} seasons of a league and at most ${max35} such seasons in all, long injuries and Achilles ruptures within ${MAX_LONG_INJURIES} and ${MAX_ACHILLES} a season`,
+    `OK: no scoring leader above ${MAX_PPG} PPG and at most ${max40} season(s) led at 40+, at most ${max99} with a 99 among the players the league made, no game above ${MAX_GAME_PTS} points, at most ${allowed} season(s) above ${MAX_WINS} wins, leaders within ${MAX_TPM} threes and ${MAX_STL} steals, at most ${MAX_TPM10} 10-three nights a season, at most ${oldAllowed} season(s) led by a player 36 or older, margins within ${MAX_MARGIN}, team scores within ${MAX_TEAM_PTS}, no scorer at 35+ PPG in more than ${MAX_35_SEASONS} seasons of a league and at most ${max35} such seasons in all, long injuries and Achilles ruptures within ${MAX_LONG_INJURIES} and ${MAX_ACHILLES} a season`,
   );
   return true;
 }
@@ -405,12 +471,13 @@ function seasonGames(league: League, season: number) {
 function playLeague(spec: string): SeasonReport[] {
   const [rngSeed, team = process.env.TEAM] = [Number(spec.split(':')[0]), spec.split(':')[1]];
   // FICTIONAL=1: the store's default league, generated (no seed), on the same thresholds
-  const seed: SeedData | null = process.env.FICTIONAL ? null : JSON.parse(readFileSync('src/data/seed.json', 'utf8'));
+  const seed: SeedData | null = process.env.FICTIONAL ? null : JSON.parse(readFileSync(process.env.HC_SEED ?? 'src/data/seed.json', 'utf8'));
   const t0 = performance.now();
   const userTid = team ? FRANCHISES.findIndex((f) => f.abbrev === team.toUpperCase()) : 19;
   if (userTid < 0) throw new Error(`${team} is no team in the seed`);
   const league = createLeague({ name: 'Stars', userTid, coachName: 'Check', settings: defaultSettings(), seed, rngSeed });
   league.id = `star_check_${rngSeed}`;
+  const firstSeason = league.season;
 
   // the real league's top 20 scorers of 2025-26 (40+ games), measured in the first simulated season
   const realSeason = league.season - 1;
@@ -489,6 +556,18 @@ function playLeague(spec: string): SeasonReport[] {
     const table = [...standings(league)].sort((a, b) => b.won - a.won);
     const abbrev = (tid: number) => league.teams[tid]?.abbrev ?? '-';
     const best = { team: abbrev(table[0].tid), won: table[0].won, lost: table[0].lost };
+    const last = table[table.length - 1];
+    const worst = { team: abbrev(last.tid), won: last.won, lost: last.lost, payroll: payroll(league, last.tid) / CAP_FOR(league).salaryCap };
+    // the league's own players: drafted since it began (a real league's first class is the real one)
+    const own = Object.values(league.players)
+      .filter((p) => p.tid >= 0 && !p.real && p.draft.year >= firstSeason)
+      .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid);
+    const made = {
+      name: own[0] ? `${playerName(own[0])} ${own[0].ovr} (${playerAge(own[0], season)}${own[0].peak ? ', generational' : ''})` : '-',
+      ovr: own[0]?.ovr ?? 0,
+      n96: own.filter((p) => p.ovr >= 96).length,
+      n99: own.filter((p) => p.ovr >= 99).length,
+    };
     const champ = abbrev(league.teams.find((t) => t.seasons.find((x) => x.season === season)?.playoffRound === 5)?.tid ?? -1);
     const gens = Object.values(league.players).filter((p) => p.tid >= 0 && p.peak);
     const past = gens.map((p) => ({ p, room: roomOf(league, p), ppg: rows.find((x) => x.p === p)?.ppg ?? 0 })).filter((x) => x.room > 0);
@@ -503,6 +582,8 @@ function playLeague(spec: string): SeasonReport[] {
     reports.push({
       season,
       tails,
+      worst,
+      made,
       leader: { name: lead ? playerName(lead.p) : '-', ppg: lead?.ppg ?? 0 },
       game,
       best,
@@ -538,7 +619,9 @@ function playLeague(spec: string): SeasonReport[] {
         .join(', ')} · ${over30} at 30+ · high ${game.name} ${game.pts} · best ${table
         .slice(0, 3)
         .map((r) => `${abbrev(r.tid)} ${r.won}-${r.lost}`)
-        .join(', ')} · streak ${abbrev(streak.tid)} ${streak.games}`,
+        .join(
+          ', ',
+        )} · worst ${worst.team} ${worst.won}-${worst.lost} (payroll ${worst.payroll.toFixed(2)} of the cap) · streak ${abbrev(streak.tid)} ${streak.games}${made.ovr >= 94 ? ` · made here: ${made.name}` : ''}`,
     );
     console.log(
       `  3PM ${tpm.name} ${tpm.pg.toFixed(2)} (${tpm.age}), ${tpm10} 10-three nights · STL ${stl.name} ${stl.pg.toFixed(2)} · margin ${margin.pts} (${margin.text}) · score ${score.pts} (${score.text}) · OT ${pct(otRate)}, by 3 or less ${pct(close)} · top-two MPG ${topMin[0].toFixed(1)}/${topMin[1].toFixed(1)} · ${foulOuts} foul-outs · champion ${champ} · injuries ${injuries.perTeam.toFixed(1)}/team, ${injuries.ten} of 10+, ${injuries.sixty} of 60+ (${injuries.achilles} Achilles, ${injuries.acl} ACL)`,

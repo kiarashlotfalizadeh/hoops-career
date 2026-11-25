@@ -67,6 +67,9 @@ export interface OwnerGoal {
    * roster's expected win% (wins), the budget's operating profit (profit), the young players' minutes (youth).
    */
   perGame?: number;
+  /** Youth: the roster's players 23 or under when the goal was set, and the minutes the staff's own rotation would give them over its games (to the hundred). */
+  young?: number;
+  staff?: number;
   /** Profit: money the budget expects at the season's end (revenue sharing, playoff gates, the league's tax payouts). */
   end?: number;
   /** Postseason: the conference rank the roster projected to when the goal was set. */
@@ -213,6 +216,17 @@ export const PACE_PRIOR = 40;
 export const YOUTH_TOP = 0.3;
 /** Age (as of February 1 of the season) a development goal's players are at most. */
 export const YOUNG_AGE = 23;
+/**
+ * Players 23 or under on the roster before the owner asks for their minutes at all, and the count at
+ * which he asks for a whole season's growth on top of the staff's rotation (YOUTH_GROWTH; fewer, their
+ * share of it). The ask had been the staff's rotation plus 1,350 minutes whoever was on the roster: a
+ * veteran Golden State with no one under 24 was asked for 1,500 young minutes and graded −100 on it
+ * for playing none, the only way that roster could (playtest round 3, 2026-11-24).
+ */
+export const YOUTH_MIN_PLAYERS = 2;
+export const YOUTH_FULL_PLAYERS = 4;
+/** Minutes over a season young players gain on an assistant's opening rotation as they improve (fitted over simulated seasons of rebuilding rosters). */
+export const YOUTH_GROWTH = 1_350;
 /** The least the owner's win goal asks, as a win% (and under FLOOR_MARGIN, see planOwnerGoals). */
 export const WIN_FLOOR = 0.3;
 /** Seasons in a row the owner accepts a rebuild (no postseason goal) before he wants the play-in. */
@@ -428,6 +442,20 @@ function youngPerGame(league: League, tid: number): number {
   if (!roster.length) return 0;
   const rot = autoRotation(roster);
   return roster.filter((p) => age(league, p) <= YOUNG_AGE).reduce((a, p) => a + (rot.minutes[p.pid] ?? 0), 0);
+}
+
+/**
+ * The development goal this roster can be asked for: the minutes a game its young players would get
+ * (0.85 of an assistant's rotation, which undercounts them, plus the growth a season brings, by how
+ * many of them there are), and how many there are. Null with fewer than YOUTH_MIN_PLAYERS: there's
+ * no one to develop, so he doesn't ask.
+ */
+function youthAsk(league: League, tid: number, who: OwnerPersonality): { perGame: number; players: number; staff: number } | null {
+  const players = standardRoster(league, tid).filter((p) => age(league, p) <= YOUNG_AGE).length;
+  if (players < YOUTH_MIN_PLAYERS) return null;
+  const staff = youngPerGame(league, tid);
+  const growth = (YOUTH_GROWTH / SEASON_GAMES) * Math.min(1, players / YOUTH_FULL_PLAYERS);
+  return { perGame: (0.85 * staff + growth) * (who === 'builder' ? 1.1 : 1), players, staff };
 }
 
 // ---------------------------------------------------------------- the floor and the rebuild clock
@@ -819,16 +847,19 @@ export function planOwnerGoals(league: League, tid: number, outlook: TeamOutlook
   else if (run > 0) base.missed = { seasons: run, of: REBUILD_SEASONS };
   if (level) goals.push({ kind: 'postseason', title: POSTSEASON[level].goal, target: level, weight: lean('postseason'), rank });
   // development: a rebuilder, a team projected out of the play-in, or a retooling team with young players in its rotation
-  const youngPg = youngPerGame(league, tid);
-  if (!level || (team.strategy === 'retool' && youngPg * SEASON_GAMES >= 2_500)) {
+  // (it reads the roster: with no one that young to play, he doesn't ask: youthAsk)
+  const youth = youthAsk(league, tid, who);
+  if (youth && (!level || (team.strategy === 'retool' && youth.staff * SEASON_GAMES >= 2_500))) {
     // an assistant's rotation undercounts them: young players gain minutes over a season as they improve (fitted over simulated seasons)
-    const target = Math.max(500, round100((0.85 * youngPg * o.left + 1_350 * share) * (who === 'builder' ? 1.1 : 1)));
+    const target = Math.max(500, round100(youth.perGame * o.left));
     goals.push({
       kind: 'youth',
       title: `Give ${target.toLocaleString('en-US')} minutes to players ${YOUNG_AGE} or under`,
       target,
       weight: lean('youth') * (level ? 0.5 : 1),
-      perGame: (0.85 * youngPg + 1_350 / SEASON_GAMES) * (who === 'builder' ? 1.1 : 1),
+      perGame: youth.perGame,
+      young: youth.players,
+      staff: round100(youth.staff * o.left),
     });
   }
   // money: a payroll near or over the tax line is the owner's concern, and his line follows the
@@ -968,6 +999,16 @@ export function goalsWhy(og: OwnerGoals, voice: 'mail' | 'screen' = 'mail'): str
       }`,
     );
   }
+  // the development goal against the roster it's asked of: who it counts, and what the staff's own minutes would come to
+  const yg = og.goals.find((g) => g.kind === 'youth');
+  if (yg?.young !== undefined && yg.staff !== undefined && !yg.conceded) {
+    const gap = Math.max(0, yg.target - yg.staff);
+    out.push(
+      `${me ? 'You have' : 'The roster has'} ${yg.young} players ${YOUNG_AGE} or under. The staff's own rotation would give them about ${yg.staff.toLocaleString('en-US')} of the ${yg.target.toLocaleString('en-US')} minutes${
+        gap >= 100 ? `: the other ${gap.toLocaleString('en-US')} ${me ? 'I want you to find' : 'are yours to find'}` : ''
+      }.`,
+    );
+  }
   // a payroll line past the tax: the tax up to it is his to pay
   const pg = og.goals.find((g) => g.kind === 'payroll');
   if (pg?.window && pg.inherited !== undefined)
@@ -975,6 +1016,10 @@ export function goalsWhy(og: OwnerGoals, voice: 'mail' | 'screen' = 'mail'): str
       me
         ? `The window is open, so I'll pay for the roster you inherited and ${money(pg.target - pg.inherited)} on top: a mid-level signing is yours to make. Past that line, it's on you.`
         : `His window is open: he pays for the payroll you inherited and ${money(pg.target - pg.inherited)} on top, room for a mid-level signing. Past that line, it counts against you.`,
+      // (why the line isn't last season's: the deals signed before the coach step up, and end, on their own schedule)
+      me
+        ? `That line is ${money(pg.inherited)} of contracts I signed before you came, as they pay this season, plus the room. It moves with those deals, not with what you add: your own signings count against it.`
+        : `The line is ${money(pg.inherited)} of contracts signed before you came, as they pay this season, plus that room. It moves with those deals, up as they step up and down as they end, never with what you add.`,
     );
   else if (pg?.window)
     out.push(
@@ -1050,8 +1095,10 @@ export function concedeBlockedReason(league: League): string | null {
 export function concedeSeason(league: League) {
   const og = currentGoals(league)!;
   const post = og.goals.find((g) => g.kind === 'postseason')!;
-  addYouthWeight(league, og, post.weight);
+  const handed = addYouthWeight(league, og, post.weight);
   og.goals = og.goals.filter((g) => g !== post);
+  // (no one young enough to play: the goals left share its weight)
+  if (!handed) normalize(og.goals);
   og.rebuild = { year: rebuildRun(league, og.tid) + 1, of: REBUILD_SEASONS };
   chargeConcession(league, og);
   addInbox(league, {
@@ -1075,7 +1122,7 @@ function chargeConcession(league: League, og: OwnerGoals) {
  * himself, a conceded postseason goal had turned a likely miss (−35) into close to +100: the Hawks
  * conceded at 8% odds and played the kids to a season grade of +39 where pushing graded −24.
  */
-function addYouthWeight(league: League, og: OwnerGoals, weight: number, fromWins = false) {
+function addYouthWeight(league: League, og: OwnerGoals, weight: number, fromWins = false): boolean {
   const who = ownerPersonality(league, og.tid);
   const ts = thisSeason(league, og.tid);
   const left = Math.max(0, SEASON_GAMES - (ts ? ts.won + ts.lost : 0));
@@ -1084,9 +1131,12 @@ function addYouthWeight(league: League, og: OwnerGoals, weight: number, fromWins
     youth.weight = Math.round((youth.weight + weight) * 100) / 100;
     youth.conceded = Math.round(((youth.conceded ?? 0) + weight) * 100) / 100;
     if (fromWins) youth.fromWins = Math.round(((youth.fromWins ?? 0) + weight) * 100) / 100;
-    return;
+    return true;
   }
-  const perGame = (0.85 * youngPerGame(league, og.tid) + 1_350 / SEASON_GAMES) * (who === 'builder' ? 1.1 : 1);
+  // (a roster with no one that young: nothing to hand the weight to, so the goals on the floor keep it)
+  const ask = youthAsk(league, og.tid, who);
+  if (!ask) return false;
+  const perGame = ask.perGame;
   const target = Math.max(100, round100(youngMinutes(league, og.tid) - (og.from?.youth ?? 0) + perGame * left));
   og.goals.push({
     kind: 'youth',
@@ -1094,9 +1144,11 @@ function addYouthWeight(league: League, og: OwnerGoals, weight: number, fromWins
     target,
     weight,
     perGame,
+    young: ask.players,
     conceded: weight,
     ...(fromWins ? { fromWins: weight } : {}),
   });
+  return true;
 }
 
 // ---------------------------------------------------------------- the floor in danger
@@ -1165,8 +1217,8 @@ export function easeFloor(league: League) {
   const wins = og.goals.find((g) => g.kind === 'wins');
   if (wins) {
     const moved = Math.round(wins.weight * EASE_WEIGHT * 100) / 100;
-    wins.weight = Math.round((wins.weight - moved) * 100) / 100;
-    addYouthWeight(league, og, moved, true);
+    // (no one young enough to play: the wins goal keeps its weight)
+    if (addYouthWeight(league, og, moved, true)) wins.weight = Math.round((wins.weight - moved) * 100) / 100;
   }
   og.rebuild ??= { year: rebuildRun(league, og.tid) + 1, of: REBUILD_SEASONS };
   chargeConcession(league, og);

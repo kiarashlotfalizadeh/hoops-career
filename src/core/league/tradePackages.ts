@@ -19,6 +19,7 @@ import {
   pickValue,
   pickValueFor,
   playerValueFor,
+  salaryMatchGap,
   stepienError,
   swapOutlook,
   swapPicks,
@@ -33,6 +34,8 @@ import {
 
 /** No AI team sends more than this many picks in one package (firsts count toward MAX_FIRSTS_OUT too). */
 export const MAX_PICKS_OUT = 3;
+/** Ways to make the money match that a package puts to the other team, the ones worth most to the user first (see findPackage). */
+const FILL_TRIES = 4;
 
 export interface Package {
   tid: number;
@@ -135,20 +138,22 @@ function findPackage(league: League, tid: number, give: { pids: number[]; dpids:
     return !stepienError(league, o, o.b);
   };
 
-  const greedy = (skip: Set<number>): Asset[] => {
+  /** Its assets worth most to the user, within `room` of what it thinks the user's side is worth, on top of `base`; `only`: of one kind. */
+  const greedy = (skip: Set<number>, only?: Asset['kind'], room = budget, base: Asset[] = []): Asset[] => {
     const pkg: Asset[] = [];
     let sum = 0;
-    let np = 0;
+    let np = base.filter((a) => a.kind === 'p').length;
     let nd = 0;
     let nf = 0;
     for (let i = 0; i < assets.length; i++) {
       if (skip.has(i)) continue;
       const a = assets[i];
+      if (only && a.kind !== only) continue;
       if (a.kind === 'p' && np >= maxPlayersIn) continue;
       // two firsts and three picks at most (second-rounders used to count toward the firsts)
       if (a.kind === 'd' && (nd >= MAX_PICKS_OUT || (a.first && nf >= MAX_FIRSTS_OUT))) continue;
-      if (sum + a.ai > budget) continue;
-      if (a.first && !stepienOk([...pkg, a])) continue;
+      if (sum + a.ai > room) continue;
+      if (a.first && !stepienOk([...base, ...pkg, a])) continue;
       pkg.push(a);
       sum += a.ai;
       if (a.kind === 'p') np++;
@@ -160,36 +165,59 @@ function findPackage(league: League, tid: number, give: { pids: number[]; dpids:
     return pkg;
   };
 
-  // salary fillers: low-value contracts the AI is happy to send to make the money work
-  const fillers = roster
-    .map(player)
-    .filter((a) => a.sal > 0)
-    .sort((x, y) => x.ai / x.sal - y.ai / y.sal);
+  // salary fillers: contracts of its that make the money match (any it can move: the ones it values least cost the package least)
+  const fillers = roster.map(player).filter((a) => a.sal > 0);
+  /** Both teams pass salary matching with `pkg` coming back. */
+  const moneyWorks = (pkg: Asset[]) => {
+    const o = offerOf(pkg);
+    return salaryMatchGap(league, o, 'a') === 0 && salaryMatchGap(league, o, 'b') === 0;
+  };
+  const aiOf = (xs: Asset[]) => xs.reduce((a, x) => a + x.ai, 0);
+  const mineOf = (xs: Asset[]) => xs.reduce((a, x) => a + x.mine, 0);
+  /** One or two of its players (`free`) that make the money match on top of `pkg`, costing it no more than `room`. */
+  const moneyFits = (pkg: Asset[], room: number): Asset[][] => {
+    const used = new Set(pkg.filter((a) => a.kind === 'p').map((a) => a.id));
+    const spots = maxPlayersIn - used.size;
+    const free = fillers.filter((x) => !used.has(x.id));
+    const fits: Asset[][] = [];
+    if (spots >= 1) for (const f of free) if (f.ai <= room && moneyWorks([...pkg, f])) fits.push([f]);
+    if (spots >= 2)
+      for (let i = 0; i < free.length; i++)
+        for (let j = i + 1; j < free.length; j++) if (free[i].ai + free[j].ai <= room && moneyWorks([...pkg, free[i], free[j]])) fits.push([free[i], free[j]]);
+    return fits;
+  };
 
   let best: { pkg: Asset[]; mine: number } | null = null;
-  const consider = (pkg: Asset[]) => {
+  const consider = (pkg: Asset[]): boolean => {
     const nPlayers = pkg.filter((a) => a.kind === 'p').length;
-    if (!pkg.length || nPlayers < minPlayersOut || nPlayers > maxPlayersIn) return;
+    if (!pkg.length || nPlayers < minPlayersOut || nPlayers > maxPlayersIn) return false;
     const ev = evaluateTrade(league, offerOf(pkg));
-    if (!ev.accept) return;
-    const mine = pkg.reduce((a, x) => a + x.mine, 0);
+    if (!ev.accept) return false;
+    const mine = mineOf(pkg);
     if (!best || mine > best.mine) best = { pkg, mine };
+    return true;
   };
   const variants: Set<number>[] = [new Set(), new Set([0]), new Set([1]), new Set([0, 1]), new Set([2])];
   for (const skip of variants) {
     const pkg = greedy(skip);
     consider(pkg);
-    // add a salary filler or two if matching fails
-    let withFill = [...pkg];
-    for (let k = 0; k < 2; k++) {
-      // fillers are players: a pick's id can equal a player's
-      const used = new Set(withFill.filter((a) => a.kind === 'p').map((a) => a.id));
-      const usedAi = withFill.reduce((a, x) => a + x.ai, 0);
-      const f = fillers.find((x) => !used.has(x.id) && usedAi + x.ai <= budget);
-      if (!f || withFill.filter((a) => a.kind === 'p').length >= maxPlayersIn) break;
-      withFill = [...withFill, f];
-      consider(withFill);
-    }
+    if (moneyWorks(pkg)) continue;
+    // the money doesn't match: one or two of its players that make it match, within what it thinks
+    // the user's side is worth; of those, the FILL_TRIES worth most to the user are put to it
+    const fits = moneyFits(pkg, budget - aiOf(pkg));
+    for (const fit of fits.sort((x, y) => mineOf(y) - mineOf(x)).slice(0, FILL_TRIES)) consider([...pkg, ...fit]);
+  }
+  // The money first, then its picks. A team over the cap can't take a salary in for a pick alone, and
+  // a package filled by value up to its budget left no room for the contract that makes the money
+  // match: every contender a rebuilding team offered a veteran to came back with nothing (the other
+  // half of "no contender pays a first for a veteran", 2026-11-24). So: the ways its players make the
+  // money match, the ones it gives up least for first, each topped up with its picks within what's
+  // left; and since its verdict counts more than the assets (the tax a salary adds, a roster spot
+  // it has to cut, its front office's edge), a pick comes off at a time until it says yes.
+  const base: Asset[][] = moneyWorks([]) ? [[]] : moneyFits([], budget);
+  for (const fit of base.sort((x, y) => aiOf(x) - aiOf(y)).slice(0, FILL_TRIES)) {
+    const picks = greedy(new Set(), 'd', budget - aiOf(fit), fit);
+    while (picks.length && !consider([...fit, ...picks])) picks.sort((x, y) => y.ai - x.ai).pop();
   }
   const b = best as { pkg: Asset[]; mine: number } | null;
   return b ? { tid, offer: offerOf(b.pkg), myValue: b.mine, giveValue } : null;

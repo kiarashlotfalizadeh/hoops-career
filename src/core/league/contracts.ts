@@ -1117,6 +1117,17 @@ function dropOptionYear(p: Player) {
   delete p.contract.option;
 }
 
+/**
+ * His team declined its option on him this summer: he goes to the market, and there is no re-signing
+ * him in the window before it opens. Declining had been free: Norman Powell's $22.6M option declined
+ * and the same player re-signed minutes later, with nobody else allowed to bid, at his $10.7M ask
+ * (the playtest's "smart trick", rounds 2 and 3). A team that says he isn't worth his option finds
+ * out what he is worth with everyone else: when free agency opens it can bid with its cap room or an
+ * exception, against the league. The user's team's rule: an AI team has no window of its own to use
+ * (it re-signs or doesn't in one step as the market opens, at the ask every team would get).
+ */
+export const optionDeclined = (league: League, p: Player) => p.optionDeclined === league.season;
+
 export function pendingTeamOptions(league: League, tid: number): Player[] {
   return teamPlayers(league, tid).filter((p) => pendingOption(league, p) === 'team');
 }
@@ -1131,11 +1142,11 @@ export function decideTeamOption(league: League, pid: number, exercise: boolean)
   if (exercise) exerciseOption(p);
   else {
     dropOptionYear(p);
-    p.asking = askingContract(league, p, league.userTid);
+    p.optionDeclined = league.season;
   }
   return {
     ok: true,
-    reason: exercise ? `Option exercised: ${playerName(p)} is signed through next season.` : `Option declined: re-sign ${playerName(p)} now or he becomes a free agent.`,
+    reason: exercise ? `Option exercised: ${playerName(p)} is signed through next season.` : `Option declined: ${playerName(p)} goes to the market when free agency opens.`,
   };
 }
 
@@ -1167,7 +1178,11 @@ export function resolveOptions(league: League, rng: Rng, includeUser = false) {
     if (user && !includeUser) continue;
     const keep = teamOptionWorth(league, p);
     if (keep) exerciseOption(p);
-    else dropOptionYear(p);
+    else {
+      dropOptionYear(p);
+      // (the user's: see optionDeclined. An AI team's own re-signings are its budget's to decide, as its market was measured)
+      if (user) p.optionDeclined = league.season;
+    }
     if (user) {
       staffCalls.push(`${playerName(p)}: ${keep ? 'exercised' : 'declined'} (${money(sal)})`);
       logMove(league, 'option', p.tid, p, { amount: sal, note: keep ? 'exercised' : 'declined' });

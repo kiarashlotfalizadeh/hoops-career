@@ -4,6 +4,7 @@
 // playoff series or play-in game starting, the books) among them, each only with a real choice in
 // it, and one still open coming due again before its deadline. The guided first week is one
 // checklist item. Job security: the meter, the grace period, the ultimatum.
+import { gmOnly, userJob } from '../league/coaches';
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, roleSettings, type SeedData } from '../league/create';
@@ -351,10 +352,13 @@ describe('the agenda', () => {
     // the coaching guide starts put away with a note saying who runs the bench, and Today's Guide link brings the checklist back
     {
       const make = (role?: 'coach' | 'gm', settings = defaultSettings()) => createLeague({ name: 'role', userTid: 5, coachName: 'c', settings, seed: null, rngSeed: 5, role });
-      expect(roleSettings('gm')).toEqual({ liveStaff: 'auto' });
+      // (and the career is told as a GM's: the news and the Coaches tab don't call him a head coach)
+      expect(roleSettings('gm')).toEqual({ liveStaff: 'auto', role: 'gm' });
       expect(roleSettings('coach')).toEqual({ liveStaff: 'ask' });
       const gm = make('gm');
       expect(gm.settings.liveStaff).toBe('auto');
+      expect([gmOnly(gm), userJob(gm).title, userJob(gm).short]).toEqual([true, 'general manager', 'GM']);
+      expect([gmOnly(make('coach')), userJob(make()).title]).toEqual([false, 'head coach']);
       expect(gm.teams[5].tactics.manage.assistantAdjusts).not.toBe(false);
       expect(gm.teams[5].rotation.manual || gm.teams[5].tactics.manual).toBeFalsy();
       expect(gm.onboarding).toEqual({ done: [], hidden: true });
@@ -746,7 +750,10 @@ describe('the agenda', () => {
         expect(youth.conceded).toBeGreaterThan(0);
         const own = (youth.weight - youth.conceded!) / youth.weight;
         expect(gradeGoal(l, after, youth, youth.target * 5)).toBeCloseTo(YOUTH_TOP * own, 2);
-        expect(gradeGoal(l, after, youth, 0)).toBe(-1);
+        // (none played: the whole miss, a thousand minutes short of a season's ask being the worst there is)
+        const span = Math.max(0.5, after.games / 82);
+        expect(gradeGoal(l, after, youth, 0)).toBeCloseTo(Math.max(-1, -youth.target / Math.max(1_000 * span, 0.5 * youth.target)), 2);
+        expect(gradeGoal(l, after, youth, 0)).toBeLessThanOrEqual(-0.4);
         const r = structuredClone(l);
         r.phase = 'playoffs';
         curTeamSeason(r, r.userTid).playoffRound = -1;

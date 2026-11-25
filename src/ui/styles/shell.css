@@ -43,6 +43,31 @@ html:has(.continue:not(.is-compact)) {
   height: 44px;
   padding-right: 6px;
 }
+/* "Saved", for a moment after a change lands on the device */
+.topbar .tb-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  padding: 0 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--good);
+  animation: tb-saved 1.8s ease both;
+  pointer-events: none;
+}
+@keyframes tb-saved {
+  0% {
+    opacity: 0;
+  }
+  12%,
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
 .topbar .title {
   font-family: var(--head);
   font-stretch: var(--head-w);

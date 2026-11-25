@@ -38,6 +38,8 @@ interface AppState {
   dirty: boolean;
   /** Why the latest save failed; cleared by the next one that works. */
   saveProblem: SaveProblem | null;
+  /** When the latest write that left nothing unsaved landed on the device (ms; 0 before the first): the top bar's "Saved" tick. */
+  savedAt: number;
   /**
    * "While you were away": what the latest sim of more than a day did (see ui/today/digest.ts),
    * until the next sim. `digestOpen`: it's up on screen (it opens by itself after the sim, unless
@@ -55,7 +57,7 @@ interface AppState {
    * Mutate the league in place and re-render. Refused (false) while a sim or a phase change runs:
    * the worker is playing on a copy of the league, which replaces this one when it's done.
    */
-  mutate: (fn: (l: League) => void, save?: boolean) => boolean;
+  mutate: (fn: (l: League) => void, save?: boolean | 'now') => boolean;
   /** Write the league to the device now. Resolves false (see saveProblem) if it didn't get there. */
   save: () => Promise<boolean>;
   /** Save only if something changed since the last save (during a sim, the worker is asked for where it has got to as well). */
@@ -166,7 +168,7 @@ async function write(l: League): Promise<boolean> {
   const at = changes;
   try {
     await saveLeague(l);
-    if (useStore.getState().league === l) useStore.setState({ dirty: changes !== at, saveProblem: null });
+    if (useStore.getState().league === l) useStore.setState({ dirty: changes !== at, saveProblem: null, ...(changes === at ? { savedAt: Date.now() } : {}) });
     return true;
   } catch (e) {
     console.error('save failed', e);
@@ -211,6 +213,7 @@ export const useStore = create<AppState>((set, get) => ({
   toasts: [],
   dirty: false,
   saveProblem: null,
+  savedAt: 0,
   digest: null,
   digestOpen: false,
   momentUp: false,
@@ -248,7 +251,11 @@ export const useStore = create<AppState>((set, get) => ({
     fn(l);
     changes++;
     set({ v: get().v + 1, dirty: true });
-    if (save) {
+    // a league action (a pick, a signing, a trade) is written as it's made: the playtest closed the app
+    // a second after taking the staff's draft pick and the pick was gone, still waiting on the timer.
+    // Light edits (a slider dragged, a level tapped through) come in bursts and share one write.
+    if (save === 'now') void get().save();
+    else if (save) {
       if (saveTimer) clearTimeout(saveTimer);
       saveTimer = setTimeout(() => void get().save(), 800);
     }
@@ -402,10 +409,23 @@ export const useStore = create<AppState>((set, get) => ({
     const l = get().league;
     if (!l) return false;
     const undo = rollbackPoint(l);
+    // (whether `fn` itself got to its end: a change that is whole is never undone for what came after
+    // it, a screen's listener throwing as the store tells it. Undone then, the screens went back to the
+    // league before a game that the device might already hold as played)
+    let whole = false;
     try {
-      return get().mutate(fn);
+      return get().mutate((x) => {
+        fn(x);
+        whole = true;
+      }, 'now');
     } catch (e) {
       console.error(`${label} failed`, e);
+      if (whole) {
+        changes++;
+        set({ v: get().v + 1, dirty: true });
+        void get().save();
+        return true;
+      }
       undo();
       set({ v: get().v + 1 });
       get().toast(failed(label), 'bad');

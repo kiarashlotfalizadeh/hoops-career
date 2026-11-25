@@ -152,6 +152,8 @@ export class GameSim {
    * more fouls reads as a cost. Not kept on the result.
    */
   xFouledMiss: [number, number] = [0, 0];
+  /** Each side's shots' variance in points, added up: how wide a night's makes can run from its looks (XShots.sd). */
+  xVar: [number, number] = [0, 0];
   flow: number[] = [];
   /** Index into flow where each period starts. */
   flowPeriods: number[] = [0];

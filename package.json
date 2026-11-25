@@ -36,7 +36,8 @@
     "dev-check": "tsx scripts/dev-check.ts",
     "style-gate": "tsx scripts/style-gate.ts",
     "forecast-check": "tsx scripts/forecast-check.ts",
-    "gameday-check": "tsx scripts/gameday-check.ts"
+    "gameday-check": "tsx scripts/gameday-check.ts",
+    "luck-check": "tsx scripts/luck-check.ts"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.9",

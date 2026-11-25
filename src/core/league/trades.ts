@@ -673,6 +673,51 @@ function starMarket(league: League, p: Player, neutral: number): number {
   return market > neutral ? neutral + share * (market - neutral) : -Infinity;
 }
 
+/**
+ * What a contending AI team counts a player of the user's for coming in, at least: BUYER_MARKET of
+ * its own valuation of him (the contender's lens: what he does now over his age), for a player who
+ * would play for it (better than its BUYER_SPOT-th best, in full from BUYER_RAMP OVR past him). The
+ * lens's band (15% over the league's neutral value, which prices a veteran by the seasons he has
+ * left) had every contender count a 79-rated 33-year-old at 7.3 against its own 15.6 and a late
+ * first's 12: no contender in the league paid a first for a useful veteran, and a rebuilding coach
+ * had nothing to sell (playtest round 3; scratch sell.ts, Chicago two days before the deadline,
+ * 2026-11-24). It mirrors STAR_MARKET, what an AI team asks him for an old star: one market, read
+ * from both sides. Only what it adds for age: a player in his prime reads the same through both
+ * lenses, and a young one less through a contender's. Not for a player he traded for this season or
+ * last (bought at the league's price from a seller with no use for him, he isn't sold on at a
+ * contender's the next winter), and not among AI teams, whose market was measured as it is.
+ */
+export const BUYER_MARKET = 0.85;
+const BUYER_SPOT = 8;
+const BUYER_RAMP = 3;
+
+/** A team's `n`-th best player's OVR (its rotation's last spot: who a newcomer has to beat to play). */
+function nthBest(league: League, tid: number, n: number): number {
+  const key = `${league.season}:${league.phase}:${league.day}:${league.nextTxnId ?? 0}:${n}`;
+  let hit = nthCache.get(league);
+  if (hit?.key !== key) nthCache.set(league, (hit = { key, by: new Map() }));
+  let v = hit.by.get(tid);
+  if (v === undefined) {
+    v =
+      standardRoster(league, tid)
+        .map((p) => p.ovr)
+        .sort((a, b) => b - a)[n - 1] ?? 0;
+    hit.by.set(tid, v);
+  }
+  return v;
+}
+const nthCache = new WeakMap<League, { key: string; by: Map<number, number> }>();
+
+function buyerMarket(league: League, p: Player, tid: number, neutral: number): number {
+  if (league.teams[tid].strategy !== 'contend' || p.tid !== league.userTid) return -Infinity;
+  // (one he traded for lately: see BUYER_MARKET)
+  if (p.tradedFrom && p.tradedFrom.season >= league.season - 1) return -Infinity;
+  const share = Math.min(1, Math.max(0, (p.ovr - nthBest(league, tid, BUYER_SPOT)) / BUYER_RAMP));
+  if (share <= 0) return -Infinity;
+  const market = BUYER_MARKET * tradeValue(league, p, 'contend');
+  return market > neutral ? neutral + share * (market - neutral) : -Infinity;
+}
+
 /** A player as team `tid` sees him in a deal (with the user unless `aiDeal`). */
 function playerView(league: League, p: Player, tid: number, incoming: boolean, aiDeal: boolean): AssetView {
   const neutral = tradeValue(league, p, 'retool');
@@ -688,6 +733,8 @@ function playerView(league: League, p: Player, tid: number, incoming: boolean, a
   let value = f ? neutral : lens(own, neutral, incoming, aiDeal);
   // (a star it sends the user is priced at what a contender would pay for him: see STAR_MARKET)
   if (!incoming && !aiDeal && !f && p.tid === tid) value = Math.max(value, starMarket(league, p, neutral));
+  // (and a contender pays near its own price for a player of his who would play for it: see BUYER_MARKET)
+  if (incoming && !aiDeal && !f && tid !== league.userTid) value = Math.max(value, buyerMarket(league, p, tid, neutral));
   // (he asked out: it has to move him, see WANTS_OUT)
   if (!incoming && value > 0 && p.tid === tid && wantsOut(league, p)) return { kind: 'player', id: p.pid, value: value * WANTS_OUT, neutral, own, flipped: f, wantsOut: true };
   // (its cornerstone going out counts for more: see CORNERSTONE)

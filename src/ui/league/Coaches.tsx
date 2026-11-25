@@ -10,7 +10,7 @@ import { seasonLabel } from '../../core/constants';
 import { DEF_PRESETS, OFF_PRESETS } from '../../core/sim/tactics';
 import { defenseLabel, offenseLabel } from '../../core/sim/playbooks';
 import { styleIdentity } from '../../core/ai/style';
-import { coachCareer, coachStatus, coyWinners, type CoachCareer, type CoachRecord, type CoachSeason, type CoachTotals, type CoachStint } from '../../core/league/coaches';
+import { coachCareer, coachStatus, coyWinners, gmOnly, type CoachCareer, type CoachRecord, type CoachSeason, type CoachTotals, type CoachStint } from '../../core/league/coaches';
 import { TeamLogo } from '../components/TeamLogo';
 import { Section, Sheet, Statline } from '../components/ui';
 import { OutcomeTag, PosterSlab, ordinal, seasonOutcome, teamPath, useQueryParam } from './shared';
@@ -74,7 +74,7 @@ export function CoachesView({ league }: { league: League }) {
       {me && (
         <PosterSlab
           colors={league.teams[league.userTid].colors}
-          over={`Your career · ${plural(me.k.stints.length, 'job')}`}
+          over={`Your career${gmOnly(league) ? ' as GM' : ''} · ${plural(me.k.stints.length, 'job')}`}
           mark={<TeamLogo tid={league.userTid} size={44} decorative />}
           region={`${league.teams[league.userTid].region} ${league.teams[league.userTid].name}`}
           name={league.coachName}
@@ -138,13 +138,14 @@ function CoachRow({ league, x, onOpen }: { league: League; x: Row; onOpen: () =>
         ? `${plural(cur.lines.length, 'season')} with ${team.abbrev}`
         : `${team.abbrev} · from ${seasonLabel(cur?.stint.from ?? league.season)}`
       : `${k.lines.length ? seasonRange(k.lines[0].season, k.lines[k.lines.length - 1].season, false) : '—'} · ${status === 'available' ? 'available' : 'retired'}`;
+  const gm = r.user && gmOnly(league);
   return (
     <button className={`lg-coach-row ${r.user ? 'me' : ''}`} onClick={onOpen}>
       <TeamLogo tid={tid} size={26} />
       <span className="lg-coach-t">
         <span className="nm">
           <span className="ellipsis">{r.name}</span>
-          {r.user && <span className="tag">You</span>}
+          {r.user && <span className="tag">{gm ? 'You · GM' : 'You'}</span>}
         </span>
         <span className="sub ellipsis">
           {sub}
@@ -211,7 +212,9 @@ function CoachSheet({ league, x, onClose }: { league: League; x?: Row; onClose: 
   const style = styleWords(league, r, cur?.stint.tid);
   const last = k.lines[k.lines.length - 1];
   const where = cur
-    ? `${r.user ? 'You: head' : 'Head'} coach of the ${league.teams[cur.stint.tid].region} ${league.teams[cur.stint.tid].name}`
+    ? r.user && gmOnly(league)
+      ? `You: general manager of the ${league.teams[cur.stint.tid].region} ${league.teams[cur.stint.tid].name}. Your staff coaches. The record is the team's under you.`
+      : `${r.user ? 'You: head' : 'Head'} coach of the ${league.teams[cur.stint.tid].region} ${league.teams[cur.stint.tid].name}`
     : `${status === 'available' ? 'Available to hire.' : 'Retired.'}${last ? ` Last coached ${league.teams[last.tid].abbrev} in ${seasonLabel(last.season)}.` : ''}`;
   return (
     <Sheet open onClose={onClose} title={r.name}>

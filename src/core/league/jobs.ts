@@ -13,7 +13,7 @@
 // draft. Nothing here draws from a random stream.
 
 import type { League } from '../types';
-import { activeCoach, candidateScore, coachCareer, coyWinners, marketScore, openStint, profileOf, userCoach, type CarouselMoves } from './coaches';
+import { activeCoach, candidateScore, coachCareer, coyWinners, marketScore, openStint, profileOf, userCoach, userJob, type CarouselMoves } from './coaches';
 import { addInbox, addNews, andList, curTeamSeason, teamCity, winPct } from './helpers';
 import { clamp } from '../random';
 import { seasonsInCharge, takeOverTeam } from './owner';
@@ -159,7 +159,7 @@ export function makeJobOffers(league: League, moves: CarouselMoves) {
     from: 'Your agent',
     subject: league.fired ? (offers.length > 1 ? `${offers.length} job offers` : 'A job offer') : 'Other teams are calling',
     body: league.fired
-      ? `${names} ${offers.length > 1 ? 'want' : 'wants'} you as head coach. ${offers.map((o) => o.note).join(' ')} Take one: the league waits until you do.`
+      ? `${names} ${offers.length > 1 ? 'want' : 'wants'} you as ${userJob(league).title}. ${offers.map((o) => o.note).join(' ')} Take one: the league waits until you do.`
       : `${offers.map((o) => o.note).join(' ')} Stay put, or ${offers.length > 1 ? 'take one of the jobs: the offers stand' : 'take the job: the offer stands'} until the draft.`,
     tone: 'good',
     link: '/office/career',

@@ -273,6 +273,11 @@ export interface Player {
   tradedFrom?: { tid: number; season: number; also?: number[]; /** The season day of that trade (older saves don't have it). */ day?: number };
   /** Signed as a free agent or re-signed: he can't be traded before this season day (NBA: December 15, or three months after signing). */
   tradeLock?: { season: number; day: number };
+  /**
+   * The season his team declined its option on him: he goes to the market that summer, and doesn't
+   * re-sign with that team in the window before it opens (contracts.ts decideTeamOption).
+   */
+  optionDeclined?: number;
   experience: number; // seasons completed in the league
   retiredSeason?: number;
   hof?: boolean;
@@ -895,6 +900,18 @@ export type ShotZone = 'rim' | 'paint' | 'mid' | 'c3' | 'ab3';
 export interface XShots {
   pts: number;
   tpm: number;
+  /**
+   * What the shots a foul wiped out were worth (points; they aren't attempts, so `pts` leaves them
+   * out, but it keeps the ones that fell: an and-one). A side's looks in points are `pts` + `fouled`:
+   * without it every and-one read as luck. Absent in results from before 2026-11-24.
+   */
+  fouled?: number;
+  /**
+   * How far the side's points from the field run from its looks on a night, shot by shot (one
+   * standard deviation, points): each shot goes in or doesn't, so 88 of them stray about 11 points
+   * either way. What a night's shooting luck is read against. Absent in results from before 2026-11-24.
+   */
+  sd?: number;
 }
 
 export interface TacticImpact {
@@ -1008,10 +1025,13 @@ export interface MovesWorth {
    */
   each?: { move: number; raw: number; se: number }[];
   /**
-   * Each kind of move left out of the night together (every timeout, every sub...), the others kept:
-   * the reading, its standard error and how many moves of the kind there were. Absent in older readings.
+   * Each kind of move's share of the night's reading (every timeout, every sub...): the reading, its
+   * standard error and how many moves of the kind there were. With `shared` the shares add up to `raw`
+   * (liveWorth.ts nightWorth); readings from before 2026-11-24 left each kind alone out of the night,
+   * and don't. Absent in older readings.
    */
   kinds?: { kind: CoachMove['kind']; raw: number; se: number; moves: number }[];
+  shared?: true;
 }
 
 /** One counter of the game plan a game was played with (GameResult.plan). */
@@ -1426,6 +1446,12 @@ export interface Settings {
    * to you ('ask', the default). Subs and timeouts stay yours either way.
    */
   liveStaff?: 'ask' | 'auto';
+  /**
+   * A GM-only career (create.ts's Role 'gm'): the staff coaches, and the telling says so: the news,
+   * the milestones and the Coaches tab call him the general manager and credit the bench's honours to
+   * his staff. Absent: GM and head coach.
+   */
+  role?: 'gm';
   /** Live games on a phone held upright: the court at full size ('court') or smaller, for more of the bench under it ('bench'). */
   liveView?: 'court' | 'bench';
   /**
@@ -1807,6 +1833,13 @@ export interface GamePlan {
   seriesId?: string;
   /** Planned matchups against this opponent: their pid -> my defender pid. */
   matchups?: Record<number, number>;
+  /**
+   * What the whole plan (its counters and matchups together) measured worth against going in without
+   * one, in points a game for the next meeting (counterWorth.ts: paired games, shrunk toward even), for
+   * the plan as it stood then (`sig`: gamePlans.ts planSig). The projection counts it while the plan
+   * is still that one; a plan changed since counts its counters' own readings until it's measured again.
+   */
+  worth?: { pts: number; raw: number; se: number; sig: string };
 }
 
 export const FREE_AGENT = -1;

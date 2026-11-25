@@ -625,6 +625,14 @@ describe('live game', () => {
         expect([w.n, w.moves]).toEqual([30, 3]);
         expect(Math.abs(w.pts)).toBeLessThanOrEqual(Math.abs(w.raw));
         expect(w.se).toBeGreaterThan(0);
+        // each kind of move's share of the night: the three add up to the night's reading
+        expect(w.shared).toBe(true);
+        expect(w.kinds!.map((k) => [k.kind, k.moves])).toEqual([
+          ['sub', 1],
+          ['tactics', 1],
+          ['timeout', 1],
+        ]);
+        expect(Math.abs(w.kinds!.reduce((a, k) => a + k.raw, 0) - w.raw)).toBeLessThan(0.08);
         expect(await nightWorth(lg.tip, side, ops, { games: 30 })).toEqual(w);
         expect(
           await nightWorth(

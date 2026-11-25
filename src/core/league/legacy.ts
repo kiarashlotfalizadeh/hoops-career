@@ -16,7 +16,7 @@ import { FRANCHISES } from '../teams';
 import { winProb } from '../analysis/winProb';
 import { worldRng } from './world';
 import { addInbox, addNews, fmtDate, teamCity } from './helpers';
-import { coachCareer, coyWinners, openStint, stintSeasons, userCoach, type CoachCareer, type CoachSeason } from './coaches';
+import { coachCareer, coyWinners, gmOnly, openStint, stintSeasons, userCoach, userJob, type CoachCareer, type CoachSeason } from './coaches';
 import { seriesLabel } from './playoffs';
 import { pulseDay } from './legacyPulse';
 import { buildSeasonReview, type SeasonReview } from './legacyReview';
@@ -254,7 +254,7 @@ function winsMilestone(league: League, k: CoachCareer, n: number, side: NonNulla
   const jobs = new Set(k.lines.map((l) => l.tid)).size;
   const pct = (k.won / Math.max(1, k.won + k.lost)).toFixed(3).replace(/^0/, '');
   const head = pick(league, `wins:${n}`, [`Win No. ${n} for ${coach}`, `${coach} reaches ${n} career wins`, `${n} and counting for ${coach}`, `${coach} gets to ${n}`]);
-  const text = `It came ${side.us}-${side.them} over ${nick(league, side.opp)} ${where(league, side)}. ${k.won}-${k.lost} as a head coach (${pct})${jobs > 1 ? ` across ${plural(jobs, 'job')}` : ''}.`;
+  const text = `It came ${side.us}-${side.them} over ${nick(league, side.opp)} ${where(league, side)}. ${k.won}-${k.lost} as a ${userJob(league).title} (${pct})${jobs > 1 ? ` across ${plural(jobs, 'job')}` : ''}.`;
   const big = n === 100 || n % 500 === 0;
   reach(
     league,
@@ -265,7 +265,7 @@ function winsMilestone(league: League, k: CoachCareer, n: number, side: NonNulla
       gid,
       ...(big
         ? {
-            body: `${k.seasons > 1 ? `${plural(k.seasons, 'season')} in, ` : ''}${coach} has won ${n} games as a head coach. ${k.titles ? `${plural(k.titles, 'title')} along the way.` : k.playoffs ? `${plural(k.playoffs, 'playoff run')} along the way.` : 'The playoffs are still to come.'}`,
+            body: `${k.seasons > 1 ? `${plural(k.seasons, 'season')} in, ` : ''}${coach} has won ${n} games as a ${userJob(league).title}. ${k.titles ? `${plural(k.titles, 'title')} along the way.` : k.playoffs ? `${plural(k.playoffs, 'playoff run')} along the way.` : 'The playoffs are still to come.'}`,
           }
         : {}),
       mail: {
@@ -337,11 +337,11 @@ export function legacyGame(league: League, g: ScheduledGame) {
             : pick(league, jobKey(stint.tid, stint.from), [
                 `${coach}'s first win with ${nick(league, tid)}`,
                 `${coach} is off the mark in ${league.teams[tid].region}`,
-                `A first win for the new ${nick(league, tid)} coach`,
+                `A first win for the new ${nick(league, tid)} ${userJob(league).short}`,
               ]),
           text: `${side.us}-${side.them} over ${nick(league, side.opp)} ${where(league, side)} on ${date}.${first ? '' : ` Win No. ${k.won} of his career, the first of a new job.`}`,
           body: first
-            ? `The first of the career came on ${date}: ${nick(league, tid)} ${side.us}, ${nick(league, side.opp)} ${side.them}. Every coach in the league has one of these. Only the next ones are hard.`
+            ? `The first of the career came on ${date}: ${nick(league, tid)} ${side.us}, ${nick(league, side.opp)} ${side.them}. Every ${userJob(league).short} in the league has one of these. Only the next ones are hard.`
             : undefined,
           gid: g.gid,
           mail: {
@@ -619,7 +619,12 @@ export function legacyDay(league: League) {
         league,
         {
           key: `cotm:${h.season}:${h.day}`,
-          head: n === 1 ? `${league.coachName}'s first Coach of the Month` : `Coach of the Month, ${plural(n, 'time')} now`,
+          // (a GM-only career: the honour is his bench's)
+          head: gmOnly(league)
+            ? `Coach of the Month goes to ${league.coachName}'s staff${n > 1 ? `, ${plural(n, 'time')} now` : ''}`
+            : n === 1
+              ? `${league.coachName}'s first Coach of the Month`
+              : `Coach of the Month, ${plural(n, 'time')} now`,
           text: h.line,
         },
         2,
@@ -670,15 +675,20 @@ export function legacyDay(league: League) {
       league,
       {
         key: `coy:${league.season}`,
-        head:
-          n === 1
+        head: gmOnly(league)
+          ? `Coach of the Year goes to ${league.coachName}'s staff${n > 1 ? ' again' : ''}`
+          : n === 1
             ? pick(league, `coy:${league.season}`, [`${league.coachName} is Coach of the Year`, `Coach of the Year: ${league.coachName}`])
             : `${league.coachName} is Coach of the Year again`,
         text: `${ts ? `${ts.won}-${ts.lost} with ${nick(league, tid)}` : `With ${nick(league, tid)}`}${n > 1 ? `: his ${ordinalWord(n)}` : ''}.`,
         mail: {
           from: 'Owner',
           subject: 'Coach of the Year',
-          body: n === 1 ? "Coach of the Year. I'll frame it. Then I'll want another season like it." : `Coach of the Year again (${n}). The league has noticed what I have.`,
+          body: gmOnly(league)
+            ? `Coach of the Year for the bench you put together${n > 1 ? `, again (${n})` : ''}. Tell the staff I noticed.`
+            : n === 1
+              ? "Coach of the Year. I'll frame it. Then I'll want another season like it."
+              : `Coach of the Year again (${n}). The league has noticed what I have.`,
         },
       },
       3,

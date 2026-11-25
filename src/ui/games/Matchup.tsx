@@ -15,13 +15,13 @@ import { counterCandidates } from '../../core/ai/advisor';
 import { worthCall } from '../../core/ai/counterWorth';
 import { CHECK_AFTER } from '../../core/ai/tacticEdits';
 import { byWorth, counterItem, useCounterWorth, worthText } from './matchup/useCounterWorth';
-import { setPlanItem } from '../../core/league/gamePlans';
+import { planFor, planWorth, setPlanItem } from '../../core/league/gamePlans';
 import { act } from '../../state/actions';
 import { GuideStrip } from '../components/GuideStrip';
 import { curTeamSeason, fmtDate, teamCity } from '../../core/league/helpers';
 import { confStandings } from '../../core/league/standings';
 import { neutralSite } from '../../core/league/games';
-import { gameProjection, nextUserGame } from '../../core/analysis/preview';
+import { gameProjection, nextUserGame, winChance } from '../../core/analysis/preview';
 import { GameTop } from './occasion';
 import { favoriteOf } from './favorite';
 import { Empty, Help, PageHeader, keep } from '../components/ui';
@@ -158,15 +158,32 @@ function TipOff({ league, gid, opp, name }: { league: League; gid: number; opp: 
 }
 
 /**
- * What of the coach's own work is in the forecast, in a line: his plan's measured counters and his
- * checked tactical changes, in points; with neither, that tactics aren't in it until they're checked.
+ * What of the coach's own work is in the forecast, in a line: his plan as the staff measured it whole
+ * (its figure and give-or-take, also when it comes to nothing, so a forecast that didn't move says
+ * why) and his checked tactical changes, in points; with neither, that tactics aren't in it until
+ * they're measured. `plan`: the plan's points in the forecast; `whole`: its measurement, once in;
+ * `measuring`: there's a plan and the staff is still on it.
  */
-function forecastIn(plan: number, edits: number): string {
-  const f = (v: number) => `${v > 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}`;
-  const parts = [Math.abs(plan) >= 0.05 && `your plan ${f(plan)}`, Math.abs(edits) >= 0.05 && `your checked changes ${f(edits)}`].filter(Boolean);
+function forecastIn(plan: number, edits: number, whole?: { pts: number; raw: number; se: number }, measuring?: boolean): string {
+  const f = (v: number) => `${v > 0.04 ? '+' : v < -0.04 ? '−' : ''}${Math.abs(v).toFixed(1)}`;
+  const win = (v: number) => {
+    const pc = Math.round((winChance(v) - 0.5) * 100);
+    return pc ? `, about ${pc > 0 ? '+' : '−'}${Math.abs(pc)}% to win in an even game` : '';
+  };
+  const ed = Math.abs(edits) >= 0.05 ? `your checked changes ${f(edits)} pts` : '';
+  if (measuring) return `The staff is measuring your plan: the forecast moves by what it finds.${ed ? ` In it now: ${ed}.` : ''}`;
+  if (whole) {
+    const pm = `give or take ${Math.max(0.1, whole.se).toFixed(1)}`;
+    const said =
+      Math.abs(whole.pts) >= 0.05
+        ? `your plan ${f(whole.pts)} pts a game (${pm}${win(whole.pts)})`
+        : `your plan measured about even against no plan (${f(whole.raw)} pts, ${pm}), so it doesn't move the forecast`;
+    return `In the forecast: ${[said, ed].filter(Boolean).join('; ')}.`;
+  }
+  const parts = [Math.abs(plan) >= 0.05 && `your plan ${f(plan)} pts`, ed].filter(Boolean);
   return parts.length
-    ? `In the forecast: ${parts.join(', ')} pts.`
-    : `Rosters, results and home court. Tactics move it once the staff has measured them: a counter in your plan, or a change checked after ${CHECK_AFTER} games.`;
+    ? `In the forecast: ${parts.join(', ')}.`
+    : `Rosters, results and home court. Tactics move it once the staff has measured them: your game plan, or a change checked after ${CHECK_AFTER} games.`;
 }
 
 /**
@@ -189,6 +206,10 @@ function Hero({ league, opp, onPlan, compact }: { league: League; opp: number; o
     !pre && d === league.day ? 'Today' : !pre && d === league.day + 1 ? 'Tomorrow' : fmtDate(league.season, d, { weekday: 'short', month: 'short', day: 'numeric' });
   const sp = seriesParts(h2h);
   const plan = planStatus(league, opp, g);
+  // the plan as the staff measured it whole (the counters' run measures it too), or still measuring
+  const made = g ? planFor(league, opp, g) : null;
+  const whole = planWorth(made);
+  const measuring = useCounterWorth(league, opp);
   const [awayTid, homeTid] = g ? [g.away, g.home] : [opp, me];
   const rec = (tid: number) => {
     const ts = curTeamSeason(league, tid);
@@ -227,16 +248,18 @@ function Hero({ league, opp, onPlan, compact }: { league: League; opp: number; o
             </span>
             <Help title="Chance to win">
               <p>
-                From both teams&apos; net ratings, tonight&apos;s rotations and home court. Your game plan counts where it changes who plays, and by any counter the staff measured
-                as a gain or a cost against them. A change to your tactics counts once the staff has checked it on played games (Tactics, Season Analysis). Until then, what it does
-                is found out on the floor.
+                From both teams&apos; net ratings, tonight&apos;s rotations and home court. Your game plan counts by what the staff measures it worth: the same game played a few
+                hundred times with the whole plan (counters and matchups) and without it. Most plans are worth under a point a game, and a point is about 3% to win. A change to
+                your tactics counts once the staff has checked it on played games (Tactics, Season Analysis). Until then, what it does is found out on the floor.
               </p>
             </Help>
           </div>
         )}
         {proj && (
           // what of the coach's own work is in the number, so a forecast that doesn't move says why
-          <div className="mu-hero-in small dim2">{forecastIn(g?.home === me ? proj.plan : -proj.plan, g?.home === me ? proj.edits : -proj.edits)}</div>
+          <div className="mu-hero-in small dim2">
+            {forecastIn(g?.home === me ? proj.plan : -proj.plan, g?.home === me ? proj.edits : -proj.edits, whole, !!made && !whole && !!measuring && !measuring.worth)}
+          </div>
         )}
       </GameBoard>
       {(h2h.total > 0 || (g && onPlan)) && (

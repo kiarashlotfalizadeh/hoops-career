@@ -7,7 +7,7 @@ import type { League, ScheduledGame } from '../../core/types';
 import { addNews, standardRoster, teamCity } from '../../core/league/helpers';
 import { userGameOnDay } from '../../core/league/games';
 import { runSim } from '../../state/simCore';
-import { settleCall, storeWorth, worthSig } from '../../core/league/calls';
+import { bigGameTonight, postseasonStops, settleCall, storeWorth, worthSig } from '../../core/league/calls';
 import { agenda, simStopIds } from '../../core/league/agenda';
 import { schedulePlayoffDay } from '../../core/league/playoffs';
 import { flowActions } from '../flow';
@@ -141,6 +141,30 @@ describe('the Continue loop', () => {
         expect(simStopIds(l).find((x) => !before.has(x))).toBe(`series:${l.season}:${conf}2-0:${s.highWins}-${s.lowWins}`);
       }
       expect(l.playoffs[0].highWins + l.playoffs[0].lowWins).toBeGreaterThan(1);
+      // a game that decides something is the night he's asked "coach it or sim it?" (BigGameSheet):
+      // lose and it's over, win and the series is his, or both; and a closeout stops a sim as an
+      // elimination game does
+      {
+        const s = l.playoffs[0];
+        const at = (hw: number, lw: number) => {
+          delete s.winner;
+          [s.highWins, s.lowWins] = [hw, lw];
+          l.schedule = l.schedule.filter((g) => g.played);
+          schedulePlayoffDay(l);
+          const g = l.schedule.find((x) => x.seriesId === s.id && !x.played)!;
+          g.day = l.day;
+          return bigGameTonight(l);
+        };
+        expect(at(2, 1)).toBeNull();
+        expect(at(2, 3)).toMatchObject({ kind: 'elim', opp, title: 'Elimination game tonight' });
+        expect(postseasonStops(l).map((x) => x.id)).toContain(`stop:elim:${l.season}:${s.id}:2-3`);
+        expect(at(3, 1)).toMatchObject({ kind: 'close', title: 'You can close it out tonight' });
+        expect(postseasonStops(l).map((x) => x.id)).toContain(`stop:close:${l.season}:${s.id}:3-1`);
+        expect(at(3, 3)).toMatchObject({ kind: 'seven', title: 'Game 7 tonight' });
+        s.round = 4;
+        expect(at(3, 2)!.title).toBe('You can win the title tonight');
+        expect(bigGameTonight({ ...l, phase: 'regular' })).toBeNull();
+      }
     }
 
     // a call that was open when the sim started, or that he settled, or a short absence, or no stops at all, plays on

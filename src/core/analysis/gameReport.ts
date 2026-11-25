@@ -646,7 +646,8 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     // the luck in points as scored, to the point: what each side's makes came to against what its looks
     // were worth, the figure the report's header and its margin line show (taken as the rest of the
     // eFG gap at average attempts, one report said luck +10.4 up top and +10.1 in this row)
-    const fell = u.t.fgm * 2 + u.t.tpm - xu.pts - (o.t.fgm * 2 + o.t.tpm - xo.pts);
+    // (a side's looks count the shots a foul wiped out: XShots.fouled)
+    const fell = u.t.fgm * 2 + u.t.tpm - xu.pts - (xu.fouled ?? 0) - (o.t.fgm * 2 + o.t.tpm - xo.pts - (xo.fouled ?? 0));
     if (Math.abs(looks) >= 3) {
       const [hi, lo] = looks > 0 ? [xefg(xu, u.t.fga), xefg(xo, o.t.fga)] : [xefg(xo, o.t.fga), xefg(xu, u.t.fga)];
       const [mHi, mLo] = looks > 0 ? [fu.efg, fo.efg] : [fo.efg, fu.efg];

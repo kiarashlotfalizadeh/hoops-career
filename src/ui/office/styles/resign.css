@@ -80,6 +80,20 @@
   letter-spacing: -0.04em;
 }
 
+/* who walks when the market opens */
+.fo-walk {
+  border-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 8%, var(--surface));
+  margin-bottom: 12px;
+}
+.fo-walk-l {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  color: var(--text-2);
+}
+
 .fo-done {
   display: flex;
   align-items: center;

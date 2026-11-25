@@ -52,6 +52,17 @@ export interface Feel {
    * runs `feature` more of its offense through him (his usage tendency times 1 + it). So the
    * league's ceilings hold everyone the real league has seen and give way for the one player in a
    * generation who is past it (league/legends.ts makes and keeps those).
+   *
+   * Sized 2026-11-24 to the legends the league now makes (legends.ts: a peak of 3.5 raw points at
+   * most, so `span` is that, and a legend at his peak has all of it). Until then: span 6, use 0.09,
+   * ceil 0.11, contest 0.7, three 0.05, feature 0.9, with peaks to 7. A legend at 0.6 of that room
+   * used 46% of his team's possessions and scored 41.8 to 45.9 a game, one at all of it 47-48% and
+   * 49.1 (star-check, 16 real and 8 generated leagues of eight seasons; the real league's two
+   * highest shares since 2004 are 0.408 and 0.406). The whole room is now a little under what 0.3
+   * of it was (the same player, 40% and 37.8): at use 0.03, ceil 0.03, contest 0.2 and feature 0.25
+   * a legend with all of it still used 42% and scored 40.8, and a founding one 41.2 on 39%. A legend
+   * at his peak now leads the league at 35 to 39 (38.2 for that player, 38.9 for the founding one),
+   * on a share only Westbrook's and Harden's seasons have reached.
    */
   tails: { span: number; use: number; ceil: number; contest: number; three: number; feature: number };
 }
@@ -61,7 +72,7 @@ const LOUD: Feel = {
   hot: { from: 3, per: 0.025, max: 0.075, miss: 2, sit: 2, coldFrom: 4, coldPer: 0.012, coldMax: 0.036, feed: 1.2, feedCall: 1.7 },
   momentum: { from: 6, per: 0.015, max: 0.06, home: 1.3, to: 0.15 },
   ato: { open: 0.55, plain: 0.2, at: 0.75, per: 0.01, set: 0.15, to: 0.6, aiSet: 1.5 },
-  tails: { span: 6, use: 0.09, ceil: 0.11, contest: 0.7, three: 0.05, feature: 0.9 },
+  tails: { span: 3.5, use: 0.02, ceil: 0.02, contest: 0.15, three: 0.015, feature: 0.15 },
 };
 
 const PURIST: Feel = {
@@ -69,7 +80,7 @@ const PURIST: Feel = {
   hot: { from: 3, per: 0, max: 0, miss: 2, sit: 2, coldFrom: 4, coldPer: 0, coldMax: 0, feed: 1, feedCall: 1.25 },
   momentum: { from: 6, per: 0, max: 0, home: 1, to: 0 },
   ato: { open: 0, plain: 0, at: 1, per: 0, set: 0, to: 1, aiSet: 1 },
-  tails: { span: 6, use: 0, ceil: 0, contest: 0, three: 0, feature: 0 },
+  tails: { span: 3.5, use: 0, ceil: 0, contest: 0, three: 0, feature: 0 },
 };
 
 /** The measuring scripts' override (see the header): 'purist', or a JSON object of values by dotted path. */

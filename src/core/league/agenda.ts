@@ -14,7 +14,7 @@ import type { League, Player } from '../types';
 import { CAP } from '../constants';
 import { addInbox, fmtDate, freeAgents, playerName, standardRoster, teamPlayers } from './helpers';
 import { FIRED_REASON, askingContract, releaseDeadMoney, releasePlayer, releasedBy, valueScore } from './contracts';
-import { marqueeFA, offerBlockedReason, signingClosedReason, userOffer } from './freeAgency';
+import { marqueeFA, offerBlockedReason, signingClosedReason, userOffer, walkRisks } from './freeAgency';
 import { acceptProposal, declineProposal, offerRating, offerSubject, openProposals, proposalError, proposalThird, stopsForOffer } from './proposals';
 import { autoDraftUserPick, continueDraft } from './season';
 import { nextPick } from './draft';
@@ -25,7 +25,8 @@ import { ultimatumVerdict } from './jobSecurity';
 import { resolveCall, staffCalls, type CallAction, type CallChoice, type CallKind, type CallMeasure } from './calls';
 import { answerRequest, openRequests, roleRead } from './pulse';
 
-export type AgendaKind = 'fired' | 'cuts' | 'signings' | 'minutes' | 'draftPick' | 'tradeOffer' | 'jobOffers' | 'ultimatum' | 'deploy' | 'tradeRequest' | 'guide' | CallKind;
+export type AgendaKind =
+  'fired' | 'cuts' | 'signings' | 'walk' | 'minutes' | 'draftPick' | 'tradeOffer' | 'jobOffers' | 'ultimatum' | 'deploy' | 'tradeRequest' | 'guide' | CallKind;
 
 /** The agenda's kinds that are the staff's calls (see calls.ts): Needs you puts them first, and the digest and the Play options show them. */
 export const CALL_KINDS: ReadonlySet<AgendaKind> = new Set<CallKind>(['injury', 'odds', 'floor', 'deadline', 'series']);
@@ -337,6 +338,28 @@ export function agenda(league: League): AgendaItem[] {
       to: '/office/career',
     });
     return items;
+  }
+
+  // the re-sign period: the rotation players who leave when the market opens, said before it does
+  if (league.phase === 'resign') {
+    const risks = walkRisks(league).filter((r) => r.key);
+    if (risks.length) {
+      const why = (r: (typeof risks)[number]) =>
+        r.declined ? 'option declined, goes to the market' : r.over ? `asks ${money(r.ask)}, your limit is ${money(r.limit)}` : `asks ${money(r.ask)}`;
+      items.push({
+        id: `walk:${league.season}`,
+        kind: 'walk',
+        required: false,
+        title: risks.length === 1 ? `${playerName(league.players[risks[0].pid])} is unsigned` : `${risks.length} rotation players are unsigned`,
+        line: `${risks.length === 1 ? 'He walks' : 'They walk'} when free agency opens: ${risks
+          .slice(0, 3)
+          .map((r) => `${league.players[r.pid].lastName} (${league.players[r.pid].ovr}), ${why(r)}`)
+          .join(' · ')}${risks.length > 3 ? ` · and ${risks.length - 3} more` : ''}.`,
+        tone: 'warn',
+        to: '/office/resign',
+        pids: risks.map((r) => r.pid),
+      });
+    }
   }
 
   // opening night: the roster limits

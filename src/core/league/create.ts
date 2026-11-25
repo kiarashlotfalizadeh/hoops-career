@@ -164,7 +164,10 @@ export interface CreateOpts {
 export type Role = 'coach' | 'gm';
 
 /** The settings a role starts with. */
-export const roleSettings = (role: Role): Pick<Settings, 'liveStaff'> => ({ liveStaff: role === 'gm' ? 'auto' : 'ask' });
+export const roleSettings = (role: Role): Pick<Settings, 'liveStaff' | 'role'> => ({
+  liveStaff: role === 'gm' ? 'auto' : 'ask',
+  ...(role === 'gm' ? { role: 'gm' as const } : {}),
+});
 
 export function defaultSettings(): Settings {
   return { injuries: true, jobSecurity: true, liveSpeed: 2 };

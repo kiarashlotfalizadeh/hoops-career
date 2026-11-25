@@ -41,6 +41,7 @@ import {
   REVIEWS_KEPT,
   WIN_SCALE,
   WIN_SLIDE,
+  YOUTH_MIN_PLAYERS,
   currentGoals,
   floorCap,
   goalResult,
@@ -333,6 +334,17 @@ describe('two seasons of the real league', () => {
       expect(goal(planOwnerGoals(l, from)!, 'wins')!.target).toBeLessThan(theirs - 2);
     }
 
+    // a roster with no one 23 or under isn't asked for young players' minutes, rebuilding or not (a
+    // veteran Golden State had been asked for 1,500 and graded −100 for playing none: playtest round 3)
+    {
+      const l = structuredClone(pre);
+      const outlook = leagueOutlook(l);
+      const tid = l.teams.find((t) => goal(planOwnerGoals(l, t.tid, outlook)!, 'youth'))!.tid;
+      for (const p of standardRoster(l, tid)) if (playerAge(p, l.season) <= 23) p.bornYear -= 6;
+      const og = planOwnerGoals(l, tid, leagueOutlook(l))!;
+      expect(goal(og, 'youth')).toBeUndefined();
+      expect(Math.round(sum(og.goals.map((g) => g.weight)) * 100)).toBe(100);
+    }
     // the postseason, development and money goals follow the projection, the strategy and the payroll; every owner has a personality of his own
     {
       const l = structuredClone(pre);
@@ -357,9 +369,11 @@ describe('two seasons of the real league', () => {
         while (most > 0 && levelOdds(odds, most) < POSTSEASON_ODDS) most--;
         // (a front office that says it contends is asked for the postseason wherever it projects, as far as the odds allow)
         const want = t.strategy === 'rebuild' ? 0 : r <= 4 || t.strategy === 'contend' ? 3 : r <= 8 ? 2 : r <= 10 ? 1 : 0;
+        // (the development goal reads the roster: asked of one with young players to play, by how many there are)
+        const kids = standardRoster(l, og.tid).filter((p) => playerAge(p, l.season) <= 23).length;
         if (Math.min(want, most) === 0) {
           expect(post, t.abbrev).toBeUndefined();
-          expect(goal(og, 'youth'), t.abbrev).toBeDefined();
+          expect(!!goal(og, 'youth'), t.abbrev).toBe(kids >= YOUTH_MIN_PLAYERS);
         } else if (want >= 3) {
           expect(post!.target, t.abbrev).toBeGreaterThanOrEqual(Math.min(3, most));
           expect(post!.target, t.abbrev).toBeLessThanOrEqual(most);
@@ -382,14 +396,23 @@ describe('two seasons of the real league', () => {
           const target = kept ? Math.max(own, Math.ceil((forced + room) / 100) * 100) : own;
           const g = goal(og, 'payroll')!;
           expect(g.target, t.abbrev).toBe(target);
-          expect(g.title, t.abbrev).toBe(target === line ? (pay <= line ? 'Stay under the luxury tax' : 'Get under the luxury tax') : `${pay > target ? 'Get' : 'Keep'} the payroll under ${money(target)}`);
+          expect(g.title, t.abbrev).toBe(
+            target === line ? (pay <= line ? 'Stay under the luxury tax' : 'Get under the luxury tax') : `${pay > target ? 'Get' : 'Keep'} the payroll under ${money(target)}`,
+          );
           // (a coach who adds nothing is never over it, and with the window open a mid-level signing fits)
           if (forced > own) expect(g, t.abbrev).toMatchObject({ line: own, inherited: forced });
           if (window) expect(target - forced, t.abbrev).toBeGreaterThanOrEqual(MLE_PCT * cap.salaryCap);
           // a side goal never outweighs the floor's: a fifth of the season at most
           expect(g.weight, t.abbrev).toBeLessThanOrEqual(SIDE_WEIGHT.payroll!);
         }
-        if (goal(og, 'youth')) expect(goal(og, 'youth')!.weight, t.abbrev).toBeLessThanOrEqual(SIDE_WEIGHT.youth!);
+        if (goal(og, 'youth')) {
+          expect(goal(og, 'youth')!.weight, t.abbrev).toBeLessThanOrEqual(SIDE_WEIGHT.youth!);
+          expect(goal(og, 'youth')!.young, t.abbrev).toBe(kids);
+          expect(
+            goalsWhy(og).some((x) => x.startsWith(`You have ${kids} players 23 or under.`)),
+            t.abbrev,
+          ).toBe(true);
+        }
         // the target is the middle of the season forecast at most (never nudged over it), past
         // WIN_ASK_TOP wins a third of the rest, and never under the floor (a .300 pace, never closer
         // than FLOOR_MARGIN wins under his read)

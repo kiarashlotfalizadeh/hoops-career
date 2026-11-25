@@ -57,6 +57,13 @@ export function DigestHost() {
     if (useStore.getState().digestUp !== show) useStore.setState({ digestUp: show });
   }, [show]);
   useEffect(() => () => useStore.setState({ digestUp: false }), []);
+  // The digest doesn't take the Play row away: the row and the tabs stay on top of it (overlays.css),
+  // so the next step is still one tap, where it always is. Under the sheet's scrim, Play did nothing
+  // until the sheet was closed: six of ten playtesters hit it after a sim, four rounds running.
+  useEffect(() => {
+    document.body.classList.toggle('digest-up', show);
+    return () => document.body.classList.remove('digest-up');
+  }, [show]);
   // once it has been read, the mail it listed is read too, but for what still needs him
   const was = useRef(false);
   useEffect(() => {

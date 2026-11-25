@@ -3,6 +3,7 @@ import { composites, defRead } from '../ratings';
 import { playerAge } from '../playerGen';
 import { clamp } from '../random';
 import { addInbox, addNews, andList, curTeamSeason, playerName, seasonTotals, teamCity, winPct } from './helpers';
+import { gmOnly } from './coaches';
 import { seasonLabel } from '../constants';
 import { awardLine, awardPhrase } from './media/history';
 
@@ -66,7 +67,13 @@ function awardPools(league: League, season = league.season) {
  * team won 53; now it's 55-57 and a top-two seed, as in the NBA.
  */
 export function mvpScore(c: Cand) {
-  return c.gmsc * Math.pow(Math.min(1, c.gp / 70), 0.3) + c.winPct * 16 + 20 * Math.min(0, c.winPct - 0.6) + c.pmPerGame * 0.15 + MVP_SCORER * Math.max(0, c.s.pts / c.gp - MVP_SCORER_FROM);
+  return (
+    c.gmsc * Math.pow(Math.min(1, c.gp / 70), 0.3) +
+    c.winPct * 16 +
+    20 * Math.min(0, c.winPct - 0.6) +
+    c.pmPerGame * 0.15 +
+    MVP_SCORER * Math.max(0, c.s.pts / c.gp - MVP_SCORER_FROM)
+  );
 }
 
 /**
@@ -285,7 +292,7 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
   awardsStory(league, awards, coy?.abbrev);
   // "Name: MVP, All-League 1st Team." for each of the user's winners, one sentence each
   const mine = [...won].filter(([pid]) => league.players[pid].tid === league.userTid).map(([pid, types]) => `${playerName(league.players[pid])}: ${andList(types)}.`);
-  if (coy?.tid === league.userTid) mine.push('You: Coach of the Year.');
+  if (coy?.tid === league.userTid) mine.push(gmOnly(league) ? 'Your staff: Coach of the Year.' : 'You: Coach of the Year.');
   if (mine.length) {
     addInbox(league, {
       from: 'League Office',
@@ -331,7 +338,7 @@ function awardsStory(league: League, aw: SeasonAwards, coyAbbrev?: string) {
   addNews(league, {
     kind: 'award',
     head,
-    text: `DPOY ${nm(aw.dpoy)} · ROY ${nm(aw.roy)} · 6MOY ${nm(aw.smoy)} · MIP ${nm(aw.mip)} · COY ${aw.coyCoach ? `${aw.coyCoach}${coyAbbrev ? ` (${coyAbbrev})` : ''}` : '—'}.`,
+    text: `DPOY ${nm(aw.dpoy)} · ROY ${nm(aw.roy)} · 6MOY ${nm(aw.smoy)} · MIP ${nm(aw.mip)} · COY ${aw.coyCoach ? `${aw.coy === league.userTid && gmOnly(league) ? `${aw.coyCoach}'s staff` : aw.coyCoach}${coyAbbrev ? ` (${coyAbbrev})` : ''}` : '—'}.`,
     body: [
       line('Most Valuable Player', 'MVP', aw.mvp),
       line('Defensive Player of the Year', 'Defensive Player of the Year', aw.dpoy),

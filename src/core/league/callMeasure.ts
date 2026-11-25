@@ -33,7 +33,7 @@ const ROUNDS = 4;
 export async function measureCall(league: League, m: CallMeasure, opts: WorthOpts = {}): Promise<CallWorth | null> {
   const g = league.schedule.find((x) => x.gid === m.gid);
   if (m.kind === 'counters') {
-    const out = await counterWorth(league, m.opp, g, { games: SIM_GAMES, counters: SIM_COUNTERS, ...opts });
+    const out = await counterWorth(league, m.opp, g, { games: SIM_GAMES, counters: SIM_COUNTERS, plan: false, ...opts });
     return out ? countersWorth(league, m, out) : null;
   }
   const out = await measureChanges(m.base ? withChange(league, m.base) : league, m.opp, [m.change], g, { games: SIM_GAMES, ...opts });

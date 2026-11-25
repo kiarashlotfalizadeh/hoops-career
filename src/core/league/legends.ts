@@ -5,7 +5,7 @@
 // guard in a center's body, a scorer who averages 40, or a team that wins 74.
 //
 // Three parts, none of them on the league's random stream (every draw has a stream of its own):
-// - A generational prospect: about one draft class in three has one (GENERATIONAL.odds), a top prospect
+// - A generational prospect: about one draft class in five has one (GENERATIONAL.odds), a top prospect
 //   whose hidden `peak` lets his ratings run past the best player the league had when it was made, by
 //   up to a few raw points, and half the time a body nobody has (a unicorn). He still has to get
 //   there: his summers, his arc and his health are his own.
@@ -21,10 +21,29 @@ import { RATING_KEYS, heightToRating, ovrRaw, ovrWeights, toDisplay } from '../r
 import { FEEL, legendRoom } from '../sim/engine/feel';
 
 export const GENERATIONAL = {
-  /** The chance a draft class has a generational prospect. */
-  odds: 0.3,
-  /** How far past the top of the league's scale he can go, raw overall points (a range). */
-  peak: [2.5, 7] as [number, number],
+  /**
+   * The chance a draft class has a generational prospect: one class in five. At 0.3
+   * (until 2026-11-24) a league had one every three drafts and most of them got all the way: over 16
+   * real leagues of eight seasons (star-check), 9 had a drafted player showing 99 within eight years
+   * (19 of 128 seasons), 12 of the 30 seasons led at 35 points or more were theirs (up to 41.8 on 46%
+   * of their teams' possessions), and four of the six best teams by net rating were built on one
+   * (+13.8 to +15.3 per 100, a 71-11). The round-3 playtest read it as the league's top end being
+   * broken (two draftees at 99 and a 44.8-point scorer in one ten-season save), not as a legend.
+   * 0.1 was tried the same day: with his ceiling and the engine's room cut back (peak, FEEL.tails) the
+   * 99s and the 40-point seasons are gone at any odds, and at one class in ten the opening night's
+   * favourite had too few rivals: Oklahoma City won 22 of star-check's 64 titles (the limit is a
+   * third; 18 before). At 0.2: 21 of 64, no drafted 99, no leader at 40, 2 seasons of 64 at 70 wins.
+   */
+  odds: 0.2,
+  /**
+   * How far past the top of the league's scale he can go, raw overall points (a range). The display
+   * scale gives 98 from 1.3 raw points past its top and 99 from 3.9: at 2.5 to 7 (until 2026-11-24)
+   * seven in ten of them had a 99 for a ceiling and up to all of the engine's room (FEEL.tails.span 6:
+   * 46-47% of his team's possessions, 40-42 points a game). At 1 to 3.5 his ceiling shows 97 or 98,
+   * and the engine's room is sized to it (FEEL.tails): the best player in the league, not a
+   * different sport.
+   */
+  peak: [1, 3.5] as [number, number],
   /** His hidden growth (a range): he develops like the best of any class. */
   growth: [0.7, 1] as [number, number],
   /** The share of them with a body nobody has: a wing's or a guard's game at 7'3" to 7'6". */
@@ -43,9 +62,12 @@ export const GENERATIONAL = {
    * A founding legend's peak (a range, raw points past the top of the scale): under a drafted one's.
    * He climbs from the league's first summer, in his prime, against rosters made to the real league's
    * shape; with a drafted one's peak he reached the whole room in two summers and led a fictional
-   * league at 49.8 points a game (the real league's tails top out near 40).
+   * league at 49.8 points a game (the real league's tails top out near 40). 2.5 to 4.5 until
+   * 2026-11-24, and the anchors lifted him past it (see keepPeak): star-check's fictional leagues
+   * still had one at 41.0 to 49.1 points a game for six seasons, on up to 48% of his team's
+   * possessions.
    */
-  foundingPeak: [2.5, 4.5] as [number, number],
+  foundingPeak: [1, 2.5] as [number, number],
   /** From this display OVR a player with room keeps climbing in his summers, to this age, by this many raw points a year (a range). */
   climbFrom: 86,
   climbTo: 28,
@@ -132,11 +154,17 @@ export function seedFounding(league: League): Player | null {
 /**
  * The anchors' exception (see progression.ts's anchorOverallSpread): a player with room is held to
  * the league's shape only as far as the top of the scale plus his peak. `before` is his raw overall
- * going into the anchor; returns what it should be coming out.
+ * going into the anchor; returns what it should be coming out. His peak holds both ways: the anchors
+ * don't pull him under it, and they don't lift him over it either. They did until 2026-11-24: a
+ * player past the top of the scale is moved along the shape's last stretch, and once the opening
+ * night's best had aged that stretch was being widened back to its first width, so every summer
+ * pushed him further out. A founding legend with a peak of 4.5 at most stood 6 raw points and more
+ * past the scale at 32 (all of the engine's room) and scored 47 to 49 a game.
  */
 export function keepPeak(league: Pick<League, 'ovrScale'>, p: Player, before: number, anchored: number): number {
-  if (!p.peak || before <= anchored) return anchored;
-  return Math.max(anchored, Math.min(before, scaleTop(league) + p.peak));
+  if (!p.peak) return anchored;
+  const cap = scaleTop(league) + p.peak;
+  return before <= anchored ? Math.min(anchored, cap) : Math.max(anchored, Math.min(before, cap));
 }
 
 /**

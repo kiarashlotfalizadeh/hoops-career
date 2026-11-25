@@ -313,6 +313,9 @@ export const shotsMethods = {
         this.shots.push({ t: off.side, pid: sh.pid, x: Math.round(xy.x * 10) / 10, y: Math.round(xy.y * 10) / 10, made, zone, q: this.q });
       }
     } else this.xFouledMiss[off.side] += pMake * value;
+    // how far the points from this shot can stray from what it was worth (its variance): the night's
+    // shooting luck is read against the sum (GameResult.xShots)
+    this.xVar[off.side] += pMake * (1 - pMake) * value * value;
     const shotStep: PossStep | null = this.record ? { k: 'shot', pid: sh.pid, zone, x: xy!.x, y: xy!.y, made, v: value, pid2: ast?.pid, f: s.finish } : null;
     if (shotStep) {
       this.cur!.steps.push(shotStep);

@@ -3,6 +3,7 @@ import { useStore, type TaskOp } from '../state/store';
 import { simStart, simSummary, type FlowAction } from './flow';
 import { userGameOnDay } from '../core/league/games';
 import { seasonLabel } from '../core/constants';
+import { askBigGame } from './today/bigGame';
 
 export function useFlowRunner() {
   const nav = useNavigate();
@@ -15,11 +16,18 @@ export function useFlowRunner() {
     }
     // a sim or a phase change is already running: ignore double taps
     if (st.sim) return;
+    // a decisive playoff game tonight: asked first whether he's coaching it (once a game: bigGame.ts)
+    if ((a.sim || a.cmd === 'quickGame') && st.league && askBigGame(st.league, a)) return;
     if (a.sim) {
       // what the sim did for the user, once it stops (after any "Stopped for news")
       const before = simStart(st.league!);
       await st.simulate(a.sim);
       const l = useStore.getState().league;
+      // stopped on the morning of a decisive game: the question is the one thing on screen (the digest stays a tap away on Today)
+      if (l && askBigGame(l)) {
+        useStore.getState().showDigest(false);
+        return;
+      }
       // (the digest, opening now, says it and more)
       if (useStore.getState().digestOpen) return;
       const said = l && simSummary(before, l);

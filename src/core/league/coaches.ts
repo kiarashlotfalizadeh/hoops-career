@@ -96,6 +96,17 @@ export const activeCoach = (league: League, tid: number) => league.coaches?.find
 
 export const userCoach = (league: League) => league.coaches?.find((r) => r.user);
 
+/** A GM-only career (Settings.role): the staff coaches. His record is still kept here, as the man in charge of the team. */
+export const gmOnly = (league: Pick<League, 'settings'>) => league.settings?.role === 'gm';
+
+/**
+ * What the user is called where his job is named: "head coach" / "coach", or for a GM-only career
+ * "general manager" / "GM". The news had a GM who never coached a game reaching "50 wins as a head
+ * coach" and the Coaches tab listing him as one (playtest, three rounds running to 2026-11-24).
+ */
+export const userJob = (league: Pick<League, 'settings'>): { title: string; short: string } =>
+  gmOnly(league) ? { title: 'general manager', short: 'GM' } : { title: 'head coach', short: 'coach' };
+
 /** A coach's surname (the name after the first word). */
 export const surnameOf = (name: string) => name.split(/ (.+)/)[1] ?? name;
 

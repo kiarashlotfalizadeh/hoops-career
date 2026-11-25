@@ -214,6 +214,9 @@ function cleanGamePlans(x: League) {
       if (!obj(p.matchups) || Array.isArray(p.matchups)) delete p.matchups;
       else for (const [pid, d] of Object.entries(p.matchups)) if (!int(d)) delete p.matchups[pid];
     }
+    // (the whole plan's measured worth feeds the win chance too: one that isn't whole goes, and is measured again)
+    const w = p.worth;
+    if (w !== undefined && !(obj(w) && [w.pts, w.raw, w.se].every((v) => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 20) && str(w.sig))) delete p.worth;
     // (plans last a game or a series now, and carry no note: a season plan becomes a next-game one)
     if (p.scope === 'season') delete p.scope;
     delete p.note;
@@ -256,9 +259,13 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   if (x.proposals !== undefined) x.proposals = Array.isArray(x.proposals) ? x.proposals.filter((p) => proposalIntact(x, p)) : [];
   if (x.untouchable !== undefined) x.untouchable = Array.isArray(x.untouchable) ? x.untouchable.filter((pid) => num(pid) && !!x.players[pid]) : [];
   // the pitches he turned down: a list of plain records, or none
-  if (x.offerLog !== undefined && !(Array.isArray(x.offerLog) && x.offerLog.every((o) => obj(o) && str(o.pitch) && num(o.tid) && num(o.season) && num(o.day) && num(o.net) && num(o.out))))
+  if (
+    x.offerLog !== undefined &&
+    !(Array.isArray(x.offerLog) && x.offerLog.every((o) => obj(o) && str(o.pitch) && num(o.tid) && num(o.season) && num(o.day) && num(o.net) && num(o.out)))
+  )
     delete x.offerLog;
   if (x.settings.offerStops !== undefined && !['good', 'all', 'never'].includes(x.settings.offerStops)) delete x.settings.offerStops;
+  if (x.settings.role !== undefined && x.settings.role !== 'gm') delete x.settings.role;
   for (const m of x.inbox) if (m.proposal !== undefined && !num(m.proposal)) delete m.proposal;
   // a live game's journal that's damaged, or not for today's game any more, goes (the game starts over)
   if (x.live !== undefined && !liveIntact(x, x.live)) delete x.live;

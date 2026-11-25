@@ -222,6 +222,21 @@ export default function Live() {
 
   const huddling = s.huddling;
   const stop: 'break' | 'huddle' | null = s.atBreak ? 'break' : huddling ? 'huddle' : null;
+  // Escape leaves your timeout's huddle (with no sheet up: a sheet takes its own Escape), as Resume
+  // does. A keyboard had no way out of it: the playtest's coach pressed Escape with no play picked
+  // and the game sat paused (round 3). The last possession's stop and a break wait for their button.
+  const inTimeout = s.huddle === 'timeout';
+  const resumeRef = useRef(s.resume);
+  resumeRef.current = s.resume;
+  useEffect(() => {
+    if (!inTimeout) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || document.body.classList.contains('sheet-open')) return;
+      resumeRef.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [inTimeout]);
   // a stop opens on its report (or the huddle), at the top (sideways, the drawer opens for it, and
   // closes again when play goes on)
   useEffect(() => {
@@ -448,6 +463,7 @@ export default function Live() {
             closer={sim.closer(me)?.pid}
             defenderOf={(pid) => sim.T[1 - userSide].guardOf.get(pid)?.pid}
             onTimeout={s.huddle === 'last' && me.timeouts > 0 && !simBusy ? () => s.callTimeout() : undefined}
+            onResume={s.huddle === 'timeout' ? s.resume : undefined}
           />
         );
       return (
@@ -638,13 +654,15 @@ export default function Live() {
               : undefined
           }
           finalOffer={
-            finalOffer && !offer
+            // (only while it's still decided: a lead that came back takes the offer with it)
+            finalOffer && !offer && sealed
               ? {
                   onSim: () => {
                     setFinalOffer(false);
                     s.skip('end');
                   },
                   onClose: closeFinalOffer,
+                  left: `${Math.floor(Math.max(0, view.clock) / 60)}:${String(Math.floor(Math.max(0, view.clock) % 60)).padStart(2, '0')}${view.q > 4 ? ' of overtime' : ''}`,
                 }
               : undefined
           }

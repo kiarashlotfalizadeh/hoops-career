@@ -379,7 +379,13 @@
   }
 }
 
+/* It floats over the tab bar, in reach from anywhere on the page. It had no position of its own (the
+   dock's sticky rule leaves it out), so "Open free agency" sat at the foot of a page two screens long
+   while the Continue bar hides for any dock: the Re-sign page showed no way on (playtest rounds 2, 3) */
 .fo-dock.fo-dock-go {
+  position: sticky;
+  bottom: calc(var(--nav-h) + var(--safe-b) + 8px);
+  z-index: 20;
   padding: 0;
   background: transparent;
   backdrop-filter: none;

@@ -214,11 +214,64 @@ const DO_TITLE: Partial<Record<Factor['category'], string>> = {
   shooting: 'Get better shots',
 };
 
-/** Points a side's shots fell above (or below) what its looks were worth: eFG against expected, over its attempts. */
+/**
+ * What a side's looks were worth in points (GameResult.xShots): its attempts as they were taken, and
+ * the shots a foul wiped out (an and-one's chance counts whether it fell or not).
+ */
+export function lookPts(res: GameResult, s: 0 | 1): number {
+  const x = res.xShots?.[s];
+  return x ? x.pts + (x.fouled ?? 0) : 0;
+}
+
+/** Points a side's shots fell above (or below) what its looks were worth. */
 export function luckPts(res: GameResult, s: 0 | 1): number {
   const box = s === 0 ? res.home : res.away;
-  const x = res.xShots?.[s];
-  return x && box.t.fga ? box.t.fgm * 2 + box.t.tpm - x.pts : 0;
+  return res.xShots?.[s] && box.t.fga ? box.t.fgm * 2 + box.t.tpm - lookPts(res, s) : 0;
+}
+
+/**
+ * One game's net shooting luck as it runs night to night (points, one standard deviation), for a
+ * result from before each game kept its own (XShots.sd). Every shot either falls or doesn't: two
+ * teams' 88 attempts each stray about 11 points from their looks, 16 between them (luck-check, 1,500
+ * games: 15.9). Until 2026-11-24 this read 7.5, so a third of all games were "past 2 SD" and an
+ * ordinary +34 night was called a 1-in-900,856,495 one (playtest round 3).
+ */
+export const LUCK_SD = 16;
+
+/**
+ * A night's shooting luck for side `s` (its own less the other side's) in standard deviations of
+ * what that game's shots could have come to: each shot's own chance, as the engine took it. Null
+ * without the looks.
+ */
+export function luckZ(res: GameResult, s: 0 | 1): number | null {
+  const x = res.xShots;
+  if (!x) return null;
+  const o = (1 - s) as 0 | 1;
+  const sd = x[0].sd !== undefined && x[1].sd !== undefined ? Math.hypot(x[0].sd, x[1].sd) : LUCK_SD;
+  return (luckPts(res, s) - luckPts(res, o)) / Math.max(1, sd);
+}
+
+/** Past this many standard deviations a night's luck is called rare, with how rare. */
+const RARE_Z = 2;
+/** The rarest a night is called: beyond it the count says nothing a reader can use. */
+const RARE_MAX = 1000;
+
+/**
+ * "about a 1-in-20 shooting night": how rare a night's luck was, from RARE_Z standard deviations on
+ * (else nothing): about one game in 22 gets a line. Past 1-in-1,000 it says "rarer than 1-in-1,000".
+ */
+export function luckRarity(res: GameResult, s: 0 | 1): string | null {
+  const zs = luckZ(res, s);
+  if (zs === null) return null;
+  const z = Math.abs(zs);
+  if (z < RARE_Z) return null;
+  // two-sided normal tail (Abramowitz-Stegun's erfc)
+  const t = 1 / (1 + 0.3275911 * (z / Math.SQRT2));
+  const erfc = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429)))) * Math.exp(-(z * z) / 2);
+  const n = 1 / erfc;
+  if (n > RARE_MAX) return `rarer than a 1-in-${RARE_MAX.toLocaleString('en-US')} shooting night`;
+  const step = n >= 100 ? 50 : 5;
+  return `about a 1-in-${(Math.round(n / step) * step).toLocaleString('en-US')} shooting night`;
 }
 
 /** Trips on what a counter was aimed at before tonight reads as anything (fewer: "too few to tell"). */
@@ -419,14 +472,18 @@ export function moveWorthRead(res: GameResult, i: number): MoveWorthRead | undef
 export const moveWorthText = (r: MoveWorthRead) => `Replayed without it: ${r.fig} ${r.pm}${r.clear ? '' : ', inside the noise'}.`;
 
 /**
- * The night's moves by kind, each kind left out of the replayed night together: "3 timeouts −0.2 pts
- * ±0.7 · 5 subs +0.6 pts ±0.8". Null for a night of one kind (the night's own figure is that kind's)
- * or one measured before the kinds were kept.
+ * The night's moves by kind, each kind's share of the replayed night as measured: "3 timeouts −0.2 pts
+ * ±0.7 · 5 subs +0.6 pts ±0.8 = +0.4 as measured". The shares add up to the night's reading before
+ * it's shrunk toward even (a reading from before 2026-11-24 left each kind alone out, and has no sum).
+ * Null for a night of one kind (the night's own figure is that kind's) or one measured before the
+ * kinds were kept.
  */
 export function nightKindsLine(res: GameResult): string | null {
-  const ks = (res.movesWorth?.kinds ?? []).filter((k) => Number.isFinite(k.raw) && Number.isFinite(k.se));
-  if (ks.length < 2) return null;
-  return ks.map((k) => `${kindWord(k.kind, k.moves)} ${readOf(k.raw, k.se).fig} ${readOf(k.raw, k.se).pm}`).join(' · ');
+  const w = res.movesWorth;
+  const ks = (w?.kinds ?? []).filter((k) => Number.isFinite(k.raw) && Number.isFinite(k.se));
+  if (!w || ks.length < 2) return null;
+  const parts = ks.map((k) => `${kindWord(k.kind, k.moves)} ${sgn1(k.raw)} pts ±${Math.max(0.1, k.se).toFixed(1)}`).join(' · ');
+  return w.shared ? `${parts} = ${sgn1(w.raw)} as measured` : parts;
 }
 
 /** A season's live coaching by kind of move: the points as measured, their standard error, the moves and the games they were in. */
@@ -440,22 +497,26 @@ export interface KindSum {
 
 /**
  * The coach's live coaching over a season, as measured game by game (GameResult.movesWorth): the
- * points his moves added, the standard error of that sum, the wins they added (each night's change in
- * the chance to win, summed) and the games it's over; and the same by kind of move (`kinds`: games
- * measured since the kinds were kept). Null before a coached game was measured. The line reads where a
- * coach's record is (Career: see seasonCoachingLine).
+ * points his moves added (`raw`, as measured; `pts`, each night shrunk toward even first), the standard
+ * error of that sum, the wins they added (each night's change in the chance to win, summed) and the
+ * games it's over; and the same by kind of move (`kinds`), which add up to `raw` less `unsplit`: the
+ * nights measured before the kinds were shares of the night (`unsplitGames` of them, MovesWorth.shared).
+ * Null before a coached game was measured. The line reads where a coach's record is (Career: see
+ * seasonCoachingLine).
  */
 export function seasonCoaching(
   league: League,
   season = league.season,
   tid = league.userTid,
-): { pts: number; raw: number; se: number; games: number; wins: number; winsSe: number; kinds: KindSum[] } | null {
+): { pts: number; raw: number; se: number; games: number; wins: number; winsSe: number; kinds: KindSum[]; unsplit: number; unsplitGames: number } | null {
   let pts = 0;
   let raw = 0;
   let v = 0;
   let games = 0;
   let wins = 0;
   let wv = 0;
+  let unsplit = 0;
+  let unsplitGames = 0;
   const kinds = new Map<CoachMove['kind'], { raw: number; v: number; moves: number; games: number }>();
   for (const g of league.games) {
     const w = g.movesWorth;
@@ -468,8 +529,14 @@ export function seasonCoaching(
     games++;
     if (Number.isFinite(w.win)) wins += w.win;
     if (w.winSe !== undefined && Number.isFinite(w.winSe)) wv += w.winSe ** 2;
-    for (const k of w.kinds ?? []) {
-      if (!Number.isFinite(k.raw) || !Number.isFinite(k.se)) continue;
+    // the night by kind, when its kinds add up to it: shares of the night, or a night of one kind
+    const ks = (w.kinds ?? []).filter((k) => Number.isFinite(k.raw) && Number.isFinite(k.se));
+    if (!ks.length || (!w.shared && ks.length > 1)) {
+      unsplit += w.raw;
+      unsplitGames++;
+      continue;
+    }
+    for (const k of ks) {
       const cur = kinds.get(k.kind) ?? { raw: 0, v: 0, moves: 0, games: 0 };
       kinds.set(k.kind, { raw: cur.raw + k.raw, v: cur.v + k.se ** 2, moves: cur.moves + k.moves, games: cur.games + 1 });
     }
@@ -484,6 +551,8 @@ export function seasonCoaching(
     wins: r1(wins),
     winsSe: r1(Math.sqrt(wv)),
     kinds: [...kinds].map(([kind, k]) => ({ kind, raw: r1(k.raw), se: r1(Math.sqrt(k.v)), moves: k.moves, games: k.games })),
+    unsplit: r1(unsplit),
+    unsplitGames,
   };
 }
 
@@ -505,7 +574,9 @@ export const KIND_SAY_MOVES = 15;
  * Season Analysis): its worth ("+4.2"), whether it's clear of even, its ± and the games; the same in
  * wins ("+0.3"); the verdict in a sentence, which says so when there's nothing to see yet; and a line
  * for each kind of move, with the plain word on one that has had enough tries (KIND_SAY_MOVES) to
- * show something and hasn't. Null under two games.
+ * show something and hasn't. The worth is the sum as measured, and the kinds are shares of the same
+ * replays, so the rows add up to it (`sums` says so; `rest` is the nights measured before they did).
+ * Null under two games.
  */
 export function seasonCoachingRead(
   league: League,
@@ -520,16 +591,18 @@ export function seasonCoachingRead(
   winsPm: string;
   verdict: string;
   kinds: { label: string; fig: string; note: string; tone: 'good' | 'bad' | 'dim' }[];
+  /** How the rows relate to the total, in a sentence (absent with fewer than two rows). */
+  sums?: string;
 } | null {
   const c = seasonCoaching(league, season, tid);
   if (!c || c.games < 2) return null;
-  const clear = Math.abs(c.raw) >= 2 * c.se && Math.abs(c.pts) >= 0.05;
+  const clear = Math.abs(c.raw) >= 2 * c.se && Math.abs(c.raw) >= 0.05;
   const wins = `${c.wins > 0.04 ? '+' : c.wins < -0.04 ? '−' : ''}${Math.abs(c.wins).toFixed(1)}`;
   const verdict = clear
     ? c.raw > 0
       ? `Your in-game moves have helped: about ${wins} wins over ${plural(c.games, 'game')} against the same nights replayed without them.`
       : `Your in-game moves have cost you: about ${wins} wins over ${plural(c.games, 'game')} against the same nights replayed without them.`
-    : `No proof either way yet: over ${plural(c.games, 'game')} your in-game moves read ${sgn1(c.pts)} pts, inside the noise (±${Math.max(0.1, c.se).toFixed(1)}). The staff's bench would have done about as well.`;
+    : `No proof either way yet: over ${plural(c.games, 'game')} your in-game moves read ${sgn1(c.raw)} pts, inside the noise (±${Math.max(0.1, c.se).toFixed(1)}). The staff's bench would have done about as well.`;
   const kinds = c.kinds
     .filter((k) => k.moves > 0)
     .sort((a, b) => b.moves - a.moves)
@@ -551,7 +624,14 @@ export function seasonCoachingRead(
         tone: (kClear ? (k.raw > 0 ? 'good' : 'bad') : 'dim') as 'good' | 'bad' | 'dim',
       };
     });
-  return { worth: sgn1(c.pts), clear, pm: `±${Math.max(0.1, c.se).toFixed(1)}`, games: c.games, wins, winsPm: `±${Math.max(0.1, c.winsSe).toFixed(1)}`, verdict, kinds };
+  // (nights measured before the kinds were shares of the night: said as one row, so the rows still add up)
+  if (c.unsplitGames && kinds.length)
+    kinds.push({ label: `${plural(c.unsplitGames, 'earlier game')}`, fig: `${sgn1(c.unsplit)} pts`, note: 'Measured before the kinds were split.', tone: 'dim' });
+  const sums =
+    kinds.length > 1
+      ? `The rows add up to the ${sgn1(c.raw)}: each kind's figure is its share of the same replays (what adding it to the night was worth, averaged over every order the kinds could go in).`
+      : undefined;
+  return { worth: sgn1(c.raw), clear, pm: `±${Math.max(0.1, c.se).toFixed(1)}`, games: c.games, wins, winsPm: `±${Math.max(0.1, c.winsSe).toFixed(1)}`, verdict, kinds, sums };
 }
 
 /**

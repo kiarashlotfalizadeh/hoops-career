@@ -399,13 +399,21 @@ export class LiveGame {
     if (!this.sim.over) this.simTo('end');
     // (recording it ends its journal)
     const res = playGame(league, g, { sim: this.sim, edge: this.edge });
-    // the coach's moves and what each did, for the game's report
-    const moves = coachMoves(this.marks, this.logs, this.userSide, (pid) => (league.players[pid] ? shortName(league, league.players[pid]) : `#${pid}`), true);
-    if (moves.length) res.moves = moves;
-    // its highlights stay with the save for its game report, until the next live game
-    const reel = reelOf(g.gid, this.logs, this.userSide);
-    if (reel.plays.length) league.reel = reel;
-    else delete league.reel;
+    // The report's extras: the coach's moves and what each did, and the highlights (kept with the save
+    // until the next live game). The result doesn't hang on them: if either can't be read, the game is
+    // still recorded. A throw here used to undo the whole recording (store.attempt), and the screens
+    // went back to a game "in progress" at its last period's score: what a playoff game's stale
+    // "Live · down 82-91" on Today looked like in the round-3 playtest (not reproduced; the path it fits).
+    try {
+      const moves = coachMoves(this.marks, this.logs, this.userSide, (pid) => (league.players[pid] ? shortName(league, league.players[pid]) : `#${pid}`), true);
+      if (moves.length) res.moves = moves;
+      const reel = reelOf(g.gid, this.logs, this.userSide);
+      if (reel.plays.length) league.reel = reel;
+      else delete league.reel;
+    } catch (e) {
+      console.error("The game's moves and highlights could not be kept:", e);
+      delete league.reel;
+    }
     postGame(league, g, res.home.pts > res.away.pts);
     // the first-week guide: a period watched whole coaches the game (as a move of his own does, from the report's moves)
     // (or a few minutes of it watched, or a move of his: the opener watched a while and skipped to the final

@@ -11,6 +11,7 @@ import { CAP, seasonLabel } from '../core/constants';
 import { plural } from '../core/format';
 import { agendaBlocker } from '../core/league/agenda';
 import { draftOrder } from '../core/league/draft';
+import { walkLine, walkRisks } from '../core/league/freeAgency';
 import { periodLabel } from './stats';
 import { lotterySeen } from './draft/common';
 
@@ -263,7 +264,16 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
     }
     case 'resign':
       a.push({ id: 'resign', label: 'Re-sign players', primary: true, to: '/office/resign' });
-      a.push({ id: 'fa', label: 'Open free agency', sub: 'Unsigned players will hit the market.', cmd: 'startFA' });
+      {
+        // with rotation players still unsigned it goes through the Re-sign page's confirm, which names
+        // them: from here it had opened the market at once, and an 84 walked unseen (playtest round 3)
+        const walk = walkLine(league, walkRisks(league));
+        a.push(
+          walk
+            ? { id: 'fa', label: 'Open free agency', sub: `Unsigned: ${walk}. They would hit the market.`, to: '/office/resign?open=fa' }
+            : { id: 'fa', label: 'Open free agency', sub: 'Unsigned players will hit the market.', cmd: 'startFA' },
+        );
+      }
       break;
     case 'freeAgency': {
       // on the last day the calendar can't advance: the new season is all that's left

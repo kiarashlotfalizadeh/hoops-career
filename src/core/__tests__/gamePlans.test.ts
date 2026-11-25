@@ -4,7 +4,19 @@
 // hack-a-player targets from a game plan, and what an AI coach plays when it inherits the user's team.
 import { describe, expect, it } from 'vitest';
 import { testLeague, toGameDay } from '../../state/__tests__/fixtures';
-import { clearAllPlans, consumePlans, effectiveTactics, persistableTactics, planFor, removePlanItem, setPlanItem, setPlanMatchup, setPlanScope } from '../league/gamePlans';
+import {
+  clearAllPlans,
+  consumePlans,
+  effectiveTactics,
+  persistableTactics,
+  planFor,
+  planSig,
+  planWorth,
+  removePlanItem,
+  setPlanItem,
+  setPlanMatchup,
+  setPlanScope,
+} from '../league/gamePlans';
 import { buildSimInput, playGame, userGameOnDay } from '../league/games';
 import { migrate } from '../../state/persistence';
 import { LiveGame } from '../../state/live';
@@ -15,7 +27,7 @@ import { GameSim } from '../sim/engine';
 import { LOSING_ADJUSTMENTS } from '../sim/engine/coach';
 import { Rng } from '../random';
 import type { League, PlayoffSeries } from '../types';
-import { counterWorth, measureChanges, shrinkWorth, worthCall, WORTH_MAX } from '../ai/counterWorth';
+import { counterWorth, measureChanges, PLAN_WORTH, shrinkWorth, worthCall, WORTH_MAX } from '../ai/counterWorth';
 import {
   CHECK_AFTER,
   EDIT_AHEAD,
@@ -358,10 +370,28 @@ describe('game plans', () => {
       expect(projectGame(l, sim, false).margin - was).toBeCloseTo(1.5 * sign, 6);
       setPlanItem(l, opp, { id: 'crash', label: 'Crash', group: 'crash', patch: { offense: { crashBoards: 78 } }, pts: 9 });
       expect(planPoints(l, g.home, g.away)).toBe(PLAN_MAX_PTS * sign);
+      // the plan measured whole (its counters and matchups together, against the same games without it)
+      // is what the projection counts, whatever its size, while the plan is still the one measured
+      {
+        const whole = (await counterWorth(l, opp, g, { games: 16 }))!.find((x) => x.id === PLAN_WORTH)!;
+        expect(Number.isFinite(whole.pts) && whole.se > 0).toBe(true);
+        l.gamePlans![opp].worth = { pts: 0.3, raw: 0.4, se: 0.3, sig: planSig(l.gamePlans![opp]) };
+        expect(planPoints(l, g.home, g.away)).toBeCloseTo(0.3 * sign, 6);
+        setPlanMatchup(l, opp, teamPlayers(l, opp)[0].pid, teamPlayers(l, l.userTid)[0].pid);
+        expect(planWorth(l.gamePlans![opp])).toBeUndefined();
+        expect(planPoints(l, g.home, g.away)).toBe(PLAN_MAX_PTS * sign);
+        setPlanMatchup(l, opp, teamPlayers(l, opp)[0].pid, null);
+        expect(planPoints(l, g.home, g.away)).toBeCloseTo(0.3 * sign, 6);
+        // (no plan, nothing to measure)
+        const bare = { ...l, gamePlans: {} } as League;
+        expect((await counterWorth(bare, opp, g, { games: 16 }))!.some((x) => x.id === PLAN_WORTH)).toBe(false);
+        l.gamePlans![opp].worth = { pts: Number.NaN, raw: 0, se: 0.3, sig: 'x' };
+      }
       // (a damaged number goes with the save check)
       l.gamePlans![opp].items[0].pts = Number.NaN as number;
       const m = migrate(JSON.parse(JSON.stringify(l)) as League);
       expect(m.gamePlans![opp].items[0].pts).toBeUndefined();
+      expect(m.gamePlans![opp].worth).toBeUndefined();
       expect(m.gamePlans![opp].items[1].pts).toBe(9);
     }
     {

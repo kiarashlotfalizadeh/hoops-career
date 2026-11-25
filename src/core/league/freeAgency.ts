@@ -35,6 +35,7 @@ import {
   askingContract,
   birdTier,
   nonGuaranteed,
+  optionDeclined,
   playerMax,
   releasedBy,
   capSpace,
@@ -1276,6 +1277,58 @@ export const signedThisSummer = (league: League) => teamPlayers(league, league.u
  */
 export const resignRoster = (league: League) => summerRoster(league, league.userTid);
 
+/** Why a player whose option the user declined can't be re-signed before the market opens. */
+export const DECLINED_REASON = (p: Player) =>
+  `You declined ${playerName(p)}'s option, so he hears every team's offer. Bid for him when free agency opens, with cap room or an exception.`;
+
+/**
+ * One of the user's expiring players as free agency is about to open: what he asks, the most his
+ * Bird rights let the team pay him (`over`: he asks more, so re-signing can't keep him), whether his
+ * option was declined (he can't be re-signed before the market either), and whether the staff
+ * counts him a rotation player (`key`: one of the roster's best WALK_KEY, or WALK_OVR and up).
+ */
+export interface WalkRisk {
+  pid: number;
+  ask: number;
+  limit: number;
+  over: boolean;
+  declined: boolean;
+  key: boolean;
+}
+
+/** A player this good among the roster (by OVR), or rated this, is one the staff flags before he walks. */
+export const WALK_KEY = 8;
+export const WALK_OVR = 78;
+
+/**
+ * Who walks if free agency opens now, best first (the re-sign period; empty outside it). The
+ * playtest's rebuilder opened the market with an 84 and an 80 unsigned and nothing said so, and an
+ * 82-rated 23-year-old left over his Early Bird limit unseen (round 3): the Re-sign page, the Play
+ * menu and the confirm all read this list.
+ */
+export function walkRisks(league: League): WalkRisk[] {
+  if (league.phase !== 'resign' || league.fired) return [];
+  const tid = league.userTid;
+  const bar = teamPlayers(league, tid)
+    .map((p) => p.ovr)
+    .sort((a, b) => b - a)[WALK_KEY - 1];
+  return expiringPlayers(league, tid)
+    .filter((p) => !askedOutReason(league, p))
+    .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
+    .map((p) => {
+      const ask = askingContract(league, p, tid).amount;
+      const limit = resignLimit(league, p, tid);
+      return { pid: p.pid, ask, limit, over: ask > limit, declined: optionDeclined(league, p), key: p.ovr >= WALK_OVR || (bar !== undefined && p.ovr >= bar) };
+    });
+}
+
+/** "Giddey (84), Essengue (80)": the rotation players among `risks`, for a warning line. Empty with none. */
+export function walkLine(league: League, risks: WalkRisk[], max = 3): string {
+  const key = risks.filter((r) => r.key);
+  const names = key.slice(0, max).map((r) => `${league.players[r.pid].lastName} (${league.players[r.pid].ovr})`);
+  return names.length ? `${names.join(', ')}${key.length > max ? ` and ${key.length - max} more` : ''}` : '';
+}
+
 /**
  * The user re-signs one of his expiring players with Bird rights (no cap limit), in the re-sign
  * period. A negotiation like any other (see hearOffer), options included.
@@ -1289,6 +1342,8 @@ export function userResign(league: League, pid: number, amount: number, years: n
   // (he asked for a trade and never got his role back: he leaves, see pulse.ts)
   const out = askedOutReason(league, p);
   if (out) return { ok: false, reason: out };
+  // (his option declined: he hears the league's offers, see contracts.ts optionDeclined)
+  if (optionDeclined(league, p)) return { ok: false, reason: DECLINED_REASON(p) };
   // a new deal takes one of next season's 21 spots, like any other signing (pending offers hold theirs)
   if (resignRoster(league) >= OFFSEASON_ROSTER_MAX)
     return {

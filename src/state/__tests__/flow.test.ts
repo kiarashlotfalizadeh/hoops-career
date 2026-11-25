@@ -152,10 +152,16 @@ describe('Play menu', () => {
       expect(primary, where(l)).toBeDefined();
       expect(primary!.disabled, where(l)).toBeUndefined();
       // take the fastest action that plays on: a route (draft board, re-sign) or live game is the player's to open
-      const pick =
+      let pick =
         acts.find((a) => a.id === 'endreg') ??
         acts.find((a) => a.id === 'quick') ??
         (primary!.sim || (primary!.cmd && primary!.cmd !== 'watchLive') ? primary! : acts.find((a) => a.sim || (a.cmd && a.cmd !== 'watchLive' && a.cmd !== 'faDay')));
+      // (with rotation players unsigned, "Open free agency" goes through the Re-sign page's confirm, which opens the market)
+      const viaConfirm = !pick && acts.find((a) => a.id === 'fa' && a.to === '/office/resign?open=fa');
+      if (viaConfirm) {
+        expect(viaConfirm.sub).toMatch(/^Unsigned: .+\(\d+\)/);
+        pick = { ...viaConfirm, to: undefined, cmd: 'startFA' };
+      }
       expect(pick, where(l)).toBeDefined();
       seen.add(`${l.phase}: ${pick!.label}`);
       const before = where(l);
