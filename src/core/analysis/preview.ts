@@ -404,10 +404,10 @@ function setUpGame(at: League, g: ScheduledGame) {
  * (and the one the game keeps), so every screen that quotes one quotes the same number. Pass
  * `ratings` when projecting a day's games.
  */
-export function gameProjection(at: League, g: ScheduledGame, ratings = leagueRatings(at)): { margin: number; win: number; plan: number; edits: number } {
+export function gameProjection(at: League, g: ScheduledGame, ratings = leagueRatings(at)): { margin: number; win: number; edits: number } {
   const { sim, neutral, league } = setUpGame(at, g);
-  const { margin, plan, edits } = projectGame(league, sim, neutral, ratings);
-  return { margin, win: winChance(margin), plan, edits };
+  const { margin, edits } = projectGame(league, sim, neutral, ratings);
+  return { margin, win: winChance(margin), edits };
 }
 
 export function matchupPreview(at: League, gid: number): MatchupPreview | null {

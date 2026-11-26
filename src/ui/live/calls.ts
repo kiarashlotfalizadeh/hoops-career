@@ -3,7 +3,7 @@
 // game in front of it suggests and measures them
 // from where the game stands (state/liveWorth.ts measureCalls: each played out from this spot, the best
 // played again on fresh seeds), and proposes the best one only when that reading clears its noise, with
-// its number. None clears: it says so in a line, and calls nothing. The drafts come from the game: the
+// its reason and never its number. None clears: it says so in a line, and calls nothing. The drafts come from the game: the
 // counter to what's hurting you (the bench's notes: their play type running hot, their tactical edge,
 // their run), then the defense's big levers the way the game points (the scheme, the coverage on their
 // ball screens, a double or your best defender on their hot scorer, the help, the pressure), one of
@@ -21,6 +21,7 @@ import { tacticsDiff, crunchTime, troubleThresholds, DECIDED_WIN, LEVER_TRIPS } 
 import { crunchTime as coreCrunch, winProb } from '../../core/analysis/winProb';
 import { GAME } from '../../core/constants';
 import { staffNotes, type StaffInput, type StaffNote } from './staff';
+import { CALL_BACKED } from '../../core/analysis/callWorth';
 import type { Drawn } from './drawn';
 
 /** Most changes measured at a stop (the brief's top timely levers: what the game suggests, the likeliest first). */
@@ -391,32 +392,23 @@ export type StaffCall =
   | { state: 'call'; draft: CallDraft; m: CallsMeasured; at: string; base: string; steps: number; shownAt?: number }
   | { state: 'none'; tried: number; at: string; m?: CallsMeasured; steps?: number };
 
-/** Concise value string for a confirmed live staff call (e.g. "+1.2 pts", "+6% win"). */
-export function callWorthText(m: CallsMeasured): string {
-  const r = m.reading;
-  if (!r) return 'Helps from here';
-  if (m.by === 'win' && r.win > 0) {
-    const pct = Math.max(1, Math.round(r.win * 100));
-    return `+${pct}% win`;
-  }
-  const pts = Math.max(0.1, r.pts);
-  return `+${pts.toFixed(1)} pts`;
-}
-
 /**
- * The call as a bench note: why the staff looked (the evidence, its headline), its measured value,
- * and the one-tap change on its button.
+ * The call as a bench note: why the staff looked (the evidence, its headline), that it would make the
+ * change, and the one-tap change on its button. The staff has played it out from this spot and it
+ * cleared its noise (that's why it's proposed at all), but the estimate stays with the staff: shown
+ * ("Est. +1.0 pts from here"), the coach weighed a figure, not the game in front of him. What the
+ * night's moves were worth is in the report.
  */
 export function callNote(c: Extract<StaffCall, { state: 'call' }>): StaffNote {
   const a = c.draft;
-  const val = callWorthText(c.m);
   return {
     id: `call-${a.id}`,
     kind: 'decision',
     tone: 'good',
     title: a.why,
-    text: c.m.by === 'win' ? `Est. ${val} to close.` : `Est. ${val} from here.`,
-    worth: val,
+    text: c.m.by === 'win' ? 'The staff would make this change to close it out.' : 'The staff would make this change.',
+    worth: CALL_BACKED,
+    backed: true,
     actions: [
       a.choice.kind === 'timeout'
         ? { kind: 'timeout', label: a.label }
@@ -429,11 +421,9 @@ export function callNote(c: Extract<StaffCall, { state: 'call' }>): StaffNote {
   };
 }
 
-/** The staff's call over the court, in a line with its measured value. */
-export const CALL_BANNER_LINE = 'The staff thinks this helps.';
+/** The staff's call over the court, in a line: its reason (the call's own evidence), never an estimate. */
 export function callBannerLine(c: Extract<StaffCall, { state: 'call' }>): string {
-  const val = callWorthText(c.m);
-  return c.m.by === 'win' ? `Est. ${val} · one-tap apply` : `Est. ${val} from here`;
+  return c.draft.why;
 }
 
 /** The staff's line when it found nothing to change, or while it looks. */

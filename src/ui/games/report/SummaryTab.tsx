@@ -29,7 +29,6 @@ import { ptsFig } from '../../../core/analysis/staffWords';
 import { applyPatch } from '../../../core/sim/tactics';
 import { persistableTactics, planFor, setPlanItem } from '../../../core/league/gamePlans';
 import { counterCandidates } from '../../../core/ai/advisor';
-import { worthCall } from '../../../core/ai/counterWorth';
 import { shortName } from '../../../core/league/helpers';
 import { useLeagueMemo, useStore } from '../../../state/store';
 import { act } from '../../../state/actions';
@@ -179,9 +178,29 @@ function Summary({ res, league, report, highlights }: { res: GameResult; league:
       </Section>
 
       {d.plan.length > 0 && (
-        <Section title="Your plan">
-          {/* a row each: the counter, what the staff measured it worth going in, and tonight on what it was aimed at */}
+        <Section
+          title="Your plan"
+          right={
+            <Help title="Your plan">
+              <p>
+                Tonight, on what each counter was aimed at, and what the staff measured it worth: this game replayed a few hundred times with it in your plan and without it. One
+                night is mostly noise; the measured figure is the one to take to the next meeting.
+              </p>
+              <p>It&apos;s told here, after the game. Before one, a counter is your call.</p>
+            </Help>
+          }
+        >
+          {/* a row each: the counter, what the staff measured it worth in the plan, and tonight on what it was aimed at */}
           <div className="card flush list">
+            {res.planWorth && (
+              <div className="gv-plan">
+                <span className="grow">
+                  <span className="lr-name">The plan as a whole</span>
+                  <span className="gd-plan-line small dim2">Against going in with no plan, give or take {Math.max(0.1, res.planWorth.se).toFixed(1)} a game.</span>
+                </span>
+                <Tag tone={res.planWorth.pts >= 0.5 ? 'good' : res.planWorth.pts <= -0.5 ? 'bad' : undefined}>{ptsFig(res.planWorth.pts)}</Tag>
+              </div>
+            )}
             {d.plan.map((g) => (
               <div key={g.label} className="gv-plan">
                 <span className="grow">
@@ -193,7 +212,7 @@ function Summary({ res, league, report, highlights }: { res: GameResult; league:
                 </span>
                 {g.pts !== undefined && (
                   <Tag tone={g.call === 'gain' ? 'good' : g.call === 'cost' ? 'bad' : undefined}>
-                    <span title="What the staff measured it worth a game, over many games">{ptsFig(g.pts)}</span>
+                    <span title="What the staff measured it worth a game in your plan, over many games">{ptsFig(g.pts)}</span>
                   </Tag>
                 )}
               </div>
@@ -378,7 +397,7 @@ function NextTime({ league, d }: { league: League; d: ReturnType<typeof debrief>
   const [all, setAll] = useState(false);
   const simming = useStore((s) => !!s.sim);
   const inPlan = new Set(planFor(league, d.opp)?.items.map((it) => it.id));
-  /** A change measured as a gain where the bench calls it, into your tactics for every game. */
+  /** A change the staff backs where the bench calls it, into your tactics for every game. */
   const always = (a: DebriefAdvice) => {
     if (!a.patch) return;
     const ok = act('Tactics', (l) => {
@@ -419,43 +438,34 @@ function NextTime({ league, d }: { league: League; d: ReturnType<typeof debrief>
 }
 
 /**
- * A next-time fix for the plan against this opponent: one tap only as the staff's counter that makes
- * the same change (sameChange), measured a gain against them on the matchup page's games. Otherwise
- * the staff's read, said as such, with nothing to tap (`quiet`: the row already carries the bench's
- * opinion, so this one says nothing).
+ * A next-time fix for the plan against this opponent: one tap when the staff drafts a counter that
+ * makes the same change (sameChange), said as what it is, the staff's read of one night. No reading
+ * of it against them: that would be the next game's answer before it's played (the counters' own
+ * rows on the matchup page carry none either). `quiet`: the row already carries the bench's opinion.
  */
 function PlanFix({ league, opp, a, inPlan, quiet }: { league: League; opp: number; a: DebriefAdvice; inPlan: Set<string>; quiet: boolean }) {
   const simming = useStore((s) => !!s.sim);
   const drafted = useLeagueMemo(() => counterCandidates(league, league.userTid, opp), [league, opp]);
-  const measuring = useCounterWorth(league, opp);
+  // (measured under the hood: an item added carries its reading to the next game's report)
+  const worth = useCounterWorth(league, opp)?.worth;
   const abbrev = league.teams[opp].abbrev;
   const base = league.teams[league.userTid].tactics;
   const c = a.patch ? drafted.find((x) => sameChange(base, a.patch!, x.patch)) : undefined;
-  const w = c ? measuring?.worth?.get(c.id) : undefined;
   if (inPlan.has(a.id) || (c && inPlan.has(c.id))) return <Tag tone="good">In the plan vs {abbrev}</Tag>;
-  if (c && w && worthCall(w) === 'gain') {
+  if (c) {
     const add = () => {
-      if (act('Game plan', (l) => setPlanItem(l, opp, counterItem(c, w)))) useStore.getState().toast(`Plan vs ${abbrev}: ${c.label}`, 'good');
+      if (act('Game plan', (l) => setPlanItem(l, opp, counterItem(c, worth?.get(c.id))))) useStore.getState().toast(`Plan vs ${abbrev}: ${c.label}`, 'good');
     };
     return (
       <>
         <button className="btn xs" disabled={simming} onClick={add}>
           {c.label}: vs {abbrev}
         </button>
-        <span className="lv-note-worth tiny">Should help against {abbrev}</span>
+        {!quiet && <span className="lv-note-worth tiny">The staff&apos;s read of one night</span>}
       </>
     );
   }
-  if (quiet) return null;
-  const note =
-    c && measuring && !measuring.worth
-      ? `The staff is looking at it against ${abbrev}…`
-      : w
-        ? worthCall(w) === 'cost'
-          ? `Could hurt against ${abbrev}. Not one for the plan.`
-          : `No clear edge against ${abbrev}. Not one for the plan.`
-        : `Only the staff's read against ${abbrev}`;
-  return <span className="lv-note-worth tiny">{note}</span>;
+  return quiet ? null : <span className="lv-note-worth tiny">Only the staff&apos;s read against {abbrev}</span>;
 }
 
 /**

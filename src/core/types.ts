@@ -625,9 +625,11 @@ export interface TacticEdit {
   what: string;
   /** Each setting it moved: its path in the team ("tactics.defense.pnr", "rotation.order"), what it was and what it became (undefined: not set). */
   diff: [path: string, from: unknown, to: unknown][];
-  /** The user's games it was measured on as it was made (gids): the next few on the schedule. */
-  ahead: number[];
-  /** What it measured on them, in points a game (shrunk toward even; `raw` before, `se` its standard error). */
+  /**
+   * Saves from before 2026-11-26 only: the games ahead a change was forecast on as it was made, and
+   * that forecast. Nothing reads them: a change is no longer read before it's played (tacticEdits.ts).
+   */
+  ahead?: number[];
   worth?: { pts: number; raw: number; se: number; games: number };
   /**
    * Measured again on the user's games played since (`games` of them, through `day`): each replayed
@@ -997,6 +999,13 @@ export interface GameResult {
   /** The user's games: his game plan's counters at tip-off, each with what it was aimed at, for the report's grade of the plan (see analysis/debrief.ts). */
   plan?: PlanUse[];
   /**
+   * The user's games: that plan whole (its counters and matchups together) as the staff's paired games
+   * measured it against going in with none, in points a game with its standard error. Told in the
+   * report only: a plan's worth is never shown before its game (see core/ai/counterWorth.ts). Absent
+   * when the plan wasn't measured by tip-off.
+   */
+  planWorth?: { pts: number; se: number };
+  /**
    * The user's games: the setup he played it with, kept as it was that night so a report read later
    * doesn't tell it from today's tactics: his playbook's name, whether it was his own or the staff's,
    * and his help-defense level. Absent in older results (their reports don't name a playbook).
@@ -1045,7 +1054,7 @@ export interface PlanUse {
   types?: string[];
   /** One of theirs it's aimed at. */
   pid?: number;
-  /** Points a game the staff measured it worth when it went in. */
+  /** Points a game the staff measured it worth in that plan (the same games with it and without), when it had been measured by tip-off. */
   pts?: number;
 }
 
@@ -1838,7 +1847,10 @@ export interface GamePlanItem {
   patch: TacticsPatch;
   /** Why it's in the plan, from the scouting numbers. */
   evidence?: string;
-  /** Points a game the staff measured it worth when it went in (see counterWorth.ts): the projection counts it. */
+  /**
+   * Points a game the staff measured it worth (see counterWorth.ts): as it went in, then in the plan as
+   * it stands once that's measured. Under the hood until the game is played: the report tells it.
+   */
   pts?: number;
   /** The staff put it in on its own, measured (a silent pick: see calls.ts, weekCall.ts): not a plan of the user's (the guide doesn't count it). */
   staff?: true;

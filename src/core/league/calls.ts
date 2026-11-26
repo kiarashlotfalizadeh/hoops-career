@@ -246,10 +246,13 @@ export function storeWorth(league: League, key: string, w: CallWorth) {
  */
 export function countersWorth(league: League, m: Extract<CallMeasure, { kind: 'counters' }>, worths: CounterWorth[]): CallWorth {
   const by = new Map(worths.map((w) => [w.id, w]));
-  const cands = counterCandidates(league, league.userTid, m.opp).filter((c) => by.has(c.id));
   const g = league.schedule.find((x) => x.gid === m.gid);
+  const made = planFor(league, m.opp, g)?.items ?? [];
+  // (a counter already in his plan is read by the games without it, counterWorth.ts: not one to propose)
+  const mine = new Set(made.map((x) => x.id));
+  const cands = counterCandidates(league, league.userTid, m.opp).filter((c) => by.has(c.id) && !mine.has(c.id));
   // (the groups a plan for them settles already are left to it: the staff's own picks never replace his)
-  const taken = new Set((planFor(league, m.opp, g)?.items ?? []).map(itemGroup));
+  const taken = new Set(made.map(itemGroup));
   const item = (c: (typeof cands)[number]): GamePlanItem => ({
     id: c.id,
     label: c.label,
@@ -509,7 +512,8 @@ export function quietSeriesStart(league: League): string | null {
   const start = seriesStart(league);
   if (!start || !quietStart(league, start)) return null;
   const made = planFor(league, start.opp, start.g);
-  return `None of the staff's counters helps against them. ${made && planMade(made) ? 'Your plan stands.' : 'You play them with your playbook as it is.'}`;
+  // (the staff's own plan would be empty: said as that, not as a verdict on every counter he might pick)
+  return `The staff has no plan of its own for them. ${made && planMade(made) ? 'Your plan stands.' : 'You play them with your playbook as it is.'}`;
 }
 
 /**
@@ -1200,7 +1204,7 @@ export function callsDecide(league: League) {
     const made = planFor(league, st.opp, st.g);
     notePick(
       league,
-      `${st.series ? `${seriesLabel(st.series)} vs ${league.teams[st.opp].abbrev}, Game 1` : `Play-in vs ${league.teams[st.opp].abbrev}`}. None of the staff's counters helps against them, so ${made && planMade(made) ? 'your plan stands' : 'you play them with your playbook as it is'}.`,
+      `${st.series ? `${seriesLabel(st.series)} vs ${league.teams[st.opp].abbrev}, Game 1` : `Play-in vs ${league.teams[st.opp].abbrev}`}. The staff has no plan of its own for them, so ${made && planMade(made) ? 'your plan stands' : 'you play them with your playbook as it is'}.`,
     );
   }
   const b = seriesBehind(league);
@@ -1397,7 +1401,7 @@ export function staffCalls(league: League): CallCard[] {
       ? 'The staff is measuring its counters against them.'
       : items.length
         ? `The staff's plan: ${items.map((x) => x.label).join(', ')}.`
-        : "None of the staff's counters helps against them.";
+        : 'The staff has no plan of its own for them.';
     // (a tap down: the staff's opinion of them, never the figures)
     const detail = [
       ...(items.length ? [items.length > 1 ? 'Each should help tonight.' : 'It should help tonight.'] : []),

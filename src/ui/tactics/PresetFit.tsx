@@ -1,9 +1,8 @@
-// Why the staff reads a playbook as it does, in its sheet: the fit in a word against the one in use, then
-// what suits the roster and what works against it, with the players behind each, and what would raise
-// it. All words: the figures stay under the hood (core/ai/coachAI.ts, core/analysis/staffWords.ts).
+// What a playbook asks of this roster, in its sheet: what suits the roster and what works against it,
+// with the players behind each, and what would raise it. The reasons, in words; no verdict on the
+// playbook against the one in use (see ./fit.ts): weighing them is the coach's part.
 import type { FitTerm, ProfileKey, RosterProfile } from '../../core/ai/coachAI';
-import { leanTone } from '../../core/analysis/staffWords';
-import { shownFit, type ShownFit } from './fit';
+import { fitParts, type FitParts } from './fit';
 
 /** Each roster quality as the fit explanation names it, and what having more of it means. */
 const QUALITY: Record<ProfileKey, { label: string; more: string }> = {
@@ -39,7 +38,7 @@ function behind(t: FitTerm, pr: RosterProfile, name: (pid: number) => string): s
 }
 
 /** One group of a fit's parts under its heading, each a quality and the players behind it. */
-function Parts({ title, parts, pr, name }: { title: string; parts: ShownFit['parts']; pr: RosterProfile; name: (pid: number) => string }) {
+function Parts({ title, parts, pr, name }: { title: string; parts: FitParts; pr: RosterProfile; name: (pid: number) => string }) {
   if (!parts.length) return null;
   return (
     <div className="tx-terms">
@@ -59,48 +58,23 @@ function Parts({ title, parts, pr, name }: { title: string; parts: ShownFit['par
   );
 }
 
-export function PresetFit({
-  id,
-  cur,
-  curName,
-  best,
-  terms,
-  fits,
-  pr,
-  name,
-}: {
-  id: string;
-  /** The playbook in use. */
-  cur: string;
-  curName: string;
-  /** Whether the staff reads this one as the best there is: then nothing would raise it. */
-  best: boolean;
-  terms: FitTerm[];
-  fits: Record<string, number>;
-  pr: RosterProfile;
-  name: (pid: number) => string;
-}) {
-  const f = shownFit(id, terms, fits, cur);
-  const suits = f.parts.filter((p) => p.v > 0).sort((a, b) => b.v - a.v);
-  const against = f.parts.filter((p) => p.v < 0).sort((a, b) => a.v - b.v);
+export function PresetFit({ terms, pr, name }: { terms: FitTerm[]; pr: RosterProfile; name: (pid: number) => string }) {
+  const parts = fitParts(terms);
+  const suits = parts.filter((p) => p.v > 0).sort((a, b) => b.v - a.v);
+  const against = parts.filter((p) => p.v < 0).sort((a, b) => a.v - b.v);
   // what raises it: more of a quality this playbook rewards
   const levers = terms
     .filter((t) => t.key !== 'base' && t.weight > 0)
     .sort((a, b) => b.weight - a.weight)
     .slice(0, 3);
-  const mine = id === cur;
   return (
     <div className="col tx-why">
-      <div className="tx-why-head">
-        <span className={`tx-fitv tx-read ${mine ? '' : leanTone(f.lean)}`}>{mine ? 'Yours' : f.word}</span>
-        <span className="grow tx-term-s">{mine ? "The staff's read for your roster." : `Against ${curName}, by the staff's read.`}</span>
-      </div>
       <Parts title="Suits your roster" parts={suits} pr={pr} name={name} />
       <Parts title="Works against it" parts={against} pr={pr} name={name} />
-      {!f.parts.length && <div className="small dim2">It leans on no one quality, so it reads the same for most rosters.</div>}
-      {levers.length > 0 && !best && (
+      {!parts.length && <div className="small dim2">It leans on no one quality, so it reads the same for most rosters.</div>}
+      {levers.length > 0 && (
         <div className="tx-terms">
-          <div className="over">What would raise it</div>
+          <div className="over">What it rewards</div>
           {levers.map((t) => (
             <div key={t.key} className="tx-term">
               <span className="grow tx-term-l">{QUALITY[t.key as ProfileKey].more}</span>

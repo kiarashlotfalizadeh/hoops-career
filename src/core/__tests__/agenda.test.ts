@@ -948,11 +948,11 @@ describe('the agenda', () => {
         storeWorth(m, ms.key, countersWorth(m, ms, []));
         expect(agenda(m).some((i) => i.kind === 'series')).toBe(false);
         expect(simStopIds(m)).not.toContain(`series:${m.season}:${conf}1-0`);
-        expect(quietSeriesStart(m)).toBe("None of the staff's counters helps against them. You play them with your playbook as it is.");
+        expect(quietSeriesStart(m)).toBe('The staff has no plan of its own for them. You play them with your playbook as it is.');
         callsDecide(m);
         callsDecide(m);
         expect(staffPicksSince(m, m.season, m.day - 1)).toEqual([
-          `${seriesLabel(m.playoffs[0])} vs ${abbrev}, Game 1. None of the staff's counters helps against them, so you play them with your playbook as it is.`,
+          `${seriesLabel(m.playoffs[0])} vs ${abbrev}, Game 1. The staff has no plan of its own for them, so you play them with your playbook as it is.`,
         ]);
         expect(quietSeriesStart(l)).toBeNull();
       }

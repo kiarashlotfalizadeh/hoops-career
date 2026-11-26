@@ -5,7 +5,6 @@
 
 import type { League } from '../types';
 import type { GameSim } from '../sim/engine';
-import { planFor, planWorth } from '../league/gamePlans';
 
 /**
  * Net rating per point of a rotation's minutes-weighted OVR above the league's (fitted over simulated
@@ -73,9 +72,17 @@ export function leagueRatings(league: League) {
 /**
  * The projection for a game set up in `sim` (both rotations planned for the tip, as the real game
  * will start them): each side's net rating this season regressed toward what its rotation tonight is
- * worth, at the two teams' pace, plus home court and the user's game plan (see planPoints). From the
- * home side: `margin` is the projected home margin (what win probability starts from at tip-off, see
- * GameResult.edge), `edge` the home-court points in it, `plan` the game plan's. Reads the league only.
+ * worth, at the two teams' pace, plus home court and the user's tactical changes already checked on
+ * played games (editPoints). From the home side: `margin` is the projected home margin (what win
+ * probability starts from at tip-off, see GameResult.edge), `edge` the home-court points in it,
+ * `edits` the checked changes'. Reads the league only.
+ *
+ * The user's game plan for tonight is not in it, on purpose. Until 2026-11-26 it counted at what the
+ * staff's paired games measured it worth, so adding and removing counters moved the chance to win
+ * before tip-off: the playtest's coach used the board as a metal detector ("51%, 50%, 56%: keep
+ * those two") instead of reading the scouting. A plan is a choice not yet played: what it does is
+ * found out on the floor, and its measured worth is told in the game's report (GameResult.plan,
+ * planWorth).
  */
 export function projectGame(league: League, sim: GameSim, neutral: boolean, ratings = leagueRatings(league)) {
   const avgTalent = league.teams.reduce((a, t) => a + rotationTalent(league, t.tid), 0) / Math.max(1, league.teams.length);
@@ -96,35 +103,13 @@ export function projectGame(league: League, sim: GameSim, neutral: boolean, rati
   const paces = [row(0), row(1)].filter((r) => r.gp > 0).map((r) => r.pace);
   const pace = paces.length ? paces.reduce((a, b) => a + b, 0) / paces.length : 100;
   const edge = neutral ? 0 : HOME_EDGE;
-  // the user's game plan for tonight, at what the staff measured it worth, and his tactical changes the staff has checked on played games
-  const plan = planPoints(league, sim.T[0].tid, sim.T[1].tid);
+  // his tactical changes the staff has checked on played games: facts, so they count
   const edits = editPoints(league, sim.T[0].tid, sim.T[1].tid, ratings);
-  return { margin: projectMargin(netHome, netAway, pace, edge) + plan + edits, netHome, netAway, edge, plan, edits };
+  return { margin: projectMargin(netHome, netAway, pace, edge) + edits, netHome, netAway, edge, edits };
 }
 
-/** Most points a game a plan adds to a projection (a guard: a plan measured whole has no overlap to cap, and none has measured near it). */
-export const PLAN_MAX_PTS = 4;
-
-/**
- * Points a game the user's plan against the other team adds to the home side's projected margin
- * (under 0 for the user away): the whole plan as the staff measured it against going in without one
- * (GamePlan.worth: its counters and matchups together, on the next meeting's rosters), whatever its
- * size. Until 2026-11-24 only a counter that read a clear gain or cost on its own counted (half a
- * point or more), and a matchup or a double never did: the playtest's coach made three changes to a
- * plan and the chance to win read 75% before and after. A plan not measured yet (or changed since)
- * counts its counters' own readings (GamePlanItem.pts), at most PLAN_MAX_PTS either way. Nothing in
- * a game the user isn't in.
- */
-export function planPoints(league: League, home: number, away: number): number {
-  const me = league.userTid;
-  if (home !== me && away !== me) return 0;
-  const opp = home === me ? away : home;
-  const plan = planFor(league, opp);
-  const whole = planWorth(plan);
-  const pts = whole ? whole.pts : (plan?.items ?? []).reduce((a, it) => a + (it.pts ?? 0), 0);
-  const capped = Math.max(-PLAN_MAX_PTS, Math.min(PLAN_MAX_PTS, pts));
-  return home === me ? capped : -capped;
-}
+/** Most points a game the user's checked changes add to a projection, either way. */
+export const EDITS_MAX_PTS = 4;
 
 /** A checked change counts from this far from even, in points a game: counterWorth.ts's WORTH_MIN (kept apart: this module is read where games are set up). */
 export const EDIT_SAYS = 0.5;
@@ -136,8 +121,7 @@ export const EDIT_SAYS = 0.5;
  * change's games are in his season's net rating already, so each counts only by the share of the
  * estimate that isn't those games (1 less its games since over the season's games and the prior's):
  * a proven change moves the forecast at once and hands over to the results as they come in. A change
- * only forecast (not checked yet) stays out: what it does is found out on the floor. At most
- * PLAN_MAX_PTS either way.
+ * not checked yet stays out: what it does is found out on the floor. At most EDITS_MAX_PTS either way.
  */
 export function editPoints(league: League, home: number, away: number, ratings = leagueRatings(league)): number {
   const me = league.userTid;
@@ -150,7 +134,7 @@ export function editPoints(league: League, home: number, away: number, ratings =
     const since = league.schedule.reduce((n, g) => n + (g.played && g.day >= e.day && (g.home === me || g.away === me) ? 1 : 0), 0);
     pts += c.pts * Math.max(0, 1 - since / (gp + PRIOR_GAMES));
   }
-  const capped = Math.max(-PLAN_MAX_PTS, Math.min(PLAN_MAX_PTS, pts));
+  const capped = Math.max(-EDITS_MAX_PTS, Math.min(EDITS_MAX_PTS, pts));
   return home === me ? capped : -capped;
 }
 

@@ -169,12 +169,18 @@ personalities, no conversations and no promises.
    a line of them sits under a 2px ink rule (`.statline`), as a printed box score does. The one figure
    a hero leads with is the condensed black cut, as big as it can be. A figure appears once per screen (the record is in the top bar: a screen
    doesn't repeat it unless it's the subject).
-8. **Numbers for facts and diagnostics, words only for untried predictions.** What has happened, or
-   what the game measured, is a number: the box score, standings, OVR and POT, contracts, money, a
-   game's win % before tip-off, the teams' stat ranks, and each factor's swing in points mid-game and
-   after it (`ptsFig`, `winPct` in `core/analysis/staffWords.ts`), with shooting luck kept apart from
-   what tactics did. Only a counter or a tactic not yet played stays the staff's opinion in words
-   ("Should help", "Seems to hurt", "Better fit").
+8. **Numbers for facts, reasons before a choice.** What has happened, or what the game measured of
+   games played, is a number: the box score, standings, OVR and POT, contracts, money, a game's win %
+   before tip-off, the teams' stat ranks, each factor's swing in points mid-game and after it
+   (`ptsFig`, `winPct` in `core/analysis/staffWords.ts`), what a plan was worth in the game's report,
+   a tactical change checked on played games. A choice of the coach's not yet played (a counter, a
+   playbook, a rotation or tactics change, a play in the huddle) gets the staff's reason and the
+   scouting facts behind it, and nothing the sim made of it: no "Should help", no "Better fit", no
+   list sorted best first, no estimate, and no forecast that moves as he tries options. The staff
+   still measures under the hood (its own picks go by it, and the report needs it); the readings are
+   told once the game is played. Shown ahead, they were an answer key (2026-11-26). The staff's own
+   proposals (a change it tested, its live call, its pick in a huddle) carry its opinion in a word,
+   never a figure.
 9. **Short copy.** See Copy.
 10. **Thumb first.** Primary actions sit low (the dock's play row, a screen's own `.dockbar`),
     targets are 44px, nothing important hides behind hover.

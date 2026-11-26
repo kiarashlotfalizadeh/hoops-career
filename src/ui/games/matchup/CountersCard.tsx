@@ -1,32 +1,40 @@
-// The Plan's counters: what the staff would change against this team, each a row with the staff's
-// opinion of it tonight (see useCounterWorth: the ones it likes first, the costs behind "more") and
-// Add. A row opens on the rest: exactly what it changes in the Tactics screen's words, why, the
-// scouting behind it, and Always (confirmed: in your tactics for every game).
+// The Plan's counters: what the staff would look at against this team, in the order its scouting rules
+// draft them, each a row with the staff's reason and Add. A row opens on the rest: exactly what it
+// changes in the Tactics screen's words, the scouting behind it, and Every game (confirmed: in your
+// tactics for every game).
+//
+// No verdict on a row, on purpose. The staff measures every counter (useCounterWorth), and until
+// 2026-11-26 the row said what it found ("Should help", the costs folded away): the playtest's coach
+// added whatever read green and never opened the scouting. Which counter is right for this opponent
+// is the coach's call now, from the reasons here and the Brief; the measuring stays under the hood
+// and the game's report says what the plan was worth. The one figure a row may carry is a fact: what a
+// counter measured worth the last time he played it against them (playedCounters).
 import { useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { applyPatch } from '../../../core/sim/tactics';
 import { counterCandidates, tacticsWithCounter, type Candidate } from '../../../core/ai/advisor';
-import { worthCall, type CounterWorth } from '../../../core/ai/counterWorth';
-import { byWorth, counterItem, useCounterWorth, worthText } from './useCounterWorth';
-import { effectiveTactics, persistableTactics, planFor, setPlanItem } from '../../../core/league/gamePlans';
+import { counterItem, useCounterWorth } from './useCounterWorth';
+import { effectiveTactics, persistableTactics, planFor, playedCounters, setPlanItem, type PlayedCounter } from '../../../core/league/gamePlans';
 import type { League } from '../../../core/types';
 import { useLeagueMemo, useStore } from '../../../state/store';
 import { act } from '../../../state/actions';
 import { Help, Section, Tag } from '../../components/ui';
 import { Term } from '../../components/Glossary';
 import { changesLine, screenChanges } from '../../tactics/changes';
-import { teamCity } from '../../../core/league/helpers';
+import { fmtDate, teamCity } from '../../../core/league/helpers';
+import { ptsFig } from '../../../core/analysis/staffWords';
 
-/** Counters shown before "more": the ones the numbers back come first. */
-const SHOWN = 4;
+/** Counters shown before "more": the first the staff's rules draft. */
+const SHOWN = 5;
 
 export function CountersCard({ league, opp }: { league: League; opp: number }) {
   const simming = useStore((s) => !!s.sim);
   const user = league.userTid;
-  const drafted = useLeagueMemo(() => counterCandidates(league, league.userTid, opp), [league, opp]);
-  const measuring = useCounterWorth(league, opp);
-  const worth = measuring?.worth;
-  const cands = byWorth(drafted, worth);
+  const cands = useLeagueMemo(() => counterCandidates(league, league.userTid, opp), [league, opp]);
+  // (measured for the plan's records and the report: nothing here shows a reading)
+  const worth = useCounterWorth(league, opp)?.worth;
+  // what he has already played against them this season, and what it measured worth then: facts
+  const played = useLeagueMemo(() => playedCounters(league, opp), [league, opp]);
   const inPlan = new Set(planFor(league, opp)?.items.map((it) => it.id));
   // (the ones in the plan when the screen opened stand still; one added since lands)
   const had = useRef<Set<string> | null>(null);
@@ -48,17 +56,7 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
     if (ok) useStore.getState().toast(scope === 'game' ? `Plan vs ${them.abbrev}: ${c.label}` : `Your tactics: ${c.label}`, 'good');
   };
 
-  // the costs and the ones it didn't measure wait behind "more": the staff wouldn't play them
-  const shown = worth
-    ? Math.min(
-        SHOWN,
-        cands.filter((c) => {
-          const w = worth.get(c.id);
-          return !!w && worthCall(w) !== 'cost';
-        }).length,
-      )
-    : SHOWN;
-  const visible = all ? cands : cands.slice(0, shown);
+  const visible = all ? cands : cands.slice(0, SHOWN);
   const mine = league.teams[user].tactics;
   return (
     <Section
@@ -66,23 +64,18 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
       right={
         <Help title="Counters">
           <p>
-            A <Term id="counter">counter</Term> is a change aimed at one opponent. The word under it is the staff&apos;s opinion.
+            A <Term id="counter">counter</Term> is a change aimed at one opponent. The line under it is why the staff would look at it: its read of their roster and numbers, not a
+            promise.
           </p>
+          <p>Which one is right against them is your call. After the game, the report says what your plan was worth.</p>
         </Help>
       }
     >
       <div className="card flush list">
-        {/* (the opinions below are the last reading while it measures your change: said once, not on every row) */}
-        {measuring?.stale && measuring.progress < 1 && (
-          <div className="mu-empty" role="status">
-            {measuring.older ? "The staff's last read. Checking it again for tonight…" : 'Rechecking with your change…'}
-          </div>
-        )}
         {!cands.length && <div className="mu-empty">Your plan already covers what the staff sees.</div>}
-        {cands.length > 0 && shown === 0 && !all && <div className="mu-empty">The staff doesn&apos;t see a counter that beats how you play them now.</div>}
         {visible.map((c) => {
           const added = inPlan.has(c.id);
-          const w = worth?.get(c.id);
+          const last = played.get(c.label);
           // a counter that only names their players (attacking one defender) has nothing to keep for every game
           const always = JSON.stringify(persistableTactics(applyPatch(mine, c.patch), mine)) !== JSON.stringify(persistableTactics(mine, mine));
           return (
@@ -91,13 +84,13 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
                 <summary className="mu-cand-s">
                   <span className="grow mu-cand-t">
                     <span className="lr-name">{c.label}</span>
-                    <WorthTag w={w} measuring={!!measuring && !worth} />
+                    <span className="mu-why">{c.why}</span>
+                    {last && <LastTime league={league} last={last} />}
                   </span>
                   <ChevronDown size={16} className="mu-cand-c" aria-hidden="true" />
                 </summary>
                 <div className="mu-cand-b">
                   <CounterChanges league={league} opp={opp} c={c} />
-                  <div className="mu-note">{c.why}</div>
                   {c.evidence && <div className="mu-ev">{c.evidence}</div>}
                   {always && !added && (
                     <div className="mu-cand-foot">
@@ -134,9 +127,9 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
             </div>
           );
         })}
-        {!all && cands.length > shown && (
+        {!all && cands.length > SHOWN && (
           <button className="gs-more" onClick={() => setAll(true)}>
-            <ChevronDown size={15} aria-hidden="true" /> {cands.length - shown} more
+            <ChevronDown size={15} aria-hidden="true" /> {cands.length - SHOWN} more
           </button>
         )}
       </div>
@@ -150,9 +143,12 @@ function CounterChanges({ league, opp, c }: { league: League; opp: number; c: Ca
   return line ? <div className="mu-changes">{line}</div> : null;
 }
 
-/** The staff's opinion of a counter, the line under its name (or that they're still looking at it). */
-export function WorthTag({ w, measuring }: { w?: CounterWorth; measuring: boolean }) {
-  if (!w) return measuring ? <span className="mu-worth dim">Staff still looking…</span> : null;
-  const { text, tone } = worthText(w);
-  return <span className={`mu-worth m-fade ${tone ?? 'dim'}`}>{text}</span>;
+/** A counter he has played against them before: the game, and what the staff measured it worth in that night's plan. A fact, so a figure. */
+function LastTime({ league, last }: { league: League; last: PlayedCounter }) {
+  const when = fmtDate(league.season, last.day, { month: 'short', day: 'numeric' });
+  return (
+    <span className="mu-played num">
+      Played {when} ({last.won ? 'W' : 'L'}){last.pts !== undefined ? ` · measured ${ptsFig(last.pts)} a game in that plan` : ''}
+    </span>
+  );
 }

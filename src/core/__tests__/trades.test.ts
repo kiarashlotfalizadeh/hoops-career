@@ -1162,7 +1162,7 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
     expect(training().summary).toBe('1 focus: barely moved.');
     expect(decisionThreads(l, l.season, U).find((t) => t.title === 'Tactical changes')!.rows).toEqual([
       ['Help defense: Balanced → Stay home', 'Checked on 10 games played with it: seems to hurt.'],
-      ['Tempo: Balanced → Up-tempo', 'Forecast when you made it: should help. No games played with it, so nothing to check.'],
+      ['Tempo: Balanced → Up-tempo', 'No games played with it, so nothing to check.'],
     ]);
   }
 

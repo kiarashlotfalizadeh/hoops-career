@@ -3,19 +3,22 @@
 // it was and what it became), so it can be measured, measured again and put back on its own, whatever
 // else has changed since.
 //
-// Measured twice, both times by measureChanges (counterWorth.ts), paired games on the same seeds:
-// - as it's made (the user taps Done, or leaves the Team screens with a change): over the user's next
-//   EDIT_AHEAD games, each played with the change and with the settings it replaced, pooled into one
-//   number a game.
-// - about CHECK_AFTER games later, on the games actually played since (those opponents, those floors,
-//   with tonight's rosters), with and without it: so a verdict ("Your change helped: +0.9 a game over 12 games") is a measurement, never the record. A game's
-//   margin has an SD of about 13: ten games of results can't tell a point a game from nothing, and
-//   paired replays can (12 games × 40 pairs each read to about ±0.5).
-// Both readings are pooled over the games and shrunk toward even as one (poolWorth), and read as a
-// gain, a cost or "too close to say" by worthCall's WORTH_MIN.
-// The functions here plan a measurement, read it and record it; the worker runs the games: a change
-// as it's made from the Team screens (src/ui/tactics/editWatch.ts), its check in the sim's morning
-// (editMorning), so it never waits on a visit to Team.
+// Measured once, on games played: about CHECK_AFTER games after it's made, the games actually played
+// since (those opponents, those floors, with tonight's rosters) are replayed with it and without it
+// (measureChanges in counterWorth.ts, paired games on the same seeds), so a verdict ("Your change
+// helped: +0.9 a game over 12 games") is a measurement, never the record. A game's margin has an SD
+// of about 13: ten games of results can't tell a point a game from nothing, and paired replays can
+// (12 games × 40 pairs each read to about ±0.5). The readings are pooled over the games and shrunk
+// toward even as one (poolWorth), and read as a gain, a cost or "too close to say" by worthCall's
+// WORTH_MIN.
+//
+// Nothing is measured, or said, as a change is made. Until 2026-11-26 it was: the next few games
+// played with it and without, and a toast seconds after Done ("Forecast: your change could hurt").
+// A rotation or a coverage could be tried, read and put back until the forecast came up green, which
+// is the sim answering for the coach. A change is his hypothesis now; the check is where it's graded.
+// The functions here plan the check, read it and record it; the worker runs the games: in the sim's
+// morning (editMorning), so it never waits on a visit to Team, or from the Team screens when one is
+// still due (src/ui/tactics/editWatch.ts).
 
 import type { League, Player, Rotation, ScheduledGame, Tactics, TacticEdit } from '../types';
 import { changeColon, tacticsChanges } from '../sim/playbooks';
@@ -24,15 +27,9 @@ import { plural } from '../format';
 import { WORTH_MIN, measureChanges, poolWorth, worthCall, type CounterWorth, type LeagueChange } from './counterWorth';
 import { leadAssistant } from './assistant';
 
-/** The user's games ahead a change is measured on as it's made. */
+/** The user's games ahead gamesAhead looks at by default. */
 export const EDIT_AHEAD = 5;
-/**
- * Paired games each configuration plays over all of them (at least EDIT_MIN_GAMES a game): five
- * games of 60 read to about ±0.45 a game, as one opponent's 240 do, in 10-20 seconds on a phone.
- */
-export const EDIT_GAMES = 300;
-export const EDIT_MIN_GAMES = 40;
-/** The user's games played since a change before the staff measures it again on them. */
+/** The user's games played since a change before the staff measures it on them. */
 export const CHECK_AFTER = 10;
 /** The most of them it's measured on (the first played after the change). */
 export const CHECK_MAX = 15;
@@ -229,15 +226,14 @@ export function playedSince(league: League, e: TacticEdit): ScheduledGame[] {
   return league.schedule.filter((g) => g.played && g.day >= e.day && isUsers(league, g)).sort((a, b) => a.day - b.day || a.gid - b.gid);
 }
 
-/** Where a change was made, when it's recorded later (a sim started first): the team as it left it, the day and the games then ahead. */
+/** Where a change was made, when it's recorded later (a sim started first): the team as it left it, and the day. */
 export interface EditAt {
   now: TeamPart;
   day: number;
-  ahead: number[];
 }
 
-/** The user's team as a change made now leaves it, today and the games ahead (what recordEdit reads by default). */
-export const editAt = (league: League): EditAt => ({ now: structuredClone(userPart(league)), day: league.day, ahead: gamesAhead(league).map((g) => g.gid) });
+/** The user's team as a change made now leaves it, and today (what recordEdit reads by default). */
+export const editAt = (league: League): EditAt => ({ now: structuredClone(userPart(league)), day: league.day });
 
 /** `nameOf`, and for a player it doesn't know (one who has left the team since), his name from the league. */
 const namesWith = (league: League, nameOf: (pid: number) => string) => (pid: number) => {
@@ -249,11 +245,10 @@ const namesWith = (league: League, nameOf: (pid: number) => string) => (pid: num
  * Record the user's change from `before` to his team as it is now (or as `at` says it was: null when
  * nothing moved). What his roster moves did meanwhile isn't his change and stays out. A second
  * change to the same setting on the same day as the last one, before a game, is the same change: the
- * two become one, measured again; a change to anything else is a change of its own, so the first
- * keeps its reading. Kept to EDITS_KEPT.
+ * two become one; a change to anything else is a change of its own. Kept to EDITS_KEPT.
  */
 export function recordEdit(league: League, before: TeamPart, nameOf: (pid: number) => string, at?: EditAt): TacticEdit | null {
-  const { now, day, ahead } = at ?? { now: userPart(league), day: league.day, ahead: gamesAhead(league).map((g) => g.gid) };
+  const { now, day } = at ?? { now: userPart(league), day: league.day };
   const on = new Set([...teamPlayers(league, league.userTid).map((p) => p.pid), ...now.rotation.order]);
   const diff = withoutRosterMoves(partDiff(before, now), on);
   if (!diff.length) return null;
@@ -268,11 +263,11 @@ export function recordEdit(league: League, before: TeamPart, nameOf: (pid: numbe
       list.pop();
       return null;
     }
-    const e: TacticEdit = { id: last.id, season: league.season, day, what: editWords(setAll(now, merged, 1), now, name), diff: merged, ahead };
+    const e: TacticEdit = { id: last.id, season: league.season, day, what: editWords(setAll(now, merged, 1), now, name), diff: merged };
     list[list.length - 1] = e;
     return e;
   }
-  const e: TacticEdit = { id: (last?.id ?? 0) + 1, season: league.season, day, what: editWords(setAll(now, diff, 1), now, name), diff, ahead };
+  const e: TacticEdit = { id: (last?.id ?? 0) + 1, season: league.season, day, what: editWords(setAll(now, diff, 1), now, name), diff };
   list.push(e);
   while (list.length > EDITS_KEPT) list.shift();
   return e;
@@ -344,26 +339,20 @@ function planGames(league: League, list: ScheduledGame[]): PlannedGame[] {
 }
 
 /**
- * How to measure change `e` now: as it's made ('made': the games it was made before, the ones still
- * ahead, else the next ones) or on the games played since ('check'). Null when there's nothing to
- * play: no games, or none of its settings still in place (`replaced` then says so).
+ * How to check change `e` now: the user's games played since it was made, each replayed with it and
+ * with the settings it replaced. Null when there's nothing to play: no games played since, or none of
+ * its settings still in place (`replaced` then says so).
  */
-export function editPlan(league: League, e: TacticEdit, kind: 'made' | 'check'): { plan?: EditPlan; replaced?: boolean } {
+export function editPlan(league: League, e: TacticEdit): { plan?: EditPlan; replaced?: boolean } {
   const me = league.userTid;
   const roster = teamPlayers(league, me);
   const now = userPart(league);
   const back = putBack(now, e.diff, roster);
   if (!back.n) return { replaced: true };
-  const byGid = new Map(league.schedule.map((g) => [g.gid, g]));
-  let list: ScheduledGame[];
-  if (kind === 'made') {
-    const ahead = e.ahead.map((gid) => byGid.get(gid)).filter((g): g is ScheduledGame => !!g && !g.played);
-    list = ahead.length ? ahead : gamesAhead(league);
-  } else list = playedSince(league, e).slice(0, e.check ? RECHECK_MAX : CHECK_MAX);
+  const list = playedSince(league, e).slice(0, e.check ? RECHECK_MAX : CHECK_MAX);
   if (!list.length) return {};
   const games = planGames(league, list);
-  const [total, least] = kind === 'made' ? [EDIT_GAMES, EDIT_MIN_GAMES] : [e.check ? CHECK_GAMES * 2 : CHECK_GAMES, CHECK_MIN_GAMES];
-  const perGame = Math.max(least, Math.round(total / games.length));
+  const perGame = Math.max(CHECK_MIN_GAMES, Math.round((e.check ? CHECK_GAMES * 2 : CHECK_GAMES) / games.length));
   const without: LeagueChange = { id: 'without', teams: { [me]: { tactics: back.part.tactics, rotation: back.part.rotation } } };
   return { plan: { games, changes: [without], perGame, count: list.length } };
 }
@@ -380,26 +369,11 @@ export function readEdit(readings: GameReadings): { worth: CounterWorth } {
   return { worth: poolWorth('edit', out) };
 }
 
-/** Put a measurement as it's made on change `id` (still in the ledger). */
-export function saveMade(league: League, id: number, r: ReturnType<typeof readEdit>, games: number) {
-  const e = editsOf(league).find((x) => x.id === id);
-  if (!e) return;
-  const { pts, raw, se } = r.worth;
-  e.worth = { pts, raw, se, games };
-}
-
-/** Changes still to measure as they were made, newest first. */
-export const unmeasured = (league: League) =>
-  editsOf(league)
-    .filter((e) => !e.worth && !e.closed && e.season === league.season)
-    .reverse();
-
 /** At the season's end, a change with this many games played since is checked on them (fewer than CHECK_AFTER: the season ran out). */
 export const CHECK_END_MIN = 3;
 
 /**
- * Changes due their check: CHECK_AFTER of the user's games played since, not checked, not closed
- * (whether or not the forecast as it was made ever finished: the check reads played games, not it).
+ * Changes due their check: CHECK_AFTER of the user's games played since, not checked, not closed.
  * `seasonOver`: his season is done, so one with CHECK_END_MIN played is checked on what there is.
  * And a check that couldn't tell (wideEven), once RECHECK_AFTER more are played (CHECK_END_MIN more
  * when the season is done), for its one second look.
@@ -431,7 +405,7 @@ export async function editMorning(
 ): Promise<{ ok: boolean; checked: number[] }> {
   const checked: number[] = [];
   for (const e of checksDue(league, opts.seasonOver)) {
-    const { plan, replaced } = editPlan(league, e, 'check');
+    const { plan, replaced } = editPlan(league, e);
     if (!plan) {
       if (replaced) {
         closeEdit(league, e.id, 'replaced');
@@ -519,21 +493,10 @@ export function revertEdit(league: League, e: TacticEdit): boolean {
 // ---------------------------------------------------------------- the lines
 
 /**
- * The staff's line on a change as it's made, in words (the reading stays under the hood). It's read
- * on the games ahead, so it's said as a forecast; what happened is the check's to say (checkLine).
+ * The staff's line on a change as it's made: that it's noted, and when it's checked. No reading of
+ * it: what it does is found out on the floor (see the top of this file).
  */
-export function madeLine(e: TacticEdit): string {
-  const w = e.worth;
-  if (!w) return 'The staff is watching your change.';
-  const call = worthCall(w);
-  const later = `The staff checks it on real games after ${CHECK_AFTER}.`;
-  // (even isn't "nothing happened": the change still moves how the team plays, the forecast just can't tell it apart)
-  return call === 'gain'
-    ? `Forecast: your change should help. ${later}`
-    : call === 'cost'
-      ? `Forecast: your change could hurt. ${later}`
-      : `Forecast: no clear swing from your change. It's a style call. ${later}`;
-}
+export const MADE_LINE = `Change noted. The staff checks it on played games after ${CHECK_AFTER}.`;
 
 /** A check's reading as a figure, a fact about played games: "+0.9 a game, give or take 0.4". */
 export const checkFigure = (c: Pick<CounterWorth, 'pts' | 'se'>) =>

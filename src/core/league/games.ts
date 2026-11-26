@@ -11,7 +11,7 @@ import { cohesionOf } from './pulse';
 import { applyInjury, clearedToPlay, GAME_TIME_PERF, healOneGame } from './injuries';
 import { gameFinances, updateHype } from './finances';
 import { playerAge } from '../playerGen';
-import { consumePlans, effectiveTactics, planFor } from './gamePlans';
+import { consumePlans, effectiveTactics, planFor, planWorth } from './gamePlans';
 import { confStandings } from './standings';
 import { hasCoachPlans, withoutCoachPlans } from '../sim/tactics';
 import { aiGamePlan, oppPlanIn, planTeam, withOppPlan } from '../ai/opponentPlan';
@@ -877,6 +877,9 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
     const base = league.teams[league.userTid].tactics;
     res.setup = { playbook: playbookLabel(base), own: !!base.manual, help: base.defense.help };
     if (plan?.items.length) res.plan = plan.items.map((it) => ({ label: it.label, ...planAim(base, it.patch), ...(it.pts !== undefined ? { pts: it.pts } : {}) }));
+    // (and the plan whole, as the staff measured it: the report's to tell, never the pre-game screen's)
+    const whole = planWorth(plan);
+    if (whole) res.planWorth = { pts: whole.pts, se: whole.se };
     // and what its quotes read that the save doesn't keep for good (who got hurt, the winner's low point)
     Object.assign(
       res,

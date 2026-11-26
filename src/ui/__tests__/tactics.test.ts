@@ -6,15 +6,15 @@
 // takes it out again).
 import { describe, expect, it } from 'vitest';
 import { DEF_SPOTS, OFF_SPOTS, place, startersOf, strengthsOf, type BoardPlayer, type Spot } from '../tactics/formation';
-import { bestFit, byFit, handOverLine, shownFit, userStaffTactics } from '../tactics/fit';
+import { fitParts, handOverLine, userStaffTactics } from '../tactics/fit';
 import { defenseLabel } from '../../core/sim/playbooks';
 import { screenChanges, changesLine } from '../tactics/changes';
 import { seasonImpacts, seasonPlayTypes } from '../seasonAnalysis';
 import { hackThreshold, livePills, offPlan, resetToPlan, type PillContext } from '../live/pills';
 import { keptTactics } from '../live/keep';
 import type { Quality, SystemReport } from '../../core/analysis/system';
-import { offPresetFit, offPresetTerms, defPresetFit, defPresetTerms, type RosterProfile } from '../../core/ai/coachAI';
-import { OFF_PRESETS, applyPatch, cloneTactics, defaultTactics, tacticsDiff } from '../../core/sim/tactics';
+import { offPresetTerms, defPresetTerms, type RosterProfile } from '../../core/ai/coachAI';
+import { applyPatch, cloneTactics, defaultTactics, tacticsDiff } from '../../core/sim/tactics';
 import { createLeague, defaultSettings } from '../../core/league/create';
 import { simDay, startRegularSeason } from '../../core/league/season';
 import type { Tactics } from '../../core/types';
@@ -129,46 +129,25 @@ describe('tactics in the UI', () => {
       expect(strengthsOf(small).weaknesses.map((x) => x.id)).toEqual(['rimD']);
     }
 
-    // playbook fit as shown, the staff's read in points a game: its start and parts add up to its worth
-    // against an average playbook exactly, and the row says what it's worth against the one in use
+    // playbook fit as shown: the roster qualities that suit a playbook and the ones against it, never
+    // a part that rounds to nothing, and nothing that grades one playbook against another
     for (const pr of [profile(50), profile(62, 85), profile(40, 70)]) {
-      for (const [terms, fits] of [
-        [offPresetTerms(pr), offPresetFit(pr)],
-        [defPresetTerms(pr), defPresetFit(pr)],
-      ] as const) {
-        const ids = Object.keys(fits);
-        for (const id of ids) {
-          // half a point a game either way reads as a better or a worse fit; the one in use reads as even
-          const f = shownFit(id, terms[id], fits, ids[0]);
-          const vs = Math.round(fits[id] - fits[ids[0]]) / 10;
-          expect(f.lean).toBe(vs >= 0.5 ? 'gain' : vs <= -0.5 ? 'cost' : 'even');
-          expect(shownFit(id, terms[id], fits, id).lean).toBe('even');
-          expect(f.parts.every((p) => p.v !== 0)).toBe(true);
+      for (const terms of [offPresetTerms(pr), defPresetTerms(pr)]) {
+        for (const id of Object.keys(terms)) {
+          const parts = fitParts(terms[id]);
+          expect(parts.every((p) => p.v !== 0 && p.term.key !== 'base')).toBe(true);
         }
       }
     }
-    // better fits first, then similar, then worse, the staff's read best first inside each; the staff's pick is still the best
     {
-      const fits = offPresetFit(profile(62, 85));
-      const terms = offPresetTerms(profile(62, 85));
-      const order = byFit(OFF_PRESETS, fits, 'balanced');
-      const leans = order.map((p) => shownFit(p.id, terms[p.id], fits, 'balanced').lean);
-      expect(leans).toEqual([...leans.filter((x) => x === 'gain'), ...leans.filter((x) => x === 'even'), ...leans.filter((x) => x === 'cost')]);
-      for (const lean of ['gain', 'even', 'cost']) {
-        const tier = order.filter((_, i) => leans[i] === lean);
-        expect(tier).toEqual([...tier].sort((a, b) => fits[b.id] - fits[a.id]));
-      }
-      expect(fits[bestFit(OFF_PRESETS, fits).id]).toBe(Math.max(...Object.values(fits)));
-    }
-    {
-      // the hand-over names what the staff would run and its read against the user's; a moved playbook reads as Custom
+      // the hand-over names what the staff would run, with no grade of the user's against it; a moved playbook reads as Custom
       const l = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 3 });
       const staff = userStaffTactics(l);
       expect(handOverLine(l, staff)).toMatch(/^The staff would keep .+ · .+, with their own settings, roles and shape\.$/);
       const t = l.teams[0].tactics;
       const other = staff.defPreset === 'hedge' ? 'drop' : 'hedge';
       l.teams[0].tactics = { ...t, defPreset: other, defense: applyPatch(t, { defense: { scheme: 'man' } }).defense, manual: true };
-      expect(handOverLine(l, staff)).toMatch(/^Staff would run .+ · .+\. (Better fit than|About even with) yours, by their read\.$/);
+      expect(handOverLine(l, staff)).toMatch(/^Staff would run .+ · .+, with their own settings, roles and shape\.$/);
       expect(defenseLabel(l.teams[0].tactics)).toMatch(/^Custom .+$/);
     }
 

@@ -18,7 +18,7 @@ import { fanScore } from './legacyPulse';
 import { jobSecurity } from './jobSecurity';
 import { money, ordinal, plural } from '../format';
 import { CHECK_AFTER, CHECK_END_MIN, editCall, editsOf, playedSince } from '../ai/tacticEdits';
-import { AHEAD, SINCE } from '../analysis/staffWords';
+import { SINCE } from '../analysis/staffWords';
 import { seasonCoachingLine } from '../analysis/debrief';
 import { FOCUS_KEYS, FOCUS_META } from './progression';
 import { focusChances } from './devWatch';
@@ -195,7 +195,7 @@ function focusLine(league: League, p: Player, season: number): string | null {
   return `${span}${base}: its skills ${signed(on)}, the rest of his game ${signed(off)}. ${read}; what balanced work would have done isn't known.${stat}`;
 }
 
-/** A tactical change as far as it has been read: checked on played games, forecast only, or not read. */
+/** A tactical change as far as it has been read: checked on played games, or not yet. */
 function editStatus(league: League, e: TacticEdit): string {
   const back = e.closed === 'reverted' ? ' You put it back.' : e.closed ? ' Replaced since.' : '';
   if (e.check) return `Checked on ${plural(e.check.games, 'game')} played with it${e.check.recheck ? ', a second look' : ''}: ${SINCE[editCall(e.check)!].toLowerCase()}.${back}`;
@@ -208,8 +208,7 @@ function editStatus(league: League, e: TacticEdit): string {
       : played < CHECK_END_MIN
         ? `Only ${plural(played, 'game')} played with it: too few to check.`
         : `The check on played games is still to come (after ${CHECK_AFTER}).`;
-  if (e.worth) return `Forecast when you made it: ${AHEAD[editCall(e.worth)!].toLowerCase()}. ${pending}${back}`;
-  return `Not read: too few games with it in place.${back}`;
+  return `${pending}${back}`;
 }
 
 /**
@@ -344,7 +343,7 @@ const EDIT_TITLE = 'Tactical changes';
 function editThread(league: League, season: number): DecisionThread | null {
   const edits = editsOf(league)
     .filter((e) => e.season === season)
-    .sort((a, b) => Number(!!b.check) - Number(!!a.check) || Number(!!b.worth) - Number(!!a.worth) || b.day - a.day)
+    .sort((a, b) => Number(!!b.check) - Number(!!a.check) || b.day - a.day)
     .slice(0, 3);
   if (!edits.length) return null;
   const read = (e: TacticEdit) => {

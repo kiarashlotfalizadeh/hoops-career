@@ -1,7 +1,9 @@
-// How the staff's readings are said (src/ui/DESIGN.md, "Words before the fact, numbers for facts").
-// A choice not yet played (a counter, a tactic, a fit) gets an opinion in words and never the figure
-// behind it: what it will do stays a little unknown. What already happened, and what the two teams
-// are, gets the exact figure: the points an edge was worth in a game (ptsFig), a chance to win (winPct).
+// How the staff's readings are said (src/ui/DESIGN.md, "Numbers for facts, reasons before a choice").
+// What already happened, and what the two teams are, gets the exact figure: the points an edge was
+// worth in a game (ptsFig), a chance to win (winPct), a check on played games. A choice of the coach's
+// not yet played (a counter, a playbook, a change to the rotation) gets the staff's reasons and no
+// reading at all. The words here are for what's left: the staff's own proposals (a change it tested
+// and offers, a deal: AHEAD) and what it makes of a change once its games are played (SINCE).
 import { WORTH_MIN } from '../ai/counterWorth';
 
 /** Which way a reading leans: a gain, a cost, or too small to call. */
@@ -13,27 +15,11 @@ export const leanOf = (pts: number, min = WORTH_MIN): Lean => (pts >= min ? 'gai
 /** A lean's colour on the page. */
 export const leanTone = (l: Lean): '' | 'good' | 'bad' => (l === 'gain' ? 'good' : l === 'cost' ? 'bad' : '');
 
-/** Before a choice is made: the staff's opinion of it. */
+/** A change the staff itself proposes, before it's made: its opinion of it (never on the coach's own options). */
 export const AHEAD: Record<Lean, string> = { gain: 'Should help', cost: 'Could hurt', even: 'No clear edge' };
 
 /** After a choice was made: what the staff makes of it so far. */
 export const SINCE: Record<Lean, string> = { gain: 'Seems to help', cost: 'Seems to hurt', even: 'Too close to call' };
-
-/** A playbook, a shape or a fit against the one in use. */
-export const FIT: Record<Lean, string> = { gain: 'Better fit', cost: 'Worse fit', even: 'Similar fit' };
-
-/** Inside even, a fit this far from the one in use (points a game) still leans a shade: the staff's read is a model, not a noisy measurement. */
-export const SHADE_MIN = 0.2;
-
-/**
- * A fit against the one in use in words, with a shade inside even ("Slightly better"), so a list of
- * playbooks the staff reads close still says which way each leans and no two read the same for no reason.
- */
-export function fitWord(pts: number): string {
-  const l = leanOf(pts);
-  if (l !== 'even') return FIT[l];
-  return pts >= SHADE_MIN ? 'Slightly better' : pts <= -SHADE_MIN ? 'Slightly worse' : 'Similar fit';
-}
 
 /** Points an edge was worth, as a fact: "+4.2 pts", "−1.3 pts" (a true minus), "0.0 pts". */
 export function ptsFig(pts: number, unit = true): string {

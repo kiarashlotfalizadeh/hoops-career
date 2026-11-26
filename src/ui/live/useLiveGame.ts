@@ -945,14 +945,14 @@ export function useLiveGame() {
     const own = staffNotes({ ...input, logs: lg.logs.slice(0, view.logs) })
       .filter((n) => !dismissed.includes(n.id))
       .map((n) =>
-        // Keep one-tap apply + value on proven positive calls (late fouls, feeding a hot hand, and
-        // counters backed by a clear positive callWorth reading); speculative unmeasured reads wait
-        // for the live staff measurement.
+        // Keep one-tap apply on proven positive calls (late fouls, feeding a hot hand, and counters
+        // backed by a clear positive callWorth reading); speculative unmeasured reads wait for the
+        // live staff measurement.
         n.kind === 'decision' &&
         n.actions[0]?.kind === 'tactics' &&
         !n.id.startsWith('late-') &&
         !n.id.startsWith('hot-') &&
-        !(typeof n.worth === 'string' && n.worth.startsWith('+'))
+        !n.backed
           ? { ...n, kind: 'read' as const, actions: [], worth: undefined, auto: false }
           : n,
       );

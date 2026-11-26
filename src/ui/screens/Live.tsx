@@ -640,12 +640,9 @@ export default function Live() {
                     const n = s.banner.id.startsWith('call-') ? notes.find((x) => x.id.startsWith('call-')) : notes.find((x) => x.id === s.banner!.id && x.actions.length > 0);
                     const a = n?.actions[0];
                     if (!n || !a) return s.banner;
-                    const worth = typeof n.worth === 'string' && n.worth.startsWith('+') ? n.worth : '';
-                    const line = worth && !s.banner.line?.includes(worth) ? (s.banner.line ? `${worth} · ${s.banner.line}` : `Est. ${worth}`) : s.banner.line;
                     const label = a.kind === 'timeout' ? 'Timeout' : a.label.length <= 14 ? a.label : 'Apply';
                     return {
                       ...s.banner,
-                      line,
                       action: {
                         label,
                         run: () => {

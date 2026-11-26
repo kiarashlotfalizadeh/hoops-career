@@ -323,6 +323,8 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
     // what a live game's moves were worth: damaged, it goes (the debrief then says nothing of it)
     if (g.movesWorth !== undefined && !(worthIntact(g.movesWorth) && num(g.movesWorth.win) && int(g.movesWorth.n))) delete g.movesWorth;
     if (g.edge !== undefined && !num(g.edge)) delete g.edge;
+    // the plan's measured worth: damaged, it goes (the report then says nothing of the plan whole)
+    if (g.planWorth !== undefined && !(obj(g.planWorth) && num(g.planWorth.pts) && num(g.planWorth.se) && Math.abs(g.planWorth.pts) <= 20)) delete g.planWorth;
     if (g.flowT !== undefined && !(nums(g.flowT) && g.flowT.length === g.flow?.length)) delete g.flowT;
     if (g.flowPoss !== undefined && !(Array.isArray(g.flowPoss) && g.flowPoss.length === g.flowPeriods?.length && g.flowPoss.every((s) => s === 0 || s === 1))) delete g.flowPoss;
   }
@@ -467,7 +469,7 @@ const editIntact = (e: unknown) =>
   str(e.what) &&
   Array.isArray(e.diff) &&
   e.diff.every((d) => Array.isArray(d) && str(d[0])) &&
-  nums(e.ahead) &&
+  (e.ahead === undefined || nums(e.ahead)) &&
   (e.worth === undefined || worthIntact(e.worth)) &&
   (e.check === undefined || worthIntact(e.check)) &&
   (e.closedDay === undefined || int(e.closedDay));

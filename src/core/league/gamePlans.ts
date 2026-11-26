@@ -1,7 +1,7 @@
 // Opponent-specific game plans for the user's team: changes to the base tactics (and planned
 // matchups) that apply only against one opponent, for the next game or a playoff series.
 
-import type { GamePlan, GamePlanItem, League, PlanScope, ScheduledGame, Tactics } from '../types';
+import type { GamePlan, GamePlanItem, GameResult, League, PlanScope, ScheduledGame, Tactics } from '../types';
 import { applyPatch, cloneTactics, withoutGameSpecific } from '../sim/tactics';
 import { hashString } from '../random';
 
@@ -23,9 +23,38 @@ export const planSig = (p: Pick<GamePlan, 'items' | 'matchups'>) =>
 
 /**
  * The whole plan's measured worth in points a game (GamePlan.worth), while the plan is still the one
- * that was measured; undefined for a plan not measured, or changed since.
+ * that was measured; undefined for a plan not measured, or changed since. Kept for the game's report
+ * (GameResult.planWorth): no screen shows it before the game.
  */
 export const planWorth = (p: GamePlan | null | undefined) => (p?.worth && p.worth.sig === planSig(p) ? p.worth : undefined);
+
+/** A counter the user has already played against an opponent: the game, and what the staff measured it worth in that night's plan. */
+export interface PlayedCounter {
+  gid: number;
+  day: number;
+  /** Whether the user won that game. */
+  won: boolean;
+  /** Points a game it measured worth in the plan it was played in, when the staff had measured it by tip-off. */
+  pts?: number;
+}
+
+/**
+ * The counters the user has played against `opp` this season, by their label, each with its latest
+ * game: what the matchup page may say of a counter before the next meeting. A fact about a game
+ * played, the only figure a counter shows ahead of a game (see core/ai/counterWorth.ts).
+ */
+export function playedCounters(league: League, opp: number): Map<string, PlayedCounter> {
+  const me = league.userTid;
+  const out = new Map<string, PlayedCounter>();
+  const mine = (g: GameResult) => g.season === league.season && ((g.home.tid === me && g.away.tid === opp) || (g.away.tid === me && g.home.tid === opp));
+  for (const g of league.games) {
+    if (!g.plan?.length || !mine(g)) continue;
+    const won = g.home.tid === me ? g.home.pts > g.away.pts : g.away.pts > g.home.pts;
+    // (games are kept oldest first: a later meeting replaces an earlier one)
+    for (const u of g.plan) out.set(u.label, { gid: g.gid, day: g.day, won, ...(u.pts !== undefined ? { pts: u.pts } : {}) });
+  }
+  return out;
+}
 
 /** A plan still has something in it. */
 const hasContent = planMade;

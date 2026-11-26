@@ -30,23 +30,21 @@ import type { League, PlayoffSeries } from '../types';
 import { counterWorth, measureChanges, PLAN_WORTH, shrinkWorth, worthCall, WORTH_MAX } from '../ai/counterWorth';
 import {
   CHECK_AFTER,
-  EDIT_AHEAD,
   RECHECK_AFTER,
   checksDue,
   editMorning,
   editPlan,
   evenText,
-  madeLine,
+  MADE_LINE,
   readEdit,
   recheckAhead,
   recordEdit,
   revertEdit,
   saveCheck,
-  saveMade,
   type GameReadings,
 } from '../ai/tacticEdits';
 import { refreshEditThread } from '../league/legacyReview';
-import { PLAN_MAX_PTS, planPoints, projectGame } from '../analysis/projection';
+import { projectGame } from '../analysis/projection';
 
 const opponentOf = (l: League) => {
   const g = userGameOnDay(l, l.day)!;
@@ -358,7 +356,8 @@ describe('game plans', () => {
       expect(worthCall({ pts: shrinkWorth(1, 0.45) })).toBe('gain');
       expect(worthCall({ pts: shrinkWorth(0.5, 0.45) })).toBe('even');
       expect(worthCall({ pts: shrinkWorth(-1.2, 0.45) })).toBe('cost');
-      // a counter in the plan counts in the projection at its measured worth, for the user's side, capped
+      // a plan never moves the projection, whatever the staff measured it worth: the chance to win is
+      // rosters, results and home court (and checked changes), so it can't be swept for the best plan
       const sim = new GameSim(buildSimInput(l, g.home, g.day, g.type, g.away, g), buildSimInput(l, g.away, g.day, g.type, g.home, g), {
         rng: new Rng(1),
         type: g.type,
@@ -366,25 +365,32 @@ describe('game plans', () => {
       });
       const was = projectGame(l, sim, false).margin;
       setPlanItem(l, opp, { id: 'help-high', label: 'Pack the paint', group: 'help', patch: { defense: { help: 78 } }, pts: 1.5 });
-      const sign = g.home === l.userTid ? 1 : -1;
-      expect(projectGame(l, sim, false).margin - was).toBeCloseTo(1.5 * sign, 6);
+      expect(projectGame(l, sim, false).margin).toBe(was);
       setPlanItem(l, opp, { id: 'crash', label: 'Crash', group: 'crash', patch: { offense: { crashBoards: 78 } }, pts: 9 });
-      expect(planPoints(l, g.home, g.away)).toBe(PLAN_MAX_PTS * sign);
-      // the plan measured whole (its counters and matchups together, against the same games without it)
-      // is what the projection counts, whatever its size, while the plan is still the one measured
+      expect(projectGame(l, sim, false).margin).toBe(was);
+      // the plan is measured whole (its counters and matchups together, against the same games without
+      // it) and each of its items by the games without that one: kept for the game's report
       {
-        const whole = (await counterWorth(l, opp, g, { games: 16 }))!.find((x) => x.id === PLAN_WORTH)!;
+        const read = (await counterWorth(l, opp, g, { games: 16 }))!;
+        const whole = read.find((x) => x.id === PLAN_WORTH)!;
         expect(Number.isFinite(whole.pts) && whole.se > 0).toBe(true);
+        expect(['help-high', 'crash'].every((id) => read.filter((x) => x.id === id).length === 1)).toBe(true);
+        // (a sim's morning budget leaves the plan's own readings out)
+        expect((await counterWorth(l, opp, g, { games: 16, plan: false }))!.some((x) => [PLAN_WORTH, 'help-high', 'crash'].includes(x.id))).toBe(false);
         l.gamePlans![opp].worth = { pts: 0.3, raw: 0.4, se: 0.3, sig: planSig(l.gamePlans![opp]) };
-        expect(planPoints(l, g.home, g.away)).toBeCloseTo(0.3 * sign, 6);
+        expect(planWorth(l.gamePlans![opp])!.pts).toBe(0.3);
+        expect(projectGame(l, sim, false).margin).toBe(was);
         setPlanMatchup(l, opp, teamPlayers(l, opp)[0].pid, teamPlayers(l, l.userTid)[0].pid);
         expect(planWorth(l.gamePlans![opp])).toBeUndefined();
-        expect(planPoints(l, g.home, g.away)).toBe(PLAN_MAX_PTS * sign);
         setPlanMatchup(l, opp, teamPlayers(l, opp)[0].pid, null);
-        expect(planPoints(l, g.home, g.away)).toBeCloseTo(0.3 * sign, 6);
-        // (no plan, nothing to measure)
+        expect(planWorth(l.gamePlans![opp])!.pts).toBe(0.3);
+        // (no plan, nothing of it to measure)
         const bare = { ...l, gamePlans: {} } as League;
         expect((await counterWorth(bare, opp, g, { games: 16 }))!.some((x) => x.id === PLAN_WORTH)).toBe(false);
+        // one counter alone is the whole plan: read once, as both
+        const one = { ...l, gamePlans: { [opp]: { ...l.gamePlans![opp], items: [l.gamePlans![opp].items[0]] } } } as League;
+        const single = (await counterWorth(one, opp, g, { games: 16 }))!;
+        expect(single.find((x) => x.id === 'help-high')).toEqual({ ...single.find((x) => x.id === PLAN_WORTH)!, id: 'help-high' });
         l.gamePlans![opp].worth = { pts: Number.NaN, raw: 0, se: 0.3, sig: 'x' };
       }
       // (a damaged number goes with the save check)
@@ -395,8 +401,8 @@ describe('game plans', () => {
       expect(m.gamePlans![opp].items[1].pts).toBe(9);
     }
     {
-      // the user's change is kept as the settings it moved and measured over his next games (each with
-      // and without it, pooled); about ten games on, measured again on the games played, with one staff
+      // the user's change is kept as the settings it moved, with nothing read of it as it's made; about
+      // ten games on it's measured on the games played (each with and without it, pooled), with one staff
       // note; putting it back moves only what it set
       const l = fresh();
       toGameDay(l);
@@ -409,7 +415,8 @@ describe('game plans', () => {
       const e = recordEdit(l, before, (pid) => `#${pid}`)!;
       expect(e.diff).toEqual([['tactics.defense.pnr', was, cov]]);
       expect(e.what).toMatch(/→/);
-      expect(e.ahead).toHaveLength(EDIT_AHEAD);
+      expect([e.ahead, e.worth]).toEqual([undefined, undefined]);
+      expect(MADE_LINE).toBe('Change noted. The staff checks it on played games after 10.');
       // a second change to the same setting the same day, before a game, is the same change
       const cov2 = ['drop', 'blitz', 'hedge'].find((x) => x !== was && x !== cov) as typeof cov;
       me.tactics.defense.pnr = cov2;
@@ -434,33 +441,20 @@ describe('game plans', () => {
           });
         return out;
       };
-      const made = editPlan(l, l.tacticEdits![0], 'made').plan!;
-      expect(made.changes.map((c) => c.id)).toEqual(['without']);
-      expect(made.games.reduce((a, g) => a + g.w, 0)).toBeCloseTo(1, 9);
-      const rm = await play(made, 8);
-      const r = readEdit(rm);
-      // the change against the old way: each game's "without" reading turned round, weighted by its share
-      expect(r.worth.raw).toBeCloseTo(-rm.reduce((a, x) => a + x.w * x.worth.find((c) => c.id === 'without')!.raw, 0), 1);
-      expect(Math.abs(r.worth.pts)).toBeLessThanOrEqual(Math.abs(r.worth.raw) + 0.05);
-      saveMade(l, e.id, r, made.count);
-      expect(madeLine(l.tacticEdits![0])).toMatch(
-        /^Forecast: (your change (should help|could hurt)|no clear swing from your change\. It's a style call)\. The staff checks it on real games after 10\.$/,
-      );
-      // a change to another setting that day is a change of its own: the first keeps its reading
+      // a change to another setting that day is a change of its own
       const mid = structuredClone({ tactics: me.tactics, rotation: me.rotation });
       me.tactics.offense.pace = me.tactics.offense.pace > 50 ? 20 : 90;
       expect(recordEdit(l, mid, (pid) => `#${pid}`)!.id).toBe(e.id + 1);
       expect(l.tacticEdits!.map((x) => x.diff.map(([p]) => p))).toEqual([['tactics.defense.pnr'], ['tactics.offense.pace']]);
-      expect(l.tacticEdits![0].worth).toEqual(expect.objectContaining({ pts: r.worth.pts }));
       // its check: once CHECK_AFTER of the user's games have been played since, on those games
       expect(checksDue(l)).toHaveLength(0);
       const mine = l.schedule.filter((g) => !g.played && (g.home === l.userTid || g.away === l.userTid)).slice(0, CHECK_AFTER);
       for (const g of mine) g.played = true;
-      // due whether or not its forecast ever finished (the pace change never had one)
       expect(checksDue(l).map((x) => x.id)).toEqual([e.id, e.id + 1]);
-      const check = editPlan(l, l.tacticEdits![0], 'check').plan!;
+      const check = editPlan(l, l.tacticEdits![0]).plan!;
       expect(check.count).toBe(CHECK_AFTER);
       expect(check.changes.map((c) => c.id)).toEqual(['without']);
+      expect(check.games.reduce((a, x) => a + x.w, 0)).toBeCloseTo(1, 9);
       const mail = l.inbox.length;
       // a season's review kept before the check came in is told again as it now stands
       const legacy = (l.legacy ??= { since: l.season, done: [], milestones: [], wins: [], honors: [], beaten: [], reviews: [] });
@@ -475,7 +469,11 @@ describe('game plans', () => {
       expect(note.body).toMatch(/with your change and without it/);
       expect(legacy.reviews[0].threads!.map((t) => t.title)).toEqual(['Tactical changes', 'Live coaching']);
       expect(legacy.reviews[0].threads![0].rows[0][1]).toMatch(/^Checked on 10 games played with it: /);
-      const w = readEdit(await play(check, 6)).worth;
+      const rc = await play(check, 6);
+      const w = readEdit(rc).worth;
+      // the change against the old way: each game's "without" reading turned round, weighted by its share
+      expect(w.raw).toBeCloseTo(-rc.reduce((a, x) => a + x.w * x.worth.find((c) => c.id === 'without')!.raw, 0), 1);
+      expect(Math.abs(w.pts)).toBeLessThanOrEqual(Math.abs(w.raw) + 0.05);
       // an even reading is inconclusive, never "no effect": a tight one rules out a big swing, a wide one can't tell
       expect(evenText({ raw: 0.1, se: 0.1 }, 12)).toMatch(/^Too close to call over 12 games: the replays put it between −0\.1 and \+0\.3 points a game, so no big swing/);
       expect(evenText({ raw: 0.1, se: 0.1 }, 12)).toMatch(/That's final: the staff won't look again\./);
@@ -492,7 +490,7 @@ describe('game plans', () => {
       expect(checksDue(l).map((x) => x.id)).not.toContain(e.id);
       for (const g of l.schedule.filter((x) => !x.played && (x.home === l.userTid || x.away === l.userTid)).slice(0, RECHECK_AFTER)) g.played = true;
       expect(checksDue(l).map((x) => x.id)).toContain(e.id);
-      const again = editPlan(l, first, 'check').plan!;
+      const again = editPlan(l, first).plan!;
       expect(again.count).toBe(CHECK_AFTER + RECHECK_AFTER);
       saveCheck(l, e.id, { ...w, pts: 0, raw: 0.2, se: 0.6 }, again.count);
       expect(first.check).toMatchObject({ games: CHECK_AFTER + RECHECK_AFTER, recheck: true });
@@ -554,8 +552,8 @@ describe('game plans', () => {
       const back = migrate(structuredClone(l));
       expect(back.editVisit).toBeUndefined();
       expect(back.tacticEdits!.map((e) => e.diff)).toEqual([[['tactics.offense.pace', pace, me.tactics.offense.pace]]]);
-      expect(back.tacticEdits![0].ahead).toHaveLength(EDIT_AHEAD);
-      expect(editPlan(back, back.tacticEdits![0], 'made').plan).toBeTruthy();
+      // (nothing played with it yet: nothing to check)
+      expect(editPlan(back, back.tacticEdits![0]).plan).toBeUndefined();
       me.tactics.offense.pace = pace;
       const still = migrate(structuredClone(l));
       expect([still.editVisit, still.tacticEdits ?? []]).toEqual([undefined, []]);

@@ -1,9 +1,9 @@
-// The style sheet's playbook pickers: the offensive playbooks or the defensive identities, better fits
-// first, each a row to pick it by with, in a column, the staff's read against the one in use in a word
-// (coachAI's fits, calibrated against the engine; the figures stay under the hood). The user's own staff
-// picks the best one (StaffFor); in season it keeps the one it runs until another reads clearly better,
-// and says so above the list. Its read opens one sheet: what it is, who it's for, what suits the roster
-// and what works against it, what would raise it, and Use.
+// The style sheet's playbook pickers: the offensive playbooks or the defensive identities in their own
+// fixed order, each a row to pick it by and a tap to its sheet: what it is, who it's for, what suits
+// the roster and what works against it, what it rewards, what would change from the one in use, and
+// Use. No "Better fit" on a row and no best-first order (see ./fit.ts): the staff's total stays with
+// the staff. When the staff runs the tactics it picks by that total (StaffFor); in season it keeps
+// the one it runs until another reads clearly better, and says so above the list.
 import { useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useLeague, useLeagueMemo } from '../../state/store';
@@ -14,15 +14,13 @@ import { QUALITY_META, gradeChanges, systemReport } from '../../core/analysis/sy
 import { CHANGE_UPS, baseDefenses, defPresetFit, defPresetTerms, fitRoster, offPresetFit, offPresetTerms, rosterProfile, staffPick } from '../../core/ai/coachAI';
 import { inSeason, rosterSorted } from '../../core/league/helpers';
 import { rosterNames } from '../stats';
-import { leanTone } from '../../core/analysis/staffWords';
 import { Sheet, Tag } from '../components/ui';
 import { PresetFit } from './PresetFit';
-import { bestFit, byFit, shownFit } from './fit';
 import '../screens/tactics.css';
 
 type Preset = OffPreset | DefPreset;
 
-/** The offensive or defensive presets, each with its fit; its fit or ⓘ explains it. */
+/** The offensive or defensive presets; a row's chevron opens what each asks of the roster. */
 export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
   const league = useLeague();
   const t = league.teams[league.userTid].tactics;
@@ -35,15 +33,16 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
   const name = useMemo(() => rosterNames(healthy, { initial: true }), [healthy]);
   const [open, setOpen] = useState<string | null>(null);
   const cur = kind === 'off' ? t.offPreset : t.defPreset;
-  const presets = useMemo(() => byFit<Preset>(kind === 'off' ? OFF_PRESETS : DEF_PRESETS, fits, cur), [kind, fits, cur]);
+  const presets: Preset[] = kind === 'off' ? OFF_PRESETS : DEF_PRESETS;
   // (a change-up, the 2-3 zone, is never the staff's base: CHANGE_UPS)
   const changeUp = (id: string) => kind === 'def' && CHANGE_UPS.has(id);
-  const best = bestFit<Preset>(
-    presets.filter((p) => !changeUp(p.id)),
-    fits,
-  );
   // in season the staff keeps the playbook it runs until another reads clearly better (STICK): said, not hidden
-  const held = !t.manual && inSeason(league) && cur !== undefined && best.id !== cur && staffPick(kind === 'def' ? baseDefenses(fits) : fits, cur, true) === cur;
+  // (only while the staff runs the tactics: it's the staff's own pick being explained, not a grade of the coach's)
+  const held = useMemo(() => {
+    if (t.manual || !inSeason(league) || cur === undefined) return false;
+    const base = kind === 'def' ? baseDefenses(fits) : fits;
+    return staffPick(base, cur, false) !== cur && staffPick(base, cur, true) === cur;
+  }, [t.manual, league, cur, kind, fits]);
   const curName = presets.find((p) => p.id === cur)?.name;
   const pick = (id: string) =>
     edit((l) => {
@@ -66,15 +65,9 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
     <>
       {held && <p className="small dim2 tx-held">In season the staff keeps {curName} until another fits clearly better.</p>}
       <div className="card flush list wide2 tx-presets">
-        <div className="list-divider list-h tx-fith" aria-hidden="true">
-          <span>Best fit first</span>
-          <span>Staff&apos;s read</span>
-        </div>
         {presets.map((p) => {
           const on = cur === p.id;
           const custom = isCustom(p);
-          const { lean, word } = shownFit(p.id, terms[p.id], fits, cur);
-          const tone = leanTone(lean);
           return (
             <div key={p.id} className={`tx-preset ${on ? 'on' : ''}`}>
               <button className="tx-preset-pick" aria-pressed={on} onClick={() => pick(p.id)}>
@@ -89,11 +82,11 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
               </button>
               <button
                 className="tx-fit"
-                aria-label={on ? `About ${p.name}, in use` : changeUp(p.id) ? `About ${p.name}, a change-up` : `About ${p.name}, the staff's read: ${word}`}
+                aria-label={on ? `About ${p.name}, in use` : changeUp(p.id) ? `About ${p.name}, a change-up` : `About ${p.name}`}
                 aria-haspopup="dialog"
                 onClick={() => setOpen(p.id)}
               >
-                {on ? <Tag>Yours</Tag> : changeUp(p.id) ? <Tag>Change-up</Tag> : <Tag tone={tone || undefined}>{word}</Tag>}
+                {on ? <Tag>Yours</Tag> : changeUp(p.id) ? <Tag>Change-up</Tag> : null}
                 <ChevronRight size={16} className="dim" aria-hidden="true" />
               </button>
             </div>
@@ -109,8 +102,8 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
               <span className="over">Best for</span>
               <span>{sheet.bestFor}</span>
             </div>
-            <PresetFit id={sheet.id} cur={cur} curName={curName ?? 'yours'} best={best.id === sheet.id} terms={terms[sheet.id]} fits={fits} pr={prof} name={name} />
-            {!sheetOn && <PresetDiff kind={kind} id={sheet.id} curName={curName ?? 'yours'} similar={shownFit(sheet.id, terms[sheet.id], fits, cur).lean === 'even'} />}
+            <PresetFit terms={terms[sheet.id]} pr={prof} name={name} />
+            {!sheetOn && <PresetDiff kind={kind} id={sheet.id} curName={curName ?? 'yours'} />}
             <button
               className="btn primary block"
               disabled={sheetOn && !sheetCustom}
@@ -132,12 +125,11 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
 const STYLE_MAX = 4;
 
 /**
- * What switching to playbook `id` changes from the one in use, beyond the fit: how the team would
- * play (the settings it moves, in the screens' words) and where it would be better or exposed (the
- * system report's grades with it against without). For two playbooks the staff reads about even this
- * is the difference: comparable results, a different team.
+ * What switching to playbook `id` changes from the one in use: how the team would play (the settings
+ * it moves, in the screens' words) and where it would be better or exposed (the system report's
+ * grades with it against without): the trade, not a verdict on it.
  */
-function PresetDiff({ kind, id, curName, similar }: { kind: 'off' | 'def'; id: string; curName: string; similar: boolean }) {
+function PresetDiff({ kind, id, curName }: { kind: 'off' | 'def'; id: string; curName: string }) {
   const league = useLeague();
   const diff = useLeagueMemo(() => {
     const me = league.userTid;
@@ -158,7 +150,6 @@ function PresetDiff({ kind, id, curName, similar }: { kind: 'off' | 'def'; id: s
   return (
     <div className="tx-terms">
       <div className="over">What changes from {curName}</div>
-      {similar && <p className="small dim2">The staff reads them about even: the difference is how you play and where you&apos;re exposed.</p>}
       {diff.style.length > 0 && (
         <p className="small">
           <b>How you&apos;d play:</b> {diff.style.join(' · ')}.

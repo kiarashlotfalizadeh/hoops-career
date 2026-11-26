@@ -8,7 +8,7 @@
 // playbook's mix, which is shares of one whole.
 import { useMemo, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react';
-import { useLeague, useLeagueMemo } from '../../../state/store';
+import { useLeague } from '../../../state/store';
 import type { ActionType, DefScheme, OffShape, Player, PnrCoverage, PressMode, Tactics } from '../../../core/types';
 import { ACTIONS, OFF_SHAPES } from '../../../core/types';
 import {
@@ -25,8 +25,6 @@ import {
   shapeOf,
 } from '../../../core/sim/tactics';
 import { composites } from '../../../core/ratings';
-import { fitRoster, shapeFits } from '../../../core/ai/coachAI';
-import { fitWord, leanOf, leanTone } from '../../../core/analysis/staffWords';
 import { ratingText } from '../../../core/analysis/guarding';
 import { shortName } from '../../../core/league/helpers';
 import type { Outlook } from '../../../core/analysis/outlook';
@@ -291,9 +289,7 @@ function WithBall({ t, players, out, stale }: ColProps) {
   const shape = shapeOf(t.offense);
   const five = useMemo(() => nextFive(order, players), [order, players]);
   const notes = useMemo(() => shapeNotes(five), [five]);
-  const fits = useLeagueMemo(() => shapeFits(fitRoster(players), t, order), [players, t, order]);
   const ov = offPresetOf(t).values;
-  const read = Math.round(fits[shape]) / 10;
   // the action drawn: the one last touched, else the one called most
   const [drawn, setDrawn] = useState<ActionType | null>(null);
   const most = ACTIONS.reduce((a, k) => (t.offense.actions[k] > t.offense.actions[a] ? k : a), ACTIONS[0]);
@@ -369,12 +365,6 @@ function WithBall({ t, players, out, stale }: ColProps) {
           <span>
             <b className="bad">−</b> {SHAPE_META[shape].bad}
           </span>
-          {shape !== 'fourOut' && (
-            <span className="dim2">
-              Staff&apos;s read: <b className={leanTone(leanOf(read))}>{fitWord(read).toLowerCase()}</b>
-              {fitWord(read) === 'Similar fit' ? ' to' : ' than'} 4-Out, 1-In
-            </span>
-          )}
         </div>
         <Measured stale={stale} fig={out ? `${out.secPerPoss.toFixed(1)} s a possession` : null}>
           <Lv label="Tempo" level="pace" value={t.offense.pace} mark={ov.pace} set={(tt, x) => void (tt.offense.pace = x)} />

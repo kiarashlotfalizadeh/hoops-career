@@ -27,7 +27,6 @@ import { TeamInstructions, type Phase } from '../tactics/instructions/TeamInstru
 import { Advanced } from '../tactics/Advanced';
 import { AnalysisTab } from '../tactics/AnalysisTab';
 import { settleEdits } from '../tactics/editWatch';
-import { EditMeasureBar } from '../tactics/EditLedger';
 import type { BoardSide } from '../tactics/Board';
 import './tactics.css';
 
@@ -81,7 +80,7 @@ function TacticsScreen() {
   const moved = changed ? gradeChanges(base, report) : [];
   // Team Instructions, open on a phase (over the board)
   const [phase, setPhase] = useState<Phase | null>(null);
-  // this visit's changes: what they did to the grades, Undo, and Done (the staff measures the change over the next games: editWatch)
+  // this visit's changes: what they did to the grades, Undo, and Done (the change is noted for its check on played games: editWatch)
   const changes = (
     <>
       <span className="grow tx-dock-l">
@@ -155,7 +154,6 @@ function TacticsScreen() {
           {changes}
         </div>
       )}
-      {!changed && !simming && <EditMeasureBar />}
     </>
   );
 }

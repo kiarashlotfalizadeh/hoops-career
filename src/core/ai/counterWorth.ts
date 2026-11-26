@@ -1,9 +1,17 @@
-// What the staff's counters are worth against one opponent, measured before they're proposed: the
-// user's next game against them played many times as it stands and with each counter in the plan,
-// game for game on the same seeds, in points a game. The rules that draft the counters (advisor.ts)
-// only say where to look: over the real league a staff plan picked by them alone came out worth about
-// nothing (+0.1 a 100 possessions over six opponents, most single counters below zero), so a counter
-// shows the number, and the staff proposes only the ones that measure as a gain.
+// What the staff's counters are worth against one opponent, measured: the user's next game against
+// them played many times as it stands and with each counter in the plan, game for game on the same
+// seeds, in points a game. The rules that draft the counters (advisor.ts) only say where to look: over
+// the real league a staff plan picked by them alone came out worth about nothing (+0.1 a 100
+// possessions over six opponents, most single counters below zero).
+//
+// Who sees a reading, and when (2026-11-26). Not the coach before the game: the matchup page lists the
+// counters with the staff's reasons and the scouting behind them, and what one does is found out on
+// the floor. Shown before tip-off ("Should help" on a row, the plan's points in the chance to win),
+// the readings were an answer key: the playtest's coach added what read green, watched the forecast,
+// and never opened the scouting. A reading is a fact once its game is played: the game report says
+// what each counter in the plan, and the plan whole, measured worth (GameResult.plan, planWorth), and
+// the matchup page remembers it for the next meeting. The staff's own picks (a series left to it, a
+// sim's silent counter: calls.ts) still go by the readings.
 //
 // Each game is scored by its shot value (every attempt as likely to fall, plus the free throws made)
 // rather than the points: a counter changes the looks, and whether this one look fell is noise it
@@ -14,8 +22,7 @@
 // real league each big decision's true worth spreads about ±1.2 a game from one opponent to the next),
 // so a reading is mostly the counter and partly noise. A counter that reads promising is still played
 // again on fresh seeds, and every reading is shrunk toward even by how much of it can be noise
-// (WORTH_SPREAD against its standard error) before it's shown, called a gain or counted in the
-// projection. (Before, the knobs were small, true worth spread ±0.4, and most readings were noise.) The seeds are the season's for this opponent, not the
+// (WORTH_SPREAD against its standard error) before it's kept or called a gain. (Before, the knobs were small, true worth spread ±0.4, and most readings were noise.) The seeds are the season's for this opponent, not the
 // day's: measured again with nothing changed, it reads the same; with something changed, the same
 // games show what the change did.
 // Pure: reads the league.
@@ -184,24 +191,46 @@ export async function measureChanges(league: League, opp: number, changes: Leagu
 export const PLAN_WORTH = '__plan';
 
 /**
- * The staff's counters against `opp` (the first WORTH_MAX the rules draft), each measured over paired
- * games of the user's next game against them (`game`, else a home game on today's date): its points
- * a game over the plan as it stands. With a plan in place, the plan itself is measured too, whole,
- * against the same games without it (PLAN_WORTH): what the forecast counts for it.
+ * The staff's counters against `opp` (the first WORTH_MAX the rules draft that aren't in the plan),
+ * each measured over paired games of the user's next game against them (`game`, else a home game on
+ * today's date): its points a game over the plan as it stands. With a plan in place (and `opts.plan`
+ * not false), what's in it is measured too: each of its items by the games without it (a counter
+ * already in the plan would read nothing against itself; a counter added also changes what the
+ * others are worth), and the plan whole against the same games with no plan (PLAN_WORTH). Those are
+ * what the game's report says the plan was worth.
  */
 export async function counterWorth(league: League, opp: number, game?: WorthGame, opts: WorthOpts = {}): Promise<CounterWorth[] | null> {
   const user = league.userTid;
   const g = game ?? { home: user, away: opp, day: league.day, type: 'regular' as const, seriesId: undefined, cup: undefined };
-  const cands: Candidate[] = counterCandidates(league, user, opp).slice(0, opts.counters ?? WORTH_MAX);
-  // each counter in tonight's plan, in place of the plan's item in its group (as Add puts it there)
   const plan = planFor(league, opp, g);
+  const inPlan = new Set((plan?.items ?? []).map((x) => x.id));
+  const cands: Candidate[] = counterCandidates(league, user, opp)
+    .filter((c) => !inPlan.has(c.id))
+    .slice(0, opts.counters ?? WORTH_MAX);
+  // each counter in tonight's plan, in place of the plan's item in its group (as Add puts it there)
   const changes = cands.map((c): LeagueChange => {
     const items = [...(plan?.items ?? []).filter((x) => itemGroup(x) !== itemGroup(c)), { id: c.id, label: c.label, group: c.group, patch: c.patch }];
     return { id: c.id, gamePlans: { [opp]: { ...plan, oppTid: opp, items, scope: plan?.scope ?? 'next' } } };
   });
-  // the plan taken out: what the games lose without it is what it's worth
-  if (plan && planMade(plan) && opts.plan !== false) changes.push({ id: PLAN_WORTH, gamePlans: { [opp]: { oppTid: opp, items: [], scope: plan.scope ?? 'next' } } });
+  // what's in the plan, taken out: what the games lose without it is what it's worth (each item, then the plan whole)
+  const removed = new Set<string>();
+  if (plan && planMade(plan) && opts.plan !== false) {
+    // (one item alone in a plan with no matchups is the whole plan: read once, as the plan)
+    const alone = plan.items.length === 1 && !Object.keys(plan.matchups ?? {}).length;
+    if (!alone)
+      for (const it of plan.items) {
+        removed.add(it.id);
+        changes.push({ id: it.id, gamePlans: { [opp]: { ...plan, oppTid: opp, items: plan.items.filter((x) => x.id !== it.id), scope: plan.scope ?? 'next' } } });
+      }
+    removed.add(PLAN_WORTH);
+    changes.push({ id: PLAN_WORTH, gamePlans: { [opp]: { oppTid: opp, items: [], scope: plan.scope ?? 'next' } } });
+  }
   const out = await measureChanges(league, opp, changes, g, opts);
-  // (measured as the plan's absence against the plan: its worth is the other way round; "0" not "−0")
-  return out && out.map((w) => (w.id === PLAN_WORTH ? { ...w, pts: -w.pts || 0, raw: -w.raw || 0 } : w));
+  if (!out) return null;
+  // (measured as its absence against the plan: its worth is the other way round; "0" not "−0")
+  const read = out.map((w) => (removed.has(w.id) ? { ...w, pts: -w.pts || 0, raw: -w.raw || 0 } : w));
+  // the one item that is the whole plan reads as the plan does
+  const whole = read.find((w) => w.id === PLAN_WORTH);
+  if (whole && plan && plan.items.length === 1 && !removed.has(plan.items[0].id)) read.push({ ...whole, id: plan.items[0].id });
+  return read;
 }

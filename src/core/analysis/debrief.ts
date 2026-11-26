@@ -28,9 +28,9 @@ export interface DebriefAdvice {
   group?: string;
   /**
    * The change measured as a gain where the bench calls it (callWorth.ts): the staff's opinion of it, in
-   * a few words. Only a change with one is offered for every game. For the plan against this opponent it's
-   * offered only as a staff counter measured a gain against them (see sameChange): else it's the
-   * staff's read, with nothing to tap.
+   * a few words, never a figure. Only a change with one is offered for every game. For the plan against
+   * this opponent it's offered as the staff counter that makes the same change (see sameChange), with
+   * no reading of it against them: a counter isn't graded before its game.
    */
   worth?: string;
 }
@@ -162,13 +162,13 @@ function firstLesson(league: League, res: GameResult, side: 0 | 1, decided: Fact
       outcome,
       next: fix.worth
         ? `Tap the staff's fix below, ${fix.label}, and apply it for every game. After ${CHECK_AFTER} games, Tactics → Season Analysis says whether it helped.`
-        : `The staff's reads are under Next time, ${fix.label} first. One it has measured as a gain has a button there; the rest are its read of one night, yours to try in Team → Tactics. After ${CHECK_AFTER} games, Season Analysis says whether a change helped.`,
+        : `The staff's reads are under Next time, ${fix.label} first. They are its read of one night, yours to try in your next plan or in Team → Tactics. After ${CHECK_AFTER} games, Season Analysis says whether a change helped.`,
     };
   if (!plan.length)
     return {
       plan: planText,
       outcome,
-      next: 'Pick one counter for your next opponent on its matchup page. The staff tells you after the game how it went.',
+      next: 'Read your next opponent on its matchup page and pick one counter. The report after the game says what it was worth.',
       to: '/preview',
       toLabel: 'Next opponent',
     };
@@ -330,7 +330,8 @@ function typesLabel(types: string[]): string {
 
 /**
  * The game plan's counters, each graded on its measured worth (what the staff's paired games made
- * of it when it went in: see counterWorth.ts), with tonight on what it was aimed at beside it: their
+ * of it in the plan: see counterWorth.ts; told here for the first time, never before the game), with
+ * tonight on what it was aimed at beside it: their
  * points a trip on those plays (ours, for a counter on offense) against their rate coming in (the
  * league's, early in the season), or their player's points against his average. A night reads as
  * going for or against it only when the gap is PLAN_Z standard errors (a trip's points spread about

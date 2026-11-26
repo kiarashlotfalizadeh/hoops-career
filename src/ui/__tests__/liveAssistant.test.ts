@@ -22,7 +22,7 @@ import { tacticsDiff } from '../live/alerts';
 import { foulLimit, liveAlerts, newEvents, recentLevers, staffCallsTimeout, troubleThresholds, type AlertInput } from '../live/alerts';
 import { finisher, gameDecided, matchups, staffNotes, staffRead, sumBy, type StaffInput } from '../live/staff';
 import { stopCalls, takeStop, type StopCall } from '../live/useLiveGame';
-import { callCosts, callKey, worthLine } from '../../core/analysis/callWorth';
+import { callBacked, callCosts, callKey, worthLine } from '../../core/analysis/callWorth';
 import { CALL_DRAFTS, CALL_DRAFTS_CRUNCH, benchFor, callBannerLine, callDrafts, callNote, callQuietLine, deadBall, nextStop, noStops, stopAfter } from '../live/calls';
 import { simDecided, skipChoices } from '../live/skip';
 import { counterCandidates } from '../../core/ai/advisor';
@@ -349,9 +349,11 @@ describe('the live assistant and the bench', () => {
       const a = liveAlerts(alertInput(g, view, { tactics: t })).find((x) => x.id === 'imp-hedge_roll:o')!;
       expect(a.action).toMatchObject({ kind: 'tactics', label: 'Go to Drop' });
       const note = staffNotes({ ...staffInput(g), view, tactics: t }).find((n) => n.id === 'imp-hedge_roll:o')!;
-      expect(note.worth).toBe('+2.2 pts');
-      expect(worthLine('run')).toBe('+0.5 pts');
-      expect(worthLine('lateFoul')).toBe('+1.4% win');
+      // a call the staff backs says so in words, never its figure, and keeps its one-tap button
+      expect([note.worth, note.backed]).toEqual(['The staff backs it', true]);
+      expect(worthLine('run')).toBe('The staff backs it');
+      expect(worthLine('lateFoul')).toBe('The staff backs it');
+      expect(['run', 'lateFoul'].every((k) => callBacked(k))).toBe(true);
       if (a.action?.kind === 'tactics') {
         a.action.apply(t);
         expect(t.defense.pnr).toBe('drop');
@@ -1013,7 +1015,7 @@ describe('broadcast graphics', () => {
       expect(benchFor(s, 0, onBig.pid, { q: 2, ahead: false })).toBeUndefined();
     }
 
-    // P0 #1: Staff calls show concrete measured values, and deliberate timeouts earn huddle composure without rewarding back-to-back spam
+    // Staff calls give their reason and no estimate (the figure is the report's, after the game), and deliberate timeouts earn huddle composure without rewarding back-to-back spam
     {
       const fakeCall = {
         state: 'call' as const,
@@ -1024,10 +1026,10 @@ describe('broadcast graphics', () => {
         steps: 40,
       };
       const cn = callNote(fakeCall);
-      expect(cn.worth).toBe('+1.4 pts');
-      expect(cn.text).toContain('+1.4 pts');
+      expect([cn.worth, cn.backed, cn.title]).toEqual(['The staff backs it', true, 'Points in the paint 44 to 26']);
+      expect(`${cn.text} ${callBannerLine(fakeCall)}`).not.toMatch(/\d\.\d|%|Est\./);
       expect(cn.actions[0].label).toBe('Pack the paint');
-      expect(callBannerLine(fakeCall)).toContain('+1.4 pts');
+      expect(callBannerLine(fakeCall)).toBe('Points in the paint 44 to 26');
       const g = game(14);
       play(g, 30);
       const s = g.sim;

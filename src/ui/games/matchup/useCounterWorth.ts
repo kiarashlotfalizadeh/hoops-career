@@ -1,21 +1,24 @@
 // What the staff's counters against one opponent are worth, measured in the sim worker (see
 // core/ai/counterWorth.ts) for the user's next game against them: a few seconds of games, once for
 // each state of the plan, the tactics and who's fit to play on either side (a counter added changes
-// what the others are worth), not again each day. While a change is measured again, the reading from
-// before it is shown (`stale`): a counter added used to send every opinion back to "Staff still
-// looking…". The player gets the staff's opinion (worthText), never the figure.
+// what the others are worth), not again each day.
+//
+// Under the hood, all of it. The coach never sees a reading before its game: the matchup page lists
+// the counters with the staff's reasons, and what one does is found out on the floor (shown ahead,
+// the readings were an answer key: see counterWorth.ts). What the measuring is for: the readings go
+// on the plan (each item's worth in it, and the plan whole), the game keeps them (GameResult.plan,
+// planWorth), and its report says what the plan was worth. The staff's own picks read them too.
 //
 // Each reading is kept with the league (League.counterReads, one per opponent), so a reopened app has
 // it at once, and the staff reads ahead: whenever the app is idle (no sim, no live game, nothing else
 // measuring) the user's next two games are measured without the page open, so a sim that stops before
 // a game leaves its counters read, or being read from where the last reading stood. Held in memory
 // only, the reading restarted on every reopen and took 8 s or more on a busy phone: the playtest's FM
-// lifer saw "Staff still looking…" on about 35 game plans.
+// lifer saw "Staff still looking…" on about 35 game plans (while the readings were shown).
 import { useEffect, useState } from 'react';
 import type { CounterRead, GamePlanItem, League } from '../../../core/types';
 import type { Candidate } from '../../../core/ai/advisor';
-import { PLAN_WORTH, worthCall, type CounterWorth } from '../../../core/ai/counterWorth';
-import { AHEAD, leanTone } from '../../../core/analysis/staffWords';
+import { PLAN_WORTH, type CounterWorth } from '../../../core/ai/counterWorth';
 import { effectiveTactics, planFor, planSig } from '../../../core/league/gamePlans';
 import { touch } from '../../../state/actions';
 import { hashString } from '../../../core/random';
@@ -136,12 +139,7 @@ function start(league: League, opp: number, key: string) {
         lastRead.set(meetingOf(key), worth);
         while (lastRead.size > KEEP) lastRead.delete(lastRead.keys().next().value!);
         retries.delete(key);
-        keepPlanWorth(
-          league.id,
-          opp,
-          sig,
-          out.find((w) => w.id === PLAN_WORTH),
-        );
+        keepPlanWorth(league.id, opp, sig, out);
         while (measured.size > KEEP) measured.delete(measured.keys().next().value!);
       }
       tell();
@@ -225,25 +223,32 @@ export function watchCounters() {
 }
 
 /**
- * The whole plan's reading goes on the plan (GamePlan.worth), where the forecast reads it: if the
- * league is still the open one and the plan still the one measured. Saved with the next change.
+ * The plan's readings go on the plan, where the game picks them up for its report: the plan whole
+ * (GamePlan.worth) and each item's worth in it (GamePlanItem.pts, the games with it against the games
+ * without). Only if the league is still the open one and the plan still the one measured. Saved with
+ * the next change.
  */
-function keepPlanWorth(leagueId: string, opp: number, sig: string | null, w: CounterWorth | undefined) {
+function keepPlanWorth(leagueId: string, opp: number, sig: string | null, out: CounterWorth[]) {
+  const w = out.find((x) => x.id === PLAN_WORTH);
   if (!w || !sig) return;
   const open = useStore.getState().league;
   if (open?.id !== leagueId) return;
   const cur = open.gamePlans?.[opp];
   if (!cur || planSig(cur) !== sig) return;
-  if (cur.worth?.sig === sig && cur.worth.pts === w.pts && cur.worth.se === w.se) return;
+  const by = new Map(out.map((x) => [x.id, x.pts]));
+  const same = cur.worth?.sig === sig && cur.worth.pts === w.pts && cur.worth.se === w.se && cur.items.every((it) => !by.has(it.id) || it.pts === by.get(it.id));
+  if (same) return;
   touch((l) => {
     const p = l.gamePlans?.[opp];
-    if (p && planSig(p) === sig) p.worth = { pts: w.pts, raw: w.raw, se: w.se, sig };
+    if (!p || planSig(p) !== sig) return;
+    p.worth = { pts: w.pts, raw: w.raw, se: w.se, sig };
+    for (const it of p.items) if (by.has(it.id)) it.pts = by.get(it.id)!;
   });
 }
 
 /**
- * The staff's counters against `opp`, measured: their worth by counter id once done, and the
- * progress until then. Only in season (the preseason too: the opener's plan is the first week's
+ * The staff's counters against `opp`, measured (for the plan's records and the report, never for a
+ * screen to show ahead of the game): their worth by counter id once done, and the progress until then. Only in season (the preseason too: the opener's plan is the first week's
  * guide), with a game against them still to play; never while a sim runs (it waits for it).
  */
 export function useCounterWorth(league: League, opp: number): WorthState | null {
@@ -291,25 +296,11 @@ export function useCounterWorth(league: League, opp: number): WorthState | null 
   return last ? { worth: last, progress: cur?.progress ?? 0, stale: true, ...older } : (cur ?? { progress: 0 });
 }
 
-/** "Should help", "Could hurt", "No clear edge": a measured counter as the staff's opinion, with its tone. `short`: the same inside a sentence. */
-export function worthText(w: CounterWorth): { text: string; tone: 'good' | 'bad' | undefined; short: string } {
-  const call = worthCall(w);
-  return { text: AHEAD[call], tone: leanTone(call) || undefined, short: AHEAD[call].toLowerCase() };
-}
-
-/** Counters by what they measured: gains first (the biggest first), then the ones too close to call, then the costs, the ones the staff didn't measure last. */
-export function byWorth<T extends { id: string }>(list: T[], worth: Map<string, CounterWorth> | undefined): T[] {
-  if (!worth) return list;
-  const rank = (c: T) => {
-    const w = worth.get(c.id);
-    if (!w) return 3;
-    const call = worthCall(w);
-    return call === 'gain' ? 0 : call === 'even' ? 1 : 2;
-  };
-  return [...list].sort((a, b) => rank(a) - rank(b) || (worth.get(b.id)?.pts ?? 0) - (worth.get(a.id)?.pts ?? 0));
-}
-
-/** A staff counter as the plan's item, as its Add puts it in: with its measured worth (the win chance counts it) when that isn't even. */
+/**
+ * A staff counter as the plan's item, as its Add puts it in. Its reading as it goes in is kept with
+ * it when the staff has one (for the game's report; the reading of the plan as it then stands
+ * replaces it once that's measured: keepPlanWorth).
+ */
 export function counterItem(c: Candidate, w: CounterWorth | undefined): GamePlanItem {
   return {
     id: c.id,
@@ -317,6 +308,6 @@ export function counterItem(c: Candidate, w: CounterWorth | undefined): GamePlan
     group: c.group,
     patch: c.patch,
     ...(c.evidence ? { evidence: c.evidence } : {}),
-    ...(w && worthCall(w) !== 'even' ? { pts: w.pts } : {}),
+    ...(w ? { pts: w.pts } : {}),
   };
 }

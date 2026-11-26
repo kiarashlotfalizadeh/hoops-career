@@ -274,13 +274,13 @@ export const GLOSSARY: GlossaryEntry[] = [
     id: 'measured',
     term: 'Measured',
     group: 'The game',
-    text: 'The staff plays the same games both ways before they back a change. You get their opinion, not a figure.',
+    text: 'The staff plays the same games both ways to see what a change is worth. For a change of its own it gives its opinion. For yours it gives the figure once your games with it are played, never before.',
   },
   {
     id: 'counter',
     term: 'Counter',
     group: 'The game',
-    text: 'A change the staff would make for one opponent, tested before you see it. Add it to the plan for a game, a series or the season. It never changes your playbook.',
+    text: "A change aimed at one opponent, with the staff's reason for looking at it. Which one is right is your call: the game report says what your plan was worth. Add it to the plan for a game or a series. It never changes your playbook.",
   },
   {
     id: 'luck',

@@ -8,7 +8,7 @@
 // (ui/live/calls.ts). Taking every call as it fired, over 1,200 paired games with the
 // switches on: −0.20 ± 0.24 points a game before (1.9 calls a game, the most frequent, "We're beating
 // X: attack him", at −0.2 each, the coverage switches to Hedge at −1.3 to −1.6), +0.10 ± 0.12 after
-// (0.2 calls a game, +1.5 each). A kept call shows the staff's opinion in words; one made too rarely to
+// (0.2 calls a game, +1.5 each). A kept call shows the staff's opinion in words, never its figure; one made too rarely to
 // have measured shows nothing. Pure.
 
 /** A call's measured worth when taken where it fires: points of the rest of the game's margin and of win chance, each with its standard error, over `n` calls. */
@@ -110,15 +110,28 @@ export function callCosts(key: string): boolean {
   return v < 0 && -v >= 2 * se;
 }
 
+/** Whether a kept call measured as a clear gain where it fires: its reading two standard errors or more above even. */
+export function callBacked(key: string): boolean {
+  const m = callWorth(key);
+  if (!m) return false;
+  const [v, se] = m.by === 'win' ? [m.win, m.winSe] : [m.pts, m.ptsSe];
+  return v >= 2 * se;
+}
+
+/** The staff's words for a call it backs, and for one inside its noise. */
+export const CALL_BACKED = 'The staff backs it';
+export const CALL_OPEN = 'Could go either way';
+
 /**
- * A kept call's estimated value where it fires (e.g. "+2.2 pts", "+1.4% win") when clear of noise,
- * or "Could go either way" inside two standard errors of even; nothing with no measurement behind it.
+ * A kept call as the staff's opinion where it fires, in words: backed when its reading is clear of
+ * its noise, "Could go either way" inside two standard errors of even; nothing with no measurement
+ * behind it. Never the figure: a call not yet made is a choice not yet played (src/ui/DESIGN.md), and
+ * what the night's moves were worth is the report's to say.
  */
 export function worthLine(key: string): string | undefined {
   const m = callWorth(key);
   if (!m) return undefined;
-  const [v, se] = m.by === 'win' ? [m.win * 100, m.winSe * 100] : [m.pts, m.ptsSe];
-  if (Math.abs(v) < 2 * se) return 'Could go either way';
-  const sign = v > 0 ? '+' : '−';
-  return m.by === 'win' ? `${sign}${Math.abs(v).toFixed(1)}% win` : `${sign}${Math.abs(v).toFixed(1)} pts`;
+  const [v, se] = m.by === 'win' ? [m.win, m.winSe] : [m.pts, m.ptsSe];
+  if (Math.abs(v) < 2 * se) return CALL_OPEN;
+  return v > 0 ? CALL_BACKED : 'The staff is wary of it';
 }

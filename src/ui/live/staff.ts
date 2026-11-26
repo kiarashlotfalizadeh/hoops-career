@@ -16,7 +16,7 @@ import { FINISH_LABEL, type FinishType, type PossLog } from '../../core/sim/log'
 import { zScore } from '../../core/analysis/playTypes';
 import { aRun, callHold, liveAlerts, type AlertInput, type LiveAlert } from './alerts';
 import { hotHand } from './drawn';
-import { callCosts, callKey, worthLine } from '../../core/analysis/callWorth';
+import { callBacked, callCosts, callKey, worthLine } from '../../core/analysis/callWorth';
 
 export type StaffAction = { label: string } & (
   | { kind: 'tactics'; apply: (t: Tactics) => void }
@@ -42,8 +42,10 @@ export interface StaffNote {
   rank: number;
   /** With the bench handed to the staff, it makes its pick itself (a tactics change; subs and timeouts stay yours). */
   auto?: boolean;
-  /** The staff's opinion of a decision where it fires, in a few words (worthLine). */
+  /** The staff's opinion of a decision where it fires, in a few words (worthLine): never a figure. */
   worth?: ReactNode;
+  /** The staff has measured it a clear gain (where calls like it fire, or from this very spot): it keeps its one-tap button. */
+  backed?: boolean;
 }
 
 /** What the staff reads besides the alerts' input: the possessions the court has drawn. */
@@ -329,7 +331,11 @@ export function staffNotes(a: StaffInput): StaffNote[] {
       // no call that measured as a cost where it fires (attacking the defender we're beating, leaning on
       // our own play types: callWorth.ts), and each one kept says what it's been worth
       .filter((n) => n.kind !== 'decision' || !callCosts(callKey(n.id, n.actions[0]?.label, manual)))
-      .map((n) => (n.kind === 'decision' && n.actions.length && n.actions[0].kind !== 'lineup' ? { ...n, worth: worthLine(callKey(n.id, n.actions[0].label, manual)) } : n))
+      .map((n) => {
+        if (n.kind !== 'decision' || !n.actions.length || n.actions[0].kind === 'lineup') return n;
+        const key = callKey(n.id, n.actions[0].label, manual);
+        return { ...n, worth: worthLine(key), ...(callBacked(key) ? { backed: true } : {}) };
+      })
       .filter((n) => !decided || !n.actions.some((x) => x.kind === 'tactics'))
       // nothing held back (callHold): but fouling late is the last seconds' own call
       .filter((n) => {
