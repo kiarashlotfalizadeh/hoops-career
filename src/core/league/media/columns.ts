@@ -140,7 +140,7 @@ function signingColumn(league: League, m: MediaState, txns: Txn[]) {
     const yrs = t.years ?? 1;
     const age = playerAge(p, league.season);
     const ratio = t.amount! / Math.max(1, market);
-    const deal = `${yrs} year${yrs === 1 ? '' : 's'}, ${money(txnTotal(t.amount!, yrs))}`;
+    const deal = `${yrs} year${yrs === 1 ? '' : 's'}, ${money(txnTotal(t))}`;
     const verdict =
       ratio >= 1.25
         ? v.pick([

@@ -282,7 +282,7 @@ function dealWords(pts: number): string {
   return lean === 'even' ? 'No clear edge from the deal.' : `The deal ${AHEAD[lean].toLowerCase()}.`;
 }
 
-/** The staff's deadline call, worked out once when its card opens (League.deadlineCall). */
+/** The staff's deadline call, worked out when its card opens, and again on a morning its deal has lapsed (League.deadlineCall). */
 export interface DeadlineCall {
   season: number;
   mode: 'buy' | 'sell' | 'hold';
@@ -957,6 +957,9 @@ export function assessDeadlineDeal(league: League, offer: TradeOffer, mode: 'buy
  * costing owner goals), sell with them unlikely or for a rebuilder (the best fair package a
  * contender sends for one of the veterans, 28 or older), hold otherwise or when nothing works.
  */
+/** A deal the other team takes as it stands today (the rules, and its judge): the only kind a staff card offers. */
+const dealWorks = (league: League, o: TradeOffer | null | undefined): o is TradeOffer => !!o && !validateTrade(league, o).length && teamAccepts(league, o, o.b.tid);
+
 export function planDeadlineCall(league: League): DeadlineCall {
   const me = league.userTid;
   const odds = oddsNow(league)?.now ?? 500;
@@ -964,7 +967,7 @@ export function planDeadlineCall(league: League): DeadlineCall {
   const mode: DeadlineCall['mode'] = !rebuild && odds >= 500 ? 'buy' : rebuild || odds < 150 ? 'sell' : 'hold';
   const call: DeadlineCall = { season: league.season, mode, odds };
   const roster = standardRoster(league, me);
-  const works = (o: TradeOffer | null) => !!o && !validateTrade(league, o).length && teamAccepts(league, o, o.b.tid);
+  const works = (o: TradeOffer | null) => dealWorks(league, o);
   if (mode === 'buy') {
     const youth = !!currentGoals(league)?.goals.some((g) => g.kind === 'youth');
     const keep = [
@@ -1045,8 +1048,19 @@ export function callsDaily(league: League) {
   skidDaily(league);
   ageInjuries(league);
   firstSlump(league);
-  if (!deadlineOpen(league) || league.deadlineCall?.season === league.season) return;
+  if (!deadlineOpen(league)) return;
+  const dc = league.deadlineCall;
+  // the deal found the day the card opened, checked again each morning: values move over the deadline's
+  // days (an injury, the standings, its fever), and a staff card offers only a deal its team still
+  // takes. One that lapsed ("Atlanta has changed its mind" on confirm, the playtest) is worked out again.
+  if (dc?.season === league.season && (!dc.offer || dealWorks(league, dc.offer))) return;
   league.deadlineCall = planDeadlineCall(league);
+  // (the old deal's measured worth goes with it: the new one is measured as its card shows)
+  if (league.callWorth?.[deadlineId(league)]) {
+    const rest = { ...league.callWorth };
+    delete rest[deadlineId(league)];
+    league.callWorth = rest;
+  }
 }
 
 /**
@@ -1582,7 +1596,10 @@ export function staffCalls(league: League): CallCard[] {
     const id = deadlineId(league);
     const call = league.deadlineCall?.season === league.season ? league.deadlineCall : null;
     const left = league.tradeDeadlineDay - league.day;
-    const offer = call?.offer;
+    // (only while its team still takes it: a move of his since the morning can undo it, and the next
+    // morning works out another)
+    const offer = dealWorks(league, call?.offer) ? call!.offer : undefined;
+    const lapsed = !!call?.offer && !offer;
     const other = offer ? league.teams[offer.b.tid] : null;
     // (today's odds, as Today and the standings show them: not the reading the call was worked out from)
     const now = call ? leagueForecast(league)?.teams[me] : undefined;
@@ -1605,6 +1622,8 @@ export function staffCalls(league: League): CallCard[] {
             ? `sell${vet ? ` ${playerName(vet)}` : ''}. No contender the staff asked bites yet. The trading block shows who would.`
             : 'stand pat. No contender the staff asked bites on what you have to sell.'
           : 'stand pat. The team is where it is.';
+    // (the deal it had found is off since: said first, so the card doesn't just change under him)
+    const gone = lapsed ? `${teamCity(league, call!.offer!.b.tid)} no longer takes the deal the staff found. ` : '';
     // the deal: its worth measured on his next game against someone else (once, as its card opens)
     // and what the forecast reads it adds to the odds, both said in words; what the players coming
     // cost, and what it does to the owner's money and youth goals
@@ -1663,7 +1682,7 @@ export function staffCalls(league: League): CallCard[] {
       line:
         deal && other
           ? `${odds}The staff's call: ${standPrimary ? 'stand pat' : call!.mode === 'buy' ? `buy ${playerName(league.players[offer!.b.pids[0]])}` : `sell to ${teamCity(league, other)}`}. ${measured}`.trim()
-          : `${odds}The staff's call: ${none}`,
+          : `${odds}${gone}The staff's call: ${none}`,
       ...(detail ? { detail } : {}),
       tone: badDeal ? 'bad' : 'warn',
       to: '/office/trade',
@@ -1743,8 +1762,11 @@ export function resolveCall(league: League, a: CallAction): { ok: boolean; text:
       const t = league.teams[a.offer.b.tid];
       const errors = validateTrade(league, a.offer);
       if (errors.length) r = { ok: false, text: errors[0] };
-      else if (!teamAccepts(league, a.offer, t.tid)) r = { ok: false, text: `${teamCity(league, t)} has changed its mind.` };
-      else {
+      else if (!teamAccepts(league, a.offer, t.tid)) {
+        r = { ok: false, text: `${teamCity(league, t)} has changed its mind.` };
+        // (the card is worked out again at once: it never offers the same dead deal twice)
+        if (a.id === deadlineId(league) && deadlineOpen(league)) league.deadlineCall = planDeadlineCall(league);
+      } else {
         executeTrade(league, a.offer);
         // the deal can make open offers impossible (the same player, a full roster)
         cleanProposals(league);

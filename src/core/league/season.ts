@@ -696,6 +696,13 @@ export function newSeason(league: League): boolean {
   const uRot = league.teams[league.userTid]?.rotation;
   const prevManual = !!uRot?.manual;
   const prevPlaying = prevManual ? uRot.order.filter((pid) => (uRot.minutes[pid] ?? 0) > 0) : [];
+  // the players he kept out on purpose (or who were hurt) aren't newcomers, though they have no line for
+  // the season; and the stars he chose to keep under the minutes warning (shortOk is cleared below)
+  const prevOut = new Set(prevManual ? [...(uRot.benched ?? []), ...(uRot.held ?? [])] : []);
+  const prevShortOk = new Set(prevManual ? (uRot.shortOk ?? []) : []);
+  // (with the team last season: a line for it, or kept out. A newcomer is neither, nor placed in his rotation)
+  const wasHere = (p: Player) => prevOut.has(p.pid) || p.stats.some((s) => s.season === prevSeason && s.tid === league.userTid && !s.playoffs && s.gp > 0);
+  delete league.rotationReset;
   for (const t of league.teams) {
     if (t.rotation.shortOk) delete t.rotation.shortOk;
     t.rotation.order = t.rotation.order.filter((pid) => league.players[pid]?.tid === t.tid);
@@ -711,30 +718,35 @@ export function newSeason(league: League): boolean {
   for (const t of league.teams) ensureRotation(league, t.tid);
   // If a manual rotation suffered significant offseason turnover or left a top-two healthy star
   // under 28 planned minutes without an explicit cap or pin, refresh minute targets for the new roster.
+  // The coach's deliberate choices stand: a star at 0 minutes (lowStarMinutes leaves him out), one he
+  // kept short when warned (shortOk), and players he had kept out don't count as turnover. Any reset is
+  // said on Today (League.rotationReset), with his own rotation a tap away.
   if (prevManual && league.teams[league.userTid]?.rotation.manual) {
     const userTeam = league.teams[league.userTid];
     const rot = userTeam.rotation;
     const roster = teamPlayers(league, league.userTid);
     const curPids = new Set(roster.map((p) => p.pid));
-    const prevSet = new Set(prevPlaying);
     const top8 = roster
       .filter((p) => !p.injury)
       .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
       .slice(0, 8);
     const startersLeft = prevPlaying.slice(0, 5).filter((pid) => !curPids.has(pid)).length;
-    const newInTop8 = prevPlaying.length >= 5 ? top8.filter((p) => !prevSet.has(p.pid)).length : 0;
+    const prevSet = new Set(prevPlaying);
+    const newInTop8 = prevPlaying.length >= 5 ? top8.filter((p) => !prevSet.has(p.pid) && !wasHere(p)).length : 0;
     const low = lowStarMinutes(league, league.userTid, { includeDismissed: true });
-    const unpinnedLow = low.filter((x) => !rot.set?.includes(x.player.pid));
+    const unpinnedLow = low.filter((x) => !rot.set?.includes(x.player.pid) && !prevShortOk.has(x.player.pid));
     if (startersLeft >= 2 || newInTop8 >= 3 || unpinnedLow.length > 0) {
+      const was = structuredClone(rot);
       userTeam.rotation = autoRotation(roster, { ...rot, manual: false });
       const reason =
         unpinnedLow.length > 0
           ? `Last season's minute targets left ${unpinnedLow.map((x) => `${playerName(x.player)} (${x.planned} min)`).join(' and ')} short on minutes.`
           : 'Your roster turned over significantly over the summer.';
+      league.rotationReset = { season: league.season, reason, was };
       addInbox(league, {
         from: 'Assistant Coach',
         subject: 'Rotation refreshed for the new roster',
-        body: `${reason} We reset your minute targets to fit this season's roster so your stars get full minutes. Adjust them anytime on Rotation.`,
+        body: `${reason} We reset your minute targets to fit this season's roster so your stars get full minutes. Put yours back from Today, or adjust them anytime on Rotation.`,
         tone: 'neutral',
         link: '/team/rotation',
       });

@@ -25,6 +25,7 @@ import { gradeTrade } from './grades';
 import { marketSalary } from '../contracts';
 import { playerAge } from '../../playerGen';
 import { money } from '../../format';
+import { txnTotal } from '../transactions';
 import { seriesLabel } from '../playoffs';
 import { titleLine } from './history';
 
@@ -558,7 +559,7 @@ function signingTakes(league: League, who: (list: Pundit[]) => Pundit): Take[] {
     const by = who(from !== null ? ['rex', 'dee', 'marv', 'lila'] : ['rex', 'dee', 'lila']);
     const texts: Texts = {
       rex: [
-        ratio >= 1.05 ? `${N(tid)} just set ${money(t.amount * yrs)} on fire` : `What does ${L} know that we don't?`,
+        ratio >= 1.05 ? `${N(tid)} just set ${money(txnTotal(t))} on fire` : `What does ${L} know that we don't?`,
         `${name(p)} to ${N(tid)}, ${deal}. ${PUNDITS.rex.name} has questions.`,
         ratio >= 1.05
           ? [`${deal}. For ${L}. Say it out loud and listen to yourself.`, `Somebody in that front office wanted to win the press conference. Congratulations. You won July.`]

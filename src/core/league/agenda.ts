@@ -12,13 +12,13 @@ import { needsDeploying } from './rosterNeed';
 import { QUALITY_META, type QualityId } from '../analysis/system';
 import type { League, Player } from '../types';
 import { CAP } from '../constants';
-import { addInbox, fmtDate, freeAgents, playerName, standardRoster, teamPlayers } from './helpers';
+import { addInbox, curTeamSeason, fmtDate, freeAgents, playerName, standardRoster, teamPlayers } from './helpers';
 import { FIRED_REASON, askingContract, releaseDeadMoney, releasePlayer, releasedBy, valueScore } from './contracts';
 import { marqueeFA, offerBlockedReason, signingClosedReason, userOffer, walkRisks } from './freeAgency';
 import { acceptProposal, declineProposal, offerRating, offerSubject, openProposals, proposalError, proposalThird, stopsForOffer } from './proposals';
 import { autoDraftUserPick, continueDraft } from './season';
 import { nextPick } from './draft';
-import { giveShare, giveStarMinutes, lowStarMinutes, noMinutes, userGameOnDay } from './games';
+import { ensureRotation, giveShare, giveStarMinutes, lowStarMinutes, noMinutes, userGameOnDay } from './games';
 import { money, plural } from '../format';
 import { planByUser } from './gamePlans';
 import { ultimatumVerdict } from './jobSecurity';
@@ -60,6 +60,8 @@ export type AgendaAction =
   | { kind: 'hideGuide' }
   /** A player's trade request, answered (shopped, given his minutes, or kept as he is): it leaves Needs you (see pulse.ts). */
   | { kind: 'request'; pid: number }
+  /** The summer's reset of his rotation (League.rotationReset), answered: the staff's minutes kept, or his own put back. */
+  | { kind: 'rotationReset'; restore: boolean }
   /** A staff call's choice (see calls.ts). */
   | { kind: 'call'; call: CallAction };
 
@@ -417,10 +419,7 @@ export function agenda(league: League): AgendaItem[] {
         id: `lowMinutes:${lowStars.map((x) => `${x.player.pid}:${x.planned}`).join(',')}`,
         kind: 'minutes',
         required: false,
-        title:
-          lowStars.length === 1
-            ? `${playerName(lowStars[0].player)} is only set for ${lowStars[0].planned} minutes`
-            : 'Top stars short on minutes',
+        title: lowStars.length === 1 ? `${playerName(lowStars[0].player)} is only set for ${lowStars[0].planned} minutes` : 'Top stars short on minutes',
         line: `${lowStars.map((x) => `${playerName(x.player)} (${x.player.ovr}): ${x.planned} min`).join(' · ')}. Your top two players should play around 32–36 minutes.`,
         tone: 'warn',
         to: '/team/rotation',
@@ -429,6 +428,23 @@ export function agenda(league: League): AgendaItem[] {
         pids: lowStars.map((x) => x.player.pid),
       });
   }
+
+  // the summer's reset of his manual rotation: said here, not only in the inbox, until he keeps the
+  // staff's minutes or puts his own back (through the season's first week of games)
+  const reset = league.rotationReset;
+  if (reset?.season === league.season && (league.phase === 'preseason' || (league.phase === 'regular' && curTeamSeason(league, me).won + curTeamSeason(league, me).lost < 5)))
+    items.push({
+      id: `rotationReset:${reset.season}`,
+      kind: 'minutes',
+      required: false,
+      quiet: true,
+      title: 'The staff reset your rotation',
+      line: `${reset.reason} The staff set this season's minutes. Keep them, or put yours back.`,
+      tone: 'warn',
+      to: '/team/rotation',
+      suggestion: { label: "Keep the staff's", action: { kind: 'rotationReset', restore: false } },
+      choices: [{ label: 'Put mine back', action: { kind: 'rotationReset', restore: true } }],
+    });
 
   // the draft: his pick on the clock
   if (league.phase === 'draft') {
@@ -662,6 +678,18 @@ export function resolveAgenda(league: League, a: AgendaAction): { ok: boolean; t
     case 'request':
       answerRequest(league, a.pid);
       return { ok: true, text: '' };
+    case 'rotationReset': {
+      const r = league.rotationReset;
+      if (!r) return { ok: false, text: 'Already answered.' };
+      delete league.rotationReset;
+      if (!a.restore) return { ok: true, text: "The staff's minutes stay. Change them anytime on Rotation." };
+      // his rotation as it stood before the reset, for the players still here (a newcomer since gets a share)
+      const t = league.teams[league.userTid];
+      t.rotation = { ...structuredClone(r.was), manual: true };
+      t.rotation.order = t.rotation.order.filter((pid) => league.players[pid]?.tid === league.userTid);
+      ensureRotation(league, league.userTid);
+      return { ok: true, text: 'Your minute targets are back.' };
+    }
     case 'call':
       if (league.fired) return { ok: false, text: FIRED_REASON };
       return resolveCall(league, a.call);

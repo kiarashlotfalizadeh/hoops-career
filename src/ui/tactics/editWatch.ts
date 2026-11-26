@@ -66,6 +66,9 @@ const subscribe = (f: () => void) => {
 /** The staff's measurement of the user's changes: the one running and the last one done. */
 export const useEditWatch = () => useSyncExternalStore(subscribe, () => state);
 
+/** Whether one of the user's changes is being measured now (the counters' look-ahead waits for it: useCounterWorth.ts). */
+export const editMeasuring = () => !!state.running;
+
 /** What a change is measured from: the user's team as the Team screens found it, or as the last change recorded left it. */
 let snap: { id: string; part: TeamPart } | null = null;
 /** The Team screens are open: the snapshot goes in the league as well, saved with the next change. */

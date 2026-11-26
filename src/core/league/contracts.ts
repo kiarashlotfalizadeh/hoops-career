@@ -895,7 +895,8 @@ export function signPlayer(
   // the transaction log leaves out AI teams' roster filler: quiet fills (no news) and new minimum
   // deals, camp bodies most of whom are cut on opening night
   const filler = opts.news === false || (!own && p.contract.salaries[0] <= CAP_FOR(league, p.contract.start).vetMin + 10);
-  if (opts.log !== false && (!filler || tid === league.userTid)) logMove(league, own ? 'resign' : 'sign', tid, p, { amount: p.contract.salaries[0], years });
+  if (opts.log !== false && (!filler || tid === league.userTid))
+    logMove(league, own ? 'resign' : 'sign', tid, p, { amount: p.contract.salaries[0], years, total: p.contract.salaries.reduce((a, x) => a + x, 0) });
 }
 
 /** Why a fired coach can't run his old team's roster (see owner.ts). */
@@ -1346,7 +1347,7 @@ export function extendContract(league: League, p: Player, amount: number, years:
     tids: [p.tid],
     pids: [p.pid],
   });
-  logMove(league, 'extend', p.tid, p, { amount: p.contract.next.salaries[0], years });
+  logMove(league, 'extend', p.tid, p, { amount: p.contract.next.salaries[0], years, total: p.contract.next.salaries.reduce((a, x) => a + x, 0) });
   // (the user's extension talks with him are over: see userExtend in negotiation.ts)
   delete p.talks;
 }

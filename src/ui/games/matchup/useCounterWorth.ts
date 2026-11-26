@@ -1,12 +1,18 @@
 // What the staff's counters against one opponent are worth, measured in the sim worker (see
 // core/ai/counterWorth.ts) for the user's next game against them: a few seconds of games, once for
 // each state of the plan, the tactics and who's fit to play on either side (a counter added changes
-// what the others are worth), not again each day. Kept for the session, so the matchup page's tabs
-// and a return to it say the same. While a change is measured again, the reading from before it is
-// shown (`stale`): a counter added used to send every opinion back to "Staff still looking…". The
-// player gets the staff's opinion (worthText), never the figure.
+// what the others are worth), not again each day. While a change is measured again, the reading from
+// before it is shown (`stale`): a counter added used to send every opinion back to "Staff still
+// looking…". The player gets the staff's opinion (worthText), never the figure.
+//
+// Each reading is kept with the league (League.counterReads, one per opponent), so a reopened app has
+// it at once, and the staff reads ahead: whenever the app is idle (no sim, no live game, nothing else
+// measuring) the user's next two games are measured without the page open, so a sim that stops before
+// a game leaves its counters read, or being read from where the last reading stood. Held in memory
+// only, the reading restarted on every reopen and took 8 s or more on a busy phone: the playtest's FM
+// lifer saw "Staff still looking…" on about 35 game plans.
 import { useEffect, useState } from 'react';
-import type { GamePlanItem, League } from '../../../core/types';
+import type { CounterRead, GamePlanItem, League } from '../../../core/types';
 import type { Candidate } from '../../../core/ai/advisor';
 import { PLAN_WORTH, worthCall, type CounterWorth } from '../../../core/ai/counterWorth';
 import { AHEAD, leanTone } from '../../../core/analysis/staffWords';
@@ -14,8 +20,10 @@ import { effectiveTactics, planFor, planSig } from '../../../core/league/gamePla
 import { touch } from '../../../state/actions';
 import { hashString } from '../../../core/random';
 import { cancelWorth, measureCounters } from '../../../state/simClient';
+import { pendingLive } from '../../../state/live';
 import { useStore } from '../../../state/store';
-import { inLane } from '../../tactics/worthLane';
+import { laneBusy, inLane, onLaneIdle } from '../../tactics/worthLane';
+import { editMeasuring } from '../../tactics/editWatch';
 
 /** A measurement: its counters once done, else how far it has got. */
 export interface WorthState {
@@ -24,6 +32,8 @@ export interface WorthState {
   progress: number;
   /** `worth` is the last reading for this game, from before the plan, tactics or who's fit changed: being measured again. */
   stale?: true;
+  /** The stale reading is the one kept with the league (an earlier session, or the last meeting), not one from before a change made here. */
+  older?: true;
 }
 
 /** Measurements kept, newest last (a season's matchup pages visited). */
@@ -54,6 +64,29 @@ function keyOf(league: League, opp: number, gid: number): string {
 
 /** A key's meeting (the league, the game, the opponent): the key without what the user decides or who's hurt. */
 const meetingOf = (key: string) => key.slice(0, key.lastIndexOf(':'));
+
+/** The reading kept with the league for `opp` this season (League.counterReads), as a map by counter id. */
+function savedRead(league: League, opp: number): { read: CounterRead; worth: Map<string, CounterWorth> } | null {
+  const read = league.counterReads?.[opp];
+  if (!read || read.season !== league.season) return null;
+  return { read, worth: new Map(read.worth.map((w) => [w.id, w])) };
+}
+
+/** A finished reading kept with the league (if it's still the open one), one per opponent: saved with the next write. */
+function keepRead(leagueId: string, opp: number, gid: number, key: string, out: CounterWorth[]) {
+  const open = useStore.getState().league;
+  if (open?.id !== leagueId) return;
+  const worth = out.filter((w) => w.id !== PLAN_WORTH).map(({ id, pts, raw, se }) => ({ id, pts, raw, se }));
+  const cur = open.counterReads?.[opp];
+  if (cur?.key === key) return;
+  // (refused while a sim runs: kept in memory, and read again once it's done if it's still wanted)
+  useStore.getState().mutate((l) => {
+    const reads = (l.counterReads ??= {});
+    reads[opp] = { season: l.season, gid, key, worth };
+    // (last season's readings go)
+    for (const k of Object.keys(reads)) if (reads[+k].season !== l.season) delete reads[+k];
+  });
+}
 
 /** The user's next game against `opp` this season, if any. */
 function nextMeeting(league: League, opp: number) {
@@ -96,6 +129,7 @@ function start(league: League, opp: number, key: string) {
       if (!out) measured.delete(key);
       else {
         measured.delete(key);
+        if (g) keepRead(league.id, opp, g.gid, key, out);
         const worth = new Map(out.map((w) => [w.id, w]));
         measured.set(key, { worth, progress: 1 });
         lastRead.delete(meetingOf(key));
@@ -111,6 +145,7 @@ function start(league: League, opp: number, key: string) {
         while (measured.size > KEEP) measured.delete(measured.keys().next().value!);
       }
       tell();
+      lookAhead();
     },
     (e: unknown) => {
       if (running === key) running = null;
@@ -119,6 +154,74 @@ function start(league: League, opp: number, key: string) {
       tell();
     },
   );
+}
+
+// ---------------------------------------------------------------- reading ahead
+
+/** The user's coming games the staff reads before their pages open: the next one, then the one after. */
+const READ_AHEAD = 2;
+let aheadTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** The user's next READ_AHEAD meetings this season, one per opponent (a series' next game is the one measured). */
+function comingMeetings(league: League): { opp: number; gid: number }[] {
+  const inSeason = league.phase === 'preseason' || league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs';
+  if (!inSeason || league.fired) return [];
+  const me = league.userTid;
+  const out: { opp: number; gid: number }[] = [];
+  for (const g of league.schedule.filter((x) => !x.played && x.day >= league.day && (x.home === me || x.away === me)).sort((a, b) => a.day - b.day || a.gid - b.gid)) {
+    const opp = g.home === me ? g.away : g.home;
+    if (out.some((m) => m.opp === opp)) continue;
+    out.push({ opp, gid: g.gid });
+    if (out.length >= READ_AHEAD) break;
+  }
+  return out;
+}
+
+/**
+ * Measure the first of the coming meetings without a reading for things as they stand, when nothing
+ * else wants the worker: no sim, no live game, no measurement the user is waiting on or of his changes.
+ */
+function readAhead() {
+  aheadTimer = null;
+  const st = useStore.getState();
+  const l = st.league;
+  if (!l || st.sim || running || laneBusy() || editMeasuring() || pendingLive(l)) return;
+  for (const m of comingMeetings(l)) {
+    const key = keyOf(l, m.opp, m.gid);
+    const done = measured.get(key)?.worth;
+    // (one finished while a sim ran couldn't be kept then: it is now)
+    if (done && savedRead(l, m.opp)?.read.key !== key) keepRead(l.id, m.opp, m.gid, key, [...done.values()]);
+    if (measured.has(key) || savedRead(l, m.opp)?.read.key === key || (retries.get(key) ?? 0) > RETRIES) continue;
+    retries.set(key, (retries.get(key) ?? 0) + 1);
+    start(l, m.opp, key);
+    return;
+  }
+}
+
+/** Read ahead once things settle (the store has taken a sim's league in, a change of the user's has had its turn). */
+function lookAhead(ms = 300) {
+  if (aheadTimer) clearTimeout(aheadTimer);
+  aheadTimer = setTimeout(readAhead, ms);
+}
+
+let watching = false;
+
+/** Start reading ahead (once, as the app starts): after each sim, a league opened, and whenever the lane comes free. */
+export function watchCounters() {
+  if (watching) return;
+  watching = true;
+  useStore.subscribe((s, prev) => {
+    // a sim starting stops a reading in flight (the games it plays get the worker), which doesn't count
+    // as one of its tries: it's read again when the sim is done, if it's still wanted
+    if (s.sim && !prev.sim && active) {
+      const k = active;
+      cancelWorth();
+      retries.set(k, Math.max(0, (retries.get(k) ?? 1) - 1));
+    }
+    if ((!s.sim && prev.sim) || (s.league && s.league.id !== prev.league?.id) || (!s.sim && s.v !== prev.v)) lookAhead(s.v !== prev.v && !prev.sim ? 1500 : 300);
+  });
+  onLaneIdle(() => lookAhead());
+  lookAhead();
 }
 
 /**
@@ -149,6 +252,9 @@ export function useCounterWorth(league: League, opp: number): WorthState | null 
   const inSeason = league.phase === 'preseason' || league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs';
   const next = inSeason ? nextMeeting(league, opp) : undefined;
   const key = next ? keyOf(league, opp, next.gid) : null;
+  // the reading kept with the league: for things as they stand, it's the staff's opinion, measured already
+  const saved = savedRead(league, opp);
+  const savedNow = !!key && saved?.read.key === key;
   useEffect(() => {
     const f = () => bump((x) => x + 1);
     listeners.add(f);
@@ -159,7 +265,7 @@ export function useCounterWorth(league: League, opp: number): WorthState | null 
   // the playtest's phone player saw it from the preseason through week one. A few tries, so two
   // measurements can't stop each other forever.)
   useEffect(() => {
-    if (!key || simming || measured.has(key)) return;
+    if (!key || simming || measured.has(key) || savedNow) return;
     const tries = retries.get(key) ?? 0;
     if (tries > RETRIES) return;
     const go = () => {
@@ -170,14 +276,19 @@ export function useCounterWorth(league: League, opp: number): WorthState | null 
     if (!tries) return go();
     const t = setTimeout(go, 400 * tries);
     return () => clearTimeout(t);
-  }, [key, simming, league, opp, n]);
+  }, [key, simming, league, opp, n, savedNow]);
   if (!key) return null;
   const cur = measured.get(key);
   if (cur?.worth) return cur;
-  const last = lastRead.get(meetingOf(key));
+  if (savedNow) return { worth: saved!.worth, progress: 1 };
+  // the last reading: this session's for this game, else the one kept with the league (an earlier
+  // session's, or the last meeting's: shown as the staff's last word while it reads again)
+  const mine = lastRead.get(meetingOf(key));
+  const last = mine ?? saved?.worth;
+  const older = !mine && !!last ? ({ older: true } as const) : {};
   // given up (stopped too many times): nobody is looking, so it doesn't say so
-  if (!cur && (retries.get(key) ?? 0) > RETRIES) return last ? { worth: last, progress: 1, stale: true } : null;
-  return last ? { worth: last, progress: cur?.progress ?? 0, stale: true } : (cur ?? { progress: 0 });
+  if (!cur && (retries.get(key) ?? 0) > RETRIES) return last ? { worth: last, progress: 1, stale: true, ...older } : null;
+  return last ? { worth: last, progress: cur?.progress ?? 0, stale: true, ...older } : (cur ?? { progress: 0 });
 }
 
 /** "Should help", "Could hurt", "No clear edge": a measured counter as the staff's opinion, with its tone. `short`: the same inside a sentence. */

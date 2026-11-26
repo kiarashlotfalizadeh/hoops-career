@@ -75,7 +75,7 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
         {/* (the opinions below are the last reading while it measures your change: said once, not on every row) */}
         {measuring?.stale && measuring.progress < 1 && (
           <div className="mu-empty" role="status">
-            Rechecking with your change…
+            {measuring.older ? "The staff's last read. Checking it again for tonight…" : 'Rechecking with your change…'}
           </div>
         )}
         {!cands.length && <div className="mu-empty">Your plan already covers what the staff sees.</div>}

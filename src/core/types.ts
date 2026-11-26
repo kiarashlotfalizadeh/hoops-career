@@ -1286,6 +1286,12 @@ export interface Txn {
   amount?: number;
   years?: number;
   /**
+   * $K: a signing's, re-signing's or extension's whole value as written, raises included (8% re-signing
+   * on Bird rights, 5% otherwise, see makeContract). The log, the news and the columns quote it; the
+   * first-year salary and the years alone can't say which raises the deal carries.
+   */
+  total?: number;
+  /**
    * An option: 'exercised' / 'declined' (team option) or 'opted in' / 'opted out' (player option);
    * a draft pick: its overall number ('#5'); a qualifying offer: 'extended' / 'withdrawn' /
    * 'accepted'; a match (tids: his team, then the offering team): 'matched' / 'declined'; a
@@ -1598,8 +1604,20 @@ export interface League {
    * records, Player.awards). Absent for a fictional league (no past) and for a save from before it.
    */
   past?: LeaguePast;
+  /**
+   * The summer's reset of the user's manual rotation (season.ts newSeason): why, and his rotation as it
+   * stood just before (to put back from Today). Today says so until he keeps the staff's or puts his
+   * own back; an inbox mail alone went unseen (the playtest).
+   */
+  rotationReset?: { season: number; reason: string; was: Rotation };
   /** The user's game plans by opponent tid (opponent-specific adjustments, see GamePlan). */
   gamePlans?: Record<number, GamePlan>;
+  /**
+   * The staff's latest reading of its counters against each opponent, by tid (useCounterWorth.ts),
+   * kept with the plans so a reopened app has the staff's opinion at once: the matchup page opens on
+   * it, and shows it while a change since (to the plan, the tactics, who's fit) is measured again.
+   */
+  counterReads?: Record<number, CounterRead>;
   /**
    * The user's recent changes to his tactics and rotation as the staff measured them (see
    * core/ai/tacticEdits.ts), oldest first, the last few kept: Tactics → Season Analysis's "Since you changed it".
@@ -1829,6 +1847,19 @@ export interface GamePlanItem {
 /** How long a game plan lasts: the next game against that opponent, the current playoff series, or the rest of the season. */
 /** How long a plan lasts: the next game against them, or the playoff series under way. */
 export type PlanScope = 'next' | 'series';
+
+/**
+ * The staff's counters against one opponent as measured for the user's next game against them
+ * (core/ai/counterWorth.ts): each counter's worth, for the game `gid` as things stood (`key`: what
+ * the measurement depends on, see useCounterWorth.ts). A reading under another key is the last one,
+ * shown while the staff measures again.
+ */
+export interface CounterRead {
+  season: number;
+  gid: number;
+  key: string;
+  worth: { id: string; pts: number; raw: number; se: number }[];
+}
 
 /** The user's plan for one opponent (see src/core/league/gamePlans.ts). */
 export interface GamePlan {

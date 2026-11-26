@@ -43,7 +43,7 @@ export function logTxn(league: League, t: Omit<Txn, 'id' | 'season' | 'day' | 'p
 }
 
 /** Log one player's move with team `tid` (a waiver claim: [claiming team, waiving team]). */
-export function logMove(league: League, kind: TxnKind, tid: number | number[], p: Player, extra: Pick<Txn, 'amount' | 'years' | 'note'> = {}): Txn {
+export function logMove(league: League, kind: TxnKind, tid: number | number[], p: Player, extra: Pick<Txn, 'amount' | 'years' | 'note' | 'total'> = {}): Txn {
   return logTxn(league, { kind, tids: Array.isArray(tid) ? tid : [tid], pid: p.pid, name: playerName(p), ...extra });
 }
 
@@ -110,14 +110,20 @@ export type TxnPart = string | { pid: number; name: string } | { tid: number };
 
 const yrs = (n: number) => `${n} yr${n === 1 ? '' : 's'}`;
 
-/** A deal's total over its years, with the 5% raises new contracts carry (see makeContract), as the news quotes it. */
-export function txnTotal(amount: number, years: number): number {
+/**
+ * A deal's total over its years as it was written (Txn.total). A move logged before the log kept it
+ * is worked out from its first year with 5% raises: a re-signing on Bird rights (8%) read short that
+ * way, $241.6M for Miller's $256.5M deal (the playtest).
+ */
+export function txnTotal(t: Pick<Txn, 'amount' | 'years' | 'total'>): number {
+  if (t.total !== undefined) return t.total;
+  const amount = t.amount ?? 0;
   let total = 0;
-  for (let i = 0; i < years; i++) total += i ? Math.round((amount * Math.pow(1.05, i)) / 10) * 10 : amount;
+  for (let i = 0; i < (t.years ?? 1); i++) total += i ? Math.round((amount * Math.pow(1.05, i)) / 10) * 10 : amount;
   return total;
 }
 
-const deal = (t: Txn) => (t.amount !== undefined && t.years ? `${yrs(t.years)} / ${money(txnTotal(t.amount, t.years))}` : '');
+const deal = (t: Txn) => (t.amount !== undefined && t.years ? `${yrs(t.years)} / ${money(txnTotal(t))}` : '');
 
 /** A stretched release's dead money: ", stretched over 7 seasons". */
 const stretched = (t: Txn) => (t.note === 'stretched' && t.years ? `, stretched over ${t.years} seasons` : '');

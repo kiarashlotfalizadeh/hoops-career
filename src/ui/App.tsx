@@ -57,6 +57,7 @@ import { AgendaList, pendingConfirm } from './components/Agenda';
 import { useNeedsYou } from './today/needs';
 import { NeedsSheet, OpenCalls } from './today/NeedsList';
 import { agenda, CALL_KINDS } from '../core/league/agenda';
+import { watchCounters } from './games/matchup/useCounterWorth';
 import { todayRoutes } from './routes/today';
 import { screenKey, teamRoutes } from './routes/team';
 import { gamesRoutes } from './routes/games';
@@ -110,6 +111,8 @@ function Boot({ children }: { children: ReactNode }) {
     void open();
   }, [open]);
   useEffect(() => {
+    // the staff reads the coming games' counters ahead, whenever the app is idle (useCounterWorth.ts)
+    watchCounters();
     // an older version of the app in another tab is holding the save database open
     onBlocked(() => {
       setBlocked(true);

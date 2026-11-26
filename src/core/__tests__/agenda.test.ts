@@ -12,7 +12,7 @@ import { agenda, agendaBlocker, cutOrder, GUIDE_STEPS, guideDone, guideFinished,
 import { canStartRegularSeason, simDay, startRegularSeason } from '../league/season';
 import { CAP_FOR, curTeamSeason, fmtDate, freeAgents, payroll, playerName, standardRoster, teamPlayers } from '../league/helpers';
 import { releasePlayer, signPlayer } from '../league/contracts';
-import { executeTrade } from '../league/trades';
+import { executeTrade, teamAccepts, validateTrade, type TradeOffer } from '../league/trades';
 import { ensureRotation } from '../league/games';
 import { fills, movedNeedText, needCache, needMove, needOptions, teamNeed } from '../league/rosterNeed';
 import { decisionThreads } from '../league/legacyReview';
@@ -74,7 +74,7 @@ import { simStopIds } from '../league/agenda';
 import { schedulePlayoffDay, seriesLabel } from '../league/playoffs';
 import { setPlanItem } from '../league/gamePlans';
 import { flowActions } from '../../ui/flow';
-import { type League } from '../types';
+import { type League, type Player } from '../types';
 
 const seed = seedJson as unknown as SeedData;
 
@@ -864,6 +864,24 @@ describe('the agenda', () => {
           // (the staff's first pick, had it added salary, is one it passes over now)
           if (dealGoals(m, call.offer!).some((d) => d.kind === 'payroll' && d.with > d.now)) expect(re.offer).not.toEqual(call.offer);
         }
+        // a deal its team no longer takes is never offered ("Atlanta has changed its mind" on confirm, the
+        // playtest): the card says so, and the next morning works out another, one its team takes
+        {
+          const m = structuredClone(l);
+          const dc = m.deadlineCall!;
+          const o = dc.offer!;
+          const best = standardRoster(m, o.b.tid)
+            .filter((p) => !o.b.pids.includes(p.pid))
+            .sort((a, b) => b.ovr - a.ovr)[0];
+          dc.offer = { ...o, b: { ...o.b, pids: [...o.b.pids, best.pid] } };
+          expect(validateTrade(m, dc.offer).length > 0 || !teamAccepts(m, dc.offer, o.b.tid)).toBe(true);
+          const c = agenda(m).find((i) => i.kind === 'deadline')!;
+          expect([c.suggestion, ...(c.choices ?? [])].some((x) => x?.action.kind === 'call' && x.action.call.kind === 'trade')).toBe(false);
+          expect(c.line).toMatch(/no longer takes the deal the staff found/);
+          callsDaily(m);
+          const again = m.deadlineCall!.offer;
+          if (again) expect(!validateTrade(m, again).length && teamAccepts(m, again, again.b.tid)).toBe(true);
+        }
         expect(resolveAgenda(l, card.suggestion!.action).ok).toBe(true);
         for (const pid of theirs) expect(l.players[pid].tid).toBe(tid);
       } else {
@@ -1207,17 +1225,27 @@ describe('the agenda', () => {
       l.oddsTrail = { season: l.season, tid: 9, pts: [[l.day - 1, 700, 0]] };
       const myRoster = standardRoster(l, 9).sort((a, b) => b.ovr - a.ovr);
       const star = myRoster[0];
-      const otherTid = 10;
-      const otherRoster = standardRoster(l, otherTid).sort((a, b) => b.ovr - a.ovr);
-      const agingVet = otherRoster[0];
-      // Force aging vet (35yo) and construct a destructive overpay: franchise star + 2 firsts for aging vet
-      agingVet.bornYear = l.season - 35;
-      agingVet.ovr = Math.min(agingVet.ovr, star.ovr);
-      const myFirsts = l.draftPicks.filter((d) => d.tid === 9 && d.round === 1).slice(0, 2);
-      const badOffer = {
-        a: { tid: 9, pids: [star.pid], dpids: myFirsts.map((d) => d.dpid) },
-        b: { tid: otherTid, pids: [agingVet.pid], dpids: [] },
-      };
+      const myFirst = l.draftPicks.filter((d) => d.tid === 9 && d.round === 1).slice(0, 1);
+      // a destructive overpay the other team takes and the rules allow (a card offers no other kind):
+      // the franchise star and a first for another team's best player, made a 35-year-old no better
+      let found: { vet: Player; offer: TradeOffer } | null = null;
+      for (const t of l.teams) {
+        if (t.tid === 9) continue;
+        const vet = standardRoster(l, t.tid).sort((a, b) => b.ovr - a.ovr)[0];
+        const was = { bornYear: vet.bornYear, ovr: vet.ovr };
+        vet.bornYear = l.season - 35;
+        vet.ovr = Math.min(vet.ovr, star.ovr);
+        const offer = { a: { tid: 9, pids: [star.pid], dpids: myFirst.map((d) => d.dpid) }, b: { tid: t.tid, pids: [vet.pid], dpids: [] } };
+        if (!validateTrade(l, offer).length && teamAccepts(l, offer, t.tid)) {
+          found = { vet, offer };
+          break;
+        }
+        Object.assign(vet, was);
+      }
+      if (!found) throw new Error('no team takes the overpay');
+      const otherTid = found.offer.b.tid;
+      const agingVet = found.vet;
+      const badOffer = found.offer;
       const ev = assessDeadlineDeal(l, badOffer, 'buy');
       expect(ev.bad).toBe(true);
       expect(ev.reason).toMatch(/^Bad /);

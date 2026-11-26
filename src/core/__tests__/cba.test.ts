@@ -9,6 +9,7 @@
 // a season, whatever the payroll), which a pending offer holds.
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
+import { txnTotal } from '../league/transactions';
 import { CAP_FOR, contractSeason, freeAgents, payroll, standardRoster } from '../league/helpers';
 import {
   EXCEPTIONS,
@@ -173,6 +174,10 @@ describe('the CBA', () => {
       const ask = askingContract(l, p, U);
       expect(userResign(l, p.pid, ask.amount * 2, 5).ok).toBe(true);
       expect(p.contract.salaries[1]).toBe(Math.round((p.contract.salaries[0] * 1.08) / 10) * 10);
+      // the log, the news and the columns quote the deal as written, its 8% raises included (they had
+      // rebuilt it from the first year at 5%: $241.6M for a $256.5M re-signing, the playtest)
+      const total = p.contract.salaries.reduce((a, x) => a + x, 0);
+      expect(txnTotal(l.transactions!.at(-1)!)).toBe(total);
       const q = expiring(l, U, 72, 27, 5_000, l.season - 1, 1);
       expect(maxYearsWith(l, q, U)).toBe(4);
       expect(userResign(l, q.pid, 1_000_000, 5).reason).toMatch(/4 years at most/);

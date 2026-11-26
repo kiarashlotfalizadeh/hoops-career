@@ -134,6 +134,8 @@ export function ResignPeriod() {
               <div className="fo-pay-v num">
                 <Fig value={committed} text={money(committed)} />
               </div>
+              {/* (an open team option is counted as if exercised: exercising it leaves this figure where it is, declining takes it off) */}
+              {options.length > 0 && <div className="tiny dim num">incl. {money(options.reduce((a, p) => a + salaryFor(p, next), 0))} in open options</div>}
             </div>
             {/* every expiring player kept at his ask */}
             <div className="right">

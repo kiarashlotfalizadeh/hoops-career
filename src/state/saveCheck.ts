@@ -255,6 +255,39 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
     if (t.rotation.shortOk !== undefined && !nums(t.rotation.shortOk)) delete t.rotation.shortOk;
   }
   cleanGamePlans(x);
+  // the summer's rotation reset, said on Today: damaged, it goes (the inbox mail still says it)
+  const rr: unknown = x.rotationReset;
+  if (
+    rr !== undefined &&
+    !(
+      obj(rr) &&
+      int(rr.season) &&
+      str(rr.reason) &&
+      obj(rr.was) &&
+      nums(rr.was.order) &&
+      numValues(rr.was.minutes) &&
+      nums(rr.was.closers) &&
+      nums(rr.was.restB2B) &&
+      numValues(rr.was.caps)
+    )
+  )
+    delete x.rotationReset;
+  // the staff's counter readings: a damaged one goes (the matchup page measures it again)
+  if (x.counterReads !== undefined) {
+    if (!obj(x.counterReads)) delete x.counterReads;
+    else
+      for (const [k, r] of Object.entries(x.counterReads as Record<string, unknown>))
+        if (!(
+          int(+k) &&
+          obj(r) &&
+          int(r.season) &&
+          int(r.gid) &&
+          str(r.key) &&
+          Array.isArray(r.worth) &&
+          r.worth.every((w) => obj(w) && str(w.id) && num(w.pts) && num(w.raw) && num(w.se))
+        ))
+          delete (x.counterReads as Record<string, unknown>)[k];
+  }
   // AI trade offers: a damaged one, or one whose players or picks are gone, is dropped (the
   // inbox then says the offer is closed), and so is an untouchable mark on a player who is gone
   if (x.proposals !== undefined) x.proposals = Array.isArray(x.proposals) ? x.proposals.filter((p) => proposalIntact(x, p)) : [];
@@ -877,6 +910,15 @@ function migrateDealTerms(x: League) {
       if (!obj(s)) continue;
       if (s.cash !== undefined && !money(s.cash)) delete s.cash;
       if (s.swaps !== undefined && !(Array.isArray(s.swaps) && s.swaps.every(int))) delete s.swaps;
+    }
+    if (!obj(t)) continue;
+    if (t.total !== undefined && !money(t.total)) delete t.total;
+    // a deal logged before the log kept its total: the one written, while he's still on it (a Bird
+    // re-signing's 8% raises read as 5% otherwise, see transactions.ts txnTotal)
+    if (t.total === undefined && (t.kind === 'sign' || t.kind === 'resign' || t.kind === 'extend') && num(t.amount) && int(t.years) && int(t.pid)) {
+      const c = x.players[t.pid]?.contract;
+      const deal = [c?.salaries, c?.next?.salaries].find((s) => Array.isArray(s) && s.length === t.years && s[0] === t.amount);
+      if (deal) t.total = deal.reduce((a, v) => a + v, 0);
     }
   }
 }

@@ -10,6 +10,7 @@ import { autoRotation, roleMemory, rosterSeason, sortByPosition, veteranCeiling 
 import { blankStats, generatePlayer, DEFAULT_SCALE } from '../playerGen';
 import { ensureRotation, giveShare, lowStarMinutes, makeWhole, youthLean } from '../league/games';
 import { newSeason } from '../league/season';
+import { agenda, resolveAgenda } from '../league/agenda';
 import { Rng } from '../random';
 import { FREE_AGENT, type Player, type Rotation } from '../types';
 
@@ -554,6 +555,35 @@ describe('rotations', () => {
       expect(nextRot.minutes[s1.pid]).toBeGreaterThanOrEqual(30);
       expect(nextRot.minutes[s2.pid]).toBeGreaterThanOrEqual(30);
       expect(l.inbox.some((m) => m.subject === 'Rotation refreshed for the new roster')).toBe(true);
+      // said on Today too, until he keeps the staff's minutes or puts his own back
+      const item = agenda(l).find((i) => i.id === `rotationReset:${l.season}`)!;
+      expect(item).toMatchObject({ required: false, quiet: true });
+      expect(item.choices!.map((c) => c.label)).toEqual(['Put mine back']);
+      expect(resolveAgenda(l, item.choices![0].action).ok).toBe(true);
+      expect(l.teams[0].rotation.manual).toBe(true);
+      expect(l.teams[0].rotation.minutes[s1.pid]).toBeLessThan(28);
+      expect(agenda(l).some((i) => i.id.startsWith('rotationReset'))).toBe(false);
+    }
+
+    // a coach's deliberate choices stand at the new season: stars kept out on purpose (0 minutes,
+    // benched) aren't newcomers to the rotation, nor are they short on minutes (the playtest's
+    // coach benched his stars and got them back silently)
+    {
+      const l = createLeague({ name: 'bench', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 12 });
+      const rot = l.teams[0].rotation;
+      rot.manual = true;
+      const top = teamPlayers(l, 0)
+        .sort((a, b) => b.ovr - a.ovr)
+        .slice(0, 3);
+      for (const p of top) rot.minutes[p.pid] = 0;
+      rot.benched = top.map((p) => p.pid);
+      l.phase = 'freeAgency';
+      l.faDay = 20;
+      expect(newSeason(l)).toBe(true);
+      expect(l.teams[0].rotation.manual).toBe(true);
+      for (const p of top) expect(l.teams[0].rotation.minutes[p.pid] ?? 0).toBe(0);
+      expect(l.rotationReset).toBeUndefined();
+      expect(l.inbox.some((m) => m.subject === 'Rotation refreshed for the new roster')).toBe(false);
     }
   });
 });
