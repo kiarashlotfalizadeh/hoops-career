@@ -11,7 +11,7 @@ import { FREE_AGENT, RETIRED } from '../types';
 import { RATING_KEYS, RATING_META, attrDisplay, expectedGrowth, tierPhrase } from '../ratings';
 import { playerAge } from '../playerGen';
 import { seasonLabel } from '../constants';
-import { ordinal, plural, rankOf } from '../format';
+import { ordinal, plural, rankOf, signed } from '../format';
 import { addInbox, addNews, andList, fmtDate, playerName, seasonTotals, sentence, shortName, teamPlayers } from './helpers';
 import { FOCUS_META, PRIORITY, devPriority, lateShare, priorityChosen, priorityCost, priorityEffect } from './progression';
 import { awardRaces } from './awards';
@@ -378,7 +378,7 @@ const FOCUS_KEYS: Record<string, RatingKey[]> = {
 };
 
 /** A figure in OVR a year to one decimal, signed ("+1.2", "−0.3"). */
-export const ovrYear = (x: number) => `${x < 0 ? '−' : '+'}${Math.abs(x).toFixed(1)}`;
+export const ovrYear = (x: number) => signed(x);
 
 /**
  * A team's development priority as it stands (progression.ts): who has it, what a year of it is
@@ -436,6 +436,35 @@ export function setupLine(league: League, tid: number): string {
     t.practice === 'intense' ? 'Intense practices speed the young players up.' : t.practice === 'light' ? 'Light practices slow the young players down.' : '',
   ].filter(Boolean);
   return [priorityLine(league, tid), `Development coaching ${rankOf(rank, n)}: ${ovrYear(worth)} OVR a year for every player.`, ...old].join(' ');
+}
+
+/** One fact of the development setup for the screen: what it is, its figure in OVR a year, a short qualifier. */
+export interface SetupFact {
+  k: string;
+  v: string;
+  note?: string;
+}
+
+/**
+ * The setup as rows for the Growth screen, the same figures as setupLine's sentences: who has the
+ * staff's priority and for how much, what the roster's other young players pay, and what the head
+ * coach's development rating adds. Every figure is OVR a year (the screen says so once, under them).
+ */
+export function setupFacts(league: League, tid = league.userTid): SetupFact[] {
+  const plan = priorityPlan(league, tid);
+  const t = league.teams[tid];
+  const rank = 1 + league.teams.filter((x) => x.coach.development > t.coach.development).length;
+  const worth = ((t.coach.development - 50) / 50) * 0.7 * 0.6 * 1.9 * 0.8;
+  const pick = plan.chosen ? undefined : "Staff's pick";
+  const out: SetupFact[] = plan.picks.length
+    ? plan.picks.map((x, i) => ({ k: i ? '' : 'Staff priority', v: `${shortName(league, league.players[x.pid])} ${ovrYear(x.gain)}`, note: i ? undefined : pick }))
+    : [{ k: 'Staff priority', v: 'Nobody', note: plan.chosen ? 'Every young player gets the same time' : 'Nobody 25 or under has room to grow' }];
+  if (plan.picks.length && plan.others.length) {
+    const cost = plan.others.reduce((a, x) => a + x.cost, 0) / plan.others.length;
+    out.push({ k: `Other ${plural(plan.others.length, 'player')} 25 or under`, v: ovrYear(-Math.abs(cost)), note: plan.others.length === 1 ? undefined : 'each' });
+  }
+  out.push({ k: 'Coaching, every player', v: ovrYear(worth), note: rankOf(rank, league.teams.length) });
+  return out;
 }
 
 /** Why a player moved (or didn't) in what develop() reads: the month and the season, the ratings that moved, his minutes while he's young, his training focus. */

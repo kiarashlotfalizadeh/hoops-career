@@ -56,6 +56,18 @@ html:has(.continue:not(.is-compact)) {
   animation: tb-saved 1.8s ease both;
   pointer-events: none;
 }
+/* a phone: the tick alone (the word had cut the status line beside it, "Preseason · 20…", each time a
+   change saved); a screen reader still hears it */
+@media (max-width: 479px) {
+  .topbar .tb-saved-w {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
 @keyframes tb-saved {
   0% {
     opacity: 0;

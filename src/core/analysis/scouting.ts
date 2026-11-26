@@ -8,6 +8,7 @@ import { FINISH_LABEL, type FinishType } from '../sim/log';
 import { DEFAULT_PPP, zScore } from './playTypes';
 import { IMPACT_TEXT, impactSentence, teamRef } from './gameReport';
 import { playerName, seasonTotals, teamPlayers } from '../league/helpers';
+import { signed } from '../format';
 
 /** Games a team needs this season before its own numbers are read instead of last season's. */
 export const SCOUT_MIN_GAMES = 5;
@@ -564,7 +565,7 @@ function read(league: League, d: ScoutData) {
   if (swing && Math.abs(swing.on! - swing.off!) >= 8) {
     const gap = swing.on! - swing.off!;
     tendencies.push({
-      text: `${gap > 0 ? 'Much better' : 'Worse'} with ${swing.name} on the floor: ${gap > 0 ? '+' : '−'}${Math.abs(gap).toFixed(1)} net rating per 100.`,
+      text: `${gap > 0 ? 'Much better' : 'Worse'} with ${swing.name} on the floor: ${signed(gap)} net rating per 100.`,
       weight: Math.abs(gap) / 10,
     });
   }

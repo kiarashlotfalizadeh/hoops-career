@@ -401,10 +401,10 @@ function GradingHelp({ league }: { league: League }) {
   return (
     <HelpSheet title="How the owner judges you">
       <p>
-        On opening night he sets two or three goals from your roster. The win total is the middle of the season forecast, never more: half the time this roster wins that many.
-        Past {WIN_ASK_TOP} wins he asks for a third of the rest, so a forecast of {WIN_ASK_TOP + 9} asks for {Math.round(winAsk(WIN_ASK_TOP + 9))}. The postseason goal never asks
-        for a round the forecast thinks is out of reach. For a rebuild, minutes for the young players replace it. The franchise runs its own money: tickets and budgets are never
-        yours to answer for.
+        On opening night he sets two or three goals from your roster. The win total is the middle of the season forecast, never more: half the time this roster wins that many. Past{' '}
+        {WIN_ASK_TOP} wins he asks for a third of the rest, so a forecast of {WIN_ASK_TOP + 9} asks for {Math.round(winAsk(WIN_ASK_TOP + 9))}. The postseason goal never asks for a
+        round the forecast thinks is out of reach. For a rebuild, minutes for the young players replace it. The franchise runs its own money: tickets and budgets are never yours to
+        answer for.
       </p>
       <p>After the playoffs each goal is graded −100 to +100. Their weights make the season&apos;s grade.</p>
       {rows.map((r) => (
@@ -426,16 +426,16 @@ function GradingHelp({ league }: { league: League }) {
       <p>
         <b>Payroll line.</b> Near the luxury tax he sets one, and it follows the team&apos;s window. Asked to win a playoff round or more, he pays past the tax: up to{' '}
         {money(cap.spendLine)}, a win-now owner up to {money(cap.spendTop)}. Otherwise the line is the tax ({money(cap.luxuryTax)}; a win-now owner&apos;s {money(cap.spendLine)}).
-        A payroll you inherited past his line is his: the line becomes what you inherited, plus {money(WINDOW_ROOM * cap.salaryCap)} with the window open, room for a mid-level
+        Inherit a payroll that is already over it and the goal becomes what you inherited, plus {money(WINDOW_ROOM * cap.salaryCap)} with the window open: room for a mid-level
         signing.
       </p>
       <p>
-        <b>The bar.</b> It follows the forecast, unless you ran the roster down yourself: rotation players you traded or let go, or a season graded Poor. Then the win target
-        falls at most {WIN_SLIDE} wins from last season&apos;s, and never sits more than {HOLD_OVER_READ} over his read.
+        <b>The bar.</b> It follows the forecast, unless you ran the roster down yourself: rotation players you traded or let go, or a season graded Poor. Then the win target falls
+        at most {WIN_SLIDE} wins from last season&apos;s, and never sits more than {HOLD_OVER_READ} over his read.
       </p>
       <p>
-        <b>Two poor seasons.</b> A season graded {fmtGrade(POOR_GRADE)} or worse is a strike. A second in a row, once the grace period is over, and you&apos;re fired, whatever
-        your standing. A title never counts as one.
+        <b>Two poor seasons.</b> A season graded {fmtGrade(POOR_GRADE)} or worse is a strike. A second in a row, once the grace period is over, and you&apos;re fired, whatever your
+        standing. A title never counts as one.
       </p>
       <p>
         <b>The floor.</b> Whatever the plan, under a .{Math.round(WIN_FLOOR * 1000)} pace is a failed season. It grades Poor or worse, whatever else went right. The floor never

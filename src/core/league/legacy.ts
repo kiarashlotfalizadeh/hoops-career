@@ -311,7 +311,7 @@ export function legacyGame(league: League, g: ScheduledGame) {
         {
           key: 'all-teams',
           head: pick(league, 'all-teams', [`${league.coachName} has beaten every team in the league`, `All ${league.teams.length - 1}: ${league.coachName} completes the set`]),
-          text: `${nick(league, side.opp)} was the last: ${side.us}-${side.them} ${where(league, side)}. Every franchise in the league has now lost to a team he coached.`,
+          text: `${nick(league, side.opp)} was the last: ${side.us}-${side.them} ${where(league, side)}. Every other franchise in the league has now lost to a ${league.coachName} team.`,
           gid: g.gid,
           mail: { from: 'Media Relations', body: `With the win over ${nick(league, side.opp)}, you've beaten all ${league.teams.length - 1} other teams in the league.` },
         },
@@ -333,13 +333,13 @@ export function legacyGame(league: League, g: ScheduledGame) {
         {
           key: jobKey(stint.tid, stint.from),
           head: first
-            ? pick(league, 'first-win', [`${coach} gets his first win`, `Win No. 1 for ${coach}`, `${coach} is off the mark against ${nick(league, side.opp)}`])
+            ? pick(league, 'first-win', [`${coach} gets a first win`, `Win No. 1 for ${coach}`, `${coach} is off the mark against ${nick(league, side.opp)}`])
             : pick(league, jobKey(stint.tid, stint.from), [
                 `${coach}'s first win with ${nick(league, tid)}`,
                 `${coach} is off the mark in ${league.teams[tid].region}`,
                 `A first win for the new ${nick(league, tid)} ${userJob(league).short}`,
               ]),
-          text: `${side.us}-${side.them} over ${nick(league, side.opp)} ${where(league, side)} on ${date}.${first ? '' : ` Win No. ${k.won} of his career, the first of a new job.`}`,
+          text: `${side.us}-${side.them} over ${nick(league, side.opp)} ${where(league, side)} on ${date}.${first ? '' : ` Career win No. ${k.won}, the first of a new job.`}`,
           body: first
             ? `The first of the career came on ${date}: ${nick(league, tid)} ${side.us}, ${nick(league, side.opp)} ${side.them}. Every ${userJob(league).short} in the league has one of these. Only the next ones are hard.`
             : undefined,
@@ -451,8 +451,8 @@ function playoffMilestones(league: League, g: ScheduledGame, side: NonNullable<R
         key: `title:${league.season}`,
         head: first
           ? pick(league, `title:${league.season}`, [
-              `Champions: ${coach} wins his first title`,
-              `${nick(league, tid)} wins the title, and ${coach} has his ring`,
+              `Champions: a first title for ${coach}`,
+              `${nick(league, tid)} wins the title, and ${coach} has a ring`,
               `${coach} and ${nick(league, tid)} win it all`,
             ])
           : pick(league, `title:${league.season}`, [`Title No. ${titles} for ${coach}`, `${coach} wins it all again`, `${nick(league, tid)} wins the title once more`]),
@@ -478,7 +478,7 @@ function playoffMilestones(league: League, g: ScheduledGame, side: NonNullable<R
       league,
       {
         key: 'series:first',
-        head: pick(league, 'series:first', [`${coach} wins his first playoff series`, `A first series win for ${coach}`, `${coach} gets past the first round`]),
+        head: pick(league, 'series:first', [`${coach} wins a first playoff series`, `A first series win for ${coach}`, `${coach} gets past the first round`]),
         text: `${games} over ${nick(league, side.opp)} in the ${label}, closed out ${side.us}-${side.them} ${where(league, side)}.`,
         gid: g.gid,
         mail: { from: 'Media Relations', body: `Your first playoff series win: ${games} over ${nick(league, side.opp)}.` },
@@ -507,7 +507,7 @@ function playoffMilestones(league: League, g: ScheduledGame, side: NonNullable<R
           round === 4
             ? pick(league, 'round:4', [`${coach} is going to the Finals`, `${nick(league, tid)} wins the ${s.conf === 'E' ? 'East' : 'West'}`])
             : `${coach} reaches the conference finals`,
-        text: `${games} over ${nick(league, side.opp)} in the ${label}: a first ${round === 4 ? 'Finals' : 'conference finals'} of his career.`,
+        text: `${games} over ${nick(league, side.opp)} in the ${label}: a career-first ${round === 4 ? 'Finals' : 'conference finals'}.`,
         gid: g.gid,
         mail: { from: 'Media Relations', body: `Your first ${round === 4 ? 'Finals' : 'conference finals'}: ${games} over ${nick(league, side.opp)}.` },
       },
@@ -649,7 +649,7 @@ export function legacyDay(league: League) {
             `A first playoff berth for ${league.coachName}`,
             `${league.coachName} is in the playoffs`,
           ]),
-          text: `${ts.won}-${ts.lost} and ${seed} in the ${league.teams[tid].conf === 'E' ? 'East' : 'West'}: the first playoff trip of his career.`,
+          text: `${ts.won}-${ts.lost} and ${seed} in the ${league.teams[tid].conf === 'E' ? 'East' : 'West'}: a career-first playoff trip.`,
           mail: { from: 'Owner', subject: 'The playoffs', body: `${ts.won}-${ts.lost}, ${seed}. That's what I wanted to see. Now go win a round.` },
         },
         3,
@@ -680,7 +680,7 @@ export function legacyDay(league: League) {
           : n === 1
             ? pick(league, `coy:${league.season}`, [`${league.coachName} is Coach of the Year`, `Coach of the Year: ${league.coachName}`])
             : `${league.coachName} is Coach of the Year again`,
-        text: `${ts ? `${ts.won}-${ts.lost} with ${nick(league, tid)}` : `With ${nick(league, tid)}`}${n > 1 ? `: his ${ordinalWord(n)}` : ''}.`,
+        text: `${ts ? `${ts.won}-${ts.lost} with ${nick(league, tid)}` : `With ${nick(league, tid)}`}${n > 1 ? `: the ${ordinalWord(n)} of a career` : ''}.`,
         mail: {
           from: 'Owner',
           subject: 'Coach of the Year',
@@ -938,7 +938,7 @@ export function hofCase(k: Pick<CoachCareer, 'won' | 'lost' | 'titles' | 'lines'
     `${k.won} wins (${pct})`,
     ...(coy ? [`${coy === 1 ? 'a' : coy} Coach of the Year${coy > 1 ? ' awards' : ''}`] : []),
   ].join(', ');
-  if (k.titles >= 2 || k.won >= 600) return { status: 'in', line: `${facts}. The press has him in.` };
+  if (k.titles >= 2 || k.won >= 600) return { status: 'in', line: `${facts}. That clears the press's bar.` };
   if ((k.titles >= 1 && k.won >= 250) || finals >= 2 || k.won >= 400) return { status: 'building', line: `${facts}. The press's bar: two titles or 600 wins.` };
   return { status: 'not yet', line: `${facts}. The press's bar: two titles or 600 wins.` };
 }

@@ -364,13 +364,13 @@ export function ResignPeriod() {
           )}
           {expiring.length > 0 && (
             <p className="fo-lede">
-              {expiring.length} player{expiring.length > 1 ? 's' : ''} become{expiring.length > 1 ? '' : 's'} free agent{expiring.length > 1 ? 's' : ''}. Other teams can sign{' '}
+              {expiring.length === 1 ? '1 player becomes a free agent.' : `${expiring.length} players become free agents.`} Other teams can sign{' '}
               {expiring.length > 1 ? 'them' : 'him'} on day one. You&apos;d compete with cap space like everyone else.
             </p>
           )}
           {options.length > 0 && (
             <p className="fo-lede">
-              Open team option{options.length > 1 ? 's' : ''}: the staff will{' '}
+              {options.length > 1 ? 'Open team options' : 'Open team option'}: the staff will{' '}
               {options.map((p) => `${teamOptionWorth(league, p) ? 'exercise' : 'decline'} ${shortName(league, p)}'s`).join(', ')}.
             </p>
           )}

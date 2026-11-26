@@ -361,7 +361,7 @@ describe('the journey between screens', () => {
       expect(v.sub).toMatch(/^“.+\.” Season grade [+−]\d+, standing [+−]\d+ after 20-62\.$/);
       // (in his own manner, by his quirk: ownerVoice.ts)
       expect(v.sub.startsWith(`“${r.said}”`)).toBe(true);
-      expect(Object.values(ownerWords(l).verdict)).toContain(r.said);
+      expect(Object.values(ownerWords(l).verdict).flat()).toContain(r.said);
       expect(v.lines).toHaveLength(Math.min(4, r.goals.length));
       // past it, the missed ultimatum: fired, in his words, with what's next
       f.tenureStart = f.season - 4;

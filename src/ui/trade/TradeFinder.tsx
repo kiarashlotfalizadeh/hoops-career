@@ -15,7 +15,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Chips, Empty, Section, Sheet } from '../components/ui';
 import { Callout, HelpSheet, OvrPot, capSeason, contractEnd, isOffseason, outTag, salaryText } from '../office/common';
 import { AvailFlag, TierLine } from './common';
-import { money } from '../../core/format';
+import { money, plural } from '../../core/format';
 
 export interface FinderState {
   pos: 'all' | Pos;
@@ -211,7 +211,7 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
               Reset
             </button>
             <button className="btn primary grow" onClick={() => setSheet(false)}>
-              Show {rows.length} player{rows.length === 1 ? '' : 's'}
+              {`Show ${plural(rows.length, 'player')}`}
             </button>
           </div>
         </div>

@@ -413,7 +413,11 @@ export function Huddle(
           </button>
         )}
       </div>
-      {onResume && <div className="lv-br-note">Call a play, make a sub, or just resume: nothing here has to be picked.</div>}
+      {onResume && (
+        <div className="lv-br-note">
+          {call ? 'Call a play, make a sub, or just resume. Nothing here has to be picked.' : 'Make a sub, or just resume. Nothing here has to be picked.'}
+        </div>
+      )}
       {call}
       <Staff {...props} max={2} />
       <Deciding edges={deciding} teams={teams} kits={kits} />

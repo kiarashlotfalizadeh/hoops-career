@@ -801,6 +801,9 @@
   margin-left: 10px;
 }
 .ti-method {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 12px;
   line-height: 1.35;
   color: var(--text-dim);

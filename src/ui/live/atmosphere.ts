@@ -352,8 +352,10 @@ const STEAL = ["{S} picks {P}'s pocket", '{S} jumps the passing lane', 'Stolen b
 const BREAKAWAY = ['{S} takes it the other way', '{S} steals it and goes coast to coast', 'Off the steal, {S} all alone'];
 const GO_AHEAD = ['and {T} leads {SC}', '{T} in front {SC}', 'and that puts {T} ahead, {SC}'];
 const TIE = ['tied at {N}', 'and we are tied at {N}', 'all square at {N}'];
-const STREAK = ['{N} straight for {P}', "{P}'s {N}th straight make", "he's heating up: {N} in a row"];
-const STREAK3 = ['{N} straight threes for {P}', "{P}'s {N}th straight three", '{P} is on fire: {N} threes in a row'];
+const STREAK = ['{N} straight for {P}', "{P}'s {Nth} straight make", "he's heating up: {N} in a row"];
+const STREAK3 = ['{N} straight threes for {P}', "{P}'s {Nth} straight three", '{P} is on fire: {N} threes in a row'];
+/** A count into a line: `{N}` the figure, `{Nth}` its ordinal ("3rd straight make"). */
+const counted = (line: string, n: number) => line.replace('{Nth}', ordinal(n)).replace('{N}', String(n));
 const PTS = ["that's {N} for {P}", '{P} has {N}', '{N} tonight for {P}'];
 
 /** The point totals worth saying as a player passes them. */
@@ -456,11 +458,11 @@ export function voiceLog(t: Tally, log: PossLog, ctx: AtmoCtx, idx = t.n): LogVo
             : ties && log.q >= 4
               ? pick(TIE, ...k('tie'))
               : (threes[pid] ?? 0) >= 3 && v === 3
-                ? pick(STREAK3, ...k('s3')).replace('{N}', String(threes[pid]))
+                ? counted(pick(STREAK3, ...k('s3')), threes[pid])
                 : mark
-                  ? pick(PTS, ...k('pts')).replace('{N}', String(pts[pid]))
+                  ? counted(pick(PTS, ...k('pts')), pts[pid])
                   : (made[pid] ?? 0) >= 3 && (made[pid] ?? 0) % 2 === 1
-                    ? pick(STREAK, ...k('st')).replace('{N}', String(made[pid]))
+                    ? counted(pick(STREAK, ...k('st')), made[pid])
                     : '';
       // the assist, unless the call already named him (an alley-oop): in brackets when more follows it
       const plain = andOne || !!extra;

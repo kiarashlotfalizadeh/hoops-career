@@ -31,7 +31,7 @@ import type { GamePlanItem, GameResult, League, PlayInGame, PlayoffSeries, Playe
 import { FREE_AGENT } from '../types';
 import { fmtDate, payroll, playerName, standardRoster, teamCity, teamGamesLeft } from './helpers';
 import { confStandings } from './standings';
-import { money, plural } from '../format';
+import { money, plural, signed } from '../format';
 import {
   currentGoals,
   concedeBlockedReason,
@@ -277,7 +277,6 @@ export function changeWorth(league: League, m: Extract<CallMeasure, { kind: 'cha
 }
 
 /** "+1.4", "−0.3": a real margin over games played as the cards say it. */
-const signed = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}`;
 
 /** A deal's measured worth as the staff's opinion: never the figure (src/ui/DESIGN.md). */
 function dealWords(pts: number): string {

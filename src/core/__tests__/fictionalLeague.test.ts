@@ -39,7 +39,7 @@ import {
 import { loadLeague, migrate, saveLeague } from '../../state/persistence';
 import { hashString, mix32 } from '../random';
 import { OWNER_QUIRK, PLAYER_VOICE, offCourtLines, ownerQuirk, playerSays, playerVoice } from '../league/voices';
-import { OWNER_WORDS, firingSaid, ownerWords, ultimatumSaid, verdictOf } from '../league/ownerVoice';
+import { OWNER_WORDS, firingSaid, ownerWords, ultimatumSaid, verdictOf, verdictSaid } from '../league/ownerVoice';
 import { CAMEO_BONUS, cameoAtReview, cameoOf, ownerCameoDay } from '../league/ownerCameos';
 import { PUNDITS, finalsTake, hotTakes, playoffTakes } from '../league/media/takes';
 import { FORM, FORM_WORD, formOf, formStretch } from '../league/legends';
@@ -878,7 +878,7 @@ describe('two seasons of a fictional league', () => {
       const all = quirks.flatMap((q) => {
         const w = OWNER_WORDS[q];
         const lines = [
-          ...Object.values(w.verdict),
+          ...Object.values(w.verdict).flat(),
           w.warning,
           w.answered,
           w.title,
@@ -898,6 +898,20 @@ describe('two seasons of a fictional league', () => {
       expect(verdictOf(0.2)).toBe('pleased');
       expect(verdictOf(0)).toBe('patient');
       expect(verdictOf(-0.3)).toBe('concerned');
+      // his verdict is on the season he reviews (its grade, not his standing), one of his lines for it, the same
+      // for the same season, and never the line his last review opened with
+      {
+        const v = structuredClone(day25);
+        const lines = ownerWords(v).verdict;
+        expect(Object.values(lines).every((l) => l.length >= 3)).toBe(true);
+        expect(lines.patient).toContain(verdictSaid(v, -0.19));
+        expect(lines.pleased).toContain(verdictSaid(v, 0.25));
+        expect(verdictSaid(v, 0.25)).toBe(verdictSaid(v, 0.25));
+        const first = verdictSaid(v, 0);
+        v.ownerReviews = [{ season: v.season - 1, tid: v.userTid, goals: [], grade: 0, total: 0, said: first }];
+        expect(verdictSaid(v, 0)).not.toBe(first);
+        expect(lines.patient).toContain(verdictSaid(v, 0));
+      }
       // the user's owner speaks as his quirk does, wherever he speaks
       const x = structuredClone(day25);
       expect(ownerWords(x)).toBe(OWNER_WORDS[ownerQuirk(x, x.userTid)]);

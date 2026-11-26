@@ -18,7 +18,7 @@ import { Statline } from '../components/ui';
 import { CapBar, Callout, HelpSheet, OvrPot, PlayerHead, appealInfo, forYears, salaryText, shortSeason, taxLine } from './common';
 import { OfferControls, STEP } from './OfferControls';
 import { type Reply, TalkPanel } from './TalkPanel';
-import { money, moneyExact } from '../../core/format';
+import { money, moneyExact, plural } from '../../core/format';
 
 export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
   const league = useLeague();
@@ -164,7 +164,7 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
           Profile
         </Link>
         <button className={`btn grow ${!blocked && !refusal && !off ? 'primary' : ''}`} disabled={!!blocked || !!refusal || off || busy} onClick={() => submit()}>
-          Make offer · {years} yr{years > 1 ? 's' : ''} · {money(total)}
+          {`Make offer · ${plural(years, 'yr')} · ${money(total)}`}
         </button>
       </div>
     </div>

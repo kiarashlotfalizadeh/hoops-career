@@ -219,7 +219,7 @@ function Chronological({ list, all, collapse, ...p }: RowProps & { list: Row[]; 
     <div className="card flush gs-list">
       {hidden > 0 && (
         <button className="gs-more" onClick={() => setExpanded(true)}>
-          <ChevronDown size={15} aria-hidden="true" /> Show {hidden} earlier game{hidden === 1 ? '' : 's'}
+          <ChevronDown size={15} aria-hidden="true" /> {`Show ${hidden} earlier ${hidden === 1 ? 'game' : 'games'}`}
         </button>
       )}
       <MonthRows rows={list.slice(hidden)} all={all} fresh={expanded && collapse ? 0 : undefined} freshEnd={anchor > 5 ? anchor - 3 : 0} {...p} />

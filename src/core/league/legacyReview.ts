@@ -16,7 +16,7 @@ import { playerAge } from '../playerGen';
 import { bestWinOf, legacyOf, type PulsePoint, type SignatureWin } from './legacy';
 import { fanScore } from './legacyPulse';
 import { jobSecurity } from './jobSecurity';
-import { money, ordinal, plural } from '../format';
+import { money, ordinal, plural, signed } from '../format';
 import { CHECK_AFTER, CHECK_END_MIN, editCall, editsOf, playedSince } from '../ai/tacticEdits';
 import { SINCE } from '../analysis/staffWords';
 import { seasonCoachingLine } from '../analysis/debrief';
@@ -85,7 +85,6 @@ const SIGNINGS_MAX = 2;
 const FOCUS_MIN_DAYS = 30;
 
 /** "+3.1" / "−2.0": a signed figure as the review's lines read it. */
-const signed = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}`;
 
 /**
  * A player's role and worth with one team in a season, not just his scoring: games, minutes, his

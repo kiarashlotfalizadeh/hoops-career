@@ -16,7 +16,7 @@ import { scoutTeam } from '../../../core/ai/advisor';
 import { SCOUT_MIN_GAMES, scoutData } from '../../../core/analysis/scouting';
 import { seasonLabel } from '../../../core/constants';
 import { setGameTime } from '../../../core/league/injuries';
-import { injuryName, plural } from '../../../core/format';
+import { injuryName, plural, signed } from '../../../core/format';
 import { Avatar, Help, Ovr, Section, Segmented, Tag } from '../../components/ui';
 import { Term } from '../../components/Glossary';
 import { TeamLogo } from '../../components/TeamLogo';
@@ -132,7 +132,7 @@ function Threats({ league, opp }: { league: League; opp: number }) {
                 {n && (
                   <span className="lr-meta num">
                     {n.pts.toFixed(1)} PTS · {(n.ts * 100).toFixed(1)}% TS · {(n.usg * 100).toFixed(0)}% USG
-                    {n.on !== undefined && n.off !== undefined ? ` · on/off ${n.on - n.off >= 0 ? '+' : '−'}${Math.abs(n.on - n.off).toFixed(1)}` : ''}
+                    {n.on !== undefined && n.off !== undefined ? ` · on/off ${signed(n.on - n.off)}` : ''}
                   </span>
                 )}
               </span>

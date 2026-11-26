@@ -430,17 +430,18 @@ function plainArchetype(r: Ratings): ArchetypeInfo {
   return { label: wing ? 'Utility Wing' : 'Combo Guard', role: wing ? 'glue' : 'playmaker' };
 }
 
-export const ROLE_META: Record<OffRole, { label: string; help: string }> = {
-  creator: { label: 'Primary Creator', help: 'Offense runs through him: most pick-and-rolls and isolations, highest usage.' },
-  scorer: { label: 'Secondary Scorer', help: 'Second option who attacks closeouts, runs pick-and-rolls and gets isolations.' },
-  playmaker: { label: 'Playmaker', help: 'Initiates sets and looks to pass first. Moderate usage, high assists.' },
-  shooter: { label: 'Movement Shooter', help: 'Runs off screens and handoffs for catch-and-shoot threes. Spaces the floor.' },
-  slasher: { label: 'Slasher', help: 'Cuts and attacks closeouts toward the rim.' },
-  roller: { label: 'Rim Runner', help: 'Screens, rolls hard and finishes lobs. Crashes the glass.' },
-  stretch: { label: 'Stretch Big', help: 'Screens and pops for threes, pulling the rim protector away.' },
-  post: { label: 'Post Hub', help: 'Gets post touches to score or pass out of doubles.' },
-  hub: { label: 'Playmaking Hub', help: 'Big who runs handoffs and finds cutters from the elbow.' },
-  glue: { label: 'Glue Guy', help: 'Low usage. Spot-ups, extra passes, defense and hustle.' },
+/** (`short`: the role on the tactics board's plates, 12 characters at most: "Movement Shooter" read "Movement Sh…" on a phone) */
+export const ROLE_META: Record<OffRole, { label: string; short: string; help: string }> = {
+  creator: { label: 'Primary Creator', short: 'Creator', help: 'Offense runs through him: most pick-and-rolls and isolations, highest usage.' },
+  scorer: { label: 'Secondary Scorer', short: 'Scorer', help: 'Second option who attacks closeouts, runs pick-and-rolls and gets isolations.' },
+  playmaker: { label: 'Playmaker', short: 'Playmaker', help: 'Initiates sets and looks to pass first. Moderate usage, high assists.' },
+  shooter: { label: 'Movement Shooter', short: 'Shooter', help: 'Runs off screens and handoffs for catch-and-shoot threes. Spaces the floor.' },
+  slasher: { label: 'Slasher', short: 'Slasher', help: 'Cuts and attacks closeouts toward the rim.' },
+  roller: { label: 'Rim Runner', short: 'Rim Runner', help: 'Screens, rolls hard and finishes lobs. Crashes the glass.' },
+  stretch: { label: 'Stretch Big', short: 'Stretch Big', help: 'Screens and pops for threes, pulling the rim protector away.' },
+  post: { label: 'Post Hub', short: 'Post Hub', help: 'Gets post touches to score or pass out of doubles.' },
+  hub: { label: 'Playmaking Hub', short: 'Passing Hub', help: 'Big who runs handoffs and finds cutters from the elbow.' },
+  glue: { label: 'Glue Guy', short: 'Glue Guy', help: 'Low usage. Spot-ups, extra passes, defense and hustle.' },
 };
 
 /** Base usage weight multiplier per role (how often the offense looks for him). */

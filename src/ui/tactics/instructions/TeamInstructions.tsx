@@ -195,9 +195,17 @@ function Body({
     );
   const moved = <PlaybookLine />;
   const method = (
+    // (one line; how the figures are measured is a tap away)
     <p className="ti-method">
-      Changes apply straight away. Figures are measured{out ? ` over ${out.games} simulated games` : ''} with your rotation against the league. A dot marks your style&apos;s own
-      setting.
+      <span>Applies right away · a dot marks your style&apos;s setting</span>
+      <Help title="How the figures are measured">
+        <p>
+          {out
+            ? `Each figure is measured over ${out.games} simulated games: your rotation against the league.`
+            : 'Each figure is measured over simulated games: your rotation against the league.'}
+        </p>
+        <p>A change is saved as you make it and plays from your next game. The figures refresh a moment after it.</p>
+      </Help>
     </p>
   );
   return (

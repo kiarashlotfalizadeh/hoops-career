@@ -23,7 +23,7 @@ import { Term } from '../components/Glossary';
 import { FA_DAYS, faDayNumber } from '../../core/league/season';
 import { ContractSheet } from '../office/ContractSheet';
 import { FilterSelect } from '../trade/TradeFinder';
-import { money, moneyExact } from '../../core/format';
+import { money, moneyExact, plural } from '../../core/format';
 
 type SortKey = 'value' | 'ovr' | 'pot' | 'ask' | 'age';
 
@@ -214,7 +214,7 @@ export default function FreeAgents() {
               Reset
             </button>
             <button className="btn primary grow" onClick={() => setFiltersOpen(false)}>
-              Show {rows.length} player{rows.length === 1 ? '' : 's'}
+              {`Show ${plural(rows.length, 'player')}`}
             </button>
           </div>
         </div>

@@ -630,8 +630,9 @@ describe('two seasons of the real league', () => {
       expect(goal(out, 'wins')!.target).toBeGreaterThanOrEqual(Math.round(82 * out.floor!));
       expect(goal(out, 'wins')!.target).toBeLessThanOrEqual(Math.round(outlook[tid].pct * 82) + 2);
       // past his allowance, a season that misses the postseason grades Poor at best, lower each season it goes on; reaching it lifts the cap
+      // (and the win goal beside the play-in is said for what it is: his read of the roster, the play-in asked on top)
       expect(goalsWhy(out)).toContain(
-        "2 seasons without the postseason is all I'll take. This season we compete. Miss the play-in and it grades −40 at best, whatever else goes right.",
+        `2 seasons without the postseason is all I'll take. This season we compete. ${goal(out, 'wins')!.target} wins is what I read in this roster. I want the play-in anyway. Miss the play-in and it grades −40 at best, whatever else goes right.`,
       );
       results(l, out, { postseason: 0 });
       expect(gradeOwnerGoals(l, out)).toMatchObject({ grade: FLOOR_GRADE, impatient: true });
@@ -734,7 +735,7 @@ describe('two seasons of the real league', () => {
       ownerEvaluation(l);
       expect(l.ownerReviews!.at(-1)).toMatchObject({ season: l.season, goals: [] });
       // (his verdict in his own manner: ownerVoice.ts)
-      expect(l.inbox[0].body.startsWith(`${ownerWords(l).verdict[verdictOf(l.ownerMood.total)]} Wins: `)).toBe(true);
+      expect(ownerWords(l).verdict[verdictOf(l.ownerMood.total)].some((said) => l.inbox[0].body.startsWith(`${said} Wins: `))).toBe(true);
       expect(l.inbox[0].body).toMatch(/ Wins: [+-]\d+ · Playoffs: [+-]\d+\./);
     }
 

@@ -1123,7 +1123,7 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
     const training = () => decisionThreads(l, l.season, U).find((t) => t.title === 'Training focus')!;
     expect(training().rows[0]).toEqual([
       `${p.firstName} ${p.lastName}, shooting`,
-      "In place since last summer: its skills +3.0, the rest of his game +0.0. The focused skills grew; what balanced work would have done isn't known.",
+      "In place since last summer: its skills +3.0, the rest of his game 0.0. The focused skills grew; what balanced work would have done isn't known.",
     ]);
     // a focus that no development step has run under (set after the season's last check-in) isn't
     // read as progress: it says so, and when the next one is
@@ -1142,7 +1142,7 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
     p.ratingsHistory[1] = { ...p.ratingsHistory[1], r: { ...r0, tp: r0.tp - 3, mid: r0.mid - 3, ft: r0.ft - 3 } };
     p.trainingSince = { season: l.season, day: l.day - 40, r: { ...r0, tp: r0.tp - 1, mid: r0.mid - 1, ft: r0.ft - 1 } };
     expect(training().rows[0][1]).toBe(
-      "Set 40 days ago: its skills +1.0, the rest of his game +0.0. The focused skills barely moved; what balanced work would have done isn't known.",
+      "Set 40 days ago: its skills +1.0, the rest of his game 0.0. The focused skills barely moved; what balanced work would have done isn't known.",
     );
     // a tactical change read only as it was made is a forecast, never told as what happened; a check is
     l.tacticEdits = [

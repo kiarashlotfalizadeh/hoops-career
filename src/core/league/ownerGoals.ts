@@ -1030,18 +1030,25 @@ export function goalsWhy(og: OwnerGoals, voice: 'mail' | 'screen' = 'mail'): str
   else if (pg?.line !== undefined)
     out.push(
       me
-        ? "You inherited this payroll, past my line. I won't hold it against you. Add to it and that's on you."
-        : "You inherited this payroll, past his line. It won't count against you. Adding to it will.",
+        ? `My own line is ${money(pg.line)}. You inherited more than that, so ${money(pg.target)} is yours to stay under: what you inherited, nothing added. Add to it and that's on you.`
+        : `His own line is ${money(pg.line)}. You inherited more, so the goal is ${money(pg.target)}: what you inherited, nothing added. Staying under it costs you nothing. Adding to it counts against you.`,
     );
   else if (pg && /^(Keep|Get) the payroll under /.test(pg.title))
     out.push(me ? "I'll pay some luxury tax, up to that line. Past it, it's on you." : 'He pays some luxury tax, up to that line. Past it, it counts against you.');
   if (og.rebuild?.over) {
     const took = og.rebuild.year - 1 === 1 ? 'One season' : `${og.rebuild.year - 1} seasons`;
     const cap = grade100(patienceCap(og, 0));
+    // (the win goal is still the forecast's read of the roster, and may sit well short of a play-in
+    // place: said, so "Win 18 games" over "Reach the play-in" doesn't read as one ask contradicting the other)
+    const read = wins
+      ? me
+        ? ` ${wins.target} wins is what I read in this roster. I want the play-in anyway.`
+        : ` The ${wins.target} wins are his read of this roster. The play-in is asked on top of them.`
+      : '';
     out.push(
       me
-        ? `${took} without the postseason is all I'll take. This season we compete. Miss the play-in and it grades ${cap} at best, whatever else goes right.`
-        : `${took} without the postseason is all he takes. This season you compete. Miss the play-in and it grades ${cap} at best.`,
+        ? `${took} without the postseason is all I'll take. This season we compete.${read} Miss the play-in and it grades ${cap} at best, whatever else goes right.`
+        : `${took} without the postseason is all he takes. This season you compete.${read} Miss the play-in and it grades ${cap} at best.`,
     );
   } else if (og.rebuild) {
     const { year, of } = og.rebuild;

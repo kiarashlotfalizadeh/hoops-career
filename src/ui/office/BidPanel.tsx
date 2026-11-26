@@ -20,7 +20,7 @@ import { MARKET_HOLD_DAYS, bidDecideDay, bidRivals, bidStanding, marketMoney, mo
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Callout, Line, forYears } from './common';
-import { money, moneyExact } from '../../core/format';
+import { money, moneyExact, plural } from '../../core/format';
 
 const LABEL: Record<keyof PlayerPrefs, string> = { winning: 'Winning', money: 'Money', role: 'Playing time', market: 'Market' };
 
@@ -118,7 +118,7 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
 
       {amount < floor ? (
         <Callout tone="bad" icon={<X size={18} className="bad" />}>
-          <b>Too low to consider.</b> Not under {moneyExact(floor)} a season for {years} year{years > 1 ? 's' : ''}.
+          <b>Too low to consider.</b> Not under {moneyExact(floor)} a season for {plural(years, 'year')}.
         </Callout>
       ) : standing.leads ? (
         <Callout tone="good" icon={<Check size={18} className="good" />}>

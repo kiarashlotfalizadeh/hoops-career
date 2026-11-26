@@ -7,7 +7,7 @@ import { defaultTactics } from '../sim/tactics';
 import { swapJobs } from './coaches';
 import { POOR_GRADE, REVIEWS_KEPT, currentGoals, goalsRecord, gradeOwnerGoals, resultText, setOwnerGoals, type OwnerGoalKind, type OwnerReview } from './ownerGoals';
 import { canBeFired, graceLeft, seasonWeight, ULTIMATUM_MET, ultimatumVerdict } from './jobSecurity';
-import { firingSaid, ownerWords, verdictOf } from './ownerVoice';
+import { firingSaid, ownerWords, verdictSaid } from './ownerVoice';
 import { cameoAtReview } from './ownerCameos';
 
 /** Seasons the user has run his current team, counting this one (grace period, owner weighting). */
@@ -156,8 +156,9 @@ export function ownerEvaluation(league: League) {
   const fired = fireable && (total < FIRING_LINE || verdict === 'missed' || twice);
   const held = impatient ? 'patience' : floored ? 'floor' : undefined;
   // his first words on it, in his own manner (ownerVoice.ts): why he fired the coach, or how the season left him
+  // (his verdict is on this season: its grade where he set goals, his standing where there were none to grade)
   const words = ownerWords(league);
-  const feeling = words.verdict[verdictOf(total)];
+  const feeling = verdictSaid(league, og ? grade : total);
   const said = fired ? firingSaid(league, verdict === 'missed' ? { ultimatum: og!.ultimatum!.text } : 'results') : feeling;
   const strike = fired && twice && verdict !== 'missed' && total >= FIRING_LINE;
   const review: OwnerReview = {

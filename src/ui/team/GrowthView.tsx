@@ -5,7 +5,7 @@
 // rookie watch, and the breakouts around the league. Every name opens his page.
 import { Link } from 'react-router-dom';
 import type { League, Player } from '../../core/types';
-import { CHECK_DAYS, GROUP_LABEL, YOUNG, devReport, devTag, isBreakout, ovrChange, type DevLine, type RookieLine } from '../../core/league/devWatch';
+import { CHECK_DAYS, GROUP_LABEL, YOUNG, devReport, devTag, isBreakout, ovrChange, setupFacts, type DevLine, type RookieLine } from '../../core/league/devWatch';
 import { ordinal } from '../../core/format';
 import { f1 } from '../stats';
 import { fmtDate, playerName, shortName } from '../../core/league/helpers';
@@ -79,6 +79,7 @@ export default function GrowthView() {
   const league = useLeague();
   const r = useLeagueMemo(() => devReport(league), [league]);
   const around = useLeagueMemo(() => leagueBreakouts(league), [league]);
+  const setup = useLeagueMemo(() => setupFacts(league), [league]);
   const next = nextCheck(league);
   const groups = (['rising', 'holding', 'slipping'] as const).filter((g) => r[g].length);
   const row = (x: DevLine) => <DevRow key={x.pid} league={league} p={league.players[x.pid]} why={shortWhy(x.reason, league.players[x.pid])} />;
@@ -112,7 +113,19 @@ export default function GrowthView() {
         ) : (
           <div className="dv-coach-h">From the development coach</div>
         )}
-        <p className="dv-setup">{r.setup}</p>
+        {/* the setup, a fact a line: a figure reads faster in a column than in a sentence */}
+        <dl className="dv-setup">
+          {setup.map((f, i) => (
+            <div key={i} className="dv-fact">
+              <dt>{f.k}</dt>
+              <dd>
+                <span className="num">{f.v}</span>
+                {f.note && <span className="dv-fact-n">{f.note}</span>}
+              </dd>
+            </div>
+          ))}
+          <div className="dv-fact-u">Figures are OVR a year.</div>
+        </dl>
       </section>
 
       {groups.map((g) => (

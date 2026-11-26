@@ -153,9 +153,7 @@ function TipOff({ league, gid, name }: { league: League; gid: number; name: stri
 function forecastIn(edits: number, planned: boolean): string {
   const f = (v: number) => `${v > 0.04 ? '+' : v < -0.04 ? '−' : ''}${Math.abs(v).toFixed(1)}`;
   const base = Math.abs(edits) >= 0.05 ? `Rosters, results and home court, and your checked changes (${f(edits)} pts).` : 'Rosters, results and home court.';
-  return planned
-    ? `${base} Your plan isn't in it: what it does is found out on the floor, and the report says what it was worth.`
-    : `${base} A game plan doesn't move it. A change to your tactics counts once the staff has checked it on ${CHECK_AFTER} played games.`;
+  return planned ? `${base} Your plan isn't in it. The game report says what it was worth.` : `${base} A game plan doesn't move it.`;
 }
 
 /**
@@ -216,10 +214,14 @@ function Hero({ league, opp, onPlan, compact }: { league: League; opp: number; o
             </span>
             <Help title="Chance to win">
               <p>From both teams&apos; net ratings, tonight&apos;s rotations and home court.</p>
-              <p>
-                Your game plan doesn&apos;t move it. What a plan does is found out on the floor, and the game report says what it was worth. A change to your tactics counts once
-                the staff has checked it on played games (Tactics, Season Analysis).
-              </p>
+              <ul>
+                <li>
+                  <b>Game plan:</b> not counted. The game report says what it was worth.
+                </li>
+                <li>
+                  <b>Tactics changes:</b> counted once the staff has checked them on {CHECK_AFTER} played games (Tactics, Season Analysis).
+                </li>
+              </ul>
             </Help>
           </div>
         )}

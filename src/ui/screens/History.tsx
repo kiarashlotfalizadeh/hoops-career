@@ -595,7 +595,7 @@ function HallOfFame({ league }: { league: League }) {
       <Poster
         over={`Hall of Fame · ${league.startSeason < league.season ? `since ${seasonLabel(league.startSeason)}` : 'this league'}`}
         head={latest ? `Latest in: ${latest.firstName} ${latest.lastName}` : 'Nobody inducted yet'}
-        dek={latest ? undefined : 'Legends go in when they retire.'}
+        dek={latest ? undefined : retired.length ? 'Only the greats go in. Nobody who has retired here has made it.' : 'The greats go in when they retire.'}
         // (a count of none would only repeat the headline)
         fig={hof.length ? { v: hof.length, k: 'inducted' } : undefined}
       />
@@ -663,7 +663,8 @@ function LegendRow({ league, p, hof }: { league: League; p: Player; hof?: boolea
           )}
         </span>
         <span className="sub">
-          {p.pos} · {seasonLabel(from).slice(0, 4)}–{p.retiredSeason ? String(p.retiredSeason).slice(2) : 'now'} · {c.gp.toLocaleString('en-US')} game{c.gp === 1 ? '' : 's'}
+          {p.pos} · {seasonLabel(from).slice(0, 4)}–{p.retiredSeason ? String(p.retiredSeason).slice(2) : 'now'} ·{' '}
+          {`${c.gp.toLocaleString('en-US')} ${c.gp === 1 ? 'game' : 'games'}`}
           {tracked > from ? ` since ${seasonLabel(tracked)}` : ''}
           <span className="sr-only">, {Math.round(c.pts).toLocaleString('en-US')} points</span>
         </span>

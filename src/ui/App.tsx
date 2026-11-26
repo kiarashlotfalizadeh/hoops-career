@@ -214,7 +214,8 @@ function statusLine(league: League): string {
   const t = league.teams[league.userTid];
   switch (league.phase) {
     case 'preseason':
-      return `Preseason · ${seasonLabel(league.season)}`;
+      // (every line here fits beside the top bar's buttons on a 360px phone: 20 characters at most)
+      return `Preseason ${seasonLabel(league.season)}`;
     case 'regular': {
       const ts = curTeamSeason(league, league.userTid);
       if (ts.won + ts.lost === 0) return `${date} · Week 1`;
@@ -226,13 +227,13 @@ function statusLine(league: League): string {
     case 'playoffs':
       return `Playoffs · ${date}`;
     case 'draftLottery':
-      return `Draft lottery · ${league.season}`;
+      return `Lottery · ${league.season}`;
     case 'draft':
       return `${league.season} draft`;
     case 'resign':
       return `Re-signing · ${league.season}`;
     case 'freeAgency':
-      return `Free agency · Day ${faDayNumber(league)} of ${FA_DAYS}`;
+      return `Free agency · ${faDayNumber(league)}/${FA_DAYS}`;
     default:
       return PHASE_LABEL[league.phase] ?? '';
   }
@@ -345,7 +346,7 @@ function SaveTick() {
   if (!shown || quiet) return null;
   return (
     <span key={shown} className="tb-saved" role="status">
-      <Check size={14} aria-hidden="true" /> Saved
+      <Check size={14} aria-hidden="true" /> <span className="tb-saved-w">Saved</span>
     </span>
   );
 }

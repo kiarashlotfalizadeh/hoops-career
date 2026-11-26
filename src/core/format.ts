@@ -14,6 +14,15 @@ export const moneyExact = (k: number) => money(k, Math.round(k) % 100 ? 2 : 1);
 /** A count with its noun: "1 game", "5 games", "2 second-rounders" (`many` for irregular plurals). */
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+/**
+ * A signed figure to `d` decimals: "+1.2", "−0.3". One that rounds to zero is "0.0", never "−0.0":
+ * the sign is read off the rounded figure, not the raw one.
+ */
+export function signed(x: number, d = 1): string {
+  const s = Math.abs(x).toFixed(d);
+  return `${Number(s) === 0 ? '' : x < 0 ? '−' : '+'}${s}`;
+}
+
 /** 1st, 2nd, 3rd, 4th ... 11th, 12th, 13th ... 21st, 22nd, 101st, 111th. */
 export const ordinalSuffix = (n: number) => {
   const v = Math.abs(n) % 100;

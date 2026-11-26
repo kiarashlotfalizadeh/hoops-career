@@ -184,7 +184,9 @@ export function Board({
           {rows.map((r) => {
             const spot = placed.get(r.p.pid);
             if (!spot) return null;
-            const role = inPoss ? ROLE_META[r.off].label : DEF_ROLE_META[r.def].short;
+            // (the plate's short name; a screen reader hears the whole one)
+            const role = inPoss ? ROLE_META[r.off].short : DEF_ROLE_META[r.def].short;
+            const roleSaid = inPoss ? ROLE_META[r.off].label : DEF_ROLE_META[r.def].label;
             const fit = inPoss ? r.offStars : r.defStars;
             const better = inPoss ? r.offBetter : r.defBetter;
             const off = !!better;
@@ -197,7 +199,7 @@ export function Board({
                 // (plain numbers, in hundredths of the floor's width and height: the styles turn them into a `translate` that glides)
                 style={{ '--x': ((spot.x + APRON) / VB_W) * 100, '--y': ((spot.y + APRON) / VB_H) * 100 } as CSSProperties}
                 onClick={() => onPick(r.p.pid)}
-                aria-label={`${nameOf(r.p.pid)}, ${spot.name}: ${role}, ${fit} of 5 for it${off ? `; suits ${bestName} better` : ''}`}
+                aria-label={`${nameOf(r.p.pid)}, ${spot.name}: ${roleSaid}, ${fit} of 5 for it${off ? `; suits ${bestName} better` : ''}`}
               >
                 {/* (a long name takes the narrowest cut rather than lose its end: "Gilgeous-Alexan…") */}
                 <span className={`tx-floor-n${nameOf(r.p.pid).length > 12 ? ' long' : ''}`}>
