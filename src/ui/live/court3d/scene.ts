@@ -2937,7 +2937,7 @@ export class CourtScene {
       if (AIMED.has(act) || act === 'ft' || (j === has && next !== undefined && (AIMED.has(next) || next === 'ft'))) out[j] = rim;
       else if (act === 'pass' && has >= 0 && has !== j) out[j] = spot(has);
       else if (j === has && next === 'pass' && nb!.hold !== undefined && nb!.hold >= 0 && nb!.hold !== j) out[j] = spot(nb!.hold);
-      else if (j === has && j === a.hold && (act === 'dribble' || act === 'hold')) {
+      else if (j === has && j === a.hold && (act === 'dribble' || act === 'hold' || act === 'post')) {
         // (up the floor, or at one of his teammates, a new look every so often)
         const r = hash(pid, Math.floor((this.lookMs + pid * 389) / SCAN_MS));
         const mates = pids.map((_, k) => k).filter((k) => k !== j && k < nO === j < nO);
@@ -3123,6 +3123,17 @@ export class CourtScene {
         if (b.act[j] === 'screen' && a.act[j] !== 'screen') {
           figs[nO + j]?.pup.cue('call', null, 600);
           if (onBall >= 0 && onBall < nO) this.glance(figs[nO + j], figs[nO + onBall], LOOK_CALL);
+        } else if (
+          a.act[j] === 'screen' &&
+          b.act[j] === 'move' &&
+          onBall >= 0 &&
+          onBall < nO &&
+          onBall !== j &&
+          Math.hypot(a.o[j].x - a.o[onBall].x, a.o[j].y - a.o[onBall].y) < ROLL_ASK
+        ) {
+          // (a ball screen used, and the screener off it to the rim or out to his shot: a hand up for the ball, the
+          // target he gives the man who has it)
+          figs[j]?.pup.cue('ask', null, 500);
         } else if (!asked && b.act[j] === 'stand' && !b.act.includes('inbound') && figs[j] && figs[j] !== holder && holder && holder.side === figs[j].side && r(20 + j) < 0.35) {
           const open = figs.every((f) => f.side === figs[j].side || Math.hypot(f.pup.x - figs[j].pup.x, f.pup.z - figs[j].pup.z) > OPEN_FT);
           if (open) {
@@ -4112,8 +4123,8 @@ export class CourtScene {
     if (d < 1e-3 || d > BUMP_REACH) return;
     // (a whistle's own move begins with it; in any other it comes as they come together)
     const at = b.foul !== undefined ? BUMP_AT_FOUL : BUMP_AT;
-    // (a driver's shoulder into the man set in his way; any other, a body into a body)
-    const kind: Contact = b.act[h[0]] === 'drive' || b.act[h[1]] === 'drive' ? 'drive' : 'bump';
+    // (a driver's shoulder into the man set in his way; a post-up's bump back into the man on him; any other, a body into a body)
+    const kind: Contact = b.act[h[0]] === 'drive' || b.act[h[1]] === 'drive' ? 'drive' : b.act[h[0]] === 'post' ? 'post' : 'bump';
     if (this.braceKey !== key && lu >= at - BUMP_BRACE) {
       this.braceKey = key;
       from.pup.hit(dx / d, dz / d, 0.5 * h[2], kind);
@@ -4313,6 +4324,8 @@ function headOf(f: Fig): V3 {
 
 /** An open man has nobody of theirs within this far of him (ft). */
 const OPEN_FT = 9;
+/** A screener coming off his screen puts a hand up for the ball if the man with it was this near him (ft): a ball screen, not one set away from it. */
+const ROLL_ASK = 9;
 /** Of the men at spots `from`..`to` (pairs of x, z; where his body is, once he has one), the nearest to spot `j`, if he is within reach of him. */
 function nearestOf(
   spots: ArrayLike<number>,

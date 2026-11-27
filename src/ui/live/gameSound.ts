@@ -84,7 +84,8 @@ export function beatSound(script: Script, i: number, speed: number, stakes: numb
   if (!next || speed > 2.4) return;
   const ms = next.dur / Math.max(0.25, speed);
   const offense = next.act.slice(0, n);
-  if (offense.some((a) => ON_BALL.has(a))) {
+  // (a post-up's bump dribbles too: the man backing in has it, a man sealing for it has not)
+  if (offense.some((a, j) => ON_BALL.has(a) || (a === 'post' && next.hold === j))) {
     const drive = offense.includes('drive');
     // a dribble every 0.4 s or so (quicker attacking the basket), the first just after the move starts
     const gap = drive ? 300 : 410;

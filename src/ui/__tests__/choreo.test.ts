@@ -180,6 +180,46 @@ describe('live court choreography', () => {
         info,
       );
       expect(post.frames.at(-1)!.hold).toBe(off.indexOf(5));
+      // a post-up is a duel: he seals with his man on his back before the entry pass, then backs him down a bump at a
+      // time, his back to the basket and the man between him and it; three bumps in a long possession that ends in
+      // his own shot, which goes up from where he backed down to; the double leaves his man on him and brings another
+      {
+        const j = off.indexOf(5);
+        const pair = [[j, off.length + j]];
+        const rim = (p: Pt) => Math.hypot(p.x - BASKET.x, p.y - BASKET.y);
+        const seal = post.frames.findIndex((f) => f.act[j] === 'post' && f.hold !== j);
+        const got = post.frames.findIndex((f) => f.act[j] === 'catch');
+        expect(seal).toBeGreaterThan(0);
+        expect(got).toBeGreaterThan(seal);
+        expect(post.frames[seal].meet).toEqual(pair);
+        const hook: PossStep = { k: 'shot', pid: 5, x: -3, y: 9, zone: 'paint', made: false, v: 2, d: 'hook shot' };
+        const long = (then: PossStep[]) => buildScript({ ...log([{ k: 'advance', pid: 1 }, { k: 'post', pid: 5 }, ...then]), clockEnd: 676 }, info);
+        const worked = long([hook]);
+        expect(long([hook])).toEqual(worked);
+        for (const [s, n] of [
+          [post, 1],
+          [worked, 3],
+          [long([{ k: 'trap', pid: 5 }]), 2],
+        ] as const) {
+          const bumps = s.frames.filter((f) => f.hit?.[0] === j);
+          expect(bumps).toHaveLength(n);
+          let was = rim(s.frames.find((f) => f.act[j] === 'catch')!.o[j]);
+          for (const f of bumps) {
+            expect([f.act[j], f.hold, f.meet]).toEqual(['post', j, pair]);
+            expect(rim(f.o[j])).toBeLessThan(was - 1);
+            was = rim(f.o[j]);
+            expect(rim(f.d[j])).toBeLessThan(was - 2.9);
+            expect(Math.cos(f.face[j] - Math.atan2(f.o[j].y - BASKET.y, f.o[j].x - BASKET.x))).toBeGreaterThan(0.5);
+            expect(closest(f)).toBeGreaterThanOrEqual(2.9);
+          }
+        }
+        const up = worked.frames.findIndex((f) => f.how === 'hook');
+        expect(Math.hypot(worked.frames[up].o[j].x - worked.frames[up - 1].o[j].x, worked.frames[up].o[j].y - worked.frames[up - 1].o[j].y)).toBeLessThan(4);
+        const doubled = long([{ k: 'trap', pid: 5 }]).frames.at(-1)!;
+        expect(doubled.meet).toEqual(pair);
+        expect(doubled.act.filter((a) => a === 'trap')).toHaveLength(2);
+        expect(doubled.d.filter((p) => Math.hypot(p.x - doubled.o[j].x, p.y - doubled.o[j].y) < 3.5).length).toBeGreaterThanOrEqual(2);
+      }
     }
 
     // the lanes filled in transition: the four without the ball never share one
@@ -294,6 +334,25 @@ describe('live court choreography', () => {
         expect(beats(s)[1].hold).toBe(H);
         expect(s.frames.filter((f) => f.flash?.kind === 'info')).toHaveLength(1);
       }
+      // the screen is set before it is used: the screener is on his spot, still, from a beat before the handler comes
+      // off his shoulder until the ball is past him, and only then rolls; the handler takes his man a step away from the
+      // screen first, and that man runs into it (the same script built twice is the same script)
+      for (const c of ['drop', 'hedge', 'switch'] as const) {
+        const s = pnr(c);
+        const i = s.frames.findIndex((f) => f.cap?.startsWith('P5 screens for P1'));
+        const [up, set, by, use, turn] = s.frames.slice(i - 3, i + 2);
+        for (const f of [set, by, use]) {
+          expect(f.act[S]).toBe('screen');
+          expect(far(f.o[S], up.o[S])).toBeLessThan(0.01);
+        }
+        const side = Math.sign(up.o[S].x - up.o[H].x);
+        expect((set.o[H].x - up.o[H].x) * side).toBeLessThan(-1);
+        expect((by.o[H].x - up.o[S].x) * side).toBeGreaterThan(0);
+        expect(far(by.o[H], by.o[S])).toBeLessThan(3.5);
+        expect(by.meet).toEqual([[S, 5 + HD]]);
+        expect(far(turn.o[S], up.o[S])).toBeGreaterThan(8);
+        expect(pnr(c).frames).toEqual(s.frames);
+      }
     }
 
     // a zone moves with the ball: to its side of the floor, its nearest man out on it, the far side in toward the lane
@@ -337,11 +396,48 @@ describe('live court choreography', () => {
         names,
       );
       const i = s.frames.findIndex((f) => f.cap === 'P1 drives');
-      const [was, drive] = [s.frames[i - 1], s.frames[i]];
+      // (a drive is a set-up, a first step by his man and the run downhill: the others have made their moves by its end)
+      const e = s.frames.findIndex((f) => f.cap === 'P1 finds P4') - 1;
+      const [was, drive] = [s.frames[i - 1], s.frames[e]];
       const shooter = drive.o[off.indexOf(4)];
       expect(Math.hypot(shooter.x - spot.x, shooter.y - spot.y)).toBeLessThan(2);
       // (so the pass goes straight to him: no dash to the spot first)
-      expect(s.frames[i + 1].cap).toBe('P1 finds P4');
+      expect(e).toBeGreaterThan(i);
+      {
+        // the drive gets by his man: in front of him as it starts, on his hip (beside him, no nearer the rim) as it ends,
+        // and the help is who is in front of him then
+        const rim = (p: Pt) => Math.hypot(p.x - BASKET.x, p.y - BASKET.y);
+        const [h, g] = [off.indexOf(1), def.indexOf(11)];
+        expect(rim(was.d[g])).toBeLessThan(rim(was.o[h]) - 2);
+        expect(rim(drive.d[g])).toBeGreaterThan(rim(drive.o[h]));
+        expect(Math.hypot(drive.d[g].x - drive.o[h].x, drive.d[g].y - drive.o[h].y)).toBeLessThan(4.5);
+        expect(s.frames[i].hit).toEqual([h, 5 + g, expect.any(Number)]);
+        expect(drive.d.some((p, k) => k !== g && rim(p) < rim(drive.o[h]) && Math.hypot(p.x - drive.o[h].x, p.y - drive.o[h].y) < 8)).toBe(true);
+        // (he sold the other side first: the step before the drive's own took him across, away from the side he went by on)
+        expect(s.frames[i - 1].act[h]).toBe('dribble');
+        expect(Math.hypot(s.frames[i - 1].o[h].x - s.frames[i - 2].o[h].x, s.frames[i - 1].o[h].y - s.frames[i - 2].o[h].y)).toBeGreaterThan(1.5);
+        // a drive ends where the log has him shoot: a pull-up from there, a runner off his last steps, never a dash back out to the spot
+        const pull = buildScript(
+          log([
+            { k: 'advance', pid: 1 },
+            { k: 'drive', pid: 1 },
+            { k: 'shot', pid: 1, x: 10, y: 14, zone: 'mid', made: false, v: 2, d: 'pull-up jumper' },
+          ]),
+          info,
+          undefined,
+          undefined,
+          names,
+        );
+        const j = pull.frames.findIndex((f) => f.act[h] === 'jumper');
+        expect(pull.frames[j - 1].act[h]).toBe('drive');
+        expect(Math.hypot(pull.frames[j - 1].o[h].x - 10, pull.frames[j - 1].o[h].y - 14)).toBeLessThan(0.1);
+        // (his man, beaten, contests it from beside him as he came, not from in front of him)
+        const [sh, on, came] = [pull.frames[j].o[h], pull.frames[j].d[g], pull.frames[j - 2].o[h]];
+        expect(Math.hypot(on.x - sh.x, on.y - sh.y)).toBeLessThan(3.6);
+        const run = Math.hypot(sh.x - came.x, sh.y - came.y);
+        expect(Math.abs(((on.x - sh.x) * (sh.x - came.x) + (on.y - sh.y) * (sh.y - came.y)) / run)).toBeLessThan(1.5);
+        for (const f of pull.frames) expect(closest(f)).toBeGreaterThan(2.5);
+      }
       // (somebody out on the floor is nearer where the driver left from than anybody was)
       const left = was.o[0];
       const near = (f: Frame) => Math.min(...f.o.slice(1).map((p) => Math.hypot(p.x - left.x, p.y - left.y)));
@@ -760,6 +856,22 @@ describe('live court choreography', () => {
       expect(brk.frames[0].hold).toBe(0);
       // (the defense is still getting back as the ball crosses half court)
       expect(brk.frames[1].d.some((p) => p.y > 30)).toBe(true);
+      // the steal itself: he gets a hand on it, it is loose ahead of him for a beat (nobody's), and he runs it down
+      const poke = stolen.frames.findIndex((f) => f.act[off.length] === 'steal');
+      expect([stolen.frames[poke].hold, stolen.frames[poke + 1].hold]).toEqual([off.length, -1]);
+      expect(stolen.frames[poke + 1].ball.y).toBeGreaterThan(stolen.frames[poke].ball.y + 5);
+      // and the run-out is a breakaway, by where it left them: the thief ahead of all five, nobody ever set in front
+      // of him, the nearest of them at his hip by the end; nobody faster than a man runs; and drawn the same twice
+      for (const f of brk.frames) expect(Math.min(...f.d.map((p) => p.y))).toBeGreaterThan(f.o[0].y);
+      const hip = brk.frames.at(-1)!;
+      expect(Math.min(...hip.d.map((p) => Math.hypot(p.x - hip.o[0].x, p.y - hip.o[0].y)))).toBeLessThan(12);
+      expect(brk.frames.at(-1)!.o[0].y).toBeLessThan(20);
+      brk.frames.forEach((f, i) => {
+        const [now, was] = [[...f.o, ...f.d], i ? [...brk.frames[i - 1].o, ...brk.frames[i - 1].d] : []];
+        was.forEach((p, j) => expect(Math.hypot(now[j].x - p.x, now[j].y - p.y) / f.dur).toBeLessThan(0.0545));
+      });
+      expect(brk.frames.some((f) => f.flat?.length)).toBe(true);
+      expect(buildScript({ ...log([{ k: 'transition', pid: 11 }]), off: 1, kind: 'transition' }, info, undefined, undefined, undefined, undefined, standing(stolen))).toEqual(brk);
     }
 
     // captions call the play by name as the court reaches each beat, and the shot as the play-by-play does

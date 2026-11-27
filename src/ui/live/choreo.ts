@@ -108,6 +108,11 @@ export interface Frame {
    * touching (the 2D court leaves them where they are).
    */
   meet?: [number, number][];
+  /**
+   * Who runs flat out through this move (indices into [offense..., defense...]): the men filling a break's lanes and
+   * the ones chasing it. A man who is only getting somewhere may go FLAT in it, not RUN (see paced).
+   */
+  flat?: number[];
 }
 
 export interface Script {
@@ -239,7 +244,8 @@ export function tangents(f: readonly Frame[], nO: number): Pt[][] {
  *  - a man with nothing to do but get somewhere (LAGS: not on the ball, not about to have it, not meeting a man
  *    body to body) goes no farther in a move than his legs take him: as fast as he was going, plus what he
  *    gathers, up to RUN. He makes up the rest in the moves after (a defense getting back trails the ball up the
- *    floor), running and facing the way he goes while he does;
+ *    floor), running and facing the way he goes while he does (on a break, the men a move has running flat out, its
+ *    `flat`, up to FLAT);
  *  - then each move lasts long enough that nobody's path through it, as the court draws it (tangents), is faster
  *    than TOP anywhere: a man who has to be somewhere (the ball, a screen) takes as long as his legs need.
  * What is changed is changed in place.
@@ -262,7 +268,7 @@ function paced(frames: Frame[], nO: number) {
     const want = Array.from({ length: n }, (_, j) => at(i, j));
     const to = want.map((w, j) => {
       const far = dist(w, now[j]);
-      const most = f.dur * Math.min(RUN, went[j] + GAIN * f.dur);
+      const most = f.dur * Math.min(f.flat?.includes(j) ? FLAT : RUN, went[j] + GAIN * f.dur);
       const free = f.dur > 0 && LAGS.has(f.act[j]) && f.hold !== j && next?.hold !== j && !f.meet?.some((m) => m.includes(j));
       return free && far > most ? { x: now[j].x + ((w.x - now[j].x) * most) / far, y: now[j].y + ((w.y - now[j].y) * most) / far } : w;
     });
@@ -423,6 +429,104 @@ const LEAK = 0.024;
 /** Coming up the floor in two moves, a man without the ball is this much of the way across to his own spot's side of it by the end of the first. */
 const LANE = 0.72;
 const LEAK_TO = 44;
+/**
+ * The open floor (see runBreak). A break is drawn a keyframe every BEAT ms, its last one no shorter than BEAT_LEAST,
+ * and never more than BEATS of them. The man with the ball pushes it at PUSH (ft a ms of the play: 21 ft a second of
+ * his own time), at EASY while he only leads it for the man the log has running it, and no slower than WAIT while
+ * the man his pass is for catches up. The men filling a lane and the ones chasing the ball from behind run flat out,
+ * FLAT (24 ft a second: a frame's `flat`); a man who trails the play, and a defender who is already back and giving
+ * ground in front of it, go at BACK. A man behind the ball when it changed hands has to turn round first:
+ * TURN_ROUND ms of the first beat are gone before he runs.
+ */
+const BEAT = 360;
+const BEAT_LEAST = 170;
+const BEATS = 10;
+const PUSH = 0.042;
+const EASY = 0.036;
+const WAIT = 0.022;
+const FLAT = 0.048;
+const BACK = 0.034;
+const TURN_ROUND = 250;
+/**
+ * Getting the ball to the man who runs the break. A man with it more than LEAD_BY ft up the floor from him (a thief,
+ * already gone) leads it himself, to LEAD_TO on his own side of the floor at the farthest, and gives it up once the
+ * runner is within HAND_NEAR ft of him, a pass of HAND_MS on the run; anyone else throws it ahead to him as he sets
+ * off, a pass of AHEAD_MS.
+ */
+const LEAD_BY = 9;
+const LEAD_TO: [number, number] = [11, 25];
+const HAND_NEAR = 15;
+const AHEAD_MS = 320;
+const HAND_MS = 300;
+/**
+ * Where a break takes everyone (ft; `s` the side a man is on). The ball: FINISH off the spot of the handler's own
+ * shot at the rim (to the side he comes from, and out), the spot of his own jump shot, DISH when he drops it off to
+ * a runner and KICK when he finds a shooter (the side away from that man, at about the foul line), and RUN_TO when
+ * the log has nothing of the kind next. The runner his pass is for: RUNNER off his own shot. The rest: a wing
+ * goes wide (WIDE, until he is past WIDE_UNTIL) and on to the corner (CORNER); one man runs to the far block (BLOCK);
+ * the deepest trails to the top (TRAIL_TO).
+ */
+const FINISH: [number, number] = [3.5, 8.5];
+const DISH: [number, number] = [5, 20];
+const KICK: [number, number] = [4, 20.5];
+const RUN_TO: Pt = { x: 2, y: 16 };
+const RUNNER: [number, number] = [6.5, 10];
+const WIDE: [number, number] = [19.5, 40];
+const WIDE_UNTIL = 44;
+const CORNER: [number, number] = [21, 6.5];
+const BLOCK: [number, number] = [9, 7.5];
+const TRAIL_TO = 28;
+/**
+ * A break's defense. A man more than DEEPER ft nearer his basket than the ball when it changed hands is back; the
+ * deepest of them takes the rim (RIM_AT), the next steps up to the ball once it is within PICK_UP ft of him (until
+ * then he waits for it at MEET_AT). A man chasing the ball runs at its hip: HIP to the side and behind. A man who is
+ * back gives ground no faster than the ball comes while he is more than CUSHION ft ahead of it, and backs up facing
+ * it on a step shorter than BACK_STEP (a longer one he turns and runs).
+ */
+const DEEPER = 3;
+const RIM_AT = 8.5;
+const PICK_UP = 18;
+const MEET_AT = 24;
+const HIP: [number, number] = [2.6, 2.2];
+const CUSHION = 14;
+const BACK_STEP = 6;
+/**
+ * Through a break's own pass and its shot everyone else runs on, RUN_ON ms of it a move (see `broke`). Its shot is
+ * contested by a man whose legs have got him within CHASE_REACH ft of it (see ranDown), and by nobody when no man's
+ * have. A dropped-off pass is taken IN_STRIDE ft nearer the rim than where it was thrown to.
+ */
+const RUN_ON = 320;
+const CHASE_REACH = 6;
+const IN_STRIDE = 4;
+/**
+ * A steal. A thief more than PICK_OFF ft from the man who loses it picks off a pass: he steps JUMP ft into its lane
+ * and is GONE ft up the floor with it in the next move. A nearer one gets a hand on it, lunging to REACH ft of him
+ * if he is farther off than that (an arm's length: nearer, and the ball comes to his hands through his own chest).
+ * It is poked LOOSE ft (and up to LOOSE_MORE more) up the floor, or out to his side if up the floor is behind him,
+ * and is loose for LOOSE_MS, while he goes LOOSE_RUN of the way to it; he gathers it on the run with it still SCOOP
+ * ft ahead of him (a reach: it comes up into his hands, not through his legs). The man who lost it turns and goes
+ * after it, RUE_STEP ft, a move late. The rest of the floor starts the other way, TURN_STEP ft in the last move.
+ */
+const PICK_OFF = 7;
+const REACH = 4.2;
+const JUMP = 5;
+const GONE = 9;
+const STEAL_MS = 420;
+const GONE_MS = 300;
+const LOOSE = 9;
+const LOOSE_MORE = 3;
+const LOOSE_MS = 250;
+const LOOSE_RUN = 0.4;
+const SCOOP = 1.6;
+const GATHER_MS = 300;
+const RUE_STEP = 3;
+const TURN_STEP = 2.5;
+/**
+ * A blocked shot is loose for BLOCK_MS: the man who gets it starts SCRAMBLE[0] ft toward where it comes down, and the
+ * nearest man of the other side SCRAMBLE[1] ft after it.
+ */
+const BLOCK_MS = 300;
+const SCRAMBLE: [number, number] = [1.5, 3];
 /** A shot from nearer the rim than this (ft), a layup or a dunk is contested from beside the rim, this far from it. */
 const RIM_NEAR = 3.5;
 const BESIDE = 3.2;
@@ -577,32 +681,56 @@ function awayOnArc(p: Pt, from: Pt, ft: number): Pt {
 }
 
 /**
- * A ball screen, as each coverage plays it (ft, in the screen's own frame: `s` the side it is set on, down the floor
- * toward the basket). The screener sets it SCREEN_AT off the handler, on his man's hip. The handler comes off it
- * over the top (USE), then turns the corner downhill (TURN) while the screener rolls to ROLL_Y. What the two
+ * A ball screen, as each coverage plays it (ft, in the screen's own frame: across to the side it is set on, and down
+ * from the ball toward the rim, which is where the man on the ball stands; iced, straight down the floor, the
+ * sideline being what the ball is sent along). The screener sets it SCREEN_AT off the handler: beside his man, on
+ * the hip he will have to turn. He stands there, set, while the handler takes his man a step away from it (SET_UP),
+ * comes back over the top of it off the screener's shoulder (BY, his man run into the screen: JAM off it) and gets
+ * past it (USE). Only then does the handler turn the corner downhill (TURN) and the screener leave: he rolls to
+ * ROLL_Y, or pops, toward a jump shot the play has coming for him from POP_FROM ft out or more. What the two
  * defenders do with that is the coverage:
- *  - drop: the big sinks DROP ft under the ball, between it and the rim; the guard goes over and trails (TRAIL);
- *  - hedge: the big jumps out into the handler's way a beat (SHOW) and strings him out (STRUNG), then gets back;
+ *  - drop: the big sinks DROP ft under the ball, between it and the rim (DROP_SET under the screen while it is
+ *    set); the guard goes over the top and trails (TRAIL);
+ *  - hedge: the big waits on the screener's high side (HEDGE_AT off him), jumps out into the handler's way a beat
+ *    (SHOW) and strings him out (STRUNG), then gets back;
  *  - blitz: both go at the ball (TRAP_OFF each side of it) and he backs out of it (BACK_OUT); the roller stops
  *    short (SHORT_ROLL_Y) and the weak side's nearest man takes him;
  *  - ice: the guard jumps to the screen's side of the ball (ICE_ON) and sends it down the sideline away from the
  *    screen (ICED, then ICED_ON), where the big is waiting (ICE_WALL under the ball);
- *  - switch: the big takes the ball, the guard the roller, and they keep them for the rest of the possession.
+ *  - switch: the big waits under the way the ball is coming (SWITCH_AT off the screener) and takes it, the guard
+ *    stays on the screener, and they keep them for the rest of the possession.
  */
 const SCREEN_AT: [number, number] = [2.8, -2.9];
 const SCREEN_ICE: [number, number] = [3.6, -2.2];
-const USE: [number, number] = [5.4, -0.6];
-const TURN: [number, number] = [6, -6];
+const SET_UP: [number, number] = [-1.5, -0.8];
+const BY: [number, number] = [3.6, 0.2];
+const JAM: [number, number] = [-2.25, 1.9];
+const USE: [number, number] = [7, -1.8];
+const TURN: [number, number] = [7.2, -7];
 const ROLL_Y = 12;
+const POP_FROM = 16;
 const DROP = 9;
+const DROP_SET = 5;
 const TRAIL: [number, number] = [-3.1, 0.3];
+const HEDGE_AT: [number, number] = [2.9, 0.6];
 const SHOW: [number, number] = [8, -1.8];
 const STRUNG: [number, number] = [5, 1];
 const SLOWED: [number, number] = [6.5, -4];
 const TRAP_OFF: [number, number] = [2.3, -1.9];
-const TRAPPED: [number, number] = [4.2, 1.2];
+const TRAPPED: [number, number] = [4.6, 2];
 const BACK_OUT: [number, number] = [3.5, 3.5];
 const SHORT_ROLL_Y = 17;
+const SWITCH_AT: [number, number] = [2.4, -1.7];
+/**
+ * A ball screen's beats (ms): the screener comes up (SCREEN_UP, or as long as his legs need: see paced), stands set
+ * while the handler sets his man up (SCREEN_SET), the handler comes off his shoulder (SCREEN_BY) and gets past him
+ * (SCREEN_USE), then turns the corner as the screener rolls (SCREEN_ROLL).
+ */
+const SCREEN_UP = 480;
+const SCREEN_SET = 300;
+const SCREEN_BY = 400;
+const SCREEN_USE = 300;
+const SCREEN_ROLL = 440;
 const ICE_ON: [number, number] = [2.4, 1.9];
 const ICED: [number, number] = [-3.5, -3.5];
 const ICED_ON: [number, number] = [-5, -8];
@@ -623,6 +751,110 @@ const DRIFT = 3.5;
 const LIFT = 5;
 const SPACE = 3.5;
 const DUNKER: Pt = { x: 6.5, y: 6.5 };
+/**
+ * A drive is three beats, not one run at the man in front of him (ft, and ms of the play):
+ *  - the set-up: a hard dribble DRIVE_JAB across, away from the side he means to go, his man going with it
+ *    (DRIVE_JAB_MS; only out on the floor, DRIVE_JAB_FROM from the rim or farther, with DRIVE_JAB_FAR to go);
+ *  - the first step: by his man on the other side, DRIVE_BY off where the man stands and DRIVE_PAST beyond him,
+ *    a shoulder into him on the way (DRIVE_STEP_MS). The man is left on his hip: DRIVE_HIP beside him and behind;
+ *  - downhill: to where the drive ends (see driveEnd), at DRIVE_PACE (ft a ms; never under DRIVE_DOWN_MS), his man
+ *    trailing at DRIVE_TRAIL beside him and behind, the help stepping up in front.
+ * A drive of under DRIVE_SHORT ft, or one his man stops (the log has the ball lost or trapped next), is one move
+ * with the man in front of him all the way.
+ */
+const DRIVE_JAB = 1.9;
+/** An isolation's drive opens with a size-up: a dribble this far (ft) at the side he means to go, this long (ms), then the set-up back across. */
+const SIZE_UP = 1.4;
+const SIZE_UP_MS = 300;
+const DRIVE_JAB_MS = 240;
+const DRIVE_JAB_FROM = 15;
+const DRIVE_JAB_FAR = 9;
+const DRIVE_BY = 3.1;
+const DRIVE_PAST = 0.9;
+const DRIVE_STEP_MS = 230;
+const DRIVE_HIP: [number, number] = [3, 0.9];
+const DRIVE_PACE = 0.034;
+const DRIVE_DOWN_MS = 300;
+const DRIVE_TRAIL: [number, number] = [2.7, 1.9];
+const DRIVE_SHORT = 5.5;
+/**
+ * Where a drive ends is where the log has him next: a jump shot goes up from there; a floater or a hook off his last
+ * steps, RUNNER_IN short of its spot (and no more than this share of the way); a layup or a dunk off a gather GATHER
+ * short of the rim's side he finishes on. With no shot of his own next (a kick-out, a whistle), he gets into the
+ * lane: DRIVE_TO from the rim on his line to it, or from nearer than that a step or two closer (DRIVE_CLOSER, never
+ * nearer than DRIVE_NEAR).
+ */
+const RUNNER_IN = 4;
+const GATHER = 6.5;
+const DRIVE_TO = 8;
+const DRIVE_CLOSER = 3;
+const DRIVE_NEAR = 4.5;
+/**
+ * A shot off a drive that got by his man: at the rim the man is still behind his hip as it goes up (CHASED back
+ * and beside) and the help, if any is within HELP_REACH of the shot, is who meets him there; a floater or a
+ * pull-up is contested from his side by the man catching him up (BESIDE_SHOT beside and ahead), not from in front.
+ */
+const CHASED: [number, number] = [1.5, 3.2];
+const HELP_REACH = 10;
+const BESIDE_SHOT: [number, number] = [3.1, 0.5];
+/**
+ * A cut to the rim from CUT_FAR ft or more is a set-up and a burst, and the pass meets him on the run:
+ *  - the set-up: a step CUT_SET back up his line, away from the rim, his man coming up with him (CUT_SET_MS);
+ *  - the burst: CUT_IN of the way to the rim (CUT_GO_MS), his man turned and left at his hip (CUT_HIP beside and behind);
+ *  - fed (the log has the pass to him next): he runs on through the pass and has it CUT_CATCH of the way in, in
+ *    stride for the finish; not fed, he runs it out to the rim (CUT_OUT_MS).
+ */
+const CUT_FAR = 9;
+const CUT_SET = 2.2;
+const CUT_SET_MS = 220;
+const CUT_IN = 0.55;
+const CUT_GO_MS = 300;
+const CUT_HIP: [number, number] = [2.4, 2];
+const CUT_CATCH = 0.86;
+const CUT_OUT_MS = 280;
+/**
+ * A step-back: a hard dribble STEP_IN at the rim first (STEP_IN_MS), his man backing off with it, then back out to
+ * his spot, the man left STEP_LATE of the way behind getting back out to him.
+ */
+const STEP_IN = 3.2;
+const STEP_IN_MS = 240;
+const STEP_LATE = 0.7;
+/**
+ * A post-up (ft, ms of the play, radians). He seals on the block's line from the basket (POST_LINE up from the
+ * baseline on his side; with the ball already, on the line he stands on, no higher than POST_HIGH), his man on his
+ * back, and holds it POST_SEAL for the entry pass (with the ball, he turns his back into him over POST_TURN_MS). Then
+ * he backs him down with bump dribbles: each a step of POST_BUMP made in POST_STEP_MS, his body into the man's
+ * (POST_HIT of a knock, see Frame.hit), and a beat set after it (POST_SET_MS). One bump for every POST_BEAT seconds
+ * the possession took, three at the most. He works POST_SIDE round from square to the basket, his left shoulder into
+ * his man and the ball in the hand away from him. He backs down to POST_DEEP from the basket at the nearest (a foot
+ * short of that when no shot of his own comes of it), a shot out on the floor goes up where he backed down to (a
+ * jump shot, from POST_SHOT at the farthest) or within POST_REACH of it (a hook's own step), and but for a jump shot
+ * he never seals farther out than POST_FAR. A shot from inside POST_NEAR of the basket is the block's: he gets to it
+ * off his last step. With the ball he goes to his seal on the dribble at POST_IN ft a ms, and seals POST_OFF nearer
+ * the basket than he caught it at the most.
+ */
+const POST_LINE = 0.42;
+const POST_HIGH = 0.95;
+const POST_SEAL = 360;
+const POST_TURN_MS = 240;
+const POST_BUMP = 1.25;
+const POST_STEP_MS = 250;
+const POST_SET_MS = 110;
+const POST_HIT = 0.4;
+const POST_BEAT = 8;
+const POST_SIDE = 0.9;
+const POST_DEEP = 5.6;
+const POST_REACH = 2.6;
+const POST_FAR = 15;
+const POST_SHOT = 19;
+const POST_NEAR = 6;
+const POST_IN = 0.018;
+const POST_OFF = 3;
+/** A teammate standing within this (ft) of where he seals or backs down to clears out to the far block; a help defender comes no nearer him than POST_DIG. */
+const POST_ROOM = 7;
+const POST_DIG = 4.6;
+/** What a post-up that isn't for his own shot may end in after two bumps at the most: the double comes, he kicks it out, or it is taken off him. */
+const POST_SHORT: ReadonlySet<string> = new Set(['trap', 'pass', 'to', 'steal']);
 
 /** The sets whose man starts from a place of the set's own, not from his spot in the offense (see setUp). */
 const FORMED: ReadonlySet<string> = new Set(['floppy', 'elevator', 'chicago']);
@@ -772,7 +1004,9 @@ export function buildScript(
   };
   /** Who is out of bounds with the ball (throwing it in): the one man not kept inside the lines. */
   const outside = new Set<number>();
-  /** Nobody stands on anybody: players too close step apart (the man with the ball keeps his spot). */
+  /** Who is set and stays where he is while the others step apart: a screener, from when he is set until he leaves. */
+  const planted = new Set<number>();
+  /** Nobody stands on anybody: players too close step apart (the man with the ball keeps his spot, and so does a man who is `planted`). */
   const spread = (keep: number) => {
     const all = [...oPids.map((p) => o.get(p)!), ...dPids.map((p) => d.get(p)!)];
     const who = [...oPids, ...dPids];
@@ -789,7 +1023,7 @@ export function buildScript(
           // (one on top of the other: apart along the sideline, by their order, so it's the same every time)
           if (gap < 0.01) [dx, dy, gap] = [1, 0, 1];
           const push = APART - gap;
-          const wa = i === keep ? 0 : j === keep ? 1 : 0.5;
+          const wa = i === keep ? 0 : j === keep ? 1 : planted.has(who[i]) ? 0 : planted.has(who[j]) ? 1 : 0.5;
           a.x -= (dx / gap) * push * wa;
           a.y -= (dy / gap) * push * wa;
           b.x += (dx / gap) * push * (1 - wa);
@@ -876,6 +1110,8 @@ export function buildScript(
   const cap = (text: string) => (name ? { cap: text } : {});
   const abbrev = (side: 0 | 1) => teams?.[side] ?? (side === 0 ? 'Home' : 'Away');
   const follow = () => {
+    // (a break's own pass and shot: nobody is matched up yet, they are still running it down. See `broke`)
+    if (broke) return broke();
     defense().forEach((p, i) => d.set(dPids[i], p));
   };
   /** A screener and the man he screens (the one guarding `freed`, man to man), as a frame's `meet`. */
@@ -973,11 +1209,31 @@ export function buildScript(
       } else relocate(p, alongArc(was, -DRIFT));
     }
   };
+  /**
+   * Where a drive from `p` ends: where the log has him next (see GATHER). His own shot's spot, short of it by what
+   * his last steps into it cover; with none, into the lane on his line to the rim.
+   */
+  const driveEnd = (pid: number, p: Pt): Pt => {
+    const nxt = steps[at + 1];
+    if (nxt?.k === 'shot' && nxt.pid === pid && nxt.x !== undefined && nxt.y !== undefined && finishOf(nxt.d) !== 'oop') {
+      const t = { x: nxt.x, y: nxt.y };
+      const far = dist(p, t);
+      const how = shotAct(nxt);
+      return toward(t, p, how === 'jumper' ? 0 : how === 'floater' ? Math.min(RUNNER_IN, far * 0.35) : Math.min(GATHER, far * 0.45));
+    }
+    const r = dist(p, BASKET);
+    return toward(p, BASKET, r > DRIVE_TO + DRIVE_SHORT ? r - DRIVE_TO : clamp(r - DRIVE_NEAR, 0, DRIVE_CLOSER));
+  };
+  /** The drive just made, if it got by his man (`on`): the step it was (`at`), the way he was going as it ended (`u`) and the side he went by on (`n`, across that). The shot that comes straight off it reads this. */
+  let drove: { at: number; pid: number; on: number; u: Pt; n: Pt } | null = null;
+  /** The cut just made by a man the log feeds next (see CUT_CATCH): the step it was, where the pass finds him, his man, the way he is going and the side his man is not on. */
+  let cutting: { at: number; pid: number; to: Pt; on: number | undefined; u: Pt; n: Pt } | null = null;
   /** What a man does once he has given the ball up (see the pass): done as the next step starts, if he is still off the ball and it isn't his. */
   let after: (() => void) | null = null;
   // the log leaves out the pass that starts an action for a man off the ball (an isolation, a post
   // entry, a ball screen for someone else): it finds him first
-  const catchBall = (pid: number) => {
+  // (`extra`: what else the catch's keyframe says, a post-up's man on his back)
+  const catchBall = (pid: number, extra: Partial<Frame> = {}) => {
     if (pid === holder || !o.has(pid)) return;
     const was = holder;
     meet(pid, was);
@@ -985,8 +1241,10 @@ export function buildScript(
     follow();
     does(was, 'pass', o.get(pid));
     does(pid, 'catch', o.get(was));
-    snap(360, cap(`${N(was)} finds ${N(pid)}`));
+    snap(360, { ...cap(`${N(was)} finds ${N(pid)}`), ...extra });
   };
+  /** Who has posted up this possession, and the man on his back (none, against a zone): the double that comes of it starts from there. */
+  const posted = new Map<number, number | undefined>();
   /** The ball gets to the man who starts the possession: the inbound after a basket, the outlet after a stop. */
   const outlet = (pid: number) => {
     holder = pid;
@@ -1024,6 +1282,40 @@ export function buildScript(
     ball = { ...at };
     leak?.(240);
     snap(240);
+  };
+  /** How fast each man was going as a break's last move ended (ft a ms of the play): what his next stride starts from. */
+  const pace = new Map<number, number>();
+  /**
+   * One man's stride of a break: toward `to` for `ms`, as far as legs take him and no farther: what he was going
+   * plus what he gathers, `top` at the most (paced's own rule, a hair inside it, so what is planned here is what is
+   * drawn). `run`: how much of the move he runs for (a man who has to turn round first: less than all of it).
+   */
+  const stride = (pid: number, to: Pt, ms: number, top: number, run = ms) => {
+    const from = o.get(pid) ?? d.get(pid)!;
+    const most = Math.max(0, run) * Math.min(top, (pace.get(pid) ?? 0) + GAIN * Math.max(0, run)) * 0.98;
+    const go = Math.min(dist(from, to), most);
+    const p = toward(from, to, go);
+    if (o.has(pid)) moveTo(pid, p);
+    else d.set(pid, { x: clamp(p.x, -24, 24), y: clamp(p.y, 0.5, COURT_LEN - 1) });
+    pace.set(pid, ms > 0 ? go / ms : 0);
+  };
+  /**
+   * A break isn't over when the ball gets where it was going: through its own pass and its shot the floor is still
+   * running. This is one more move of that for everyone the step isn't about (see runBreak), set as a break ends and
+   * done wherever those steps would have sent the defense to its men (follow); gone with the shot (ranDown), or with
+   * any step that isn't the break's pass or shot.
+   */
+  let broke: (() => void) | undefined;
+  /**
+   * Off a break, who of the defense goes up with a shot at `spot`: the nearest man whose legs have got him within
+   * CHASE_REACH ft of it. Null when nobody's have: a breakaway, and nobody goes up with it. Undefined when the shot
+   * isn't off a break. Asked once: the break is over with its shot.
+   */
+  const ranDown = (spot: Pt): number | null | undefined => {
+    if (!broke) return undefined;
+    broke = undefined;
+    const far = (p: number) => dist(d.get(p)!, spot);
+    return dPids.filter((p) => far(p) <= CHASE_REACH).sort((p, q) => far(p) - far(q))[0] ?? null;
   };
 
   snap(0, name ? { cap: log.label } : {});
@@ -1097,10 +1389,195 @@ export function buildScript(
     follow();
   }
 
+  /**
+   * The open floor: a break, run from wherever the ball changed hands by where the ten men really are.
+   *
+   * The ball gets to `h`, the man the log has running it. It is his already; or it is thrown ahead to him on the
+   * run; or the man who has it is well up the floor from him (a thief who is gone) and leads it himself until `h`
+   * has caught him up. It is pushed to where the log's next step wants it (his own finish or pull-up, a dish to a
+   * runner, a kick to a shooter), a keyframe a BEAT, each man going no farther in one than legs take him (stride):
+   * the nearest man to each sideline runs it wide, one runs to the far block, the deepest trails.
+   *
+   * The defense is who was really back when the ball changed hands: the deepest takes the rim, the next steps up
+   * to the ball, and the rest sprint for their own men's lanes from behind and get there late. With nobody back to
+   * take the ball, the nearest man chases it at its hip (the man the log has blocking, fouling or stripping it next
+   * is always that one). So a thief ahead of everybody is a breakaway, three men ahead of two defenders a
+   * three-on-two, and a floor that was balanced a matched break. Nothing here knows whether the shot goes in.
+   */
+  function runBreak(h: number) {
+    const nx = steps[at + 1];
+    const n2 = steps[at + 2];
+    // what the log has next: his own shot, or his pass to the man who shoots
+    const to = nx?.k === 'pass' && nx.pid2 !== undefined && nx.pid2 !== h && o.has(nx.pid2) && n2?.k === 'shot' && n2.pid === nx.pid2 ? nx.pid2 : undefined;
+    const shot = to !== undefined ? n2 : nx?.k === 'shot' && nx.pid === h ? nx : undefined;
+    const aim = shot && { x: shot.x ?? 0, y: shot.y ?? 10 };
+    const atRim = !!shot && shotAct(shot) !== 'jumper';
+    // (and the defender it has on the ball after that: blocking or fouling the shot, fouling him on the floor, taking it off him)
+    const follows = shot ? steps[steps.indexOf(shot) + 1] : nx;
+    const onIt = follows?.k === 'block' || follows?.k === 'foul' ? follows.pid : follows?.k === 'steal' || follows?.k === 'to' ? follows.pid2 : undefined;
+    const named = onIt !== undefined && d.has(onIt) ? onIt : undefined;
+
+    // the ball: nobody's (a basket: thrown in to him), his, or another man's
+    pace.clear();
+    const had = holding();
+    const from = had >= 0 && had < nO && all[had] !== h ? all[had] : undefined;
+    if (had < 0 || had >= nO) outlet(h);
+    const lead = from !== undefined && o.get(from)!.y < o.get(h)!.y - LEAD_BY ? from : undefined;
+    holder = lead ?? h;
+    const hp = { ...o.get(h)! };
+    const c0 = { ...(o.get(from ?? h) ?? hp) };
+
+    // where it is taken, and where the man the pass is for goes (`fs`: the side the finish comes in from)
+    const goal = new Map<number, Pt>();
+    let end: Pt;
+    let fs: 1 | -1 = hp.x >= 0 ? 1 : -1;
+    if (to !== undefined && aim && atRim) {
+      fs = o.get(to)!.x >= hp.x ? 1 : -1;
+      end = { x: -fs * DISH[0], y: DISH[1] };
+      goal.set(to, { x: aim.x + fs * RUNNER[0], y: aim.y + RUNNER[1] });
+    } else if (to !== undefined && aim) {
+      fs = aim.x >= 0 ? 1 : -1;
+      // (a shooter at the top: the ball goes well to one side of him)
+      end = { x: -fs * (Math.abs(aim.x) < 8 ? 9 : KICK[0]), y: KICK[1] };
+      goal.set(to, aim);
+    } else if (aim && atRim) {
+      fs = hp.x >= aim.x ? 1 : -1;
+      end = { x: aim.x + fs * FINISH[0], y: aim.y + FINISH[1] };
+    } else if (aim) end = { ...aim };
+    else end = follows?.k === 'foul' || follows?.k === 'steal' || follows?.k === 'to' ? { x: clamp(hp.x * 0.4, -8, 8), y: MEET_AT } : { ...RUN_TO };
+
+    // the lanes: the deepest man trails, the nearest to each sideline runs it wide (not the side a shooter is going
+    // to), one more runs to the far block
+    const lanes = oPids.filter((p) => p !== h && p !== to);
+    const trailer = lanes.length >= 3 ? lanes.sort((a, b) => o.get(b)!.y - o.get(a)!.y).shift() : undefined;
+    lanes.sort((a, b) => o.get(a)!.x - o.get(b)!.x);
+    const taken = to !== undefined && aim && !atRim && Math.abs(aim.x) > 8 ? fs : 0;
+    const wing = new Map<number, 1 | -1>();
+    if (taken !== -1 && lanes.length) wing.set(lanes.shift()!, -1);
+    if (taken !== 1 && lanes.length) wing.set(lanes.pop()!, 1);
+    for (const [p, s] of wing) goal.set(p, { x: s * CORNER[0], y: CORNER[1] });
+    lanes.forEach((p, i) => goal.set(p, i === 0 ? { x: -fs * BLOCK[0], y: BLOCK[1] } : { x: fs * (BLOCK[0] + 5), y: TRAIL_TO - 6 }));
+    if (trailer !== undefined) {
+      // (behind the ball: the other side of the floor is the runner's)
+      const top = { x: clamp(end.x * 0.6, -6, 6), y: TRAIL_TO };
+      // (not on top of a shooter who is going there)
+      goal.set(trailer, to !== undefined && dist(top, goal.get(to)!) < 9 ? { x: clamp(end.x, -10, 10), y: TRAIL_TO + 3 } : top);
+    }
+    const aimOf = (p: number): Pt => {
+      const s = wing.get(p);
+      return s !== undefined && o.get(p)!.y > WIDE_UNTIL ? { x: s * WIDE[0], y: WIDE[1] } : (goal.get(p) ?? o.get(p)!);
+    };
+
+    // the defense: who is back, who takes the rim, who the ball
+    const deep = [...dPids].sort((a, b) => d.get(a)!.y - d.get(b)!.y);
+    const backs = deep.filter((p) => d.get(p)!.y < c0.y - DEEPER);
+    const behind = deep.filter((p) => !backs.includes(p));
+    const stopper = named ?? (backs.length > 1 ? backs[1] : [...behind].sort((a, b) => dist(d.get(a)!, c0) - dist(d.get(b)!, c0))[0]);
+    const rimMan = backs.find((p) => p !== stopper);
+    const wants = (p: number, c: Pt): Pt => {
+      const was = d.get(p)!;
+      if (p === stopper) {
+        // (behind it: at its hip, on the side he is on; ahead of it: out to it, once it is near)
+        if (was.y >= c.y - 1) return { x: c.x + (was.x >= c.x ? 1 : -1) * HIP[0], y: c.y + HIP[1] };
+        return dist(was, c) < PICK_UP ? guardSpot(c, true, log.help) : { x: end.x * 0.5, y: Math.min(MEET_AT, c.y - 4) };
+      }
+      if (p === rimMan) return { x: clamp(c.x * 0.3, -4, 4), y: RIM_AT };
+      const man = manOf.get(p);
+      return man !== undefined && man !== h && o.has(man) ? guardSpot(goal.get(man) ?? o.get(man)!, false, log.help) : { x: -fs * 4, y: 12 };
+    };
+
+    /**
+     * One move of it: the ball toward `ballTo` at `top`, everyone else his own way. `first`: the men behind the ball
+     * turn round first. `thrower`: the man throwing it in this move, who stays where he is, or (`easy`) goes on no
+     * faster than he was leading it. Who ran flat out comes back.
+     */
+    const beat = (ms: number, ballTo: Pt, top: number, first: boolean, thrower?: number, easy = false): number[] => {
+      const flat: number[] = [];
+      const carrier = holder;
+      stride(carrier, ballTo, ms, top);
+      const c = o.get(carrier)!;
+      for (const p of oPids) {
+        if (p === carrier || (p === thrower && !easy)) continue;
+        // (the man who is to run it, while another leads it: up to that man's inside shoulder)
+        const goes = p === h ? { x: c.x + (c.x >= hp.x ? -1 : 1) * 7, y: c.y + 2 } : aimOf(p);
+        // (a runner his pass is for who is ahead of the ball times his run: at his spot as the ball gets to its own, not standing there waiting for it)
+        const top = p === thrower ? EASY : p === trailer ? BACK : p === to && atRim ? clamp(dist(o.get(p)!, goes) / (ms + dist(c, end) / PUSH), WAIT, FLAT) : FLAT;
+        stride(p, goes, ms, top);
+        if (top > RUN) flat.push(oPids.indexOf(p));
+      }
+      for (const p of dPids) {
+        const was = { ...d.get(p)! };
+        const ahead = was.y < c.y - DEEPER;
+        const most = ahead ? (was.y < c.y - CUSHION ? Math.min(BACK, pace.get(carrier) ?? BACK) : BACK) : FLAT;
+        stride(p, wants(p, c), ms, most, first && live && p !== named && behind.includes(p) ? ms - TURN_ROUND : ms);
+        if (!ahead) flat.push(nO + dPids.indexOf(p));
+        // (a long step back he turns and runs; a short one he backs up, facing the play)
+        if (dist(d.get(p)!, was) > (ahead ? BACK_STEP : 2)) does(p, 'move');
+      }
+      return flat;
+    };
+
+    let first = true;
+    let led = false;
+    let said = false;
+    if (from !== undefined && lead === undefined) {
+      // thrown ahead to him: he is on his way as it leaves the passer's hands
+      const flat = beat(AHEAD_MS, end, PUSH, true, from);
+      does(from, 'pass', o.get(h));
+      does(h, 'catch', o.get(from));
+      snap(AHEAD_MS, { flat, ...cap(`${N(from)} gets it ahead to ${N(h)}`) });
+      first = false;
+    }
+    const sl = Math.abs(c0.x) > 3 ? (c0.x > 0 ? 1 : -1) : c0.x >= hp.x ? 1 : -1;
+    const leadTo = { x: sl * LEAD_TO[0], y: Math.min(LEAD_TO[1], c0.y) };
+    for (let n = 0; n < BEATS; n++) {
+      const carrier = holder;
+      const cp = o.get(carrier)!;
+      if (carrier !== h) {
+        // (led by the man who took it, until the man who runs it has caught him up: given up on the run)
+        if (dist(o.get(h)!, cp) < HAND_NEAR || n >= BEATS - 4) {
+          holder = h;
+          const flat = beat(HAND_MS, end, PUSH, first, carrier, true);
+          does(carrier, 'pass', o.get(h));
+          does(h, 'catch', o.get(carrier));
+          snap(HAND_MS, { flat, ...cap(`${N(carrier)} finds ${N(h)}`) });
+        } else {
+          const flat = beat(BEAT, leadTo, EASY, first);
+          snap(BEAT, { flat, ...(led ? {} : cap(`${N(carrier)} is away with it`)) });
+          led = true;
+        }
+        first = false;
+        continue;
+      }
+      const left = dist(cp, end);
+      if (left < 2.5) break;
+      // (the man his pass is for has farther to go than the ball has: he waits for him on the dribble)
+      let top = PUSH;
+      if (to !== undefined) {
+        const need = dist(o.get(to)!, goal.get(to)!) / FLAT;
+        if (need > left / PUSH + 120) top = Math.max(WAIT, left / need);
+      }
+      const v = Math.min(top, (pace.get(carrier) ?? 0) + GAIN * BEAT) * 0.98;
+      const ms = left < v * BEAT ? Math.max(BEAT_LEAST, Math.round(left / v)) : BEAT;
+      const flat = beat(ms, end, top, first);
+      snap(ms, { flat, ...(said ? {} : cap(`${N(h)} pushes it in transition`)) });
+      said = true;
+      first = false;
+    }
+    // (and through its pass and its shot, a move at a time: the defense still by who is where, the lanes still run)
+    broke = () => {
+      const c = o.get(holder) ?? ball;
+      for (const p of dPids) stride(p, wants(p, c), RUN_ON, RUN);
+      for (const p of oPids) if (p !== holder && p !== h && p !== to) stride(p, aimOf(p), RUN_ON, p === trailer ? BACK : RUN);
+    };
+  }
+
   function stepFrames(st: PossStep) {
     const then = after;
     after = null;
     then?.();
+    // (a break is over with anything but its own pass and shot)
+    if (st.k !== 'transition' && st.k !== 'pass' && st.k !== 'shot') broke = undefined;
     switch (st.k) {
       case 'advance': {
         // (a set or a clear-out called for a player says so as the ball comes up)
@@ -1157,23 +1634,7 @@ export function buildScript(
         break;
       }
       case 'transition': {
-        if (live) outlet(st.pid ?? holder);
-        else holder = st.pid ?? holder;
-        moveTo(holder, { x: 0, y: 30 });
-        // (a lane each for the other four: counted among them, two never share one; i % 4 in case the log names no one of the five)
-        oPids.filter((pid) => pid !== holder).forEach((pid, i) => moveTo(pid, { x: [-20, 20, -10, 10][i % 4], y: 14 + (i % 2) * 6 }));
-        if (live) {
-          // the nearest defenders get back; the rest are still chasing the play
-          const back = [...dPids].sort((a, b) => d.get(a)!.y - d.get(b)!.y);
-          back.forEach((pid, i) => {
-            const now = d.get(pid)!;
-            d.set(pid, i < 3 ? { x: (i - 1) * 7, y: 15 + i * 4 } : { x: now.x * 0.6, y: Math.min(now.y, 34 + (i - 3) * 5) });
-          });
-        } else dPids.forEach((pid, i) => d.set(pid, { x: (i - 2) * 6, y: 18 + i * 3 }));
-        ball = { ...o.get(holder)! };
-        snap(650, cap(`${N(holder)} pushes it in transition`));
-        moveTo(holder, { x: 2, y: 16 });
-        snap(450);
+        runBreak(st.pid !== undefined && o.has(st.pid) ? st.pid : holder);
         break;
       }
       case 'screen': {
@@ -1190,83 +1651,114 @@ export function buildScript(
         catchBall(h);
         const hp = { ...o.get(h)! };
         // the side it is set on: the middle's, for a ball out on one side of the floor; in the middle, the side the
-        // screener comes from. A point of the screen's own frame (see SCREEN_AT), on the floor:
+        // screener comes from
         const s = Math.abs(hp.x) > 5 ? (hp.x > 0 ? -1 : 1) : o.get(scr)!.x >= hp.x ? 1 : -1;
-        const P = ([across, down]: [number, number]): Pt => ({ x: hp.x + s * across, y: hp.y + down });
         // (man to man, the two men the coverage is played by: the handler's and the screener's)
         const cov = zone || junk || !log.coverage || log.coverage === 'zone' ? undefined : log.coverage;
         const [hd, sd] = [guardOf.get(h), guardOf.get(scr)];
         const played = cov !== undefined && hd !== undefined && sd !== undefined && hd !== sd && d.has(hd) && d.has(sd) ? cov : undefined;
+        // (the man the screen is set on, man to man: he runs into it whatever the coverage, unless he was sent the other side of the ball)
+        const on = zone || junk || played === 'ice' || hd === undefined || hd === sd || !d.has(hd) ? undefined : hd;
+        // the screen's own frame (see SCREEN_AT): down from the ball toward the rim, across to the side the screen is
+        // set on (iced, down the floor). A point of it off `p`, and off where the ball is as the screen is called:
+        const rim = dist(hp, BASKET);
+        const dn = played === 'ice' || rim < 1 ? { x: 0, y: -1 } : { x: (BASKET.x - hp.x) / rim, y: (BASKET.y - hp.y) / rim };
+        const F = (p: Pt, [across, down]: [number, number]): Pt => ({ x: p.x - s * across * dn.y - down * dn.x, y: p.y + s * across * dn.x - down * dn.y });
+        const P = (v: [number, number]) => F(hp, v);
         const says = {
           ...(log.coverage && { flash: { text: title(log.coverage), kind: 'info' as const, x: hp.x, y: hp.y + 3 } }),
           ...cap(`${N(scr)} screens for ${N(h)}${log.coverage && log.coverage !== 'zone' ? `: they ${COVER_VERB[log.coverage]}` : ''}`),
         };
 
-        // the screen is set, and each of the two is where his coverage has him as it is
+        // the screener comes up to set it, and each of the two is where his coverage has him while it is set. The spot
+        // is his from here until the ball has come off him: anyone in his way steps out of it (see planted)
         moveTo(scr, P(played === 'ice' ? SCREEN_ICE : SCREEN_AT));
-        follow();
-        const set = o.get(scr)!;
-        if (played === 'drop') d.set(sd!, toward(set, BASKET, DROP - 2));
-        else if (played === 'switch') d.set(sd!, toward(set, BASKET, APART));
-        else if (played === 'hedge' || played === 'blitz') d.set(sd!, { x: set.x + s * 2.6, y: set.y + 0.6 });
-        else if (played === 'ice') {
-          d.set(hd!, P(ICE_ON));
-          d.set(sd!, toward(P(ICED), BASKET, ICE_WALL));
-        }
-        does(scr, 'screen', hp);
-        // (iced, the screen never gets its man: he is on the other side of the ball from it)
-        snap(480, played === 'ice' ? {} : screens(scr, h));
+        planted.add(scr);
+        const set = { ...o.get(scr)! };
+        const wait = () => {
+          follow();
+          if (played === 'drop') d.set(sd!, toward(set, BASKET, DROP_SET));
+          else if (played === 'switch') d.set(sd!, F(set, SWITCH_AT));
+          else if (played === 'hedge' || played === 'blitz') d.set(sd!, F(set, HEDGE_AT));
+          else if (played === 'ice') {
+            d.set(hd!, P(ICE_ON));
+            d.set(sd!, toward(P(ICED), BASKET, ICE_WALL));
+          }
+        };
+        wait();
+        // (his chest to the man he sets it on, where that man stands as he gets there: he doesn't turn after him)
+        const chest = { ...((on !== undefined ? d.get(on) : undefined) ?? hp) };
+        does(scr, 'screen', chest);
+        snap(SCREEN_UP);
+        // he is set, a beat before he is used: the handler takes his man a step away from the screen first
+        if (played !== 'ice') moveTo(h, P(SET_UP));
+        wait();
+        does(scr, 'screen', chest);
+        snap(SCREEN_SET);
 
-        // the handler comes off it (or is sent away from it), and the coverage is played
         const roll: Pt = { x: clamp(hp.x + s * 1.2, -7, 7), y: ROLL_Y };
-        if (played === 'blitz') {
-          moveTo(h, P(TRAPPED));
-          follow();
-          const hb = o.get(h)!;
-          d.set(hd!, { x: hb.x - s * TRAP_OFF[0], y: hb.y + TRAP_OFF[1] });
-          d.set(sd!, { x: hb.x + s * TRAP_OFF[0], y: hb.y + TRAP_OFF[1] });
-          does(hd, 'trap', hb);
-          does(sd, 'trap', hb);
-          does(scr, 'screen');
-          snap(400, says);
-          // (he backs out of it with the two still on him; the screener stops short, where the pass out finds him,
-          // and the weak side's nearest man comes over to him: the rest are a man short behind it)
-          moveTo(h, P(BACK_OUT));
-          moveTo(scr, { x: roll.x, y: SHORT_ROLL_Y });
-          space([scr, h], undefined, -s as 1 | -1);
-          follow();
-          const hr = o.get(h)!;
-          d.set(hd!, { x: hr.x - s * TRAP_OFF[0], y: hr.y + TRAP_OFF[1] });
-          d.set(sd!, { x: hr.x + s * TRAP_OFF[0], y: hr.y + TRAP_OFF[1] });
-          does(hd, 'trap', hr);
-          does(sd, 'trap', hr);
-          const tag = dPids.filter((p) => p !== hd && p !== sd).sort((a, b) => dist(d.get(a)!, o.get(scr)!) - dist(d.get(b)!, o.get(scr)!))[0];
-          if (tag !== undefined) d.set(tag, guardSpot(o.get(scr)!, false, log.help));
-          help(o.get(scr)!, scr, h, ...(tag !== undefined && manOf.has(tag) ? [manOf.get(tag)!] : []));
-          snap(440);
-          break;
-        }
         if (played === 'ice') {
+          // (iced, the screen never gets its man: he is on the other side of the ball from it)
           moveTo(h, P(ICED));
           follow();
           const hi = o.get(h)!;
-          d.set(hd!, { x: hi.x + s * ICE_ON[0], y: hi.y + ICE_ON[1] });
+          d.set(hd!, F(hi, ICE_ON));
           d.set(sd!, toward(hi, BASKET, ICE_WALL));
-          does(scr, 'screen');
-          snap(400, says);
+          does(scr, 'screen', chest);
+          snap(SCREEN_BY, says);
           // (down the side, the guard on his top hand, the big between him and the rim; the screener, with nobody to
           // screen, turns and rolls)
+          planted.delete(scr);
           moveTo(h, P(ICED_ON));
           moveTo(scr, roll);
           space([scr, h], undefined, s as 1 | -1);
           follow();
           const hl = o.get(h)!;
-          d.set(hd!, { x: hl.x + s * ICE_ON[0], y: hl.y + ICE_ON[1] });
+          d.set(hd!, F(hl, ICE_ON));
           d.set(sd!, toward(hl, BASKET, ICE_WALL - 1.5));
           help(o.get(scr)!, scr, h);
-          snap(440);
+          snap(SCREEN_ROLL);
           break;
         }
+        // he comes back over the top of it, off the screener's shoulder, and his man runs into the screen
+        const met = screens(scr, h);
+        moveTo(h, P(BY));
+        wait();
+        if (on !== undefined) d.set(on, F(set, JAM));
+        does(scr, 'screen', chest);
+        // (on his way round it he looks where he is going, his shoulders turned along his path: not sliding by square to the rim)
+        does(h, 'dribble', P(played === 'blitz' ? TRAPPED : played === 'hedge' ? STRUNG : USE));
+        snap(SCREEN_BY, met);
+        if (played === 'blitz') {
+          // (the two of them jump him as he comes off it)
+          moveTo(h, P(TRAPPED));
+          follow();
+          const hb = o.get(h)!;
+          d.set(hd!, F(hb, [-TRAP_OFF[0], TRAP_OFF[1]]));
+          d.set(sd!, F(hb, TRAP_OFF));
+          does(hd, 'trap', hb);
+          does(sd, 'trap', hb);
+          does(scr, 'screen', chest);
+          snap(SCREEN_USE, says);
+          // (he backs out of it with the two still on him; the screener stops short, where the pass out finds him,
+          // and the weak side's nearest man comes over to him: the rest are a man short behind it)
+          planted.delete(scr);
+          moveTo(h, P(BACK_OUT));
+          moveTo(scr, { x: roll.x, y: SHORT_ROLL_Y });
+          space([scr, h], undefined, -s as 1 | -1);
+          follow();
+          const hr = o.get(h)!;
+          d.set(hd!, F(hr, [-TRAP_OFF[0], TRAP_OFF[1]]));
+          d.set(sd!, F(hr, TRAP_OFF));
+          does(hd, 'trap', hr);
+          does(sd, 'trap', hr);
+          const tag = dPids.filter((p) => p !== hd && p !== sd).sort((a, b) => dist(d.get(a)!, o.get(scr)!) - dist(d.get(b)!, o.get(scr)!))[0];
+          if (tag !== undefined) d.set(tag, guardSpot(o.get(scr)!, false, log.help));
+          help(o.get(scr)!, scr, h, ...(tag !== undefined && manOf.has(tag) ? [manOf.get(tag)!] : []));
+          snap(SCREEN_ROLL);
+          break;
+        }
+        // he is past it, and the coverage is played; the screener is still set behind him
         moveTo(h, P(played === 'hedge' ? STRUNG : USE));
         if (played === 'switch') {
           // (they change men: the big out on the ball, the guard with the roller, from here on)
@@ -1277,29 +1769,36 @@ export function buildScript(
         }
         follow();
         const hu = o.get(h)!;
-        if (played === 'drop') {
-          d.set(sd!, toward(hu, BASKET, DROP));
-          d.set(hd!, { x: hu.x + s * TRAIL[0], y: hu.y + TRAIL[1] });
-        } else if (played === 'hedge') {
-          d.set(sd!, P(SHOW));
-          d.set(hd!, { x: hu.x + s * TRAIL[0], y: hu.y - 0.6 });
-        } else if (played === 'switch') d.set(hd!, toward(set, BASKET, APART));
-        does(scr, 'screen');
-        snap(400, says);
-        // he turns the corner and the screener rolls; behind the roll the weak side's corner lifts, and its nearest
-        // defender tags the roller
+        if (played === 'drop') d.set(sd!, toward(hu, BASKET, DROP));
+        else if (played === 'hedge') d.set(sd!, P(SHOW));
+        // (the man the screen got: switched, he stays on the screener, body to body; if not he gets over the top of
+        // it behind the ball, round the screener and never through him)
+        if (played === 'switch') d.set(hd!, F(set, JAM));
+        else if (on !== undefined) {
+          const over = played ? F(hu, played === 'hedge' ? [TRAIL[0], -0.6] : TRAIL) : d.get(on)!;
+          const off = dist(over, set);
+          d.set(on, off >= APART || off < 0.01 ? over : { x: set.x + ((over.x - set.x) / off) * APART, y: set.y + ((over.y - set.y) / off) * APART });
+        }
+        does(scr, 'screen', chest);
+        does(h, 'dribble', P(played === 'hedge' ? SLOWED : TURN));
+        snap(SCREEN_USE, { ...says, ...(played === 'switch' && met) });
+        // he turns the corner, and only now does the screener leave: he rolls, or pops out toward the jump shot the
+        // play has coming for him; behind a roll the weak side's corner lifts, and its nearest defender tags the roller
+        planted.delete(scr);
         moveTo(h, P(played === 'hedge' ? SLOWED : TURN));
-        moveTo(scr, roll);
-        space([scr, h], undefined, -s as 1 | -1);
+        const shot = shotAhead(scr);
+        const pop = shot && dist(shot, BASKET) >= POP_FROM ? toward(set, shot, AHEAD_MOST) : undefined;
+        moveTo(scr, pop ?? roll);
+        space([scr, h], undefined, pop ? undefined : (-s as 1 | -1));
         follow();
         const ht = o.get(h)!;
         if (played === 'drop') {
           // (the big keeps backing off between the ball and the rim; the guard is still behind the play)
           d.set(sd!, toward(ht, BASKET, DROP - 1.5));
-          d.set(hd!, { x: ht.x - s * 2.2, y: ht.y + 2.4 });
+          d.set(hd!, F(ht, [-2.2, 2.4]));
         }
-        help(o.get(scr)!, scr, h);
-        snap(440);
+        if (!pop) help(o.get(scr)!, scr, h);
+        snap(SCREEN_ROLL);
         break;
       }
       case 'pin': {
@@ -1370,7 +1869,11 @@ export function buildScript(
         snap(420);
         moveTo(cut, to);
         if (log.set?.id === 'postSplit') moveTo(scr, { x: -side * 18, y: 20 });
-        else does(scr, 'screen');
+        else {
+          // (set, he stays where he is while his man comes off him: see planted)
+          planted.add(scr);
+          does(scr, 'screen');
+        }
         follow();
         // (the man guarding him was caught on the screen: he comes round it behind him, not between him and the rim)
         const chaser = zone || junk ? undefined : guardOf.get(cut);
@@ -1381,11 +1884,30 @@ export function buildScript(
           ...(n === 0 && log.set && { flash: { text: SETS[log.set.id].short, kind: 'info' as const, x: spot.x, y: spot.y + 3 } }),
           ...cap(`${N(scr)} screens for ${N(cut)}`),
         });
+        planted.delete(scr);
         break;
       }
       case 'trap': {
         const h = st.pid ?? holder;
         const hp = o.get(h)!;
+        if (posted.has(h) && [steps[at - 1], steps[at - 2]].some((s) => s?.k === 'post' && s.pid === h)) {
+          // (the double on a post-up: his own man stays on his back, the nearest of the others comes at him from where
+          // he was, and he picks it up, turned as he was or to the man he will throw it out to)
+          const on = posted.get(h);
+          const dbl = dPids.filter((p) => p !== on).sort((a, b) => dist(d.get(a)!, hp) - dist(d.get(b)!, hp))[0];
+          if (dbl !== undefined) d.set(dbl, toward(hp, d.get(dbl)!, APART + 0.3));
+          for (const p of [on, dbl]) does(p, 'trap', hp);
+          const j = all.indexOf(h);
+          const next = steps[at + 1];
+          const to = next?.k === 'pass' && next.pid2 !== undefined ? o.get(next.pid2) : undefined;
+          does(h, 'hold', to ?? { x: hp.x + Math.cos(lastFace[j]) * 4, y: hp.y + Math.sin(lastFace[j]) * 4 });
+          snap(420, {
+            flash: { text: 'Trap', kind: 'info', x: hp.x, y: hp.y + 4 },
+            ...(on !== undefined && { meet: [[j, nO + dPids.indexOf(on)]] as [number, number][] }),
+            ...cap(`${N(h)} is trapped`),
+          });
+          break;
+        }
         const near = [...dPids].sort((a, b) => dist(d.get(a)!, hp) - dist(d.get(b)!, hp)).slice(0, 2);
         near.forEach((pid, i) => d.set(pid, { x: hp.x + (i ? 2.2 : -2.2), y: hp.y - 2 }));
         near.forEach((pid) => does(pid, 'trap', hp));
@@ -1396,41 +1918,230 @@ export function buildScript(
       case 'drive': {
         const pid = st.pid!;
         catchBall(pid);
-        const p = { ...o.get(pid)! };
-        moveTo(pid, { x: p.x * 0.35, y: 10 });
+        const p0 = { ...o.get(pid)! };
+        const end = driveEnd(pid, p0);
+        const far = dist(p0, end);
+        const on = zone || junk ? undefined : guardOf.get(pid);
+        const man = on !== undefined && dPids.includes(on) ? on : undefined;
+        // (he gets a shoulder into the man on him on his way by)
+        const bump = man !== undefined && { hit: [oPids.indexOf(pid), nO + dPids.indexOf(man), DRIVE_BUMP] as [number, number, number] };
+        const nxt = steps[at + 1];
+        const stopped = nxt === undefined || nxt.k === 'to' || nxt.k === 'steal' || nxt.k === 'trap';
+        drove = null;
+        if (man !== undefined && !stopped && far >= DRIVE_SHORT) {
+          const u = { x: (end.x - p0.x) / far, y: (end.y - p0.y) / far };
+          // (which side of his man he goes: the side the drive's end is on from the line through the two of them; on
+          // that line, one or the other, the same every time this possession is drawn)
+          const g0 = d.get(man)!;
+          const lean = (g0.x - p0.x) * -u.y + (g0.y - p0.y) * u.x;
+          const side = Math.abs(lean) > 0.4 ? -Math.sign(lean) : jitter(log.q * 7919 + log.clockStart * 131 + at * 3, pid) < 0.5 ? 1 : -1;
+          const n = { x: -u.y * side, y: u.x * side };
+          const off = (p: Pt, [beside, back]: [number, number], v = u): Pt => ({ x: p.x - n.x * beside - v.x * back, y: p.y - n.y * beside - v.y * back });
+          const jabs = dist(p0, BASKET) >= DRIVE_JAB_FROM && far >= DRIVE_JAB_FAR;
+          // (an isolation: he sizes his man up first, a dribble at the side he means to go, before he sells the other)
+          if (jabs && (log.iso === pid || log.action === 'iso')) {
+            moveTo(pid, { x: p0.x + n.x * SIZE_UP, y: p0.y + n.y * SIZE_UP });
+            follow();
+            snap(SIZE_UP_MS, cap(`${N(pid)} sizes up ${N(man)}`));
+          }
+          // the set-up: he sells the other side first
+          if (jabs) {
+            moveTo(pid, { x: p0.x - n.x * DRIVE_JAB + u.x * 0.5, y: p0.y - n.y * DRIVE_JAB + u.y * 0.5 });
+            follow();
+            snap(DRIVE_JAB_MS);
+          }
+          const p = { ...o.get(pid)! };
+          const g = { ...d.get(man)! };
+          const along = (g.x - p.x) * u.x + (g.y - p.y) * u.y;
+          const across = (g.x - p.x) * n.x + (g.y - p.y) * n.y;
+          const left = dist(p, end);
+          // the first step: by him, if he is in the way and there is floor beyond him
+          const by = along > 0 && along + DRIVE_PAST < left - 1 && across > -DRIVE_BY;
+          // (the others make room and make themselves a pass: see space)
+          space([pid], { left: p0, to: end });
+          if (by) {
+            const c = { x: p.x + u.x * (along + DRIVE_PAST) + n.x * (across + DRIVE_BY), y: p.y + u.y * (along + DRIVE_PAST) + n.y * (across + DRIVE_BY) };
+            moveTo(pid, c);
+            follow();
+            d.set(man, off(o.get(pid)!, DRIVE_HIP));
+            does(pid, 'drive');
+            snap(DRIVE_STEP_MS, { ...bump, ...cap(`${N(pid)} drives`) });
+          }
+          // downhill: his man at his hip, the nearest help stepping in front of him
+          const from = { ...o.get(pid)! };
+          const rest = dist(from, end);
+          const v = rest > 0.5 ? { x: (end.x - from.x) / rest, y: (end.y - from.y) / rest } : u;
+          moveTo(pid, end);
+          follow();
+          d.set(man, off(o.get(pid)!, DRIVE_TRAIL, v));
+          help(o.get(pid)!, pid);
+          does(pid, 'drive');
+          snap(Math.max(DRIVE_DOWN_MS, Math.round(rest / DRIVE_PACE)), by ? {} : { ...bump, ...cap(`${N(pid)} drives`) });
+          drove = { at, pid, on: man, u: v, n };
+          break;
+        }
+        moveTo(pid, end);
         // (the others make room and make themselves a pass: see space)
-        space([pid], { left: p, to: o.get(pid)! });
+        space([pid], { left: p0, to: o.get(pid)! });
         follow();
         // (the nearest help steps in front of him)
         help(o.get(pid)!, pid);
         does(pid, 'drive');
-        // (he gets a shoulder into the man on him on his way by)
-        const on = zone || junk ? undefined : guardOf.get(pid);
-        snap(620, {
-          ...(on !== undefined && dPids.includes(on) && { hit: [oPids.indexOf(pid), nO + dPids.indexOf(on), DRIVE_BUMP] as [number, number, number] }),
-          ...cap(`${N(pid)} drives`),
-        });
+        snap(620, { ...bump, ...cap(`${N(pid)} drives`) });
         break;
       }
       case 'post': {
         const pid = st.pid!;
-        const side = (o.get(pid)!.x >= 0 ? 1 : -1) * 7;
-        moveTo(pid, { x: side, y: 8 });
-        // (the corner on his side lifts out of it: the block is his, and the double has farther to come)
-        space([pid], undefined, side > 0 ? 1 : -1);
-        follow();
-        // (his back to the basket)
-        does(pid, 'post', { x: side * 3, y: 8 + (8 - BASKET.y) * 2 });
-        snap(560, cap(`${N(pid)} posts up`));
-        // the entry pass once he has his spot
-        catchBall(pid);
+        const j = oPids.indexOf(pid);
+        const had = pid === holder;
+        const from = { ...o.get(pid)! };
+        // what comes of it: the next thing the log has for him (a Post split's screen and cut go on around him meanwhile)
+        const split = steps[at + 1]?.k === 'pin';
+        const next = steps.slice(at + 1).find((s) => s.k !== 'pin' && s.k !== 'cut');
+        const shot = next?.k === 'shot' && next.pid === pid && next.x !== undefined && next.y !== undefined ? next : undefined;
+        const target = shot ? { x: shot.x!, y: shot.y! } : undefined;
+        const r = target ? dist(target, BASKET) : 0;
+        // (on the side of the floor his shot is from, if it is from one; else the side he is on)
+        const side = (target && Math.abs(target.x) >= 2 ? target.x : from.x) >= 0 ? 1 : -1;
+        // how long he works on his man: by how long the possession took, and by what it comes to (see POST_BEAT)
+        const n = split ? 1 : Math.min(clamp(Math.round((log.clockStart - log.clockEnd) / POST_BEAT), 1, 3), shot ? 3 : next && POST_SHORT.has(next.k) ? 2 : 1);
+        const far = n * POST_BUMP;
+        // the line he backs down (its angle round the basket), and how near the basket it takes him
+        let line = side > 0 ? POST_LINE : Math.PI - POST_LINE;
+        let deep = POST_DEEP + (target ? 0 : 1);
+        if (target && r > POST_NEAR) {
+          // (a shot from out on the floor: down the line to its spot, a jump shot's all the way, a hook's a step short)
+          line = Math.atan2(target.y - BASKET.y, target.x - BASKET.x);
+          deep = shotAct(shot!) === 'jumper' ? clamp(r, POST_DEEP, POST_SHOT) : clamp(r + POST_REACH, POST_DEEP, POST_FAR - far);
+        } else if (had && !target) {
+          // (found out on the floor with nothing of his own to come: he backs in from near where he has it)
+          const up = clamp(Math.atan2(from.y - BASKET.y, Math.abs(from.x - BASKET.x)), POST_LINE, POST_HIGH);
+          line = side > 0 ? up : Math.PI - up;
+          deep = clamp(dist(from, BASKET) - POST_OFF - far, deep, POST_FAR - far);
+        }
+        const out = (ft: number): Pt => ({ x: BASKET.x + Math.cos(line) * ft, y: BASKET.y + Math.sin(line) * ft });
+        // (the block is his: a teammate standing on his line goes across to the far one, and takes his man with him)
+        for (const p of oPids) {
+          const q = o.get(p)!;
+          if (p !== pid && Math.min(dist(q, out(deep)), dist(q, out(deep + far))) < POST_ROOM) relocate(p, { x: -side * DUNKER.x, y: DUNKER.y });
+        }
+        const on = zone || junk ? undefined : guardOf.get(pid);
+        const dj = on !== undefined ? dPids.indexOf(on) : -1;
+        posted.set(pid, dj >= 0 ? on : undefined);
+        /** His man on his back, between him and the basket (the 3D court draws the two touching: Frame.meet); against a zone, whoever of it is on him. */
+        const back = (): Partial<Frame> => {
+          const p = o.get(pid)!;
+          if (dj >= 0) {
+            d.set(on!, toward(p, BASKET, APART + 0.02));
+            // (the help sagging toward him digs from a step off: only his own man is on him, until a double comes)
+            for (const q of dPids) {
+              const at = d.get(q)!;
+              const gap = dist(at, p);
+              if (q !== on && gap < POST_DIG)
+                d.set(q, gap > 0.01 ? { x: p.x + ((at.x - p.x) / gap) * POST_DIG, y: p.y + ((at.y - p.y) / gap) * POST_DIG } : { x: p.x, y: p.y + POST_DIG });
+            }
+            return { meet: [[j, nO + dj]] };
+          }
+          const near = dPids.map((q, k) => [dist(d.get(q)!, p), k]).sort((x, y) => x[0] - y[0])[0];
+          return near && near[0] < 4 ? { meet: [[j, nO + near[1]]] } : {};
+        };
+        /** Where he looks with his back to the basket: straight out from it, turned `turn` radians round. */
+        const faces = (turn: number): Pt => {
+          const p = o.get(pid)!;
+          const a = heading(BASKET, p) + turn;
+          return { x: p.x + Math.cos(a) * 4, y: p.y + Math.sin(a) * 4 };
+        };
+        const words = cap(`${N(pid)} posts up`);
+        if (!had) {
+          moveTo(pid, out(deep + far));
+          // (the corner on his side lifts out of it: the block is his, and the double has farther to come)
+          space([pid], undefined, side);
+          follow();
+          // (the seal: his back to his man, turned part of the way to the ball, a hand up for it; hardly at all to his
+          // left, which would put the man on the side of the hand he asks for it with)
+          const seal = () => {
+            const p = o.get(pid)!;
+            const off = heading(p, o.get(holder) ?? ball) - heading(BASKET, p);
+            return faces(clamp(Math.atan2(Math.sin(off), Math.cos(off)), -1, 0.2) * 0.5);
+          };
+          does(pid, 'post', seal());
+          snap(560, { ...words, ...back() });
+          does(pid, 'post', seal());
+          snap(POST_SEAL, back());
+          // the entry pass once he has his man sealed, caught with his back to the basket
+          catchBall(pid, back());
+        } else {
+          // (he has it already: to his spot on the dribble, and he turns his back into his man)
+          const to = out(deep + far);
+          const run = dist(from, to);
+          if (run > 1) moveTo(pid, to);
+          space([pid], undefined, side);
+          follow();
+          if (run > 1) snap(Math.max(360, Math.round(run / POST_IN)), words);
+          // (round to his right as he looks out: the shoulder into his man is his left, and the ball's hand his right)
+          does(pid, 'post', faces(-POST_SIDE));
+          snap(POST_TURN_MS, { ...(run > 1 ? {} : words), ...back() });
+        }
+        // the back-down: a bump dribble at a time, his man giving ground body to body
+        for (let i = 1; i <= n; i++) {
+          moveTo(pid, out(deep + far - i * POST_BUMP));
+          follow();
+          const met = back();
+          does(pid, 'post', faces(-POST_SIDE));
+          if (dj >= 0) does(on, 'guard', o.get(pid));
+          const into = met.meet?.[0][1];
+          snap(POST_STEP_MS, {
+            ...met,
+            ...(into !== undefined && { hit: [j, into, POST_HIT] as [number, number, number] }),
+            ...(i === 1 && cap(`${N(pid)} backs him down`)),
+          });
+          does(pid, 'post', faces(-POST_SIDE));
+          if (dj >= 0) does(on, 'guard', o.get(pid));
+          snap(POST_SET_MS, met);
+        }
         break;
       }
       case 'cut': {
         const pid = st.pid!;
-        const p = o.get(pid)!;
-        moveTo(pid, { x: Math.sign(p.x || 1) * 3, y: 7 });
-        snap(520, cap(`${N(pid)} cuts to the rim`));
+        const p = { ...o.get(pid)! };
+        const end = { x: Math.sign(p.x || 1) * 3, y: 7 };
+        const far = dist(p, end);
+        cutting = null;
+        if (pid === holder || far < CUT_FAR) {
+          moveTo(pid, end);
+          snap(520, cap(`${N(pid)} cuts to the rim`));
+          break;
+        }
+        const on = zone || junk ? undefined : guardOf.get(pid);
+        const man = on !== undefined && d.has(on) ? on : undefined;
+        const u = { x: (end.x - p.x) / far, y: (end.y - p.y) / far };
+        const along = (k: number): Pt => ({ x: p.x + (end.x - p.x) * k, y: p.y + (end.y - p.y) * k });
+        // the set-up: a step away, his man up with him
+        moveTo(pid, { x: p.x - u.x * CUT_SET, y: p.y - u.y * CUT_SET });
+        follow();
+        snap(CUT_SET_MS);
+        // (his man is left on the side of the cut he is on already, at his hip and behind)
+        const g = man !== undefined ? d.get(man)! : undefined;
+        const side = g && (g.x - p.x) * -u.y + (g.y - p.y) * u.x < 0 ? 1 : -1;
+        const n = { x: -u.y * side, y: u.x * side };
+        const trail = () => {
+          const at = o.get(pid)!;
+          if (man !== undefined) d.set(man, { x: at.x - n.x * CUT_HIP[0] - u.x * CUT_HIP[1], y: Math.max(0.5, at.y - n.y * CUT_HIP[0] - u.y * CUT_HIP[1]) });
+        };
+        // the burst
+        moveTo(pid, along(CUT_IN));
+        follow();
+        trail();
+        snap(CUT_GO_MS, cap(`${N(pid)} cuts to the rim`));
+        const nxt = steps[at + 1];
+        if (nxt?.k === 'pass' && nxt.pid2 === pid) cutting = { at, pid, to: along(CUT_CATCH), on: man, u, n };
+        else if (!(nxt?.k === 'shot' && nxt.pid === pid)) {
+          // (nothing comes: he runs it out to the rim)
+          moveTo(pid, end);
+          follow();
+          trail();
+          snap(CUT_OUT_MS);
+        }
         break;
       }
       case 'handoff': {
@@ -1480,6 +2191,9 @@ export function buildScript(
           break;
         }
         const spot = next?.k === 'shot' && next.pid === to && shotAct(next) === 'jumper' ? { x: next.x ?? 0, y: next.y ?? 10 } : undefined;
+        // (a man cutting to the rim: thrown ahead of him, taken in stride, his man still at his hip)
+        const cut = cutting && cutting.at === at - 1 && cutting.pid === to && was !== to && !spot ? cutting : null;
+        cutting = null;
         if (spot && was !== to && o.has(to)) {
           const far = dist(o.get(to)!, spot) > SHOT_SET;
           moveTo(to, spot);
@@ -1487,9 +2201,20 @@ export function buildScript(
             follow();
             snap(SHOT_GO);
           }
-        } else if (was !== to) meet(to, was);
+        } else if (cut) moveTo(to, cut.to);
+        else if (was !== to) {
+          // (dropped off to a man running to the rim on a break: he takes it in stride, he doesn't stop for it)
+          if (broke && next?.k === 'shot' && next.pid === to && o.has(to)) moveTo(to, toward(o.get(to)!, { x: next.x ?? 0, y: next.y ?? 10 }, IN_STRIDE));
+          else meet(to, was);
+        }
         give(to);
         follow();
+        if (cut?.on !== undefined) {
+          const p = o.get(to)!;
+          d.set(cut.on, { x: p.x - cut.n.x * CUT_HIP[0] - cut.u.x * CUT_HIP[1], y: Math.max(0.5, p.y - cut.n.y * CUT_HIP[0] - cut.u.y * CUT_HIP[1]) });
+          // (the finish that comes straight off it is a beaten man's: see CHASED)
+          drove = { at, pid: to, on: cut.on, u: cut.u, n: cut.n };
+        }
         if (was !== to) {
           does(was, 'pass', o.get(to));
           does(to, 'catch', o.get(was));
@@ -1530,16 +2255,33 @@ export function buildScript(
             }
           }
         }
-        if (shotAct(st) === 'jumper' && from && dist(from, target) > SHOT_SET) {
+        // (the drive this comes straight off, if it got by his man)
+        const beat = drove && drove.at === at - 1 && drove.pid === pid && d.has(drove.on) ? drove : null;
+        drove = null;
+        // (a step-back, off the dribble or off the catch: at the rim first, his man backing off, then back out to his spot with the man late)
+        const own = holder === pid && !zone && !junk ? guardOf.get(pid) : undefined;
+        const backs = shotAct(st) === 'jumper' && fin === 'stepBack' && own !== undefined && d.has(own) && dist(target, BASKET) > STEP_IN + 6;
+        if (shotAct(st) === 'jumper' && from && (backs || dist(from, target) > SHOT_SET)) {
+          if (backs) {
+            moveTo(pid, toward(target, BASKET, STEP_IN));
+            follow();
+            snap(STEP_IN_MS);
+          }
+          const was = backs ? { ...d.get(own!)! } : undefined;
           moveTo(pid, target);
           give(pid);
           follow();
+          if (was) {
+            const to = d.get(own!)!;
+            d.set(own!, { x: to.x + (was.x - to.x) * STEP_LATE, y: to.y + (was.y - to.y) * STEP_LATE });
+          }
           snap(SHOT_GO);
         }
         // (a turnaround starts with his back to the rim: he has it there, as the move before this one ends)
         const j0 = all.indexOf(pid);
         const last = frames[frames.length - 1];
-        if (fin === 'turn' && last && last.hold === j0 && from && dist(from, target) < 6 && (last.act[j0] === 'post' || last.act[j0] === 'hold' || last.act[j0] === 'dribble')) {
+        // (out of a post-up he has it there already, a shoulder into his man: see the post-up)
+        if (fin === 'turn' && last && last.hold === j0 && from && dist(from, target) < 6 && (last.act[j0] === 'hold' || last.act[j0] === 'dribble')) {
           last.face[j0] = heading(BASKET, from) + (from.x >= 0 ? 0.5 : -0.5);
           lastFace[j0] = last.face[j0];
         }
@@ -1554,12 +2296,34 @@ export function buildScript(
         const blocker = next?.k === 'block' && next.pid !== undefined && d.has(next.pid) ? next.pid : undefined;
         // (fouled on it: the man the whistle is on is the one who goes up with him, and into him)
         const hacker = next?.k === 'foul' && next.pid !== undefined && d.has(next.pid) ? next.pid : undefined;
-        const near = blocker ?? hacker ?? [...dPids].sort((a, b) => dist(d.get(a)!, target) - dist(d.get(b)!, target))[0];
+        // (off a break: the man who could get there from where it left him, and nobody when none could. See ranDown)
+        const back = ranDown(target);
+        let near = blocker ?? hacker ?? (back === null ? undefined : (back ?? [...dPids].sort((a, b) => dist(d.get(a)!, target) - dist(d.get(b)!, target))[0]));
         const toRim = dist(target, BASKET);
         const [ux, uy] = toRim > 0.5 ? [(BASKET.x - target.x) / toRim, (BASKET.y - target.y) / toRim] : [0, -1];
         const how = shotAct(st);
+        const atRim = how === 'dunk' || how === 'layup' || toRim < RIM_NEAR;
+        /** Off a drive that got by his man, a shot away from the rim: the man contests it from beside him (see BESIDE_SHOT). */
+        let beside: Pt | undefined;
+        if (beat) {
+          // (the way he comes into it: his last steps, or the drive's own if it ended on the spot)
+          const run = from ? dist(from, target) : 0;
+          const v = from && run > 0.5 ? { x: (target.x - from.x) / run, y: (target.y - from.y) / run } : beat.u;
+          const side = beat.n.x * -v.y + beat.n.y * v.x >= 0 ? 1 : -1;
+          const n = { x: -v.y * side, y: v.x * side };
+          if (atRim) {
+            // (his man is still on his hip; the help, if there is any near enough, is who goes up with him)
+            d.set(beat.on, { x: target.x - n.x * CHASED[0] - v.x * CHASED[1], y: Math.max(0.5, target.y - n.y * CHASED[0] - v.y * CHASED[1]) });
+            const helper = dPids.filter((p) => p !== beat.on).sort((a, b) => dist(d.get(a)!, target) - dist(d.get(b)!, target))[0];
+            if (blocker === undefined && hacker === undefined) near = helper !== undefined && dist(d.get(helper)!, target) < HELP_REACH ? helper : beat.on;
+          } else {
+            if (blocker === undefined && hacker === undefined) near = beat.on;
+            if (near === beat.on) beside = { x: target.x - n.x * BESIDE_SHOT[0] + v.x * BESIDE_SHOT[1], y: Math.max(0.5, target.y - n.y * BESIDE_SHOT[0] + v.y * BESIDE_SHOT[1]) };
+          }
+        }
         if (near !== undefined) {
-          if (how === 'dunk' || how === 'layup' || toRim < RIM_NEAR) {
+          if (beside) d.set(near, beside);
+          else if (atRim) {
             // a shot at the rim takes the shooter to it: his man goes up beside the rim, square to the way he
             // comes in (the side he is already on), never where the shooter comes down and never behind the board
             const was = d.get(near)!;
@@ -1671,7 +2435,29 @@ export function buildScript(
         break;
       }
       case 'block': {
-        snap(260, { flash: { text: 'Blocked', kind: 'block', x: 0, y: 11 }, ...cap(voiced() ?? `Blocked by ${N(st.pid)}!`) });
+        // it comes off his hand toward the man the log has getting it next: that man and the nearest of the other side
+        // go for it while it is loose, and everyone turns to see where it went
+        const got = steps[at + 1]?.k === 'reb' ? steps[at + 1].pid : undefined;
+        const gp = got === undefined ? undefined : (o.get(got) ?? d.get(got));
+        if (got !== undefined && gp) {
+          const spot = toward(gp, BASKET, REB_STEP);
+          const mine = o.has(got);
+          const rival = (mine ? dPids : oPids)
+            .filter((p) => p !== st.pid && p !== st.pid2)
+            .sort((a, b) => dist((o.get(a) ?? d.get(a))!, spot) - dist((o.get(b) ?? d.get(b))!, spot))[0];
+          for (const p of all) does(p, p === st.pid ? 'land' : o.has(p) ? 'stand' : 'defend', spot);
+          for (const p of [got, rival]) {
+            if (p === undefined || p === st.pid || p === st.pid2) continue;
+            const was = (o.get(p) ?? d.get(p))!;
+            const to = toward(was, spot, p === got ? SCRAMBLE[0] : SCRAMBLE[1]);
+            if (o.has(p)) o.set(p, to);
+            else d.set(p, to);
+            does(p, 'move', spot);
+          }
+          // (where the 2D court's ball goes; the 3D one flies off his hand to where the rebound has it)
+          ball = { ...spot };
+        }
+        snap(BLOCK_MS, { flash: { text: 'Blocked', kind: 'block', x: 0, y: 11 }, ...cap(voiced() ?? `Blocked by ${N(st.pid)}!`) });
         break;
       }
       case 'reb': {
@@ -1707,16 +2493,33 @@ export function buildScript(
       case 'steal': {
         const stl = st.pid2;
         const stolen = stl !== undefined && d.has(stl);
-        if (stolen) {
-          does(stl, 'steal', o.get(st.pid ?? holder));
+        const loser = st.pid ?? holder;
+        // (where the man who loses it is, and the thief: he picks off a pass from far off, or gets a hand on the ball)
+        const lp = { ...(o.get(loser) ?? ball) };
+        const sp = stolen ? { ...d.get(stl)! } : lp;
+        const picked = stolen && dist(sp, lp) > PICK_OFF;
+        if (picked) {
+          // he reads the pass and steps into its lane: thrown for the teammate nearest him, it never gets there
+          const mate = oPids.filter((p) => p !== loser).sort((a, b) => dist(o.get(a)!, sp) - dist(o.get(b)!, sp))[0];
+          const mp = mate !== undefined ? o.get(mate)! : sp;
+          const [lx, ly] = [mp.x - lp.x, mp.y - lp.y];
+          const u = clamp(((sp.x - lp.x) * lx + (sp.y - lp.y) * ly) / (lx * lx + ly * ly || 1), 0.35, 0.9);
+          d.set(stl, toward(sp, { x: lp.x + lx * u, y: lp.y + ly * u }, JUMP));
+          does(loser, 'pass', mp);
+          does(stl, 'steal', lp);
+          ball = { ...d.get(stl)! };
+        } else if (stolen) {
+          // he lunges at it and gets a hand on it, from an arm's length
+          d.set(stl, toward(sp, lp, Math.max(0, dist(sp, lp) - REACH)));
+          does(stl, 'steal', lp);
           ball = { ...d.get(stl)! };
         } else {
-          does(st.pid ?? holder, 'rue');
+          does(loser, 'rue');
           ball = { x: 25, y: ball.y };
         }
         // (the shot clock running out is the buzzer's, not a lost ball: the court and the sound say which)
         const clockOut = st.k === 'to' && st.d === 'shot clock violation';
-        snap(420, {
+        snap(stolen ? STEAL_MS : 420, {
           flash: { text: st.k === 'steal' ? 'Steal' : clockOut ? SHOT_CLOCK : 'Turnover', kind: 'to', x: ball.x * 0.5, y: ball.y + 3 },
           ...cap(
             st.k === 'steal' && stl !== undefined
@@ -1728,10 +2531,53 @@ export function buildScript(
         });
         // he's off the other way with it (the next possession picks him up from there)
         if (stolen && live) {
-          const p = d.get(stl)!;
-          d.set(stl, { x: p.x * 0.8, y: Math.min(COURT_LEN - 1, p.y + 9) });
-          ball = { ...d.get(stl)! };
-          snap(300);
+          const p = { ...d.get(stl)! };
+          // (the same every time this possession is drawn)
+          const rnd = (k: number) => jitter(log.q * 7919 + log.clockStart * 131 + log.score[0] * 17 + log.score[1] * 29 + at * 3, k);
+          /** The floor turns with it: his own side start up it, and the two nearest of the side that lost it turn to get back. */
+          const turn = () => {
+            for (const q of dPids) if (q !== stl) d.set(q, { x: d.get(q)!.x, y: Math.min(COURT_LEN - 1, d.get(q)!.y + TURN_STEP) });
+            const nearest = oPids.filter((q) => q !== loser).sort((a, b) => dist(o.get(a)!, p) - dist(o.get(b)!, p));
+            for (const q of nearest.slice(0, 2)) {
+              o.set(q, { x: o.get(q)!.x, y: Math.min(COURT_LEN - 1, o.get(q)!.y + TURN_STEP) });
+              does(q, 'move');
+            }
+          };
+          if (picked) {
+            // (clean, and gone: the passer is left looking at it)
+            d.set(stl, { x: p.x * 0.85, y: Math.min(COURT_LEN - 1, p.y + GONE) });
+            ball = { ...d.get(stl)! };
+            does(stl, 'dribble', { x: p.x * 0.5, y: COURT_LEN });
+            does(loser, 'rue');
+            turn();
+            snap(GONE_MS);
+          } else {
+            // poked ahead of him, up the floor: loose for a beat, the two of them after it
+            // (the way his hand sends it: up the floor if that is in front of him, or else out to the side of him that
+            // is, never back through himself)
+            const [fx, fy] = [(lp.x - p.x) / (dist(lp, p) || 1), (lp.y - p.y) / (dist(lp, p) || 1)];
+            const [sx, sy] = fy >= 0 ? [0, 1] : [-fx * fy, 1 - fy * fy];
+            const sl = Math.hypot(sx, sy);
+            const [ux, uy] = sl > 0.05 ? [sx / sl, sy / sl] : [p.x > 0 ? -1 : 1, 0];
+            const far = LOOSE + rnd(2) * LOOSE_MORE;
+            const k = { x: clamp(p.x + ux * far + (rnd(1) - 0.5) * 3, -22, 22), y: clamp(p.y + uy * far, 2, COURT_LEN - 2) };
+            ball = { ...k };
+            d.set(stl, toward(p, k, dist(p, k) * LOOSE_RUN));
+            does(stl, 'move');
+            // (it went by the man who lost it: he has to turn round for it)
+            does(loser, 'stand', k);
+            snap(LOOSE_MS);
+            // and he runs it down: it is still ahead of him, a reach away, as his hands get to it
+            d.set(stl, toward(k, p, SCOOP));
+            ball = { ...d.get(stl)! };
+            does(stl, 'dribble', { x: k.x + (k.x - p.x), y: k.y + (k.y - p.y) + 6 });
+            if (o.has(loser)) {
+              o.set(loser, toward(lp, k, RUE_STEP));
+              does(loser, 'move', k);
+            }
+            turn();
+            snap(GATHER_MS);
+          }
         }
         break;
       }

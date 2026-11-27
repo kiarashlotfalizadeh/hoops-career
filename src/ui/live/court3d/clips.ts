@@ -1319,9 +1319,11 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
     [0.5, { hip: -0.34 }],
     [1, {}],
   ]),
-  postUp: clip('postUp', 'loop', 1500, { hip: -0.5, wide: 0.65, lean: 0.16, lx: 1.1, ly: -0.9, lz: -0.3, rx: 0.5, ry: 0.9, rz: 0.6 }, [
+  // (sealing his man for the entry pass: sat wide with his back to him, his left arm out and back to hold him there,
+  // his right hand up in front of him where he wants the ball, shown again as he sits)
+  postUp: clip('postUp', 'loop', 1500, { hip: -0.5, wide: 0.65, lean: 0.16, lx: 1.1, ly: -0.9, lz: -0.3, rx: 0.3, ry: 0.7, rz: 1.0 }, [
     [0, {}],
-    [0.5, { hip: -0.56, ry: 1.05 }],
+    [0.5, { hip: -0.56, ry: 0.85, rz: 1.1 }],
     [1, {}],
   ]),
   // (sat back into the man behind him, arms out to hold him there, head up for the ball: he shoves back and gives)
