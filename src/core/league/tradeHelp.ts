@@ -194,8 +194,7 @@ function userCoreGuards(league: League, tid: number, alreadySent: readonly numbe
       if (p.ovr >= 80 || (i === 0 && p.ovr >= 78)) softSet.add(p.pid);
       if (
         p.ovr >= 82 &&
-        (p.ovr >= maxTargetOvr ||
-          (p.ovr >= maxTargetOvr - 2 && (v > maxTargetVal * 1.15 || (maxTargetAge >= 32 && playerAge(p, league.season) <= maxTargetAge - 2))))
+        (p.ovr >= maxTargetOvr || (p.ovr >= maxTargetOvr - 2 && (v > maxTargetVal * 1.15 || (maxTargetAge >= 32 && playerAge(p, league.season) <= maxTargetAge - 2))))
       )
         hardSet.add(p.pid);
     }

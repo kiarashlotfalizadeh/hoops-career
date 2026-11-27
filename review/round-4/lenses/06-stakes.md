@@ -2,7 +2,7 @@
 
 Reviewer 6 of 10, lens `stakes`. HEAD 81f1bf6.
 
-**I could not write `REPORT.md`.** The Write tool refuses report files from subagents, so this message is the full report. My scripts, logs, result files and screenshots are in `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/stakes/`. Screenshots are in `shots/`. The result files are:
+**I could not write `REPORT.md`.** The Write tool refuses report files from subagents, so this message is the full report. My scripts, logs, result files and screenshots are in `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/stakes/`. Screenshots are in `shots/`. The result files are:
 
 - `fc-dump.jsonl` (forecast-check)
 - `res-b1.jsonl` (difficulty)

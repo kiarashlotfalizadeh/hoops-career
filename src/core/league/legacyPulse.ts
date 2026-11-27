@@ -237,7 +237,7 @@ const OPENERS: Record<OwnerPersonality, Record<Band, string[]>> = {
 const ON_PLAN_LOSING: Record<OwnerPersonality, string[]> = {
   'win-now': ["I don't enjoy the standings. I signed off on this season, so I'll live with them.", 'This is the record I expected. I want to see what it buys us.'],
   builder: ['The record is what I expected. I am watching the young players, not the standings.', 'Losing was in the plan this year. The growth has to be in it too.'],
-  frugal: ['We are about what this roster costs. That was the plan for this year.', "No surprises in the standings. I can live with that this season."],
+  frugal: ['We are about what this roster costs. That was the plan for this year.', 'No surprises in the standings. I can live with that this season.'],
 };
 
 const CLOSERS: Record<OwnerPersonality, string[]> = {

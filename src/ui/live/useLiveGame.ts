@@ -948,11 +948,7 @@ export function useLiveGame() {
         // Keep one-tap apply on proven positive calls (late fouls, feeding a hot hand, and counters
         // backed by a clear positive callWorth reading); speculative unmeasured reads wait for the
         // live staff measurement.
-        n.kind === 'decision' &&
-        n.actions[0]?.kind === 'tactics' &&
-        !n.id.startsWith('late-') &&
-        !n.id.startsWith('hot-') &&
-        !n.backed
+        n.kind === 'decision' && n.actions[0]?.kind === 'tactics' && !n.id.startsWith('late-') && !n.id.startsWith('hot-') && !n.backed
           ? { ...n, kind: 'read' as const, actions: [], worth: undefined, auto: false }
           : n,
       );
@@ -965,7 +961,9 @@ export function useLiveGame() {
   // the calls about 3 to 1, 11 to 2 in one double-overtime game (round-4 game-day review)
   useEffect(() => {
     if (over || staffCall?.state !== 'call') return;
-    queueBanner([{ id: `call-${staffCall.draft.id}${staffCall.steps}`, tone: 'info', kicker: 'Staff call', title: staffCall.draft.label, line: callBannerLine(staffCall), ms: 14_000 }]);
+    queueBanner([
+      { id: `call-${staffCall.draft.id}${staffCall.steps}`, tone: 'info', kicker: 'Staff call', title: staffCall.draft.label, line: callBannerLine(staffCall), ms: 14_000 },
+    ]);
   }, [staffCall, over, queueBanner]);
 
   return {

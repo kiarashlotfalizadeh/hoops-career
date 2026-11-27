@@ -26,7 +26,7 @@ FM's Continue lands on small choices that cost something (training load, opposit
 - **Each game's result answers the decision you made.** The debrief after TOR said "Your plan: 2-3 zone · Tonight: TOR offense 1.25 a trip … 1.24 coming in · Worth +0.9 a game". The luck line was also honest: "Their shots fell above what their looks were worth: that part was luck, not the plan."
 - **Injury calls carry a measured number:** "Without him: about −2.9 a game (measured on Thursday vs MEM)".
 - **"Leave it to the staff" now applies the staff's plan** and says so in a toast ("The staff's plan vs GSW: Sprint back").
-- **The season-end hero and review** (`/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/core-loop/shots/t2-season-end.png`): "Lost in the second round · Picked for 36 wins · The owner: Excellent · Best win…".
+- **The season-end hero and review** (`/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/core-loop/shots/t2-season-end.png`): "Lost in the second round · Picked for 36 wins · The owner: Excellent · Best win…".
 - **The digest says why it stopped:** "Stopped for tonight: Game 7 at Trail Blazers". The moment of the stretch leads.
 - **Mail volume is sane:** 45 messages a season with 16 unread (round 1: 55, with 50 unread).
 - **All-Star weekend:** a hero on Today and a moment ("4 All-Stars…").
@@ -34,7 +34,7 @@ FM's Continue lands on small choices that cost something (training load, opposit
 
 ## 3. Findings (most severe first)
 
-The folder `<S>` below is `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/core-loop`.
+The folder `<S>` below is `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/core-loop`.
 
 **F1. The weekly call is a rubber stamp — P1**
 

@@ -2,7 +2,7 @@
 
 The harness blocked me from writing `REPORT.md` (subagents may not write report files), so the full report is below and nothing is in the scratch folder under that name.
 
-All paths are under `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/front-office/`:
+All paths are under `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/front-office/`:
 
 - `shots/*.png` are phone screenshots (390×844).
 - `u*.mjs` are the Playwright drivers.

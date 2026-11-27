@@ -2,7 +2,7 @@ The harness blocked writing `REPORT.md` to my scratch folder (subagents can't wr
 
 # Core loop: round-4 review (lens 2, `core-loop`)
 
-`<S>` = `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/core-loop`
+`<S>` = `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/core-loop`
 
 ## 1. Verdict
 

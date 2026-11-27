@@ -1,4 +1,4 @@
-# Hoops Career — product review, round 4 (October 2026)
+# Clipboard GM — product review, round 4 (October 2026)
 
 This is the fourth full review, run on HEAD 81f1bf6 (clean). Ten Opus reviewers each took one lens. They:
 

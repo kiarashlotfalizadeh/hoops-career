@@ -2,7 +2,7 @@
 
 I couldn't save this as `REPORT.md` because the harness blocks subagents from writing report files, so the full report is below.
 
-My scratch folder is `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/game-day/`. It holds:
+My scratch folder is `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/game-day/`. It holds:
 
 - `shots/`: screenshots
 - `logs/`: one log per watched game

@@ -1,4 +1,4 @@
-# Hoops Career — product review, round 3 (October 2026)
+# Clipboard GM — product review, round 3 (October 2026)
 
 This is the third full review. Ten Opus reviewers each took one lens, played the game in their own headless phone browser, and ran paired-game experiments against the engine. This time they were judged against the best in the genre (Football Manager, Basketball GM, NBA 2K MyNBA), not against round 2. Each played first and only then compared with [round 2](../round-2/PRODUCT-REVIEW.md). The full reports, with evidence, file:line references and screenshot paths, are in [`lenses/`](lenses/).
 

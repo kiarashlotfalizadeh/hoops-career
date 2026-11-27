@@ -1,4 +1,4 @@
-# Hoops Career — product review (October 2026)
+# Clipboard GM — product review (October 2026)
 
 Ten Opus reviewers each looked through one lens and played the game in their own headless phone browser. Some also ran headless season and engine experiments. Their full reports, with evidence, file:line references and screenshot paths, are in [`lenses/`](lenses/). This page brings them together.
 

@@ -1,4 +1,4 @@
-## Hoops Career, round 3: `career-world` lens (seasons 3, 5 and 10)
+## Clipboard GM, round 3: `career-world` lens (seasons 3, 5 and 10)
 
 ### 1. Verdict
 
@@ -67,7 +67,7 @@ What keeps it from FM- or BBGM-grade long saves:
 
 ### 3. Findings (most severe first)
 
-`S` = `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/career-world/shots`
+`S` = `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/career-world/shots`
 
 **F1. The record book and the press ignore the NBA past the app now seeds — P1**
 
@@ -311,4 +311,4 @@ Timings were under heavy load: one season took up to 720 s headless.
 
 My second UI run (seasons 4-5) stopped silently after the 2030-31 owner's verdict.
 
-Everything is in `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/career-world/`. I made no changes to the repo.
+Everything is in `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/career-world/`. I made no changes to the repo.

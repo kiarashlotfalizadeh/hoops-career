@@ -2,9 +2,9 @@ I couldn't write `REPORT.md`: the harness blocks report files from subagents, so
 
 # Onboarding review, round 4: first launch to the end of week 4
 
-Lens `onboarding`. Screenshots are in `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/onboarding/shots/` (written `shots/x.png` below).
+Lens `onboarding`. Screenshots are in `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/onboarding/shots/` (written `shots/x.png` below).
 
-Headless data is in `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/onboarding/study.jsonl`, made by `study.ts`, `fict.ts` and `sched.ts` in the same folder.
+Headless data is in `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/onboarding/study.jsonl`, made by `study.ts`, `fict.ts` and `sched.ts` in the same folder.
 
 Everything ran at 390×844 in fresh Playwright profiles, with ten reviewers sharing the machine.
 

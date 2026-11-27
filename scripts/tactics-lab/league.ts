@@ -36,7 +36,7 @@ export const RNG_SEED = 307;
 export const USER_TID = 19;
 /** The early sample: this many days into the regular season. */
 export const EARLY_DAY = 14;
-const SYNERGY_FILES = [join(REPO, 'data/raw/synergy/teams.json'), '/Users/kiarash/Downloads/hoops-career/data/raw/synergy/teams.json'];
+const SYNERGY_FILES = [join(REPO, 'data/raw/synergy/teams.json'), '/Users/kiarash/Downloads/clipboard-gm/data/raw/synergy/teams.json'];
 
 /** Synergy's ten play types (the sim's 'misc' is kept apart: Synergy's tables leave it out). */
 export const KINDS = ['isolation', 'transition', 'pnrBH', 'pnrRoll', 'post', 'spotup', 'handoff', 'offscreen', 'cut', 'putback'] as const;

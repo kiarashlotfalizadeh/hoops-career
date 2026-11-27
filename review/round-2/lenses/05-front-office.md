@@ -1,6 +1,6 @@
 I played a full season as Memphis on Normal: a preseason cap-space trade, the trade deadline, the lottery, draft night, re-signing and 30 days of free agency. My verdict: the trade economy is now mostly sound, but free agency barely functions at the top and the draft has no scouting. My score is **7/10**, up from 6.5.
 
-All paths below are under `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/front-office/` (screenshots in `shots/`, probe scripts `probe-*.ts`, saved leagues in `snaps/`).
+All paths below are under `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/front-office/` (screenshots in `shots/`, probe scripts `probe-*.ts`, saved leagues in `snaps/`).
 
 # Front office review, round 2 (lens: `front-office`)
 

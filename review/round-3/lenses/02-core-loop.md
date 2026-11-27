@@ -44,7 +44,7 @@ A sim error after every watched postseason game, and a deadline "buy" that hides
 
 ## 3. Findings (most severe first)
 
-`<S>` = `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/core-loop`
+`<S>` = `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/core-loop`
 
 **F1. The regular season is a decision desert — P1**
 

@@ -211,7 +211,20 @@ export function jobSecurity(league: League, fc?: Forecast | null): JobSecurity {
       : ` Last season graded poor: a second in a row (${Math.round(POOR_GRADE * 100)} or worse) and he fires you.`;
   if (!off && left > 0 && (h.heat === 'warm' || h.heat === 'hot'))
     line += ` He can't fire you ${left === 1 ? (reviewed ? 'next season' : 'this season') : `for ${reviewed ? 'the next ' : ''}${left} seasons`}${sets ? ', but this season sets your standing with him' : ''}.`;
-  return { score, heat: h.heat, label: league.fired ? 'Fired' : h.label, line, ...(danger ? { danger } : {}), standing, projected, grace, left, ultimatum, ...(strike ? { strike } : {}), off };
+  return {
+    score,
+    heat: h.heat,
+    label: league.fired ? 'Fired' : h.label,
+    line,
+    ...(danger ? { danger } : {}),
+    standing,
+    projected,
+    grace,
+    left,
+    ultimatum,
+    ...(strike ? { strike } : {}),
+    off,
+  };
 }
 
 /**

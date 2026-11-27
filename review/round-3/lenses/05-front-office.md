@@ -1,6 +1,6 @@
 # Front office review, round 3 (lens: `front-office`)
 
-All paths below are under `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/front-office/`. Screenshots are in `shots/`, probe scripts are `probe-*.ts` and `long2.ts`/`long3.ts`, logs are `*.log`, and saved leagues are in `snaps/14_42` and `snaps/4_7`.
+All paths below are under `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/front-office/`. Screenshots are in `shots/`, probe scripts are `probe-*.ts` and `long2.ts`/`long3.ts`, logs are `*.log`, and saved leagues are in `snaps/14_42` and `snaps/4_7`.
 
 ## 1. Verdict
 

@@ -1,8 +1,8 @@
-# Hoops Career, round 2: market and platform review (`market-platform`)
+# Clipboard GM, round 2: market and platform review (`market-platform`)
 
-Screenshots and scripts are in `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/market-platform/`. Shot names below are relative to its `shots/` folder. The repo is untouched (`git status` is clean), and my static server is stopped.
+Screenshots and scripts are in `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/market-platform/`. Shot names below are relative to its `shots/` folder. The repo is untouched (`git status` is clean), and my static server is stopped.
 
-**About the build I measured.** `dist/` was built at 16:36 and HEAD (e95407b) was committed at 17:22. `src/data/seed.json` (16:21) and the UI files the HEAD commits changed are older than the build, so `dist/` is effectively HEAD. The public Pages site was redeployed at 21:23 GMT on 25 Oct and serves a different JS hash (index-CazXKiSG.js against dist's index-y0cSNOaJ.js), presumably the same commit built for the /hoops-career/ path.
+**About the build I measured.** `dist/` was built at 16:36 and HEAD (e95407b) was committed at 17:22. `src/data/seed.json` (16:21) and the UI files the HEAD commits changed are older than the build, so `dist/` is effectively HEAD. The public Pages site was redeployed at 21:23 GMT on 25 Oct and serves a different JS hash (index-CazXKiSG.js against dist's index-y0cSNOaJ.js), presumably the same commit built for the /clipboard-gm/ path.
 
 **About the timings.** The machine's load average was 38–59 on 14 cores while nine other reviewers ran. All timings are wall-clock under that load and are conservative.
 
@@ -72,7 +72,7 @@ The market side has not moved, and part of it got worse:
 
 **Backups are now small and fast** (`backup.mjs`):
 
-- After one season plus the rollover, export took 0.32 s and produced `hoops-career-my-league-2028.json.gz` at 1.35 MB (6.59 MB of JSON). Round one measured 12.96 MB.
+- After one season plus the rollover, export took 0.32 s and produced `clipboard-gm-my-league-2028.json.gz` at 1.35 MB (6.59 MB of JSON). Round one measured 12.96 MB.
 - Import took 0.39 s and never overwrites: the copy becomes "My League (imported)" (`start-two-leagues.png`).
 
 **Save growth is under control:**
@@ -109,8 +109,8 @@ The market side has not moved, and part of it got worse:
 ### 1. The public repo and Pages site redistribute scraped Basketball Reference pages and an unlicensed NBA product — P0 (legal, live now)
 
 - **What happens:**
-  - `github.com/kiarashlotfalizadeh/hoops-career` is public (GitHub API: `"visibility": "public"`, `"license": null`).
-  - `kiarashlotfalizadeh.github.io/hoops-career/` serves the app, deployed on every push (`.github/workflows/pages.yml`).
+  - `github.com/kiarashlotfalizadeh/clipboard-gm` is public (GitHub API: `"visibility": "public"`, `"license": null`).
+  - `kiarashlotfalizadeh.github.io/clipboard-gm/` serves the app, deployed on every push (`.github/workflows/pages.yml`).
   - Branch `data-raw` holds `data-raw.tgz` (8,209,962 bytes): the cached Basketball Reference pages plus extras (`seed.yml:7,64`).
   - `src/data/seed.json` (2.66 MB, ratings derived from those pages) is in `main`.
 - **Why it matters:**
@@ -210,7 +210,7 @@ The market side has not moved, and part of it got worse:
 ### 7. No share loop — P2 (still open)
 
 - **Evidence:** `@capacitor/share` and `navigator.share` are used only for backups (`backup.ts:80,87`). The final slab, the "What decided it" card, the champions moment and the player card can't be shared.
-- **Recommendation (S–M):** a Share button that renders the existing slab as a 1080×1350 PNG with a small "Hoops Career" wordmark. This is the genre's growth channel (Reddit and Discord).
+- **Recommendation (S–M):** a Share button that renders the existing slab as a 1080×1350 PNG with a small "Clipboard GM" wordmark. This is the genre's growth channel (Reddit and Discord).
 
 ### 8. Native saves live only in WebView IndexedDB, with no device-file autosave — P1 (still open)
 
@@ -252,7 +252,7 @@ The market side has not moved, and part of it got worse:
 
 ### 13. Saves still default to "My League" — P3 (still open)
 
-- **Evidence:** `NewLeague.tsx:49,128`. The start list showed "My League (imported)" over "My League" (`start-two-leagues.png`), and the backup was named `hoops-career-my-league-2028.json.gz`.
+- **Evidence:** `NewLeague.tsx:49,128`. The start list showed "My League (imported)" over "My League" (`start-two-leagues.png`), and the backup was named `clipboard-gm-my-league-2028.json.gz`.
 - **Recommendation (S):** default the name to "Pistons 2026-27" and tag fictional leagues "(fictional)".
 
 ### 14. The start screen's figures are frozen at the seed — P3
@@ -337,9 +337,9 @@ The market side has not moved, and part of it got worse:
 
 **Competitor comparison:**
 
-| Product                                                                                    | Platform / price                                 | Real NBA                                                    | GM + coach                              | Explains _why_    | Mobile / offline             | Vs Hoops Career                                                               |
+| Product                                                                                    | Platform / price                                 | Real NBA                                                    | GM + coach                              | Explains _why_    | Mobile / offline             | Vs Clipboard GM                                                               |
 | ------------------------------------------------------------------------------------------ | ------------------------------------------------ | ----------------------------------------------------------- | --------------------------------------- | ----------------- | ---------------------------- | ----------------------------------------------------------------------------- |
-| **Hoops Career**                                                                           | PWA live on Pages; Android/iOS shells unreleased | Real 2026-27, unlicensed; "fictional" keeps real franchises | GM + coach, deep tactics, live coaching | **Yes, the core** | Phone-first, fully offline   | —                                                                             |
+| **Clipboard GM**                                                                           | PWA live on Pages; Android/iOS shells unreleased | Real 2026-27, unlicensed; "fictional" keeps real franchises | GM + coach, deep tactics, live coaching | **Yes, the core** | Phone-first, fully offline   | —                                                                             |
 | Basketball GM                                                                              | Free web                                         | Real players, but no team names, logos or photos by default | Deep GM, light coaching                 | No                | Web, offline                 | The IP model to copy; big community                                           |
 | NBA 2K26 Arcade Edition                                                                    | Apple Arcade subscription                        | Fully licensed                                              | "The Association": GM + coach, NBA Eras | No                | iPhone, iPad, Mac            | Licensed GM on iPhone; shallow on _why_; you are the depth and honesty option |
 | NBA 2K MyNBA / MyGM (console)                                                              | Full price                                       | Licensed                                                    | Deep                                    | No                | Not mobile                   | The licensed bar; console-bound                                               |

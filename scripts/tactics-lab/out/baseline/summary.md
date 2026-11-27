@@ -367,7 +367,7 @@ Coverage by team over every sample (% of its defensive trips with a ball screen;
 
 ### Play types against real NBA Synergy data
 
-Shares of the ten Synergy kinds, percent: the sim's possessions by their last finish as each game result tallies them (the box score's and the lab's play types), its misc left out; NBA.com's plays, renormalised to the ten. Real: /Users/kiarash/Downloads/hoops-career/data/raw/synergy/teams.json. r = correlation across the 30 teams; "sim1" is the first simulated season (2027). The sim counts possessions, Synergy plays (an offensive board starts a new one): compare order and spread, not exact levels.
+Shares of the ten Synergy kinds, percent: the sim's possessions by their last finish as each game result tallies them (the box score's and the lab's play types), its misc left out; NBA.com's plays, renormalised to the ten. Real: /Users/kiarash/Downloads/clipboard-gm/data/raw/synergy/teams.json. r = correlation across the 30 teams; "sim1" is the first simulated season (2027). The sim counts possessions, Synergy plays (an offensive board starts a new one): compare order and spread, not exact levels.
 
 | Kind | sim1 mean | real 25-26 | real 24-25 | sim1 SD | real SD 25-26 | real SD 24-25 | r sim1~real 25-26 | r sim1~real 24-25 | r real 24-25~25-26 | r sim1~sim2 | r sim2~sim3 | sim PPP | real PPP 25-26 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |

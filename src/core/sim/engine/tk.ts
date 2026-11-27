@@ -162,7 +162,22 @@ const LIFE = {
    * defense in the game (+2.2 per 100, +3 to +6 against star-led teams).
    */
   zone: {
-    zone23: { roll: 0.85, pnr: 1.0, iso: 1.1, post: 1.5, drive: 1.0, kick: 0.85, pop: 0.62, handoff: 0.4, swing: 0.95, swingW: 1.85, corner: 0.5, cutW: 0.45, cut: 0.4, glass: 1.2 },
+    zone23: {
+      roll: 0.85,
+      pnr: 1.0,
+      iso: 1.1,
+      post: 1.5,
+      drive: 1.0,
+      kick: 0.85,
+      pop: 0.62,
+      handoff: 0.4,
+      swing: 0.95,
+      swingW: 1.85,
+      corner: 0.5,
+      cutW: 0.45,
+      cut: 0.4,
+      glass: 1.2,
+    },
     zone32: {
       roll: -0.15,
       pnr: 0,

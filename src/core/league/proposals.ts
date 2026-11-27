@@ -508,7 +508,9 @@ function buyNote(league: League, t: Team, target: Player): string {
       needLine,
       st && st.winning && `We're ${st.rec}, ${st.seat}, and ${thin ? `short a ${where}` : 'one piece short'} for the playoffs. ${last} is that piece.`,
       st && !st.winning && `We're built to win and we're ${st.rec}. Something has to change, and ${last} changes it.`,
-      !needLine && !st && (thin ? `We need another ${where} for a playoff run, and ${last} is the one we want.` : `We're going for it this season, and ${last} makes us better right away.`),
+      !needLine &&
+        !st &&
+        (thin ? `We need another ${where} for a playoff run, and ${last} is the one we want.` : `We're going for it this season, and ${last} makes us better right away.`),
     ]);
   return pickLine(league, target.pid, [
     needLine,

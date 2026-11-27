@@ -126,7 +126,8 @@ export function useStaffCall() {
         budget,
         ahead: ahead && { ops, reached: false },
         publish: (m) => {
-          if (m) setCall(m.pick !== null ? { state: 'call', draft: drafts[m.pick], m, at, base, steps, shownAt: Date.now() } : { state: 'none', tried: drafts.length, at, m, steps });
+          if (m)
+            setCall(m.pick !== null ? { state: 'call', draft: drafts[m.pick], m, at, base, steps, shownAt: Date.now() } : { state: 'none', tried: drafts.length, at, m, steps });
         },
       };
       run.current = r;

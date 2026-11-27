@@ -1,4 +1,4 @@
-**Hoops Career: `career-world` review, round 2 (seasons 3, 5 and 10)**
+**Clipboard GM: `career-world` review, round 2 (seasons 3, 5 and 10)**
 
 ## 1. Verdict
 
@@ -69,7 +69,7 @@ The archives are now good enough to browse; what's missing is mostly what you pu
 
 ## 3. Findings (most severe first)
 
-`S` below means `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/career-world/shots`.
+`S` below means `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/career-world/shots`.
 
 **F1. The real league still starts with no past, so legends and stars are undersold — P1**
 
@@ -321,4 +321,4 @@ New problems from the recent rounds: the copy bugs (F5), the stale `REAL_SERIES`
 - Whether a jersey moment shows on a short sim right after the opener.
 - The year-1 headline of the 67-point game, which had already been pruned from the news.
 
-Scripts, logs and saves are in `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/career-world/`. I made no changes to the repo.
+Scripts, logs and saves are in `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/career-world/`. I made no changes to the repo.

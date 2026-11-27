@@ -54,16 +54,13 @@ export default function Rotation() {
 
   const update = (fn: (r: RotationT) => void, now = true) => {
     setUndo(null);
-    edit(
-      (l) => {
-        const r = l.teams[l.userTid].rotation;
-        fn(r);
-        r.manual = true;
-        // what his targets add up to as he leaves them: minutes that go missing later left with a player
-        r.whole = players.reduce((a, p) => a + (r.minutes[p.pid] ?? 0), 0);
-      },
-      now,
-    );
+    edit((l) => {
+      const r = l.teams[l.userTid].rotation;
+      fn(r);
+      r.manual = true;
+      // what his targets add up to as he leaves them: minutes that go missing later left with a player
+      r.whole = players.reduce((a, p) => a + (r.minutes[p.pid] ?? 0), 0);
+    }, now);
   };
   const closeEdit = () => {
     setEditing(null);
@@ -74,13 +71,10 @@ export default function Rotation() {
       const before = structuredClone(rot);
       // the assistant's rotation as the next game would have it
       if (
-        edit(
-          (l) => {
-            l.teams[l.userTid].rotation.manual = false;
-            ensureRotation(l, l.userTid);
-          },
-          true,
-        )
+        edit((l) => {
+          l.teams[l.userTid].rotation.manual = false;
+          ensureRotation(l, l.userTid);
+        }, true)
       )
         setUndo(before);
     } else if (edit((l) => void (l.teams[l.userTid].rotation.manual = true), true)) setUndo(null);
@@ -467,14 +461,11 @@ function EditPlayer({
             disabled={busy}
             steppers
             onChange={(x) =>
-              update(
-                (r) => {
-                  r.minutes[p.pid] = x;
-                  // his target is the coach's own now: the plan plays him this and scales the others around it
-                  r.set = [...(r.set ?? []).filter((pid) => pid !== p.pid), ...(x > 0 ? [p.pid] : [])];
-                },
-                false,
-              )
+              update((r) => {
+                r.minutes[p.pid] = x;
+                // his target is the coach's own now: the plan plays him this and scales the others around it
+                r.set = [...(r.set ?? []).filter((pid) => pid !== p.pid), ...(x > 0 ? [p.pid] : [])];
+              }, false)
             }
             format={(x) => `${x} min`}
             help={

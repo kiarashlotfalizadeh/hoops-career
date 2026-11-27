@@ -1,4 +1,4 @@
-# Hoops Career: market and platform review (`market-platform`)
+# Clipboard GM: market and platform review (`market-platform`)
 
 REPORT.md was not written: the harness refuses report files from sub-agents. This message is the full report. The repo is untouched (`git status` is clean), and I stopped my own static server.
 
@@ -6,7 +6,7 @@ Screenshots are in `/private/tmp/claude-501/-Users-kiarash--claude-spares-spare-
 
 ## 1. Verdict
 
-The engineering platform under Hoops Career is unusually good. The production build loads in 0.2 s locally and about 3 s on emulated slow 4G. It creates a league in 0.3 s and sims a full regular season in about 8 s of compute. It works fully offline. It survives a reload in the middle of a sim or a live game with no corruption, and a backup round-trips in under 1 s. That makes it faster and sturdier than most of the category.
+The engineering platform under Clipboard GM is unusually good. The production build loads in 0.2 s locally and about 3 s on emulated slow 4G. It creates a league in 0.3 s and sims a full regular season in about 8 s of compute. It works fully offline. It survives a reload in the middle of a sim or a live game with no corruption, and a backup round-trips in under 1 s. That makes it faster and sturdier than most of the category.
 
 As a product to ship and sell, it is not ready, for two reasons:
 
@@ -192,7 +192,7 @@ A "real-roster season pass" sells exactly the unlicensed thing (Finding 1).
 
 1. Free fictional web PWA, no ads.
 2. Store app at a one-time ~$7.99–9.99, with no gameplay IAP.
-3. An optional yearly edition ("Hoops Career 27") from the `data:build` pipeline.
+3. An optional yearly edition ("Clipboard GM 27") from the `data:build` pipeline.
 4. An optional supporter tip.
 
 Never sell any of these:
@@ -210,7 +210,7 @@ Never sell any of these:
 
 **Evidence.** Share is used only for backups (`backup.ts:33,38`). The "Champions" moment, the game headlines and the player card can't be shared.
 
-**Recommendation (S–M).** Add a "Share" button on the report hero, title and season moments, and the player card. Render a 1080×1350 PNG of the existing slab, watermarked with "Hoops Career" and the URL. Reddit and Discord (r/BasketballGM, r/HoopLand) are where this genre grows.
+**Recommendation (S–M).** Add a "Share" button on the report hero, title and season moments, and the player card. Render a 1080×1350 PNG of the existing slab, watermarked with "Clipboard GM" and the URL. Reddit and Discord (r/BasketballGM, r/HoopLand) are where this genre grows.
 
 ### 9. Tablet and landscape are a stretched phone; iPhone landscape is nearly unusable
 
@@ -293,7 +293,7 @@ First three screenshots:
 
 **Severity: P3.**
 
-**Evidence.** The list shows "My League", "My League (imported)" and "My League" (the fictional Lakers league). The backup is named `hoops-career-my-league-2027.json`.
+**Evidence.** The list shows "My League", "My League (imported)" and "My League" (the fictional Lakers league). The backup is named `clipboard-gm-my-league-2027.json`.
 
 **Recommendation (S).** Default the name to "Thunder 2026-27" and mark fictional leagues "(fictional)".
 
@@ -371,9 +371,9 @@ About 1.3 MB of gzipped files is transferred before the start screen is usable. 
 
 **One-sentence hook.** _"The only basketball sim that tells you why you won: GM and head coach on your phone, a season in seconds, offline, no ads."_
 
-| Product                                                                                  | Platform / price (Oct 2026)              | Real NBA data                                                                                                           | GM + coach depth                                              | Explains _why_        | Mobile / offline                 | Vs Hoops Career                                                                 |
+| Product                                                                                  | Platform / price (Oct 2026)              | Real NBA data                                                                                                           | GM + coach depth                                              | Explains _why_        | Mobile / offline                 | Vs Clipboard GM                                                                 |
 | ---------------------------------------------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | --------------------- | -------------------------------- | ------------------------------------------------------------------------------- |
-| **Hoops Career**                                                                         | PWA + Capacitor (unreleased)             | Real 2026-27 seed, unlicensed                                                                                           | GM + head coach, tactics, live coaching                       | **Yes, core feature** | Phone-first, fully offline       | —                                                                               |
+| **Clipboard GM**                                                                         | PWA + Capacitor (unreleased)             | Real 2026-27 seed, unlicensed                                                                                           | GM + head coach, tactics, live coaching                       | **Yes, core feature** | Phone-first, fully offline       | —                                                                               |
 | Basketball GM                                                                            | Free web / PWA                           | Random by default; "Real Players" mode **omits real team names, logos and photos by default**; community files add them | Deep GM, light coaching                                       | No                    | Web, offline                     | The IP model to copy; huge community; little coaching                           |
 | Football Manager 26 (PC) / FM26 Mobile (Netflix-only) / FM26 Touch (Apple Arcade)        | Paid / subscription                      | Licensed (soccer)                                                                                                       | Benchmark tactics + GM                                        | Partly                | Mobile via subscription services | Sets the "tactics matter" bar; no basketball equivalent, which is the gap       |
 | NBA 2K27 MyNBA / MyGM                                                                    | Console/PC, full price                   | Fully licensed                                                                                                          | Deep (CBA negotiation, GM Trust, 4-team trades, second apron) | No                    | Not mobile                       | Licensed but slow, console-bound, opaque                                        |

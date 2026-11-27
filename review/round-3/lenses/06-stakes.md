@@ -1,6 +1,6 @@
 # Stakes lens: owner, money, job security, difficulty (round 3)
 
-Everything I made is in `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/stakes/`. Screenshots are in `shots/`, headless logs in `out/`, and the scripts (`harness.mts`, `passive.mts`, `targets2.mts`, `calib.mts`, `ease.mts`, `budget.mts`, `swap.mts`, `concede2.mts`, `ult.mts`, `season.mjs`, `takejob.mjs`) are at its top level. Nothing in the repo was touched.
+Everything I made is in `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/stakes/`. Screenshots are in `shots/`, headless logs in `out/`, and the scripts (`harness.mts`, `passive.mts`, `targets2.mts`, `calib.mts`, `ease.mts`, `budget.mts`, `swap.mts`, `concede2.mts`, `ult.mts`, `season.mjs`, `takejob.mjs`) are at its top level. Nothing in the repo was touched.
 
 **Two warnings first:**
 

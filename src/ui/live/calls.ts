@@ -118,12 +118,7 @@ export function nextStop(sim: GameSim, side: 0 | 1, seen: StopSeen, ahead: numbe
  * possible, and never one who would immediately trip Trouble's foul or fatigue lines (or have as
  * many fouls / as little energy as the man coming off).
  */
-export function benchFor(
-  sim: GameSim,
-  side: 0 | 1,
-  pid: number,
-  opts: { exclude?: ReadonlySet<number>; prefer?: number; ahead?: boolean; q?: number } = {},
-): number | undefined {
+export function benchFor(sim: GameSim, side: 0 | 1, pid: number, opts: { exclude?: ReadonlySet<number>; prefer?: number; ahead?: boolean; q?: number } = {}): number | undefined {
   const t = sim.T[side];
   const out = t.byId.get(pid);
   const ahead = opts.ahead ?? sim.atBuzzer();
@@ -310,8 +305,7 @@ export function callDrafts(input: StaffInput, sim: GameSim, skip: Set<string> = 
   if (!man) addTactics('man', 'Man-to-man', scoring, (x) => void (x.defense.scheme = 'man'));
   if (d.scheme !== 'zone23' && canZone23 && paintHurting)
     addTactics('zone23', SCHEME_META.zone23.label, `${paint.pts} points inside on ${paint.poss} trips`, (x) => void (x.defense.scheme = 'zone23'));
-  else if (d.scheme !== 'zone32' && canZone32 && hotThrees)
-    addTactics('zone32', SCHEME_META.zone32.label, threesLine, (x) => void (x.defense.scheme = 'zone32'));
+  else if (d.scheme !== 'zone32' && canZone32 && hotThrees) addTactics('zone32', SCHEME_META.zone32.label, threesLine, (x) => void (x.defense.scheme = 'zone32'));
 
   // their ball screens: the first of drop, hedge, switch, ice and blitz besides this one
   const pnr = (them.pt.pnrBH?.poss ?? 0) + (them.pt.pnrRoll?.poss ?? 0);

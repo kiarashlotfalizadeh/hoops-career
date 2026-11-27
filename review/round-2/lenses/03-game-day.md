@@ -1,6 +1,6 @@
 # Game-day review, round 2 (lens `game-day`)
 
-My working files are in `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/game-day/`. Screenshots are in `shots/`, logs from watched games in `logs/`, and the headless scripts are `policy.mts`, `late.mts`, `placebo.mts`, `nightcheck.mts` and `adjcheck.mts`, with their JSON and log outputs beside them. All paths below are relative to that folder. The repo is untouched: `git status` is clean.
+My working files are in `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/game-day/`. Screenshots are in `shots/`, logs from watched games in `logs/`, and the headless scripts are `policy.mts`, `late.mts`, `placebo.mts`, `nightcheck.mts` and `adjcheck.mts`, with their JSON and log outputs beside them. All paths below are relative to that folder. The repo is untouched: `git status` is clean.
 
 ## 1. Verdict
 

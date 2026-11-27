@@ -430,8 +430,16 @@ export function giveShare(league: League, tid: number, pids: number[], spare = 0
     need -= take(benchRest, Math.min(need, capBench));
     if (need > 0) need -= take(ownRest, need);
     if (need > 0) need -= take(starRest, need, starFloor);
-    if (need > 0) need -= take(benchRest.map(([k]) => [k, rot.minutes[+k] ?? 0] as [string, number]), need);
-    if (need > 0) take(starRest.map(([k]) => [k, rot.minutes[+k] ?? 0] as [string, number]), need);
+    if (need > 0)
+      need -= take(
+        benchRest.map(([k]) => [k, rot.minutes[+k] ?? 0] as [string, number]),
+        need,
+      );
+    if (need > 0)
+      take(
+        starRest.map(([k]) => [k, rot.minutes[+k] ?? 0] as [string, number]),
+        need,
+      );
     rot.minutes[pid] = want;
     rot.held = rot.held?.filter((x) => x !== pid);
     rot.benched = rot.benched?.filter((x) => x !== pid);

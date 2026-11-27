@@ -691,7 +691,9 @@ export default function Live() {
                     if (wasClutchStop && paused) s.togglePause();
                   },
                   left: `${Math.floor(Math.max(0, view.clock) / 60)}:${String(Math.floor(Math.max(0, view.clock) % 60)).padStart(2, '0')}${view.q > 4 ? ' of overtime' : ''}`,
-                  label: s.clutchDecided ? `Not close · ${Math.floor(Math.max(0, view.clock) / 60)}:${String(Math.floor(Math.max(0, view.clock) % 60)).padStart(2, '0')} left` : undefined,
+                  label: s.clutchDecided
+                    ? `Not close · ${Math.floor(Math.max(0, view.clock) / 60)}:${String(Math.floor(Math.max(0, view.clock) % 60)).padStart(2, '0')} left`
+                    : undefined,
                   sticky: s.clutchDecided,
                 }
               : undefined

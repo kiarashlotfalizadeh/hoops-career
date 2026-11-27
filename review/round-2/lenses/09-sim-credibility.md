@@ -264,7 +264,7 @@ New this round: the OKC payroll dynasty (finding 3), the inflated finishing and 
 - New league, preseason cuts, Power and Odds forecasts, the opener's report (Box and Flow).
 - Simmed to the trade deadline, then to the end of the regular season, through the play-in and playoffs to the draft lottery, with Stats, Ratings, Teams, Awards and Playoffs screens.
 - Player pages for Curry, Gafford, Kennard and Mobley.
-- Screenshots are in `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/sim-credibility/shots/`.
+- Screenshots are in `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/sim-credibility/shots/`.
 
 **Repo scripts:** `real-check.ts`, `star-check.ts` (4 leagues × 8 seasons), `league-invariants.ts` (passed), `season-test.ts 3` and `season-test.ts 8`, `tactic-sweep.ts 200`.
 

@@ -1,6 +1,6 @@
 # Stakes lens: owner, money, job security, difficulty (round 2)
 
-All my files are under `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/stakes/`. Screenshots are in its `shots/` folder, headless logs in `out/`, and the scripts (`harness.mts`, `passive.mts`, `scenario.mts`, `concede.mts`, `ult.mts`, `targets.mts`, `dead2.mts`, `season.mjs`, …) at its top level. Nothing in the repo was touched.
+All my files are under `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/stakes/`. Screenshots are in its `shots/` folder, headless logs in `out/`, and the scripts (`harness.mts`, `passive.mts`, `scenario.mts`, `concede.mts`, `ult.mts`, `targets.mts`, `dead2.mts`, `season.mjs`, …) at its top level. Nothing in the repo was touched.
 
 ## 1. Verdict
 

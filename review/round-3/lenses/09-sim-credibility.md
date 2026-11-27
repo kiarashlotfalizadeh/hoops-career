@@ -244,7 +244,7 @@ Sources: rc = real-check, sc = star-check. Real figures marked "~" or "memory" a
 
 ## 6. What I couldn't verify and how I tested
 
-**UI** (Playwright, phone viewport, own profile; screenshots in `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/sim-credibility/shots/`):
+**UI** (Playwright, phone viewport, own profile; screenshots in `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/sim-credibility/shots/`):
 
 - New real league as Golden State; preseason cuts through the Needs-you confirm.
 - The opener quick-simmed, with its report and box score (`/game/7`).

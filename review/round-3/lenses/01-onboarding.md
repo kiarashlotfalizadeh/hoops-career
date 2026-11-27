@@ -1,6 +1,6 @@
 ## Onboarding review, round 3: first launch to the end of week 1
 
-Screenshots are in `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/onboarding/shots/`. Below, `shots/x.png` means a file in that folder. Profiles:
+Screenshots are in `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/onboarding/shots/`. Below, `shots/x.png` means a file in that folder. Profiles:
 
 - **a**: the default Wizards, reading nothing
 - **b**: the default Wizards, following the guide
@@ -259,4 +259,4 @@ Wall-clock times were taken under load from ten reviewers. Taps are counted exac
 - MyNBA shows team ratings.
 - Football Manager shows board expectations before you take the job, then gives preseason friendlies to learn in.
 
-Hoops Career beats all three at teaching _why_ in game 1. It falls behind them at the first-week contract: what you were promised, and whether the team can deliver it.
+Clipboard GM beats all three at teaching _why_ in game 1. It falls behind them at the first-week contract: what you were promised, and whether the team can deliver it.

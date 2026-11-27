@@ -1,4 +1,4 @@
-The harness refused to write `REPORT.md` (subagents can't write report files), so the full report is below and nothing is saved at that path. My scripts, outputs and screenshots are in `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/sim-credibility/`, written below as `./`. The browser profile is deleted. Timings ran on a shared machine (load average 19-26).
+The harness refused to write `REPORT.md` (subagents can't write report files), so the full report is below and nothing is saved at that path. My scripts, outputs and screenshots are in `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/sim-credibility/`, written below as `./`. The browser profile is deleted. Timings ran on a shared machine (load average 19-26).
 
 # Sim credibility review, round 4 (`sim-credibility`)
 

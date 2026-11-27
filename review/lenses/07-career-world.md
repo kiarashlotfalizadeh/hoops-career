@@ -1,4 +1,4 @@
-## Hoops Career: `career-world` lens report (the long game: seasons 3, 5, 10)
+## Clipboard GM: `career-world` lens report (the long game: seasons 3, 5, 10)
 
 The tool refused to write `REPORT.md` because subagents must return reports as text, so the full report is below. Screenshots are in `/private/tmp/claude-501/-Users-kiarash--claude-spares-spare-hVNZPT/b285bc02-5a07-46d5-a46e-e152c55fa3b7/scratchpad/review/career-world/shots/`, written `shots/…` below. The logs, the decade analysis and the scripts sit next to that folder.
 

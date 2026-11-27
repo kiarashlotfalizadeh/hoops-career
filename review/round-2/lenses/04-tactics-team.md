@@ -1,6 +1,6 @@
 ## Tactics-team lens: second-round review
 
-All evidence is under `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/tactics-team/`. Screenshots are in `shots/`, headless outputs are the `*.txt` files, and the scripts that made them sit beside them. The repo was not touched.
+All evidence is under `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/tactics-team/`. Screenshots are in `shots/`, headless outputs are the `*.txt` files, and the scripts that made them sit beside them. The repo was not touched.
 
 ### 1. Verdict
 
@@ -234,8 +234,8 @@ New since the first round: the hidden philosophy lean and zone ban (#1, #2), los
 
 Key files:
 
-- `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/tactics-team/style-def-k12.txt`
-- `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/tactics-team/style-off-k18.txt`
-- `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/tactics-team/m2.txt`
-- `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/tactics-team/shots/04-change-sheet.png`
-- `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/tactics-team/shots/28-ledger-checked.png`
+- `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/tactics-team/style-def-k12.txt`
+- `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/tactics-team/style-off-k18.txt`
+- `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/tactics-team/m2.txt`
+- `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/tactics-team/shots/04-change-sheet.png`
+- `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/tactics-team/shots/28-ledger-checked.png`

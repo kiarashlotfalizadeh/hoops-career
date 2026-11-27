@@ -99,9 +99,7 @@ describe('the draft', () => {
       const holder = draftOrder(league).find((d) => d.round === 1 && d.pick === 1)!;
       expect(holder.originalTid).toBe(top.tid);
       const news = league.news.find((n) => n.text.startsWith('Draft lottery:'))!;
-      expect(news.text).toBe(
-        `Draft lottery: ${teamCity(league, holder.tid)} wins the No. 1 pick. It came from ${teamCity(league, top.tid)}, ${ordinal(top.pre)} in the odds.`,
-      );
+      expect(news.text).toBe(`Draft lottery: ${teamCity(league, holder.tid)} wins the No. 1 pick. It came from ${teamCity(league, top.tid)}, ${ordinal(top.pre)} in the odds.`);
     }
 
     // a pick of a player who is off the board (a double tap on consecutive picks) is refused instead of throwing

@@ -1,6 +1,6 @@
 # UX / IA lens: round 4 (reviewer 8, `ux-ia`)
 
-The tool harness blocked writing `REPORT.md` ("Subagents should return findings as text"), so this message is the full report and there is no file. My save profile has been deleted. Every path below is under the scratch folder `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/ux-ia/`.
+The tool harness blocked writing `REPORT.md` ("Subagents should return findings as text"), so this message is the full report and there is no file. My save profile has been deleted. Every path below is under the scratch folder `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/ux-ia/`.
 
 ## 1. Verdict
 
@@ -231,7 +231,7 @@ Budget: one hero, ≤5 blocks, rows with ≤1 meta line, one primary button, one
   - 28 heading-order violations across the crawl.
   - Generic h1s: "Matchup" rather than the opponent, "League" on every League tab.
 - **Tabs.** Page tabs are still `radiogroup`/`radio` (`components/ui.tsx:153`).
-- **Page title and skip link.** `document.title` is "Hoops Career" on every route, and there is no skip link.
+- **Page title and skip link.** `document.title` is "Clipboard GM" on every route, and there is no skip link.
 - **Focus rings.**
   - The Games slab link has no focus ring.
   - After a keyboard Escape from Play options, the dock chevron's ring renders as two clipped red lines above the dock (`shots/35-today-deadline-0.png`, x≈330 and 388).

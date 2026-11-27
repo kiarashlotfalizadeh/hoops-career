@@ -1,6 +1,6 @@
 ## Tactics-team lens: third-round review
 
-All evidence is in `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/tactics-team/`. Screenshots are in `shots/`, headless outputs are the `*.txt` files, and the scripts sit beside them. I didn't touch the repo. The machine was shared and heavily loaded (load average 35–60 on 14 cores), so timings are slow.
+All evidence is in `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/tactics-team/`. Screenshots are in `shots/`, headless outputs are the `*.txt` files, and the scripts sit beside them. I didn't touch the repo. The machine was shared and heavily loaded (load average 35–60 on 14 cores), so timings are slow.
 
 ### 1. Verdict
 
@@ -264,10 +264,10 @@ Three things hold it back from FM-grade trust:
 
 Key files:
 
-- `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/tactics-team/nyk.txt`
-- `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/tactics-team/style-5150.txt`
-- `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/tactics-team/levers.txt`
-- `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/tactics-team/sweep.txt`
-- `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/tactics-team/shots/20-ledger2-0.png`
-- `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/tactics-team/shots/tac-season2-1.png`
-- `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/tactics-team/shots/sh-towns-0.png`
+- `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/tactics-team/nyk.txt`
+- `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/tactics-team/style-5150.txt`
+- `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/tactics-team/levers.txt`
+- `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/tactics-team/sweep.txt`
+- `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/tactics-team/shots/20-ledger2-0.png`
+- `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/tactics-team/shots/tac-season2-1.png`
+- `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/tactics-team/shots/sh-towns-0.png`

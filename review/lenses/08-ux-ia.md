@@ -1,4 +1,4 @@
-# Hoops Career: UX / IA review (lens `ux-ia`)
+# Clipboard GM: UX / IA review (lens `ux-ia`)
 
 I couldn't save this report to `REPORT.md`: the tool refused, because sub-agents have to return reports as text. The full report is below. Screenshots and scripts are in my review folder; nothing was written to the repo.
 

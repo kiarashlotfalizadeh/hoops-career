@@ -590,8 +590,8 @@ function Desks({ league }: { league: League }) {
         : jobAsks
           ? `${plural(jobAsks, 'opening')} would hear you out · until the draft`
           : seasonsIn < 1
-          ? `Your ${teamCity(league, team)} tenure starts next season`
-          : `Season ${seasonsIn} with ${teamCity(league, team)}`,
+            ? `Your ${teamCity(league, team)} tenure starts next season`
+            : `Season ${seasonsIn} with ${teamCity(league, team)}`,
       tone: jobOffers ? 'good' : undefined,
       hot: jobOffers > 0,
     },

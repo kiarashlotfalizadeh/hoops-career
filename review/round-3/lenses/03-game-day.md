@@ -1,6 +1,6 @@
 # Game-day review, round 3 (lens `game-day`)
 
-All my files are in `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/game-day/`:
+All my files are in `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/game-day/`:
 
 - `shots/`: screenshots
 - `logs/`: watched-game logs

@@ -1,4 +1,4 @@
-# Hoops Career — product review, round 2 (October 2026)
+# Clipboard GM — product review, round 2 (October 2026)
 
 This is the second full review. Ten Opus reviewers each took one lens and played the game in their own headless phone browser. Most also ran headless paired-game experiments against the engine. They played first and only then compared with [round 1](../PRODUCT-REVIEW.md). Their full reports, with evidence, file:line references and screenshot paths, are in [`lenses/`](lenses/). This page brings them together.
 
@@ -33,7 +33,7 @@ The work changed the product's main problem. It used to be that numbers weren't 
 - **Measuring made it quiet or a formality.**
 - **The game's goals and economy reward gaming more than judgment.**
 
-> **Act now (P0, outside the app):** the market reviewer found the repo `kiarashlotfalizadeh/hoops-career` is **public with no licence**, the app is live on **GitHub Pages**, and the `data-raw` branch hosts an 8.2 MB tarball of **cached Basketball Reference pages**. Sports Reference's data-use terms forbid building tools on scraped data. Make the repo private or delete `data-raw`, and turn Pages off or deploy a fictional-only build ([market F1](lenses/10-market-platform.md)).
+> **Act now (P0, outside the app):** the market reviewer found the repo `kiarashlotfalizadeh/clipboard-gm` is **public with no licence**, the app is live on **GitHub Pages**, and the `data-raw` branch hosts an 8.2 MB tarball of **cached Basketball Reference pages**. Sports Reference's data-use terms forbid building tools on scraped data. Make the repo private or delete `data-raw`, and turn Pages off or deploy a fictional-only build ([market F1](lenses/10-market-platform.md)).
 
 ---
 

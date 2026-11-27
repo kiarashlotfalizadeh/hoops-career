@@ -1,4 +1,4 @@
-I couldn't save the report to `REPORT.md` in the scratch folder: the harness blocks subagents from writing report files. The full report is below instead, and all screenshots, data and scripts are in `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/tactics-team/`:
+I couldn't save the report to `REPORT.md` in the scratch folder: the harness blocks subagents from writing report files. The full report is below instead, and all screenshots, data and scripts are in `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/tactics-team/`:
 
 - `shots/`: PNG screenshots plus `.txt` dumps of each screen.
 - `data/`: headless outputs and the edit-ledger JSON.

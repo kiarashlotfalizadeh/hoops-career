@@ -1,11 +1,11 @@
-# Hoops Career, round 4: `career-world` lens (the long game)
+# Clipboard GM, round 4: `career-world` lens (the long game)
 
 **REPORT.md was not written.** The harness blocks report files from subagents, so this message is the full report.
 
 Paths used below:
 
-- `S` = `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/career-world/shots`
-- `D` = `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/career-world`
+- `S` = `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/career-world/shots`
+- `D` = `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/career-world`
 
 ## 1. Verdict
 

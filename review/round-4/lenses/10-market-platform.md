@@ -1,6 +1,6 @@
-# Hoops Career, round 4: market and platform (`market-platform`)
+# Clipboard GM, round 4: market and platform (`market-platform`)
 
-I couldn't save this as `REPORT.md` in my scratch folder: the tool refused the write, so the full report is below instead. Logs (`*.log`), scripts and screenshots (`shots/`) are in `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/market-platform/`.
+I couldn't save this as `REPORT.md` in my scratch folder: the tool refused the write, so the full report is below instead. Logs (`*.log`), scripts and screenshots (`shots/`) are in `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/1432d099-c3e8-46a9-bd36-274882ec0af2/scratchpad/review/market-platform/`.
 
 **How I tested.**
 
@@ -12,7 +12,7 @@ I couldn't save this as `REPORT.md` in my scratch folder: the tool refused the w
 
 ## 1. Verdict
 
-As software, Hoops Career is ready to ship:
+As software, Clipboard GM is ready to ship:
 
 - The start screen appears in 0.24 s.
 - A whole regular season sims in about 11–13 s.
@@ -363,7 +363,7 @@ The web app's manifest has no screenshots, so Chrome shows its basic install pro
 
 | Product                  | Price / platform                              | Real NBA?                                               | Coaching depth                        | Explains why?     |
 | ------------------------ | --------------------------------------------- | ------------------------------------------------------- | ------------------------------------- | ----------------- |
-| **Hoops Career**         | Web app; native apps unreleased; no price     | Real 2026-27 rosters and history since 1947, unlicensed | Deep, live staff voice                | **Yes, measured** |
+| **Clipboard GM**         | Web app; native apps unreleased; no price     | Real 2026-27 rosters and history since 1947, unlicensed | Deep, live staff voice                | **Yes, measured** |
 | Basketball GM            | Free web; about 2× faster since Sep 2026      | Built-in real players back to 1947                      | Light                                 | No                |
 | NBA 2K27 Arcade Edition  | Apple Arcade, $6.99/mo, 5 Nov                 | Licensed, adds the WNBA                                 | The Association mode                  | No                |
 | NBA 2K27 MyNBA (console) | Full price                                    | Licensed; 100-year Legacy, GM Trust                     | Deep                                  | No                |

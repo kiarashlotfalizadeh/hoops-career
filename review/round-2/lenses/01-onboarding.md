@@ -1,6 +1,6 @@
 # Onboarding review, round 2: a new player's first hour (first launch to the end of week 1)
 
-All screenshots are in `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/onboarding/shots/`. Below I write `shots/<name>.png` for a file in that folder. Profile prefixes: pa = (a) default flow, pb/pe = (b) followed the guide, pc = (c) Bulls on Hard, pd = (d) fictional league on Easy, pf = Nets on Hard, op1-4 = four extra openers.
+All screenshots are in `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/3ab7e56a-18a1-4267-8218-da731c128be7/scratchpad/review/onboarding/shots/`. Below I write `shots/<name>.png` for a file in that folder. Profile prefixes: pa = (a) default flow, pb/pe = (b) followed the guide, pc = (c) Bulls on Hard, pd = (d) fictional league on Easy, pf = Nets on Hard, op1-4 = four extra openers.
 
 ## 1. Verdict
 

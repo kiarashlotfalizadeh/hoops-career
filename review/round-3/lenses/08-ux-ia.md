@@ -392,7 +392,7 @@ All reasonable, except that depth in Tactics makes its sub-settings the slowest 
 - **Colour blindness.** `cvd.mjs` and `cvd.py`: Machado protan, deutan and tritan plus grayscale, as on-screen filters and as ΔE2000 maths over the tokens.
 - **Other checks.** `misc.mjs`: sticky stacks, bell, Play options, focus, Career.
 - **Load.** Timings were taken on a machine shared with nine other reviewers, so they are noisy.
-- **Where things are.** Everything is under `/private/tmp/claude-501/-Users-kiarash-Downloads-hoops-career/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/ux-ia/`: screenshots in `shots/mid-phone`, `shots/mid-tablet`, `shots/off`, `shots/draft`, `shots/cvd` and `shots/live-*`; crops in `crops/`.
+- **Where things are.** Everything is under `/private/tmp/claude-501/-Users-kiarash-Downloads-clipboard-gm/aa526230-11b5-4da6-a507-e3bf42281b2d/scratchpad/review/ux-ia/`: screenshots in `shots/mid-phone`, `shots/mid-tablet`, `shots/off`, `shots/draft`, `shots/cvd` and `shots/live-*`; crops in `crops/`.
 
 **Not verified:**
 
