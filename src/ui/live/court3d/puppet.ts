@@ -501,6 +501,57 @@ const SORE_BEATS: Gesture[] = ['wipe', 'tug', 'head'];
 const STEP_BACK = 1.15;
 /** A man standing on the weak side (the ball farther off than this, ft) may stand tall with a hand on his hip; nearer it he is ready. */
 const WEAK_SIDE = 24;
+/**
+ * A man off the ball is as ready as the ball is near (Drive.live's `near`, eased up over KEEN_UP ms and let go over
+ * KEEN_DOWN): sat this much lower (ft), his chest this much farther over his toes (radians), his feet this much
+ * wider, and his hands up where a pass can be put (READY_HANDS, by the kind of man he is: in front of his chest, at
+ * his belt, or at his belt with one shown high as a target once the ball is right by him). Loose again as it goes
+ * away. Past ROUSE of it he doesn't stand with his hands on his hips or his knees. On his toes while he is: a give
+ * in his knees this deep (ft), on his own uneven beat.
+ */
+const KEEN_UP = 260;
+const KEEN_DOWN = 700;
+const ROUSE = 0.3;
+const READY_SIT = 0.12;
+const READY_LEAN = 0.08;
+const READY_WIDE = 0.06;
+const READY_BOUNCE = 0.045;
+const READY_HANDS: readonly (readonly [number, number, number])[] = [
+  [0.25, -0.74, 1.0],
+  [0.2, -0.98, 0.9],
+  [0.2, -0.98, 0.9],
+];
+/** The target hand of the third kind: up beside his head, shown to the ball, once his readiness is past TARGET_FROM. */
+const TARGET_HAND: readonly [number, number, number] = [0.34, 0.7, 0.82];
+const TARGET_FROM = 0.62;
+/** A pass about to come to him: both hands out in front of his chest to it, shown over SHOW_MS, and he sits this much more (ft). */
+const SHOW_HANDS: readonly [number, number, number] = [0.27, -0.74, 1.08];
+const SHOW_MS = 170;
+const SHOW_SIT = 0.07;
+/**
+ * A shot in the air: every man without a move of his own is up on it, sat this much (ft), his hands up in front of
+ * his shoulders for whatever comes off the rim (this far of the way there), eased in over WATCH_IN ms and out over
+ * WATCH_OUT.
+ */
+const WATCH_HANDS: readonly [number, number, number] = [0.6, -0.52, 0.78];
+const WATCH_SIT = 0.11;
+const WATCH_ARMS = 0.72;
+const WATCH_IN = 200;
+const WATCH_OUT = 380;
+/**
+ * A defender off the ball digs at a drive going by him: a stab down at the ball with the hand nearer it and back
+ * (DIG_MS in all, out over its first DIG_OUT share), his chest and hips going with it; not again for DIG_REST ms.
+ * Where the hand goes (ft from his shoulder), and how far his chest goes over (radians), turns (radians) and his
+ * hips sink (ft) and shift toward it (ft).
+ */
+const DIG_MS = 520;
+const DIG_OUT = 0.36;
+const DIG_REST = 900;
+const DIG_HAND: readonly [number, number, number] = [0.5, -1.4, 1.12];
+const DIG_LEAN = 0.15;
+const DIG_TWIST = 0.24;
+const DIG_SIT = 0.16;
+const DIG_SWAY = 0.13;
 /** A catch's last beat (the ball down on his hip) is dropped if he is already going, this fast (ft a second), this long after it (ms). */
 const CATCH_GO = 4;
 const CATCH_HELD = 200;
@@ -1143,6 +1194,13 @@ export interface Drive {
    * weight goes where he is about to go (the lean of a start or a stop, the bank of a bend), as it comes and not after it.
    */
   ahead?: { x: number; z: number; x2: number; z2: number; ms: number };
+  /**
+   * The play is live and this move gives him nothing of his own to do: what it has to do with him all the same.
+   * `near`: how near the ball's business is to him (0: the far side of the floor; 1: right by him, or his to get
+   * next); `gets`: a pass is about to be thrown to him, in this long (ms); `shot`: a shot is in the air, anyone's;
+   * `dig`: he is off the ball and a man is driving it past him.
+   */
+  live?: { near: number; gets?: number; shot?: boolean; dig?: boolean };
 }
 
 /**
@@ -1907,6 +1965,17 @@ export class Puppet {
   private yawV = 0;
   private lim = LOOK_MAX;
   private deny = 0;
+  /** Off the ball: how ready he is (eased, see KEEN_UP), how much he shows his hands to a pass about to come, how much he is up on a shot in the air; and his dig at a drive: how long into it (ms), on which side (1 his left). */
+  private keen = 0;
+  private shown = 0;
+  private watch = 0;
+  private digT = 1e9;
+  private digSide = 1;
+  /** How he is ready (an index into READY_HANDS), how low and how much with his hands (his own), and which hand a target is shown with (1 his left). */
+  private readyKind = 0;
+  private readyLow = 1;
+  private readyUp = 1;
+  private targetSide = -1;
   /** The shot he is taking: its count, how much it fades, whether a leg kicks out, and whether it is off his left hand (a layup from that side) or a step across first. */
   private shots = 0;
   private fade = 0;
@@ -4297,6 +4366,14 @@ export class Puppet {
     this.waitLow = clamp((r(172) - 0.3) * 0.1 + 0.05 * burst - 0.03 * glide, -0.03, 0.09);
     this.wantsK = clamp(0.25 + 0.35 * r(173) + 0.2 * craft + 0.1 * burst, 0.1, 0.8);
     this.weightTo = r(174) < 0.5 ? 1 : -1;
+    // (and how he is ready when the ball comes his way: a shooter's hands up in front of his chest, most men's at
+    // their belts, a big man's there with a target shown high once it is right by him; each sits and shows his own amount)
+    const tall = clamp((s - 1.0) / 0.05, 0, 1);
+    const kind = r(176);
+    this.readyKind = kind < 0.2 + 0.45 * tall ? 2 : kind < 0.62 + 0.2 * craft ? 0 : 1;
+    this.readyLow = clamp(0.75 + 0.5 * r(177) + 0.2 * burst - 0.15 * glide, 0.6, 1.4);
+    this.readyUp = clamp(0.72 + 0.28 * r(178) + 0.15 * craft, 0.6, 1);
+    this.targetSide = r(179) < 0.22 ? 1 : -1;
     this.weightIn = WEIGHT_HOLD[0] * r(175);
     // (and his timing: how fast he turns, how quickly he is into his next thing, how quick his hands are, how hard he
     // drives off his first step, how often he changes hands standing with it)
@@ -4525,8 +4602,12 @@ export class Puppet {
    */
   private stand(d: Drive, own: number): ClipId {
     const rest = !!d.rest;
-    // (and a breather taken as the buzzer went is over with it: see below)
-    const fresh = !STANDING.has(this.clip) || rest !== this.resting || (!!d.over && this.idle === 'knees');
+    // (how much the play has to do with him: the ball near, coming to him, or up at the rim)
+    const live = rest ? undefined : d.live;
+    const keen = live ? Math.max(live.near, live.shot || live.gets !== undefined ? 1 : 0) : 0;
+    // (and a breather taken as the buzzer went is over with it: see below; so is one the play has come to)
+    const roused = keen > ROUSE && (this.idle === 'spot3' || this.idle === 'knees');
+    const fresh = !STANDING.has(this.clip) || rest !== this.resting || (!!d.over && this.idle === 'knees') || roused;
     this.standMs -= own;
     if (!fresh && this.standMs > 0) return this.idle;
     this.resting = rest;
@@ -4538,8 +4619,9 @@ export class Puppet {
       else {
         // (near the ball he is loose or wanting it, by how much he likes to show his hands; on the far side he may stand
         // tall with his hands on his hips, or, late and blown, bend over with them on his knees)
-        const far = !!d.look && Math.hypot(d.look.x - this.x, d.look.z - this.z) > WEAK_SIDE;
-        const wants = this.wantsK * (far ? 0.4 : 1);
+        // (told how near the play is, that is what he goes by: with the ball's business anywhere near him he is in it)
+        const far = live ? keen <= ROUSE * 0.6 : !!d.look && Math.hypot(d.look.x - this.x, d.look.z - this.z) > WEAK_SIDE;
+        const wants = this.wantsK * (far ? 0.4 : 1) + 0.3 * keen;
         if (far && tired > 0.35 && r < 0.22) this.idle = 'knees';
         else if (far && r < 0.32) this.idle = 'spot3';
         else this.idle = hash(this.who, 3000 + this.standN) < wants ? 'spot2' : 'spot';
@@ -4552,6 +4634,14 @@ export class Puppet {
     else this.idle = r < 0.3 ? 'hips' : r < 0.65 ? 'shift' : r < 0.85 ? 'idle' : 'idle3';
     this.standMs = this.idle === 'knees' ? 1600 + r * 1200 : WAITS.has(this.idle) ? 3200 + r * 4400 : 2600 + r * 3200;
     return this.idle;
+  }
+
+  /** How much his empty hands are up for the ball (0 let hang, 1 up and shown: ready for it off the ball, or up on a shot in the air), and how much of that is for a pass about to come to him. */
+  get showing(): number {
+    return Math.max(smooth(clamp(this.keen, 0, 1)) * this.readyUp, this.shown, this.watch);
+  }
+  get expecting(): number {
+    return this.shown;
   }
 
   /** A gesture for his arms and head (see GESTURES): made as soon as his hands are free, or dropped if they aren't within `wait` ms. `mate`: whose hand he slaps for a five. */
@@ -4734,8 +4824,51 @@ export class Puppet {
     this.weightAt += this.weightV * k;
     // (his hips go over the foot he is on as weigh puts them; his chest leans back the other way over it)
     P[I.tilt] -= WEIGHT_TILT * clamp(this.weightAt * this.weightK, -1, 1);
+    // (as ready as the ball is near: it comes over him as the ball comes round to his side, and goes as it goes)
+    const live = waiting && !d.rest ? d.live : undefined;
+    const keenTo = live ? clamp(live.near, 0, 1) : 0;
+    this.keen += (keenTo - this.keen) * (1 - Math.exp(-own / (!waiting ? 90 : keenTo > this.keen ? KEEN_UP : KEEN_DOWN)));
+    this.shown += ((live?.gets !== undefined ? 1 : 0) - this.shown) * (1 - Math.exp(-own / (waiting ? SHOW_MS : 60)));
     if (!waiting) return;
     P[I.hip] -= this.waitLow;
+    const e = smooth(clamp(this.keen, 0, 1));
+    if (e > 0.01) {
+      P[I.hip] -= READY_SIT * this.readyLow * e;
+      P[I.lean] += READY_LEAN * e;
+      P[I.wide] += READY_WIDE * e;
+      // (on his toes: a give in his knees that comes and goes, never a beat kept)
+      P[I.hip] -= READY_BOUNCE * e * Math.max(0, Math.sin(t * 6.1 + ph * 4)) * (0.5 + 0.5 * Math.sin(t * 1.3 + ph * 2.2));
+      const H = READY_HANDS[this.readyKind];
+      const up = e * this.readyUp;
+      // (his arms hang from his shoulders or rest on his hips: they come up from wherever they are)
+      P[I.lx] += (H[0] - P[I.lx]) * up;
+      P[I.ly] += (H[1] - P[I.ly]) * up;
+      P[I.lz] += (H[2] - P[I.lz]) * up;
+      P[I.rx] += (H[0] - P[I.rx]) * up;
+      P[I.ry] += (H[1] - P[I.ry]) * up;
+      P[I.rz] += (H[2] - P[I.rz]) * up;
+      // (a big man's target: one hand shown high to the ball once it is right by him)
+      const tg = this.readyKind === 2 ? smooth(clamp((this.keen - TARGET_FROM) / (1 - TARGET_FROM), 0, 1)) * (1 - this.shown) : 0;
+      if (tg > 0.01) {
+        const [ax, ay, az] = this.targetSide > 0 ? [I.lx, I.ly, I.lz] : [I.rx, I.ry, I.rz];
+        P[ax] += (TARGET_HAND[0] - P[ax]) * tg;
+        P[ay] += (TARGET_HAND[1] - P[ay]) * tg;
+        P[az] += (TARGET_HAND[2] - P[az]) * tg;
+      }
+    }
+    // (a pass about to come to him: both hands out to it where he wants it, and down into his legs to take it)
+    const sh = smooth(clamp(this.shown, 0, 1));
+    if (sh > 0.01) {
+      P[I.hip] -= SHOW_SIT * sh;
+      for (const [ax, ay, az] of [
+        [I.lx, I.ly, I.lz],
+        [I.rx, I.ry, I.rz],
+      ]) {
+        P[ax] += (SHOW_HANDS[0] - P[ax]) * sh;
+        P[ay] += (SHOW_HANDS[1] - P[ay]) * sh;
+        P[az] += (SHOW_HANDS[2] - P[az]) * sh;
+      }
+    }
     // (his hands: never quite still, each on its own slow time)
     P[I.lz] += 0.035 * Math.sin(t * 0.83 + ph);
     P[I.rz] += 0.035 * Math.sin(t * 0.67 + ph * 2.3);
@@ -4794,6 +4927,39 @@ export class Puppet {
     if (this.resetT < 340) {
       this.resetT += own;
       P[I.hip] -= 0.08 * Math.sin((Math.PI * Math.min(340, this.resetT)) / 340);
+    }
+    // (a drive going by him off the ball: he digs at it, a stab of the hand nearer it and back into his stance)
+    this.digT += own;
+    if (d.live?.dig && d.look && id === 'ready' && !this.one && !this.gest && this.digT > DIG_MS + DIG_REST / this.swipeK) {
+      this.digT = 0;
+      this.digSide = this.local(d.look.x, d.look.z)[0] >= 0 ? 1 : -1;
+    }
+    if (this.digT < DIG_MS && (id === 'ready' || id === 'shuffle' || id === 'stance') && !this.one) {
+      const u = this.digT / DIG_MS;
+      const w = u < DIG_OUT ? smooth(u / DIG_OUT) : 1 - smooth((u - DIG_OUT) / (1 - DIG_OUT));
+      const [ax, ay, az] = this.digSide > 0 ? [I.lx, I.ly, I.lz] : [I.rx, I.ry, I.rz];
+      P[ax] += (DIG_HAND[0] - P[ax]) * w;
+      P[ay] += (DIG_HAND[1] - P[ay]) * w;
+      P[az] += (DIG_HAND[2] - P[az]) * w;
+      P[I.lean] += DIG_LEAN * w;
+      P[I.twist] += DIG_TWIST * this.digSide * w;
+      P[I.hip] -= DIG_SIT * w;
+      P[I.sway] += DIG_SWAY * this.digSide * w;
+    }
+    // (a shot in the air: whoever has no move of his own is up on it, his hands up for what comes off the rim)
+    const watching = !!d.live?.shot && !d.rest && !this.one && !d.ball && !this.gest && P[I.air] < 0.2 && (WAITS.has(id) || id === 'ready' || id === 'stance');
+    this.watch += ((watching ? 1 : 0) - this.watch) * (1 - Math.exp(-own / (watching ? WATCH_IN : WATCH_OUT)));
+    if (this.watch > 0.01 && (WAITS.has(id) || id === 'ready' || id === 'stance')) {
+      const w = smooth(clamp(this.watch, 0, 1));
+      P[I.hip] -= WATCH_SIT * w;
+      for (const [ax, ay, az] of [
+        [I.lx, I.ly, I.lz],
+        [I.rx, I.ry, I.rz],
+      ]) {
+        P[ax] += (WATCH_HANDS[0] - P[ax]) * w * WATCH_ARMS;
+        P[ay] += (WATCH_HANDS[1] - P[ay]) * w * WATCH_ARMS;
+        P[az] += (WATCH_HANDS[2] - P[az]) * w * WATCH_ARMS;
+      }
     }
     // (starting he leans into it, stopping back against it; not in a shot or in the air)
     const gained = vf - this.vfLag;

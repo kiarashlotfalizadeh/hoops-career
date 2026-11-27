@@ -1914,6 +1914,8 @@ const SUP_MOST = 1.35;
 const FLEX_MOST = 1.15;
 const EXT_MOST = 0.8;
 const WRIST_MS = 90;
+/** A man off the ball with his hands up for it (Puppet.showing past this) has them open, their palms shown to it, as a defender's are. */
+const SHOWN_FROM = 0.35;
 const DEFENDS = new Set<string>(['stance', 'ready', 'shuffle', 'closeout', 'contest', 'block', 'steal']);
 /**
  * A pass let go of: both hands snap through it, turned thumbs down (PASS_PRON) and bent toward the palm (PASS_SNAP),
@@ -2032,6 +2034,7 @@ const GESTURE_HANDS: Record<Gesture, readonly [Shape | null, Shape | null, numbe
   ask: [null, OPEN, PALM_FRONT],
   talk: [OPEN, null, PALM_UP],
   direct: [null, POINT, PALM_AS],
+  three: [null, THREE, PALM_FRONT],
   refFoul: [null, FIST, PALM_AS],
   refThree: [THREE, null, PALM_FRONT],
   refGood: [OPEN, OPEN, PALM_FRONT],
@@ -5961,13 +5964,15 @@ export class Fig {
         if ((one && one.tau > 0 && FLICKED.has(one.id)) || p.following > 0.3) free = left ? GUIDE_OFF : GOOSE;
         if ((one?.id === 'catch' || one?.id === 'take') && one.tau < 0) free = CATCH;
         if (p.onRim) free = GRAB;
+        // (up for the ball off it, or for what comes off the rim: open and alive, not let hang; out for a pass about to come)
+        if (!c && p.showing > SHOWN_FROM && !one) free = p.expecting > 0.5 ? CATCH : ACTIVE;
       }
       // a hand off the ball has a wrist: let hang, loose and a little bent toward the palm; a defender's turned to show
       // its palm (and a gesture's, as it turns it); a pass let go of snaps through, thumbs down; a shot let go of drops
       // over toward the rim (FLICK), its palm turned down to it. Turned about the forearm's own line, then bent toward
       // the palm (the bone's own z)
       const wi = left ? 0 : 2;
-      const defends = DEFENDS.has(p.clip);
+      const defends = DEFENDS.has(p.clip) || (!gh && !one && p.showing > SHOWN_FROM);
       let flex = defends || palm !== PALM_AS ? WRIST_SHOW : WRIST_LOOSE;
       // (how far the palm would turn to face the way he faces: from facing in, about the forearm)
       const fore0 = this.bones[f].quaternion;

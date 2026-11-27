@@ -26,7 +26,7 @@ import {
   type WebGLRenderTarget,
 } from 'three';
 import { BASKET, COURT_LEN, faceWorld, toWorld, type Act, type Flash, type Frame, type Pt, type Script } from '../choreo';
-import { COLD, FLOOR_L, FLOOR_W, pose, type GameInfo, type Pose, type Stage, type Woe } from '../Court';
+import { COLD, FLOOR_L, FLOOR_W, HALF_W, pose, type GameInfo, type Pose, type Stage, type Woe } from '../Court';
 import type { MatchKit, Venue } from '../../teamColors';
 import type { Occasion } from '../occasion';
 import { Arena } from './arena';
@@ -61,6 +61,7 @@ import { ShotFx } from './fx';
 import { Marks, SHOT_LATE } from './marks';
 import type { Models } from './models';
 import type { NetSim } from './net';
+import { SHADOW, slideAt, waitShare } from './livefeet';
 import { buildProps } from './props';
 import { Rig } from './rig';
 import { BALL_R, HANDOFF_AT, hash, J, type Body, type Contact, type Puppet, type Tape, type V3 } from './puppet';
@@ -264,6 +265,34 @@ const DRIVE_INTO = 4;
 const SWAP_NEAR_MS = 160;
 /** Each man is told where the plan takes him this far on (ms, the bodies' time): see Drive.ahead. */
 const AHEAD_MS = 150;
+/**
+ * How near the ball's business is to a man off it (see Drive.live): all of it with the ball within NEAR_FT of him,
+ * none past FAR_FT. A pass to him is "about to come" this long (the play's ms) before it is thrown. A defender off
+ * the ball digs at a drive or a post-up within DIG_FT of him (and not on top of him).
+ */
+const NEAR_FT = 12;
+/** A rebound: the men who fought for it within this far of where it is taken (ft) go up for it too, this often each. */
+const BOARD_FT = 9.5;
+const BOARD_UP = 0.75;
+/** A three in the air: each teammate with nothing to do holds three fingers up after it this often (the first who does is the only one). */
+const THREE_UP = 0.16;
+const FAR_FT = 29;
+const GETS_MS = 620;
+const DIG_FT: [number, number] = [2.8, 8.5];
+/**
+ * Live feet (see livefeet.ts): only men this near the rim their side is going at slide (a half-court set, not the walk
+ * up); a slide goes round the rim less the nearer it he is (all of it from SLIDE_FULL ft out); nobody slides nearer a
+ * line than SLIDE_IN ft; a defender shadows a man within SHADOW_FT of him. How quickly each comes to where his slide
+ * has him (a spring's rate, a second): the man himself, and the man guarding him, who is a beat late.
+ */
+const SLIDE_HALF = 33;
+const SLIDE_FULL = 9;
+const SLIDE_IN = 1.4;
+const SHADOW_FT = 7.5;
+const SLIDE_W: [number, number] = [10, 6];
+/** A man slides not at all with a teammate within the first of these (ft, spot to spot), and all he would with none within the second. */
+const SLIDE_ROOM: [number, number] = [4.5, 7.5];
+const SLIDE: [number, number] = [0, 0];
 /** Men step round each other for where the plan has them this far on (ms, the bodies' time) as well as where it has them now: see Spacing.place's `soon`. */
 const SPACE_AHEAD = 300;
 /** A loose ball is moved off a body at this speed at most, ft a second: it rolls off him, it doesn't jump. */
@@ -1191,9 +1220,9 @@ export class CourtScene {
           const w = toWorld(j < nO ? f0.o[j] : f0.d[j - nO], sc.dir);
           return !!was && Math.hypot(sx(w) - was[0], sz(w) - was[1]) > FRESH;
         });
-      const spots = this.apart(sc, play, own, aside, cut, dt);
       // a dead ball (the line, a whistle, a timeout, everyone waiting): men stand up out of their stance and may rest
       const dead = line || b.flash?.kind === 'foul' || !!b.flash?.text.startsWith('Timeout') || b.act.every((x) => x === 'stand' || x === 'hold');
+      const spots = this.apart(sc, play, own, aside, cut, dt, !dead && p.final === undefined);
       const late = sc.q >= 4 && play.clock <= LATE_S;
       const looks = this.looks(sc, play, bi, dead);
       // (how each move of this possession is made, kept with it: a replay makes them the same way, see Tape)
@@ -1263,6 +1292,8 @@ export class CourtScene {
       } else this.swap = null;
       // (where the plan has each man a beat from now, with the play's clock running: see Drive.ahead)
       const soon = dt > 0 && own > 0 && p.final === undefined ? [1, 2].map((n) => pose(sc, this.scriptAt + (n * AHEAD_MS * dt) / own, true)) : null;
+      // (who goes up for a rebound he doesn't get: see goesUp)
+      const ups = pids.map((_, j) => this.goesUp(sc, play, bi, j));
       pids.forEach((pid, j) => {
         const side = (j < nO ? sc.off : 1 - sc.off) as 0 | 1;
         const f = this.fig(pid, side, p);
@@ -1270,7 +1301,8 @@ export class CourtScene {
         const now = this.planAt.get(pid);
         // (his face on the possession's clock before anything this frame comes to it: see Fig.when)
         f.when(sc, this.scriptAt, this.director.onAir);
-        const said = over(pid, side, b.act[j]);
+        // (a board coming down: the men who fought for it under the rim go up for it with the man who gets it)
+        const said = over(pid, side, ups[j] ? 'contest' : b.act[j]);
         // (out of their stance at a dead ball; on the lane at a free throw, down into one as it goes up)
         const lane = line && said === 'stand' && (b.act.includes('ft') || b.act.includes('release')) && Math.hypot(spots[j * 2] - rim.x, spots[j * 2 + 1] - rim.z) < LANE_FT;
         // (a man on a way of his own, to his bench or to a teammate on the floor, faces the way he goes: see aside;
@@ -1331,6 +1363,7 @@ export class CourtScene {
             k0: runs[j],
             t: this.scriptAt,
             ahead: then && now && !end.act ? { x: sx(then[0]) - now[0], z: sz(then[0]) - now[1], x2: sx(then[1]) - now[0], z2: sz(then[1]) - now[1], ms: AHEAD_MS } : undefined,
+            live: dead || p.final !== undefined || end.act ? undefined : this.liveFor(sc, play, j, spots, said, nb, line),
           },
           dt,
           own,
@@ -2270,7 +2303,7 @@ export class CourtScene {
    * other. The plan keeps them apart at its keyframes, not on the way between: two whose paths cross
    * step round each other (see spacing.ts).
    */
-  private apart(sc: NonNullable<Stage['script']>, play: NonNullable<Stage['play']>, own: number, aside: number, cut: boolean, dt: number): Float32Array {
+  private apart(sc: NonNullable<Stage['script']>, play: NonNullable<Stage['play']>, own: number, aside: number, cut: boolean, dt: number, live = false): Float32Array {
     const nO = sc.oPids.length;
     const n = nO + sc.dPids.length;
     const at = this.spotsFor(n);
@@ -2295,12 +2328,116 @@ export class CourtScene {
     }
     const pids = [...sc.oPids, ...sc.dPids];
     pids.forEach((pid, j) => this.planAt.set(pid, [at[j * 2], at[j * 2 + 1]]));
+    this.slides(sc, play, pids, at, soon, own, cut, live);
     this.aside(pids, at, go, own, cut);
     const meets = this.meets(play, pids, at);
     const spots = this.spacing.place(at, go, pids, own, aside, cut, meets, this.builds(pids), soon);
     this.given(pids, spots, own, cut);
     this.tug(pids, spots, own, cut);
     return spots;
+  }
+
+  /** Where each man's live feet have him off his spot (x, z, and how fast: see slides), and what they are after this frame. */
+  private readonly slid = new Map<number, Float32Array>();
+  private slideTo = new Float32Array(20);
+  /**
+   * Live feet (see livefeet.ts): a man of the side with the ball who only waits, in the half court with the play
+   * live, slides a step or two round the rim from his spot and back onto it before his wait is over; the man guarding
+   * him off the ball goes with him. Laid on the plan's spots (and on where it has them a beat on) before anyone is
+   * kept apart, each followed as a spring so nothing a move's end changes is taken in a frame.
+   */
+  private slides(
+    sc: NonNullable<Stage['script']>,
+    play: NonNullable<Stage['play']>,
+    pids: readonly number[],
+    at: Float32Array,
+    soon: Float32Array | undefined,
+    own: number,
+    cut: boolean,
+    live: boolean,
+  ) {
+    const n = pids.length;
+    const nO = sc.oPids.length;
+    if (this.slideTo.length !== n * 2) this.slideTo = new Float32Array(n * 2);
+    const to = this.slideTo;
+    to.fill(0);
+    const b = play.b;
+    const bi = Math.min(play.i, sc.frames.length - 1);
+    if (live && !cut && !b.fx && play.i < sc.frames.length) {
+      const rimPt = toWorld(BASKET, sc.dir);
+      const [rx, rz] = [sx(rimPt), sz(rimPt)];
+      const t = this.scriptAt;
+      const t0 = t - play.ms;
+      const waits = (k: number, j: number) => sc.frames[k].act[j] === 'stand' && sc.frames[k].hold !== j && !sc.frames[k].fx;
+      for (let j = 0; j < nO; j++) {
+        if (!waits(bi, j)) continue;
+        const [dx, dz] = [at[j * 2] - rx, at[j * 2 + 1] - rz];
+        const far = Math.hypot(dx, dz);
+        if (far > SLIDE_HALF || far < 1) continue;
+        // (how long he has waited, and how long he still will)
+        let [from, upto] = [t0, t0 + sc.frames[bi].dur];
+        for (let k = bi - 1; k >= 1 && waits(k, j); k--) from -= sc.frames[k].dur;
+        for (let k = bi + 1; k < sc.frames.length && waits(k, j); k++) upto += sc.frames[k].dur;
+        // (with one of his own standing right by him he keeps his spot: two of them sliding would slide into each other)
+        let mate = Infinity;
+        for (let k = 0; k < nO; k++) if (k !== j) mate = Math.min(mate, Math.hypot(at[k * 2] - at[j * 2], at[k * 2 + 1] - at[j * 2 + 1]));
+        const share = waitShare(t, from, upto) * smooth(clamp((mate - SLIDE_ROOM[0]) / (SLIDE_ROOM[1] - SLIDE_ROOM[0]), 0, 1));
+        if (share <= 0) continue;
+        const [along, out] = slideAt(pids[j], this.seed, t, SLIDE);
+        const round = along * Math.min(1, far / SLIDE_FULL);
+        const [ux, uz] = [dx / far, dz / far];
+        let ox = share * (-uz * round + ux * out);
+        let oz = share * (ux * round + uz * out);
+        // (never out over a line, nor nearer one than a shoe)
+        const [mx, mz] = [COURT_LEN / 2 - SLIDE_IN, HALF_W - SLIDE_IN];
+        if (Math.abs(at[j * 2]) <= mx) ox = clamp(at[j * 2] + ox, -mx, mx) - at[j * 2];
+        if (Math.abs(at[j * 2 + 1]) <= mz) oz = clamp(at[j * 2 + 1] + oz, -mz, mz) - at[j * 2 + 1];
+        to[j * 2] = ox;
+        to[j * 2 + 1] = oz;
+      }
+      // (the man on each of them off the ball: the nearest of theirs to him as this move ends, if he is near)
+      for (let j = nO; j < n; j++) {
+        if (b.act[j] !== 'defend') continue;
+        const me = toWorld(b.d[j - nO], sc.dir);
+        let man = -1;
+        let near = SHADOW_FT;
+        for (let k = 0; k < nO; k++) {
+          const o = toWorld(b.o[k], sc.dir);
+          const d = Math.hypot(sx(o) - sx(me), sz(o) - sz(me));
+          if (d < near) [near, man] = [d, k];
+        }
+        if (man < 0) continue;
+        to[j * 2] = to[man * 2] * SHADOW;
+        to[j * 2 + 1] = to[man * 2 + 1] * SHADOW;
+      }
+    }
+    const sec = own / 1000;
+    for (let j = 0; j < n; j++) {
+      let g = this.slid.get(pids[j]);
+      if (cut) {
+        g?.fill(0);
+        continue;
+      }
+      if (!g) {
+        if (to[j * 2] === 0 && to[j * 2 + 1] === 0) continue;
+        this.slid.set(pids[j], (g = new Float32Array(4)));
+      }
+      const w = SLIDE_W[j < nO ? 0 : 1];
+      for (let left = sec; left > 1e-6;) {
+        const h = Math.min(left, 0.012);
+        left -= h;
+        for (const a of [0, 1]) {
+          g[a + 2] += (w * w * (to[j * 2 + a] - g[a]) - 2 * w * g[a + 2]) * h;
+          g[a] += g[a + 2] * h;
+        }
+      }
+      at[j * 2] += g[0];
+      at[j * 2 + 1] += g[1];
+      if (soon) {
+        soon[j * 2] += g[0];
+        soon[j * 2 + 1] += g[1];
+      }
+    }
   }
 
   /**
@@ -2731,6 +2868,44 @@ export class CourtScene {
   private readonly gives = new Map<number, Float32Array>();
 
   /**
+   * A rebound is never one man's jump: of the men who went to the glass or boxed out for this one (the move before),
+   * those within BOARD_FT of where it is taken go up for it too, most of the time (BOARD_UP), a beat lower and a hand
+   * short of the man who comes down with it. Which of them is the possession's own: the same when it is played again.
+   */
+  private goesUp(sc: NonNullable<Stage['script']>, play: NonNullable<Stage['play']>, bi: number, j: number): boolean {
+    const { a, b } = play;
+    const rj = b.act.indexOf('rebound');
+    if (rj < 0 || rj === j || play.i >= sc.frames.length) return false;
+    if (a.act[j] !== 'crash' && a.act[j] !== 'boxout') return false;
+    if (b.act[j] !== 'stand' && b.act[j] !== 'defend' && b.act[j] !== 'move') return false;
+    const nO = sc.oPids.length;
+    const at = (k: number) => (k < nO ? b.o[k] : b.d[k - nO]);
+    if (Math.hypot(at(j).x - at(rj).x, at(j).y - at(rj).y) > BOARD_FT) return false;
+    return hash(this.seed, 900 + bi * 31 + j) < BOARD_UP;
+  }
+
+  /**
+   * What the live play has to do with a man it gives no move of his own (see Drive.live): how near the ball is to
+   * him, a pass about to be thrown to him, a shot in the air, and, off the ball on defense, a drive or a post-up
+   * going on within his reach.
+   */
+  private liveFor(sc: NonNullable<Stage['script']>, play: NonNullable<Stage['play']>, j: number, spots: Float32Array, said: Act, nb: Frame | undefined, line: boolean) {
+    const b = play.b;
+    const nO = sc.oPids.length;
+    const [x, z] = [spots[j * 2], spots[j * 2 + 1]];
+    const near = 1 - smooth(clamp((Math.hypot(this.ball.x - x, this.ball.z - z) - NEAR_FT) / (FAR_FT - NEAR_FT), 0, 1));
+    const gets = nb?.act[j] === 'catch' && b.act[j] !== 'catch' && play.dur - play.ms <= GETS_MS ? Math.max(0, play.dur - play.ms) : undefined;
+    const hb = b.hold !== undefined && b.hold >= 0 ? b.hold : -1;
+    let dig = false;
+    if (j >= nO && said === 'defend' && hb >= 0 && hb < nO && (b.act[hb] === 'drive' || b.act[hb] === 'post')) {
+      const d = Math.hypot(spots[hb * 2] - x, spots[hb * 2 + 1] - z);
+      dig = d > DIG_FT[0] && d < DIG_FT[1];
+    }
+    // (up at the rim, or coming down off it to whoever gets it)
+    return { near, gets, shot: (!!b.fx || b.act.includes('rebound')) && !line, dig };
+  }
+
+  /**
    * What each of the ten looks at this move: a shooter the rim (from the move before he goes up); a passer the man
    * he's throwing to (from the move before it leaves); the man with the ball up the floor and round his teammates (and
    * up at the shot clock once, late in it); a defender off the ball his own man every so often, and his eyes on the
@@ -2932,6 +3107,14 @@ export class CourtScene {
       // (his shot sent back: the shooter is stunned, then stung)
       const sent = a.swat !== undefined ? a.act.indexOf('release') : -1;
       if (sent >= 0) figs[sent]?.feel('stunned');
+      // (a three in the air: now and then one of his own with nothing to do holds three fingers up after it. Before
+      // anyone knows: it is held up for a miss as for a make)
+      if (b.fx && b.three && !line)
+        for (let j = 0; j < nO; j++)
+          if ((b.act[j] === 'stand' || b.act[j] === 'move') && r(150 + j) < THREE_UP) {
+            figs[j]?.pup.cue('three', null, 300);
+            break;
+          }
       // a screen coming: the man guarding the screener calls it, to the man guarding the ball. An open man with nobody
       // near asks for the ball (one a move)
       let asked = false;

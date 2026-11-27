@@ -415,6 +415,14 @@ const TIP_TAP = 210;
 /** Where the man who throws it in after a basket stands: this far behind the baseline (ft), and for this long with it (ms). */
 const OUT = 1.6;
 const INBOUND_MS = 420;
+/**
+ * While the ball is thrown in after a basket, the men with no part in that go up the floor at a jog (ft a ms of the
+ * play), no farther than this (ft from the basket they are going to: a step over half court).
+ */
+const LEAK = 0.024;
+/** Coming up the floor in two moves, a man without the ball is this much of the way across to his own spot's side of it by the end of the first. */
+const LANE = 0.72;
+const LEAK_TO = 44;
 /** A shot from nearer the rim than this (ft), a layup or a dunk is contested from beside the rim, this far from it. */
 const RIM_NEAR = 3.5;
 const BESIDE = 3.2;
@@ -986,6 +994,7 @@ export function buildScript(
     if (!at || dist(at, ball) < 0.01) return;
     // nobody has it (it dropped through the net, or went out): the nearest teammate picks it up and gets it in
     let passer = holding();
+    let leak: ((ms: number) => void) | undefined;
     if (passer < 0) {
       const near = oPids.filter((p) => p !== pid).sort((a, b) => dist(o.get(a)!, ball) - dist(o.get(b)!, ball))[0];
       if (near !== undefined) {
@@ -995,9 +1004,15 @@ export function buildScript(
         o.set(near, made ? { x: clamp(ball.x + 4, -24, 24), y: COURT_LEN + OUT } : { x: clamp(ball.x, -24.5, 24.5), y: clamp(ball.y, 0.5, COURT_LEN - 0.5) });
         ball = { ...o.get(near)! };
         does(near, 'hold', at);
+        // (after a basket nobody else waits to see it thrown in: the three with no part in that are on their way up
+        // the floor from the moment he steps out with it, each toward his own side of it)
+        if (made)
+          leak = (ms: number) => oPids.forEach((p) => p !== near && p !== pid && moveTo(p, toward(o.get(p)!, { x: spots.get(p)?.x ?? o.get(p)!.x, y: LEAK_TO }, LEAK * ms)));
+        leak?.(200);
         snap(200);
         if (made) {
           does(near, 'inbound', at);
+          leak?.(INBOUND_MS);
           snap(INBOUND_MS);
         }
         passer = oPids.indexOf(near);
@@ -1007,6 +1022,7 @@ export function buildScript(
     if (from !== undefined && from !== pid) does(from, 'pass', at);
     does(pid, 'catch', { ...ball });
     ball = { ...at };
+    leak?.(240);
     snap(240);
   };
 
@@ -1101,7 +1117,8 @@ export function buildScript(
             const e = endO.get(pid)!;
             const w = wasO.get(pid)!;
             // (the handler walks it over the line; the others are ahead of him, on their way to their spots)
-            o.set(pid, pid === holder ? { x: clamp(w.x * 0.4, -8, 8), y: 50 } : { x: (e.x + w.x) / 2, y: Math.min(w.y, e.y + 20) });
+            // (each in his own lane by half court: most of the way across to his side of the floor before he is most of the way up it)
+            o.set(pid, pid === holder ? { x: clamp(w.x * 0.4, -8, 8), y: 50 } : { x: e.x * LANE + w.x * (1 - LANE), y: Math.min(w.y, e.y + 20) });
           }
           for (const pid of dPids) {
             const e = endD.get(pid)!;

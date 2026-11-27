@@ -33,6 +33,7 @@ import arenaGlb from '../live/court3d/models/arena.glb?inline';
 import figureGlb from '../live/court3d/models/figure.glb?inline';
 import peopleGlb from '../live/court3d/models/people.glb?inline';
 import { bouncePass, meets, planShot, RIM_H, shotAt, shotSpeed, spinFor, Spring, stretch, type How } from '../live/court3d/ballistics';
+import { ALONG, DRIFT_IN, OUT, slideAt, waitShare } from '../live/court3d/livefeet';
 import { NET, NetSim } from '../live/court3d/net';
 import { BALL_R, baseClip, bodyOf, hash, HIP, J, OWN_LEGS_UP, Puppet } from '../live/court3d/puppet';
 import { ballSize } from '../live/court3d/ballskin';
@@ -663,6 +664,51 @@ describe('live court choreography', () => {
       expect(next.frames[3].hold).toBe(0);
       expect(next.frames[3].act[next.frames[1].hold!]).toBe('pass');
       expect(next.frames[3].act[0]).toBe('catch');
+      // (the three with no part in that don't stand and watch it thrown in: each is on his way up the floor from the
+      // moment it is picked up, farther along with every move of it, and at no more than a jog)
+      {
+        const idle = [1, 2, 3, 4].filter((j) => j !== next.frames[1].hold);
+        expect(idle).toHaveLength(3);
+        for (const j of idle) {
+          for (const k of [1, 2, 3]) {
+            const run = next.frames[k - 1].o[j].y - next.frames[k].o[j].y;
+            expect(run).toBeGreaterThan(0.5);
+            expect(Math.hypot(next.frames[k].o[j].x - next.frames[k - 1].o[j].x, run) / next.frames[k].dur).toBeLessThan(0.03);
+            expect(next.frames[k].act[j]).toBe('move');
+          }
+          expect(next.frames[0].o[j].y - next.frames[3].o[j].y).toBeGreaterThan(8);
+        }
+      }
+      // live feet (livefeet.ts): a man waiting off the ball is a step or two off his spot, round the rim more than out
+      // from it; where he is has no jump in it and is the same whenever it is asked; he is on his spot as his wait
+      // begins and again before it ends
+      {
+        const at: [number, number] = [0, 0];
+        let [most, out, step, moved] = [0, 0, 0, 0];
+        for (const pid of [3, 67, 150]) {
+          let was = [...slideAt(pid, 9, 0, at)];
+          for (let t = 4; t <= 20000; t += 4) {
+            const now = [...slideAt(pid, 9, t, at)];
+            most = Math.max(most, Math.abs(now[0]));
+            out = Math.max(out, Math.abs(now[1]));
+            step = Math.max(step, Math.hypot(now[0] - was[0], now[1] - was[1]));
+            if (Math.hypot(now[0] - was[0], now[1] - was[1]) > 1e-6) moved++;
+            was = now;
+          }
+          expect(slideAt(pid, 9, 5000, [0, 0])).toEqual(slideAt(pid, 9, 5000, [0, 0]));
+          expect(slideAt(pid, 9, 5000, [0, 0])).not.toEqual(slideAt(pid, 10, 5000, [0, 0]));
+        }
+        expect(most).toBeGreaterThan(1);
+        expect(most).toBeLessThanOrEqual(ALONG);
+        expect(out).toBeLessThanOrEqual(OUT);
+        // (no faster than a shuffled step, 2.5 ft a second of his own time: the play's ms are half his)
+        expect(step / 4).toBeLessThan(0.005);
+        // (on a spot more of the time than between two)
+        expect(moved / (3 * 5000)).toBeLessThan(0.5);
+        expect([waitShare(1000, 1000, 4000), waitShare(4000, 1000, 4000), waitShare(2500, 1000, 4000)]).toEqual([0, 0, 1]);
+        expect(waitShare(1000 + DRIFT_IN / 2, 1000, 4000)).toBeCloseTo(0.5, 5);
+        expect(waitShare(1200, 1000, 1400)).toBeLessThan(0.25);
+      }
       // the game's first possession opens with the tip: both fives round the circle, the two centres up for it, tapped to a guard
       const tipped = buildScript({ ...log([{ k: 'advance', pid: 1 }]), clockStart: 720 }, info);
       expect(tipped.frames[0].o.every((p) => p.y >= 47 && p.y < 60) && tipped.frames[0].d.every((p) => p.y <= 47 && p.y > 34)).toBe(true);

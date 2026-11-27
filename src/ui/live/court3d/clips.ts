@@ -1509,7 +1509,7 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3' | 'jog' | 'dribbleWalk' | 
  * channels are read, laid over his pose (see Puppet.cue).
  */
 export type Gesture =
-  'flex' | 'roar' | 'point' | 'fist' | 'five' | 'handUp' | 'protest' | 'clap' | 'wag' | 'head' | 'wipe' | 'tug' | 'call' | 'ask' | 'talk' | 'direct' | SidelineGesture;
+  'flex' | 'roar' | 'point' | 'fist' | 'five' | 'handUp' | 'protest' | 'clap' | 'wag' | 'head' | 'wipe' | 'tug' | 'call' | 'ask' | 'talk' | 'direct' | 'three' | SidelineGesture;
 /** The gestures of the people round the floor (sideline.ts): a referee's signals, a coach's. */
 export type SidelineGesture =
   | 'refFoul'
@@ -1668,6 +1668,13 @@ export const GESTURES: Record<Gesture, Clip> = {
     [230, { rx: 0.5, ry: -0.15, rz: 1.7, turn: -0.3, twist: -0.1 }],
     [800, { rx: 0.55, ry: -0.2, rz: 1.65, turn: -0.32, twist: -0.1 }],
     [1100, {}],
+  ]),
+  // (a teammate's three in the air: three fingers held up after it until it comes down)
+  three: gesture([
+    [0, {}],
+    [230, { rx: 0.2, ry: 1.95, rz: 0.42, nod: -0.12 }],
+    [1050, { rx: 0.2, ry: 2.0, rz: 0.4, nod: -0.16 }],
+    [1400, {}],
   ]),
   // --- the sideline's gestures (a referee's signals, a coach's) go below this line ---
   // ---- the people round the floor (sideline.ts): a referee's signals, then a coach's ----
