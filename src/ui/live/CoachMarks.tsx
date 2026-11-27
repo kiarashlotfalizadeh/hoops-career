@@ -5,7 +5,7 @@
 // (or past that quarter), never again.
 import { useEffect, useRef } from 'react';
 
-const SEEN_KEY = 'hc:live-tips';
+const SEEN_KEY = 'cgm:live-tips';
 
 /**
  * The cards. `at`: the parts each points at, as the page's `data-tip` words ("bug", "call", "court",

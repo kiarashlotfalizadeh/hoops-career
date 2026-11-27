@@ -1,7 +1,7 @@
 // Visual tour: every screen and tab of the real league on a phone and a tablet, at several
 // points of a season. For design review, not assertions; page errors are collected and printed.
 // Usage: node scripts/qa/tour.mjs <devServerUrl> <outDir> [stages=pre,mid,post,draft,resign,fa]
-// It reads the league through window.__hc (player and game ids, saves), which only dev servers
+// It reads the league through window.__cgm (player and game ids, saves), which only dev servers
 // (npm run dev) and builds made with VITE_QA=1 expose: for a production-like run,
 // `VITE_QA=1 npm run build && npm run preview`.
 import { chromium } from 'playwright';
@@ -54,7 +54,7 @@ const play = async (label) => {
 };
 const league = () =>
   phone.evaluate(() => {
-    const l = window.__hc.store.getState().league;
+    const l = window.__cgm.store.getState().league;
     const mine = Object.values(l.players)
       .filter((p) => p.tid === l.userTid)
       .sort((a, b) => b.ovr - a.ovr);
@@ -72,7 +72,7 @@ const league = () =>
       phase: l.phase,
     };
   });
-const save = () => phone.evaluate(() => window.__hc.store.getState().save());
+const save = () => phone.evaluate(() => window.__cgm.store.getState().save());
 
 async function snap(pg, dir, name, route) {
   await pg.goto(`${base}/#${route}`);
@@ -141,8 +141,8 @@ async function tour(stage) {
 
 await phone.goto(`${base}/#/start`);
 await phone.waitForTimeout(800);
-if (!(await phone.evaluate(() => !!window.__hc))) {
-  console.error(`${base} doesn't expose window.__hc: point the tour at a dev server (npm run dev) or a build made with VITE_QA=1.`);
+if (!(await phone.evaluate(() => !!window.__cgm))) {
+  console.error(`${base} doesn't expose window.__cgm: point the tour at a dev server (npm run dev) or a build made with VITE_QA=1.`);
   await browser.close();
   process.exit(1);
 }

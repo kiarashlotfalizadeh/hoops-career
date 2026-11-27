@@ -7,7 +7,7 @@ import { Capacitor } from '@capacitor/core';
 import { Download, Share } from 'lucide-react';
 import './agenda.css';
 
-const DISMISSED = 'hc-install-row';
+const DISMISSED = 'cgm-install-row';
 
 /** Chrome's install prompt, held back so the row can offer it (main.tsx starts listening at load: it fires once, early). */
 interface InstallPrompt extends Event {

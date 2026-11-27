@@ -9,7 +9,7 @@ async function download(url: string): Promise<Buffer | null> {
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
       // a stalled connection fails and retries instead of hanging the run
-      const res = await fetch(url, { signal: AbortSignal.timeout(2 * 60_000), headers: { 'User-Agent': 'hoops-career seed builder' } });
+      const res = await fetch(url, { signal: AbortSignal.timeout(2 * 60_000), headers: { 'User-Agent': 'clipboard-gm seed builder' } });
       if (res.ok) return Buffer.from(await res.arrayBuffer());
       console.log(`HTTP ${res.status}`);
       if (res.status < 500) return null;

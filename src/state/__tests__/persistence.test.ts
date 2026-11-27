@@ -265,7 +265,7 @@ describe('saves', () => {
       const l = testLeague('v1');
       for (let i = 0; i < 4; i++) simDay(l);
       // the version-1 schema and record, as older builds wrote them
-      const open = indexedDB.open('hoops-career', 1);
+      const open = indexedDB.open('clipboard-gm', 1);
       open.onupgradeneeded = () => {
         open.result.createObjectStore('leagues');
         open.result.createObjectStore('meta');
@@ -283,7 +283,7 @@ describe('saves', () => {
       expect(back.day).toBe(l.day);
       expect((await fresh.listLeagues()).map((m) => m.id)).toEqual([l.id]);
       // the record itself no longer carries them, and the league saves as before
-      const v2 = await req(indexedDB.open('hoops-career'));
+      const v2 = await req(indexedDB.open('clipboard-gm'));
       // (and on to version 3, with its snapshots, the first of them taken by the first save)
       expect([v2.version, v2.objectStoreNames.contains('snapshots')]).toEqual([3, true]);
       expect((await req(v2.transaction('leagues').objectStore('leagues').get(l.id))).games).toEqual([]);

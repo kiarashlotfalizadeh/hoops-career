@@ -15,9 +15,9 @@ type Colors = [string, string, string];
 const NO_TEAM: Colors = ['#2a3441', '#8a94a4', '#c4cfdc'];
 const colorsOf = (league: League, tid: number): Colors => league.teams[tid]?.colors ?? FRANCHISES[tid]?.colors ?? NO_TEAM;
 
-/** A file's name from a poster's subject: "hoops-gilgeous-alexander.png". */
+/** A file's name from a poster's subject: "clipboard-gm-gilgeous-alexander.png". */
 export const posterFile = (subject: string) =>
-  `hoops-${
+  `clipboard-gm-${
     subject
       .normalize('NFD')
       .replace(/[̀-ͯ]/g, '')

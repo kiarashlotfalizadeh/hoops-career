@@ -1,4 +1,4 @@
-# Hardwood: the Hoops Career design system
+# Hardwood: the Clipboard GM design system
 
 A printed sports poster in your hand: warm bone paper and white card stock, black ink, your team's
 colour as solid blocks with the court's white lines on them, black expanded headlines, the box
@@ -240,7 +240,7 @@ cash: "$1.27M"), `plural` ("1 game", "5 games"), `rankOf` ("7th of 30"), `madeAt
 tables and sentences alike), `injuryName` and `outFor` ("Torn meniscus · out 8 games"). Don't
 write a new inline formatter. On screen a record, a series or a made-attempted never breaks at its
 hyphen: `keepFigures` (`core/format.ts`) for a string, `keep` (`components/ui.tsx`) for any node
-(display only: compare and store the plain string). The lint rule `hoops/keep-figures` flags a join
+(display only: compare and store the plain string). The lint rule `cgm/keep-figures` flags a join
 written into the markup without it.
 
 **One word for one thing** (the vocabulary every screen uses):

@@ -16,7 +16,7 @@ initTheme();
 startMotionSweeper();
 
 // QA scripts drive the store directly in dev builds (save, inspect the league).
-if (import.meta.env.DEV || import.meta.env.VITE_QA === '1') (window as unknown as { __hc: unknown }).__hc = { store: useStore };
+if (import.meta.env.DEV || import.meta.env.VITE_QA === '1') (window as unknown as { __cgm: unknown }).__cgm = { store: useStore };
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -22,7 +22,7 @@
   font-family: var(--head);
   font-stretch: var(--head-w);
   font-weight: 900;
-  font-size: clamp(64px, 22.5vw, 118px);
+  font-size: clamp(48px, 16.2vw, 92px); /* "Clipboard" is about 5.6em wide: the page's width and no more */
   line-height: 0.84;
   letter-spacing: -0.035em;
   color: var(--text);

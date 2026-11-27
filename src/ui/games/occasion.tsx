@@ -74,7 +74,7 @@ export function nightTitle(league: League, g: ScheduledGame, neutral: boolean): 
   return neutral ? `Against ${t}` : g.home === me ? `${t} in town` : `At ${t}`;
 }
 
-const SEEN_KEY = 'hc-results-seen';
+const SEEN_KEY = 'cgm-results-seen';
 
 /**
  * Whether a result (`id`: the league's and the game's) is on screen for the first time on this device (the result moment: its score

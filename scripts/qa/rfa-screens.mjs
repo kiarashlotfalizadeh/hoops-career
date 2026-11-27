@@ -1,5 +1,5 @@
 // Restricted free agency on a phone viewport: builds a fictional league, shapes the user's expiring
-// young players through the dev store hook (window.__hc: a dev server, or a build with VITE_QA=1),
+// young players through the dev store hook (window.__cgm: a dev server, or a build with VITE_QA=1),
 // and drives Re-sign (qualifying offers), the open-free-agency confirm, Free Agents (your
 // restricted free agents, an offer sheet on one, signing another team's to a sheet), the Inbox's
 // Match button, the Office spotlight, the Play menu, the player page and the Moves tab, with
@@ -53,7 +53,7 @@ const mutate = (fn, arg) =>
   page.evaluate(
     ([src, a]) => {
       let out;
-      window.__hc.store.getState().mutate((l) => {
+      window.__cgm.store.getState().mutate((l) => {
         out = new Function('l', 'a', `return (${src})(l, a)`)(l, a);
       });
       return out;

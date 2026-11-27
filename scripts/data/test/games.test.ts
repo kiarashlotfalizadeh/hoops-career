@@ -178,7 +178,7 @@ describe('the game files and the value target', () => {
 
     // box scores: lines by team, season and part, his team's points and usage while he played, the
     // career highs of regular seasons before the new one, teams named by name alone resolved
-    const dir = mkdtempSync(join(tmpdir(), 'hc-games-'));
+    const dir = mkdtempSync(join(tmpdir(), 'cgm-games-'));
     writeFileSync(
       join(dir, 'PlayerStatisticsExtended.csv'),
       [
@@ -209,7 +209,7 @@ describe('the game files and the value target', () => {
 
     // minutes: a season written as minutes and seconds ("24.30" is 24:30) reads so; a season of cut-off
     // whole minutes gets back what each team's game falls short of 240, shared by its players
-    const mins = mkdtempSync(join(tmpdir(), 'hc-mins-'));
+    const mins = mkdtempSync(join(tmpdir(), 'cgm-mins-'));
     const minRow = (pid: number, game: number, m: string) => `P,${pid},${pid},${game},2024-11-01 19:00:00,${OKC},Oklahoma City,Thunder,${HOU},Houston,Rockets,${m},10`;
     writeFileSync(
       join(mins, 'PlayerStatisticsExtended.csv'),
@@ -447,7 +447,7 @@ describe('the game files and the value target', () => {
     for (const k of Object.keys(gr) as (keyof typeof gr)[]) if (!(keys as readonly string[]).includes(k)) expect(gr[k]).toBe(pr[k]);
 
     // the inputs are pinned by content: a build from other files fails, naming them
-    const raw = mkdtempSync(join(tmpdir(), 'hc-raw-'));
+    const raw = mkdtempSync(join(tmpdir(), 'cgm-raw-'));
     mkdirSync(join(raw, 'nba'));
     mkdirSync(join(raw, 'games'));
     writeFileSync(join(raw, 'per_game_2026.html'), 'a');
@@ -458,7 +458,7 @@ describe('the game files and the value target', () => {
     writeFileSync(join(raw, 'games', 'cache_box.json'), 'cache');
     const roots = { raw, games: join(raw, 'games'), nba: join(raw, 'nba') };
     expect(Object.keys(hashInputs(roots))).toEqual(['games/PlayByPlay.parquet', 'nba/matchups_2025.tar.xz', 'raw/per_game_2026.html']);
-    const lockPath = join(mkdtempSync(join(tmpdir(), 'hc-lock-')), 'seed-inputs.json');
+    const lockPath = join(mkdtempSync(join(tmpdir(), 'cgm-lock-')), 'seed-inputs.json');
     expect(() => pinInputs(roots, 2027, { update: false, today: () => '2026-10-22', lockPath })).toThrow(/No input lock/);
     const pinned = pinInputs(roots, 2027, { update: true, today: () => '2026-10-22', lockPath });
     const again = pinInputs(roots, 2027, { update: false, today: () => 'never', lockPath });

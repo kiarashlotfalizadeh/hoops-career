@@ -61,7 +61,7 @@ export default defineConfig([
   },
   {
     files: ['src/ui/**/*.tsx'],
-    plugins: { hoops: { rules: { 'keep-figures': keepFigures } } },
-    rules: { 'hoops/keep-figures': 'error' },
+    plugins: { cgm: { rules: { 'keep-figures': keepFigures } } },
+    rules: { 'cgm/keep-figures': 'error' },
   },
 ]);

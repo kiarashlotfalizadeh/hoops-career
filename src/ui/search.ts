@@ -261,7 +261,7 @@ export function search(index: SearchEntry[], query: string, limit = 30): SearchE
 
 // ---------------------------------------------------------------- recent picks (this device, per league)
 
-const recentKey = (leagueId: string) => `hc:search:${leagueId}`;
+const recentKey = (leagueId: string) => `cgm:search:${leagueId}`;
 
 export function loadRecent(leagueId: string): string[] {
   try {

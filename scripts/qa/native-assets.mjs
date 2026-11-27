@@ -43,7 +43,7 @@ for (const f of files) {
   } else if (name.startsWith('splash')) {
     // iOS fills the screen with the square splash (cropping its sides on a phone): mark and wordmark stay in the middle third
     const s = Math.round(Math.min(w, h) * 0.2);
-    html = `${face}<div style="width:${w}px;height:${h}px;background:${paper};display:grid;place-items:center"><div style="display:flex;flex-direction:column;align-items:center;gap:${Math.round(s * 0.12)}px">${artOnly.replace('<svg ', `<svg width="${s}" height="${s}" `)}<div style="font-family:Archivo;font-weight:900;font-stretch:118%;font-size:${Math.round(s * 0.2)}px;line-height:1;color:${ink};letter-spacing:-0.035em">Hoops Career</div></div></div>`;
+    html = `${face}<div style="width:${w}px;height:${h}px;background:${paper};display:grid;place-items:center"><div style="display:flex;flex-direction:column;align-items:center;gap:${Math.round(s * 0.12)}px">${artOnly.replace('<svg ', `<svg width="${s}" height="${s}" `)}<div style="font-family:Archivo;font-weight:900;font-stretch:118%;font-size:${Math.round(s * 0.2)}px;line-height:1;color:${ink};letter-spacing:-0.035em">Clipboard GM</div></div></div>`;
   } else continue;
   const page = await browser.newPage({ viewport: { width: w, height: h } });
   await page.setContent(`<html><body style="margin:0;background:transparent">${html}</body></html>`);

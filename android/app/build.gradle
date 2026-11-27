@@ -10,10 +10,10 @@ def keystoreFile = System.getenv('ANDROID_KEYSTORE_FILE')
 def appVersion = new JsonSlurper().parse(rootProject.file('../package.json')).version
 
 android {
-    namespace "com.hoopscareer.app"
+    namespace "com.clipboardgm.app"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.hoopscareer.app"
+        applicationId "com.clipboardgm.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Android only installs an update with a versionCode at least the installed one's, and Google

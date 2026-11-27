@@ -1,4 +1,4 @@
-package com.hoopscareer.app;
+package com.clipboardgm.app;
 
 import com.getcapacitor.BridgeActivity;
 

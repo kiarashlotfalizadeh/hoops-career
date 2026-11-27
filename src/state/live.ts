@@ -498,7 +498,7 @@ let current: LiveGame | null = null;
  * had by then. A reload picks the game up exactly there when the save's journal has every one of
  * those moves (each move is saved as it's made); else from the save's checkpoint, saying it went back.
  */
-const REACHED_KEY = 'hc:live-reached';
+const REACHED_KEY = 'cgm:live-reached';
 
 interface Reached {
   steps: number;

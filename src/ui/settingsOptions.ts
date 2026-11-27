@@ -9,7 +9,7 @@ export const TEACHING_HELP = "The first-week guide on Today, its mail and Today'
 /** Whether new leagues start with teaching on: this device remembers the last choice. */
 export function teachingDefault(): boolean {
   try {
-    return localStorage.getItem('hc:teaching') !== '0';
+    return localStorage.getItem('cgm:teaching') !== '0';
   } catch {
     return true;
   }
@@ -17,7 +17,7 @@ export function teachingDefault(): boolean {
 
 export function rememberTeaching(on: boolean) {
   try {
-    localStorage.setItem('hc:teaching', on ? '1' : '0');
+    localStorage.setItem('cgm:teaching', on ? '1' : '0');
   } catch {
     /* ignore */
   }
@@ -32,7 +32,7 @@ export const ROLES: { id: Role; label: string; line: string }[] = [
 /** The role new leagues start on: this device remembers the last choice. */
 export function roleDefault(): Role {
   try {
-    return localStorage.getItem('hc:role') === 'gm' ? 'gm' : 'coach';
+    return localStorage.getItem('cgm:role') === 'gm' ? 'gm' : 'coach';
   } catch {
     return 'coach';
   }
@@ -40,7 +40,7 @@ export function roleDefault(): Role {
 
 export function rememberRole(role: Role) {
   try {
-    localStorage.setItem('hc:role', role);
+    localStorage.setItem('cgm:role', role);
   } catch {
     /* ignore */
   }

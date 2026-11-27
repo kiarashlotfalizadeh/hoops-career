@@ -1,5 +1,5 @@
 // Contract negotiation, the stretch provision, the exceptions and 10-day contracts on a phone
-// viewport: builds a fictional league, shapes players through the dev store hook (window.__hc: a dev
+// viewport: builds a fictional league, shapes players through the dev store hook (window.__cgm: a dev
 // server, or a build with VITE_QA=1), and drives Re-sign (talks: a lowball, his counter, Accept
 // counter), an extension, Free Agents (the exceptions, an offer over the cap, 10-day contracts and a
 // hardship spot), the Release confirmation (as it is and stretched, and a buyout), Finances' dead
@@ -50,7 +50,7 @@ const mutate = (fn, arg) =>
   page.evaluate(
     ([src, a]) => {
       let out;
-      window.__hc.store.getState().mutate((l) => {
+      window.__cgm.store.getState().mutate((l) => {
         out = new Function('l', 'a', `return (${src})(l, a)`)(l, a);
       });
       return out;

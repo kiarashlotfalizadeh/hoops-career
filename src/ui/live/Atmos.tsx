@@ -14,7 +14,7 @@ export function Crowd({ level, color, clutch }: { level: number; color: string; 
   return <div className={`lv-crowd lvl-${lvl}${clutch ? ' clutch' : ''}`} style={{ '--crowd-c': color } as CSSProperties} aria-hidden="true" />;
 }
 
-const SLOW_KEY = 'hoops.live.clutchSlow';
+const SLOW_KEY = 'cgm.live.clutchSlow';
 
 /** Whether this device slows close finishes to 1× by itself (the offer's Always). A setting of the live screen's own, on this device. */
 export function clutchSlowAlways(): boolean {

@@ -8,16 +8,16 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Hoops" />
+    <meta name="apple-mobile-web-app-title" content="Clipboard GM" />
     <meta name="description" content="A basketball GM and head coach game, with a tactics layer that tells you why." />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <title>Hoops Career</title>
+    <title>Clipboard GM</title>
     <!-- the look this device keeps (Hardwood or Night Court, or the system's own), on the page before
          anything is drawn: no flash of paper at night while the app's stylesheet loads (ui/theme.ts) -->
     <script>
       try {
-        var p = JSON.parse(localStorage.getItem('hc:device') || '{}');
+        var p = JSON.parse(localStorage.getItem('cgm:device') || '{}');
         var t = p.theme === 'light' || p.theme === 'dark' ? p.theme : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         document.documentElement.dataset.theme = t;
       } catch (e) {}

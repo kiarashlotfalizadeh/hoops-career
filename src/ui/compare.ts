@@ -348,7 +348,7 @@ export function recentPids(list: Pair[], except: number[] = []): number[] {
   return out;
 }
 
-const recentKey = (leagueId: string) => `hc:compare:${leagueId}`;
+const recentKey = (leagueId: string) => `cgm:compare:${leagueId}`;
 
 /** This league's recent comparisons on this device (a convenience: none when storage is unavailable). */
 export function loadRecent(leagueId: string): Pair[] {

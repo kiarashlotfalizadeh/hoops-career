@@ -485,7 +485,7 @@ export default function Settings() {
               <BrandMark size={22} className="set-mark" />
               <div className="grow">
                 <div className="set-word">
-                  Hoops <em>Career</em>
+                  Clipboard <em>GM</em>
                 </div>
                 {/* a build hash keeps its own case */}
                 <div className="set-link-m num">

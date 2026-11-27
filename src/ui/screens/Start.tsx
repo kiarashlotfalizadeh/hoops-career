@@ -117,9 +117,9 @@ export default function Start() {
       <header className="st-hero">
         <BrandMark size={34} className="st-mark" draw />
         <h1 className="st-word">
-          <span>Hoops</span>
+          <span>Clipboard</span>
           <br />
-          <span>Career</span>
+          <span>GM</span>
         </h1>
         <p className="st-tag">GM and head coach in one, with a tactics layer that tells you why.</p>
         <Statline

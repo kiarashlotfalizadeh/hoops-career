@@ -151,7 +151,7 @@ function foot(ctx: Ctx, label: string, ground = PAPER, ink = INK) {
   ctx.textAlign = 'left';
   ctx.font = head(30);
   tracking(ctx, -0.04, 30);
-  ctx.fillText('Hoops Career', 64, POSTER_H - h / 2 + 2);
+  ctx.fillText('Clipboard GM', 64, POSTER_H - h / 2 + 2);
   ctx.textAlign = 'right';
   ctx.font = mono(24);
   tracking(ctx, -0.01, 24);

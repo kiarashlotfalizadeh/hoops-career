@@ -59,7 +59,7 @@ if (await page.locator('.st-continue').count()) {
   if (flag('--mid')) {
     await play('Start regular season');
     await play('Sim to trade deadline');
-    await page.evaluate(() => window.__hc?.store.getState().save());
+    await page.evaluate(() => window.__cgm?.store.getState().save());
   }
 }
 for (const [name, route] of routes) {

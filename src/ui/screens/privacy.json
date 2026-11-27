@@ -5,7 +5,7 @@
   "sections": [
     {
       "h": "What we collect",
-      "p": ["Nothing. Hoops Career has no accounts, no sign-in, no analytics, no ads and no trackers. There is no server of ours for your data to go to."]
+      "p": ["Nothing. Clipboard GM has no accounts, no sign-in, no analytics, no ads and no trackers. There is no server of ours for your data to go to."]
     },
     {
       "h": "Where your leagues live",
@@ -42,7 +42,7 @@
     {
       "h": "Questions",
       "p": ["Open an issue on the project's page."],
-      "link": { "label": "github.com/kiarashlotfalizadeh/hoops-career", "href": "https://github.com/kiarashlotfalizadeh/hoops-career/issues" }
+      "link": { "label": "github.com/kiarashlotfalizadeh/clipboard-gm", "href": "https://github.com/kiarashlotfalizadeh/clipboard-gm/issues" }
     }
   ]
 }

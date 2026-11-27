@@ -109,7 +109,7 @@ function stopToast(l: League, stop: SimStop, from: ReadonlySet<string>): { toast
 }
 
 /** The latest digest is kept on this device, so it's still there after the app is closed and opened again. */
-const DIGEST_KEY = 'hc:digest';
+const DIGEST_KEY = 'cgm:digest';
 
 function keepDigest(d: Digest | null) {
   try {

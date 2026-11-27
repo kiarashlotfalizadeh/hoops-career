@@ -244,8 +244,8 @@ export default function Court3D(props: Court3DProps) {
       stepping = false;
       sized = floorKey = '';
       shown = false;
-      // (the dev server's QA scripts look at the broadcast through this, as at the store through __hc)
-      if (import.meta.env.DEV) (window as unknown as { __hc3d: unknown }).__hc3d = scene;
+      // (the dev server's QA scripts look at the broadcast through this, as at the store through __cgm)
+      if (import.meta.env.DEV) (window as unknown as { __cgm3d: unknown }).__cgm3d = scene;
       // (a scene built again has no replay on: the court is not kept waiting for one)
       letGo();
     };

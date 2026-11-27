@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Hoops Career</string>
-    <string name="title_activity_main">Hoops Career</string>
-    <string name="package_name">com.hoopscareer.app</string>
-    <string name="custom_url_scheme">com.hoopscareer.app</string>
+    <string name="app_name">Clipboard GM</string>
+    <string name="title_activity_main">Clipboard GM</string>
+    <string name="package_name">com.clipboardgm.app</string>
+    <string name="custom_url_scheme">com.clipboardgm.app</string>
 </resources>

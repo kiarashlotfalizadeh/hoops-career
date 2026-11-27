@@ -1,7 +1,7 @@
 import { lazy, type ComponentType } from 'react';
 import { useStore } from '../state/store';
 
-const KEY = 'hc:chunk-reload';
+const KEY = 'cgm:chunk-reload';
 
 /** Whether this tab already reloaded for a missing chunk. Blocked storage counts as yes, so it can't reload forever. */
 function reloadedOnce(): boolean {

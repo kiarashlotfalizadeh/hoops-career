@@ -37,7 +37,7 @@ function privacyPage(): Plugin {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
-    <title>${esc(policy.title)} · Hoops Career</title>
+    <title>${esc(policy.title)} · Clipboard GM</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <style>
       :root { --bg: #f3efe7; --ink: #1b1915; --dim: #5b564c; }
@@ -55,12 +55,12 @@ function privacyPage(): Plugin {
   </head>
   <body>
     <main>
-      <p class="small"><a href="./">Hoops Career</a></p>
+      <p class="small"><a href="./">Clipboard GM</a></p>
       <h1>${esc(policy.title)}</h1>
       <p class="small">Updated ${esc(policy.updated)}</p>
       <p class="lead">${esc(policy.lead)}</p>
       ${sections}
-      <p class="small" style="margin-top: 32px">Hoops Career is not affiliated with the NBA or NBPA.</p>
+      <p class="small" style="margin-top: 32px">Clipboard GM is not affiliated with the NBA or NBPA.</p>
     </main>
   </body>
 </html>
@@ -85,9 +85,9 @@ export default defineConfig({
       injectRegister: null,
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
-        id: 'hoops-career',
-        name: 'Hoops Career',
-        short_name: 'Hoops',
+        id: 'clipboard-gm',
+        name: 'Clipboard GM',
+        short_name: 'Clipboard GM',
         description: 'A basketball GM and head coach game, with a tactics layer that tells you why.',
         theme_color: '#f3efe7',
         background_color: '#f3efe7',

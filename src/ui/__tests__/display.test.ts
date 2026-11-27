@@ -251,7 +251,7 @@ describe('display helpers', () => {
     }
     {
       // the OVR tiers read as text on white, on the paper and under a white figure (a solid badge); figures in text never break at a hyphen
-      // (the lint rule hoops/keep-figures, eslint.config.js, flags a join written into the markup without it)
+      // (the lint rule cgm/keep-figures, eslint.config.js, flags a join written into the markup without it)
       // (read from the file: the test runner doesn't load CSS)
       const fs = (await import('node:fs' as string)) as { readFileSync: (path: URL, enc: 'utf8') => string; readdirSync: (path: URL, o: { recursive: true }) => unknown[] };
       const tokens = fs.readFileSync(new URL('../styles/tokens.css', import.meta.url), 'utf8');

@@ -9,8 +9,8 @@ import { adoptStored, isQuotaError, listLeagues, loadRawLeague, loadRawSnapshot,
 import { useStore } from './store';
 import { checkpointLive } from './live';
 
-const NOT_A_BACKUP = 'That file is not a Hoops Career backup.';
-const TOO_BIG = 'That file is too big to be a Hoops Career backup.';
+const NOT_A_BACKUP = 'That file is not a Clipboard GM backup.';
+const TOO_BIG = 'That file is too big to be a Clipboard GM backup.';
 /** Well above any real league's JSON (ten seasons in, under 20 MB); reading more would just exhaust memory. Holds for a gzipped file's contents too. */
 const MAX_IMPORT_BYTES = 64 * 1024 * 1024;
 
@@ -19,7 +19,7 @@ const slug = (s: string) =>
     .replace(/[^a-z0-9]+/gi, '-')
     .replace(/^-|-$/g, '')
     .toLowerCase();
-const fileName = (name: string, season: unknown) => `hoops-career-${slug(name) || 'league'}-${season}`;
+const fileName = (name: string, season: unknown) => `clipboard-gm-${slug(name) || 'league'}-${season}`;
 
 /** A file's contents: its JSON gzipped where the browser can compress (Safari 16.4+, every current browser), as it is otherwise. */
 async function pack(json: string): Promise<{ blob: Blob; ext: string }> {
@@ -79,12 +79,12 @@ async function deliver(json: string, base: string): Promise<boolean> {
     if (Capacitor.isNativePlatform()) {
       const [{ Filesystem, Directory }, { Share }] = await Promise.all([import('@capacitor/filesystem'), import('@capacitor/share')]);
       const res = await Filesystem.writeFile({ path: name, data: await base64(blob), directory: Directory.Cache });
-      await Share.share({ title: 'Hoops Career backup', files: [res.uri] });
+      await Share.share({ title: 'Clipboard GM backup', files: [res.uri] });
       return true;
     }
     const file = new File([blob], name, { type: blob.type });
     if (matchMedia('(pointer: coarse)').matches && navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file], title: 'Hoops Career backup' });
+      await navigator.share({ files: [file], title: 'Clipboard GM backup' });
       return true;
     }
   } catch (e) {

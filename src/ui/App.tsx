@@ -68,7 +68,7 @@ import { legacyRoutes } from './routes/legacy';
 const Start = lazyRetry(() => import('./screens/Start'));
 const NewLeague = lazyRetry(() => import('./screens/NewLeague'));
 const Privacy = lazyRetry(() => import('./screens/Privacy'));
-const BLOCKED = 'Close other Hoops Career tabs or windows to finish updating your saves.';
+const BLOCKED = 'Close other Clipboard GM tabs or windows to finish updating your saves.';
 
 /** Hand the user a file from a button; a cancelled share sheet is no failure. */
 async function offerFile(make: () => Promise<boolean>) {

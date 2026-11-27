@@ -1,9 +1,9 @@
 {
-  "name": "hoops-career",
+  "name": "clipboard-gm",
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Hoops Career \u2014 a mobile-first basketball GM + head coach simulation with a deep tactics layer.",
+  "description": "Clipboard GM \u2014 a mobile-first basketball GM + head coach simulation with a deep tactics layer.",
   "engines": {
     "node": ">=22.15"
   },

@@ -277,7 +277,7 @@ try {
   if (await page.locator('.sheet').count()) await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Export backup/ }).click()]);
-  const file = join(mkdtempSync(join(tmpdir(), 'hc-')), download.suggestedFilename());
+  const file = join(mkdtempSync(join(tmpdir(), 'cgm-')), download.suggestedFilename());
   await download.saveAs(file);
   await page.goto(`${base}/#/start`);
   await page.locator('input[type=file]').setInputFiles(file);

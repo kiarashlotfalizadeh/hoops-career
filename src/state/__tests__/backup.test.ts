@@ -129,8 +129,8 @@ describe('backups', () => {
       fresh();
 
       // refuses files that are not backups, too big, or from a newer version
-      await expect(importLeague(new File(['{"nope"'], 'x.json'))).rejects.toThrow('not a Hoops Career backup');
-      await expect(importLeague(backup({ id: 'x', teams: [] }))).rejects.toThrow('not a Hoops Career backup');
+      await expect(importLeague(new File(['{"nope"'], 'x.json'))).rejects.toThrow('not a Clipboard GM backup');
+      await expect(importLeague(backup({ id: 'x', teams: [] }))).rejects.toThrow('not a Clipboard GM backup');
       const huge = backup({});
       Object.defineProperty(huge, 'size', { value: 65 * 1024 * 1024 });
       await expect(importLeague(huge)).rejects.toThrow('too big');
@@ -152,7 +152,7 @@ describe('backups', () => {
       await expect(importLeague(backup(played('other')))).rejects.toBeInstanceOf(UnsavedLeagueError);
       expect(useStore.getState().league).toBe(open);
       // a file that isn't a backup says so first
-      await expect(importLeague(backup({ id: 'x', teams: [] }))).rejects.toThrow('not a Hoops Career backup');
+      await expect(importLeague(backup({ id: 'x', teams: [] }))).rejects.toThrow('not a Clipboard GM backup');
       // offered an export and told to go ahead, it imports without saving the open league first
       vi.mocked(IDBObjectStore.prototype.put).mockImplementation(function (this: IDBObjectStore, ...args) {
         if (JSON.stringify(args[0] ?? null).includes('"renamed"')) throw quotaError();
@@ -183,12 +183,12 @@ describe('backups', () => {
         const l = played('gzip');
         const gz = await download(l);
         const plain = JSON.stringify({ ...l, version: SAVE_VERSION, lastBackup: l.lastBackup });
-        expect([gz.name, gz.type, [...new Uint8Array(await gz.slice(0, 2).arrayBuffer())]]).toEqual([`hoops-career-gzip-${l.season}.json.gz`, 'application/gzip', [0x1f, 0x8b]]);
+        expect([gz.name, gz.type, [...new Uint8Array(await gz.slice(0, 2).arrayBuffer())]]).toEqual([`clipboard-gm-gzip-${l.season}.json.gz`, 'application/gzip', [0x1f, 0x8b]]);
         expect(gz.size).toBeLessThan(plain.length / 4);
         const back = await importLeague(gz, { existing: 'copy' });
         expect(back).toEqual(await importLeague(backup(JSON.parse(plain)), { existing: 'copy' }).then((x) => ({ ...x, id: back.id, name: back.name })));
         // a damaged one isn't a backup; one that unpacks to more than any league is too big
-        await expect(importLeague(new File([(await gz.arrayBuffer()).slice(0, 200)], 'cut.json.gz'))).rejects.toThrow('not a Hoops Career backup');
+        await expect(importLeague(new File([(await gz.arrayBuffer()).slice(0, 200)], 'cut.json.gz'))).rejects.toThrow('not a Clipboard GM backup');
         const bomb = new Response(new Blob([new Uint8Array(65 * 1024 * 1024)]).stream().pipeThrough(new CompressionStream('gzip')));
         await expect(importLeague(new File([await bomb.arrayBuffer()], 'bomb.json.gz'))).rejects.toThrow('too big');
         fresh();

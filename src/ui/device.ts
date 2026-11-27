@@ -17,7 +17,7 @@ export interface DevicePrefs {
   volume: number;
 }
 
-const KEY = 'hc:device';
+const KEY = 'cgm:device';
 const DEFAULTS: DevicePrefs = { theme: 'auto', gameSound: true, uiSound: false, volume: 0.7 };
 
 function read(): DevicePrefs {

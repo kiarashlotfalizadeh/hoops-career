@@ -17,7 +17,7 @@ describe('NBA.com data pipeline', () => {
     expect(splitCsv('"say ""hi""",,3')).toEqual(['say "hi"', '', '3']);
 
     // rows stream out of a .tar.xz; an archive tar cannot read fails instead of reading no rows
-    const dir = mkdtempSync(join(tmpdir(), 'hc-csv-'));
+    const dir = mkdtempSync(join(tmpdir(), 'cgm-csv-'));
     writeFileSync(join(dir, 'pbp.csv'), 'gameId,desc\n1,"Jump, ball"\n2,Dunk\n');
     execFileSync('tar', ['-cJf', join(dir, 'ok.tar.xz'), '-C', dir, 'pbp.csv']);
     const read = async (f: string) => {

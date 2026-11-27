@@ -18,7 +18,7 @@ import { MAX_STEPS } from './live';
 /** A save from before the current format (MIN_SAVE_VERSION): its league can't be opened by this build. */
 export class OldSaveError extends Error {
   constructor() {
-    super('This league was saved by an older version of Hoops Career and can no longer be opened. Start a new league.');
+    super('This league was saved by an older version of Clipboard GM and can no longer be opened. Start a new league.');
     this.name = 'OldSaveError';
   }
 }
@@ -235,7 +235,7 @@ function cleanGamePlans(x: League) {
  */
 export function migrate(x: unknown, notALeague = 'This save is damaged or from an incompatible version.'): League {
   const version = obj(x) ? x.version : undefined;
-  if (num(version) && (version as number) > SAVE_VERSION) throw new Error('This league was saved by a newer version of Hoops Career. Update the app to open it.');
+  if (num(version) && (version as number) > SAVE_VERSION) throw new Error('This league was saved by a newer version of Clipboard GM. Update the app to open it.');
   if (!isLeague(x)) throw new Error(notALeague);
   if (!num(version) || (version as number) < MIN_SAVE_VERSION) throw new OldSaveError();
   for (const m of x.inbox) if (m.link !== undefined && !isRoute(m.link)) delete m.link;

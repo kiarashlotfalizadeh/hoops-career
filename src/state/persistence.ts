@@ -133,7 +133,7 @@ export function onBlocked(fn: (() => void) | null) {
 
 function db() {
   if (!dbp) {
-    dbp = openDB('hoops-career', 3, {
+    dbp = openDB('clipboard-gm', 3, {
       async upgrade(d, from, _to, tx) {
         if (from < 1) {
           d.createObjectStore('leagues');
@@ -191,7 +191,7 @@ async function withDb<T>(op: (d: IDBPDatabase) => Promise<T>): Promise<T> {
 let channel: BroadcastChannel | null | undefined;
 /** Tells other windows which league changed, so they stop autosaving their stale copy right away. */
 function broadcast() {
-  if (channel === undefined) channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('hoops-career') : null;
+  if (channel === undefined) channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('clipboard-gm') : null;
   return channel;
 }
 
@@ -405,7 +405,7 @@ export async function deleteLeague(id: string) {
 
 export function lastLeagueId(): string | null {
   try {
-    return localStorage.getItem('hc:last');
+    return localStorage.getItem('cgm:last');
   } catch {
     return null;
   }
@@ -413,8 +413,8 @@ export function lastLeagueId(): string | null {
 
 export function setLastLeagueId(id: string | null) {
   try {
-    if (id) localStorage.setItem('hc:last', id);
-    else localStorage.removeItem('hc:last');
+    if (id) localStorage.setItem('cgm:last', id);
+    else localStorage.removeItem('cgm:last');
   } catch {
     /* ignore */
   }
