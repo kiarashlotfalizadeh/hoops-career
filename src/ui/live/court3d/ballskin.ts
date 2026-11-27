@@ -28,9 +28,9 @@ const DEPTH = 0.9;
  * A soft light round the ball's edge, the lamps' warm white caught at its rim (this strong, this tight to it): the
  * ball keeps its round against the wood, a jersey or the dark crowd behind it, without glowing.
  */
-const EDGE = 0.22;
-const EDGE_TIGHT = 2.6;
-const EDGE_TINT = '1.0, 0.9, 0.78';
+const EDGE = 0.28;
+const EDGE_TIGHT = 2.5;
+const EDGE_TINT = '1.0, 0.91, 0.78';
 /**
  * Small on the picture, the ball's edge is drawn dark (this dark, this wide: CSS px), so a ball a few dots across
  * keeps its round against the wood, a jersey or the crowd; from RIM_FULL dots across down it has all of it, from
@@ -166,13 +166,13 @@ export function ballSize(px: number): number {
  * full strength however clear the pane is.
  */
 export function pane(): MeshStandardMaterial {
-  const mat = new MeshStandardMaterial({ color: 0xdfeee9, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.13, depthWrite: false, envMapIntensity: 1.1 });
+  const mat = new MeshStandardMaterial({ color: 0xdfeee9, roughness: 0.045, metalness: 0, transparent: true, opacity: 0.14, depthWrite: false, envMapIntensity: 1.35 });
   mat.onBeforeCompile = (sh) => {
     sh.fragmentShader = sh.fragmentShader.replace(
       '#include <opaque_fragment>',
       /* glsl */ `
       // (a pane this clean mirrors more of the building than its bare face would: the stands and the boards show in it faintly)
-      totalSpecular *= 2.2;
+      totalSpecular *= 2.6;
       float shine = clamp(max(totalSpecular.r, max(totalSpecular.g, totalSpecular.b)), 0.0, 1.0);
       float seen = clamp(diffuseColor.a + shine * (1.0 - diffuseColor.a), 0.0, 1.0);
       outgoingLight = (totalDiffuse * diffuseColor.a + totalSpecular) / max(seen, 1e-3);
@@ -185,8 +185,9 @@ export function pane(): MeshStandardMaterial {
 }
 
 /** The lights round the board, off. */
-const LED_OFF = new Color(0x2a0707);
-const LED_ON = new Color(1, 0.035, 0.02);
+const LED_OFF = new Color(0x2c0707);
+/** On: brighter than white can be, so it glows along the glass's edge (lens.ts GLOW_FROM). */
+const LED_ON = new Color(3.2, 0.12, 0.05);
 
 /** The strip of lights round each board: red at the horn, dark the rest of the time (see lit). */
 export function lights(): MeshBasicMaterial {

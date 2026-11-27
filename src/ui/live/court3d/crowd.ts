@@ -965,11 +965,18 @@ const PROP_MOVE = /* glsl */ `
   vec3 transformed = mid + (across * position.x * size.x + rise * position.y * size.y) * here;`;
 /**
  * Its back: a phone's is black; a sign's is the brown card it was cut from, as dark as the seat it is held up in (the
- * house's light on it: `vLit`, and the picture's own, `diffuse`); a foam finger is the same both sides. A sign's back is
- * what the camera sees of the near stands' signs, close and across the foot of the picture, and none of this is lit:
- * a pale grey card there came out a blank white board held up in front of the game.
+ * house's light on it: `uDim` and `vLit`, and the picture's own, `diffuse`); a foam finger is the same both sides. A
+ * sign's back is what the camera sees of the near stands' signs, close and across the foot of the picture, and none of
+ * this is lit: a pale grey card there came out a blank white board held up in front of the game. A sign's face and a
+ * foam finger take the house's light as the people holding them do: printed card in a dimmed bowl is not a lit screen
+ * (a phone's face is, and keeps its own).
  */
-const PROP_BACK = /* glsl */ `if (!gl_FrontFacing) diffuseColor.rgb = vKind < 0.5 || vKind > 2.5 ? vec3(0.025) : vKind < 1.5 ? vec3(0.115, 0.082, 0.052) * diffuse * (0.45 + 0.55 * vLit) : diffuseColor.rgb;`;
+const PROP_BACK = /* glsl */ `
+  if (gl_FrontFacing) {
+    if (vKind >= 0.5 && vKind <= 2.5) diffuseColor.rgb *= uDim * (0.28 + 0.58 * vLit) * vec3(1.0, 0.97, 0.93);
+  } else {
+    diffuseColor.rgb = vKind < 0.5 || vKind > 2.5 ? vec3(0.025) : vKind < 1.5 ? vec3(0.115, 0.082, 0.052) * diffuse * uDim * (0.35 + 0.55 * vLit) : diffuseColor.rgb * uDim * (0.28 + 0.58 * vLit);
+  }`;
 
 /** The signs (the building's colour and its letters on them), the foam finger and the phone, painted onto the atlas. */
 function paintHeld(cv: HTMLCanvasElement, board: string, letters: string) {
@@ -1209,10 +1216,10 @@ export class Crowd {
         .replace('#include <uv_vertex>', '#include <uv_vertex>\n  vMapUv = aCell.xy + uv * aCell.zw;')
         .replace('#include <begin_vertex>', PROP_MOVE);
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying float vKind;\nvarying float vLit;')
+        .replace('#include <common>', '#include <common>\nuniform float uDim;\nvarying float vKind;\nvarying float vLit;')
         .replace('#include <map_fragment>', `#include <map_fragment>\n  ${PROP_BACK}`);
     };
-    this.propMat.customProgramCacheKey = () => 'held2';
+    this.propMat.customProgramCacheKey = () => 'held3';
 
     // the seats: the model in the rows by the floor, a back and a pan behind (two faces: nobody is near enough for more)
     this.seatMat = keep(new MeshLambertMaterial({ color: 0xffffff, vertexColors: true, side: DoubleSide }));

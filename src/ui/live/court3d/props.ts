@@ -17,7 +17,6 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
   Quaternion,
@@ -295,7 +294,7 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
   // (glass: what is behind it, and the lamps on its face; its edge, green end on)
   const glass = keep(pane());
   // (the edge holds the light that comes in through the pane: a faint glow of its own, so it reads from a replay's camera)
-  const glassEdge = keep(new MeshStandardMaterial({ color: '#6c9d8c', emissive: '#132c25', roughness: 0.15 }));
+  const glassEdge = keep(new MeshStandardMaterial({ color: '#78b09d', emissive: '#1d4036', roughness: 0.12, metalness: 0.1 }));
   // (the stanchions' badge: the caller paints it; a decal a hair off the pad, drawn over it)
   const badgeCv = document.createElement('canvas');
   badgeCv.width = BADGE;
@@ -313,14 +312,15 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
   // (the clocks' faces: the caller puts the clocks on them)
   const clock = keep(new MeshBasicMaterial({ color: 0x2b3038 }));
   // (the rim's orange enamel: a hard gloss coat, so it takes the lamps as a line along the tube, not a smudge)
-  const iron = keep(new MeshStandardMaterial({ color: '#e4501a', roughness: 0.26, vertexColors: true }));
+  const iron = keep(new MeshStandardMaterial({ color: '#ec5219', roughness: 0.22, metalness: 0.22, vertexColors: true }));
   const cord = keep(new MeshStandardMaterial({ color: 0xf4f4f0, roughness: 0.9, vertexColors: true }));
   braided(cord, 'cord');
   // (the live net's knots: a small round of cord where two cross, in its shade)
   const knot = keep(new IcosahedronGeometry(KNOT_R, 0));
   knot.setAttribute('color', new BufferAttribute(new Float32Array(knot.getAttribute('position').count * 3).fill(0.86), 3));
-  // (black furniture, but not so black that a monitor on the table or the scoreboard's corners are lost in the dark behind them)
-  const dark = keep(new MeshLambertMaterial({ color: 0x26272c, vertexColors: true }));
+  // (black furniture, but not so black that a monitor on the table or the scoreboard's corners are lost in the dark behind
+  // them: a dull metal, so its edges take the lamps)
+  const dark = keep(new MeshStandardMaterial({ color: 0x2c2e35, roughness: 0.42, metalness: 0.32, emissive: 0x0a0b0e, vertexColors: true }));
 
   // the live net's cords: which corners make its triangles, and each point's shade (darker toward the mouth, as Blender's net is)
   const links = NET.n * NET.k * 2;

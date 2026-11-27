@@ -100,9 +100,9 @@ const BLOWOUT_S = 330;
 const LEAVERS = 0.45;
 const LEAVERS_LOST = 0.6;
 /** How far the house lights go down for the open, a timeout and a home win (the picture's exposure: the spots and the boards keep theirs), and how long each lasts (ms). */
-const HOUSE_DOWN = 0.6;
+const HOUSE_DOWN = 0.62;
 /** How much of the stands' light the rig's darker mood takes (the clutch, the open: the lamps stay on the floor, the bowl sits back). */
-const MOOD_DIM = 0.4;
+const MOOD_DIM = 0.56;
 const OPEN_SHOW_MS = 5200;
 const TIMEOUT_SHOW_MS = 9000;
 const WIN_SHOW_MS = 60000;
@@ -161,11 +161,11 @@ const POOL = {
 };
 
 /** How soft the mirror gets with height: the blur (of the picture's height) for each ft over the floor, for each ft the floor is from the camera. */
-const SHEEN_SOFT = '0.06';
+const SHEEN_SOFT = '0.056';
 /** How sharp the mirror is drawn: this much of the picture's own size, but this many dots across at least and at most (and on a device that has stepped down, at most as it was drawn before). */
-const SHEEN_SHARP = 0.5;
-const SHEEN_LEAST = 480;
-const SHEEN_MOST = 1024;
+const SHEEN_SHARP = 0.62;
+const SHEEN_LEAST = 560;
+const SHEEN_MOST = 1152;
 const SHEEN_LITE = 640;
 
 /**
@@ -186,7 +186,7 @@ const SHEEN = {
     uSize: { value: null },
     tFloor: { value: null },
     uWood: { value: null },
-    strength: { value: 0.85 },
+    strength: { value: 0.92 },
   },
   vertexShader: /* glsl */ `
     uniform mat4 textureMatrix;
@@ -212,40 +212,54 @@ const SHEEN = {
       vec3 c = textureLod(tDiffuse, uv, lod).rgb;
       return c * c;
     }
-    void main() {
-      vec2 uv = vUv.xy / vUv.w;
-      // how high over the floor what the mirror shows here is (ft); how far apart its samples go for it,
-      // drawn out up and down the picture (toward the camera, as a rough floor draws a reflection)
+    // how high over the floor what the mirror shows at uv is (ft)
+    float heightAt(vec2 uv) {
       float depth = texture2D(tDepth, uv).r;
       vec4 at = uUnproject * vec4(uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
       // (nothing drawn there, or so far off the mirror's tipped clip runs out: the roof, high up)
-      float high = at.w <= 0.0 || depth > 0.9999 ? 200.0 : clamp(at.y / at.w, 0.0, 200.0);
+      return at.w <= 0.0 || depth > 0.9999 ? 120.0 : clamp(at.y / at.w, 0.0, 120.0);
+    }
+    void main() {
+      vec2 uv = vUv.xy / vUv.w;
+      vec2 texel = 1.0 / max(uSize, vec2(1.0));
+      // (the least of it here and round it, a little toward its own: an edge against the roof, high up, doesn't come out in steps)
+      float h0 = heightAt(uv);
+      float hMin = min(h0, min(min(heightAt(uv + vec2(texel.x * 1.5, 0.0)), heightAt(uv - vec2(texel.x * 1.5, 0.0))), min(heightAt(uv + vec2(0.0, texel.y * 1.5)), heightAt(uv - vec2(0.0, texel.y * 1.5)))));
+      float high = mix(hMin, h0, 0.45);
       float far = max(length(vView), 1.0);
       // how clear the coat is here: paint or bare wood, worn or not (the floor's canvas, as its own shader reads it)
       vec3 spot = cameraPosition - vView;
       vec3 paint = texture2D(tFloor, vec2(spot.x / ${FLOOR_L.toFixed(3)} + 0.5, 0.5 - spot.z / ${FLOOR_W.toFixed(3)})).rgb;
       float worn;
       float coat = fCoat(fGlossAt(spot.xz, 1.0 - smoothstep(0.05, 0.16, length(paint - uWood)), worn));
-      // (each 2¼ in strip's face is a little off flat: its piece of the mirror sits a little up or down, the more
-      // the higher what it shows; strips too fine to see don't)
+      // (each 2¼ in strip's face is a little off flat: its piece of the mirror sits a little up or down, the more the higher
+      // what it shows, and only a little, or an edge over it comes out in teeth; strips too fine to see don't)
       float across = (${(FLOOR_W / 2).toFixed(3)} - (cameraPosition.z - vView.z)) / 0.1875;
       float off = fract(sin(floor(across) * 12.9898) * 43758.5453) - 0.5;
-      uv.y += off * 0.05 * min(high, 30.0) / far * (1.0 - smoothstep(0.45, 1.3, fwidth(across)));
-      // (the taps turned a little from dot to dot: rows of seats don't come back as a lattice)
-      float turn = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
-      vec2 r = vec2(0.32, 1.0) * clamp((0.05 + high) * ${SHEEN_SOFT} / far * (1.0 + 0.9 * (1.0 - coat)), 0.0, 0.034) * (0.7 + 0.6 * turn);
-      float lod = log2(max(r.y * uSize.y * 0.4, 1.0)) + 0.6 + min(high, 40.0) * 0.05;
-      // (the mirror's picture is in the screen's terms: its taps are added up as light, near enough, and put back)
-      vec3 c = lit(uv, lod * 0.5) * 0.24;
-      c += (lit(uv + r * vec2(0.5, 0.25), lod) + lit(uv - r * vec2(0.5, 0.25), lod)) * 0.16;
-      c += (lit(uv + r * vec2(-0.6, 0.55), lod) + lit(uv - r * vec2(-0.6, 0.55), lod)) * 0.12;
-      c += (lit(uv + r * vec2(0.15, 0.95), lod) + lit(uv - r * vec2(0.15, 0.95), lod)) * 0.1;
+      uv.y += off * 0.022 * min(high, 16.0) / far * (1.0 - smoothstep(0.35, 1.1, fwidth(across)));
+      // (nine taps, drawn out up and down the picture, toward the camera, as a rough floor draws a reflection, and turned
+      // from dot to dot: rows of seats don't come back as a lattice. The mirror's picture is in the screen's terms: its
+      // taps are added up as light, near enough, and put back)
+      float ang = 6.2831853 * fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+      float ca = cos(ang), sa = sin(ang);
+      mat2 rot = mat2(ca, -sa, sa, ca);
+      vec2 rad = vec2(0.34, 1.0) * clamp((0.08 + high) * ${SHEEN_SOFT} / far * (1.0 + 0.85 * (1.0 - coat)), 0.0008, 0.032);
+      float lod = max(0.35, log2(max(rad.y * uSize.y * 0.42, 1.0)) + 0.45 + min(high, 36.0) * 0.045);
+      vec3 c = lit(uv, lod * 0.65) * 0.22;
+      vec2 d1 = rot * vec2(0.38, 0.28) * rad;
+      vec2 d2 = rot * vec2(-0.48, 0.52) * rad;
+      vec2 d3 = rot * vec2(0.22, -0.82) * rad;
+      vec2 d4 = rot * vec2(0.86, 0.16) * rad;
+      c += (lit(uv + d1, lod) + lit(uv - d1, lod)) * 0.135;
+      c += (lit(uv + d2, lod) + lit(uv - d2, lod)) * 0.11;
+      c += (lit(uv + d3, lod) + lit(uv - d3, lod)) * 0.08;
+      c += (lit(uv + d4, lod) + lit(uv - d4, lod)) * 0.065;
       c = sqrt(c);
-      // (a game floor's coat is poured thick and buffed: from the broadcast's seat, some 30 degrees down, the men
-      // stand in the wood as a broadcast shows them, soft but plain, a fifth of what is over it; more looked along)
-      float graze = pow(1.0 - clamp(normalize(vView).y, 0.0, 1.0), 5.0);
+      // (a game floor's coat is poured thick and buffed: from the broadcast's seat, some 30 degrees down, the men stand
+      // in the wood as a broadcast shows them, soft but plain, a fifth or so of what is over it; more looked along)
       // (and fainter the higher what it shows: a varnish is not a mirror, the roof is a blur in it)
-      gl_FragColor = vec4(c, strength * coat * (0.2 + 0.8 * graze) / (1.0 + high * 0.015));
+      float graze = pow(1.0 - clamp(normalize(vView).y, 0.0, 1.0), 4.6);
+      gl_FragColor = vec4(c, strength * coat * (0.22 + 0.78 * graze) / (1.0 + high * 0.015));
     }`,
 };
 
@@ -272,6 +286,9 @@ export class Arena {
   private readonly lights: Show;
   /** How far down the rig's own mood is (rig.ts drama: the scene says): the stands sit darker under it. */
   mood = 0;
+  /** The boards' light as it falls on the wood by them: its colour and how much (scene.ts hands them to the floor: lens.ts varnish). */
+  readonly ledColor = new Color(0x3a64b8);
+  ledStrength = 0.7;
   /** How far the house lights are down (0 to 1). */
   private show = 0;
   private showMs = Infinity;
@@ -424,7 +441,7 @@ export class Arena {
     this.roofKit = {
       unit: keep(new BoxGeometry(1, 1, 1)),
       // (the steel shows a little whatever the light: the lamps point down, and a roof is never quite black)
-      steel: keep(new MeshLambertMaterial({ color: 0xffffff, emissive: 0x1e2025 })),
+      steel: keep(new MeshLambertMaterial({ color: 0xffffff, emissive: 0x262932 })),
       glow: keep(new MeshBasicMaterial({ color: 0xfff1dc })),
       deck: new Mesh(keep(new PlaneGeometry(310, 290)), keep(new MeshLambertMaterial({ map: ribs, emissiveMap: ribs, side: DoubleSide }))),
       ceiling: new Mesh(
@@ -862,12 +879,17 @@ export class Arena {
     this.boards.boost((1 / house) * (1 - LIVE_LED * this.live));
 
     this.crowd.wave(this.wave > 0.02 || this.rally > 0.02, this.dimTo);
-    // (the boards' light on the rows by them: the building's colour, up for a moment with a big one)
-    if (this.board)
+    // (the boards' light on the rows by them and on the wood: the building's colour, up for a moment with a big one)
+    if (this.board) {
+      const surge = fresh(FLASH_MS) ? 1 - m!.ms / FLASH_MS : 0;
+      const base = this.dimTo * (1 - LIVE_LED * this.live);
       u.uLed.value
         .set(this.board)
-        .lerp(LED_WHITE, 0.35)
-        .multiplyScalar((0.2 + (fresh(FLASH_MS) ? 0.25 * (1 - m!.ms / FLASH_MS) : 0)) * this.dimTo * (1 - LIVE_LED * this.live));
+        .lerp(LED_WHITE, 0.32)
+        .multiplyScalar((0.22 + 0.28 * surge) * base);
+      this.ledColor.set(this.board).lerp(LED_WHITE, 0.16);
+      this.ledStrength = (0.72 + 0.55 * surge + 0.18 * this.mood) * base;
+    }
     // (sat down, the stands are a shade under the floor's light: the play is in front of them. On their feet they are in it)
     // (the steps, the seats and the walls go down with them, for a close-up and under the darker house: one bowl)
     const stands = this.dimTo * (1 - MOOD_DIM * this.mood) * (1 - LIVE_STANDS * this.live);
@@ -1260,12 +1282,12 @@ const CEILING_RINGS: readonly (readonly [number, number, number])[] = [
   [84, 66, 36],
 ];
 /** A dark open roof's: its deck, near black; where its arched ribs cross the floor; how far they fall from the middle to the walls (ft). */
-const OPEN_DECK = 0x0d0e10;
+const OPEN_DECK = 0x16181e;
 const RIBS = [-110, -66, -22, 22, 66, 110];
 const ARCH_RISE = 16.5;
 /** A trussed roof's deck, and its glow. */
-const DECK = 0x2c2e33;
-const DECK_GLOW = 0x17181c;
+const DECK = 0x353840;
+const DECK_GLOW = 0x1f222a;
 /** Catwalks in a ring round the scoreboard: half its length and width (ft); across over the ends: how far out. */
 const RING = [46, 36] as const;
 const ENDS_X = 52;

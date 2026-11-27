@@ -56,8 +56,12 @@
   top: 0;
   left: 0;
   padding: 3px 9px 4px;
+  border: 1px solid color-mix(in srgb, var(--on-ink, #fff) 16%, transparent);
   border-radius: 999px;
-  background: var(--ink, #121212);
+  background: color-mix(in srgb, var(--ink, #121212) 92%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.48);
   color: var(--on-ink, #fff);
   font:
     700 12px/1.2 'Archivo Variable',
@@ -78,9 +82,13 @@
   left: 0;
   display: inline-flex;
   align-items: stretch;
-  height: 20px;
-  border-radius: 4px;
+  height: 22px;
+  border: 1px solid color-mix(in srgb, var(--on-ink, #fff) 16%, transparent);
+  border-radius: 5px;
   background: color-mix(in srgb, var(--ink, #121212) 90%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
   color: var(--on-ink, #fff);
   white-space: nowrap;
   opacity: 0;
@@ -96,7 +104,7 @@
   width: 8px;
   height: 4px;
   translate: -50% 0;
-  background: color-mix(in srgb, var(--ink, #121212) 90%, transparent);
+  background: color-mix(in srgb, var(--ink, #121212) 92%, transparent);
   clip-path: polygon(0 0, 100% 0, 50% 100%);
 }
 /* (seated beside his head, the notch would point at nothing) */
@@ -159,23 +167,38 @@
 }
 /* a play's word: a plate in the scoreboard's condensed cut, seated by the frame loop where it covers nothing being played */
 .c3d-flash {
-  padding: 4px 12px 5px;
-  border-radius: 6px;
+  padding: 5px 13px 6px;
+  border-radius: 7px;
   font-family: var(--display, sans-serif);
   font-stretch: var(--display-w, 72%);
-  font-size: 20px;
+  font-size: 21px;
   font-weight: 900;
   letter-spacing: -0.015em;
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 color-mix(in srgb, var(--on-ink, #fff) 14%, transparent);
 }
 .c3d-flash[data-kind='make'] {
   color: var(--good-night, #7fe3a8);
+  border-color: color-mix(in srgb, var(--good-night, #7fe3a8) 38%, transparent);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.55),
+    inset 0 -2px 0 var(--good-night, #7fe3a8);
 }
 .c3d-flash[data-kind='block'],
 .c3d-flash[data-kind='to'] {
   color: var(--bad-night, #ff9a8f);
+  border-color: color-mix(in srgb, var(--bad-night, #ff9a8f) 38%, transparent);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.55),
+    inset 0 -2px 0 var(--bad-night, #ff9a8f);
 }
 .c3d-flash[data-kind='foul'] {
   color: var(--warn-night, #ffc65c);
+  border-color: color-mix(in srgb, var(--warn-night, #ffc65c) 38%, transparent);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.55),
+    inset 0 -2px 0 var(--warn-night, #ffc65c);
 }
 /* the lower third: whom a cut-in or a replay is on, his number on his team's colour, his name, and what he did */
 .c3d-third {
@@ -185,9 +208,15 @@
   display: flex;
   align-items: stretch;
   max-width: calc(100% - 24px);
-  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--on-ink, #fff) 16%, transparent);
+  border-radius: 7px;
   overflow: hidden;
-  background: var(--ink, #121212);
+  background: color-mix(in srgb, var(--ink, #121212) 93%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.58),
+    inset 0 1px 0 color-mix(in srgb, var(--on-ink, #fff) 12%, transparent);
   opacity: 0;
   translate: -14px 0;
   transition:
@@ -253,10 +282,14 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 26px;
+  height: 27px;
   padding: 0 11px 0 9px;
+  border: 1px solid color-mix(in srgb, var(--on-ink, #fff) 18%, transparent);
   border-radius: 999px;
-  background: var(--ink, #121212);
+  background: color-mix(in srgb, var(--ink, #121212) 90%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
   font-family: var(--font, sans-serif);
   font-size: 13px;
   font-weight: 700;
@@ -362,9 +395,12 @@
   gap: 6px;
   height: 32px;
   padding: 0 12px 0 10px;
-  border: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 999px;
-  background: rgba(18, 18, 18, 0.82);
+  background: rgba(14, 15, 19, 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.36);
   color: var(--on-ink, #fff);
   font:
     700 12px/1 'Archivo Variable',
@@ -374,7 +410,14 @@
   white-space: nowrap;
   cursor: pointer;
   pointer-events: auto;
-  transition: scale var(--dur-fast, 0.15s) var(--ease-out, ease-out);
+  transition:
+    scale var(--dur-fast, 0.15s) var(--ease-out, ease-out),
+    background var(--dur-fast, 0.15s) ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .court-cam:hover {
+    background: rgba(24, 26, 32, 0.9);
+  }
 }
 .court-cam-look {
   letter-spacing: 0.02em;

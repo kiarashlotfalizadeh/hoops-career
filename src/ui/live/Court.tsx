@@ -1129,10 +1129,14 @@ function drawPlayer(ctx: CanvasRenderingContext2D, view: View, at: Pt, kit: Matc
   const k = view.k;
   const r = bodyR(k);
   const ring = Math.max(2, k * 0.32);
-  // his shadow on the boards
-  ctx.fillStyle = 'rgba(40, 20, 0, 0.22)';
+  // his shadow on the boards: a soft one round him, and a darker one where he stands
+  ctx.fillStyle = 'rgba(20, 12, 4, 0.16)';
   ctx.beginPath();
-  ctx.ellipse(x + r * 0.12, y + r * 0.22, r * 1.02, r * 0.96, 0, 0, Math.PI * 2);
+  ctx.ellipse(x + r * 0.16, y + r * 0.3, r * 1.12, r * 1.04, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(20, 12, 4, 0.26)';
+  ctx.beginPath();
+  ctx.ellipse(x + r * 0.08, y + r * 0.16, r * 0.98, r * 0.92, 0, 0, Math.PI * 2);
   ctx.fill();
   if (hot || ball) {
     // (edged in ink so the ring reads on the maple and the paint alike)
@@ -1269,19 +1273,28 @@ function drawBall(ctx: CanvasRenderingContext2D, view: View, at: Pt, z: number, 
   ctx.restore();
 }
 
-/** A shot's flight so far (u: how far along), a dotted arc behind the ball. */
+/** A shot's flight so far (u: how far along): a line behind the ball, faint and thin at its start, fuller toward the ball. */
 function drawTrail(ctx: CanvasRenderingContext2D, view: View, from: Pt, to: Pt, u: number, peak: number, paints: Paints) {
-  ctx.fillStyle = paints.ballSeam;
-  const n = 9;
-  for (let i = 1; i <= n; i++) {
-    const v = (u * i) / (n + 1);
-    const p = project(view, lerpPt(from, to, v));
-    ctx.globalAlpha = 0.08 + (0.34 * i) / n;
+  const segs = 12;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = paints.ballSeam;
+  for (let i = 1; i <= segs; i++) {
+    const v0 = (u * (i - 1)) / segs;
+    const v1 = (u * i) / segs;
+    const p0 = project(view, lerpPt(from, to, v0));
+    const p1 = project(view, lerpPt(from, to, v1));
+    const y0 = p0.y - Math.sin(Math.PI * v0) * peak * view.k;
+    const y1 = p1.y - Math.sin(Math.PI * v1) * peak * view.k;
+    const t = i / segs;
+    ctx.globalAlpha = 0.08 + 0.55 * t * t;
+    ctx.lineWidth = Math.max(1.2, (0.1 + 0.24 * t) * view.k);
     ctx.beginPath();
-    ctx.arc(p.x, p.y - Math.sin(Math.PI * v) * peak * view.k, 0.16 * view.k + 0.6, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.moveTo(p0.x, y0);
+    ctx.lineTo(p1.x, y1);
+    ctx.stroke();
   }
-  ctx.globalAlpha = 1;
+  ctx.restore();
 }
 
 /** A pass in the air: a line from where it was thrown to the ball, fading toward the thrower and gone as it arrives. */

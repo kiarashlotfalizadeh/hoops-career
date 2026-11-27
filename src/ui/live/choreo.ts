@@ -84,6 +84,8 @@ export interface Frame {
   act: Act[];
   /** A shot going up or away in this move: what the play-by-play's word for it says of how it is made (see Finish). */
   how?: Finish;
+  /** A shot from behind the arc, in or not: what the court may say of it while it is in the air (never the flash: that is only a make's). */
+  three?: true;
   /** Who shows the ball and brings it back down in this move, a shot fake (an index into [offense..., defense...]). */
   fake?: number;
   /** The ball goes from hand to hand in this move, not thrown: a hand-off, taken out of the big man's hands as the man coming by gets to them. */
@@ -1634,6 +1636,7 @@ export function buildScript(
         for (const p of dPids) does(p, p === near && !bit && !tipped ? 'land' : boxing.has(p) ? 'boxout' : 'stand', BASKET);
         snap(st.zone === 'rim' ? 380 : Math.round(520 + far * 7), {
           ...(fin && { how: fin }),
+          ...(st.v === 3 && { three: true as const }),
           ...(blocker !== undefined && { swat: nO + dPids.indexOf(blocker) }),
           ...(held.length && { meet: held }),
           ballZ: st.zone === 'rim' ? 2.4 : 4.5 + far * 0.24,

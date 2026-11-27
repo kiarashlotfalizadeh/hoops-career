@@ -2179,7 +2179,7 @@ const rgbOf = (c: string): Rgb => {
  * forehead; at 1.8 it was a band of thin hair a few centimetres deep, his skin through it: every man looked to be going
  * bald). Ahead of it, a few single hairs; behind it, all hair.
  */
-const HAIR_EDGE = 0.75;
+const HAIR_EDGE = 0.92;
 /** How many rows of cornrows (and of the braids' roots) across his head, ear to ear over the top. */
 const CORNROWS = 17;
 /** How much lower than his hairline (a unit of his head's height, half of it) his hair is painted under an afro, a head of curls, a high top: see headPainter's `over`. */
@@ -2847,7 +2847,7 @@ function font(ctx: CanvasRenderingContext2D, weight: number, px: number, stretch
 }
 
 /** Words set along an arch over (x, y), its middle highest (`bend`: how far its ends drop, in its height), no wider than `most`. */
-function arched(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, px: number, bend: number, most: number, spacing: number, paint: () => void) {
+function arched(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, px: number, bend: number, most: number, spacing: number, paint: (ch: string) => void) {
   const widths = [...text].map((ch) => ctx.measureText(ch).width + spacing);
   const total = widths.reduce((a, b) => a + b, 0) - spacing;
   const k = Math.min(1, most / total);
@@ -2859,7 +2859,7 @@ function arched(ctx: CanvasRenderingContext2D, text: string, x: number, y: numbe
     ctx.translate(x + mid, y + bend * px * u * u);
     ctx.rotate(Math.atan((2 * bend * px * u) / (most / 2)) * 0.9);
     ctx.scale(k, 1);
-    paint();
+    paint(ch);
     ctx.fillText(ch, 0, 0);
     ctx.restore();
     at += widths[i];
@@ -3449,14 +3449,34 @@ function paint(kit: MatchKit, num: string, name: string, mark: string, gear: Gea
         if (style.type === 'italic') ctx.transform(1, 0, -TYPE_LEAN, 1, 0, 0);
         ctx.fillStyle = pick(ink, 'print');
       };
+      const frontLetter = () => {
+        if (style.type === 'italic') ctx.transform(1, 0, -TYPE_LEAN, 1, 0, 0);
+        if (edge) {
+          ctx.lineJoin = 'round';
+          ctx.lineWidth = 2.4;
+          ctx.strokeStyle = pick(edge, 'print');
+        }
+        ctx.fillStyle = pick(ink, 'print');
+      };
       if (mark) {
-        font(ctx, wide ? 800 : 900, wide ? 25 : 28, wide ? 'normal' : 'semi-condensed');
-        arched(ctx, mark.toUpperCase(), 384, 104, 28, 0.2, 92, wide ? 4 : 3, letter);
+        font(ctx, wide ? 800 : 900, wide ? 26 : 29, wide ? 'normal' : 'semi-condensed');
+        arched(ctx, mark.toUpperCase(), 384, 104, 29, 0.2, 94, wide ? 4 : 3, (ch) => {
+          frontLetter();
+          if (edge) ctx.strokeText(ch, 0, 0);
+        });
       }
       if (name) {
         font(ctx, wide ? 700 : 800, wide ? 19 : 21, wide ? 'semi-condensed' : 'condensed');
         arched(ctx, name.toUpperCase(), 128, 62, 21, 0.3, 112, wide ? 2.8 : 2.2, letter);
       }
+      // (the maker's tag, sewn on low on the front by the hem)
+      ctx.fillStyle = pick('#15161a', 'print');
+      ctx.fillRect(434, 224, 22, 13);
+      ctx.fillStyle = pick(ring, 'print');
+      ctx.fillRect(434, 224, 22, 2.5);
+      ctx.fillStyle = pick('#eceae3', 'print');
+      ctx.fillRect(437, 229, 10, 2);
+      ctx.fillRect(437, 233, 15, 1.5);
     },
     1 / VEST_TOP,
     0,
@@ -4680,7 +4700,7 @@ export function stuffMaterial(
           }
         } else {
           // (dark skin's hollows go to black under a light from above long before light skin's do: its shade is let off some)
-          vec3 baked = mix( vColor.rgb, vec3( 1.0 ), ( ( ${ON_HEAD('vMapUv')} ? ${HEAD_LIFT} : 0.3 ) + 0.25 * uTone ) * skinK );
+          vec3 baked = mix( vColor.rgb, vec3( 1.0 ), ( ( ${ON_HEAD('vMapUv')} ? ${HEAD_LIFT} : 0.35 ) + 0.26 * uTone ) * skinK );
           // (and his hair and beard as much as his skin: a beard's strands down under his jaw, in its shade, catch no sky)
           shutK = mix( 1.0, vColor.g, ${ON_HEAD('vMapUv')} ? 1.0 : skinK );
           diffuseColor.rgb *= mix( vColor.rgb, pow( baked, vec3( 0.9, 1.02, 1.1 ) ), skinK );${anat ? '\n          // (and the shade down in the hollows of his anatomy: between his muscles, along a tendon, under his collarbones)\n          diffuseColor.rgb *= mix( 1.0, anatC, skinK * ( 1.0 - eyeWet ) * uAnatK.z );' : ''}
@@ -4758,6 +4778,12 @@ export function stuffMaterial(
             }
             hairWet = uWorn.x * onHead * ( 1.0 - skinK ) * ( 1.0 - ear );
             diffuseColor.rgb *= 1.0 - ${WET_HAIR} * hairWet;
+            // (and as wet as his hair is, his vest dark with it in patches across the top of his chest and his back)
+            if ( ${ON_VEST('vMapUv')} && stuff.g > 0.5 ) {
+              float dampZone = smoothstep( 4.25, 5.15, vRest.y ) * ( 1.0 - smoothstep( 0.42, 0.72, abs( vRest.x ) ) );
+              float dampPatch = smoothstep( 0.32, 0.78, noise3( vRest * 4.5 + vec3( 1.7, 0.3, 2.9 ) ) );
+              diffuseColor.rgb *= 1.0 - 0.16 * uWorn.x * dampZone * ( 0.45 + 0.55 * dampPatch );
+            }
           }
           float flush = uWorn.y * ( 1.0 - ${FLUSH_DARK} * uTone );
           if ( flush > 0.0 ) {

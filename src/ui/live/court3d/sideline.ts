@@ -676,15 +676,22 @@ const CAST_GRAIN_COLOR = /* glsl */ `
 const PPL_FOLDS = { loose: 0.032, suit: 0.014 };
 function peopleShade(sh: { vertexShader: string; fragmentShader: string }, declared: boolean) {
   const f = (v: number) => v.toFixed(1);
+  // (where on his trunk a point is: across it (ft), up it from his hips (0) to his neck (1), and forward of his middle)
+  const torsoExpr = declared
+    ? /* glsl */ `float pplHip = mix(uHips[0], uHips[1], aMix);
+  vec3 pplNeck = mix(uNeck[0], uNeck[1], aMix);
+  vPplTorso = vec3(position.x, (position.y - pplHip) / max(0.5, pplNeck.y - pplHip), position.z - pplNeck.z * 0.45);`
+    : /* glsl */ `vPplTorso = vec3(position.x, (position.y - ${HIP.toFixed(3)}) / ${(TORSO + HEAD).toFixed(3)}, position.z);`;
   sh.vertexShader = sh.vertexShader
-    .replace('#include <common>', `#include <common>\n${declared ? '' : 'attribute float aPart;\n'}varying float vPplPart;\nvarying vec3 vPplAt;`)
-    .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vPplPart = aPart;\n  vPplAt = position;');
+    .replace('#include <common>', `#include <common>\n${declared ? '' : 'attribute float aPart;\n'}varying float vPplPart;\nvarying vec3 vPplAt;\nvarying vec3 vPplTorso;`)
+    .replace('#include <begin_vertex>', `#include <begin_vertex>\n  vPplPart = aPart;\n  vPplAt = position;\n  ${torsoExpr}`);
   sh.fragmentShader = sh.fragmentShader
     .replace(
       '#include <common>',
       /* glsl */ `#include <common>
   varying float vPplPart;
   varying vec3 vPplAt;
+  varying vec3 vPplTorso;
   float pplHash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
   float pplNoise(vec3 p) {
     vec3 i = floor(p);
@@ -718,6 +725,21 @@ function peopleShade(sh: { vertexShader: string; fragmentShader: string }, decla
     float mot = pplNoise(vPplAt * 9.0) - 0.5;
     diffuseColor.rgb *= (1.0 + 0.12 * mot) * mix(vec3(1.0), vec3(1.03, 0.9, 0.88), 0.5 * max(0.0, mot));
   } else if (pplCloth > 0.5) {
+    if (abs(vPplPart - ${f(PART.top)}) < 0.5) {
+      // (a referee's shirt: a fine stripe in its knit, dark panels down his sides, and a patch on his left breast)
+      float ax = abs(vPplTorso.x);
+      float ty = vPplTorso.y;
+      float fineR = 1.0 - smoothstep(0.35, 1.0, fwidth(vPplTorso.x * 95.0));
+      float stripe = 0.5 + 0.5 * sin(vPplTorso.x * 160.0);
+      diffuseColor.rgb *= mix(1.0, 0.94 + 0.06 * stripe, fineR);
+      float sideBlk = smoothstep(0.46, 0.52, ax) * (1.0 - smoothstep(0.72, 0.8, ax)) * (1.0 - smoothstep(0.62, 0.68, ty));
+      float frontFace = smoothstep(0.14, 0.22, vPplTorso.z);
+      float badge = frontFace * smoothstep(0.16, 0.185, vPplTorso.x) * (1.0 - smoothstep(0.31, 0.335, vPplTorso.x)) * smoothstep(0.58, 0.605, ty) * (1.0 - smoothstep(0.71, 0.735, ty));
+      float badgeIn = frontFace * smoothstep(0.19, 0.21, vPplTorso.x) * (1.0 - smoothstep(0.285, 0.305, vPplTorso.x)) * smoothstep(0.605, 0.625, ty) * (1.0 - smoothstep(0.685, 0.705, ty));
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.025, 0.027, 0.033), sideBlk * 0.92);
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.035, 0.04, 0.055), badge * 0.88);
+      diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(0.14, 0.24, 0.48), vec3(0.55, 0.14, 0.16), step(0.248, vPplTorso.x)), badgeIn * 0.76);
+    }
     // (cloth hangs in folds, creased: a suit's are few and shallow, a warm-up's and a pair of trousers' deeper)
     float seen = 1.0 - smoothstep(0.35, 0.9, length(fwidth(vPplAt * 5.0)));
     if (seen > 0.0) {
@@ -740,8 +762,9 @@ function peopleShade(sh: { vertexShader: string; fragmentShader: string }, decla
     .replace(
       '#include <roughnessmap_fragment>',
       /* glsl */ `#include <roughnessmap_fragment>
-  if (pplSkin > 0.5) roughnessFactor = 0.55 + 0.12 * (pplNoise(vPplAt * 7.0) - 0.5);
+  if (pplSkin > 0.5) roughnessFactor = 0.61 + 0.1 * (pplNoise(vPplAt * 7.0) - 0.5);
   else if (pplHair > 0.5) roughnessFactor = 0.86;
+  else if (abs(vPplPart - ${f(PART.top)}) < 0.5) roughnessFactor = 0.86;
   else if (vPplPart > ${f(PART.eye - 0.5)} && vPplPart < ${f(PART.ball + 0.5)}) roughnessFactor = abs(vPplPart - ${f(PART.ball)}) < 0.5 ? 0.22 : 0.12;
   else if (abs(vPplPart - ${f(PART.shoe)}) < 0.5) roughnessFactor = 0.5;
   else if (abs(vPplPart - ${f(PART.metal)}) < 0.5) roughnessFactor = 0.3;`,
@@ -756,8 +779,8 @@ function peopleShade(sh: { vertexShader: string; fragmentShader: string }, decla
       /* glsl */ `#include <lights_fragment_end>
   // (skin gives back the lamps, not the whole lit roof; and what light comes to it off the building is warmer on it)
   if (pplSkin > 0.5) {
-    reflectedLight.indirectSpecular *= 0.5;
-    reflectedLight.indirectDiffuse *= vec3(1.04, 0.99, 0.96);
+    reflectedLight.indirectSpecular *= 0.36;
+    reflectedLight.indirectDiffuse *= vec3(1.06, 0.99, 0.95);
   }`,
     );
 }

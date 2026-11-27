@@ -317,7 +317,7 @@ const SHARP_DEEP = 1.5;
 /** The focus follows what it is on over about this long (ms), never in a frame but on a cut. */
 const FOCUS_MS = 140;
 /** The flash of light on a slam, and on a shot at the buzzer that drops (lens.bump; none with reduced motion). */
-const DUNK_BUMP = 0.16;
+const DUNK_BUMP = 0.2;
 /**
  * A missed dunk jammed off the iron: where it comes off (ft out from the rim's middle, and up over the ring), how
  * fast up (ft a second, and up to this much more) and out toward the rebound.
@@ -330,7 +330,7 @@ const MISS_OUT = 5;
 const MISS_OUT_JIT = 3;
 /** A rebound nearer the rim's middle than this (ft) gives no way out: it comes off back the way he came. */
 const MISS_TO = 2;
-const BUZZER_BUMP = 0.22;
+const BUZZER_BUMP = 0.28;
 /** On the lane at a free throw: men this near the rim (ft) get down into a stance as it goes up. */
 const LANE_FT = 11;
 /** The last this many seconds of the fourth (or overtime): the men are tired, and show it when they stand. */
@@ -1479,6 +1479,7 @@ export class CourtScene {
             this.drift.x = v.x;
             this.drift.z = v.z;
             this.spin.set(v.z, 0, -v.x).multiplyScalar(0.6);
+            if (!calm && p.fx !== false && this.level < 2) this.shotFx.block(hand.x, hand.y, hand.z);
             free = true;
           }
         } else {
@@ -1522,8 +1523,9 @@ export class CourtScene {
               if (hit.what === 'net') {
                 this.netKick = 1;
                 this.netHit = hit.power;
-                // (nothing but the cords: the ring drops through them)
-                if (p.fx !== false && this.level < 2 && shot.hits.every((h) => h.what === 'net')) this.shotFx.swish(rim.x, RIM_H - 0.1, rim.z);
+                // (nothing but the cords: the ring drops through them; gold for a three, a big moment, the clutch)
+                if (p.fx !== false && this.level < 2 && shot.hits.every((h) => h.what === 'net'))
+                  this.shotFx.swish(rim.x, RIM_H - 0.1, rim.z, !!b.three || !!sc.moment || !!p.clutch);
                 roar(sc.off === 0, b.flash?.text === '+3' || !!sc.moment);
                 if (sc.moment) this.lens.bump(BUZZER_BUMP);
               } else if (hit.what === 'rim') {
@@ -1865,8 +1867,10 @@ export class CourtScene {
       if (ring && f.ring.visible) (f.ring.material as MeshBasicMaterial).color.set(ring);
     }
 
-    // (a shot in the air has its way drawn behind it, where the user has that on and the device keeps up)
-    this.shotFx.arc(p.fx !== false && !calm && this.level < 2 && this.flight && !this.landed && !this.swatted ? this.flight : null, this.flightU, this.camera.position);
+    // (a shot in the air has its way drawn behind it, where the user has that on and the device keeps up: gold for a
+    // three and in the clutch, both known as it leaves his hand; never anything that says whether it goes in)
+    const flight = p.fx !== false && !calm && this.level < 2 && this.flight && !this.landed && !this.swatted ? this.flight : null;
+    this.shotFx.arc(flight, this.flightU, this.camera.position, !!flight && (!!p.clutch || !!play?.b.three) ? 'gold' : 'plain');
     this.shotFx.tick(calm ? 1e6 : real);
     // the ball turns as what it is doing turns it (ballistics.ts spinFor): its seams show it; and its dark is put on the floor under it
     const bm = this.ballFrame.position;
@@ -1977,7 +1981,9 @@ export class CourtScene {
     });
     // the lights round the boards: red when the period's clock is out, and when the shot clock is
     const shotClock = this.arena.boards.house.shot;
-    ledLit(this.led, (play ? play.clock <= 0 : p.game?.clock === 0) || (shotClock !== null && shotClock <= 0));
+    const hornOn = (play ? play.clock <= 0 : p.game?.clock === 0) || (shotClock !== null && shotClock <= 0);
+    ledLit(this.led, hornOn);
+    this.floorKnobs.uBuzzer.value += ((hornOn ? 1 : 0) - this.floorKnobs.uBuzzer.value) * (calm ? 1 : 1 - Math.exp(-real / 80));
 
     // where each body meets the floor: under each foot (less as it lifts), and wide under him
     let pools = 0;
@@ -2120,7 +2126,9 @@ export class CourtScene {
     };
     this.marks.tick(real);
     const lit = plain && holder ? (holder as Fig) : null;
-    this.marks.put(0, !!lit, lit?.pup.x ?? 0, lit?.pup.z ?? 0, real, lit ? p.kits[lit.side].color : null, late, p.warn, calm);
+    const clockFrac = left !== null ? clamp(left / SHOT_LATE, 0, 1) : 1;
+    const holderHot = !!(lit && this.heldBy !== null && p.hot?.has(this.heldBy));
+    this.marks.put(0, !!lit, lit?.pup.x ?? 0, lit?.pup.z ?? 0, real, lit ? p.kits[lit.side].color : null, late, p.warn, calm, lit?.pup.yaw ?? 0, clockFrac, holderHot);
     const also = plain && picked && picked !== lit ? picked : null;
     this.marks.put(1, !!also, also?.pup.x ?? 0, also?.pup.z ?? 0, real, null, 0, p.warn, calm);
     if (plain && p.names) {
@@ -2221,10 +2229,14 @@ export class CourtScene {
       this.lens.focus(0, 0);
       this.focusKey = '';
     }
-    // (the house lights come down for the open, the tip and a timeout, and some of the way for the clutch: rig.ts)
-    this.rig.mood(this.shot === 'open' || this.shot === 'tip' || this.shot === 'house' ? 1 : p.clutch ? 0.6 : 0, calm ? 1e6 : real);
+    // (the house lights come down for the open, the tip and a timeout, and most of the way for the clutch: rig.ts)
+    this.rig.mood(this.shot === 'open' || this.shot === 'tip' || this.shot === 'house' ? 1 : p.clutch ? 0.78 : 0, calm ? 1e6 : real);
     this.lens.drama = this.rig.drama;
     this.arena.mood = this.rig.drama;
+    // (the boards' light on the wood by them, and the darker house on the floor's edges: lens.ts varnish)
+    this.floorKnobs.uLedColor.value.copy(this.arena.ledColor);
+    this.floorKnobs.uLedStrength.value = this.arena.ledStrength;
+    this.floorKnobs.uDrama.value = this.rig.drama;
     this.rig.turn();
     // (the house lights down for the open, a timeout, a home win: the building says how far)
     this.lens.exposure = (this.lit ??= this.lens.exposure) * this.arena.house;

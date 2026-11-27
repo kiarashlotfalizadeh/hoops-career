@@ -172,12 +172,12 @@ const LIT_FRONT = 0.62;
 const LIT_BACK = 0.15;
 export const lit = (row: number) => LIT_BACK + (LIT_FRONT - LIT_BACK) * (1 - Math.min(1, row / (ROWS - 1))) ** 1.5;
 /** Those stood at the rail behind the top row, the upper deck's picture at its front row, and the lit fronts behind and over the walkway: under the lower bowl's, not over it. */
-const RAIL_LIT = 0.16;
-const DECK_GLOW = 0.15;
-const SUITE_GLOW = 0.36;
-const SHOP_GLOW = 0.26;
-const DOOR_GLOW = 0.55;
-const SIGN_GLOW = 0.8;
+const RAIL_LIT = 0.17;
+const DECK_GLOW = 0.19;
+const SUITE_GLOW = 0.44;
+const SHOP_GLOW = 0.3;
+const DOOR_GLOW = 0.56;
+const SIGN_GLOW = 0.85;
 /** The building's colour on its walls' padded tops and its seats' picture: this far toward grey, and this much of it (paint under a dimmed house is not a lit sign). */
 const TRIM_GREY = 0.3;
 const TRIM_TONE = 0.5;
@@ -376,16 +376,24 @@ function paintSuites(cv: HTMLCanvasElement, look: Venue['suites'] = { frame: '#0
     ctx.fillStyle = g;
     ctx.fillRect(x, h * 0.08, gw, h * 0.86);
     if (!dark) {
-      // (lamps over a counter at the back, a screen on a wall, the people in it against the light)
+      // (a warm light along its ceiling, lamps over a counter at the back, a screen on a wall, the people in it against the light)
+      const cove = ctx.createLinearGradient(0, h * 0.08, 0, h * 0.28);
+      cove.addColorStop(0, warm < 0.7 ? 'rgba(255,218,158,0.45)' : 'rgba(180,210,255,0.32)');
+      cove.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = cove;
+      ctx.fillRect(x, h * 0.08, gw, h * 0.2);
       for (let i = 0; i < 4; i++) {
-        ctx.fillStyle = 'rgba(255,214,150,0.85)';
+        ctx.fillStyle = 'rgba(255,222,162,0.92)';
         ctx.beginPath();
-        ctx.arc(x + gw * (0.14 + 0.24 * i), h * 0.2, h * 0.035, 0, Math.PI * 2);
+        ctx.arc(x + gw * (0.14 + 0.24 * i), h * 0.19, h * 0.036, 0, Math.PI * 2);
         ctx.fill();
       }
-      if (rnd() < 0.7) {
-        ctx.fillStyle = rnd() < 0.5 ? '#9fc4e8' : '#c9d8a0';
-        ctx.fillRect(x + gw * (0.1 + rnd() * 0.55), h * 0.3, gw * 0.2, h * 0.16);
+      if (rnd() < 0.74) {
+        const sx = x + gw * (0.1 + rnd() * 0.55);
+        ctx.fillStyle = rnd() < 0.5 ? '#a8cff4' : '#d2e2aa';
+        ctx.fillRect(sx, h * 0.29, gw * 0.2, h * 0.16);
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.fillRect(sx, h * 0.29, gw * 0.2, h * 0.03);
       }
       const people = 2 + Math.floor(rnd() * 5);
       for (let i = 0; i < people; i++) {
@@ -399,6 +407,15 @@ function paintSuites(cv: HTMLCanvasElement, look: Venue['suites'] = { frame: '#0
         ctx.arc(px, h * 0.94 - ph * 0.86, gw * 0.028, 0, Math.PI * 2);
         ctx.fill();
       }
+      // (and the glass's own shine across it)
+      ctx.fillStyle = 'rgba(255,255,255,0.06)';
+      ctx.beginPath();
+      ctx.moveTo(x + gw * 0.12, h * 0.08);
+      ctx.lineTo(x + gw * 0.34, h * 0.08);
+      ctx.lineTo(x + gw * 0.18, h * 0.94);
+      ctx.lineTo(x, h * 0.94);
+      ctx.closePath();
+      ctx.fill();
     }
     // (the glass's posts, and the rail along its foot)
     ctx.fillStyle = look.frame;
@@ -496,38 +513,63 @@ function paintShops(cv: HTMLCanvasElement, signs = SIGNS, plate = '#3a332c', see
   }
 }
 
-/** A tunnel's mouth: the concourse's light, brightest at head height, the floor catching it, a couple of people coming or going against it. */
+/** How many ways a tunnel's mouth is drawn, side by side on its canvas: tunnels next to each other aren't one picture. */
+const DOOR_PANELS = 4;
+/** A tunnel's mouth: the concourse's light, brightest at head height, the floor catching it, someone coming or going against it (or nobody). */
 function paintDoor(cv: HTMLCanvasElement) {
   const ctx = cv.getContext('2d')!;
-  const { width: w, height: h } = cv;
-  const g = ctx.createLinearGradient(0, 0, 0, h);
-  g.addColorStop(0, '#5a3f22');
-  g.addColorStop(0.3, '#f0c488');
-  g.addColorStop(0.75, '#c08a4a');
-  g.addColorStop(1, '#8a6032');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = '#fbe6bf';
-  for (let i = 0; i < 3; i++) ctx.fillRect(w * (0.14 + 0.3 * i), h * 0.1, w * 0.14, h * 0.05);
-  for (const [x, tall] of [
-    [0.3, 0.6],
-    [0.68, 0.66],
-  ]) {
-    ctx.fillStyle = '#2a1d12';
+  const pw = cv.width / DOOR_PANELS;
+  const h = cv.height;
+  // (who is in each, where across it, how tall, how dark: nobody; one, near, to the right; two further off; one, near, to the left)
+  const scenes: readonly (readonly [number, number, number])[][] = [
+    [],
+    [[0.66, 0.56, 0.9]],
+    [
+      [0.36, 0.44, 0.75],
+      [0.54, 0.48, 0.78],
+    ],
+    [[0.26, 0.62, 0.95]],
+  ];
+  for (let p = 0; p < DOOR_PANELS; p++) {
+    const x0 = p * pw;
+    ctx.save();
     ctx.beginPath();
-    ctx.roundRect(w * (x - 0.07), h * (1 - tall * 0.84), w * 0.14, h * tall * 0.84, w * 0.04);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(w * x, h * (1 - tall * 0.92), w * 0.05, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.rect(x0, 0, pw, h);
+    ctx.clip();
+    ctx.translate(x0, 0);
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, p === 2 ? '#4d361d' : '#583e22');
+    g.addColorStop(0.28, p === 1 ? '#e5b97d' : '#f0c488');
+    g.addColorStop(0.74, '#b88346');
+    g.addColorStop(1, '#7c552b');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, pw, h);
+    // (the arch's shade over the top, and the lamps along the concourse's ceiling)
+    ctx.fillStyle = 'rgba(28, 18, 10, 0.22)';
+    ctx.fillRect(0, 0, pw, h * 0.16);
+    ctx.fillStyle = '#fce8c4';
+    for (let i = 0; i < 3; i++) ctx.fillRect(pw * (0.14 + 0.3 * i), h * 0.1, pw * 0.14, h * 0.045);
+    // (a rail across the far side of the concourse)
+    ctx.fillStyle = 'rgba(42, 28, 16, 0.36)';
+    ctx.fillRect(pw * 0.1, h * 0.68, pw * 0.8, h * 0.03);
+    for (const [x, tall, alpha] of scenes[p]) {
+      ctx.fillStyle = `rgba(38, 25, 15, ${alpha})`;
+      ctx.beginPath();
+      ctx.roundRect(pw * (x - 0.065), h * (1 - tall * 0.84), pw * 0.13, h * tall * 0.84, pw * 0.035);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(pw * x, h * (1 - tall * 0.92), pw * 0.046, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const edge = ctx.createLinearGradient(0, 0, pw, 0);
+    edge.addColorStop(0, 'rgba(18,12,7,0.75)');
+    edge.addColorStop(0.14, 'rgba(18,12,7,0)');
+    edge.addColorStop(0.86, 'rgba(18,12,7,0)');
+    edge.addColorStop(1, 'rgba(18,12,7,0.75)');
+    ctx.fillStyle = edge;
+    ctx.fillRect(0, 0, pw, h);
+    ctx.restore();
   }
-  const edge = ctx.createLinearGradient(0, 0, w, 0);
-  edge.addColorStop(0, 'rgba(20,14,8,0.7)');
-  edge.addColorStop(0.12, 'rgba(20,14,8,0)');
-  edge.addColorStop(0.88, 'rgba(20,14,8,0)');
-  edge.addColorStop(1, 'rgba(20,14,8,0.7)');
-  ctx.fillStyle = edge;
-  ctx.fillRect(0, 0, w, h);
 }
 
 /** How many ft of the wall along the top of the lower bowl one turn of its picture covers, and how much of its light it keeps (paint under a dimmed house). */
@@ -672,7 +714,7 @@ export class Bowl {
       suites: picture(this.suiteTex, SUITE_GLOW),
       shops: picture(this.shops, SHOP_GLOW),
       plates: Object.assign(picture(plates, SHOP_GLOW), { transparent: true, depthWrite: false }),
-      doors: picture(texture(keep, 128, 96, paintDoor, false), DOOR_GLOW),
+      doors: picture(texture(keep, 512, 96, paintDoor, false), DOOR_GLOW),
       signs: picture(texture(keep, 64, 24, paintExit, false), SIGN_GLOW),
       // (glass: mostly what is behind it, and the building's lights on its face)
       pane: keep(
@@ -728,6 +770,7 @@ export class Bowl {
     const shops = new Soup();
     const plates = new Soup();
     let section = 0;
+    let doorIdx = 0;
     const deck = new Soup();
     const band = new Soup();
     const cover = new Soup();
@@ -846,7 +889,13 @@ export class Bowl {
           concrete.quad(P(s, u, ys, d0), P(s, u, y1, d1), P(s, u, y1 + 1.5, d1), P(s, u, ys + 1.5, d0), '#3a3c42', l);
           trim.quad(P(s, u - 0.12, ys + 1.5, d0), P(s, u - 0.12, y1 + 1.5, d1), P(s, u + 0.12, y1 + 1.5, d1), P(s, u + 0.12, ys + 1.5, d0), '#ffffff', 0.8);
         }
-        doors.quad(P(s, a + 0.8, y0, d1), P(s, b - 0.8, y0, d1), P(s, b - 0.8, y1 - 0.5, d1), P(s, a + 0.8, y1 - 0.5, d1), '#ffffff', 1, [0, 0, 1, 1]);
+        const dp = doorIdx++ % DOOR_PANELS;
+        doors.quad(P(s, a + 0.8, y0, d1), P(s, b - 0.8, y0, d1), P(s, b - 0.8, y1 - 0.5, d1), P(s, a + 0.8, y1 - 0.5, d1), '#ffffff', 1, [
+          dp / DOOR_PANELS,
+          0,
+          (dp + 1) / DOOR_PANELS,
+          1,
+        ]);
         for (const [p, q] of [
           [a, a + 0.8],
           [b - 0.8, b],

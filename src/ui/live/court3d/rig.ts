@@ -24,10 +24,10 @@ const NEAR = 20;
 
 /** The four lamps: where from (x along the floor, y up, z toward the camera), colour, how bright, how many dots its shadow map is across. */
 const LAMPS: readonly (readonly [number, number, number, number, number, number])[] = [
-  [34, 78, 40, 0xfff3e2, 2.0, 2048],
-  [-34, 78, 40, 0xfff3e2, 1.2, 2048],
-  [-40, 72, -44, 0xeef3ff, 1.15, 1024],
-  [40, 72, -44, 0xeef3ff, 1.15, 1024],
+  [34, 78, 40, 0xfff2de, 2.25, 2048],
+  [-34, 78, 40, 0xfff5e8, 1.05, 2048],
+  [-40, 72, -44, 0xe8f0ff, 1.0, 1024],
+  [40, 72, -44, 0xe8f0ff, 1.0, 1024],
 ];
 /**
  * The lamps before this one have their shadows drawn afresh every frame (the camera's side: the key's is
@@ -37,18 +37,20 @@ const LAMPS: readonly (readonly [number, number, number, number, number, number]
  */
 const EVERY_FRAME = 2;
 /** The edge light from behind the far stands, and the soft one from the camera's side. */
-const RIM = 1.9;
-const FRONT = 0.5;
+const RIM = 2.05;
+const FRONT = 0.52;
 /** The sky (cool, from above), the flat light all round, what comes back up off the wood. */
-const SKY = 0.4;
+const SKY = 0.42;
 const FILL = 0.03;
-const BOUNCE = 0.34;
+const BOUNCE = 0.38;
 /** The darker house: how much of each is left when the mood is all the way down. */
-const MOOD_SKY = 0.45;
-const MOOD_FRONT = 0.35;
-const MOOD_ENV = 0.6;
+const MOOD_SKY = 0.28;
+const MOOD_FRONT = 0.22;
+const MOOD_ENV = 0.48;
+/** And how much more the edge light has (of its own) when the mood is all the way down: the men stand out from the darker stands. */
+const MOOD_RIM_BOOST = 0.24;
 /** How much of the building's own light (lens.ts arenaLight) the scene takes: the lamps are in the rig too. */
-const ENV = 0.8;
+const ENV = 0.85;
 /** The mood gets where it is going in about this long (ms). */
 const MOOD_MS = 900;
 
@@ -76,6 +78,7 @@ export class Rig {
   readonly sky: HemisphereLight;
   readonly bounce: DirectionalLight;
   readonly lamps: DirectionalLight[] = [];
+  private readonly rim: DirectionalLight;
   private readonly front: DirectionalLight;
   private readonly fill: AmbientLight;
   /** How far down the house lights are (0: a game's; 1: the open, a timeout, the clutch). */
@@ -123,14 +126,14 @@ export class Rig {
       lamp.shadow.bias = -0.0005;
       lamp.shadow.normalBias = dots < 2048 ? 0.07 : 0.04;
       // (soft on a body; the floor's own is sharp at a foot and soft by a head: see lens.ts varnish)
-      lamp.shadow.radius = dots < 2048 ? 2.5 : 4;
+      lamp.shadow.radius = dots < 2048 ? 3.2 : 4.6;
       this.lamps.push(lamp);
       scene.add(lamp);
     }
     // (an edge, not an outline: cool, from low behind the far side)
-    const rim = new DirectionalLight(0xdfe6ff, RIM);
-    rim.position.set(-10, 56, -74);
-    scene.add(rim);
+    this.rim = new DirectionalLight(0xdce6ff, RIM);
+    this.rim.position.set(-10, 56, -74);
+    scene.add(this.rim);
     this.front = new DirectionalLight(0xfff4e8, FRONT);
     this.front.position.set(6, 22, 80);
     scene.add(this.front);
@@ -166,7 +169,8 @@ export class Rig {
     const d = this.drama;
     this.sky.intensity = SKY * (1 - d * (1 - MOOD_SKY));
     this.front.intensity = FRONT * (1 - d * (1 - MOOD_FRONT));
-    this.fill.intensity = FILL * (1 - d * 0.5);
+    this.fill.intensity = FILL * (1 - d * 0.65);
+    this.rim.intensity = RIM * (1 + d * MOOD_RIM_BOOST);
     this.scene.environmentIntensity = ENV * (1 - d * (1 - MOOD_ENV));
   }
 }

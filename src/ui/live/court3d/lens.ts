@@ -121,17 +121,17 @@ const PROBE_Y = 5;
 /** The building is drawn this much smaller round that point (the same in every direction, and inside the cube camera's reach). */
 const ENV_SCALE = 0.4;
 /** How bright a lamp is (the floor's radiance is about 0.5): what lights the bodies from above, and glints on the ball and the glass. */
-const ENV_LAMP = 56;
+const ENV_LAMP = 62;
 /** What the lamps' light is: a daylight white (a broadcast is balanced for it: the warmth is the wood's). */
 const LAMP_TINT = new Color(1, 0.98, 0.95);
 /** The floor as the things on it see it: its own colour, about as bright as it is lit. */
-const ENV_FLOOR = 0.45;
+const ENV_FLOOR = 0.48;
 /** The stands round the floor (the crowd in the lamps' spill), the roof over them, and the LED ribbon along the top of the bowl. */
-const ENV_STANDS = new Color(0.09, 0.08, 0.075);
-const ENV_ROOF = new Color(0.008, 0.008, 0.01);
-const ENV_RIBBON = 0.22;
+const ENV_STANDS = new Color(0.088, 0.084, 0.086);
+const ENV_ROOF = new Color(0.015, 0.017, 0.024);
+const ENV_RIBBON = 0.28;
 /** The scoreboard over the middle: its screens' glow on the tops of heads. */
-const ENV_BOARD = 0.35;
+const ENV_BOARD = 0.4;
 
 const BOWL = {
   vertexShader: /* glsl */ `
@@ -225,8 +225,8 @@ const STRIP_LONG = 7;
 const SEAM_W = 0.006;
 const SEAM_DARK = 0.5;
 /** How much darker the darkest strip is than the lightest (maple: not much), and the grain in one. */
-const TONE = 0.13;
-const GRAIN = 0.11;
+const TONE = 0.16;
+const GRAIN = 0.13;
 /**
  * What is left when the strips are too fine to see: runs of this many strips (a bundle of boards laid
  * together), of this many, and of this many (a lot of them), each a shade of its own by this much; and
@@ -235,45 +235,45 @@ const GRAIN = 0.11;
 const BUNDLE = 3;
 const BAND = 11;
 const LOT = 30;
-const BUNDLE_TONE = 0.085;
-const BAND_TONE = 0.06;
-const LOT_TONE = 0.07;
-const PATCH = 0.07;
+const BUNDLE_TONE = 0.105;
+const BAND_TONE = 0.075;
+const LOT_TONE = 0.085;
+const PATCH = 0.08;
 /**
  * The bare wood's colour under these lamps, of the canvas's: a game floor's maple under an arena's white LEDs reads a
  * pale blonde on a broadcast, not a honey: the canvas's stain kept only this much of its colour, then this shade of it.
  */
-const WOOD_SAT = 0.74;
-const WOOD_GRADE = [0.9, 0.96, 0.88];
+const WOOD_SAT = 0.8;
+const WOOD_GRADE = [0.93, 0.96, 0.87];
 /** How far a strip's face is off flat at most (radians): the lamps in the varnish break up along them. */
-const TILT = 0.011;
+const TILT = 0.014;
 /**
  * A parquet's squares (a floor laid so: Court.tsx paints which): this many strips a side (just under 5 ft),
  * the strips turned in every other one; each square a shade of its own by this much.
  */
 const PARQUET_STRIPS = 26;
-const PARQUET_TONE = 0.08;
+const PARQUET_TONE = 0.105;
 /** A lamp bank, as bright as it is (the floor shows a twentieth or so of it, more the flatter it is looked across). */
-const BANK_GLOW = new Color(1, 0.97, 0.92).multiplyScalar(34);
+const BANK_GLOW = new Color(1, 0.96, 0.9).multiplyScalar(38);
 /** A worn coat keeps this much of the lamps and the mirror a clear one shows (a broadcast floor: soft reflections, not a mirror). */
-const COAT_LEAST = 0.35;
+const COAT_LEAST = 0.36;
 /**
  * How far a reflection spreads up and down, for each ft it goes from the floor to the lamp: the clear
  * coat's (sharp), the wood's under it (soft) and the varnish's haze. Across, it spreads less the flatter
  * the floor is looked across (a rough floor draws a light out toward the camera).
  */
-const SPREAD_SHARP = 0.035;
-const SPREAD_SOFT = 0.14;
+const SPREAD_SHARP = 0.032;
+const SPREAD_SOFT = 0.135;
 const SPREAD_HAZE = 0.34;
 /** How much of the lamps the haze is; and how much brighter the clear coat's lamps are than the wood's blur of them. */
-const HAZE = 0.18;
-const CLEAR = 1.3;
+const HAZE = 0.22;
+const CLEAR = 1.6;
 /** How clear the coat is: over bare wood, over paint (a logo has more coats on it), and where the key is worn by feet. */
-const GLOSS_WOOD = 0.5;
-const GLOSS_PAINT = 0.72;
-const GLOSS_WORN = 0.22;
+const GLOSS_WOOD = 0.56;
+const GLOSS_PAINT = 0.78;
+const GLOSS_WORN = 0.24;
 /** The apron's paint: a satin, not the court's gloss. */
-const GLOSS_APRON = 0.34;
+const GLOSS_APRON = 0.42;
 /** How much a coat's clarity comes and goes across the floor (buffed by machine in big soft swirls), either way. */
 const BUFF = 0.24;
 /** The lane is this long from the baseline and this wide (ft): where the wear is most. */
@@ -294,21 +294,21 @@ const SCUFF_DARK = 0.5;
  * the rig's in full (they throw its shadows) and this much of the soft light from all round, so a shadow
  * on it is a shadow.
  */
-const FLOOR_DIRECT = 0.85;
+const FLOOR_DIRECT = 0.87;
 /** How much deeper a shadow on the floor is than the light it keeps off (1: as it is). */
-const FLOOR_SHADE = 1.75;
+const FLOOR_SHADE = 1.48;
 /** How much of the floor's light is taken to be the lamps' that throw shadows (the rest is never in shadow). */
-const FLOOR_HOLD = 0.9;
-const FLOOR_SOFT = 0.1;
+const FLOOR_HOLD = 0.88;
+const FLOOR_SOFT = 0.11;
 /**
  * The shadows on the floor: sharp where a foot meets it, softer the higher what throws them is (a lamp
  * ring is a broad light). How far round a point the map is looked at for what is over it (texels); how
  * soft for each ft that is over the floor, at least and at most (texels).
  */
 const SHADOW_SEARCH = 7;
-const SHADOW_SOFT = 0.4;
-const SHADOW_SHARP = 0.7;
-const SHADOW_MOST = 4;
+const SHADOW_SOFT = 0.52;
+const SHADOW_SHARP = 0.75;
+const SHADOW_MOST = 5;
 /** The depth of the shadow map along the light, ft (scene.ts SHADOW_DEPTH). */
 const SHADOW_FT = 120;
 
@@ -385,6 +385,10 @@ const FLOOR_HEAD = /* glsl */ `
   uniform float uDetail;
   uniform float uParquet;
   uniform vec3 uWood;
+  uniform vec3 uLedColor;
+  uniform float uLedStrength;
+  uniform float uBuzzer;
+  uniform float uDrama;
   uniform vec3 uBankAt[BANKS];
   uniform vec4 uBankU[BANKS];
   uniform vec4 uBankV[BANKS];
@@ -569,15 +573,49 @@ const FLOOR_VARNISH = /* glsl */ `
     // (looked along, the mirror over the floor has the lamps themselves: the coat's own are left to it; a worn
     // coat shows less of them, so they come and go across the floor as its gloss does)
     reflectedLight.directSpecular += uBankGlow * glint * fres * fCoat(fGloss) * smoothstep(0.04, 0.22, cosI);
+    // (the boards' light on the wood by them: the table's along the far side, the baseline boards' at the ends; in the wood and in its coat)
+    if (uLedStrength > 0.001) {
+      float dFar = max(0.0, vFloor.z - (-HALF_EDGE - 1.4));
+      float farSpan = smoothstep(32.0, 14.0, abs(vFloor.x));
+      float farSpill = exp(-dFar * 0.21) * (0.42 + 0.58 * farSpan);
+      float dEnd = max(0.0, HALF_LEN + 2.0 - abs(vFloor.x));
+      float endSpan = smoothstep(26.0, 17.0, abs(vFloor.z));
+      float endSpill = exp(-dEnd * 0.16) * endSpan;
+      vec3 ledBounce = uLedColor * (farSpill * 0.92 + endSpill * 1.2) * uLedStrength;
+      reflectedLight.directDiffuse += BRDF_Lambert(material.diffuseColor) * ledBounce * 0.38;
+      float ledFres = (0.09 + 0.56 * pow(1.0 - cosI, 3.2)) * fCoat(fGloss);
+      reflectedLight.directSpecular += ledBounce * ledFres * 0.34 * smoothstep(0.03, 0.2, cosI);
+    }
+    // (at the horn, the red of the lights round the boards on the wood under both ends)
+    if (uBuzzer > 0.001) {
+      float bEnd = exp(-max(0.0, HALF_LEN - 4.0 - abs(vFloor.x)) * 0.14) * smoothstep(24.0, 8.0, abs(vFloor.z));
+      vec3 redSpill = vec3(1.15, 0.1, 0.045) * bEnd * uBuzzer;
+      reflectedLight.directDiffuse += BRDF_Lambert(material.diffuseColor) * redSpill * 0.48;
+      reflectedLight.directSpecular += redSpill * (0.1 + 0.55 * pow(1.0 - cosI, 3.0)) * fCoat(fGloss) * 0.5;
+    }
+    // (under the darker house, the open, a timeout, the clutch: the floor's edges go down with the stands, its middle keeps its light)
+    if (uDrama > 0.001) {
+      vec2 cn = vec2(vFloor.x / 47.0, vFloor.z / 25.0);
+      float stage = 1.0 - smoothstep(0.55, 1.38, length(cn));
+      reflectedLight.directDiffuse *= mix(1.0, 0.85 + 0.22 * stage, uDrama);
+    }
   }`;
 
-/** What the floor's shader is told each frame (only the wood's detail is changed: shed on a slow device). */
+/** What the floor's shader is told each frame: the wood's detail (shed on a slow device), and the building's light on it. */
 export interface FloorKnobs {
   uDetail: { value: number };
   /** 1 for a floor laid in parquet (Court.tsx paintFloor says which on its canvas), 0 in strips. */
   uParquet: { value: number };
   /** The bare wood's colour as the floor's canvas has it (linear): what isn't that is paint. */
   uWood: { value: Color };
+  /** The boards' colour, as their light falls on the wood by the table and the baselines (linear). */
+  uLedColor: { value: Color };
+  /** How much of it: up for a moment with a big one, down under the darker house and for a close-up. */
+  uLedStrength: { value: number };
+  /** The red of the lights round the boards, on the wood under them (0 to 1): at the horn, the shot clock's or the period's. */
+  uBuzzer: { value: number };
+  /** How far down the house is (rig.ts drama, 0 to 1): the floor's edges go down with it. */
+  uDrama: { value: number };
 }
 
 /**
@@ -614,7 +652,15 @@ export function woodOf(cv: HTMLCanvasElement): Color {
  */
 export function varnish(mat: MeshStandardMaterial): FloorKnobs {
   const list = banks();
-  const knobs: FloorKnobs = { uDetail: { value: 1 }, uParquet: { value: 0 }, uWood: { value: new Color(0xdcae76) } };
+  const knobs: FloorKnobs = {
+    uDetail: { value: 1 },
+    uParquet: { value: 0 },
+    uWood: { value: new Color(0xdcae76) },
+    uLedColor: { value: new Color(0x3a64b8) },
+    uLedStrength: { value: 0.7 },
+    uBuzzer: { value: 0 },
+    uDrama: { value: 0 },
+  };
   const uniforms = {
     ...knobs,
     uBankAt: { value: list.map((b) => b.at) },
@@ -687,22 +733,22 @@ export function varnish(mat: MeshStandardMaterial): FloorKnobs {
 // The air in the building
 
 /** The air over the stands, lit by the lamps (linear): at the lamps' height, and up in the roof. */
-const AIR_LOW = new Color(0.018, 0.016, 0.014);
-const AIR_HIGH = new Color(0.002, 0.002, 0.0025);
+const AIR_LOW = new Color(0.032, 0.029, 0.028);
+const AIR_HIGH = new Color(0.009, 0.011, 0.015);
 /** The haze between the camera and the far stands: how thick (the far side is a few percent into it, the roof more). */
-export const HAZE_COLOR = new Color(0.02, 0.018, 0.016);
-export const HAZE_DENSITY = 0.0009;
+export const HAZE_COLOR = new Color(0.026, 0.024, 0.025);
+export const HAZE_DENSITY = 0.0012;
 /** The lamps' beams down through the haze to the floor: how much of the lamp they show where they leave it, and how wide they get by the floor (ft). */
-const BEAM = 0.05;
-const BEAM_FLOOR = 26;
+const BEAM = 0.068;
+const BEAM_FLOOR = 28;
 /**
  * How far down toward the floor a beam is drawn at all (of the way): past it there is a three-hundredth of
  * its light left, and fifteen cones drawn to the floor were thirty sheets of nothing over the floor, which
  * is most of the picture. (The haze they lay over the stands is all above this.)
  */
-const BEAM_END = 0.8;
+const BEAM_END = 0.85;
 /** The glow round a lamp bank, at its middle (over the glow's threshold: it blooms). */
-const LAMP_GLOW = 2.2;
+const LAMP_GLOW = 2.6;
 
 const DOME = {
   vertexShader: /* glsl */ `
@@ -777,8 +823,11 @@ const GLOWS = {
     varying vec2 vCorner;
     void main() {
       float r = length(vCorner);
-      float a = exp(-r * r * 7.0) * (1.0 - smoothstep(0.7, 1.0, r)) + 0.06 * exp(-r * r * 3.0) * (1.0 - smoothstep(0.6, 1.0, r));
-      gl_FragColor = vec4(uLamp * a, 1.0);
+      float core = exp(-r * r * 6.5) * (1.0 - smoothstep(0.7, 1.0, r));
+      float halo = 0.1 * exp(-r * r * 2.6) * (1.0 - smoothstep(0.6, 1.0, r));
+      // (and a streak along its length, as a broadcast lens draws one off a bright light)
+      float streak = 0.24 * exp(-vCorner.y * vCorner.y * 26.0) * exp(-vCorner.x * vCorner.x * 2.4) * (1.0 - smoothstep(0.75, 1.0, abs(vCorner.x)));
+      gl_FragColor = vec4(uLamp * (core + halo + streak), 1.0);
       #include <colorspace_fragment>
     }`,
 };
@@ -877,7 +926,7 @@ export function air(keep: <T extends { dispose(): void }>(o: T) => T): { group: 
       gp.push(b.at.x, b.at.y, b.at.z);
       gc.push(x, y);
       gu.push(b.u.x, b.u.y, b.u.z);
-      gs.push(b.hu * 1.25, b.hv * 3);
+      gs.push(b.hu * 1.65, b.hv * 3.2);
     }
     gi.push(n * 4, n * 4 + 1, n * 4 + 2, n * 4, n * 4 + 2, n * 4 + 3);
   });
@@ -907,25 +956,25 @@ export function air(keep: <T extends { dispose(): void }>(o: T) => T): { group: 
  * lamps in the varnish, a glint on the rim, a lit board whose colour is set over it (a white kit in the
  * lamps is about 1 to 1.4, and doesn't).
  */
-const GLOW_FROM = 1.8;
-const GLOW_KNEE = 0.6;
+const GLOW_FROM = 1.45;
+const GLOW_KNEE = 0.55;
 /** How much the glow adds (of the brightness it is made of). */
-const GLOW = 0.32;
+const GLOW = 0.42;
 /** How many times the glow is halved in size: the widest is the picture's height over 2 to this. */
 const GLOW_STEPS = 4;
 /** How much of the dark where things meet is laid over the picture (ao.ts). */
-const AO = 0.85;
+const AO = 0.88;
 /** How much darker the corners are. */
-const VIGNETTE = 0.22;
+const VIGNETTE = 0.24;
 /** And how much more of each the darker house has (the open, a timeout, the clutch). */
-const DRAMA_VIGNETTE = 0.2;
-const DRAMA_CONTRAST = 0.08;
+const DRAMA_VIGNETTE = 0.26;
+const DRAMA_CONTRAST = 0.14;
 /** The grade: a little more colour, a soft S in the contrast, the blacks held down a touch. */
-const SATURATION = 1.12;
-const CONTRAST = 0.16;
-const BLACKS = 0.008;
+const SATURATION = 1.15;
+const CONTRAST = 0.19;
+const BLACKS = 0.01;
 /** How much crispness is put back (the most a neighbour is taken off a dot, of 1: a fifth is as far as it can go). */
-const SHARP = 0.08;
+const SHARP = 0.11;
 /** A picture of more dots than this is drawn with two samples a dot, not four (a 1440p screen's is; a 1080p one's is not). */
 const FINE_DOTS = 2.6e6;
 /** A broadcast camera's balance: a hair warm (in the screen's terms). */
@@ -1088,6 +1137,7 @@ const FINISH = /* glsl */ `
   uniform float uContrast;
   uniform float uBlacks;
   uniform float uVignette;
+  uniform float uDrama;
   uniform float uAspect;
   uniform sampler2D tSofter;
   uniform vec2 uDot;
@@ -1151,6 +1201,11 @@ const FINISH = /* glsl */ `
     s = clamp(s * uBalance, 0.0, 1.0);
     s = s + sqrt(glow / (1.0 + glow)) * (1.0 - s);
     float l = dot(s, vec3(0.2126, 0.7152, 0.0722));
+    // (the darks a hair cool and the lights a hair warm, as a broadcast grades a game; more so under the darker house)
+    vec3 shTint = mix(vec3(0.975, 0.988, 1.028), vec3(0.935, 0.965, 1.06), uDrama);
+    vec3 hiTint = mix(vec3(1.014, 1.004, 0.986), vec3(1.036, 1.01, 0.958), uDrama);
+    s = clamp(s * mix(shTint, hiTint, smoothstep(0.14, 0.82, l)), 0.0, 1.0);
+    l = dot(s, vec3(0.2126, 0.7152, 0.0722));
     s = clamp(mix(vec3(l), s, uSat), 0.0, 1.0);
     s = mix(s, s * s * (3.0 - 2.0 * s), uContrast);
     s = max(s - uBlacks, 0.0) / (1.0 - uBlacks);
@@ -1277,6 +1332,7 @@ export class Lens {
       uContrast: { value: CONTRAST },
       uBlacks: { value: BLACKS },
       uVignette: { value: VIGNETTE },
+      uDrama: { value: 0 },
       uAspect: { value: 1 },
       uFocus: { value: new Vector2() },
       uFocusAmt: { value: 0 },
@@ -1456,6 +1512,7 @@ export class Lens {
     (f.uDot.value as Vector2).set(1 / this.w, 1 / this.h);
     f.uVignette.value = VIGNETTE + DRAMA_VIGNETTE * this.drama;
     f.uContrast.value = CONTRAST + DRAMA_CONTRAST * this.drama;
+    f.uDrama.value = this.drama;
     f.tScene.value = this.scene.texture;
     f.tGlow.value = this.glow[0].texture;
     f.uAspect.value = this.w / this.h;

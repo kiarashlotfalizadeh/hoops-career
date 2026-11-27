@@ -18,7 +18,6 @@ import {
   MeshBasicMaterial,
   PlaneGeometry,
   Points,
-  RingGeometry,
   ShaderMaterial,
   Color,
   Vector2,
@@ -29,65 +28,243 @@ import { shotAt, type Shot } from './ballistics';
 type Keep = <T extends { dispose(): void }>(o: T) => T;
 
 /**
- * A shot's way through the air and a clean make, drawn (the scene's own choice whether: a setting, never under reduced
- * motion, never on a device that can't keep up). The arc: a thin streak of light behind the ball over the last of its
- * flight (TRAIL_SPAN of it), wide as a finger at the ball and gone to nothing at its tail, turned to face the camera;
- * it says where the ball came from, which a small ball against a dark stand does not. The swish: on a shot that
- * touches nothing but the cords, a ring of light at the rim that drops through the net and opens as it fades
- * (SWISH_MS). The slam: on a dunk that goes down, a ring of light off the rim that opens out level with it and is
- * gone in a quarter of a second (SLAM_MS): the iron's own answer, under the building's flashes. Three draws, a few
- * dozen triangles.
+ * A shot's way through the air and what the rim does with it, drawn (the scene's own choice whether: a setting, never
+ * under reduced motion, never on a device that can't keep up). The arc: a streak of light behind the ball over the
+ * last of its flight (TRAIL_SPAN of it), bright down its middle and soft at its edges, thin at its tail and fullest
+ * just behind the ball, turned to face the camera; it says where the ball came from, which a small ball against a
+ * dark stand does not. Gold for a three and in the clutch (both known as it leaves his hand), else the lamps' white.
+ * The swish: on a shot that touches nothing but the cords, two rings of light at the rim that drop through the net
+ * and open as they fade (SWISH_MS). The slam: on a dunk that goes down, a ring of light off the rim that opens out
+ * level with it, and a few sparks thrown off it that fall (SLAM_MS): the iron's own answer, under the building's
+ * flashes. The block: the same, smaller and cold, at the hand that got to it. Four draws, a few dozen triangles.
  */
-const TRAIL_N = 22;
-const TRAIL_SPAN = 0.4;
-const TRAIL_WIDE = 0.1;
-const TRAIL_LIGHT = 0.5;
-const SWISH_MS = 420;
-const SLAM_MS = 260;
+const TRAIL_N = 28;
+const TRAIL_SPAN = 0.46;
+const TRAIL_WIDE = 0.24;
+const SWISH_MS = 460;
+const SLAM_MS = 300;
+const SPARK_N = 28;
+/** How much light the slam's ring has at its middle as it starts (of the ring's own): a glint, not a flash over the rim. */
+const SLAM_CORE = 0.3;
+
+const TRAIL_SHADER = {
+  vertexShader: /* glsl */ `
+    attribute vec2 aTrail;
+    varying vec2 vTrail;
+    void main() {
+      vTrail = aTrail;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: /* glsl */ `
+    uniform vec3 uCore;
+    uniform vec3 uEdge;
+    varying vec2 vTrail;
+    void main() {
+      float across = abs(vTrail.y);
+      float along = vTrail.x;
+      float core = exp(-across * across * 9.0);
+      float halo = exp(-across * across * 2.1) * 0.48;
+      float fade = pow(along, 1.65) * smoothstep(1.0, 0.86, along) * smoothstep(0.0, 0.14, along);
+      vec3 col = (uCore * core + uEdge * halo) * fade;
+      if (max(col.r, max(col.g, col.b)) < 0.004) discard;
+      gl_FragColor = vec4(col, 1.0);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
+};
+
+const RIPPLE_SHADER = {
+  vertexShader: /* glsl */ `
+    varying vec2 vAt;
+    void main() {
+      vAt = uv * 2.0 - 1.0;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: /* glsl */ `
+    uniform float uK;
+    uniform vec3 uTint;
+    uniform float uStyle;
+    varying vec2 vAt;
+    void main() {
+      float r = length(vAt);
+      if (r > 1.0) discard;
+      float e = 1.0 - (1.0 - uK) * (1.0 - uK);
+      // (style 0: the swish's two rings, dropping; style 1: the slam's, opening fast, with a glint at its middle)
+      float r1 = mix(0.28 + 0.56 * e, 0.18 + 0.78 * e, uStyle);
+      float w1 = mix(0.09, 0.13, uStyle);
+      float ring1 = exp(-pow((r - r1) / w1, 2.0));
+      float r2 = max(0.05, r1 - 0.2);
+      float ring2 = exp(-pow((r - r2) / (w1 * 0.75), 2.0)) * 0.48;
+      float flash = uStyle * exp(-r * r * 7.5) * (1.0 - smoothstep(0.0, 0.42, uK)) * ${SLAM_CORE.toFixed(2)};
+      float fade = (1.0 - uK) * (1.0 - uK);
+      vec3 col = uTint * (ring1 + ring2 + flash) * fade * (1.0 - smoothstep(0.84, 1.0, r));
+      if (max(col.r, max(col.g, col.b)) < 0.004) discard;
+      gl_FragColor = vec4(col, 1.0);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
+};
+
+const SPARK_SHADER = {
+  vertexShader: /* glsl */ `
+    attribute vec3 aVel;
+    attribute float aSeed;
+    uniform float uT;
+    uniform float uScale;
+    varying float vFade;
+    void main() {
+      float life = 0.24 + 0.18 * aSeed;
+      float k = clamp(uT / life, 0.0, 1.0);
+      vFade = (1.0 - k) * (1.0 - k) * step(uT, life);
+      vec3 p = position + aVel * uT + vec3(0.0, -7.5 * uT * uT, 0.0);
+      vec4 mv = modelViewMatrix * vec4(p, 1.0);
+      gl_Position = projectionMatrix * mv;
+      gl_PointSize = vFade * clamp((0.36 + 0.34 * aSeed) * projectionMatrix[1][1] * uScale / max(-mv.z, 1.0), 2.0, 20.0);
+    }`,
+  fragmentShader: /* glsl */ `
+    uniform vec3 uTint;
+    varying float vFade;
+    void main() {
+      if (vFade < 0.01) discard;
+      float r = length(gl_PointCoord * 2.0 - 1.0);
+      float a = (smoothstep(0.55, 0.0, r) * 1.5 + exp(-r * r * 5.0) * 0.5) * vFade;
+      if (a < 0.004) discard;
+      gl_FragColor = vec4(mix(uTint, vec3(1.4, 1.35, 1.25), smoothstep(0.45, 0.0, r)) * a, 1.0);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
+};
 
 export class ShotFx {
   readonly group = new Group();
   private readonly trail: Mesh;
+  private readonly trailMat: ShaderMaterial;
   private readonly at: BufferAttribute;
-  private readonly light: BufferAttribute;
   private readonly ring: Mesh;
+  private readonly ringMat: ShaderMaterial;
   private ringMs = SWISH_MS;
   private readonly burst: Mesh;
+  private readonly burstMat: ShaderMaterial;
+  private readonly sparks: Points;
+  private readonly sparkMat: ShaderMaterial;
+  private readonly sparkSize = new Vector2();
   private burstMs = SLAM_MS;
 
   constructor(keep: Keep) {
     const geo = keep(new BufferGeometry());
     this.at = new BufferAttribute(new Float32Array((TRAIL_N + 1) * 6), 3);
-    this.light = new BufferAttribute(new Float32Array((TRAIL_N + 1) * 6), 3);
+    const uv = new Float32Array((TRAIL_N + 1) * 4);
+    for (let i = 0; i <= TRAIL_N; i++) {
+      const k = i / TRAIL_N;
+      uv[i * 4] = k;
+      uv[i * 4 + 1] = 1;
+      uv[i * 4 + 2] = k;
+      uv[i * 4 + 3] = -1;
+    }
     geo.setAttribute('position', this.at);
-    geo.setAttribute('color', this.light);
+    geo.setAttribute('aTrail', new BufferAttribute(uv, 2));
     const index: number[] = [];
     for (let i = 0; i < TRAIL_N; i++) index.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
     geo.setIndex(index);
-    const mat = keep(new MeshBasicMaterial({ vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, side: DoubleSide, fog: false }));
-    this.trail = new Mesh(geo, mat);
+    this.trailMat = keep(
+      new ShaderMaterial({
+        ...TRAIL_SHADER,
+        uniforms: {
+          uCore: { value: new Color(1.25, 1.15, 0.96) },
+          uEdge: { value: new Color(0.75, 0.65, 0.5) },
+        },
+        transparent: true,
+        blending: AdditiveBlending,
+        depthWrite: false,
+        side: DoubleSide,
+        fog: false,
+      }),
+    );
+    this.trail = new Mesh(geo, this.trailMat);
     this.trail.frustumCulled = false;
     this.trail.visible = false;
     this.trail.renderOrder = 4;
-    this.ring = new Mesh(
-      keep(new RingGeometry(0.62, 0.8, 36).rotateX(-Math.PI / 2)),
-      keep(new MeshBasicMaterial({ color: 0xffffff, transparent: true, blending: AdditiveBlending, depthWrite: false, side: DoubleSide, fog: false })),
+
+    const swishGeo = keep(new PlaneGeometry(2.8, 2.8).rotateX(-Math.PI / 2));
+    this.ringMat = keep(
+      new ShaderMaterial({
+        ...RIPPLE_SHADER,
+        uniforms: { uK: { value: 1 }, uTint: { value: new Color(1.15, 1.12, 1.02) }, uStyle: { value: 0 } },
+        transparent: true,
+        blending: AdditiveBlending,
+        depthWrite: false,
+        side: DoubleSide,
+        fog: false,
+      }),
     );
+    this.ring = new Mesh(swishGeo, this.ringMat);
     this.ring.visible = false;
     this.ring.renderOrder = 4;
-    this.burst = new Mesh(
-      keep(new RingGeometry(0.74, 0.86, 40).rotateX(-Math.PI / 2)),
-      keep(new MeshBasicMaterial({ color: 0xffffff, transparent: true, blending: AdditiveBlending, depthWrite: false, side: DoubleSide, fog: false })),
+
+    const burstGeo = keep(new PlaneGeometry(4.4, 4.4).rotateX(-Math.PI / 2));
+    this.burstMat = keep(
+      new ShaderMaterial({
+        ...RIPPLE_SHADER,
+        uniforms: { uK: { value: 1 }, uTint: { value: new Color(0.32, 0.22, 0.1) }, uStyle: { value: 1 } },
+        transparent: true,
+        blending: AdditiveBlending,
+        depthWrite: false,
+        side: DoubleSide,
+        fog: false,
+      }),
     );
+    this.burst = new Mesh(burstGeo, this.burstMat);
     this.burst.visible = false;
     this.burst.renderOrder = 4;
-    this.group.add(this.trail, this.ring, this.burst);
+
+    // (the sparks: thrown out round the ring and up, each its own speed and life, falling as they go)
+    const sGeo = keep(new BufferGeometry());
+    const pos = new Float32Array(SPARK_N * 3);
+    const vel = new Float32Array(SPARK_N * 3);
+    const seed = new Float32Array(SPARK_N);
+    let n = 19;
+    const rnd = () => ((n = (n * 16807) % 2147483647) & 0xffff) / 0xffff;
+    for (let i = 0; i < SPARK_N; i++) {
+      const a = (i / SPARK_N) * Math.PI * 2 + (rnd() - 0.5) * 0.25;
+      const spd = 3.2 + rnd() * 6.5;
+      const up = 0.8 + rnd() * 4.2;
+      pos.set([Math.cos(a) * 0.5, 0, Math.sin(a) * 0.5], i * 3);
+      vel.set([Math.cos(a) * spd, up, Math.sin(a) * spd], i * 3);
+      seed[i] = rnd();
+    }
+    sGeo.setAttribute('position', new Float32BufferAttribute(pos, 3));
+    sGeo.setAttribute('aVel', new Float32BufferAttribute(vel, 3));
+    sGeo.setAttribute('aSeed', new Float32BufferAttribute(seed, 1));
+    this.sparkMat = keep(
+      new ShaderMaterial({
+        ...SPARK_SHADER,
+        uniforms: { uT: { value: 1 }, uScale: { value: 400 }, uTint: { value: new Color(1.2, 0.78, 0.3) } },
+        transparent: true,
+        blending: AdditiveBlending,
+        depthWrite: false,
+        fog: false,
+      }),
+    );
+    this.sparks = new Points(sGeo, this.sparkMat);
+    this.sparks.frustumCulled = false;
+    this.sparks.visible = false;
+    this.sparks.renderOrder = 5;
+    this.sparks.onBeforeRender = (renderer) => void (this.sparkMat.uniforms.uScale.value = renderer.getDrawingBufferSize(this.sparkSize).y / 2);
+
+    this.group.add(this.trail, this.ring, this.burst, this.sparks);
   }
 
-  /** The shot in the air (null: none, and no streak), how far along its flight the ball is (0..1), and where the camera stands. */
-  arc(shot: Shot | null, u: number, eye: Vector3) {
+  /** The shot in the air (null: none, and no streak), how far along its flight the ball is (0..1), where the camera stands, and its colour (gold: a three, the clutch). */
+  arc(shot: Shot | null, u: number, eye: Vector3, accent: 'plain' | 'gold' = 'plain') {
     this.trail.visible = !!shot && u > 0.02;
     if (!shot || !this.trail.visible) return;
+    if (accent === 'gold') {
+      (this.trailMat.uniforms.uCore.value as Color).setRGB(1.85, 1.38, 0.62);
+      (this.trailMat.uniforms.uEdge.value as Color).setRGB(1.2, 0.64, 0.16);
+    } else {
+      (this.trailMat.uniforms.uCore.value as Color).setRGB(1.22, 1.16, 1.02);
+      (this.trailMat.uniforms.uEdge.value as Color).setRGB(0.68, 0.64, 0.56);
+    }
     const [P, Q, T, S] = [A, B, C, D];
     const from = Math.max(0, u - TRAIL_SPAN);
     for (let i = 0; i <= TRAIL_N; i++) {
@@ -99,42 +276,55 @@ export class ShotFx {
       T.subVectors(Q, P);
       S.subVectors(eye, P).cross(T);
       const len = S.length();
-      // (thin at its tail, a finger at the ball; and it stops short of the ball itself)
-      S.multiplyScalar(len > 1e-6 ? (TRAIL_WIDE * k * (1 - 0.6 * k * k * k)) / len : 0);
+      // (thin at its tail, fullest just short of the ball, and a little fuller in gold)
+      const wide = TRAIL_WIDE * (accent === 'gold' ? 1.2 : 1) * (0.2 + 0.8 * k) * (1 - 0.55 * k * k * k);
+      S.multiplyScalar(len > 1e-6 ? wide / len : 0);
       this.at.setXYZ(i * 2, P.x + S.x, P.y + S.y, P.z + S.z);
       this.at.setXYZ(i * 2 + 1, P.x - S.x, P.y - S.y, P.z - S.z);
-      const c = TRAIL_LIGHT * k * k * (1 - k * k * k * k);
-      this.light.setXYZ(i * 2, c, c * 0.96, c * 0.88);
-      this.light.setXYZ(i * 2 + 1, c, c * 0.96, c * 0.88);
     }
     this.at.needsUpdate = true;
-    this.light.needsUpdate = true;
   }
 
-  /** A shot has gone through with nothing but the cords: the ring, at that rim (its middle). */
-  swish(x: number, y: number, z: number) {
+  /** A shot has gone through with nothing but the cords: the rings, at that rim (its middle); gold as the arc is, or for a big moment. */
+  swish(x: number, y: number, z: number, gold = false) {
     this.ring.position.set(x, y, z);
+    (this.ringMat.uniforms.uTint.value as Color).setRGB(gold ? 1.55 : 1.15, gold ? 1.25 : 1.12, gold ? 0.58 : 1.0);
     this.ringMs = 0;
   }
 
-  /** A dunk has gone down: the ring off the rim, at that rim (its middle). */
+  /** A dunk has gone down: the ring off the rim and its sparks, at that rim (its middle), warm: the iron's colour in it. */
   slam(x: number, y: number, z: number) {
     this.burst.position.set(x, y, z);
+    this.sparks.position.set(x, y, z);
+    (this.burstMat.uniforms.uTint.value as Color).setRGB(0.32, 0.22, 0.1);
+    (this.sparkMat.uniforms.uTint.value as Color).setRGB(1.2, 0.78, 0.3);
+    this.burst.scale.setScalar(1);
     this.burstMs = 0;
   }
 
-  /** The rings' own time (ms of the picture's clock). */
+  /** A shot has been got to: the same ring and sparks at the hand that got it, smaller and cold. */
+  block(x: number, y: number, z: number) {
+    this.burst.position.set(x, y, z);
+    this.sparks.position.set(x, y, z);
+    (this.burstMat.uniforms.uTint.value as Color).setRGB(0.26, 0.32, 0.4);
+    (this.sparkMat.uniforms.uTint.value as Color).setRGB(1.0, 1.2, 1.45);
+    this.burst.scale.setScalar(0.72);
+    this.burstMs = 0;
+  }
+
+  /** The rings' and the sparks' own time (ms of the picture's clock). */
   tick(ms: number) {
     if (this.burstMs < SLAM_MS) {
       this.burstMs += ms;
       const k = Math.min(1, this.burstMs / SLAM_MS);
       this.burst.visible = k < 1;
-      // (out fast and slowing, as a ring on water does; warm, the iron's colour in it)
-      const e = 1 - (1 - k) * (1 - k);
-      this.burst.scale.set(1 + 1.5 * e, 1, 1 + 1.5 * e);
-      const c = 0.5 * (1 - k) * (1 - k);
-      (this.burst.material as MeshBasicMaterial).color.setRGB(c, c * 0.82, c * 0.6);
-    } else this.burst.visible = false;
+      this.sparks.visible = k < 1;
+      this.burstMat.uniforms.uK.value = k;
+      this.sparkMat.uniforms.uT.value = this.burstMs / 1000;
+    } else {
+      this.burst.visible = false;
+      this.sparks.visible = false;
+    }
     if (this.ringMs >= SWISH_MS) {
       this.ring.visible = false;
       return;
@@ -142,9 +332,8 @@ export class ShotFx {
     this.ringMs += ms;
     const k = Math.min(1, this.ringMs / SWISH_MS);
     this.ring.visible = k < 1;
-    this.ring.scale.setScalar(1 + 0.5 * k);
-    this.ring.position.y -= (ms / 1000) * 3.2;
-    (this.ring.material as MeshBasicMaterial).color.setScalar(0.55 * (1 - k) * (1 - k));
+    this.ringMat.uniforms.uK.value = k;
+    this.ring.position.y -= (ms / 1000) * 3.1;
   }
 
   /** None of it (the setting off, a replay's cut, a possession over). */
@@ -153,6 +342,7 @@ export class ShotFx {
     this.ring.visible = false;
     this.ringMs = SWISH_MS;
     this.burst.visible = false;
+    this.sparks.visible = false;
     this.burstMs = SLAM_MS;
   }
 }
@@ -459,7 +649,7 @@ const BEAM = {
     varying vec3 vTint;
     void main() {
       float across = 1.0 - abs(vAt.x);
-      float a = across * across * (0.2 * exp(-vAt.y * 2.6) + 0.035) * smoothstep(1.0, 0.86, vAt.y) * uOn;
+      float a = across * across * (0.26 * exp(-vAt.y * 2.3) + 0.048) * smoothstep(1.0, 0.86, vAt.y) * uOn;
       gl_FragColor = vec4(vTint * a * uBoost, 1.0);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
@@ -488,7 +678,7 @@ const SPOT_POOL = {
     varying vec3 vTint;
     void main() {
       float t = 1.0 - min(1.0, length(vAt));
-      gl_FragColor = vec4(vTint * t * t * (3.0 - 2.0 * t) * 0.16 * uOn * uBoost, 1.0);
+      gl_FragColor = vec4(vTint * t * t * (3.0 - 2.0 * t) * 0.22 * uOn * uBoost, 1.0);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }`,

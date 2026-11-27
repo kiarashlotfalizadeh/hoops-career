@@ -181,7 +181,7 @@ const LED_MAP = /* glsl */ `
   #endif`;
 
 /** How bright the lamps are against the floor's light (a lit sign reads brighter than a painted one). */
-const GLOW = 1.15;
+const GLOW = 1.24;
 /** A board behind a close-up keeps this much of its light: the picture is the player. */
 const BOARD_DIM = 0.4;
 
@@ -824,11 +824,25 @@ function screen(ctx: CanvasRenderingContext2D, w: number, h: number, show: Show,
   const { home, away, game, shot } = look;
   ctx.fillStyle = BLACK;
   ctx.fillRect(0, 0, w, h);
-  // (the screen's lowest rows are what the screen under the scoreboard shows: the home colour)
+  // (the screen's lowest rows are what the screen under the scoreboard shows: the home colour, deeper at its ends)
   const foot = 3;
   const H = h - foot;
-  ctx.fillStyle = home.fill;
+  const underBg = ctx.createLinearGradient(0, 0, w, 0);
+  underBg.addColorStop(0, home.deep);
+  underBg.addColorStop(0.5, home.fill);
+  underBg.addColorStop(1, home.deep);
+  ctx.fillStyle = underBg;
   ctx.fillRect(0, H, w, foot);
+  // (over the rest, a faint lift at its middle, and the home trim along its top)
+  const bg = ctx.createRadialGradient(w / 2, H * 0.42, H * 0.08, w / 2, H * 0.48, w * 0.65);
+  bg.addColorStop(0, '#141923');
+  bg.addColorStop(1, BLACK);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, w, H);
+  ctx.fillStyle = home.trim;
+  ctx.globalAlpha = 0.35;
+  ctx.fillRect(0, 0, w, 2);
+  ctx.globalAlpha = 1;
   /** The score along the bottom, under a big word. */
   const under = () => {
     if (!game) return;
@@ -857,21 +871,39 @@ function screen(ctx: CanvasRenderingContext2D, w: number, h: number, show: Show,
         big(home.abbr, home.fill, home.deep, home.trim);
         break;
       }
-      // two panels, the visitors' on the left; the clocks between
+      // two panels, the visitors' on the left; the clocks between, in a dark box of their own
       const pw = w * 0.36;
       const panel = (s: Side, pts: number, x: number, ahead: boolean) => {
-        ctx.fillStyle = s.fill;
+        ctx.fillStyle = s.deep;
+        ctx.globalAlpha = 0.34;
+        ctx.fillRect(x, H * 0.04, pw, H * 0.88);
+        ctx.globalAlpha = 1;
+        const hdr = ctx.createLinearGradient(x, H * 0.04, x, H * 0.28);
+        hdr.addColorStop(0, s.fill);
+        hdr.addColorStop(1, s.deep);
+        ctx.fillStyle = hdr;
         ctx.fillRect(x, H * 0.04, pw, H * 0.24);
         ctx.fillStyle = s.trim;
-        ctx.fillRect(x, H * 0.27, pw, H * 0.015);
+        ctx.fillRect(x, H * 0.27, pw, Math.max(2, H * 0.018));
+        ctx.fillRect(x, H * 0.905, pw, Math.max(2, H * 0.015));
         write(ctx, s.abbr, x + pw / 2, H * 0.16, H * 0.2, pw * 0.8, WHITE);
-        write(ctx, String(pts), x + pw / 2, H * 0.62, H * 0.5, pw * 0.92, ahead ? WHITE : '#d9d6cf');
+        write(ctx, String(pts), x + pw / 2, H * 0.61, H * 0.52, pw * 0.92, ahead ? WHITE : '#cbc8c0');
       };
       panel(away, game.score[1], w * 0.03, game.score[1] >= game.score[0]);
       panel(home, game.score[0], w - w * 0.03 - pw, game.score[0] >= game.score[1]);
-      write(ctx, period(game.q), w / 2, H * 0.14, H * 0.16, w * 0.2, AMBER);
+      // (the clocks' box)
+      ctx.fillStyle = 'rgba(0,0,0,0.68)';
+      ctx.fillRect(w * 0.4, H * 0.06, w * 0.2, H * 0.84);
+      ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(w * 0.4, H * 0.06, w * 0.2, H * 0.84);
+      write(ctx, period(game.q), w / 2, H * 0.16, H * 0.15, w * 0.18, AMBER);
       seven(ctx, clockText(game.clock), w / 2, H * 0.44, H * 0.22, AMBER);
-      if (shot !== null) seven(ctx, shotText(shot), w / 2, H * 0.78, H * 0.2, RED);
+      if (shot !== null) {
+        ctx.fillStyle = 'rgba(255, 45, 31, 0.12)';
+        ctx.fillRect(w * 0.425, H * 0.64, w * 0.15, H * 0.23);
+        seven(ctx, shotText(shot), w / 2, H * 0.76, H * 0.19, RED);
+      }
       break;
     }
     case 'defense': {
@@ -1101,7 +1133,8 @@ export class Boards {
     tex.anisotropy = 4;
     this.flags = { cv, tex };
     const geo = faces(list.map((b, i) => ({ ...b, turn: 0, u: [i / list.length, (i + 1) / list.length] as [number, number] })));
-    const mat = this.keep(new MeshLambertMaterial({ map: tex, side: DoubleSide, alphaTest: 0.5 }));
+    // (lit a little from below, as the building's light catches them: up in the dark roof they were cardboard)
+    const mat = this.keep(new MeshLambertMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.24, side: DoubleSide, alphaTest: 0.5 }));
     const m = new Mesh(this.keep(geo), mat);
     this.group.add(m);
     return m;
