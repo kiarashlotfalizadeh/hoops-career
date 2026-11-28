@@ -39,14 +39,16 @@ starts doing anything on payment, such as sending email or keeping records.
 ## Going live (once)
 
 1. **Stripe, in the Clipboard GM account (live mode):**
-   - Settings → Managed Payments: accept the terms.
+   - Settings → Managed Payments: accept the terms. Set **Refund requests** to "Email me for
+     approval" and **Include tax in prices** to "Yes". The price is US$14.99 with tax included,
+     everywhere.
    - Settings → Public details: set the business name and support email. Checkout shows both.
    - Make the product and price with the Stripe CLI, logged in to that account:
      ```bash
      stripe products create --live --name "Clipboard GM" --description "The full game: every season after your first. One payment, no subscription." --tax-code txcd_10201000
      ```
      ```bash
-     stripe prices create --live --product <prod_id> --unit-amount 1499 --currency usd --tax-behavior exclusive --lookup-key clipboard-gm-full
+     stripe prices create --live --product <prod_id> --unit-amount 1499 --currency usd --tax-behavior inclusive --lookup-key clipboard-gm-full
      ```
    - Developers → API keys: create a **restricted key** with write access to Checkout Sessions,
      and read access to Prices, Payment Intents, Charges and Invoices.

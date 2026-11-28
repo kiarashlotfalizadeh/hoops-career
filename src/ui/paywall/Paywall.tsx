@@ -125,7 +125,7 @@ function Offer({ league, summer, busy, error }: { league: League | null; summer:
       </ul>
       <div className="pw-price">
         <span className="pw-fig num">{PRICE}</span>
-        <span className="over">once, plus tax. Checkout shows it in your currency.</span>
+        <span className="over">once, tax included. Checkout can show it in your currency.</span>
       </div>
       {error && (
         <p className="small bad pw-err" role="alert">

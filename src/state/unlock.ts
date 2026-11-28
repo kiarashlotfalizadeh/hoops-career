@@ -10,9 +10,10 @@ import { useStore } from './store';
 export const PAYWALL = import.meta.env.VITE_PAYWALL === '1';
 const PUBLIC_KEY: string = import.meta.env.VITE_LICENSE_PUBLIC_KEY ?? '';
 /**
- * The price before tax, as the game shows it. "US$": Stripe's page shows a buyer abroad his own
- * currency (Adaptive Pricing is always on with Managed Payments), so a bare "$" would read as a
- * Canadian or Australian dollar and the checkout figure would look like a different price.
+ * The price as the game shows it: the whole price, tax included, everywhere (the Stripe price is
+ * tax-inclusive, so Stripe takes the buyer's tax out of it). "US$": Stripe's page shows a buyer abroad
+ * his own currency (Adaptive Pricing is always on with Managed Payments), so a bare "$" would read as
+ * a Canadian or Australian dollar and the checkout figure would look like a different price.
  */
 export const PRICE = 'US$14.99';
 
