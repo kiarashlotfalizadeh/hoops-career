@@ -5,6 +5,7 @@
 // strength from it.
 import type { Player, RatingKey } from '../types';
 import { clamp } from '../random';
+import { defRead, ovrWeights } from '../ratings';
 
 /**
  * Net rating per point of a roster's worth (rosterWorth) above the league's: what the season
@@ -18,8 +19,21 @@ import { clamp } from '../random';
  * every league: under the Thunder and the Cavaliers, over the Kings, the 76ers and the Wizards.
  * 2.13 → 2.26 on 2026-11-21: with tactics played louder than life (sim/engine/feel.ts) the league's teams
  * sit about 6% further apart than their rosters said (forecast-check's slope 1.05-1.06; 1.00 at this rate).
+ * 2.26 → 2.05 on 2026-11-27: the engine and league changes of 2026-11-25 (commits ee9d0cf and
+ * aef1ad5: the tails and the AI's set plays played softer in feel.ts, rebuilding teams' minutes,
+ * stars' minutes held) put the teams closer together than their rosters said, by about a tenth in
+ * both kinds of league (forecast-check's slope 0.88 → 0.81 real, 1.01 → 0.87 fictional; team
+ * strength SD about 5.7 → 5.3 in fictional seasons, the games' own noise unchanged at a 13.8-point
+ * margin SD). With perimeter defense and defensive IQ read as they're played (playerWorth) the
+ * slope was 0.91 (real) and 0.94 (fictional) at 2.26; 0.99 and 1.01 at this rate, 1.03 and 1.03 on
+ * sixteen other leagues.
  */
-export const ROSTER_NET = 2.26;
+export const ROSTER_NET = 2.05;
+/**
+ * Display OVR points per raw OVR point (ratings.ts toDisplay) about the league's middle: 2.32 over a
+ * real league's rostered players, 2.15 over a fictional one's. What a point of a rating moves OVR by.
+ */
+const OVR_PER_RAW = 2.2;
 /** Minutes by OVR rank in a typical rotation (240 in all), for what a roster is worth with its injured players out or back. */
 const SLOTS = [35, 34, 32, 30, 28, 24, 20, 16, 12, 9];
 /**
@@ -69,11 +83,26 @@ const STAR_STEPS: [ovr: number, perPoint: number][] = [
   [90, -0.593],
 ];
 
-/** A player's worth on the floor in OVR points: his OVR, read the way the engine plays it (see ENGINE). */
+/**
+ * A player's worth on the floor in OVR points: his OVR, read the way the engine plays it (see ENGINE).
+ * Perimeter defense and defensive IQ count as the floor plays them, at DEF_READ about 50
+ * (ratings.ts), the way they did when ENGINE and ROSTER_NET were fitted: OVR counts them as stored,
+ * so its share of the difference comes off, and ENGINE's corrections read the played value. (Since
+ * 2026-11-24 real players' two ratings are stored one and a half times as wide and every player's are
+ * played at two thirds; read as stored, the forecast overrated teams of good defenders, the Thunder
+ * by 7-9 wins, and its slope fell from 1.01 to 0.88.)
+ */
 export function playerWorth(p: Pick<Player, 'ovr' | 'ratings'>): number {
   let v = p.ovr;
   for (const [at, per] of STAR_STEPS) v += per * Math.max(0, p.ovr - at);
-  if (p.ratings) for (const k in ENGINE) v += ENGINE[k as RatingKey]! * (p.ratings[k as RatingKey] - 50);
+  const r = p.ratings;
+  if (!r) return v;
+  const w = ovrWeights(r);
+  for (const k of ['perD', 'diq'] as const) v -= OVR_PER_RAW * w[k] * (r[k] - defRead(r[k]));
+  for (const k in ENGINE) {
+    const key = k as RatingKey;
+    v += ENGINE[key]! * ((key === 'perD' || key === 'diq' ? defRead(r[key]) : r[key]) - 50);
+  }
   return v;
 }
 

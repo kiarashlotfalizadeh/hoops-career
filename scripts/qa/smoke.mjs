@@ -281,6 +281,8 @@ try {
   await download.saveAs(file);
   await page.goto(`${base}/#/start`);
   await page.locator('input[type=file]').setInputFiles(file);
+  // the backup is of the league already on the device: the app asks whether to restore over it or keep both
+  await page.getByRole('button', { name: 'Keep both', exact: true }).click({ timeout: 30_000 });
   await page.waitForSelector('.topbar', { timeout: 30_000 });
   await page.goto(`${base}/#/start`);
   if (!(await page.getByText(/\(imported\)/).count())) fail.push('imported league not listed');
