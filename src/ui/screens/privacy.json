@@ -1,11 +1,14 @@
 {
   "title": "Privacy Policy",
-  "updated": "November 20, 2026",
-  "lead": "Zero accounts, zero analytics, everything stays on your device.",
+  "updated": "November 27, 2026",
+  "lead": "Zero accounts, zero analytics. Your leagues stay on your device.",
   "sections": [
     {
       "h": "What we collect",
-      "p": ["Nothing. Clipboard GM has no accounts, no sign-in, no analytics, no ads and no trackers. There is no server of ours for your data to go to."]
+      "p": [
+        "Nothing about how you play. Clipboard GM has no accounts, no sign-in, no analytics, no ads and no trackers.",
+        "Buying the full game on clipboardgm.com is the one exception. It happens on Stripe's checkout page, described below."
+      ]
     },
     {
       "h": "Where your leagues live",
@@ -17,22 +20,36 @@
     {
       "h": "What goes over the network",
       "p": [
-        "Only the game's own files, downloaded from the site that hosts it. After that the game runs offline. The only requests it makes are for newer versions of those same files.",
-        "Like any web host, the site's host (GitHub Pages) can log the IP address that downloads those files. We can't see those logs and don't keep any of our own."
+        "The game's own files, downloaded from the site that hosts it. After that the game runs offline, apart from checks for newer versions of those files.",
+        "On clipboardgm.com, a purchase also talks to our server and to Stripe. Now and then an unlocked game asks our server whether its purchase still stands.",
+        "Like any web host, the site's host keeps short-lived request logs, IP addresses included. clipboardgm.com and our server run on Cloudflare."
       ]
     },
     {
+      "h": "Buying the full game",
+      "p": [
+        "Stripe sells the full game for us as the merchant of record. Stripe collects your payment details, email and billing country, and handles tax and receipts. We never see your card.",
+        "Our server asks Stripe whether a checkout was paid, then gives your device a signed unlock code. The code names the checkout, not you. Your device and your backups keep it.",
+        "To restore a purchase, our server looks up the email and receipt number you enter at Stripe. It keeps no copy.",
+        "Stripe's own privacy policy covers what Stripe does with your details."
+      ],
+      "link": {
+        "label": "stripe.com/privacy",
+        "href": "https://stripe.com/privacy"
+      }
+    },
+    {
       "h": "Cookies",
-      "p": ["None. A few preferences, such as light or dark, are kept in the browser's local storage on your device."]
+      "p": ["None. A few preferences, such as light or dark, and the unlock code are kept in the browser's local storage on your device."]
     },
     {
       "h": "Children",
-      "p": ["The game collects no personal information from anyone, children included."]
+      "p": ["The game collects no personal information from anyone, children included. A purchase is made on Stripe's page, under Stripe's terms."]
     },
     {
       "h": "Deleting your data",
       "p": [
-        "Delete a league from the main menu or from Settings. Clearing the site's data in your browser, or uninstalling the app, removes everything. No copy exists anywhere else."
+        "Delete a league from the main menu or from Settings. Clearing the site's data in your browser, or uninstalling the app, removes everything on the device. A purchase's record stays with Stripe."
       ]
     },
     {
@@ -42,7 +59,10 @@
     {
       "h": "Questions",
       "p": ["Open an issue on the project's page."],
-      "link": { "label": "github.com/kiarashlotfalizadeh/clipboard-gm", "href": "https://github.com/kiarashlotfalizadeh/clipboard-gm/issues" }
+      "link": {
+        "label": "github.com/kiarashlotfalizadeh/clipboard-gm",
+        "href": "https://github.com/kiarashlotfalizadeh/clipboard-gm/issues"
+      }
     }
   ]
 }

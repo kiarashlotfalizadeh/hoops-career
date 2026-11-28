@@ -44,6 +44,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Moments } from './components/Moments';
 import { DigestHost } from './today/AwaySheet';
 import { BigGameHost } from './today/BigGameSheet';
+import { PaywallHost } from './paywall/Paywall';
 import { QuickSearch } from './components/QuickSearch';
 import { applyAccent } from './teamColors';
 import { useToastHost } from './toastHost';
@@ -738,6 +739,7 @@ function GameShell() {
       <Moments />
       <DigestHost />
       <BigGameHost />
+      <PaywallHost />
     </div>
   );
 }

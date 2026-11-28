@@ -28,6 +28,7 @@ import { courtLookOf } from '../live/gl';
 import { setDevicePref, useDevice, type ThemePref } from '../device';
 import { sfx } from '../sound';
 import './settings.css';
+import { openPaywall, PAYWALL, PRICE, useUnlock } from '../../state/unlock';
 
 const SPEEDS = LIVE_SPEEDS.map((s) => ({ id: String(s.id), label: s.label }));
 /** What a long sim stops for among AI teams' trade offers (Settings.offerStops). */
@@ -491,6 +492,7 @@ export default function Settings() {
                 <div className="set-link-m num">
                   v{__APP_VERSION__} · {__APP_BUILD__} · save format {league.version}
                 </div>
+                <FullGameRow />
                 <Link to="/privacy" className="set-privacy">
                   Privacy policy
                 </Link>
@@ -548,5 +550,25 @@ export default function Settings() {
         </div>
       </Sheet>
     </main>
+  );
+}
+
+/** The web edition's full game: unlocked, or the offer and a way back to a purchase made elsewhere. */
+function FullGameRow() {
+  const unlocked = useUnlock((s) => s.unlocked);
+  if (!PAYWALL) return null;
+  if (unlocked) return <div className="set-link-m set-full">Full game unlocked</div>;
+  return (
+    <div className="set-full">
+      <div className="set-link-m">First season free. Full game {PRICE} once.</div>
+      <div className="row" style={{ gap: 8, marginTop: 8 }}>
+        <button type="button" className="btn sm" onClick={() => openPaywall('offer')}>
+          Unlock
+        </button>
+        <button type="button" className="btn sm" onClick={() => openPaywall('restore')}>
+          Restore purchase
+        </button>
+      </div>
+    </div>
   );
 }

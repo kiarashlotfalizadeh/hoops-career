@@ -1,0 +1,29 @@
+// clipboardgm.com: the web edition, the only one with the paywall (npm run build:web turns it on).
+// Static files come straight from dist/; only /api/* runs worker/index.ts. Secrets are set once with
+// `npx wrangler secret put STRIPE_SECRET_KEY` and `npm run license:keys -- --live` (see worker/README.md).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "clipboard-gm",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-11-01",
+  // one origin only: saves live per origin, so a second address would split a player's leagues
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "clipboardgm.com", "custom_domain": true }],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"],
+  },
+  "vars": {
+    // where Stripe sends a buyer back (.dev.vars sets the local address for wrangler dev)
+    "SITE_ORIGIN": "https://clipboardgm.com",
+    // the price is found by this lookup key, the same in the sandbox and live
+    "STRIPE_PRICE_LOOKUP_KEY": "clipboard-gm-full",
+    // Stripe sells as merchant of record (Managed Payments): it handles tax, receipts and disputes
+    "MANAGED_PAYMENTS": "1",
+  },
+  "ratelimits": [{ "name": "RESTORE_LIMITER", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } }],
+  "observability": { "enabled": true },
+}

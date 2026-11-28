@@ -166,3 +166,7 @@
 .set-list > .set-pending {
   animation: drop var(--dur) var(--ease-out) backwards;
 }
+/* the web edition's full game: unlocked, or the offer (see state/unlock.ts) */
+.set-full {
+  margin-top: 8px;
+}

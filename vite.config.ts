@@ -73,12 +73,29 @@ function privacyPage(): Plugin {
 // BASE_PATH lets GitHub Pages serve the app from /<repo>/ while Capacitor and local dev use '/'.
 const base = process.env.BASE_PATH ?? '/';
 
+/**
+ * The paywall's build (--mode web, clipboardgm.com) must carry the licence's public key: without it no
+ * purchase could unlock the game, so the build stops instead.
+ */
+function paywallGuard(): Plugin {
+  return {
+    name: 'paywall-guard',
+    apply: 'build',
+    configResolved(c) {
+      if (c.env.VITE_PAYWALL === '1' && !c.env.VITE_LICENSE_PUBLIC_KEY) {
+        throw new Error(`The ${c.mode} build turns the paywall on but has no VITE_LICENSE_PUBLIC_KEY: run npm run license:keys (see worker/README.md).`);
+      }
+    },
+  };
+}
+
 export default defineConfig({
   base,
   define: { __APP_VERSION__: JSON.stringify(pkg.version), __APP_BUILD__: JSON.stringify(commit) },
   plugins: [
     react(),
     privacyPage(),
+    paywallGuard(),
     VitePWA({
       // registered from main.tsx (web only); a new version waits for the next launch instead of reloading mid-game
       registerType: 'prompt',

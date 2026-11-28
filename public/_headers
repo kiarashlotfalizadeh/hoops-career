@@ -1,0 +1,7 @@
+# Cloudflare (clipboardgm.com) reads this; other hosts serve it as a plain file and ignore it.
+# Built files carry a hash of their contents in their names, so a kept copy is never stale.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

@@ -359,6 +359,11 @@ Archivo, variable in width and weight, for words and big figures; IBM Plex Mono 
 - `Sheet`: bottom sheet (dialog on tablets). Title in `h2`. It locks the page behind it and slides out
   on close; its content must not assume the sheet unmounts the instant `open` turns false. A sheet
   that filters a list as you type gives its box `.sheet-filter`, so it keeps its height.
+- `PaywallHost` (`paywall/Paywall.tsx`, web edition only, `state/unlock.ts`): the one place the game
+  asks for money, once, on "Start the next season" after the first summer. It leads with the user's
+  own unplayed summer, shows the price as its one big figure, and "Not now" always works and takes
+  nothing away. The price is said once up front, under Start career and in Settings. No reminders,
+  countdowns or nags anywhere else.
 - A first-run or setup flow (New League) keeps its step's call to action in a sticky foot
   (`.nl-cta`) so a long grid never hides it.
 - `.dockbar`: a screen's own fixed action bar over the tab bar (an ink bar, inverted tokens); the

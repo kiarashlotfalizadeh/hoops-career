@@ -4,6 +4,7 @@ import { simStart, simSummary, type FlowAction } from './flow';
 import { userGameOnDay } from '../core/league/games';
 import { seasonLabel } from '../core/constants';
 import { askBigGame } from './today/bigGame';
+import { mayStartSeason } from '../state/unlock';
 
 export function useFlowRunner() {
   const nav = useNavigate();
@@ -85,6 +86,8 @@ export function useFlowRunner() {
         await task('Free agency', { kind: 'faAdvance', days: 7 });
         return;
       case 'newSeason': {
+        // the first season is free: the next one needs the full game (the web edition's paywall opens instead)
+        if (!(await mayStartSeason())) return;
         const r = await task('New season', { kind: 'newSeason' });
         if (!r) return;
         const done = !!r.done;

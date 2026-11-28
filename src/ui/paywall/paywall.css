@@ -1,0 +1,67 @@
+/* The paywall sheet (Paywall.tsx): a lead line, the summer still to be played, what the full game
+   gives, the price as the one big figure, then the actions. */
+.pw {
+  gap: 14px;
+}
+.pw-lead {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.4;
+}
+.pw-summer {
+  padding: 14px 16px;
+}
+.pw-summer ul {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  font-weight: 650;
+}
+.pw-value {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.pw-value li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pw-value svg {
+  color: var(--good);
+  flex: none;
+}
+.pw-price {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.pw-fig {
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 900;
+  font-size: 40px;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.pw-err {
+  margin: 0;
+}
+.pw-foot {
+  margin: 0;
+  text-align: center;
+}
+.pw-field {
+  display: grid;
+  gap: 6px;
+}
+.pw-receipt {
+  padding: 12px 14px;
+  display: grid;
+  gap: 4px;
+}

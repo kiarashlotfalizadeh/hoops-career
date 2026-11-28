@@ -6,6 +6,7 @@ import { Capacitor } from '@capacitor/core';
 import { initNative } from './native';
 import { useStore } from './state/store';
 import { noteStorageKept } from './state/backup';
+import { initUnlock, useUnlock } from './state/unlock';
 import { watchInstall } from './ui/components/InstallRow';
 import { initTheme } from './ui/theme';
 import { startMotionSweeper } from './ui/motion';
@@ -16,7 +17,10 @@ initTheme();
 startMotionSweeper();
 
 // QA scripts drive the store directly in dev builds (save, inspect the league).
-if (import.meta.env.DEV || import.meta.env.VITE_QA === '1') (window as unknown as { __cgm: unknown }).__cgm = { store: useStore };
+if (import.meta.env.DEV || import.meta.env.VITE_QA === '1') (window as unknown as { __cgm: unknown }).__cgm = { store: useStore, unlock: useUnlock };
+
+// the web edition's licence, and the return from Stripe's checkout (before the router reads the address)
+initUnlock();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

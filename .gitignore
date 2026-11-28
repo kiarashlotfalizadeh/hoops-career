@@ -20,3 +20,7 @@ ios/App/build
 # Blender's working files (.blend, preview renders); the .glb models in src are kept
 scripts/blender/out
 __pycache__
+
+# the Worker's local secrets (wrangler dev) and its build state
+.dev.vars*
+.wrangler

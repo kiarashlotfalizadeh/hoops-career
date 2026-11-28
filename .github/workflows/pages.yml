@@ -30,11 +30,19 @@ jobs:
           cache: npm
       - id: pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      # once the game lives at its own address (the repository variable SITE_MOVED_TO, e.g.
+      # https://clipboardgm.com, set only after that site is live), this one only forwards there
       - run: npm ci
+        if: vars.SITE_MOVED_TO == ''
       # the site's own path: /<repo>/ for a project site, / for a user site or a custom domain
       - run: npm run build
+        if: vars.SITE_MOVED_TO == ''
         env:
           BASE_PATH: ${{ steps.pages.outputs.base_path }}/
+      - run: node scripts/moved-site.mjs "$SITE_MOVED_TO" dist
+        if: vars.SITE_MOVED_TO != ''
+        env:
+          SITE_MOVED_TO: ${{ vars.SITE_MOVED_TO }}
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: dist

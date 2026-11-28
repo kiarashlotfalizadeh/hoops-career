@@ -45,7 +45,7 @@ const keepFigures = {
 };
 
 export default defineConfig([
-  globalIgnores(['dist', 'dev-dist', 'android', 'ios', 'data', 'coverage', '.claude']),
+  globalIgnores(['dist', 'dev-dist', 'android', 'ios', 'data', 'coverage', '.claude', '.wrangler']),
   {
     files: ['**/*.{ts,tsx,js,mjs}'],
     extends: [js.configs.recommended, tseslint.configs.recommended],

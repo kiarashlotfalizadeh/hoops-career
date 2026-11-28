@@ -16,6 +16,7 @@ import { useStore } from '../../state/store';
 import type { Settings } from '../../core/types';
 import { UnsavedSheet } from '../components/UnsavedSheet';
 import { canGoBack } from '../nav';
+import { PAYWALL, PRICE, useUnlock } from '../../state/unlock';
 import { GRACE } from '../../core/league/jobSecurity';
 import { booksLine, defaultTeam, ownerLine, rosterLine, seedRosterSizes, teamPreviews, type TeamPreview } from '../newLeague';
 
@@ -29,6 +30,7 @@ let wizardLeague: { id: string; rngSeed: number } | null = null;
 export default function NewLeague() {
   const nav = useNavigate();
   const setLeague = useStore((s) => s.setLeague);
+  const unlocked = useUnlock((s) => s.unlocked);
   const [seed, setSeed] = useState<SeedData | null>(null);
   const [seedLoaded, setSeedLoaded] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -425,6 +427,8 @@ export default function NewLeague() {
             <button className="btn primary big block" disabled={busy || (kind === 'real' && !seed)} onClick={() => void create()}>
               {busy ? <Spinner /> : null} {busy ? 'Building the league…' : 'Start career'}
             </button>
+            {/* the price said up front, before the career starts, not first met at the paywall */}
+            {PAYWALL && !unlocked && <p className="tiny dim nl-free">Your first season is free. The full game is {PRICE}, once.</p>}
           </div>
         </>
       )}

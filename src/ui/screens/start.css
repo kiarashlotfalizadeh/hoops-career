@@ -658,3 +658,8 @@
 .nl-chosen-main > svg {
   animation: pop 0.42s var(--ease-spring) 0.12s backwards;
 }
+/* the web edition's price, said once under Start career (see state/unlock.ts) */
+.nl-free {
+  margin: -2px 0 0;
+  text-align: center;
+}

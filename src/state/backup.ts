@@ -8,6 +8,7 @@ import type { League } from '../core/types';
 import { adoptStored, isQuotaError, listLeagues, loadRawLeague, loadRawSnapshot, migrate, onDevice, SAVE_VERSION, saveLeague } from './persistence';
 import { useStore } from './store';
 import { checkpointLive } from './live';
+import { adoptFromBackup, licenseForBackup } from './unlock';
 
 const NOT_A_BACKUP = 'That file is not a Clipboard GM backup.';
 const TOO_BIG = 'That file is too big to be a Clipboard GM backup.';
@@ -115,8 +116,9 @@ export async function exportLeague(league: League): Promise<boolean> {
   else checkpointLive(league);
   const stamp = { at: Date.now(), season: league.season };
   // stamped with this build's format, so an older build refuses it rather than drop what it can't
-  // read, and with the backup it is (a league imported from it was backed up then)
-  const ok = await deliver(JSON.stringify({ ...league, version: SAVE_VERSION, lastBackup: stamp }), fileName(league.name, league.season));
+  // read, and with the backup it is (a league imported from it was backed up then); on an unlocked
+  // web edition, with the licence too, so the file unlocks the device it's imported on
+  const ok = await deliver(JSON.stringify({ ...league, version: SAVE_VERSION, lastBackup: stamp, license: licenseForBackup() }), fileName(league.name, league.season));
   if (ok) noteBackup(league, stamp);
   return ok;
 }
@@ -200,6 +202,9 @@ export async function importLeague(file: File, { force = false, existing: onExis
   } catch {
     throw new Error(NOT_A_BACKUP);
   }
+  // the licence rides beside the league, not in it (see exportLeague)
+  const license = data && typeof data === 'object' ? (data as { license?: unknown }).license : undefined;
+  if (license !== undefined) delete (data as { license?: unknown }).license;
   const league = migrate(data, NOT_A_BACKUP);
   // the import replaces the open league: don't drop changes of it that never reached the disk
   const st = useStore.getState();
@@ -222,5 +227,6 @@ export async function importLeague(file: File, { force = false, existing: onExis
       : `Could not save it to device storage${e instanceof Error && e.message ? ` (${e.message})` : ''}.`;
     throw new Error(why, { cause: e });
   }
+  await adoptFromBackup(license);
   return league;
 }
